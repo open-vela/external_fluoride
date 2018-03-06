@@ -26,9 +26,7 @@
 #include "bt_utils.h"
 #include "osi/include/osi.h"
 
-#include <log/log.h>
 #include <string.h>
-
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "l2c_int.h"
@@ -285,8 +283,8 @@ tGATT_STATUS gatt_sr_process_app_rsp(tGATT_TCB& tcb, tGATT_IF gatt_if,
  * Returns          void
  *
  ******************************************************************************/
-void gatt_process_exec_write_req(tGATT_TCB& tcb, uint8_t op_code, uint16_t len,
-                                 uint8_t* p_data) {
+void gatt_process_exec_write_req(tGATT_TCB& tcb, uint8_t op_code,
+                                 UNUSED_ATTR uint16_t len, uint8_t* p_data) {
   uint8_t *p = p_data, flag, i = 0;
   uint32_t trans_id = 0;
   tGATT_IF gatt_if;
@@ -304,13 +302,6 @@ void gatt_process_exec_write_req(tGATT_TCB& tcb, uint8_t op_code, uint16_t len,
     return;
   }
 #endif
-
-  if (len < sizeof(flag)) {
-    android_errorWriteLog(0x534e4554, "73172115");
-    LOG(ERROR) << __func__ << "invalid length";
-    gatt_send_error_rsp(tcb, GATT_INVALID_PDU, GATT_REQ_EXEC_WRITE, 0, false);
-    return;
-  }
 
   STREAM_TO_UINT8(flag, p);
 
@@ -468,7 +459,7 @@ static tGATT_STATUS gatt_build_primary_service_rsp(
     if (!p_uuid) continue;
 
     if (op_code == GATT_REQ_READ_BY_GRP_TYPE)
-      handle_len = 4 + gatt_build_uuid_to_stream_len(*p_uuid);
+      handle_len = 4 + p_uuid->GetShortestRepresentationSize();
 
     /* get the length byte in the repsonse */
     if (p_msg->offset == 0) {
@@ -491,8 +482,8 @@ static tGATT_STATUS gatt_build_primary_service_rsp(
 
     UINT16_TO_STREAM(p, el.s_hdl);
 
-    if (gatt_cb.last_service_handle &&
-        gatt_cb.last_service_handle == el.s_hdl) {
+    if (gatt_cb.last_primary_s_handle &&
+        gatt_cb.last_primary_s_handle == el.s_hdl) {
       VLOG(1) << "Use 0xFFFF for the last primary attribute";
       /* see GATT ERRATA 4065, 4063, ATT ERRATA 4062 */
       UINT16_TO_STREAM(p, 0xFFFF);
@@ -576,7 +567,7 @@ static tGATT_STATUS read_handles(uint16_t& len, uint8_t*& p, uint16_t& s_hdl,
 
   if (s_hdl > e_hdl || !GATT_HANDLE_IS_VALID(s_hdl) ||
       !GATT_HANDLE_IS_VALID(e_hdl)) {
-    return GATT_INVALID_HANDLE;
+    return GATT_INVALID_PDU;
   }
 
   return GATT_SUCCESS;
@@ -750,7 +741,7 @@ static void gatts_process_mtu_req(tGATT_TCB& tcb, uint16_t len,
   else
     tcb.payload_size = mtu;
 
-  LOG(INFO) << "MTU request PDU with MTU size " << +tcb.payload_size;
+  LOG(ERROR) << "MTU request PDU with MTU size " << +tcb.payload_size;
 
   l2cble_set_fixed_channel_tx_data_length(tcb.peer_bda, L2CAP_ATT_CID,
                                           tcb.payload_size);
@@ -791,7 +782,7 @@ static void gatts_process_mtu_req(tGATT_TCB& tcb, uint16_t len,
 void gatts_process_read_by_type_req(tGATT_TCB& tcb, uint8_t op_code,
                                     uint16_t len, uint8_t* p_data) {
   Uuid uuid = Uuid::kEmpty;
-  uint16_t s_hdl = 0, e_hdl = 0, err_hdl = 0;
+  uint16_t s_hdl, e_hdl, err_hdl = 0;
   tGATT_STATUS reason =
       gatts_validate_packet_format(op_code, len, p_data, &uuid, s_hdl, e_hdl);
 
@@ -885,13 +876,13 @@ void gatts_process_write_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
       sr_data.write_req.is_prep = true;
       STREAM_TO_UINT16(sr_data.write_req.offset, p);
       len -= 2;
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* fall through */
     case GATT_SIGN_CMD_WRITE:
       if (op_code == GATT_SIGN_CMD_WRITE) {
         VLOG(1) << "Write CMD with data sigining";
         len -= GATT_AUTH_SIGN_LEN;
       }
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* fall through */
     case GATT_CMD_WRITE:
     case GATT_REQ_WRITE:
       if (op_code == GATT_REQ_WRITE || op_code == GATT_REQ_PREPARE_WRITE)
@@ -951,19 +942,9 @@ void gatts_process_write_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
  */
 static void gatts_process_read_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
                                    uint8_t op_code, uint16_t handle,
-                                   uint16_t len, uint8_t* p_data) {
+                                   UNUSED_ATTR uint16_t len, uint8_t* p_data) {
   size_t buf_len = sizeof(BT_HDR) + tcb.payload_size + L2CAP_MIN_OFFSET;
   uint16_t offset = 0;
-
-  if (op_code == GATT_REQ_READ_BLOB && len < sizeof(uint16_t)) {
-    /* Error: packet length is too short */
-    LOG(ERROR) << __func__ << ": packet length=" << len
-               << " too short. min=" << sizeof(uint16_t);
-    android_errorWriteWithInfoLog(0x534e4554, "73172115", -1, NULL, 0);
-    gatt_send_error_rsp(tcb, GATT_INVALID_PDU, op_code, 0, false);
-    return;
-  }
-
   BT_HDR* p_msg = (BT_HDR*)osi_calloc(buf_len);
 
   if (op_code == GATT_REQ_READ_BLOB) STREAM_TO_UINT16(offset, p_data);
@@ -985,7 +966,7 @@ static void gatts_process_read_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
   if (reason != GATT_SUCCESS) {
     osi_free(p_msg);
 
-    /* in theory BUSY is not possible(should already been checked), protected
+    /* in theroy BUSY is not possible(should already been checked), protected
      * check */
     if (reason != GATT_PENDING && reason != GATT_BUSY)
       gatt_send_error_rsp(tcb, reason, op_code, handle, false);

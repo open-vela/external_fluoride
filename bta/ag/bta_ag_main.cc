@@ -68,7 +68,6 @@ enum {
   BTA_AG_RESULT,
   BTA_AG_SETCODEC,
   BTA_AG_SEND_RING,
-  BTA_AG_HANDLE_COLLISION,
   BTA_AG_NUM_ACTIONS
 };
 
@@ -134,7 +133,6 @@ static const char* bta_ag_evt_str(uint16_t event) {
     CASE_RETURN_STR(BTA_AG_DISC_FAIL_EVT)
     CASE_RETURN_STR(BTA_AG_RING_TIMEOUT_EVT)
     CASE_RETURN_STR(BTA_AG_SVC_TIMEOUT_EVT)
-    CASE_RETURN_STR(BTA_AG_COLLISION_EVT)
     default:
       return "Unknown AG Event";
   }
@@ -162,11 +160,7 @@ const tBTA_AG_ACTION bta_ag_action[] = {
     bta_ag_sco_conn_close, bta_ag_sco_listen,    bta_ag_sco_open,
     bta_ag_sco_close,      bta_ag_sco_shutdown,  bta_ag_post_sco_open,
     bta_ag_post_sco_close, bta_ag_svc_conn_open, bta_ag_result,
-    bta_ag_setcodec,       bta_ag_send_ring,     bta_ag_handle_collision};
-
-static_assert(sizeof(bta_ag_action) / sizeof(tBTA_AG_ACTION) ==
-                  BTA_AG_NUM_ACTIONS,
-              "bta_ag_action must handle all actions");
+    bta_ag_setcodec,       bta_ag_send_ring};
 
 /* state table information */
 #define BTA_AG_ACTIONS 2    /* number of actions */
@@ -195,8 +189,7 @@ const uint8_t bta_ag_st_init[][BTA_AG_NUM_COLS] = {
     /* DISC_OK_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_INIT_ST},
     /* DISC_FAIL_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_INIT_ST},
     /* RING_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_INIT_ST},
-    /* SVC_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_INIT_ST},
-    /* COLLISION_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_INIT_ST}};
+    /* SVC_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_INIT_ST}};
 
 /* state table for opening state */
 const uint8_t bta_ag_st_opening[][BTA_AG_NUM_COLS] = {
@@ -223,9 +216,7 @@ const uint8_t bta_ag_st_opening[][BTA_AG_NUM_COLS] = {
     /* DISC_OK_EVT */ {BTA_AG_RFC_DO_OPEN, BTA_AG_IGNORE, BTA_AG_OPENING_ST},
     /* DISC_FAIL_EVT */ {BTA_AG_DISC_FAIL, BTA_AG_IGNORE, BTA_AG_INIT_ST},
     /* RING_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_OPENING_ST},
-    /* SVC_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_OPENING_ST},
-    /* COLLISION_EVT */
-    {BTA_AG_HANDLE_COLLISION, BTA_AG_IGNORE, BTA_AG_INIT_ST}};
+    /* SVC_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_OPENING_ST}};
 
 /* state table for open state */
 const uint8_t bta_ag_st_open[][BTA_AG_NUM_COLS] = {
@@ -252,8 +243,7 @@ const uint8_t bta_ag_st_open[][BTA_AG_NUM_COLS] = {
     /* DISC_OK_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_OPEN_ST},
     /* DISC_FAIL_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_OPEN_ST},
     /* RING_TOUT_EVT */ {BTA_AG_SEND_RING, BTA_AG_IGNORE, BTA_AG_OPEN_ST},
-    /* SVC_TOUT_EVT */ {BTA_AG_START_CLOSE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST},
-    /* COLLISION_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_OPEN_ST}};
+    /* SVC_TOUT_EVT */ {BTA_AG_START_CLOSE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST}};
 
 /* state table for closing state */
 const uint8_t bta_ag_st_closing[][BTA_AG_NUM_COLS] = {
@@ -279,19 +269,7 @@ const uint8_t bta_ag_st_closing[][BTA_AG_NUM_COLS] = {
     /* DISC_OK_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST},
     /* DISC_FAIL_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST},
     /* RING_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST},
-    /* SVC_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST},
-    /* COLLISION_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST}};
-
-constexpr size_t BTA_AG_NUM_EVENTS =
-    BTA_AG_MAX_EVT - BTA_SYS_EVT_START(BTA_ID_AG);
-static_assert(sizeof(bta_ag_st_init) / BTA_AG_NUM_COLS == BTA_AG_NUM_EVENTS,
-              "bta_ag_st_init must handle all AG events");
-static_assert(sizeof(bta_ag_st_opening) / BTA_AG_NUM_COLS == BTA_AG_NUM_EVENTS,
-              "bta_ag_st_opening must handle all AG events");
-static_assert(sizeof(bta_ag_st_open) / BTA_AG_NUM_COLS == BTA_AG_NUM_EVENTS,
-              "bta_ag_st_open must handle all AG events");
-static_assert(sizeof(bta_ag_st_closing) / BTA_AG_NUM_COLS == BTA_AG_NUM_EVENTS,
-              "bta_ag_st_closing must handle all AG events");
+    /* SVC_TOUT_EVT */ {BTA_AG_IGNORE, BTA_AG_IGNORE, BTA_AG_CLOSING_ST}};
 
 /* type for state table */
 typedef const uint8_t (*tBTA_AG_ST_TBL)[BTA_AG_NUM_COLS];
@@ -327,14 +305,10 @@ static tBTA_AG_SCB* bta_ag_scb_alloc(void) {
       /* initialize variables */
       p_scb->in_use = true;
       p_scb->sco_idx = BTM_INVALID_SCO_INDEX;
-      p_scb->received_at_bac = false;
       p_scb->codec_updated = false;
       p_scb->codec_fallback = false;
       p_scb->peer_codecs = BTA_AG_CODEC_CVSD;
       p_scb->sco_codec = BTA_AG_CODEC_CVSD;
-      p_scb->peer_version = HFP_HSP_VERSION_UNKNOWN;
-      p_scb->hsp_version = HSP_VERSION_1_2;
-      p_scb->peer_sdp_features = 0;
       /* set up timers */
       p_scb->ring_timer = alarm_new("bta_ag.scb_ring_timer");
       p_scb->collision_timer = alarm_new("bta_ag.scb_collision_timer");
@@ -402,12 +376,12 @@ void bta_ag_scb_dealloc(tBTA_AG_SCB* p_scb) {
  * Description      Given a pointer to an scb, return its index.
  *
  *
- * Returns          Index of scb starting from 1
+ * Returns          Index of scb.
  *
  ******************************************************************************/
 uint16_t bta_ag_scb_to_idx(tBTA_AG_SCB* p_scb) {
   /* use array arithmetic to determine index */
-  return static_cast<uint16_t>(p_scb - bta_ag_cb.scb + 1);
+  return ((uint16_t)(p_scb - bta_ag_cb.scb)) + 1;
 }
 
 /*******************************************************************************
@@ -520,6 +494,52 @@ bool bta_ag_scb_open(tBTA_AG_SCB* p_curr_scb) {
 
 /*******************************************************************************
  *
+ * Function         bta_ag_get_other_idle_scb
+ *
+ * Description      Return other scb if it is in INIT st.
+ *
+ *
+ * Returns          Pointer to other scb if INIT st, NULL otherwise.
+ *
+ ******************************************************************************/
+tBTA_AG_SCB* bta_ag_get_other_idle_scb(tBTA_AG_SCB* p_curr_scb) {
+  tBTA_AG_SCB* p_scb = &bta_ag_cb.scb[0];
+  uint8_t xx;
+
+  for (xx = 0; xx < BTA_AG_MAX_NUM_CLIENTS; xx++, p_scb++) {
+    if (p_scb->in_use && (p_scb != p_curr_scb) &&
+        (p_scb->state == BTA_AG_INIT_ST)) {
+      return p_scb;
+    }
+  }
+
+  /* no other scb found */
+  APPL_TRACE_DEBUG("bta_ag_get_other_idle_scb: No idle AG scb");
+  return nullptr;
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_ag_collision_timer_cback
+ *
+ * Description      AG connection collision timer callback
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+static void bta_ag_collision_timer_cback(void* data) {
+  tBTA_AG_SCB* p_scb = (tBTA_AG_SCB*)data;
+
+  APPL_TRACE_DEBUG("%s", __func__);
+
+  /* If the peer haven't opened AG connection     */
+  /* we will restart opening process.             */
+  bta_ag_resume_open(p_scb);
+}
+
+/*******************************************************************************
+ *
  * Function         bta_ag_collision_cback
  *
  * Description      Get notified about collision.
@@ -537,16 +557,33 @@ void bta_ag_collision_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status, uint8_t id,
 
   if (p_scb && (p_scb->state == BTA_AG_OPENING_ST)) {
     if (id == BTA_ID_SYS) {
-      LOG(WARNING) << __func__ << ": AG found collision (ACL) for handle "
+      LOG(WARNING) << __func__ << "AG found collision (ACL) for handle "
                    << unsigned(handle) << " device " << peer_addr;
     } else if (id == BTA_ID_AG) {
-      LOG(WARNING) << __func__ << ": AG found collision (RFCOMM) for handle "
+      LOG(WARNING) << __func__ << "AG found collision (RFCOMM) for handle "
                    << unsigned(handle) << " device " << peer_addr;
     } else {
-      LOG(WARNING) << __func__ << ": AG found collision (UNKNOWN) for handle "
+      LOG(WARNING) << __func__ << "AG found collision (UNKNOWN) for handle "
                    << unsigned(handle) << " device " << peer_addr;
     }
-    bta_ag_sm_execute(p_scb, BTA_AG_COLLISION_EVT, tBTA_AG_DATA::kEmpty);
+
+    p_scb->state = BTA_AG_INIT_ST;
+
+    /* Cancel SDP if it had been started. */
+    if (p_scb->p_disc_db) {
+      SDP_CancelServiceSearch(p_scb->p_disc_db);
+      bta_ag_free_db(p_scb, tBTA_AG_DATA::kEmpty);
+    }
+
+    /* reopen registered servers */
+    /* Collision may be detected before or after we close servers. */
+    if (bta_ag_is_server_closed(p_scb)) {
+      bta_ag_start_servers(p_scb, p_scb->reg_services);
+    }
+
+    /* Start timer to han */
+    alarm_set_on_mloop(p_scb->collision_timer, BTA_AG_COLLISION_TIMEOUT_MS,
+                       bta_ag_collision_timer_cback, p_scb);
   }
 }
 
@@ -561,15 +598,20 @@ void bta_ag_collision_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status, uint8_t id,
  *
  ******************************************************************************/
 void bta_ag_resume_open(tBTA_AG_SCB* p_scb) {
-  if (p_scb->state == BTA_AG_INIT_ST) {
-    LOG(INFO) << __func__ << ": Resume connection to " << p_scb->peer_addr
-              << ", handle" << bta_ag_scb_to_idx(p_scb);
-    tBTA_AG_DATA open_data = {.api_open.bd_addr = p_scb->peer_addr,
-                              .api_open.sec_mask = p_scb->cli_sec_mask};
-    bta_ag_sm_execute(p_scb, BTA_AG_API_OPEN_EVT, open_data);
+  if (p_scb) {
+    APPL_TRACE_DEBUG("%s: handle=%d, bd_addr=%s", __func__,
+                     bta_ag_scb_to_idx(p_scb),
+                     p_scb->peer_addr.ToString().c_str());
+    /* resume opening process.  */
+    if (p_scb->state == BTA_AG_INIT_ST) {
+      LOG(WARNING) << __func__
+                   << ": handle=" << unsigned(bta_ag_scb_to_idx(p_scb))
+                   << ", bd_addr=" << p_scb->peer_addr;
+      p_scb->state = BTA_AG_OPENING_ST;
+      bta_ag_start_open(p_scb, tBTA_AG_DATA::kEmpty);
+    }
   } else {
-    VLOG(1) << __func__ << ": device " << p_scb->peer_addr
-            << " is already in state " << std::to_string(p_scb->state);
+    LOG(ERROR) << __func__ << ": null p_scb";
   }
 }
 

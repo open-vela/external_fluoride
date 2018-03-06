@@ -18,7 +18,6 @@
 
 #include "bt_target.h"
 
-#include <log/log.h>
 #include <string.h>
 #include "smp_int.h"
 
@@ -155,6 +154,7 @@ enum {
   SMP_SET_LOCAL_OOB_KEYS,
   SMP_SET_LOCAL_OOB_RAND_COMMITMENT,
   SMP_IDLE_TERMINATE,
+  SMP_FAST_CONN_PARAM,
   SMP_SM_NO_ACTION
 };
 
@@ -218,7 +218,8 @@ static const tSMP_ACT smp_sm_action[] = {
     smp_process_secure_connection_oob_data,
     smp_set_local_oob_keys,
     smp_set_local_oob_random_commitment,
-    smp_idle_terminate};
+    smp_idle_terminate,
+    smp_fast_conn_param};
 
 /************ SMP Master FSM State/Event Indirection Table **************/
 static const uint8_t smp_master_entry_map[][SMP_STATE_MAX] = {
@@ -342,7 +343,7 @@ static const uint8_t smp_master_wait_for_app_response_table[][SMP_SM_NUM_COLS] =
         /* SEC_GRANT */
         {SMP_PROC_SEC_GRANT, SMP_SEND_APP_CBACK, SMP_STATE_WAIT_APP_RSP},
         /* IO_RSP */
-        {SMP_SEND_PAIR_REQ, SMP_SM_NO_ACTION, SMP_STATE_PAIR_REQ_RSP},
+        {SMP_SEND_PAIR_REQ, SMP_FAST_CONN_PARAM, SMP_STATE_PAIR_REQ_RSP},
 
         /* TK ready */
         /* KEY_READY */
@@ -350,7 +351,7 @@ static const uint8_t smp_master_wait_for_app_response_table[][SMP_SM_NUM_COLS] =
 
         /* start enc mode setup */
         /* ENC_REQ */
-        {SMP_START_ENC, SMP_SM_NO_ACTION, SMP_STATE_ENCRYPTION_PENDING},
+        {SMP_START_ENC, SMP_FAST_CONN_PARAM, SMP_STATE_ENCRYPTION_PENDING},
         /* DISCARD_SEC_REQ */
         {SMP_PROC_DISCARD, SMP_SM_NO_ACTION, SMP_STATE_IDLE}
         /* user confirms NC 'OK', i.e. phase 1 is completed */
@@ -628,7 +629,7 @@ static const uint8_t smp_slave_wait_for_app_response_table[][SMP_SM_NUM_COLS] =
     {
         /* Event                   Action                 Next State */
         /* IO_RSP */
-        {SMP_PROC_IO_RSP, SMP_SM_NO_ACTION, SMP_STATE_PAIR_REQ_RSP},
+        {SMP_PROC_IO_RSP, SMP_FAST_CONN_PARAM, SMP_STATE_PAIR_REQ_RSP},
         /* SEC_GRANT */
         {SMP_PROC_SEC_GRANT, SMP_SEND_APP_CBACK, SMP_STATE_WAIT_APP_RSP},
 
@@ -953,13 +954,6 @@ void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event, tSMP_INT_DATA* p_data) {
   uint8_t curr_state = p_cb->state;
   tSMP_SM_TBL state_table;
   uint8_t action, entry, i;
-
-  if (p_cb->role >= 2) {
-    SMP_TRACE_DEBUG("Invalid role: %d", p_cb->role);
-    android_errorWriteLog(0x534e4554, "74121126");
-    return;
-  }
-
   tSMP_ENTRY_TBL entry_table = smp_entry_table[p_cb->role];
 
   SMP_TRACE_EVENT("main smp_sm_event");

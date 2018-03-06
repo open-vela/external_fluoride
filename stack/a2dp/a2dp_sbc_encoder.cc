@@ -28,7 +28,6 @@
 #include "a2dp_sbc.h"
 #include "a2dp_sbc_up_sample.h"
 #include "bt_common.h"
-#include "common/time_util.h"
 #include "embdrv/sbc/encoder/include/sbc_encoder.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
@@ -44,6 +43,11 @@
 
 #define A2DP_SBC_NON_EDR_MAX_RATE 229
 
+/*
+ * 2DH5 payload size of:
+ * 679 bytes - (4 bytes L2CAP Header + 12 bytes AVDTP Header)
+ */
+#define MAX_2MBPS_AVDTP_MTU 663
 #define A2DP_SBC_MAX_PCM_ITER_NUM_PER_TICK 3
 
 #define A2DP_SBC_MAX_HQ_FRAME_SIZE_44_1 119
@@ -120,7 +124,7 @@ static void a2dp_sbc_get_num_frame_iteration(uint8_t* num_of_iterations,
                                              uint8_t* num_of_frames,
                                              uint64_t timestamp_us);
 static uint8_t calculate_max_frames_per_packet(void);
-static uint16_t a2dp_sbc_source_rate();
+static uint16_t a2dp_sbc_source_rate(void);
 static uint32_t a2dp_sbc_frame_length(void);
 
 bool A2DP_LoadEncoderSbc(void) {
@@ -138,8 +142,7 @@ void a2dp_sbc_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
                            a2dp_source_enqueue_callback_t enqueue_callback) {
   memset(&a2dp_sbc_encoder_cb, 0, sizeof(a2dp_sbc_encoder_cb));
 
-  a2dp_sbc_encoder_cb.stats.session_start_us =
-      bluetooth::common::time_get_os_boottime_us();
+  a2dp_sbc_encoder_cb.stats.session_start_us = time_get_os_boottime_us();
 
   a2dp_sbc_encoder_cb.read_callback = read_callback;
   a2dp_sbc_encoder_cb.enqueue_callback = enqueue_callback;
@@ -157,7 +160,7 @@ void a2dp_sbc_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
                           &restart_input, &restart_output, &config_updated);
 }
 
-bool A2dpCodecConfigSbcSource::updateEncoderUserConfig(
+bool A2dpCodecConfigSbc::updateEncoderUserConfig(
     const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params, bool* p_restart_input,
     bool* p_restart_output, bool* p_config_updated) {
   a2dp_sbc_encoder_cb.is_peer_edr = p_peer_params->is_peer_edr;
@@ -219,7 +222,6 @@ static void a2dp_sbc_encoder_update(uint16_t peer_mtu,
   LOG_DEBUG(LOG_TAG, "%s: sample_rate=%u bits_per_sample=%u channel_count=%u",
             __func__, p_feeding_params->sample_rate,
             p_feeding_params->bits_per_sample, p_feeding_params->channel_count);
-  a2dp_sbc_feeding_reset();
 
   // The codec parameters
   p_encoder_params->s16ChannelMode = A2DP_GetChannelModeCodeSbc(p_codec_info);
@@ -366,7 +368,7 @@ static void a2dp_sbc_encoder_update(uint16_t peer_mtu,
   LOG_DEBUG(LOG_TAG, "%s: final bit rate %d, final bit pool %d", __func__,
             p_encoder_params->u16BitRate, p_encoder_params->s16BitPool);
 
-  /* Reset the SBC encoder */
+  /* Reset entirely the SBC encoder */
   SBC_Encoder_Init(&a2dp_sbc_encoder_cb.sbc_encoder_params);
   a2dp_sbc_encoder_cb.tx_sbc_frames = calculate_max_frames_per_packet();
 }
@@ -396,7 +398,7 @@ void a2dp_sbc_feeding_flush(void) {
   a2dp_sbc_encoder_cb.feeding_state.aa_feed_residue = 0;
 }
 
-uint64_t a2dp_sbc_get_encoder_interval_ms(void) {
+period_ms_t a2dp_sbc_get_encoder_interval_ms(void) {
   return A2DP_SBC_ENCODER_INTERVAL_MS;
 }
 
@@ -829,7 +831,7 @@ static uint8_t calculate_max_frames_per_packet(void) {
   return result;
 }
 
-static uint16_t a2dp_sbc_source_rate() {
+static uint16_t a2dp_sbc_source_rate(void) {
   uint16_t rate = A2DP_SBC_DEFAULT_BITRATE;
 
   /* restrict bitrate if a2dp link is non-edr */
@@ -857,7 +859,7 @@ static uint32_t a2dp_sbc_frame_length(void) {
 
   switch (p_encoder_params->s16ChannelMode) {
     case SBC_MONO:
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* FALLTHROUGH */
     case SBC_DUAL:
       frame_len = A2DP_SBC_FRAME_HEADER_SIZE_BYTES +
                   ((uint32_t)(A2DP_SBC_SCALE_FACTOR_BITS *
@@ -899,22 +901,11 @@ static uint32_t a2dp_sbc_frame_length(void) {
   return frame_len;
 }
 
-uint32_t a2dp_sbc_get_bitrate() {
-  SBC_ENC_PARAMS* p_encoder_params = &a2dp_sbc_encoder_cb.sbc_encoder_params;
-  LOG_DEBUG(LOG_TAG, "%s: bit rate %d ", __func__,
-            p_encoder_params->u16BitRate);
-  return p_encoder_params->u16BitRate * 1000;
-}
-
-uint64_t A2dpCodecConfigSbcSource::encoderIntervalMs() const {
+period_ms_t A2dpCodecConfigSbc::encoderIntervalMs() const {
   return a2dp_sbc_get_encoder_interval_ms();
 }
 
-int A2dpCodecConfigSbcSource::getEffectiveMtu() const {
-  return a2dp_sbc_encoder_cb.TxAaMtuSize;
-}
-
-void A2dpCodecConfigSbcSource::debug_codec_dump(int fd) {
+void A2dpCodecConfigSbc::debug_codec_dump(int fd) {
   a2dp_sbc_encoder_stats_t* stats = &a2dp_sbc_encoder_cb.stats;
 
   A2dpCodecConfig::debug_codec_dump(fd);

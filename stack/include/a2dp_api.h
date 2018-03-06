@@ -82,8 +82,7 @@ typedef struct {
 } tA2DP_Service;
 
 /* This is the callback to notify the result of the SDP discovery process. */
-typedef void(tA2DP_FIND_CBACK)(bool found, tA2DP_Service* p_service,
-                               const RawAddress& peer_address);
+typedef void(tA2DP_FIND_CBACK)(bool found, tA2DP_Service* p_service);
 
 /*****************************************************************************
  *  external function declarations

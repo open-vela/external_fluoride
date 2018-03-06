@@ -280,11 +280,6 @@ static void process_service_search_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   uint16_t total, cur_handles, orig;
   uint8_t cont_len;
 
-  if (p_reply + 8 > p_reply_end) {
-    android_errorWriteLog(0x534e4554, "74249842");
-    sdp_disconnect(p_ccb, SDP_GENERIC_ERROR);
-    return;
-  }
   /* Skip transaction, and param len */
   p_reply += 4;
   BE_STREAM_TO_UINT16(total, p_reply);
@@ -302,12 +297,6 @@ static void process_service_search_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   if (total > sdp_cb.max_recs_per_search) total = sdp_cb.max_recs_per_search;
   if (p_ccb->num_handles > sdp_cb.max_recs_per_search)
     p_ccb->num_handles = sdp_cb.max_recs_per_search;
-
-  if (p_reply + ((p_ccb->num_handles - orig) * 4) + 1 > p_reply_end) {
-    android_errorWriteLog(0x534e4554, "74249842");
-    sdp_disconnect(p_ccb, SDP_GENERIC_ERROR);
-    return;
-  }
 
   for (xx = orig; xx < p_ccb->num_handles; xx++)
     BE_STREAM_TO_UINT32(p_ccb->handles[xx], p_reply);
@@ -368,15 +357,8 @@ static void sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
     p = &p_ccb->rsp_list[0];
 
     if (offset) {
-      cpy_len -= 1;
       type = *p++;
-      uint8_t* old_p = p;
       p = sdpu_get_len_from_type(p, type, &list_len);
-      if ((int)cpy_len < (p - old_p)) {
-        SDP_TRACE_WARNING("%s: no bytes left for data", __func__);
-        return;
-      }
-      cpy_len -= (p - old_p);
     }
     if (list_len < cpy_len) {
       cpy_len = list_len;
@@ -557,13 +539,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
 #endif
   /* If p_reply is NULL, we were called for the initial read */
   if (p_reply) {
-    if (p_reply + 4 /* transaction ID and length */ + sizeof(lists_byte_count) >
-        p_reply_end) {
-      android_errorWriteLog(0x534e4554, "79884292");
-      sdp_disconnect(p_ccb, SDP_INVALID_PDU_SIZE);
-      return;
-    }
-
 #if (SDP_DEBUG_RAW == TRUE)
     SDP_TRACE_WARNING("ID & len: 0x%02x-%02x-%02x-%02x", p_reply[0], p_reply[1],
                       p_reply[2], p_reply[3]);
@@ -587,13 +562,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     SDP_TRACE_WARNING("list_len: %d, list_byte_count: %d", p_ccb->list_len,
                       lists_byte_count);
 #endif
-
-    if (p_reply + lists_byte_count + 1 /* continuation */ > p_reply_end) {
-      android_errorWriteLog(0x534e4554, "79884292");
-      sdp_disconnect(p_ccb, SDP_INVALID_PDU_SIZE);
-      return;
-    }
-
     if (p_ccb->rsp_list == NULL)
       p_ccb->rsp_list = (uint8_t*)osi_malloc(SDP_MAX_LIST_BYTE_COUNT);
     memcpy(&p_ccb->rsp_list[p_ccb->list_len], p_reply, lists_byte_count);
@@ -895,7 +863,7 @@ static uint8_t* add_attr(uint8_t* p, tSDP_DISCOVERY_DB* p_db,
           break;
         }
       }
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case falls through */
 
     case TWO_COMP_INT_DESC_TYPE:
       switch (attr_len) {

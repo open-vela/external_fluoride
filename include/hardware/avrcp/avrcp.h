@@ -16,12 +16,13 @@
 
 #pragma once
 
-#include <set>
+#include <map>
 #include <string>
 
-#include <base/callback_forward.h>
+#include <base/bind.h>
 
 #include "avrcp_common.h"
+#include "avrcp_logging_helper.h"
 #include "raw_address.h"
 
 namespace bluetooth {
@@ -29,7 +30,7 @@ namespace avrcp {
 
 struct SongInfo {
   std::string media_id;  // This gets converted to a UID in the native service
-  std::set<AttributeEntry> attributes;
+  std::map<Attribute, std::string> attributes;
 };
 
 enum PlayState : uint8_t {
@@ -72,11 +73,10 @@ struct ListItem {
 
 class MediaCallbacks {
  public:
-  virtual void SendMediaUpdate(bool track_changed, bool play_state,
-                               bool queue) = 0;
+  virtual void SendMediaUpdate(bool track_changed, bool play_state, bool queue);
   virtual void SendFolderUpdate(bool available_players, bool addressed_players,
-                                bool uids_changed) = 0;
-  virtual void SendActiveDeviceChanged(const RawAddress& address) = 0;
+                                bool uids_changed);
+  virtual void SendActiveDeviceChanged(const RawAddress& address);
   virtual ~MediaCallbacks() = default;
 };
 
@@ -102,7 +102,7 @@ class MediaCallbacks {
 // behavior in case the threading model changes on either side.
 class MediaInterface {
  public:
-  virtual void SendKeyEvent(uint8_t key, KeyState state) = 0;
+  virtual void SendKeyEvent(uint8_t key, uint8_t status) = 0;
 
   using SongInfoCallback = base::Callback<void(SongInfo)>;
   virtual void GetSongInfo(SongInfoCallback info_cb) = 0;

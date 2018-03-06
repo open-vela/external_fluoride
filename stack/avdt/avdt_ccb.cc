@@ -443,8 +443,7 @@ AvdtpCcb* avdt_ccb_alloc(const RawAddress& bd_addr) {
   for (int i = 0; i < AVDT_NUM_LINKS; i++, p_ccb++) {
     if (!p_ccb->allocated) {
       p_ccb->Allocate(bd_addr);
-      AVDT_TRACE_DEBUG("%s: allocated (index %d) for peer %s", __func__, i,
-                       bd_addr.ToString().c_str());
+      AVDT_TRACE_DEBUG("%s: allocated (index %d)", __func__, i);
       return p_ccb;
     }
   }

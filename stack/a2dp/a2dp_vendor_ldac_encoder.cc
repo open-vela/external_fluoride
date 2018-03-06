@@ -33,7 +33,6 @@
 #include "a2dp_vendor_ldac.h"
 #include "a2dp_vendor_ldac_abr.h"
 #include "bt_common.h"
-#include "common/time_util.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -286,8 +285,7 @@ void a2dp_vendor_ldac_encoder_init(
     a2dp_ldac_abr_free_handle(a2dp_ldac_encoder_cb.ldac_abr_handle);
   memset(&a2dp_ldac_encoder_cb, 0, sizeof(a2dp_ldac_encoder_cb));
 
-  a2dp_ldac_encoder_cb.stats.session_start_us =
-      bluetooth::common::time_get_os_boottime_us();
+  a2dp_ldac_encoder_cb.stats.session_start_us = time_get_os_boottime_us();
 
   a2dp_ldac_encoder_cb.read_callback = read_callback;
   a2dp_ldac_encoder_cb.enqueue_callback = enqueue_callback;
@@ -315,7 +313,7 @@ void a2dp_vendor_ldac_encoder_init(
                                   &restart_output, &config_updated);
 }
 
-bool A2dpCodecConfigLdacSource::updateEncoderUserConfig(
+bool A2dpCodecConfigLdac::updateEncoderUserConfig(
     const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params, bool* p_restart_input,
     bool* p_restart_output, bool* p_config_updated) {
   a2dp_ldac_encoder_cb.is_peer_edr = p_peer_params->is_peer_edr;
@@ -361,7 +359,6 @@ static void a2dp_vendor_ldac_encoder_update(uint16_t peer_mtu,
     }
     a2dp_ldac_encoder_cb.has_ldac_handle = true;
   }
-  CHECK(a2dp_ldac_encoder_cb.ldac_handle != nullptr);
 
   if (!a2dp_codec_config->copyOutOtaCodecConfig(codec_info)) {
     LOG_ERROR(LOG_TAG,
@@ -384,7 +381,6 @@ static void a2dp_vendor_ldac_encoder_update(uint16_t peer_mtu,
   LOG_DEBUG(LOG_TAG, "%s: sample_rate=%u bits_per_sample=%u channel_count=%u",
             __func__, p_feeding_params->sample_rate,
             p_feeding_params->bits_per_sample, p_feeding_params->channel_count);
-  a2dp_vendor_ldac_feeding_reset();
 
   // The codec parameters
   p_encoder_params->sample_rate =
@@ -497,13 +493,8 @@ static void a2dp_vendor_ldac_encoder_update(uint16_t peer_mtu,
       p_encoder_params->channel_mode, p_encoder_params->pcm_fmt,
       p_encoder_params->sample_rate);
   if (result != 0) {
-    int err_code = ldac_get_error_code_func(a2dp_ldac_encoder_cb.ldac_handle);
-    LOG_ERROR(LOG_TAG,
-              "%s: error initializing the LDAC encoder: %d api_error = %d "
-              "handle_error = %d block_error = %d error_code = 0x%x",
-              __func__, result, LDACBT_API_ERR(err_code),
-              LDACBT_HANDLE_ERR(err_code), LDACBT_BLOCK_ERR(err_code),
-              err_code);
+    LOG_ERROR(LOG_TAG, "%s: error initializing the LDAC encoder: %d", __func__,
+              result);
   }
 }
 
@@ -535,7 +526,7 @@ void a2dp_vendor_ldac_feeding_flush(void) {
   a2dp_ldac_encoder_cb.ldac_feeding_state.counter = 0;
 }
 
-uint64_t a2dp_vendor_ldac_get_encoder_interval_ms(void) {
+period_ms_t a2dp_vendor_ldac_get_encoder_interval_ms(void) {
   return A2DP_LDAC_ENCODER_INTERVAL_MS;
 }
 
@@ -667,10 +658,9 @@ static void a2dp_ldac_encode_frames(uint8_t nb_frame) {
               ldac_get_error_code_func(a2dp_ldac_encoder_cb.ldac_handle);
           LOG_ERROR(LOG_TAG,
                     "%s: LDAC encoding error: %d api_error = %d "
-                    "handle_error = %d block_error = %d error_code = 0x%x",
+                    "handle_error = %d block_error = %d",
                     __func__, result, LDACBT_API_ERR(err_code),
-                    LDACBT_HANDLE_ERR(err_code), LDACBT_BLOCK_ERR(err_code),
-                    err_code);
+                    LDACBT_HANDLE_ERR(err_code), LDACBT_BLOCK_ERR(err_code));
           a2dp_ldac_encoder_cb.stats.media_read_total_dropped_packets++;
           osi_free(p_buf);
           return;
@@ -761,15 +751,11 @@ void a2dp_vendor_ldac_set_transmit_queue_length(size_t transmit_queue_length) {
   a2dp_ldac_encoder_cb.TxQueueLength = transmit_queue_length;
 }
 
-uint64_t A2dpCodecConfigLdacSource::encoderIntervalMs() const {
+period_ms_t A2dpCodecConfigLdac::encoderIntervalMs() const {
   return a2dp_vendor_ldac_get_encoder_interval_ms();
 }
 
-int A2dpCodecConfigLdacSource::getEffectiveMtu() const {
-  return a2dp_ldac_encoder_cb.TxAaMtuSize;
-}
-
-void A2dpCodecConfigLdacSource::debug_codec_dump(int fd) {
+void A2dpCodecConfigLdac::debug_codec_dump(int fd) {
   a2dp_ldac_encoder_stats_t* stats = &a2dp_ldac_encoder_cb.stats;
   tA2DP_LDAC_ENCODER_PARAMS* p_encoder_params =
       &a2dp_ldac_encoder_cb.ldac_encoder_params;

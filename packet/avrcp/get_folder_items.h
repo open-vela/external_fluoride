@@ -25,35 +25,32 @@ class GetFolderItemsResponseBuilder : public BrowsePacketBuilder {
  public:
   virtual ~GetFolderItemsResponseBuilder() = default;
   static std::unique_ptr<GetFolderItemsResponseBuilder> MakePlayerListBuilder(
-      Status status, uint16_t uid_counter, size_t mtu);
+      Status status, uint16_t uid_counter);
   static std::unique_ptr<GetFolderItemsResponseBuilder> MakeVFSBuilder(
-      Status status, uint16_t uid_counter, size_t mtu);
+      Status status, uint16_t uid_counter);
   static std::unique_ptr<GetFolderItemsResponseBuilder> MakeNowPlayingBuilder(
-      Status status, uint16_t uid_counter, size_t mtu);
+      Status status, uint16_t uid_counter);
 
   virtual size_t size() const override;
   virtual bool Serialize(
       const std::shared_ptr<::bluetooth::Packet>& pkt) override;
 
-  // Returns false if adding an item would exceed the MTU
-  bool AddMediaPlayer(MediaPlayerItem item);
-  bool AddSong(MediaElementItem item);
-  bool AddFolder(FolderItem item);
+  void AddMediaPlayer(MediaPlayerItem item);
+  void AddSong(MediaElementItem item);
+  void AddFolder(FolderItem item);
 
  protected:
   Scope scope_;
   std::vector<MediaListItem> items_;
   Status status_;
   uint16_t uid_counter_;
-  size_t mtu_;
 
   GetFolderItemsResponseBuilder(Scope scope, Status status,
-                                uint16_t uid_counter, size_t mtu)
+                                uint16_t uid_counter)
       : BrowsePacketBuilder(BrowsePdu::GET_FOLDER_ITEMS),
         scope_(scope),
         status_(status),
-        uid_counter_(uid_counter),
-        mtu_(mtu){};
+        uid_counter_(uid_counter){};
 
  private:
   void PushMediaListItem(const std::shared_ptr<::bluetooth::Packet>& pkt,
@@ -95,34 +92,6 @@ class GetFolderItemsRequest : public BrowsePacket {
 
  protected:
   using BrowsePacket::BrowsePacket;
-};
-
-class GetFolderItemsRequestBuilder : public BrowsePacketBuilder {
- public:
-  virtual ~GetFolderItemsRequestBuilder() = default;
-
-  static std::unique_ptr<GetFolderItemsRequestBuilder> MakeBuilder(
-      Scope scope, uint32_t start_item, uint32_t end_item,
-      const std::set<Attribute>& requested_attrs);
-
-  virtual size_t size() const override;
-  virtual bool Serialize(
-      const std::shared_ptr<::bluetooth::Packet>& pkt) override;
-
- protected:
-  GetFolderItemsRequestBuilder(Scope scope, uint32_t start_item,
-                               uint32_t end_item,
-                               const std::set<Attribute>& requested_attrs)
-      : BrowsePacketBuilder(BrowsePdu::GET_FOLDER_ITEMS),
-        scope_(scope),
-        start_item_(start_item),
-        end_item_(end_item),
-        requested_attrs_(requested_attrs){};
-
-  Scope scope_;
-  uint32_t start_item_;
-  uint32_t end_item_;
-  std::set<Attribute> requested_attrs_;
 };
 
 }  // namespace avrcp

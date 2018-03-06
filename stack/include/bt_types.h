@@ -561,22 +561,15 @@ typedef uint8_t tAMP_KEY_TYPE;
 #define BT_OCTET8_LEN 8
 typedef uint8_t BT_OCTET8[BT_OCTET8_LEN]; /* octet array: size 16 */
 
+#define LINK_KEY_LEN 16
+typedef uint8_t LINK_KEY[LINK_KEY_LEN]; /* Link Key */
+
 #define AMP_LINK_KEY_LEN 32
 typedef uint8_t
     AMP_LINK_KEY[AMP_LINK_KEY_LEN]; /* Dedicated AMP and GAMP Link Keys */
 
-/* Some C files include this header file */
-#ifdef __cplusplus
-
-#include <array>
-
-constexpr int OCTET16_LEN = 16;
-typedef std::array<uint8_t, OCTET16_LEN> Octet16;
-
-constexpr int LINK_KEY_LEN = OCTET16_LEN;
-typedef Octet16 LinkKey; /* Link Key */
-
-#endif
+#define BT_OCTET16_LEN 16
+typedef uint8_t BT_OCTET16[BT_OCTET16_LEN]; /* octet array: size 16 */
 
 #define PIN_CODE_LEN 16
 typedef uint8_t PIN_CODE[PIN_CODE_LEN]; /* Pin Code (upto 128 bits) MSB is 0 */
@@ -730,7 +723,6 @@ typedef struct {
 #define BLE_ADDR_RANDOM 0x01
 #define BLE_ADDR_PUBLIC_ID 0x02
 #define BLE_ADDR_RANDOM_ID 0x03
-#define BLE_ADDR_ANONYMOUS 0xFF
 typedef uint8_t tBLE_ADDR_TYPE;
 #define BLE_ADDR_TYPE_MASK (BLE_ADDR_RANDOM | BLE_ADDR_PUBLIC)
 

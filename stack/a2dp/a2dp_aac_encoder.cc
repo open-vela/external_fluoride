@@ -27,7 +27,6 @@
 
 #include "a2dp_aac.h"
 #include "bt_common.h"
-#include "common/time_util.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -37,6 +36,12 @@
 
 // A2DP AAC encoder interval in milliseconds
 #define A2DP_AAC_ENCODER_INTERVAL_MS 20
+
+/*
+ * 2DH5 payload size of:
+ * 679 bytes - (4 bytes L2CAP Header + 12 bytes AVDTP Header)
+ */
+#define MAX_2MBPS_AVDTP_MTU 663
 
 // offset
 #if (BTA_AV_CO_CP_SCMS_T == TRUE)
@@ -126,8 +131,7 @@ void a2dp_aac_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
     aacEncClose(&a2dp_aac_encoder_cb.aac_handle);
   memset(&a2dp_aac_encoder_cb, 0, sizeof(a2dp_aac_encoder_cb));
 
-  a2dp_aac_encoder_cb.stats.session_start_us =
-      bluetooth::common::time_get_os_boottime_us();
+  a2dp_aac_encoder_cb.stats.session_start_us = time_get_os_boottime_us();
 
   a2dp_aac_encoder_cb.read_callback = read_callback;
   a2dp_aac_encoder_cb.enqueue_callback = enqueue_callback;
@@ -150,7 +154,7 @@ void a2dp_aac_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
                           &restart_input, &restart_output, &config_updated);
 }
 
-bool A2dpCodecConfigAacSource::updateEncoderUserConfig(
+bool A2dpCodecConfigAac::updateEncoderUserConfig(
     const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params, bool* p_restart_input,
     bool* p_restart_output, bool* p_config_updated) {
   a2dp_aac_encoder_cb.is_peer_edr = p_peer_params->is_peer_edr;
@@ -218,7 +222,6 @@ static void a2dp_aac_encoder_update(uint16_t peer_mtu,
   LOG_DEBUG(LOG_TAG, "%s: sample_rate=%u bits_per_sample=%u channel_count=%u",
             __func__, p_feeding_params->sample_rate,
             p_feeding_params->bits_per_sample, p_feeding_params->channel_count);
-  a2dp_aac_feeding_reset();
 
   // The codec parameters
   p_encoder_params->sample_rate =
@@ -479,7 +482,7 @@ void a2dp_aac_feeding_flush(void) {
   a2dp_aac_encoder_cb.aac_feeding_state.counter = 0;
 }
 
-uint64_t a2dp_aac_get_encoder_interval_ms(void) {
+period_ms_t a2dp_aac_get_encoder_interval_ms(void) {
   return A2DP_AAC_ENCODER_INTERVAL_MS;
 }
 
@@ -690,15 +693,11 @@ static bool a2dp_aac_read_feeding(uint8_t* read_buffer, uint32_t* bytes_read) {
   return true;
 }
 
-uint64_t A2dpCodecConfigAacSource::encoderIntervalMs() const {
+period_ms_t A2dpCodecConfigAac::encoderIntervalMs() const {
   return a2dp_aac_get_encoder_interval_ms();
 }
 
-int A2dpCodecConfigAacSource::getEffectiveMtu() const {
-  return a2dp_aac_encoder_cb.TxAaMtuSize;
-}
-
-void A2dpCodecConfigAacSource::debug_codec_dump(int fd) {
+void A2dpCodecConfigAac::debug_codec_dump(int fd) {
   a2dp_aac_encoder_stats_t* stats = &a2dp_aac_encoder_cb.stats;
 
   A2dpCodecConfig::debug_codec_dump(fd);

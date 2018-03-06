@@ -38,6 +38,7 @@
 #include "bta_api.h"
 #include "bta_mce_api.h"
 #include "btif_common.h"
+#include "btif_profile_queue.h"
 #include "btif_util.h"
 
 /*****************************************************************************

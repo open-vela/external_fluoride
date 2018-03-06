@@ -191,9 +191,6 @@ typedef void (*tBTA_AV_CO_UPDATE_MTU)(tBTA_AV_HNDL bta_av_handle,
                                       const RawAddress& peer_addr,
                                       uint16_t mtu);
 
-typedef bool (*tBTA_AV_CO_CONTENT_PROTECT_IS_ACTIVE)(
-    const RawAddress& peer_addr);
-
 /* the call-out functions for one stream */
 typedef struct {
   tBTA_AV_CO_INIT init;
@@ -207,7 +204,6 @@ typedef struct {
   tBTA_AV_CO_DATAPATH data;
   tBTA_AV_CO_DELAY delay;
   tBTA_AV_CO_UPDATE_MTU update_mtu;
-  tBTA_AV_CO_CONTENT_PROTECT_IS_ACTIVE cp_is_active;
 } tBTA_AV_CO_FUNCTS;
 
 /* data type for BTA_AV_API_ENABLE_EVT */
@@ -369,6 +365,7 @@ typedef struct {
 /* data type for BTA_AV_SDP_DISC_OK_EVT */
 typedef struct {
   BT_HDR hdr;
+  uint16_t avdt_version; /* AVDTP protocol version */
 } tBTA_AV_SDP_RES;
 
 /* data type for BTA_AV_API_OFFLOAD_RSP_EVT */
@@ -455,9 +452,7 @@ typedef union {
   0x02 /* API open was called while incoming timer is running */
 
 /* type for AV stream control block */
-// TODO: This should be renamed and changed to a proper class
-struct tBTA_AV_SCB final {
- public:
+struct tBTA_AV_SCB {
   const tBTA_AV_ACT* p_act_tbl; /* the action table for stream state machine */
   const tBTA_AV_CO_FUNCTS* p_cos; /* the associated callout functions */
   bool sdp_discovery_started; /* variable to determine whether SDP is started */
@@ -468,8 +463,10 @@ struct tBTA_AV_SCB final {
   tAVDT_SEP_INFO sep_info[BTA_AV_NUM_SEPS]; /* stream discovery results */
   AvdtpSepConfig cfg;                       /* local SEP configuration */
   alarm_t* avrc_ct_timer;                   /* delay timer for AVRC CT */
+  RawAddress peer_addr;                     /* peer BD address */
   uint16_t l2c_cid;                         /* L2CAP channel ID */
   uint16_t stream_mtu;                      /* MTU of stream */
+  uint16_t avdt_version;      /* the avdt version of peer device */
   tBTA_SEC sec_mask;          /* security mask */
   uint8_t media_type;         /* Media type: AVDT_MEDIA_TYPE_* */
   bool cong;                  /* true if AVDTP congested */
@@ -513,48 +510,7 @@ struct tBTA_AV_SCB final {
   bool no_rtp_header; /* true if add no RTP header */
   uint16_t uuid_int; /*intended UUID of Initiator to connect to */
   bool offload_start_pending;
-  bool offload_started;
-
-  /**
-   * Called to setup the state when connected to a peer.
-   *
-   * @param peer_address the peer address
-   */
-  void OnConnected(const RawAddress& peer_address);
-
-  /**
-   * Called to clear the state when disconnected from a peer.
-   *
-   */
-  void OnDisconnected();
-
-  /**
-   * Get the peer address.
-   */
-  const RawAddress& PeerAddress() const { return peer_address_; }
-
-  /**
-   * Get the AVDTP version of the peer device.
-   */
-  uint16_t AvdtpVersion() const { return avdtp_version_; }
-
-  /**
-   * Set the AVDTP version of the peer device.
-   *
-   * @param avdtp_version the AVDTP version to use
-   */
-  void SetAvdtpVersion(uint16_t avdtp_version);
-
-  /**
-   * Check whether the entry is assigned and currenty used.
-   *
-   * @return true if the entry is assigned and currently used
-   */
-  bool IsAssigned() const { return !peer_address_.IsEmpty(); }
-
- private:
-  RawAddress peer_address_;  // Peer address
-  uint16_t avdtp_version_;   // The AVDTP version of the peer device
+  bool skip_sdp; /* Decides if sdp to be done prior to profile connection */
 };
 
 #define BTA_AV_RC_ROLE_MASK 0x10
@@ -616,27 +572,6 @@ typedef struct {
   uint8_t audio_streams; /* handle mask of streaming audio channels */
 } tBTA_AV_CB;
 
-// A2DP offload VSC parameters
-class tBT_A2DP_OFFLOAD {
- public:
-  uint32_t codec_type;            /* codec types ex: SBC/AAC/LDAC/APTx */
-  uint16_t max_latency;           /* maximum latency */
-  uint16_t scms_t_enable;         /* content protection enable */
-  uint32_t sample_rate;           /* Sample rates ex: 44.1/48/88.2/96 Khz */
-  uint8_t bits_per_sample;        /* bits per sample ex: 16/24/32 */
-  uint8_t ch_mode;                /* None:0 Left:1 Right:2 */
-  uint32_t encoded_audio_bitrate; /* encoder audio bitrates */
-  uint16_t acl_hdl;               /* connection handle */
-  uint16_t l2c_rcid;              /* l2cap channel id */
-  uint16_t mtu;                   /* MTU size */
-  uint8_t codec_info[32];         /* Codec specific information */
-};
-
-/* Vendor OFFLOAD VSC */
-#define HCI_VSQC_CONTROLLER_A2DP_OPCODE 0x000A
-
-#define VS_HCI_A2DP_OFFLOAD_START 0x01
-#define VS_HCI_A2DP_OFFLOAD_STOP 0x02
 /*****************************************************************************
  *  Global data
  ****************************************************************************/
@@ -666,6 +601,7 @@ extern void bta_av_sink_data_cback(uint8_t handle, BT_HDR* p_pkt,
 extern tBTA_AV_SCB* bta_av_hndl_to_scb(uint16_t handle);
 extern bool bta_av_chk_start(tBTA_AV_SCB* p_scb);
 extern void bta_av_restore_switch(void);
+extern uint16_t bta_av_chk_mtu(tBTA_AV_SCB* p_scb, uint16_t mtu);
 extern void bta_av_conn_cback(uint8_t handle, const RawAddress& bd_addr,
                               uint8_t event, tAVDT_CTRL* p_data,
                               uint8_t scb_index);
@@ -679,7 +615,6 @@ extern bool bta_av_is_scb_init(tBTA_AV_SCB* p_scb);
 extern void bta_av_set_scb_sst_incoming(tBTA_AV_SCB* p_scb);
 extern tBTA_AV_LCB* bta_av_find_lcb(const RawAddress& addr, uint8_t op);
 extern const char* bta_av_sst_code(uint8_t state);
-extern void bta_av_free_scb(tBTA_AV_SCB* p_scb);
 
 /* main functions */
 extern void bta_av_api_deregister(tBTA_AV_DATA* p_data);
@@ -776,6 +711,5 @@ extern void bta_av_delay_co(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 extern void bta_av_open_at_inc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 extern void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 extern void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
-extern void bta_av_vendor_offload_stop(void);
 
 #endif /* BTA_AV_INT_H */

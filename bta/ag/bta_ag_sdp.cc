@@ -32,11 +32,9 @@
 #include "bta_ag_int.h"
 #include "bta_api.h"
 #include "bta_sys.h"
-#include "btif_config.h"
 #include "btm_api.h"
 #include "osi/include/osi.h"
 #include "sdp_api.h"
-#include "stack/include/btu.h"
 #include "utl.h"
 
 using bluetooth::Uuid;
@@ -87,9 +85,8 @@ static void bta_ag_sdp_cback(uint16_t status, uint8_t idx) {
     } else {
       event = BTA_AG_DISC_INT_RES_EVT;
     }
-    tBTA_AG_DATA disc_result = {.disc_result.status = status};
-    do_in_main_thread(FROM_HERE, base::Bind(&bta_ag_sm_execute_by_handle, idx,
-                                            event, disc_result));
+    do_in_bta_thread(FROM_HERE, base::Bind(&bta_ag_sm_execute_by_handle, idx,
+                                           event, tBTA_AG_DATA::kEmpty));
   }
 }
 
@@ -230,6 +227,8 @@ void bta_ag_create_records(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
       }
     }
   }
+
+  p_scb->hsp_version = HSP_VERSION_1_2;
 }
 
 /*******************************************************************************
@@ -298,10 +297,7 @@ bool bta_ag_sdp_find_attr(tBTA_AG_SCB* p_scb, tBTA_SERVICE_MASK service) {
 
   if (service & BTA_HFP_SERVICE_MASK) {
     uuid = UUID_SERVCLASS_HF_HANDSFREE;
-    /* If there is no cached peer version, use default one */
-    if (p_scb->peer_version == HFP_HSP_VERSION_UNKNOWN) {
-      p_scb->peer_version = HFP_VERSION_1_1; /* Default version */
-    }
+    p_scb->peer_version = HFP_VERSION_1_1; /* Default version */
   } else if (service & BTA_HSP_SERVICE_MASK && p_scb->role == BTA_AG_INT) {
     uuid = UUID_SERVCLASS_HEADSET_HS;
     p_scb->peer_version = HSP_VERSION_1_2; /* Default version */
@@ -337,63 +333,23 @@ bool bta_ag_sdp_find_attr(tBTA_AG_SCB* p_scb, tBTA_SERVICE_MASK service) {
     }
 
     /* get profile version (if failure, version parameter is not updated) */
-    uint16_t peer_version = HFP_HSP_VERSION_UNKNOWN;
-    if (!SDP_FindProfileVersionInRec(p_rec, uuid, &peer_version)) {
+    if (!SDP_FindProfileVersionInRec(p_rec, uuid, &p_scb->peer_version)) {
       APPL_TRACE_WARNING("%s: Get peer_version failed, using default 0x%04x",
                          __func__, p_scb->peer_version);
-      peer_version = p_scb->peer_version;
     }
 
+    /* get features if HFP */
     if (service & BTA_HFP_SERVICE_MASK) {
-      /* Update cached peer version if the new one is different */
-      if (peer_version != p_scb->peer_version) {
-        p_scb->peer_version = peer_version;
-        if (btif_config_set_bin(
-                p_scb->peer_addr.ToString(), HFP_VERSION_CONFIG_KEY,
-                (const uint8_t*)&peer_version, sizeof(peer_version))) {
-          btif_config_save();
-        } else {
-          APPL_TRACE_WARNING("%s: Failed to store peer HFP version for %s",
-                             __func__, p_scb->peer_addr.ToString().c_str());
-        }
-      }
-      /* get features if HFP */
       p_attr = SDP_FindAttributeInRec(p_rec, ATTR_ID_SUPPORTED_FEATURES);
       if (p_attr != nullptr) {
         /* Found attribute. Get value. */
         /* There might be race condition between SDP and BRSF.  */
         /* Do not update if we already received BRSF.           */
-        uint16_t sdp_features = p_attr->attr_value.v.u16;
-        bool sdp_wbs_support = sdp_features & BTA_AG_FEAT_WBS_SUPPORT;
-        if (!p_scb->received_at_bac && sdp_wbs_support) {
-          // Workaround for misbehaving HFs (e.g. some Hyundai car kit) that:
-          // 1. Indicate WBS support in SDP and codec negotiation in BRSF
-          // 2. But do not send required AT+BAC command
-          // Will assume mSBC is enabled and try codec negotiation by default
-          p_scb->codec_updated = true;
-          p_scb->peer_codecs = BTA_AG_CODEC_CVSD & BTA_AG_CODEC_MSBC;
-          p_scb->sco_codec = UUID_CODEC_MSBC;
-        }
-        if (sdp_features != p_scb->peer_sdp_features) {
-          p_scb->peer_sdp_features = sdp_features;
-          if (btif_config_set_bin(
-                  p_scb->peer_addr.ToString(), HFP_SDP_FEATURES_CONFIG_KEY,
-                  (const uint8_t*)&sdp_features, sizeof(sdp_features))) {
-            btif_config_save();
-          } else {
-            APPL_TRACE_WARNING(
-                "%s: Failed to store peer HFP SDP Features for %s", __func__,
-                p_scb->peer_addr.ToString().c_str());
-          }
-        }
-        if (p_scb->peer_features == 0) {
-          p_scb->peer_features = sdp_features & HFP_SDP_BRSF_FEATURES_MASK;
-        }
+        if (p_scb->peer_features == 0)
+          p_scb->peer_features = p_attr->attr_value.v.u16;
       }
-    } else {
-      /* No peer version caching for HSP, use discovered one directly */
-      p_scb->peer_version = peer_version;
-      /* get features if HSP */
+    } else /* HSP */
+    {
       p_attr =
           SDP_FindAttributeInRec(p_rec, ATTR_ID_REMOTE_AUDIO_VOLUME_CONTROL);
       if (p_attr != nullptr) {
@@ -471,6 +427,7 @@ void bta_ag_do_disc(tBTA_AG_SCB* p_scb, tBTA_SERVICE_MASK service) {
 
     if (p_scb->hsp_version >= HSP_VERSION_1_2) {
       uuid_list[0] = Uuid::From16Bit(UUID_SERVCLASS_HEADSET_HS);
+      num_uuid = 2;
     } else {
       /* Legacy from HSP v1.0 */
       uuid_list[0] = Uuid::From16Bit(UUID_SERVCLASS_HEADSET);

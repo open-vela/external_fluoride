@@ -34,26 +34,6 @@ bool btif_a2dp_source_init(void);
 // btif_a2dp_source_init() to prepare to start streaming.
 bool btif_a2dp_source_startup(void);
 
-// Start the A2DP Source session.
-// This function should be called by the BTIF state machine after
-// btif_a2dp_source_startup() to start the streaming session for |peer_address|.
-bool btif_a2dp_source_start_session(const RawAddress& peer_address);
-
-// Restart the A2DP Source session.
-// This function should be called by the BTIF state machine after
-// btif_a2dp_source_startup() to restart the streaming session.
-// |old_peer_address| is the peer address of the old session. This address
-// can be empty.
-// |new_peer_address| is the peer address of the new session. This address
-// cannot be empty.
-bool btif_a2dp_source_restart_session(const RawAddress& old_peer_address,
-                                      const RawAddress& new_peer_address);
-
-// End the A2DP Source session.
-// This function should be called by the BTIF state machine to end the
-// streaming session for |peer_address|.
-bool btif_a2dp_source_end_session(const RawAddress& peer_address);
-
 // Shutdown the A2DP Source module.
 // This function should be called by the BTIF state machine to stop streaming.
 void btif_a2dp_source_shutdown(void);
@@ -73,6 +53,11 @@ bool btif_a2dp_source_media_task_is_shutting_down(void);
 
 // Return true if the A2DP Source module is streaming.
 bool btif_a2dp_source_is_streaming(void);
+
+// Setup the A2DP Source codec, and prepare the encoder.
+// The peer address is |peer_addr|.
+// This function should be called prior to starting A2DP streaming.
+void btif_a2dp_source_setup_codec(const RawAddress& peer_addr);
 
 // Process a request to start the A2DP audio encoding task.
 void btif_a2dp_source_start_audio_req(void);
@@ -121,5 +106,9 @@ BT_HDR* btif_a2dp_source_audio_readbuf(void);
 // |fd| is the file descriptor to use for writing the ASCII formatted
 // information.
 void btif_a2dp_source_debug_dump(int fd);
+
+// Update the A2DP Source related metrics.
+// This function should be called before collecting the metrics.
+void btif_a2dp_source_update_metrics(void);
 
 #endif /* BTIF_A2DP_SOURCE_H */

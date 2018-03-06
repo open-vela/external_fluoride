@@ -24,8 +24,6 @@
 #include <base/logging.h>
 #include <string.h>
 
-#include <log/log.h>
-
 #include "avrc_api.h"
 #include "avrc_int.h"
 #include "bt_common.h"
@@ -425,15 +423,15 @@ static BT_HDR* avrc_proc_vendor_command(uint8_t handle, uint8_t label,
   }
 
   if (status != AVRC_STS_NO_ERROR) {
-    p_rsp = (BT_HDR*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
-    p_rsp->offset = p_pkt->offset;
-    p_data = (uint8_t*)(p_rsp + 1) + p_pkt->offset;
+    /* use the current GKI buffer to build/send the reject message */
+    p_data = (uint8_t*)(p_pkt + 1) + p_pkt->offset;
     *p_data++ = AVRC_RSP_REJ;
     p_data += AVRC_VENDOR_HDR_SIZE; /* pdu */
     *p_data++ = 0;                  /* pkt_type */
     UINT16_TO_BE_STREAM(p_data, 1); /* len */
     *p_data++ = status;             /* error code */
-    p_rsp->len = AVRC_VENDOR_HDR_SIZE + 5;
+    p_pkt->len = AVRC_VENDOR_HDR_SIZE + 5;
+    p_rsp = p_pkt;
   }
 
   return p_rsp;
@@ -574,7 +572,6 @@ static uint8_t avrc_proc_far_msg(uint8_t handle, uint8_t label, uint8_t cr,
     p_rsp = avrc_proc_vendor_command(handle, label, *pp_pkt, p_msg);
     if (p_rsp) {
       AVCT_MsgReq(handle, label, AVCT_RSP, p_rsp);
-      osi_free_and_reset((void**)pp_pkt);
       drop_code = 3;
     } else if (p_msg->hdr.opcode == AVRC_OP_DROP) {
       drop_code = 1;
@@ -662,13 +659,6 @@ static void avrc_msg_cback(uint8_t handle, uint8_t label, uint8_t cr,
     msg.browse.browse_len = p_pkt->len;
     msg.browse.p_browse_pkt = p_pkt;
   } else {
-    if (p_pkt->len < AVRC_AVC_HDR_SIZE) {
-      android_errorWriteLog(0x534e4554, "111803925");
-      AVRC_TRACE_WARNING("%s: message length %d too short: must be at least %d",
-                         __func__, p_pkt->len, AVRC_AVC_HDR_SIZE);
-      osi_free(p_pkt);
-      return;
-    }
     msg.hdr.ctype = p_data[0] & AVRC_CTYPE_MASK;
     AVRC_TRACE_DEBUG("%s handle:%d, ctype:%d, offset:%d, len: %d", __func__,
                      handle, msg.hdr.ctype, p_pkt->offset, p_pkt->len);
@@ -702,15 +692,6 @@ static void avrc_msg_cback(uint8_t handle, uint8_t label, uint8_t cr,
           p_drop_msg = "auto respond";
         } else {
           /* parse response */
-          if (p_pkt->len < AVRC_OP_UNIT_INFO_RSP_LEN) {
-            AVRC_TRACE_WARNING(
-                "%s: message length %d too short: must be at least %d",
-                __func__, p_pkt->len, AVRC_OP_UNIT_INFO_RSP_LEN);
-            android_errorWriteLog(0x534e4554, "79883824");
-            drop = true;
-            p_drop_msg = "UNIT_INFO_RSP too short";
-            break;
-          }
           p_data += 4; /* 3 bytes: ctype, subunit*, opcode + octet 3 (is 7)*/
           msg.unit.unit_type =
               (*p_data & AVRC_SUBTYPE_MASK) >> AVRC_SUBTYPE_SHIFT;
@@ -740,15 +721,6 @@ static void avrc_msg_cback(uint8_t handle, uint8_t label, uint8_t cr,
           p_drop_msg = "auto responded";
         } else {
           /* parse response */
-          if (p_pkt->len < AVRC_OP_SUB_UNIT_INFO_RSP_LEN) {
-            AVRC_TRACE_WARNING(
-                "%s: message length %d too short: must be at least %d",
-                __func__, p_pkt->len, AVRC_OP_SUB_UNIT_INFO_RSP_LEN);
-            android_errorWriteLog(0x534e4554, "79883824");
-            drop = true;
-            p_drop_msg = "SUB_UNIT_INFO_RSP too short";
-            break;
-          }
           p_data += AVRC_AVC_HDR_SIZE; /* 3 bytes: ctype, subunit*, opcode */
           msg.sub.page =
               (*p_data++ >> AVRC_SUB_PAGE_SHIFT) & AVRC_SUB_PAGE_MASK;
@@ -1150,11 +1122,7 @@ uint16_t AVRC_MsgReq(uint8_t handle, uint8_t label, uint8_t ctype,
     AVRC_CO_ID_TO_BE_STREAM(p_data, AVRC_CO_METADATA);
   } else {
     chk_frag = false;
-    if (p_pkt->layer_specific == AVCT_DATA_BROWSE) {
-      peer_mtu = AVCT_GetBrowseMtu(handle);
-    } else {
-      peer_mtu = AVCT_GetPeerMtu(handle);
-    }
+    peer_mtu = AVCT_GetBrowseMtu(handle);
     if (p_pkt->len > (peer_mtu - AVCT_HDR_LEN_SINGLE)) {
       AVRC_TRACE_ERROR(
           "%s bigger than peer mtu (p_pkt->len(%d) > peer_mtu(%d-%d))",

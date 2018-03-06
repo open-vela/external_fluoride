@@ -29,7 +29,6 @@
 #include "bta_api.h"
 #include "bta_dm_api.h"
 #include "bta_sys.h"
-#include "btif_config.h"
 #include "l2c_api.h"
 #include "osi/include/osi.h"
 #include "port_api.h"
@@ -174,13 +173,17 @@ void bta_ag_start_dereg(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
  *
  ******************************************************************************/
 void bta_ag_start_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
-  p_scb->peer_addr = data.api_open.bd_addr;
-  p_scb->cli_sec_mask = data.api_open.sec_mask;
-  p_scb->open_services = p_scb->reg_services;
+  RawAddress pending_bd_addr = {};
+
+  /* store parameters */
+  if (!data.IsEmpty()) {
+    p_scb->peer_addr = data.api_open.bd_addr;
+    p_scb->open_services = data.api_open.services;
+    p_scb->cli_sec_mask = data.api_open.sec_mask;
+  }
 
   /* Check if RFCOMM has any incoming connection to avoid collision. */
-  RawAddress pending_bd_addr = RawAddress::kEmpty;
-  if (PORT_IsOpening(&pending_bd_addr)) {
+  if (PORT_IsOpening(pending_bd_addr)) {
     /* Let the incoming connection goes through.                        */
     /* Issue collision for this scb for now.                            */
     /* We will decide what to do when we find incoming connetion later. */
@@ -294,11 +297,10 @@ void bta_ag_disc_fail(tBTA_AG_SCB* p_scb,
   /* reinitialize stuff */
 
   /* clear the remote BD address */
-  RawAddress peer_addr = p_scb->peer_addr;
   p_scb->peer_addr = RawAddress::kEmpty;
 
   /* call open cback w. failure */
-  bta_ag_cback_open(p_scb, peer_addr, BTA_AG_FAIL_SDP);
+  bta_ag_cback_open(p_scb, RawAddress::kEmpty, BTA_AG_FAIL_SDP);
 }
 
 /*******************************************************************************
@@ -327,7 +329,6 @@ void bta_ag_open_fail(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
  *
  ******************************************************************************/
 void bta_ag_rfc_fail(tBTA_AG_SCB* p_scb, UNUSED_ATTR const tBTA_AG_DATA& data) {
-  RawAddress peer_addr = p_scb->peer_addr;
   /* reinitialize stuff */
   p_scb->conn_handle = 0;
   p_scb->conn_service = 0;
@@ -344,7 +345,7 @@ void bta_ag_rfc_fail(tBTA_AG_SCB* p_scb, UNUSED_ATTR const tBTA_AG_DATA& data) {
   bta_ag_start_servers(p_scb, p_scb->reg_services);
 
   /* call open cback w. failure */
-  bta_ag_cback_open(p_scb, peer_addr, BTA_AG_FAIL_RFCOMM);
+  bta_ag_cback_open(p_scb, RawAddress::kEmpty, BTA_AG_FAIL_RFCOMM);
 }
 
 /*******************************************************************************
@@ -456,30 +457,6 @@ void bta_ag_rfc_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
   p_scb->cmee_enabled = false;
   p_scb->inband_enabled =
       ((p_scb->features & BTA_AG_FEAT_INBAND) == BTA_AG_FEAT_INBAND);
-  if (p_scb->conn_service == BTA_AG_HFP) {
-    size_t version_value_size = sizeof(p_scb->peer_version);
-    if (!btif_config_get_bin(
-            p_scb->peer_addr.ToString(), HFP_VERSION_CONFIG_KEY,
-            (uint8_t*)&p_scb->peer_version, &version_value_size)) {
-      APPL_TRACE_WARNING("%s: Failed read cached peer HFP version for %s",
-                         __func__, p_scb->peer_addr.ToString().c_str());
-      p_scb->peer_version = HFP_HSP_VERSION_UNKNOWN;
-    }
-    size_t sdp_features_size = sizeof(p_scb->peer_sdp_features);
-    if (btif_config_get_bin(
-            p_scb->peer_addr.ToString(), HFP_SDP_FEATURES_CONFIG_KEY,
-            (uint8_t*)&p_scb->peer_sdp_features, &sdp_features_size)) {
-      bool sdp_wbs_support = p_scb->peer_sdp_features & BTA_AG_FEAT_WBS_SUPPORT;
-      if (!p_scb->received_at_bac && sdp_wbs_support) {
-        p_scb->codec_updated = true;
-        p_scb->peer_codecs = BTA_AG_CODEC_CVSD & BTA_AG_CODEC_MSBC;
-        p_scb->sco_codec = UUID_CODEC_MSBC;
-      }
-    } else {
-      APPL_TRACE_WARNING("%s: Failed read cached peer HFP SDP features for %s",
-                         __func__, p_scb->peer_addr.ToString().c_str());
-    }
-  }
 
   /* set up AT command interpreter */
   p_scb->at_cb.p_at_tbl = bta_ag_at_tbl[p_scb->conn_service];
@@ -514,58 +491,56 @@ void bta_ag_rfc_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
  *
  ******************************************************************************/
 void bta_ag_rfc_acp_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
-  APPL_TRACE_DEBUG("%s: serv_handle0 = %d serv_handle = %d", __func__,
-                   p_scb->serv_handle[0], p_scb->serv_handle[1]);
+  uint16_t lcid;
+  int i;
+  tBTA_AG_SCB *ag_scb, *other_scb;
+  RawAddress dev_addr = {};
+  int status;
+
   /* set role */
   p_scb->role = BTA_AG_ACP;
 
+  APPL_TRACE_DEBUG("bta_ag_rfc_acp_open: serv_handle0 = %d serv_handle1 = %d",
+                   p_scb->serv_handle[0], p_scb->serv_handle[1]);
+
   /* get bd addr of peer */
-  uint16_t lcid = 0;
-  RawAddress dev_addr = RawAddress::kEmpty;
-  int status = PORT_CheckConnection(data.rfc.port_handle, &dev_addr, &lcid);
-  if (status != PORT_SUCCESS) {
-    LOG(ERROR) << __func__ << ", PORT_CheckConnection returned " << status;
-    return;
+  if (PORT_SUCCESS !=
+      (status = PORT_CheckConnection(data.rfc.port_handle, dev_addr, &lcid))) {
+    APPL_TRACE_DEBUG(
+        "bta_ag_rfc_acp_open error PORT_CheckConnection returned status %d",
+        status);
   }
 
   /* Collision Handling */
-  for (tBTA_AG_SCB& ag_scb : bta_ag_cb.scb) {
-    // Cancel any pending collision timers
-    if (ag_scb.in_use && alarm_is_scheduled(ag_scb.collision_timer)) {
-      VLOG(1) << __func__ << ": cancel collision alarm for "
-              << ag_scb.peer_addr;
-      alarm_cancel(ag_scb.collision_timer);
-      if (dev_addr != ag_scb.peer_addr && p_scb != &ag_scb) {
-        // Resume outgoing connection if incoming is not on the same device
-        bta_ag_resume_open(&ag_scb);
-      }
-    }
-    if (dev_addr == ag_scb.peer_addr && p_scb != &ag_scb) {
-      VLOG(1) << __func__ << ": fail outgoing connection before accepting "
-              << ag_scb.peer_addr;
-      // Fail the outgoing connection to clean up any upper layer states
-      bta_ag_rfc_fail(&ag_scb, tBTA_AG_DATA::kEmpty);
-      // If client port is opened, close it
-      if (ag_scb.conn_handle > 0) {
-        status = RFCOMM_RemoveConnection(ag_scb.conn_handle);
-        if (status != PORT_SUCCESS) {
-          LOG(WARNING) << __func__ << ": RFCOMM_RemoveConnection failed for "
-                       << dev_addr << ", handle "
-                       << std::to_string(ag_scb.conn_handle) << ", error "
-                       << status;
+  for (i = 0, ag_scb = &bta_ag_cb.scb[0]; i < BTA_AG_MAX_NUM_CLIENTS;
+       i++, ag_scb++) {
+    if (ag_scb->in_use && alarm_is_scheduled(ag_scb->collision_timer)) {
+      alarm_cancel(ag_scb->collision_timer);
+
+      if (dev_addr == ag_scb->peer_addr) {
+        /* If incoming and outgoing device are same, nothing more to do. */
+        /* Outgoing conn will be aborted because we have successful incoming
+         * conn.  */
+      } else {
+        /* Resume outgoing connection. */
+        other_scb = bta_ag_get_other_idle_scb(p_scb);
+        if (other_scb) {
+          other_scb->peer_addr = ag_scb->peer_addr;
+          other_scb->open_services = ag_scb->open_services;
+          other_scb->cli_sec_mask = ag_scb->cli_sec_mask;
+
+          bta_ag_resume_open(other_scb);
         }
       }
+
+      break;
     }
-    VLOG(1) << __func__ << ": dev_addr=" << dev_addr
-            << ", peer_addr=" << ag_scb.peer_addr
-            << ", in_use=" << ag_scb.in_use
-            << ", index=" << bta_ag_scb_to_idx(p_scb);
   }
 
   p_scb->peer_addr = dev_addr;
 
   /* determine connected service from port handle */
-  for (uint8_t i = 0; i < BTA_AG_NUM_IDX; i++) {
+  for (i = 0; i < BTA_AG_NUM_IDX; i++) {
     APPL_TRACE_DEBUG(
         "bta_ag_rfc_acp_open: i = %d serv_handle = %d port_handle = %d", i,
         p_scb->serv_handle[i], data.rfc.port_handle);
@@ -612,13 +587,11 @@ void bta_ag_rfc_data(tBTA_AG_SCB* p_scb, UNUSED_ATTR const tBTA_AG_DATA& data) {
     /* read data from rfcomm; if bad status, we're done */
     if (PORT_ReadData(p_scb->conn_handle, buf, BTA_AG_RFC_READ_MAX, &len) !=
         PORT_SUCCESS) {
-      LOG(ERROR) << __func__ << ": failed to read data " << p_scb->peer_addr;
       break;
     }
 
     /* if no data, we're done */
     if (len == 0) {
-      LOG(WARNING) << __func__ << ": no data for " << p_scb->peer_addr;
       break;
     }
 
@@ -801,7 +774,6 @@ void bta_ag_svc_conn_open(tBTA_AG_SCB* p_scb,
 void bta_ag_setcodec(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
   tBTA_AG_PEER_CODEC codec_type = data.api_setcodec.codec;
   tBTA_AG_VAL val = {};
-  val.hdr.handle = bta_ag_scb_to_idx(p_scb);
 
   /* Check if the requested codec type is valid */
   if ((codec_type != BTA_AG_CODEC_NONE) && (codec_type != BTA_AG_CODEC_CVSD) &&
@@ -829,33 +801,4 @@ void bta_ag_setcodec(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
   }
 
   (*bta_ag_cb.p_cback)(BTA_AG_WBS_EVT, (tBTA_AG*)&val);
-}
-
-static void bta_ag_collision_timer_cback(void* data) {
-  if (data == nullptr) {
-    LOG(ERROR) << __func__ << ": data should never be null in a timer callback";
-    return;
-  }
-  /* If the peer haven't opened AG connection     */
-  /* we will restart opening process.             */
-  bta_ag_resume_open(static_cast<tBTA_AG_SCB*>(data));
-}
-
-void bta_ag_handle_collision(tBTA_AG_SCB* p_scb,
-                             UNUSED_ATTR const tBTA_AG_DATA& data) {
-  /* Cancel SDP if it had been started. */
-  if (p_scb->p_disc_db) {
-    SDP_CancelServiceSearch(p_scb->p_disc_db);
-    bta_ag_free_db(p_scb, tBTA_AG_DATA::kEmpty);
-  }
-
-  /* reopen registered servers */
-  /* Collision may be detected before or after we close servers. */
-  if (bta_ag_is_server_closed(p_scb)) {
-    bta_ag_start_servers(p_scb, p_scb->reg_services);
-  }
-
-  /* Start timer to han */
-  alarm_set_on_mloop(p_scb->collision_timer, BTA_AG_COLLISION_TIMEOUT_MS,
-                     bta_ag_collision_timer_cback, p_scb);
 }

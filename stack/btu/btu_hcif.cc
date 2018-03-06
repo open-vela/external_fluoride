@@ -49,11 +49,10 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
-using base::Location;
+using tracked_objects::Location;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
-extern void smp_cancel_start_encryption_attempt();
 
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
@@ -126,6 +125,18 @@ static void btu_ble_rc_param_req_evt(uint8_t* p);
 #if (BLE_PRIVACY_SPT == TRUE)
 static void btu_ble_proc_enhanced_conn_cmpl(uint8_t* p, uint16_t evt_len);
 #endif
+
+static void do_in_hci_thread(const tracked_objects::Location& from_here,
+                             const base::Closure& task) {
+  base::MessageLoop* hci_message_loop = get_message_loop();
+  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
+    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
+              __func__, from_here.ToString().c_str());
+    return;
+  }
+
+  hci_message_loop->task_runner()->PostTask(from_here, task);
+}
 
 /*******************************************************************************
  *
@@ -384,8 +395,8 @@ void btu_hcif_send_cmd(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_buf) {
       vsc_callback);
 }
 
-using hci_cmd_cb = base::OnceCallback<void(
-    uint8_t* /* return_parameters */, uint16_t /* return_parameters_length*/)>;
+using hci_cmd_cb = base::Callback<void(uint8_t* /* return_parameters */,
+                                       uint16_t /* return_parameters_length*/)>;
 
 struct cmd_with_cb_data {
   hci_cmd_cb cb;
@@ -413,7 +424,7 @@ static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
   cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)context;
   HCI_TRACE_DEBUG("command complete for: %s",
                   cb_wrapper->posted_from.ToString().c_str());
-  std::move(cb_wrapper->cb).Run(stream, event->len - 5);
+  cb_wrapper->cb.Run(stream, event->len - 5);
   cmd_with_cb_data_cleanup(cb_wrapper);
   osi_free(cb_wrapper);
 
@@ -422,9 +433,9 @@ static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
 
 static void btu_hcif_command_complete_evt_with_cb(BT_HDR* response,
                                                   void* context) {
-  do_in_main_thread(FROM_HERE,
-                    base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
-                               response, context));
+  do_in_hci_thread(FROM_HERE,
+                   base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
+                              response, context));
 }
 
 static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
@@ -440,7 +451,7 @@ static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
   cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)context;
   HCI_TRACE_DEBUG("command status for: %s",
                   cb_wrapper->posted_from.ToString().c_str());
-  std::move(cb_wrapper->cb).Run(&status, sizeof(uint16_t));
+  cb_wrapper->cb.Run(&status, sizeof(uint16_t));
   cmd_with_cb_data_cleanup(cb_wrapper);
   osi_free(cb_wrapper);
 
@@ -455,7 +466,7 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
     return;
   }
 
-  do_in_main_thread(
+  do_in_hci_thread(
       FROM_HERE, base::Bind(btu_hcif_command_status_evt_with_cb_on_task, status,
                             command, context));
 }
@@ -463,9 +474,9 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
 /* This function is called to send commands to the Host Controller. |cb| is
  * called when command status event is called with error code, or when the
  * command complete event is received. */
-void btu_hcif_send_cmd_with_cb(const Location& posted_from, uint16_t opcode,
-                               uint8_t* params, uint8_t params_len,
-                               hci_cmd_cb cb) {
+void btu_hcif_send_cmd_with_cb(const tracked_objects::Location& posted_from,
+                               uint16_t opcode, uint8_t* params,
+                               uint8_t params_len, hci_cmd_cb cb) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -482,7 +493,7 @@ void btu_hcif_send_cmd_with_cb(const Location& posted_from, uint16_t opcode,
       (cmd_with_cb_data*)osi_malloc(sizeof(cmd_with_cb_data));
 
   cmd_with_cb_data_init(cb_wrapper);
-  cb_wrapper->cb = std::move(cb);
+  cb_wrapper->cb = cb;
   cb_wrapper->posted_from = posted_from;
 
   hci_layer_get_interface()->transmit_command(
@@ -726,11 +737,6 @@ static void btu_hcif_encryption_change_evt(uint8_t* p) {
   STREAM_TO_UINT16(handle, p);
   STREAM_TO_UINT8(encr_enable, p);
 
-  if (status == HCI_ERR_CONNECTION_TOUT) {
-    smp_cancel_start_encryption_attempt();
-    return;
-  }
-
   btm_acl_encrypt_change(handle, status, encr_enable);
   btm_sec_encrypt_change(handle, status, encr_enable);
 }
@@ -936,6 +942,18 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     /* BLE Commands sComplete*/
+    case HCI_BLE_ADD_WHITE_LIST:
+      btm_ble_add_2_white_list_complete(*p);
+      break;
+
+    case HCI_BLE_CLEAR_WHITE_LIST:
+      btm_ble_clear_white_list_complete(p, evt_len);
+      break;
+
+    case HCI_BLE_REMOVE_WHITE_LIST:
+      btm_ble_remove_from_white_list_complete(p, evt_len);
+      break;
+
     case HCI_BLE_RAND:
     case HCI_BLE_ENCRYPT:
       btm_ble_rand_enc_complete(p, opcode, (tBTM_RAND_ENC_CB*)p_cplt_cback);
@@ -953,10 +971,6 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
     case HCI_LE_EXTENDED_CREATE_CONNECTION:
       // No command complete event for those commands according to spec
       LOG(ERROR) << "No command complete expected, but received!";
-      break;
-
-    case HCI_BLE_CREATE_CONN_CANCEL:
-      btm_ble_create_conn_cancel_complete(p);
       break;
 
     case HCI_BLE_TRANSMITTER_TEST:
@@ -1021,8 +1035,8 @@ static void btu_hcif_command_complete_evt_on_task(BT_HDR* event,
 }
 
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
-  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
-                                          response, context));
+  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
+                                         response, context));
 }
 
 /*******************************************************************************
@@ -1056,7 +1070,7 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
         }
       }
 #endif
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case Falls Through */
 
     case HCI_HOLD_MODE:
     case HCI_SNIFF_MODE:
@@ -1122,15 +1136,6 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
             /* Device refused to start authentication.  That should be treated
              * as authentication failure. */
             btm_sec_auth_complete(BTM_INVALID_HCI_HANDLE, status);
-            break;
-
-          case HCI_BLE_START_ENC:
-            // Race condition: disconnection happened right before we send
-            // "LE Encrypt", controller responds with no connection, we should
-            // cancel the encryption attempt, rather than unpair the device.
-            if (status == HCI_ERR_NO_CONNECTION) {
-              smp_cancel_start_encryption_attempt();
-            }
             break;
 
           case HCI_SET_CONN_ENCRYPTION:
@@ -1205,8 +1210,8 @@ static void btu_hcif_command_status_evt_on_task(uint8_t status, BT_HDR* event,
 
 static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
                                         void* context) {
-  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
-                                          status, command, context));
+  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
+                                         status, command, context));
 }
 
 /*******************************************************************************
@@ -1372,11 +1377,11 @@ static void btu_hcif_link_key_request_evt(uint8_t* p) {
  ******************************************************************************/
 static void btu_hcif_link_key_notification_evt(uint8_t* p) {
   RawAddress bda;
-  Octet16 key;
+  LINK_KEY key;
   uint8_t key_type;
 
   STREAM_TO_BDADDR(bda, p);
-  STREAM_TO_ARRAY16(key.data(), p);
+  STREAM_TO_ARRAY16(key, p);
   STREAM_TO_UINT8(key_type, p);
 
   btm_sec_link_key_notification(bda, key, key_type);

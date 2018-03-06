@@ -47,6 +47,12 @@
 /* Invalid Chld command */
 #define BTA_AG_INVALID_CHLD 255
 
+/* clip type constants */
+#define BTA_AG_CLIP_TYPE_MIN 128
+#define BTA_AG_CLIP_TYPE_MAX 175
+#define BTA_AG_CLIP_TYPE_DEFAULT 129
+#define BTA_AG_CLIP_TYPE_VOIP 255
+
 #define COLON_IDX_4_VGSVGM 4
 
 /* Local events which will not trigger a higher layer callback */
@@ -57,6 +63,7 @@ enum {
   BTA_AG_LOCAL_EVT_CMER,
   BTA_AG_LOCAL_EVT_BRSF,
   BTA_AG_LOCAL_EVT_CMEE,
+  BTA_AG_LOCAL_EVT_BIA,
   BTA_AG_LOCAL_EVT_BCC,
 };
 
@@ -98,7 +105,7 @@ const tBTA_AG_AT_CMD bta_ag_hfp_cmd[] = {
     {"+COPS", BTA_AG_AT_COPS_EVT, BTA_AG_AT_READ | BTA_AG_AT_SET, BTA_AG_AT_STR,
      0, 0},
     {"+CMEE", BTA_AG_LOCAL_EVT_CMEE, BTA_AG_AT_SET, BTA_AG_AT_INT, 0, 1},
-    {"+BIA", BTA_AG_AT_BIA_EVT, BTA_AG_AT_SET, BTA_AG_AT_STR, 0, 20},
+    {"+BIA", BTA_AG_LOCAL_EVT_BIA, BTA_AG_AT_SET, BTA_AG_AT_STR, 0, 20},
     {"+CBC", BTA_AG_AT_CBC_EVT, BTA_AG_AT_SET, BTA_AG_AT_INT, 0, 100},
     {"+BCC", BTA_AG_LOCAL_EVT_BCC, BTA_AG_AT_NONE, BTA_AG_AT_STR, 0, 0},
     {"+BCS", BTA_AG_AT_BCS_EVT, BTA_AG_AT_SET, BTA_AG_AT_INT, 0,
@@ -835,7 +842,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
   val.hdr.handle = bta_ag_scb_to_idx(p_scb);
   val.hdr.app_id = p_scb->app_id;
   val.hdr.status = BTA_AG_SUCCESS;
-  val.num = static_cast<uint32_t>(int_arg);
+  val.num = int_arg;
   val.bd_addr = p_scb->peer_addr;
   strlcpy(val.str, p_arg, sizeof(val.str));
 
@@ -846,28 +853,16 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
    * callback is NOT invoked.
    */
   tBTA_AG_EVT event = 0;
-  if (cmd < BTA_AG_LOCAL_EVT_FIRST) {
-    event = static_cast<tBTA_AG_EVT>(cmd);
-  }
+  if (cmd < BTA_AG_LOCAL_EVT_FIRST) event = cmd;
 
   switch (cmd) {
     case BTA_AG_AT_A_EVT:
     case BTA_AG_SPK_EVT:
     case BTA_AG_MIC_EVT:
+    case BTA_AG_AT_CHUP_EVT:
     case BTA_AG_AT_CBC_EVT:
       /* send OK */
       bta_ag_send_ok(p_scb);
-      break;
-
-    case BTA_AG_AT_CHUP_EVT:
-      if (!bta_ag_sco_is_active_device(p_scb->peer_addr)) {
-        LOG(WARNING) << __func__ << ": AT+CHUP rejected as " << p_scb->peer_addr
-                << " is not the active device";
-        event = 0;
-        bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
-      } else {
-        bta_ag_send_ok(p_scb);
-      }
       break;
 
     case BTA_AG_AT_BLDN_EVT:
@@ -1145,37 +1140,32 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
       event = 0;
       break;
 
-    case BTA_AG_AT_BIA_EVT:
+    case BTA_AG_LOCAL_EVT_BIA:
+      /* don't call callback */
+      event = 0;
+
       bia_masked_out = p_scb->bia_masked_out;
 
       /* Parse the indicator mask */
       for (i = 0, ind_id = 1; (val.str[i] != 0) && (ind_id <= 20);
            i++, ind_id++) {
-        if (val.str[i] == ',') {
-          continue;
-        }
+        if (val.str[i] == ',') continue;
 
-        if (val.str[i] == '0') {
+        if (val.str[i] == '0')
           bia_masked_out |= ((uint32_t)1 << ind_id);
-        } else if (val.str[i] == '1') {
+        else if (val.str[i] == '1')
           bia_masked_out &= ~((uint32_t)1 << ind_id);
-        } else {
+        else
           break;
-        }
 
         i++;
-        if (val.str[i] != ',') {
-          break;
-        }
+        if ((val.str[i] == 0) || (val.str[i] != ',')) break;
       }
       if (val.str[i] == 0) {
         p_scb->bia_masked_out = bia_masked_out;
-        val.num = bia_masked_out;
         bta_ag_send_ok(p_scb);
-      } else {
-        event = 0;
+      } else
         bta_ag_send_error(p_scb, BTA_AG_ERR_INVALID_INDEX);
-      }
       break;
 
     case BTA_AG_AT_CNUM_EVT:
@@ -1190,7 +1180,6 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
 
     case BTA_AG_AT_BAC_EVT:
       bta_ag_send_ok(p_scb);
-      p_scb->received_at_bac = true;
 
       /* store available codecs from the peer */
       if ((p_scb->peer_features & BTA_AG_PEER_FEAT_CODEC) &&
@@ -1424,10 +1413,24 @@ void bta_ag_hfp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& result) {
       /* tell sys to stop av if any */
       bta_sys_sco_use(BTA_ID_AG, p_scb->app_id, p_scb->peer_addr);
 
-      p_scb->clip[0] = 0;
-      if (result.data.str[0] != 0) {
-        snprintf(p_scb->clip, sizeof(p_scb->clip), "%s", result.data.str);
+      /* Store caller id string.
+       * Append type info at the end.
+       * Make sure a valid type info is passed.
+       * Otherwise add 129 as default type */
+      uint16_t clip_type = result.data.num;
+      if ((clip_type < BTA_AG_CLIP_TYPE_MIN) ||
+          (clip_type > BTA_AG_CLIP_TYPE_MAX)) {
+        if (clip_type != BTA_AG_CLIP_TYPE_VOIP) {
+          clip_type = BTA_AG_CLIP_TYPE_DEFAULT;
+        }
       }
+
+      APPL_TRACE_DEBUG("CLIP type :%d", clip_type);
+      p_scb->clip[0] = 0;
+      if (result.data.str[0] != 0)
+        snprintf(p_scb->clip, sizeof(p_scb->clip), "%s,%d", result.data.str,
+                 clip_type);
+
       /* send callsetup indicator */
       if (p_scb->post_sco == BTA_AG_POST_SCO_CALL_END) {
         /* Need to sent 2 callsetup IND's(Call End and Incoming call) after SCO
@@ -1748,11 +1751,9 @@ void bta_ag_send_bcs(tBTA_AG_SCB* p_scb) {
  ******************************************************************************/
 void bta_ag_send_ring(tBTA_AG_SCB* p_scb,
                       UNUSED_ATTR const tBTA_AG_DATA& data) {
-  if ((p_scb->conn_service == BTA_AG_HFP) &&
-      p_scb->callsetup_ind != BTA_AG_CALLSETUP_INCOMING) {
-    LOG(WARNING) << __func__ << ": don't send RING, conn_service="
-                 << std::to_string(p_scb->conn_service)
-                 << ", callsetup_ind=" << std::to_string(p_scb->callsetup_ind);
+  if (p_scb->callsetup_ind != BTA_AG_CALLSETUP_INCOMING) {
+    APPL_TRACE_DEBUG("%s: don't send the ring since there is no MT call setup",
+                     __func__);
     return;
   }
   /* send RING */

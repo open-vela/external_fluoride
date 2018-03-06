@@ -519,13 +519,11 @@ tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   /* Allocate a new CCB. Return if none available. */
   p_ccb = sdpu_allocate_ccb();
   if (p_ccb == NULL) {
-    SDP_TRACE_WARNING("%s: no spare CCB for peer %s", __func__,
-                      p_bd_addr.ToString().c_str());
+    SDP_TRACE_WARNING("SDP - no spare CCB for orig");
     return (NULL);
   }
 
-  SDP_TRACE_EVENT("%s: SDP - Originate started for peer %s", __func__,
-                  p_bd_addr.ToString().c_str());
+  SDP_TRACE_EVENT("SDP - Originate started");
 
   /* We are the originator of this connection */
   p_ccb->con_flags |= SDP_FLAGS_IS_ORIG;
@@ -540,14 +538,15 @@ tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   cid = L2CA_ConnectReq(SDP_PSM, p_bd_addr);
 
   /* Check if L2CAP started the connection process */
-  if (cid == 0) {
-    SDP_TRACE_WARNING("%s: SDP - Originate failed for peer %s", __func__,
-                      p_bd_addr.ToString().c_str());
+  if (cid != 0) {
+    p_ccb->connection_id = cid;
+
+    return (p_ccb);
+  } else {
+    SDP_TRACE_WARNING("SDP - Originate failed");
     sdpu_release_ccb(p_ccb);
     return (NULL);
   }
-  p_ccb->connection_id = cid;
-  return (p_ccb);
 }
 
 /*******************************************************************************

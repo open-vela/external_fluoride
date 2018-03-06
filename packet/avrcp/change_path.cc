@@ -52,7 +52,7 @@ bool ChangePathResponseBuilder::Serialize(
 
 uint16_t ChangePathRequest::GetUidCounter() const {
   auto it = begin() + BrowsePacket::kMinSize();
-  return it.extractBE<uint16_t>();
+  return base::ByteSwap(it.extract<uint16_t>());
 }
 
 Direction ChangePathRequest::GetDirection() const {
@@ -62,7 +62,7 @@ Direction ChangePathRequest::GetDirection() const {
 
 uint64_t ChangePathRequest::GetUid() const {
   auto it = begin() + BrowsePacket::kMinSize() + static_cast<size_t>(3);
-  return it.extractBE<uint64_t>();
+  return base::ByteSwap(it.extract<uint64_t>());
 }
 
 bool ChangePathRequest::IsValid() const {
@@ -82,30 +82,6 @@ std::string ChangePathRequest::ToString() const {
   ss << std::endl;
 
   return ss.str();
-}
-
-std::unique_ptr<ChangePathRequestBuilder> ChangePathRequestBuilder::MakeBuilder(
-    uint16_t uid_counter, Direction direction, uint64_t folder_uid) {
-  std::unique_ptr<ChangePathRequestBuilder> builder(
-      new ChangePathRequestBuilder(uid_counter, direction, folder_uid));
-
-  return builder;
-}
-
-size_t ChangePathRequestBuilder::size() const {
-  return ChangePathRequest::kMinSize();
-}
-
-bool ChangePathRequestBuilder::Serialize(
-    const std::shared_ptr<::bluetooth::Packet>& pkt) {
-  ReserveSpace(pkt, size());
-
-  BrowsePacketBuilder::PushHeader(pkt, size() - BrowsePacket::kMinSize());
-
-  AddPayloadOctets2(pkt, base::ByteSwap(uid_counter_));
-  AddPayloadOctets1(pkt, static_cast<uint8_t>(direction_));
-  AddPayloadOctets8(pkt, base::ByteSwap(folder_uid_));
-  return true;
 }
 
 }  // namespace avrcp

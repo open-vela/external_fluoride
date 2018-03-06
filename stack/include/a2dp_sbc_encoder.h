@@ -25,6 +25,7 @@
 #define A2DP_SBC_ENCODER_H
 
 #include "a2dp_codec_api.h"
+#include "osi/include/time.h"
 
 // Loads the A2DP SBC encoder.
 // Return true on success, otherwise false.
@@ -53,13 +54,10 @@ void a2dp_sbc_feeding_reset(void);
 void a2dp_sbc_feeding_flush(void);
 
 // Get the A2DP SBC encoder interval (in milliseconds).
-uint64_t a2dp_sbc_get_encoder_interval_ms(void);
+period_ms_t a2dp_sbc_get_encoder_interval_ms(void);
 
 // Prepare and send A2DP SBC encoded frames.
 // |timestamp_us| is the current timestamp (in microseconds).
 void a2dp_sbc_send_frames(uint64_t timestamp_us);
 
-// Get SBC bitrate
-// Returns |uint32_t| bitrate in bits per second
-uint32_t a2dp_sbc_get_bitrate();
 #endif  // A2DP_SBC_ENCODER_H
