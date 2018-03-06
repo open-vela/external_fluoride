@@ -36,7 +36,6 @@
 /* Number of SCBs (AG service instances that can be registered) */
 #define BTA_AG_MAX_NUM_CLIENTS 6
 
-#define HFP_HSP_VERSION_UNKNOWN 0x0000
 #define HFP_VERSION_1_1 0x0101
 #define HFP_VERSION_1_5 0x0105
 #define HFP_VERSION_1_6 0x0106
@@ -44,9 +43,6 @@
 
 #define HSP_VERSION_1_0 0x0100
 #define HSP_VERSION_1_2 0x0102
-
-#define HFP_VERSION_CONFIG_KEY "HfpVersion"
-#define HFP_SDP_FEATURES_CONFIG_KEY "HfpSdpFeatures"
 
 /* Note, if you change the default version here, please also change the one in
  * bta_hs_api.h, they are meant to be the same.
@@ -66,12 +62,6 @@
 #define BTA_AG_FEAT_ECC 0x00000080    /* Enhanced Call Control */
 #define BTA_AG_FEAT_EXTERR 0x00000100 /* Extended error codes */
 #define BTA_AG_FEAT_CODEC 0x00000200  /* Codec Negotiation */
-
-/* AG SDP feature masks */
-#define BTA_AG_FEAT_WBS_SUPPORT 0x0020 /* Supports WBS */
-
-/* Only SDP feature bits 0 to 4 matches BRSF feature bits */
-#define HFP_SDP_BRSF_FEATURES_MASK 0x001F
 
 /* Valid feature bit mask for HFP 1.6 (and below) */
 #define HFP_1_6_FEAT_MASK 0x000003FF
@@ -264,12 +254,6 @@ typedef uint16_t tBTA_AG_PEER_CODEC;
 #define BTA_AG_BTRH_READ 3     /* Read the current value */
 #define BTA_AG_BTRH_NO_RESP 4  /* Not in RH States (reply to read) */
 
-/* clip type constants */
-#define BTA_AG_CLIP_TYPE_MIN 128
-#define BTA_AG_CLIP_TYPE_MAX 175
-#define BTA_AG_CLIP_TYPE_DEFAULT 129
-#define BTA_AG_CLIP_TYPE_VOIP 255
-
 /* ASCII character string of arguments to the AT command or result */
 #ifndef BTA_AG_AT_MAX_LEN
 #define BTA_AG_AT_MAX_LEN 256
@@ -329,7 +313,6 @@ struct tBTA_AG_RES_DATA {
 #define BTA_AG_AT_BCS_EVT 27  /* Codec select */
 #define BTA_AG_AT_BIND_EVT 28 /* HF indicator */
 #define BTA_AG_AT_BIEV_EVT 29 /* HF indicator updates from peer */
-#define BTA_AG_AT_BIA_EVT 32  /* AG indicator activation event from peer */
 
 typedef uint8_t tBTA_AG_EVT;
 
@@ -373,7 +356,7 @@ typedef struct {
   tBTA_AG_HDR hdr;
   RawAddress bd_addr;
   char str[BTA_AG_AT_MAX_LEN + 1];
-  uint32_t num;
+  uint16_t num;
   uint8_t idx;   /* call number used by CLCC and CHLD */
   uint16_t lidx; /* long index, ex, HF indicator */
 } tBTA_AG_VAL;
@@ -530,7 +513,8 @@ void BTA_AgDeregister(uint16_t handle);
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AgOpen(uint16_t handle, const RawAddress& bd_addr, tBTA_SEC sec_mask);
+void BTA_AgOpen(uint16_t handle, const RawAddress& bd_addr, tBTA_SEC sec_mask,
+                tBTA_SERVICE_MASK services);
 
 /*******************************************************************************
  *

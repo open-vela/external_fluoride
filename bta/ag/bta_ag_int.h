@@ -79,7 +79,6 @@ enum {
   BTA_AG_DISC_FAIL_EVT,
   BTA_AG_RING_TIMEOUT_EVT,
   BTA_AG_SVC_TIMEOUT_EVT,
-  BTA_AG_COLLISION_EVT,
   BTA_AG_MAX_EVT,
 };
 
@@ -126,6 +125,7 @@ typedef struct {
 /* data type for BTA_AG_API_OPEN_EVT */
 typedef struct {
   RawAddress bd_addr;
+  tBTA_SERVICE_MASK services;
   tBTA_SEC sec_mask;
 } tBTA_AG_API_OPEN;
 
@@ -203,7 +203,6 @@ struct tBTA_AG_SCB {
   tBTA_SEC cli_sec_mask;                /* client security mask */
   tBTA_AG_FEAT features;                /* features registered by application */
   tBTA_AG_PEER_FEAT peer_features;      /* peer device features */
-  uint16_t peer_sdp_features;           /* peer device SDP features */
   uint16_t peer_version;                /* profile version of peer device */
   uint16_t hsp_version;                 /* HSP profile version before SDP */
   uint16_t sco_idx;                     /* SCO handle */
@@ -232,7 +231,6 @@ struct tBTA_AG_SCB {
   alarm_t* collision_timer;
   alarm_t* ring_timer;
   alarm_t* codec_negotiation_timer;
-  bool received_at_bac; /* indicate AT+BAC is received at least once */
   tBTA_AG_PEER_CODEC peer_codecs; /* codecs for eSCO supported by the peer */
   tBTA_AG_PEER_CODEC sco_codec;   /* codec to be used for eSCO connection */
   tBTA_AG_PEER_CODEC
@@ -308,6 +306,7 @@ extern uint8_t bta_ag_service_to_idx(tBTA_SERVICE_MASK services);
 extern uint16_t bta_ag_idx_by_bdaddr(const RawAddress* peer_addr);
 extern bool bta_ag_other_scb_open(tBTA_AG_SCB* p_curr_scb);
 extern bool bta_ag_scb_open(tBTA_AG_SCB* p_curr_scb);
+extern tBTA_AG_SCB* bta_ag_get_other_idle_scb(tBTA_AG_SCB* p_curr_scb);
 extern void bta_ag_sm_execute(tBTA_AG_SCB* p_scb, uint16_t event,
                               const tBTA_AG_DATA& data);
 extern void bta_ag_sm_execute_by_handle(uint16_t handle, uint16_t event,
@@ -379,8 +378,6 @@ extern void bta_ag_svc_conn_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data);
 extern void bta_ag_result(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data);
 extern void bta_ag_setcodec(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data);
 extern void bta_ag_send_ring(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data);
-extern void bta_ag_handle_collision(tBTA_AG_SCB* p_scb,
-                                    const tBTA_AG_DATA& data);
 
 /* Internal utility functions */
 extern void bta_ag_sco_codec_nego(tBTA_AG_SCB* p_scb, bool result);

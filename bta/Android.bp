@@ -12,8 +12,6 @@ cc_defaults {
         "system/bt",
         "system/bt/bta/include",
         "system/bt/btcore/include",
-        "system/bt/btif/avrcp",
-        "system/bt/btif/include",
         "system/bt/hci/include",
         "system/bt/internal_include",
         "system/bt/stack/include",
@@ -34,7 +32,6 @@ cc_defaults {
 cc_library_static {
     name: "libbt-bta",
     defaults: ["fluoride_bta_defaults"],
-    cflags: ["-Wno-implicit-fallthrough"],
     srcs: [
         "ag/bta_ag_act.cc",
         "ag/bta_ag_api.cc",
@@ -69,8 +66,6 @@ cc_library_static {
         "gatt/bta_gatts_api.cc",
         "gatt/bta_gatts_main.cc",
         "gatt/bta_gatts_utils.cc",
-        "gatt/database.cc",
-        "gatt/database_builder.cc",
         "hearing_aid/hearing_aid.cc",
         "hearing_aid/hearing_aid_audio_source.cc",
         "hf_client/bta_hf_client_act.cc",
@@ -114,10 +109,7 @@ cc_library_static {
         "sys/bta_sys_main.cc",
         "sys/utl.cc",
     ],
-    static_libs: [
-        "avrcp-target-service",
-        "lib-bt-packets",
-    ],
+
     whole_static_libs: [
         "libaudio-hearing-aid-hw-utils",
     ],
@@ -130,9 +122,7 @@ cc_test {
     defaults: ["fluoride_bta_defaults"],
     srcs: [
         "test/bta_hf_client_test.cc",
-        "test/gatt/database_builder_test.cc",
-        "test/gatt/database_builder_sample_device_test.cc",
-        "test/gatt/database_test.cc",
+        "test/gatt_cache_file_test.cc",
     ],
     shared_libs: [
         "liblog",
@@ -142,8 +132,7 @@ cc_test {
         "libbtcore",
         "libbt-bta",
         "libbluetooth-types",
-        "libbt-protos-lite",
         "libosi",
-        "libbt-common",
+        "libbt-protos",
     ],
 }

@@ -49,26 +49,6 @@ bool btif_a2dp_sink_init(void);
 // streaming.
 bool btif_a2dp_sink_startup(void);
 
-// Start the A2DP Sink session.
-// This function should be called by the BTIF state machine after
-// btif_a2dp_sink_startup() to start the streaming session for |peer_address|.
-bool btif_a2dp_sink_start_session(const RawAddress& peer_address);
-
-// Restart the A2DP Sink session.
-// This function should be called by the BTIF state machine after
-// btif_a2dp_sink_startup() to restart the streaming session.
-// |old_peer_address| is the peer address of the old session. This address
-// can be empty.
-// |new_peer_address| is the peer address of the new session. This address
-// cannot be empty.
-bool btif_a2dp_sink_restart_session(const RawAddress& old_peer_address,
-                                    const RawAddress& new_peer_address);
-
-// End the A2DP Sink session.
-// This function should be called by the BTIF state machine to end the
-// streaming session for |peer_address|.
-bool btif_a2dp_sink_end_session(const RawAddress& peer_address);
-
 // Shutdown the A2DP Sink module.
 // This function should be called by the BTIF state machine before
 // btif_a2dp_sink_cleanup() to shutdown the processing of the audio streaming.
@@ -84,9 +64,6 @@ tA2DP_SAMPLE_RATE btif_a2dp_sink_get_sample_rate(void);
 
 // Get the audio channel count for the A2DP Sink module.
 tA2DP_CHANNEL_COUNT btif_a2dp_sink_get_channel_count(void);
-
-// Get the audio bits per sample for the A2DP Sink module.
-tA2DP_BITS_PER_SAMPLE btif_a2dp_sink_get_bits_per_sample(void);
 
 // Update the decoder for the A2DP Sink module.
 // |p_codec_info| contains the new codec information.
@@ -121,6 +98,10 @@ uint8_t btif_a2dp_sink_enqueue_buf(BT_HDR* p_buf);
 // |fd| is the file descriptor to use for writing the ASCII formatted
 // information.
 void btif_a2dp_sink_debug_dump(int fd);
+
+// Update the A2DP Sink related metrics.
+// This function should be called before collecting the metrics.
+void btif_a2dp_sink_update_metrics(void);
 
 // Create a request to set the audio focus state for the audio track.
 // |state| is the new state value - see |btif_a2dp_sink_focus_state_t|

@@ -39,7 +39,6 @@
 
 #include "btm_ble_int.h"
 #include "btm_int_types.h"
-#include "l2cdefs.h"
 #include "smp_api.h"
 
 extern tBTM_CB btm_cb;
@@ -53,7 +52,7 @@ extern void btm_init(void);
  ******************************************
 */
 extern tBTM_STATUS btm_initiate_rem_name(const RawAddress& remote_bda,
-                                         uint8_t origin, uint64_t timeout_ms,
+                                         uint8_t origin, period_ms_t timeout_ms,
                                          tBTM_CMPL_CB* p_cb);
 
 extern void btm_process_remote_name(const RawAddress* bda, BD_NAME name,
@@ -181,7 +180,10 @@ extern void btm_dev_init(void);
 extern void btm_read_local_name_timeout(void* data);
 extern void btm_read_local_name_complete(uint8_t* p, uint16_t evt_len);
 
-extern void btm_ble_create_conn_cancel_complete(uint8_t* p);
+extern void btm_ble_add_2_white_list_complete(uint8_t status);
+extern void btm_ble_remove_from_white_list_complete(uint8_t* p,
+                                                    uint16_t evt_len);
+extern void btm_ble_clear_white_list_complete(uint8_t* p, uint16_t evt_len);
 extern bool btm_ble_addr_resolvable(const RawAddress& rpa,
                                     tBTM_SEC_DEV_REC* p_dev_rec);
 extern tBTM_STATUS btm_ble_read_resolving_list_entry(
@@ -252,7 +254,7 @@ extern void btm_proc_sp_req_evt(tBTM_SP_EVT event, uint8_t* p);
 extern void btm_keypress_notif_evt(uint8_t* p);
 extern void btm_simple_pair_complete(uint8_t* p);
 extern void btm_sec_link_key_notification(const RawAddress& p_bda,
-                                          const Octet16& link_key,
+                                          uint8_t* p_link_key,
                                           uint8_t key_type);
 extern void btm_sec_link_key_request(const RawAddress& p_bda);
 extern void btm_sec_pin_code_request(const RawAddress& p_bda);
@@ -270,9 +272,10 @@ extern bool btm_ble_init_pseudo_addr(tBTM_SEC_DEV_REC* p_dev_rec,
                                      const RawAddress& new_pseudo_addr);
 extern tBTM_SEC_SERV_REC* btm_sec_find_first_serv(CONNECTION_TYPE conn_type,
                                                   uint16_t psm);
-extern tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(
-    const RawAddress& bd_addr, uint16_t psm, bool is_originator,
-    tBTM_SEC_CALLBACK* p_callback, void* p_ref_data);
+extern bool btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm,
+                                    bool is_originator,
+                                    tBTM_SEC_CALLBACK* p_callback,
+                                    void* p_ref_data);
 
 extern tINQ_DB_ENT* btm_inq_db_new(const RawAddress& p_bda);
 
@@ -284,6 +287,5 @@ extern void btm_acl_reset_paging(void);
 extern void btm_acl_paging(BT_HDR* p, const RawAddress& dest);
 extern uint8_t btm_sec_clr_service_by_psm(uint16_t psm);
 extern void btm_sec_clr_temp_auth_service(const RawAddress& bda);
-extern tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec);
 
 #endif

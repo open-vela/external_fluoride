@@ -20,18 +20,16 @@
 
 #include <base/callback_forward.h>
 #include <hardware/bt_hearing_aid.h>
-#include <future>
 
-constexpr uint16_t HA_INTERVAL_10_MS = 10;
-constexpr uint16_t HA_INTERVAL_20_MS = 20;
+using bluetooth::Uuid;
 
 /** Implementations of HearingAid will also implement this interface */
 class HearingAidAudioReceiver {
  public:
   virtual ~HearingAidAudioReceiver() = default;
   virtual void OnAudioDataReady(const std::vector<uint8_t>& data) = 0;
-  virtual void OnAudioSuspend(std::promise<void> do_suspend_promise) = 0;
-  virtual void OnAudioResume(std::promise<void> do_resume_promise) = 0;
+  virtual void OnAudioSuspend();
+  virtual void OnAudioResume();
 };
 
 class HearingAid {
@@ -41,18 +39,13 @@ class HearingAid {
   static void Initialize(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                          base::Closure initCb);
   static void CleanUp();
-  static bool IsHearingAidRunning();
+  static bool IsInitialized();
   static HearingAid* Get();
-  static void DebugDump(int fd);
 
   static void AddFromStorage(const RawAddress& address, uint16_t psm,
-                             uint8_t capabilities, uint16_t codec,
+                             uint8_t capabilities, uint8_t codec,
                              uint16_t audioControlPointHandle,
-                             uint16_t volumeHandle, uint64_t hiSyncId,
-                             uint16_t render_delay, uint16_t preparation_delay,
-                             uint16_t is_white_listed);
-
-  static int GetDeviceCount();
+                             uint16_t volumeHandle, uint64_t hiSyncId);
 
   virtual void Connect(const RawAddress& address) = 0;
   virtual void Disconnect(const RawAddress& address) = 0;
@@ -89,5 +82,4 @@ class HearingAidAudioSource {
   static void Stop();
   static void Initialize();
   static void CleanUp();
-  static void DebugDump(int fd);
 };

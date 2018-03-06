@@ -20,31 +20,23 @@ namespace bluetooth {
 namespace avrcp {
 
 std::unique_ptr<GetItemAttributesResponseBuilder>
-GetItemAttributesResponseBuilder::MakeBuilder(Status status, size_t mtu) {
+GetItemAttributesResponseBuilder::MakeBuilder(Status status) {
   std::unique_ptr<GetItemAttributesResponseBuilder> builder(
-      new GetItemAttributesResponseBuilder(status, mtu));
+      new GetItemAttributesResponseBuilder(status));
 
   return builder;
 }
 
-bool GetItemAttributesResponseBuilder::AddAttributeEntry(AttributeEntry entry) {
+GetItemAttributesResponseBuilder*
+GetItemAttributesResponseBuilder::AddAttributeEntry(AttributeEntry entry) {
   CHECK(entries_.size() < 0xFF);
-
-  size_t remaining_space = mtu_ - size();
-  if (entry.size() > remaining_space) {
-    entry.resize(remaining_space);
-  }
-
-  if (entry.empty()) {
-    return false;
-  }
-
   entries_.insert(entry);
-  return true;
+  return this;
 }
 
-bool GetItemAttributesResponseBuilder::AddAttributeEntry(Attribute attribute,
-                                                         std::string value) {
+GetItemAttributesResponseBuilder*
+GetItemAttributesResponseBuilder::AddAttributeEntry(Attribute attribute,
+                                                    std::string value) {
   return AddAttributeEntry(AttributeEntry(attribute, value));
 }
 
@@ -54,8 +46,11 @@ size_t GetItemAttributesResponseBuilder::size() const {
   if (status_ != Status::NO_ERROR) return len;
 
   len += 1;  // Number of attributes
-  for (const auto& entry : entries_) {
-    len += entry.size();
+  for (const auto& attribute_entry : entries_) {
+    len += 4;  // Size of attr entry
+    len += 2;  // Size of value length field
+    len += 2;  // Size of character encoding
+    len += attribute_entry.second.length();
   }
   return len;
 }
@@ -70,13 +65,13 @@ bool GetItemAttributesResponseBuilder::Serialize(
   if (status_ != Status::NO_ERROR) return true;
 
   AddPayloadOctets1(pkt, entries_.size());
-  for (const auto& entry : entries_) {
-    AddPayloadOctets4(pkt, base::ByteSwap((uint32_t)entry.attribute()));
+  for (auto attribute_entry : entries_) {
+    AddPayloadOctets4(pkt, base::ByteSwap((uint32_t)attribute_entry.first));
     uint16_t character_set = 0x006a;  // UTF-8
     AddPayloadOctets2(pkt, base::ByteSwap(character_set));
-    uint16_t value_length = entry.value().length();
+    uint16_t value_length = attribute_entry.second.length();
     AddPayloadOctets2(pkt, base::ByteSwap(value_length));
-    for (const uint8_t& byte : entry.value()) {
+    for (const uint8_t& byte : attribute_entry.second) {
       AddPayloadOctets1(pkt, byte);
     }
   }
@@ -91,12 +86,12 @@ Scope GetItemAttributesRequest::GetScope() const {
 
 uint64_t GetItemAttributesRequest::GetUid() const {
   auto it = begin() + BrowsePacket::kMinSize() + static_cast<size_t>(1);
-  return it.extractBE<uint64_t>();
+  return base::ByteSwap(it.extract<uint64_t>());
 }
 
 uint16_t GetItemAttributesRequest::GetUidCounter() const {
   auto it = begin() + BrowsePacket::kMinSize() + static_cast<size_t>(9);
-  return it.extractBE<uint16_t>();
+  return base::ByteSwap(it.extract<uint16_t>());
 }
 
 uint8_t GetItemAttributesRequest::GetNumAttributes() const {
@@ -111,7 +106,7 @@ std::vector<Attribute> GetItemAttributesRequest::GetAttributesRequested()
 
   std::vector<Attribute> attribute_list;
   for (size_t i = 0; i < number_of_attributes; i++) {
-    attribute_list.push_back((Attribute)it.extractBE<uint32_t>());
+    attribute_list.push_back((Attribute)base::ByteSwap(it.extract<uint32_t>()));
   }
 
   return attribute_list;

@@ -48,9 +48,7 @@
 #include <hardware/bt_sock.h>
 
 #include "bt_utils.h"
-#include "bta/include/bta_hearing_aid_api.h"
 #include "bta/include/bta_hf_client_api.h"
-#include "btif/avrcp/avrcp_service.h"
 #include "btif_a2dp.h"
 #include "btif_api.h"
 #include "btif_av.h"
@@ -62,15 +60,13 @@
 #include "btif_storage.h"
 #include "btsnoop.h"
 #include "btsnoop_mem.h"
-#include "common/address_obfuscator.h"
-#include "common/metrics.h"
 #include "device/include/interop.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocation_tracker.h"
 #include "osi/include/log.h"
+#include "osi/include/metrics.h"
 #include "osi/include/osi.h"
 #include "osi/include/wakelock.h"
-#include "stack/gatt/connection_manager.h"
 #include "stack_manager.h"
 
 /* Test interface includes */
@@ -318,21 +314,21 @@ static void dump(int fd, const char** arguments) {
   btif_debug_av_dump(fd);
   bta_debug_av_dump(fd);
   stack_debug_avdtp_api_dump(fd);
-  bluetooth::avrcp::AvrcpService::DebugDump(fd);
   btif_debug_config_dump(fd);
   BTA_HfClientDumpStatistics(fd);
   wakelock_debug_dump(fd);
   osi_allocator_debug_dump(fd);
   alarm_debug_dump(fd);
-  HearingAid::DebugDump(fd);
-  connection_manager::dump(fd);
 #if (BTSNOOP_MEM == TRUE)
   btif_debug_btsnoop_dump(fd);
 #endif
+
+  close(fd);
 }
 
 static void dumpMetrics(std::string* output) {
-  bluetooth::common::BluetoothMetricsLogger::GetInstance()->WriteString(output);
+  system_bt_osi::BluetoothMetricsLogger::GetInstance()->WriteString(output,
+                                                                    true);
 }
 
 static const void* get_profile_interface(const char* profile_id) {
@@ -416,47 +412,14 @@ int le_test_mode(uint16_t opcode, uint8_t* buf, uint8_t len) {
   return btif_le_test_mode(opcode, buf, len);
 }
 
-static bt_os_callouts_t* wakelock_os_callouts_saved = nullptr;
-
-static int acquire_wake_lock_cb(const char* lock_name) {
-  return do_in_jni_thread(
-      FROM_HERE, base::Bind(base::IgnoreResult(
-                                wakelock_os_callouts_saved->acquire_wake_lock),
-                            lock_name));
-}
-
-static int release_wake_lock_cb(const char* lock_name) {
-  return do_in_jni_thread(
-      FROM_HERE, base::Bind(base::IgnoreResult(
-                                wakelock_os_callouts_saved->release_wake_lock),
-                            lock_name));
-}
-
-static bt_os_callouts_t wakelock_os_callouts_jni = {
-    sizeof(wakelock_os_callouts_jni),
-    nullptr /* not used */,
-    acquire_wake_lock_cb,
-    release_wake_lock_cb,
-};
-
 static int set_os_callouts(bt_os_callouts_t* callouts) {
-  wakelock_os_callouts_saved = callouts;
-  wakelock_set_os_callouts(&wakelock_os_callouts_jni);
+  wakelock_set_os_callouts(callouts);
   return BT_STATUS_SUCCESS;
 }
 
 static int config_clear(void) {
   LOG_INFO(LOG_TAG, "%s", __func__);
   return btif_config_clear() ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;
-}
-
-static bluetooth::avrcp::ServiceInterface* get_avrcp_service(void) {
-  return bluetooth::avrcp::AvrcpService::GetServiceInterface();
-}
-
-static std::string obfuscate_address(const RawAddress& address) {
-  return bluetooth::common::AddressObfuscator::GetInstance()->Obfuscate(
-      address);
 }
 
 EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
@@ -493,6 +456,4 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
     config_clear,
     interop_database_clear,
     interop_database_add,
-    get_avrcp_service,
-    obfuscate_address,
 };

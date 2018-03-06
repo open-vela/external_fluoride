@@ -473,8 +473,7 @@ uint16_t AVDT_OpenReq(uint8_t handle, const RawAddress& bd_addr,
 
   /* send event to scb */
   if (result == AVDT_SUCCESS) {
-    AVDT_TRACE_DEBUG("%s: codec: %s", __func__,
-                     A2DP_CodecInfoString(p_cfg->codec_info).c_str());
+    A2DP_DumpCodecInfo(p_cfg->codec_info);
 
     evt.msg.config_cmd.hdr.seid = seid;
     evt.msg.config_cmd.hdr.ccb_idx = avdt_ccb_to_idx(p_ccb);
@@ -1212,8 +1211,6 @@ uint8_t AVDT_SetTraceLevel(uint8_t new_level) {
 }
 
 void stack_debug_avdtp_api_dump(int fd) {
-  if (appl_trace_level < BT_TRACE_LEVEL_DEBUG) return;
-
   dprintf(fd, "\nAVDTP Stack State:\n");
   dprintf(fd, "  AVDTP signalling L2CAP channel MTU: %d\n",
           avdtp_cb.rcb.ctrl_mtu);
@@ -1221,9 +1218,6 @@ void stack_debug_avdtp_api_dump(int fd) {
 
   for (size_t i = 0; i < AVDT_NUM_LINKS; i++) {
     const AvdtpCcb& ccb = avdtp_cb.ccb[i];
-    if (ccb.peer_addr.IsEmpty()) {
-      continue;
-    }
     dprintf(fd, "\n  Channel control block: %zu peer: %s\n", i,
             ccb.peer_addr.ToString().c_str());
     dprintf(fd, "    Allocated: %s\n", ccb.allocated ? "true" : "false");
@@ -1240,14 +1234,9 @@ void stack_debug_avdtp_api_dump(int fd) {
 
     for (size_t i = 0; i < AVDT_NUM_SEPS; i++) {
       const AvdtpScb& scb = ccb.scb[i];
-      if (!scb.in_use) {
-        continue;
-      }
       dprintf(fd, "\n    Stream control block: %zu\n", i);
       dprintf(fd, "      SEP codec: %s\n",
               A2DP_CodecName(scb.stream_config.cfg.codec_info));
-      dprintf(fd, "      SEP protocol service capabilities: 0x%x\n",
-              scb.stream_config.cfg.psc_mask);
       dprintf(fd, "      SEP type: 0x%x\n", scb.stream_config.tsep);
       dprintf(fd, "      Media type: 0x%x\n", scb.stream_config.media_type);
       dprintf(fd, "      MTU: %d\n", scb.stream_config.mtu);

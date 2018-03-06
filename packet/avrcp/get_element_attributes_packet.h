@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <set>
+#include <map>
 #include "vendor_packet.h"
 
 namespace bluetooth {
@@ -51,7 +51,7 @@ class GetElementAttributesRequest : public VendorPacket {
   std::vector<Attribute> GetAttributesRequested() const;
 
   // Overloaded Functions
-  virtual bool IsValid() const override;
+  virtual bool IsValid() const;
   virtual std::string ToString() const override;
 
  protected:
@@ -62,24 +62,22 @@ class GetElementAttributesResponseBuilder : public VendorPacketBuilder {
  public:
   virtual ~GetElementAttributesResponseBuilder() = default;
 
-  static std::unique_ptr<GetElementAttributesResponseBuilder> MakeBuilder(
-      size_t mtu);
+  static std::unique_ptr<GetElementAttributesResponseBuilder> MakeBuilder();
 
-  bool AddAttributeEntry(AttributeEntry entry);
-  bool AddAttributeEntry(Attribute attribute, std::string value);
+  GetElementAttributesResponseBuilder* AddAttributeEntry(AttributeEntry entry);
+  GetElementAttributesResponseBuilder* AddAttributeEntry(Attribute attribute,
+                                                         std::string value);
 
   virtual size_t size() const override;
   virtual bool Serialize(
       const std::shared_ptr<::bluetooth::Packet>& pkt) override;
 
  private:
-  std::set<AttributeEntry> entries_;
-  size_t mtu_;
+  std::map<Attribute, std::string> entries_;
 
-  GetElementAttributesResponseBuilder(size_t mtu)
+  GetElementAttributesResponseBuilder()
       : VendorPacketBuilder(CType::STABLE, CommandPdu::GET_ELEMENT_ATTRIBUTES,
-                            PacketType::SINGLE),
-        mtu_(mtu){};
+                            PacketType::SINGLE){};
 };
 
 }  // namespace avrcp

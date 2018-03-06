@@ -85,6 +85,13 @@ inline bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x) {
   return ((x.address)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB;
 }
 
+#define BLE_PUBLIC_ADDR_MSB_MASK 0xC0
+/*  most significant bit, bit7, bit6 is 10 to be public address*/
+#define BLE_PUBLIC_ADDR_MSB 0x80
+inline bool BTM_IS_PUBLIC_BDA(const RawAddress& x) {
+  return ((x.address)[0] & BLE_PUBLIC_ADDR_MSB_MASK) == BLE_PUBLIC_ADDR_MSB;
+}
+
 /* LE scan activity bit mask, continue with LE inquiry bits */
 /* observe is in progress */
 #define BTM_LE_OBSERVE_ACTIVE 0x80
@@ -185,8 +192,9 @@ typedef struct {
 } tBTM_LE_BG_CONN_DEV;
 
 /* white list using state as a bit mask */
-constexpr uint8_t BTM_BLE_WL_IDLE = 0;
-constexpr uint8_t BTM_BLE_WL_INIT = 1;
+#define BTM_BLE_WL_IDLE 0
+#define BTM_BLE_WL_INIT 1
+typedef uint8_t tBTM_BLE_WL_STATE;
 
 /* resolving list using state as a bit mask */
 #define BTM_BLE_RL_IDLE 0
@@ -286,12 +294,14 @@ typedef struct {
   alarm_t* observer_timer;
 
   /* background connection procedure cb value */
-  uint16_t scan_int;
-  uint16_t scan_win;
+  tBTM_BLE_CONN_TYPE bg_conn_type;
+  uint32_t scan_int;
+  uint32_t scan_win;
 
   /* white list information */
-  uint8_t wl_state;
+  tBTM_BLE_WL_STATE wl_state;
 
+  fixed_queue_t* conn_pending_q;
   tBTM_BLE_CONN_ST conn_state;
 
   /* random address management control block */

@@ -96,6 +96,11 @@ typedef uint8_t tBTA_AV_HNDL;
 #define BTA_AV_NUM_STRS 6
 #endif
 
+#ifndef BTA_AV_MAX_A2DP_MTU
+/*#define BTA_AV_MAX_A2DP_MTU     668 //224 (DM5) * 3 - 4(L2CAP header) */
+#define BTA_AV_MAX_A2DP_MTU 1008
+#endif
+
 /* operation id list for BTA_AvRemoteCmd */
 typedef uint8_t tBTA_AV_RC;
 
@@ -148,15 +153,6 @@ typedef uint8_t tBTA_AV_ERR;
 #define BTA_AV_MAX_EVT 25
 
 typedef uint8_t tBTA_AV_EVT;
-
-typedef enum {
-  BTA_AV_CODEC_TYPE_UNKNOWN = 0x00,
-  BTA_AV_CODEC_TYPE_SBC = 0x01,
-  BTA_AV_CODEC_TYPE_AAC = 0x02,
-  BTA_AV_CODEC_TYPE_APTX = 0x04,
-  BTA_AV_CODEC_TYPE_APTXHD = 0x08,
-  BTA_AV_CODEC_TYPE_LDAC = 0x10
-} tBTA_AV_CODEC_TYPE;
 
 /* Event associated with BTA_AV_ENABLE_EVT */
 typedef struct { tBTA_AV_FEAT features; } tBTA_AV_ENABLE;
@@ -697,17 +693,6 @@ void BTA_AvOffloadStart(tBTA_AV_HNDL hndl);
  *
  ******************************************************************************/
 void BTA_AvOffloadStartRsp(tBTA_AV_HNDL hndl, tBTA_AV_STATUS status);
-
-/**
- * Obtain the Channel Index for a peer.
- * If the peer already has associated internal state, the corresponding
- * Channel Index for that state is returned. Otherwise, the Channel Index
- * for unused internal state is returned instead.
- *
- * @param peer_address the peer address
- * @return the peer Channel Index index if obtained, otherwise -1
- */
-int BTA_AvObtainPeerChannelIndex(const RawAddress& peer_address);
 
 /**
  * Dump debug-related information for the BTA AV module.

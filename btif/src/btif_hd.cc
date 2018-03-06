@@ -25,15 +25,14 @@
  *
  *
  ***********************************************************************************/
-#define LOG_TAG "BTIF_HD"
-
 #include <errno.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_hd.h>
-#include <log/log.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define LOG_TAG "BTIF_HD"
 
 #include "bta_api.h"
 #include "bta_hd_api.h"
@@ -201,8 +200,10 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
 
     case BTA_HD_OPEN_EVT: {
       RawAddress* addr = (RawAddress*)&p_data->conn.bda;
-      BTIF_TRACE_WARNING("BTA_HD_OPEN_EVT, address=%s",
-                         addr->ToString().c_str());
+      BTIF_TRACE_WARNING(
+          "BTA_HD_OPEN_EVT, address (%02x:%02x:%02x:%02x:%02x:%02x)",
+          addr->address[0], addr->address[1], addr->address[2],
+          addr->address[3], addr->address[4], addr->address[5]);
       /* Check if the connection is from hid host and not hid device */
       if (check_cod_hid(addr)) {
         /* Incoming connection from hid device, reject it */
@@ -252,18 +253,8 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
     case BTA_HD_VC_UNPLUG_EVT:
       HAL_CBACK(bt_hd_callbacks, connection_state_cb,
                 (RawAddress*)&p_data->conn.bda, BTHD_CONN_STATE_DISCONNECTED);
-      if (bta_dm_check_if_only_hd_connected(p_data->conn.bda)) {
-        BTIF_TRACE_DEBUG("%s: Removing bonding as only HID profile connected",
-                         __func__);
-        BTA_DmRemoveDevice(p_data->conn.bda);
-      } else {
-        RawAddress* bd_addr = (RawAddress*)&p_data->conn.bda;
-        BTIF_TRACE_DEBUG(
-            "%s: Only removing HID data as some other profiles "
-            "connected",
-            __func__);
-        btif_hd_remove_device(*bd_addr);
-      }
+      LOG(INFO) << __func__ << ": Only removing HID data";
+      btif_hd_remove_device(p_data->conn.bda);
       HAL_CBACK(bt_hd_callbacks, vc_unplug_cb);
       break;
 
@@ -398,18 +389,13 @@ static bt_status_t register_app(bthd_app_param_t* p_app_param,
     return BT_STATUS_BUSY;
   }
 
-  if (strlen(p_app_param->name) >= BTIF_HD_APP_NAME_LEN ||
-      strlen(p_app_param->description) >= BTIF_HD_APP_DESCRIPTION_LEN ||
-      strlen(p_app_param->provider) >= BTIF_HD_APP_PROVIDER_LEN) {
-    android_errorWriteLog(0x534e4554, "113037220");
-  }
-  app_info.p_name = (char*)osi_calloc(BTIF_HD_APP_NAME_LEN);
-  strlcpy(app_info.p_name, p_app_param->name, BTIF_HD_APP_NAME_LEN);
-  app_info.p_description = (char*)osi_calloc(BTIF_HD_APP_DESCRIPTION_LEN);
-  strlcpy(app_info.p_description, p_app_param->description,
-          BTIF_HD_APP_DESCRIPTION_LEN);
-  app_info.p_provider = (char*)osi_calloc(BTIF_HD_APP_PROVIDER_LEN);
-  strlcpy(app_info.p_provider, p_app_param->provider, BTIF_HD_APP_PROVIDER_LEN);
+  app_info.p_name = (char*)osi_malloc(BTIF_HD_APP_NAME_LEN);
+  memcpy(app_info.p_name, p_app_param->name, BTIF_HD_APP_NAME_LEN);
+  app_info.p_description = (char*)osi_malloc(BTIF_HD_APP_DESCRIPTION_LEN);
+  memcpy(app_info.p_description, p_app_param->description,
+         BTIF_HD_APP_DESCRIPTION_LEN);
+  app_info.p_provider = (char*)osi_malloc(BTIF_HD_APP_PROVIDER_LEN);
+  memcpy(app_info.p_provider, p_app_param->provider, BTIF_HD_APP_PROVIDER_LEN);
   app_info.subclass = p_app_param->subclass;
   app_info.descriptor.dl_len = p_app_param->desc_list_len;
   app_info.descriptor.dsc_list =

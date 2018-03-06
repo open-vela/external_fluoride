@@ -51,9 +51,9 @@ interface IBluetoothHeadset {
     void setAudioRouteAllowed(boolean allowed);
     boolean getAudioRouteAllowed();
     void setForceScoAudio(boolean forced);
-    boolean startScoUsingVirtualVoiceCall();
-    boolean stopScoUsingVirtualVoiceCall();
-    oneway void phoneStateChanged(int numActive, int numHeld, int callState, String number, int type, String name);
+    boolean startScoUsingVirtualVoiceCall(in BluetoothDevice device);
+    boolean stopScoUsingVirtualVoiceCall(in BluetoothDevice device);
+    oneway void phoneStateChanged(int numActive, int numHeld, int callState, String number, int type);
     void clccResponse(int index, int direction, int status, int mode, boolean mpty,
                       String number, int type);
     boolean setActiveDevice(in BluetoothDevice device);

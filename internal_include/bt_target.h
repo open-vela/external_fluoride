@@ -124,15 +124,9 @@
 #endif
 
 // How long to wait before activating sniff mode after entering the
-// idle state for server FT/RFCOMM, OPS connections
+// idle state for FTS, OPS connections
 #ifndef BTA_FTS_OPS_IDLE_TO_SNIFF_DELAY_MS
 #define BTA_FTS_OPS_IDLE_TO_SNIFF_DELAY_MS 7000
-#endif
-
-// How long to wait before activating sniff mode after entering the
-// idle state for client FT/RFCOMM connections
-#ifndef BTA_FTC_IDLE_TO_SNIFF_DELAY_MS
-#define BTA_FTC_IDLE_TO_SNIFF_DELAY_MS 5000
 #endif
 
 //------------------End added from bdroid_buildcfg.h---------------------
@@ -280,10 +274,6 @@
 #define BTM_SCO_INCLUDED TRUE /* TRUE includes SCO code */
 #endif
 
-#ifndef DISABLE_WBS
-#define DISABLE_WBS FALSE
-#endif
-
 /*  This is used to work around a controller bug that doesn't like Disconnect
  *  issued while there is a role switch in progress
 */
@@ -353,7 +343,7 @@
 
 /* The number of SCO links. */
 #ifndef BTM_MAX_SCO_LINKS
-#define BTM_MAX_SCO_LINKS 6
+#define BTM_MAX_SCO_LINKS 3
 #endif
 
 /* The number of security records for peer devices. */
@@ -665,11 +655,6 @@
 #ifndef GATT_MAX_APPS
 #define GATT_MAX_APPS 32 /* note: 2 apps used internally GATT and GAP */
 #endif
-
-/* connection manager doesn't generate it's own IDs. Instead, all GATT clients
- * use their gatt_if to identify against conection manager. When stack tries to
- * create l2cap connection, it will use this fixed ID. */
-#define CONN_MGR_ID_L2CAP (GATT_MAX_APPS + 10)
 
 #ifndef GATT_MAX_PHY_CHANNEL
 #define GATT_MAX_PHY_CHANNEL 7

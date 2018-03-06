@@ -39,7 +39,6 @@ cc_library_shared {
     logtags: ["../EventLogTags.logtags"],
     shared_libs: [
         "android.hardware.bluetooth@1.0",
-        "android.hardware.bluetooth.a2dp@1.0",
         "libaudioclient",
         "libcutils",
         "libdl",
@@ -51,7 +50,6 @@ cc_library_shared {
         "libutils",
         "libtinyxml2",
         "libz",
-        "libcrypto",
     ],
     static_libs: [
         "libbt-sbc-decoder",
@@ -62,15 +60,14 @@ cc_library_shared {
     ],
     whole_static_libs: [
         "libbt-bta",
-        "libbt-common",
         "libbtdevice",
         "libbtif",
         "libbt-hci",
+        "libbt-protos",
         "libbt-stack",
         "libbt-utils",
         "libbtcore",
         "libosi",
-        "libbt-protos-lite",
     ],
     // Shared library link options.
     // References to global symbols and functions should bind to the library

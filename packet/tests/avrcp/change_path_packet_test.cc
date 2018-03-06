@@ -72,14 +72,5 @@ TEST(ChangePathRequestTest, invalidTest) {
   ASSERT_FALSE(test_packet->IsValid());
 }
 
-TEST(ChangePathRequestBuilder, builderTest) {
-  auto builder = ChangePathRequestBuilder::MakeBuilder(0, Direction::DOWN, 2);
-  ASSERT_EQ(builder->size(), change_path_request.size());
-
-  auto test_packet = TestChangePathReqPacket::Make();
-  builder->Serialize(test_packet);
-  ASSERT_EQ(test_packet->GetData(), change_path_request);
-}
-
 }  // namespace avrcp
 }  // namespace bluetooth

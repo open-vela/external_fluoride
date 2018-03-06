@@ -44,13 +44,9 @@ class AvrcpInterface {
 
   virtual uint16_t OpenBrowse(uint8_t handle, uint8_t conn_role) = 0;
 
-  virtual uint16_t GetPeerMtu(uint8_t handle) = 0;
-
-  virtual uint16_t GetBrowseMtu(uint8_t handle) = 0;
+  virtual uint16_t CloseBrowse(uint8_t handle) = 0;
 
   virtual uint16_t Close(uint8_t handle) = 0;
-
-  virtual uint16_t CloseBrowse(uint8_t handle) = 0;
 
   virtual uint16_t MsgReq(uint8_t handle, uint8_t label, uint8_t ctype,
                           BT_HDR* p_pkt) = 0;
@@ -81,6 +77,10 @@ class SdpInterface {
 
 class A2dpInterface {
  public:
+  virtual void event_open(const RawAddress& address) = 0;
+
+  virtual void event_close(const RawAddress& address) = 0;
+
   virtual RawAddress active_peer() = 0;
 
   virtual ~A2dpInterface() = default;

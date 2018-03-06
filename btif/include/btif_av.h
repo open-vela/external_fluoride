@@ -48,10 +48,8 @@ void btif_av_stream_start(void);
 
 /**
  * Stop streaming.
- *
- * @param peer_address the peer address or RawAddress::kEmpty to stop all peers
  */
-void btif_av_stream_stop(const RawAddress& peer_address);
+void btif_av_stream_stop(void);
 
 /**
  * Suspend streaming.
@@ -90,6 +88,27 @@ uint8_t btif_av_get_peer_sep(void);
  * Clear the remote suspended flag for the active peer.
  */
 void btif_av_clear_remote_suspend_flag(void);
+
+/**
+ * Process AVRCP Open event.
+ *
+ * @param peer_address the peer address
+ */
+void btif_av_avrcp_event_open(const RawAddress& peer_address);
+
+/**
+ * Process AVRCP Close event.
+ *
+ * @param peer_address the peer address
+ */
+void btif_av_avrcp_event_close(const RawAddress& peer_address);
+
+/**
+ * Process AVRCP Remote Play event.
+ *
+ * @param peer_address the peer address
+ */
+void btif_av_avrcp_event_remote_play(const RawAddress& peer_address);
 
 /**
  * Check whether the connected A2DP peer supports EDR.
@@ -172,18 +191,4 @@ void btif_av_set_audio_delay(uint16_t delay);
  */
 void btif_av_reset_audio_delay(void);
 
-/**
- * Called to disconnect peer device when
- *  remote initiatied offload start failed
- *
- * @param peer_address to disconnect
- *
- */
-void btif_av_src_disconnect_sink(const RawAddress& peer_address);
-
-/**
- *  check A2DP offload support enabled
- *  @param  none
- */
-bool btif_av_is_a2dp_offload_enabled(void);
 #endif /* BTIF_AV_H */

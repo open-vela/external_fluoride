@@ -40,7 +40,7 @@ std::vector<Attribute> GetElementAttributesRequest::GetAttributesRequested()
   std::vector<Attribute> attribute_list;
 
   for (size_t i = 0; i < number_of_attributes; i++) {
-    attribute_list.push_back((Attribute)it.extractBE<uint32_t>());
+    attribute_list.push_back((Attribute)base::ByteSwap(it.extract<uint32_t>()));
   }
 
   return attribute_list;
@@ -83,41 +83,37 @@ std::string GetElementAttributesRequest::ToString() const {
 }
 
 std::unique_ptr<GetElementAttributesResponseBuilder>
-GetElementAttributesResponseBuilder::MakeBuilder(size_t mtu) {
+GetElementAttributesResponseBuilder::MakeBuilder() {
   std::unique_ptr<GetElementAttributesResponseBuilder> builder(
-      new GetElementAttributesResponseBuilder(mtu));
+      new GetElementAttributesResponseBuilder());
 
   return builder;
 }
 
-bool GetElementAttributesResponseBuilder::AddAttributeEntry(
-    AttributeEntry entry) {
+GetElementAttributesResponseBuilder*
+GetElementAttributesResponseBuilder::AddAttributeEntry(AttributeEntry entry) {
   CHECK_LT(entries_.size(), size_t(0xFF))
       << __func__ << ": attribute entry overflow";
 
-  size_t remaining_space = mtu_ - size();
-  if (entry.size() > remaining_space) {
-    entry.resize(remaining_space);
-  }
-
-  if (entry.empty()) {
-    return false;
-  }
-
   entries_.insert(entry);
-  return true;
+
+  return this;
 }
 
-bool GetElementAttributesResponseBuilder::AddAttributeEntry(Attribute attribute,
-                                                            std::string value) {
+GetElementAttributesResponseBuilder*
+GetElementAttributesResponseBuilder::AddAttributeEntry(Attribute attribute,
+                                                       std::string value) {
   return AddAttributeEntry(AttributeEntry(attribute, value));
 }
 
 size_t GetElementAttributesResponseBuilder::size() const {
   size_t attr_list_size = 0;
 
-  for (auto& attribute_entry : entries_) {
-    attr_list_size += attribute_entry.size();
+  for (auto attribute_entry : entries_) {
+    attr_list_size += 4;  // Size of attr entry
+    attr_list_size += 2;  // Size of value length field
+    attr_list_size += 2;  // Size of character encoding
+    attr_list_size += attribute_entry.second.length();
   }
 
   return VendorPacket::kMinSize() + 1 + attr_list_size;
@@ -132,7 +128,7 @@ bool GetElementAttributesResponseBuilder::Serialize(
   VendorPacketBuilder::PushHeader(pkt, size() - VendorPacket::kMinSize());
 
   AddPayloadOctets1(pkt, entries_.size());
-  for (const auto& attribute_entry : entries_) {
+  for (auto attribute_entry : entries_) {
     PushAttributeValue(pkt, attribute_entry);
   }
 

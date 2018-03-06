@@ -26,7 +26,6 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
 #include <string.h>
 #include "avdt_api.h"
 #include "avdt_int.h"
@@ -470,9 +469,6 @@ static void avdt_msg_bld_discover_rsp(uint8_t** p, tAVDT_MSG* p_msg) {
 static void avdt_msg_bld_svccap(uint8_t** p, tAVDT_MSG* p_msg) {
   AvdtpSepConfig cfg = *p_msg->svccap.p_cfg;
 
-  // Include only the Basic Capability
-  cfg.psc_mask &= AVDT_LEG_PSC;
-
   avdt_msg_bld_cfg(p, &cfg);
 }
 
@@ -601,11 +597,6 @@ static uint8_t avdt_msg_prs_cfg(AvdtpSepConfig* p_cfg, uint8_t* p, uint16_t len,
 
       case AVDT_CAT_PROTECT:
         p_cfg->psc_mask &= ~AVDT_PSC_PROTECT;
-        if (p + elem_len > p_end) {
-          err = AVDT_ERR_LENGTH;
-          android_errorWriteLog(0x534e4554, "78288378");
-          break;
-        }
         if ((elem_len + protect_offset) < AVDT_PROTECT_SIZE) {
           p_cfg->num_protect++;
           p_cfg->protect_info[protect_offset] = elem_len;
@@ -625,11 +616,6 @@ static uint8_t avdt_msg_prs_cfg(AvdtpSepConfig* p_cfg, uint8_t* p, uint16_t len,
         tmp = elem_len;
         if (elem_len >= AVDT_CODEC_SIZE) {
           tmp = AVDT_CODEC_SIZE - 1;
-        }
-        if (p + tmp > p_end) {
-          err = AVDT_ERR_LENGTH;
-          android_errorWriteLog(0x534e4554, "78288378");
-          break;
         }
         p_cfg->num_codec++;
         p_cfg->codec_info[0] = elem_len;
@@ -1135,13 +1121,13 @@ bool avdt_msg_send(AvdtpCcb* p_ccb, BT_HDR* p_msg) {
             (sig == AVDT_SIG_SECURITY) || (avdtp_cb.rcb.ret_tout == 0)) {
           alarm_cancel(p_ccb->idle_ccb_timer);
           alarm_cancel(p_ccb->ret_ccb_timer);
-          uint64_t interval_ms = avdtp_cb.rcb.sig_tout * 1000;
+          period_ms_t interval_ms = avdtp_cb.rcb.sig_tout * 1000;
           alarm_set_on_mloop(p_ccb->rsp_ccb_timer, interval_ms,
                              avdt_ccb_rsp_ccb_timer_timeout, p_ccb);
         } else if (sig != AVDT_SIG_DELAY_RPT) {
           alarm_cancel(p_ccb->idle_ccb_timer);
           alarm_cancel(p_ccb->rsp_ccb_timer);
-          uint64_t interval_ms = avdtp_cb.rcb.ret_tout * 1000;
+          period_ms_t interval_ms = avdtp_cb.rcb.ret_tout * 1000;
           alarm_set_on_mloop(p_ccb->ret_ccb_timer, interval_ms,
                              avdt_ccb_ret_ccb_timer_timeout, p_ccb);
         }

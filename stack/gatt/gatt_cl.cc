@@ -29,7 +29,6 @@
 #include "bt_utils.h"
 #include "gatt_int.h"
 #include "l2c_int.h"
-#include "log/log.h"
 #include "osi/include/osi.h"
 
 #define GATT_WRITE_LONG_HDR_SIZE 5 /* 1 opcode + 2 handle + 2 offset */
@@ -108,14 +107,10 @@ void gatt_act_discovery(tGATT_CLCB* p_clcb) {
 
     size_t size = p_clcb->uuid.GetShortestRepresentationSize();
     cl_req.find_type_value.value_len = size;
-    if (size == Uuid::kNumBytes16) {
-      uint8_t* p = cl_req.find_type_value.value;
-      UINT16_TO_STREAM(p, p_clcb->uuid.As16Bit());
-    } else if (size == Uuid::kNumBytes32) {
+    if (size == Uuid::kNumBytes32) {
       /* if service type is 32 bits UUID, convert it now */
       memcpy(cl_req.find_type_value.value, p_clcb->uuid.To128BitLE().data(),
-            Uuid::kNumBytes128);
-      cl_req.find_type_value.value_len = Uuid::kNumBytes128;
+             Uuid::kNumBytes128);
     } else
       memcpy(cl_req.find_type_value.value, p_clcb->uuid.To128BitLE().data(),
              size);
@@ -297,7 +292,7 @@ void gatt_send_queue_write_cancel(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 bool gatt_check_write_long_terminate(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                                      tGATT_VALUE* p_rsp_value) {
   tGATT_VALUE* p_attr = (tGATT_VALUE*)p_clcb->p_attr_buf;
-  bool terminate = false;
+  bool exec = false;
   tGATT_EXEC_FLAG flag = GATT_PREP_WRITE_EXEC;
 
   VLOG(1) << __func__;
@@ -310,18 +305,19 @@ bool gatt_check_write_long_terminate(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
       /* data does not match    */
       p_clcb->status = GATT_ERROR;
       flag = GATT_PREP_WRITE_CANCEL;
-      terminate = true;
+      exec = true;
     } else /* response checking is good */
     {
       p_clcb->status = GATT_SUCCESS;
       /* update write offset and check if end of attribute value */
-      if ((p_attr->offset += p_rsp_value->len) >= p_attr->len) terminate = true;
+      if ((p_attr->offset += p_rsp_value->len) >= p_attr->len) exec = true;
     }
   }
-  if (terminate && p_clcb->op_subtype != GATT_WRITE_PREPARE) {
+  if (exec) {
     gatt_send_queue_write_cancel(tcb, p_clcb, flag);
+    return true;
   }
-  return terminate;
+  return false;
 }
 
 /** Send prepare write */
@@ -511,24 +507,9 @@ void gatt_process_error_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
   tGATT_VALUE* p_attr = (tGATT_VALUE*)p_clcb->p_attr_buf;
 
   VLOG(1) << __func__;
-
-  if (len < 4) {
-    android_errorWriteLog(0x534e4554, "79591688");
-    LOG(ERROR) << "Error response too short";
-    // Specification does not clearly define what should happen if error
-    // response is too short. General rule in BT Spec 5.0 Vol 3, Part F 3.4.1.1
-    // is: "If an error code is received in the Error Response that is not
-    // understood by the client, for example an error code that was reserved for
-    // future use that is now being used in a future version of this
-    // specification, then the Error Response shall still be considered to state
-    // that the given request cannot be performed for an unknown reason."
-    opcode = handle = 0;
-    reason = 0x7F;
-  } else {
-    STREAM_TO_UINT8(opcode, p);
-    STREAM_TO_UINT16(handle, p);
-    STREAM_TO_UINT8(reason, p);
-  }
+  STREAM_TO_UINT8(opcode, p);
+  STREAM_TO_UINT16(handle, p);
+  STREAM_TO_UINT8(reason, p);
 
   if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY) {
     gatt_proc_disc_error_rsp(tcb, p_clcb, opcode, handle, reason);
@@ -585,15 +566,15 @@ void gatt_process_prep_write_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 
   memcpy(value.value, p, value.len);
 
-  if (!gatt_check_write_long_terminate(tcb, p_clcb, &value)) {
-    gatt_send_prepare_write(tcb, p_clcb);
-    return;
-  }
-
   if (p_clcb->op_subtype == GATT_WRITE_PREPARE) {
+    p_clcb->status = GATT_SUCCESS;
     /* application should verify handle offset
        and value are matched or not */
+
     gatt_end_operation(p_clcb, p_clcb->status, &value);
+  } else if (p_clcb->op_subtype == GATT_WRITE) {
+    if (!gatt_check_write_long_terminate(tcb, p_clcb, &value))
+      gatt_send_prepare_write(tcb, p_clcb);
   }
 }
 /*******************************************************************************

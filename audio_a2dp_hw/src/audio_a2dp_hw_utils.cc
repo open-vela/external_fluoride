@@ -34,12 +34,13 @@ const char* audio_a2dp_hw_dump_ctrl_event(tA2DP_CTRL_CMD event) {
     CASE_RETURN_STR(A2DP_CTRL_GET_OUTPUT_AUDIO_CONFIG)
     CASE_RETURN_STR(A2DP_CTRL_SET_OUTPUT_AUDIO_CONFIG)
     CASE_RETURN_STR(A2DP_CTRL_CMD_OFFLOAD_START)
-    CASE_RETURN_STR(A2DP_CTRL_GET_PRESENTATION_POSITION)
+    default:
+      break;
   }
 
   return "UNKNOWN A2DP_CTRL_CMD";
 }
 
 bool delay_reporting_enabled() {
-  return !osi_property_get_bool("persist.bluetooth.disabledelayreports", false);
+  return osi_property_get_bool("persist.bluetooth.enabledelayreports", false);
 }

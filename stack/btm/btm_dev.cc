@@ -60,7 +60,7 @@
  ******************************************************************************/
 bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
                       BD_NAME bd_name, uint8_t* features,
-                      uint32_t trusted_mask[], LinkKey* p_link_key,
+                      uint32_t trusted_mask[], LINK_KEY link_key,
                       uint8_t key_type, tBTM_IO_CAP io_cap,
                       uint8_t pin_length) {
   BTM_TRACE_API("%s: link key type:%x", __func__, key_type);
@@ -120,10 +120,10 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
 
   BTM_SEC_COPY_TRUSTED_DEVICE(trusted_mask, p_dev_rec->trusted_mask);
 
-  if (p_link_key) {
+  if (link_key) {
     VLOG(2) << __func__ << ": BDA: " << bd_addr;
     p_dev_rec->sec_flags |= BTM_SEC_LINK_KEY_KNOWN;
-    p_dev_rec->link_key = *p_link_key;
+    memcpy(p_dev_rec->link_key, link_key, LINK_KEY_LEN);
     p_dev_rec->link_key_type = key_type;
     p_dev_rec->pin_code_length = pin_length;
 
@@ -149,16 +149,17 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
   return true;
 }
 
-/** Free resources associated with the device associated with |bd_addr| address.
+/*******************************************************************************
  *
- * *** WARNING ***
- * tBTM_SEC_DEV_REC associated with bd_addr becomes invalid after this function
- * is called, also any of it's fields. i.e. if you use p_dev_rec->bd_addr, it is
- * no longer valid!
- * *** WARNING ***
+ * Function         BTM_SecDeleteDevice
  *
- * Returns true if removed OK, false if not found or ACL link is active.
- */
+ * Description      Free resources associated with the device.
+ *
+ * Parameters:      bd_addr          - BD address of the peer
+ *
+ * Returns          true if removed OK, false if not found or ACL link is active
+ *
+ ******************************************************************************/
 bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
   if (BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE) ||
       BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_BR_EDR)) {
@@ -169,10 +170,9 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
 
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec != NULL) {
-    RawAddress bda = p_dev_rec->bd_addr;
     btm_sec_free_dev(p_dev_rec);
     /* Tell controller to get rid of the link key, if it has one stored */
-    BTM_DeleteStoredLinkKey(&bda, NULL);
+    BTM_DeleteStoredLinkKey(&p_dev_rec->bd_addr, NULL);
   }
 
   return true;

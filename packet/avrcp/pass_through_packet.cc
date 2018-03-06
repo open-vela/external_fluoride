@@ -46,9 +46,8 @@ bool PassThroughPacketBuilder::Serialize(
   return true;
 }
 
-KeyState PassThroughPacket::GetKeyState() const {
-  auto it = begin() + Packet::kMinSize();
-  return static_cast<KeyState>(((*it) & 0b10000000) >> 7);
+bool PassThroughPacket::GetPushed() const {
+  return (*(begin() + Packet::kMinSize()) & 0b10000000) == 0;
 }
 
 uint8_t PassThroughPacket::GetOperationId() const {
@@ -64,7 +63,7 @@ std::string PassThroughPacket::ToString() const {
   ss << "  └ Subunit Type = " << loghex(GetSubunitType()) << std::endl;
   ss << "  └ Subunit ID = " << loghex(GetSubunitId()) << std::endl;
   ss << "  └ OpCode = " << GetOpcode() << std::endl;
-  ss << "  └ Pushed = " << GetKeyState() << std::endl;
+  ss << "  └ Pushed = " << GetPushed() << std::endl;
   ss << "  └ Opperation ID = " << loghex(GetOperationId()) << std::endl;
 
   return ss.str();

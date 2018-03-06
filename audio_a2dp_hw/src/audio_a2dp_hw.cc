@@ -427,12 +427,10 @@ static int a2dp_command(struct a2dp_stream_common* common, tA2DP_CTRL_CMD cmd) {
   DEBUG("A2DP COMMAND %s", audio_a2dp_hw_dump_ctrl_event(cmd));
 
   if (common->ctrl_fd == AUDIO_SKT_DISCONNECTED) {
-    INFO("starting up or recovering from previous error: command=%s",
-         audio_a2dp_hw_dump_ctrl_event(cmd));
+    INFO("starting up or recovering from previous error");
     a2dp_open_ctrl_path(common);
     if (common->ctrl_fd == AUDIO_SKT_DISCONNECTED) {
-      ERROR("failure to open ctrl path: command=%s",
-            audio_a2dp_hw_dump_ctrl_event(cmd));
+      ERROR("failure to open ctrl path");
       return -1;
     }
   }
@@ -441,8 +439,7 @@ static int a2dp_command(struct a2dp_stream_common* common, tA2DP_CTRL_CMD cmd) {
   ssize_t sent;
   OSI_NO_INTR(sent = send(common->ctrl_fd, &cmd, 1, MSG_NOSIGNAL));
   if (sent == -1) {
-    ERROR("cmd failed (%s): command=%s", strerror(errno),
-          audio_a2dp_hw_dump_ctrl_event(cmd));
+    ERROR("cmd failed (%s)", strerror(errno));
     skt_disconnect(common->ctrl_fd);
     common->ctrl_fd = AUDIO_SKT_DISCONNECTED;
     return -1;
@@ -457,10 +454,7 @@ static int a2dp_command(struct a2dp_stream_common* common, tA2DP_CTRL_CMD cmd) {
   DEBUG("A2DP COMMAND %s DONE STATUS %d", audio_a2dp_hw_dump_ctrl_event(cmd),
         ack);
 
-  if (ack == A2DP_CTRL_ACK_INCALL_FAILURE) {
-    ERROR("A2DP COMMAND %s error %d", audio_a2dp_hw_dump_ctrl_event(cmd), ack);
-    return ack;
-  }
+  if (ack == A2DP_CTRL_ACK_INCALL_FAILURE) return ack;
   if (ack != A2DP_CTRL_ACK_SUCCESS) {
     ERROR("A2DP COMMAND %s error %d", audio_a2dp_hw_dump_ctrl_event(cmd), ack);
     return -1;
@@ -700,8 +694,8 @@ static int a2dp_write_output_audio_config(struct a2dp_stream_common* common) {
       codec_config.bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_32;
       break;
     case AUDIO_FORMAT_PCM_8_24_BIT:
-      // All 24-bit audio is expected in AUDIO_FORMAT_PCM_24_BIT_PACKED format
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    // FALLTHROUGH
+    // All 24-bit audio is expected in AUDIO_FORMAT_PCM_24_BIT_PACKED format
     default:
       ERROR("Invalid audio format: 0x%x", common->cfg.format);
       return -1;
@@ -748,11 +742,6 @@ static int a2dp_write_output_audio_config(struct a2dp_stream_common* common) {
 static int a2dp_get_presentation_position_cmd(struct a2dp_stream_common* common,
                                               uint64_t* bytes, uint16_t* delay,
                                               struct timespec* timestamp) {
-  if ((common->ctrl_fd == AUDIO_SKT_DISCONNECTED) ||
-      (common->state != AUDIO_A2DP_STATE_STARTED)) {  // Audio is not streaming
-    return -1;
-  }
-
   if (a2dp_command(common, A2DP_CTRL_GET_PRESENTATION_POSITION) < 0) {
     return -1;
   }
@@ -1679,8 +1668,6 @@ static void adev_close_output_stream(struct audio_hw_device* dev,
                                      struct audio_stream_out* stream) {
   struct a2dp_audio_device* a2dp_dev = (struct a2dp_audio_device*)dev;
   struct a2dp_stream_out* out = (struct a2dp_stream_out*)stream;
-
-  INFO("%s: state %d", __func__, out->common.state);
 
   // prevent interference with adev_set_parameters.
   std::lock_guard<std::recursive_mutex> lock(*a2dp_dev->mutex);

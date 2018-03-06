@@ -31,8 +31,6 @@
  *
  *****************************************************************************/
 
-#define LOG_TAG "btm_acl"
-
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,7 +48,6 @@
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
-#include "osi/include/log.h"
 #include "osi/include/osi.h"
 
 static void btm_read_remote_features(uint16_t handle);
@@ -163,8 +160,8 @@ bool btm_ble_get_acl_remote_addr(tBTM_SEC_DEV_REC* p_dev_rec,
       break;
 
     case BTM_BLE_ADDR_STATIC:
-      conn_addr = p_dev_rec->ble.identity_addr;
-      *p_addr_type = p_dev_rec->ble.identity_addr_type;
+      conn_addr = p_dev_rec->ble.static_addr;
+      *p_addr_type = p_dev_rec->ble.static_addr_type;
       break;
 
     default:
@@ -286,6 +283,8 @@ void btm_acl_created(const RawAddress& bda, DEV_CLASS dc, BD_NAME bdn,
         } else {
           btm_establish_continue(p);
         }
+      } else {
+        btm_read_remote_features(p->hci_handle);
       }
 
       /* read page 1 - on rmt feature event for buffer reasons */
@@ -352,7 +351,7 @@ void btm_acl_removed(const RawAddress& bda, tBT_TRANSPORT transport) {
     if (p->link_up_issued) {
       p->link_up_issued = false;
 
-      /* If anyone cares, indicate the database changed */
+      /* If anyone cares, tell him database changed */
       if (btm_cb.p_bl_changed_cb) {
         tBTM_BL_EVENT_DATA evt_data;
         evt_data.event = BTM_BL_DISCN_EVT;
@@ -543,10 +542,7 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
   tBTM_STATUS status;
   tBTM_PM_MODE pwr_mode;
   tBTM_PM_PWR_MD settings;
-
-  LOG_INFO(LOG_TAG, "%s: peer %s new_role=0x%x p_cb=%p p_switch_role_cb=%p",
-           __func__, remote_bd_addr.ToString().c_str(), new_role, p_cb,
-           btm_cb.devcb.p_switch_role_cb);
+  VLOG(1) << __func__ << " BDA: " << remote_bd_addr;
 
   /* Make sure the local device supports switching */
   if (!controller_get_interface()->supports_master_slave_role_switch())
@@ -888,10 +884,6 @@ void btm_read_remote_version_complete(uint8_t* p) {
         STREAM_TO_UINT8(p_acl_cb->lmp_version, p);
         STREAM_TO_UINT16(p_acl_cb->manufacturer, p);
         STREAM_TO_UINT16(p_acl_cb->lmp_subversion, p);
-
-        if (p_acl_cb->transport == BT_TRANSPORT_BR_EDR) {
-          btm_read_remote_features(p_acl_cb->hci_handle);
-        }
       }
 
       if (p_acl_cb->transport == BT_TRANSPORT_LE) {
@@ -941,16 +933,6 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
            HCI_FEATURE_BYTES_PER_PAGE);
   }
 
-  if (!(p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) ||
-      p_dev_rec->is_originator) {
-    BTM_TRACE_DEBUG("%s: Calling Next Security Procedure", __func__);
-    uint8_t status = btm_sec_execute_procedure(p_dev_rec);
-    if (status != BTM_CMD_STARTED) {
-      BTM_TRACE_ERROR("%s: Security procedure not started! status %d", __func__,
-                      status);
-      btm_sec_dev_rec_cback_event(p_dev_rec, status, false);
-    }
-  }
   const uint8_t req_pend = (p_dev_rec->sm4 & BTM_SM4_REQ_PEND);
 
   /* Store the Peer Security Capabilites (in SM4 and rmt_sec_caps) */
@@ -1195,10 +1177,6 @@ void btm_establish_continue(tACL_CONN* p_acl_cb) {
       BTM_SetLinkPolicy(p_acl_cb->remote_addr, &btm_cb.btm_def_link_policy);
   }
 #endif
-  if (p_acl_cb->link_up_issued) {
-    BTM_TRACE_ERROR("%s: Already link is up ", __func__);
-    return;
-  }
   p_acl_cb->link_up_issued = true;
 
   /* If anyone cares, tell him database changed */

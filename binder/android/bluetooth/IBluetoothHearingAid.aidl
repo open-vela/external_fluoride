@@ -30,8 +30,6 @@ interface IBluetoothHearingAid {
     List<BluetoothDevice> getConnectedDevices();
     List<BluetoothDevice> getDevicesMatchingConnectionStates(in int[] states);
     int getConnectionState(in BluetoothDevice device);
-    boolean setActiveDevice(in BluetoothDevice device);
-    List<BluetoothDevice> getActiveDevices();
     boolean setPriority(in BluetoothDevice device, int priority);
     int getPriority(in BluetoothDevice device);
     void adjustVolume(int direction);

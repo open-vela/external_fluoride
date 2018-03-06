@@ -31,9 +31,10 @@
 /*****************************************************************************
  *  Constants
  ****************************************************************************/
+#ifndef AVDT_VERSION
+#define AVDT_VERSION 0x0103
+#endif
 #define AVDT_VERSION_1_3 0x0103
-
-#define AVDTP_VERSION_CONFIG_KEY "AvdtpVersion"
 
 /* Maximum size in bytes of the codec capabilities information element. */
 #define AVDT_CODEC_SIZE 20
@@ -70,9 +71,6 @@
  * or AVDT_DATA_IND_EVT.
 */
 #define AVDT_MARKER_SET 0x80
-
-#define MAX_2MBPS_AVDTP_MTU 663   // 2DH5 MTU=679, -12 for AVDTP, -4 for L2CAP
-#define MAX_3MBPS_AVDTP_MTU 1005  // 3DH5 MTU=1021, -12 for AVDTP, -4 for L2CAP
 
 /* SEP Type.  This indicates the stream endpoint type. */
 #define AVDT_TSEP_SRC 0     /* Source SEP */

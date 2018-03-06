@@ -76,6 +76,15 @@ bool A2DP_IsVendorSinkCodecSupported(const uint8_t* p_codec_info);
 // device is supported, otherwise false.
 bool A2DP_IsVendorPeerSourceCodecSupported(const uint8_t* p_codec_info);
 
+// Builds a vendor-specific A2DP preferred Sink capability from a vendor
+// Source capability.
+// |p_src_cap| is the Source capability to use.
+// |p_pref_cfg| is the result Sink capability to store.
+// Returns |A2DP_SUCCESS| on success, otherwise the corresponding A2DP error
+// status code.
+tA2DP_STATUS A2DP_VendorBuildSrc2SinkConfig(const uint8_t* p_src_cap,
+                                            uint8_t* p_pref_cfg);
+
 // Gets the Vendor ID for the vendor-specific A2DP codec.
 // |p_codec_info| contains information about the codec capabilities.
 // Returns the Vendor ID for the vendor-specific A2DP codec.
@@ -117,23 +126,11 @@ bool A2DP_VendorCodecEquals(const uint8_t* p_codec_info_a,
 // contains invalid codec information.
 int A2DP_VendorGetTrackSampleRate(const uint8_t* p_codec_info);
 
-// Gets the track bits per sample value for the A2DP vendor-specific codec.
-// |p_codec_info| is a pointer to the vendor-specific codec_info to decode.
-// Returns the track sample rate on success, or -1 if |p_codec_info|
-// contains invalid codec information.
-int A2DP_VendorGetTrackBitsPerSample(const uint8_t* p_codec_info);
-
 // Gets the channel count for the A2DP vendor-specific codec.
 // |p_codec_info| is a pointer to the vendor-specific codec_info to decode.
 // Returns the channel count on success, or -1 if |p_codec_info|
 // contains invalid codec information.
 int A2DP_VendorGetTrackChannelCount(const uint8_t* p_codec_info);
-
-// Gets the bitrate for the A2DP vendor-specific codec.
-// |p_codec_info| is a pointer to the vendor-specific codec_info to decode.
-// Returns the channel count on success, or -1 if |p_codec_info|
-// contains invalid codec information.
-int A2DP_VendorGetBitRate(const uint8_t* p_codec_info);
 
 // Gets the channel type for the A2DP vendor-specific Sink codec:
 // 1 for mono, or 3 for dual/stereo/joint.
@@ -187,11 +184,6 @@ bool A2DP_VendorAdjustCodec(uint8_t* p_codec_info);
 btav_a2dp_codec_index_t A2DP_VendorSourceCodecIndex(
     const uint8_t* p_codec_info);
 
-// Gets the A2DP vendor Sink codec index for a given |p_codec_info|.
-// Returns the corresponding |btav_a2dp_codec_index_t| on success,
-// otherwise |BTAV_A2DP_CODEC_INDEX_MAX|.
-btav_a2dp_codec_index_t A2DP_VendorSinkCodecIndex(const uint8_t* p_codec_info);
-
 // Gets the A2DP vendor codec name for a given |codec_index|.
 const char* A2DP_VendorCodecIndexStr(btav_a2dp_codec_index_t codec_index);
 
@@ -202,9 +194,9 @@ const char* A2DP_VendorCodecIndexStr(btav_a2dp_codec_index_t codec_index);
 bool A2DP_VendorInitCodecConfig(btav_a2dp_codec_index_t codec_index,
                                 AvdtpSepConfig* p_cfg);
 
-// Decodes A2DP vendor codec info into a human readable string.
-// |p_codec_info| is a pointer to the codec_info to decode.
-// Returns a string describing the codec information.
-std::string A2DP_VendorCodecInfoString(const uint8_t* p_codec_info);
+// Decodes and displays A2DP vendor codec info when using |LOG_DEBUG|.
+// |p_codec_info| is a pointer to the codec_info to decode and display.
+// Returns true if the codec information is valid, otherwise false.
+bool A2DP_VendorDumpCodecInfo(const uint8_t* p_codec_info);
 
 #endif  // A2DP_VENDOR_H
