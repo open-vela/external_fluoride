@@ -25,13 +25,11 @@
 #include "bt_common.h"
 #include "bta_av_api.h"
 #include "btif_a2dp.h"
-#include "btif_a2dp_audio_interface.h"
 #include "btif_a2dp_control.h"
 #include "btif_a2dp_sink.h"
 #include "btif_a2dp_source.h"
 #include "btif_av.h"
 #include "btif_av_co.h"
-#include "btif_hf.h"
 #include "btif_util.h"
 #include "osi/include/log.h"
 
@@ -53,16 +51,7 @@ bool btif_a2dp_on_started(const RawAddress& peer_addr,
 
   if (p_av_start == NULL) {
     /* ack back a local start request */
-
-    if (!btif_av_is_a2dp_offload_enabled()) {
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
-      return true;
-    } else if (bluetooth::headset::IsCallIdle()) {
-      btif_av_stream_start_offload();
-    } else {
-      APPL_TRACE_ERROR("%s: call in progress, do not start offload", __func__);
-      btif_a2dp_audio_on_started(A2DP_CTRL_ACK_INCALL_FAILURE);
-    }
+    btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
     return true;
   }
 
@@ -75,11 +64,7 @@ bool btif_a2dp_on_started(const RawAddress& peer_addr,
     if (!p_av_start->suspending) {
       if (p_av_start->initiator) {
         if (pending_start) {
-          if (btif_av_is_a2dp_offload_enabled()) {
-            btif_av_stream_start_offload();
-          } else {
-            btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
-          }
+          btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
           ack = true;
         }
       } else {
@@ -87,9 +72,6 @@ bool btif_a2dp_on_started(const RawAddress& peer_addr,
          * is setup before datapath is started.
          */
         btif_a2dp_source_setup_codec(peer_addr);
-        if (btif_av_is_a2dp_offload_enabled()) {
-          btif_av_stream_start_offload();
-        }
       }
 
       /* media task is autostarted upon a2dp audiopath connection */
@@ -110,28 +92,20 @@ void btif_a2dp_on_stopped(tBTA_AV_SUSPEND* p_av_suspend) {
     btif_a2dp_sink_on_stopped(p_av_suspend);
     return;
   }
-  if (!btif_av_is_a2dp_offload_enabled()) {
-    btif_a2dp_source_on_stopped(p_av_suspend);
-  } else if (p_av_suspend != NULL) {
-    btif_a2dp_audio_on_stopped(p_av_suspend->status);
-  }
+
+  btif_a2dp_source_on_stopped(p_av_suspend);
 }
 
 void btif_a2dp_on_suspended(tBTA_AV_SUSPEND* p_av_suspend) {
-  APPL_TRACE_EVENT("## ON A2DP SUSPENDED ##");
-  if (!btif_av_is_a2dp_offload_enabled()) {
-    if (btif_av_get_peer_sep() == AVDT_TSEP_SRC) {
-      btif_a2dp_sink_on_suspended(p_av_suspend);
-    } else {
-      btif_a2dp_source_on_suspended(p_av_suspend);
-    }
+  APPL_TRACE_WARNING("## ON A2DP SUSPENDED ##");
+  if (btif_av_get_peer_sep() == AVDT_TSEP_SRC) {
+    btif_a2dp_sink_on_suspended(p_av_suspend);
   } else {
-    btif_a2dp_audio_on_suspended(p_av_suspend->status);
+    btif_a2dp_source_on_suspended(p_av_suspend);
   }
 }
 
-void btif_a2dp_on_offload_started(const RawAddress& peer_addr,
-                                  tBTA_AV_STATUS status) {
+void btif_a2dp_on_offload_started(tBTA_AV_STATUS status) {
   tA2DP_CTRL_ACK ack;
   APPL_TRACE_EVENT("%s status %d", __func__, status);
 
@@ -148,18 +122,7 @@ void btif_a2dp_on_offload_started(const RawAddress& peer_addr,
       ack = A2DP_CTRL_ACK_FAILURE;
       break;
   }
-  if (btif_av_is_a2dp_offload_enabled()) {
-    btif_a2dp_audio_on_started(status);
-    if (ack != BTA_AV_SUCCESS && btif_av_stream_started_ready()) {
-      // Offload request will return with failure from btif_av sm if
-      // suspend is triggered for remote start. Disconnect only if SoC
-      // returned failure for offload VSC
-      APPL_TRACE_ERROR("%s: offload start failed", __func__);
-      btif_av_src_disconnect_sink(peer_addr);
-    }
-  } else {
-    btif_a2dp_command_ack(ack);
-  }
+  btif_a2dp_command_ack(ack);
 }
 
 void btif_debug_a2dp_dump(int fd) {
