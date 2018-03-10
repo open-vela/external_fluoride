@@ -22,7 +22,6 @@ btifCommonIncludes = [
     "system/bt/embdrv/sbc/decoder/include",
     "system/bt/utils/include",
     "system/bt/include",
-    "system/libhwbinder/include",
 ]
 
 // libbtif static library for target
@@ -36,7 +35,6 @@ cc_library_static {
         "src/bluetooth.cc",
         // BTIF implementation
         "src/btif_a2dp.cc",
-        "src/btif_a2dp_audio_interface.cc",
         "src/btif_a2dp_control.cc",
         "src/btif_a2dp_sink.cc",
         "src/btif_a2dp_source.cc",
@@ -93,11 +91,6 @@ cc_library_static {
         "liblog",
         "libz",
         "libtinyxml2",
-        "android.hardware.bluetooth.a2dp@1.0",
-        "libhidlbase",
-        "libhidltransport",
-        "libhwbinder",
-        "libutils",
     ],
     whole_static_libs: [
         "libaudio-a2dp-hw-utils",

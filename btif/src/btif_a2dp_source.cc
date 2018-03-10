@@ -33,7 +33,6 @@
 #include "bt_common.h"
 #include "bta_av_ci.h"
 #include "btif_a2dp.h"
-#include "btif_a2dp_audio_interface.h"
 #include "btif_a2dp_control.h"
 #include "btif_a2dp_source.h"
 #include "btif_av.h"
@@ -415,7 +414,6 @@ static void btif_a2dp_source_startup_delayed(void) {
 
   raise_priority_a2dp(TASK_HIGH_MEDIA);
   btif_a2dp_control_init();
-  if (btif_av_is_a2dp_offload_enabled()) btif_a2dp_audio_interface_init();
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateRunning);
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
       system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
@@ -444,7 +442,6 @@ static void btif_a2dp_source_shutdown_delayed(void) {
   btif_a2dp_source_cb.media_alarm = nullptr;
 
   btif_a2dp_control_cleanup();
-  if (btif_av_is_a2dp_offload_enabled()) btif_a2dp_audio_interface_deinit();
   fixed_queue_free(btif_a2dp_source_cb.tx_audio_queue, nullptr);
   btif_a2dp_source_cb.tx_audio_queue = nullptr;
 
@@ -667,8 +664,6 @@ static void btif_a2dp_source_audio_tx_start_event(void) {
            alarm_is_scheduled(btif_a2dp_source_cb.media_alarm) ? "" : "not ",
            btif_a2dp_source_is_streaming() ? "true" : "false");
 
-  if (btif_av_is_a2dp_offload_enabled()) return;
-
   /* Reset the media feeding state */
   CHECK(btif_a2dp_source_cb.encoder_interface != nullptr);
   btif_a2dp_source_cb.encoder_interface->feeding_reset();
@@ -693,8 +688,6 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
   LOG_INFO(LOG_TAG, "%s: media_alarm is %srunning, streaming %s", __func__,
            alarm_is_scheduled(btif_a2dp_source_cb.media_alarm) ? "" : "not ",
            btif_a2dp_source_is_streaming() ? "true" : "false");
-
-  if (btif_av_is_a2dp_offload_enabled()) return;
 
   const bool send_ack = btif_a2dp_source_is_streaming();
 
@@ -740,8 +733,6 @@ static void btif_a2dp_source_alarm_cb(UNUSED_ATTR void* context) {
 }
 
 static void btif_a2dp_source_audio_handle_timer(void) {
-  if (btif_av_is_a2dp_offload_enabled()) return;
-
   uint64_t timestamp_us = time_get_os_boottime_us();
   log_tstamps_us("A2DP Source tx timer", timestamp_us);
 
@@ -871,7 +862,6 @@ static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
 static void btif_a2dp_source_audio_tx_flush_event(void) {
   /* Flush all enqueued audio buffers (encoded) */
   LOG_INFO(LOG_TAG, "%s", __func__);
-  if (btif_av_is_a2dp_offload_enabled()) return;
 
   if (btif_a2dp_source_cb.encoder_interface != nullptr)
     btif_a2dp_source_cb.encoder_interface->feeding_flush();
