@@ -47,10 +47,10 @@
 #include <hardware/bt_sdp.h>
 #include <hardware/bt_sock.h>
 
+#include "avrcp_service.h"
 #include "bt_utils.h"
 #include "bta/include/bta_hearing_aid_api.h"
 #include "bta/include/bta_hf_client_api.h"
-#include "btif/avrcp/avrcp_service.h"
 #include "btif_a2dp.h"
 #include "btif_api.h"
 #include "btif_av.h"
@@ -62,11 +62,11 @@
 #include "btif_storage.h"
 #include "btsnoop.h"
 #include "btsnoop_mem.h"
-#include "common/metrics.h"
 #include "device/include/interop.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocation_tracker.h"
 #include "osi/include/log.h"
+#include "osi/include/metrics.h"
 #include "osi/include/osi.h"
 #include "osi/include/wakelock.h"
 #include "stack_manager.h"
@@ -326,10 +326,12 @@ static void dump(int fd, const char** arguments) {
 #if (BTSNOOP_MEM == TRUE)
   btif_debug_btsnoop_dump(fd);
 #endif
+
+  close(fd);
 }
 
 static void dumpMetrics(std::string* output) {
-  bluetooth::common::BluetoothMetricsLogger::GetInstance()->WriteString(output);
+  system_bt_osi::BluetoothMetricsLogger::GetInstance()->WriteString(output);
 }
 
 static const void* get_profile_interface(const char* profile_id) {
@@ -413,32 +415,8 @@ int le_test_mode(uint16_t opcode, uint8_t* buf, uint8_t len) {
   return btif_le_test_mode(opcode, buf, len);
 }
 
-static bt_os_callouts_t* wakelock_os_callouts_saved = nullptr;
-
-static int acquire_wake_lock_cb(const char* lock_name) {
-  return do_in_jni_thread(
-      FROM_HERE, base::Bind(base::IgnoreResult(
-                                wakelock_os_callouts_saved->acquire_wake_lock),
-                            lock_name));
-}
-
-static int release_wake_lock_cb(const char* lock_name) {
-  return do_in_jni_thread(
-      FROM_HERE, base::Bind(base::IgnoreResult(
-                                wakelock_os_callouts_saved->release_wake_lock),
-                            lock_name));
-}
-
-static bt_os_callouts_t wakelock_os_callouts_jni = {
-    sizeof(wakelock_os_callouts_jni),
-    nullptr /* not used */,
-    acquire_wake_lock_cb,
-    release_wake_lock_cb,
-};
-
 static int set_os_callouts(bt_os_callouts_t* callouts) {
-  wakelock_os_callouts_saved = callouts;
-  wakelock_set_os_callouts(&wakelock_os_callouts_jni);
+  wakelock_set_os_callouts(callouts);
   return BT_STATUS_SUCCESS;
 }
 
