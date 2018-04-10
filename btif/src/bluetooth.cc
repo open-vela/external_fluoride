@@ -328,7 +328,8 @@ static void dump(int fd, const char** arguments) {
 }
 
 static void dumpMetrics(std::string* output) {
-  system_bt_osi::BluetoothMetricsLogger::GetInstance()->WriteString(output);
+  system_bt_osi::BluetoothMetricsLogger::GetInstance()->WriteString(output,
+                                                                    true);
 }
 
 static const void* get_profile_interface(const char* profile_id) {

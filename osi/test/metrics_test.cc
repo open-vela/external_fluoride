@@ -50,8 +50,6 @@ using bluetooth::metrics::BluetoothMetricsProto::ScanEvent_ScanTechnologyType;
 using bluetooth::metrics::BluetoothMetricsProto::ScanEvent_ScanEventType;
 using bluetooth::metrics::BluetoothMetricsProto::WakeEvent;
 using bluetooth::metrics::BluetoothMetricsProto::WakeEvent_WakeEventType;
-using bluetooth::metrics::BluetoothMetricsProto::HeadsetProfileType;
-using bluetooth::metrics::BluetoothMetricsProto::HeadsetProfileConnectionStats;
 using system_bt_osi::BluetoothMetricsLogger;
 using system_bt_osi::A2dpSessionMetrics;
 
@@ -410,7 +408,7 @@ TEST_F(BluetoothMetricsLoggerTest, PairEventTest) {
   BluetoothMetricsLogger::GetInstance()->LogPairEvent(
       35, 12345, 42, system_bt_osi::DEVICE_TYPE_BREDR);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -422,7 +420,7 @@ TEST_F(BluetoothMetricsLoggerTest, WakeEventTest) {
   BluetoothMetricsLogger::GetInstance()->LogWakeEvent(
       system_bt_osi::WAKE_EVENT_ACQUIRED, "TEST_REQ", "TEST_NAME", 12345);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -439,7 +437,7 @@ TEST_F(BluetoothMetricsLoggerTest, WakeEventOverrunTest) {
         "TEST_REQ", "TEST_NAME", i);
   }
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -453,7 +451,7 @@ TEST_F(BluetoothMetricsLoggerTest, ScanEventTest) {
   BluetoothMetricsLogger::GetInstance()->LogScanEvent(
       false, "TEST_INITIATOR", system_bt_osi::SCAN_TECH_TYPE_BREDR, 42, 123456);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -471,7 +469,7 @@ TEST_F(BluetoothMetricsLoggerTest, BluetoothSessionTest) {
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
       system_bt_osi::DISCONNECT_REASON_UNKNOWN, 133456);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -488,7 +486,7 @@ TEST_F(BluetoothMetricsLoggerTest, BluetoothSessionDumpBeforeEndTest) {
       system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_LE, time_get_os_boottime_ms());
   sleep_ms(1000);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -515,7 +513,7 @@ TEST_F(BluetoothMetricsLoggerTest, BluetoothSessionStartBeforeEndTest) {
       system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_LE, 0);
   sleep_ms(2000);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -581,7 +579,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesTest) {
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
       system_bt_osi::DISCONNECT_REASON_UNKNOWN, 133456);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -637,7 +635,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesSeparatedbyDumpTest) {
   BluetoothMetricsLogger::GetInstance()->LogA2dpSession(metrics1);
   sleep_ms(1000);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
   ClearLog();
   info = MakeDeviceInfo(
@@ -657,7 +655,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesSeparatedbyDumpTest) {
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
       system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
   msg_str.clear();
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -716,7 +714,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionOnlyTest) {
   BluetoothMetricsLogger::GetInstance()->LogA2dpSession(metrics2);
   sleep_ms(1000);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
 }
 
@@ -779,7 +777,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionDumpBeforeTwoUpdatesTest) {
       BTM_COD_MAJOR_AUDIO_TEST, system_bt_osi::DEVICE_TYPE_BREDR);
   sleep_ms(1000);
   std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
   ClearLog();
   info = MakeDeviceInfo(
@@ -800,94 +798,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionDumpBeforeTwoUpdatesTest) {
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
       system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
   msg_str.clear();
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
+  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str, true);
   EXPECT_THAT(msg_str, StrEq(bt_log_str_));
-}
-
-TEST_F(BluetoothMetricsLoggerTest, LogHeadsetProfileRfcConnectionTest) {
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_HSP_SERVICE_ID);
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_HFP_SERVICE_ID);
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_HFP_SERVICE_ID);
-  std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
-  BluetoothLog* metrics = BluetoothLog::default_instance().New();
-  metrics->ParseFromString(msg_str);
-  EXPECT_EQ(metrics->headset_profile_connection_stats_size(), 2);
-  bool hfp_correct = false;
-  bool hsp_correct = false;
-  for (const HeadsetProfileConnectionStats& headset_profile_connection_stats :
-       metrics->headset_profile_connection_stats()) {
-    switch (headset_profile_connection_stats.headset_profile_type()) {
-      case HeadsetProfileType::HFP:
-        EXPECT_EQ(headset_profile_connection_stats.num_times_connected(), 2);
-        hfp_correct = true;
-        break;
-      case HeadsetProfileType::HSP:
-        EXPECT_EQ(headset_profile_connection_stats.num_times_connected(), 1);
-        hsp_correct = true;
-        break;
-      default:
-        FAIL();
-    }
-  }
-  EXPECT_TRUE(hfp_correct);
-  EXPECT_TRUE(hsp_correct);
-  metrics->clear_headset_profile_connection_stats();
-  EXPECT_EQ(metrics->headset_profile_connection_stats_size(), 0);
-  msg_str.clear();
-  // Verify that dump after clean up result in an empty list
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
-  metrics->ParseFromString(msg_str);
-  EXPECT_EQ(metrics->headset_profile_connection_stats_size(), 0);
-  delete metrics;
-}
-
-TEST_F(BluetoothMetricsLoggerTest, LogHeadsetProfileRfcConnectionErrorTest) {
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_HSP_SERVICE_ID);
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_HFP_SERVICE_ID);
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_BIP_SERVICE_ID);
-  BluetoothMetricsLogger::GetInstance()->LogHeadsetProfileRfcConnection(
-      BTA_HSP_SERVICE_ID);
-  std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
-  BluetoothLog* metrics = BluetoothLog::default_instance().New();
-  metrics->ParseFromString(msg_str);
-  EXPECT_EQ(metrics->headset_profile_connection_stats_size(), 3);
-  bool hfp_correct = false;
-  bool hsp_correct = false;
-  bool unknown_correct = false;
-  for (const HeadsetProfileConnectionStats& headset_profile_connection_stats :
-       metrics->headset_profile_connection_stats()) {
-    switch (headset_profile_connection_stats.headset_profile_type()) {
-      case HeadsetProfileType::HFP:
-        EXPECT_EQ(headset_profile_connection_stats.num_times_connected(), 1);
-        hfp_correct = true;
-        break;
-      case HeadsetProfileType::HSP:
-        EXPECT_EQ(headset_profile_connection_stats.num_times_connected(), 2);
-        hsp_correct = true;
-        break;
-      default:
-        EXPECT_EQ(headset_profile_connection_stats.num_times_connected(), 1);
-        unknown_correct = true;
-        break;
-    }
-  }
-  EXPECT_TRUE(hfp_correct);
-  EXPECT_TRUE(hsp_correct);
-  EXPECT_TRUE(unknown_correct);
-  metrics->clear_headset_profile_connection_stats();
-  EXPECT_EQ(metrics->headset_profile_connection_stats_size(), 0);
-  // Verify that dump after clean up result in an empty list
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
-  metrics->ParseFromString(msg_str);
-  EXPECT_EQ(metrics->headset_profile_connection_stats_size(), 0);
-  delete metrics;
 }
 }
