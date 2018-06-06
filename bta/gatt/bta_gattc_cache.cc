@@ -61,7 +61,7 @@ tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_characteristic_srcb(
 #define BTA_GATT_SDP_DB_SIZE 4096
 
 #define GATT_CACHE_PREFIX "/data/misc/bluetooth/gatt_cache_"
-#define GATT_CACHE_VERSION 5
+#define GATT_CACHE_VERSION 4
 
 static void bta_gattc_generate_cache_file_name(char* buffer, size_t buffer_len,
                                                const RawAddress& bda) {
@@ -177,7 +177,7 @@ static void add_service_to_gatt_db(std::vector<tBTA_GATTC_SERVICE>& gatt_db,
 
 /** Add a characteristic into GATT database */
 static void add_characteristic_to_gatt_db(
-    std::vector<tBTA_GATTC_SERVICE>& gatt_db, uint16_t attribute_handle,
+    std::vector<tBTA_GATTC_SERVICE>& gatt_db, uint16_t attr_handle,
     uint16_t value_handle, const Uuid& uuid, uint8_t property) {
 #if (BTA_GATT_DEBUG == TRUE)
   VLOG(1) << __func__
@@ -186,7 +186,7 @@ static void add_characteristic_to_gatt_db(
 #endif
 
   tBTA_GATTC_SERVICE* service =
-      bta_gattc_find_matching_service(gatt_db, attribute_handle);
+      bta_gattc_find_matching_service(gatt_db, attr_handle);
   if (!service) {
     LOG(ERROR) << "Illegal action to add char/descr/incl srvc for non-existing "
                   "service!";
@@ -200,7 +200,7 @@ static void add_characteristic_to_gatt_db(
   if (service->e_handle < value_handle) service->e_handle = value_handle;
 
   service->characteristics.emplace_back(
-      tBTA_GATTC_CHARACTERISTIC{.declaration_handle = attribute_handle,
+      tBTA_GATTC_CHARACTERISTIC{.declaration_handle = attr_handle,
                                 .value_handle = value_handle,
                                 .properties = property,
                                 .uuid = uuid});
@@ -387,67 +387,72 @@ static bool bta_gattc_srvc_in_list(std::vector<tBTA_GATTC_SERVICE>& services,
   return false;
 }
 
-/* Process the discovery result from sdp */
+/*******************************************************************************
+ *
+ * Function         bta_gattc_sdp_callback
+ *
+ * Description      Process the discovery result from sdp
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
 void bta_gattc_sdp_callback(uint16_t sdp_status, void* user_data) {
   tBTA_GATTC_CB_DATA* cb_data = (tBTA_GATTC_CB_DATA*)user_data;
   tBTA_GATTC_SERV* p_srvc_cb = bta_gattc_find_scb_by_cid(cb_data->sdp_conn_id);
 
   if (p_srvc_cb == nullptr) {
     LOG(ERROR) << "GATT service discovery is done on unknown connection";
-    /* allocated in bta_gattc_sdp_service_disc */
-    osi_free(cb_data);
-    return;
-  }
+  } else {
+    bool no_pending_disc = p_srvc_cb->pending_discovery.empty();
 
-  bool no_pending_disc = p_srvc_cb->pending_discovery.empty();
-
-  if ((sdp_status == SDP_SUCCESS) || (sdp_status == SDP_DB_FULL)) {
-    tSDP_DISC_REC* p_sdp_rec =
-        SDP_FindServiceInDb(cb_data->p_sdp_db, 0, nullptr);
-    while (p_sdp_rec != nullptr) {
-      /* find a service record, report it */
-      Uuid service_uuid;
-      if (!SDP_FindServiceUUIDInRec(p_sdp_rec, &service_uuid)) continue;
-
-      tSDP_PROTOCOL_ELEM pe;
-      if (!SDP_FindProtocolListElemInRec(p_sdp_rec, UUID_PROTOCOL_ATT, &pe))
-        continue;
-
-      uint16_t start_handle = (uint16_t)pe.params[0];
-      uint16_t end_handle = (uint16_t)pe.params[1];
+    if ((sdp_status == SDP_SUCCESS) || (sdp_status == SDP_DB_FULL)) {
+      tSDP_DISC_REC* p_sdp_rec = NULL;
+      do {
+        /* find a service record, report it */
+        p_sdp_rec = SDP_FindServiceInDb(cb_data->p_sdp_db, 0, p_sdp_rec);
+        if (p_sdp_rec) {
+          Uuid service_uuid;
+          if (SDP_FindServiceUUIDInRec(p_sdp_rec, &service_uuid)) {
+            tSDP_PROTOCOL_ELEM pe;
+            if (SDP_FindProtocolListElemInRec(p_sdp_rec, UUID_PROTOCOL_ATT,
+                                              &pe)) {
+              uint16_t start_handle = (uint16_t)pe.params[0];
+              uint16_t end_handle = (uint16_t)pe.params[1];
 
 #if (BTA_GATT_DEBUG == TRUE)
-      VLOG(1) << "Found ATT service uuid=" << service_uuid
-              << ", s_handle=" << loghex(start_handle)
-              << ", e_handle=" << loghex(end_handle);
+              VLOG(1) << "Found ATT service uuid=" << service_uuid
+                      << ", s_handle=" << loghex(start_handle)
+                      << ", e_handle=" << loghex(end_handle);
 #endif
 
-      if (!GATT_HANDLE_IS_VALID(start_handle) ||
-          !GATT_HANDLE_IS_VALID(end_handle)) {
-        LOG(ERROR) << "invalid start_handle=" << loghex(start_handle)
-                   << ", end_handle=" << loghex(end_handle);
-        continue;
-      }
-
-      /* discover services result, add services into a service list */
-      add_service_to_gatt_db(p_srvc_cb->pending_discovery, start_handle,
-                             end_handle, service_uuid, true);
-
-      p_sdp_rec = SDP_FindServiceInDb(cb_data->p_sdp_db, 0, p_sdp_rec);
+              if (GATT_HANDLE_IS_VALID(start_handle) &&
+                  GATT_HANDLE_IS_VALID(end_handle) && p_srvc_cb != NULL) {
+                /* discover services result, add services into a service list */
+                add_service_to_gatt_db(p_srvc_cb->pending_discovery,
+                                       start_handle, end_handle, service_uuid,
+                                       true);
+              } else {
+                LOG(ERROR) << "invalid start_handle=" << loghex(start_handle)
+                           << ", end_handle=" << loghex(end_handle);
+              }
+            }
+          }
+        }
+      } while (p_sdp_rec);
     }
+
+    if (no_pending_disc) {
+      p_srvc_cb->pending_service = p_srvc_cb->pending_discovery.begin();
+    }
+
+    /* start discover primary service */
+    bta_gattc_explore_srvc(cb_data->sdp_conn_id, p_srvc_cb);
   }
 
-  if (no_pending_disc) {
-    p_srvc_cb->pending_service = p_srvc_cb->pending_discovery.begin();
-  }
-
-  /* start discover primary service */
-  bta_gattc_explore_srvc(cb_data->sdp_conn_id, p_srvc_cb);
-
-  /* allocated in bta_gattc_sdp_service_disc */
+  /* both were allocated in bta_gattc_sdp_service_disc */
+  osi_free(cb_data->p_sdp_db);
   osi_free(cb_data);
 }
-
 /*******************************************************************************
  *
  * Function         bta_gattc_sdp_service_disc
@@ -466,10 +471,10 @@ static tGATT_STATUS bta_gattc_sdp_service_disc(uint16_t conn_id,
    * On success, cb_data will be freed inside bta_gattc_sdp_callback,
    * otherwise it will be freed within this function.
    */
-  tBTA_GATTC_CB_DATA* cb_data = (tBTA_GATTC_CB_DATA*)osi_malloc(
-      sizeof(tBTA_GATTC_CB_DATA) + BTA_GATT_SDP_DB_SIZE);
+  tBTA_GATTC_CB_DATA* cb_data =
+      (tBTA_GATTC_CB_DATA*)osi_malloc(sizeof(tBTA_GATTC_CB_DATA));
 
-  cb_data->p_sdp_db = (tSDP_DISCOVERY_DB*)(cb_data + 1);
+  cb_data->p_sdp_db = (tSDP_DISCOVERY_DB*)osi_malloc(BTA_GATT_SDP_DB_SIZE);
   attr_list[0] = ATTR_ID_SERVICE_CLASS_ID_LIST;
   attr_list[1] = ATTR_ID_PROTOCOL_DESC_LIST;
 
@@ -480,6 +485,7 @@ static tGATT_STATUS bta_gattc_sdp_service_disc(uint16_t conn_id,
   if (!SDP_ServiceSearchAttributeRequest2(p_server_cb->server_bda,
                                           cb_data->p_sdp_db,
                                           &bta_gattc_sdp_callback, cb_data)) {
+    osi_free(cb_data->p_sdp_db);
     osi_free(cb_data);
     return GATT_ERROR;
   }
@@ -902,13 +908,6 @@ void bta_gattc_get_gatt_db(uint16_t conn_id, uint16_t start_handle,
                              count);
 }
 
-namespace {
-const Uuid PRIMARY_SERVICE = Uuid::From16Bit(GATT_UUID_PRI_SERVICE);
-const Uuid SECONDARY_SERVICE = Uuid::From16Bit(GATT_UUID_SEC_SERVICE);
-const Uuid INCLUDE = Uuid::From16Bit(GATT_UUID_INCLUDE_SERVICE);
-const Uuid CHARACTERISTIC = Uuid::From16Bit(GATT_UUID_CHAR_DECLARE);
-}  // namespace
-
 /* rebuild server cache from NV cache */
 void bta_gattc_rebuild_cache(tBTA_GATTC_SERV* p_srvc_cb, uint16_t num_attr,
                              tBTA_GATTC_NV_ATTR* p_attr) {
@@ -919,30 +918,65 @@ void bta_gattc_rebuild_cache(tBTA_GATTC_SERV* p_srvc_cb, uint16_t num_attr,
   std::vector<tBTA_GATTC_SERVICE>().swap(p_srvc_cb->srvc_cache);
 
   while (num_attr > 0 && p_attr != NULL) {
-    if (p_attr->type == PRIMARY_SERVICE || p_attr->type == SECONDARY_SERVICE) {
-      add_service_to_gatt_db(
-          p_srvc_cb->srvc_cache, p_attr->handle, p_attr->value.service.e_handle,
-          p_attr->value.service.uuid, (p_attr->type == PRIMARY_SERVICE));
-    } else if (p_attr->type == INCLUDE) {
-      add_incl_srvc_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->handle,
-                               p_attr->value.included_service.uuid,
-                               p_attr->value.included_service.s_handle);
-    } else if (p_attr->type == CHARACTERISTIC) {
-      add_characteristic_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->handle,
-                                    p_attr->value.characteristic.value_handle,
-                                    p_attr->value.characteristic.uuid,
-                                    p_attr->value.characteristic.properties);
-    } else {
-      add_descriptor_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->handle,
-                                p_attr->type);
-    }
+    switch (p_attr->attr_type) {
+      case BTA_GATTC_ATTR_TYPE_SRVC:
+        add_service_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->s_handle,
+                               p_attr->e_handle, p_attr->uuid,
+                               p_attr->is_primary);
+        break;
 
+      case BTA_GATTC_ATTR_TYPE_CHAR:
+        add_characteristic_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->s_handle,
+                                      p_attr->s_handle, p_attr->uuid,
+                                      p_attr->prop);
+        break;
+
+      case BTA_GATTC_ATTR_TYPE_CHAR_DESCR:
+        add_descriptor_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->s_handle,
+                                  p_attr->uuid);
+        break;
+      case BTA_GATTC_ATTR_TYPE_INCL_SRVC:
+        add_incl_srvc_to_gatt_db(p_srvc_cb->srvc_cache, p_attr->s_handle,
+                                 p_attr->uuid, p_attr->incl_srvc_handle);
+        break;
+    }
     p_attr++;
     num_attr--;
   }
 }
 
-/** save the server cache into NV */
+/*******************************************************************************
+ *
+ * Function         bta_gattc_fill_nv_attr
+ *
+ * Description      fill a NV attribute entry value
+ *
+ * Returns          None.
+ *
+ ******************************************************************************/
+void bta_gattc_fill_nv_attr(tBTA_GATTC_NV_ATTR* p_attr, uint8_t type,
+                            uint16_t s_handle, uint16_t e_handle, Uuid uuid,
+                            uint8_t prop, uint16_t incl_srvc_handle,
+                            bool is_primary) {
+  p_attr->s_handle = s_handle;
+  p_attr->e_handle = e_handle;
+  p_attr->attr_type = type;
+  p_attr->is_primary = is_primary;
+  p_attr->id = 0;
+  p_attr->prop = prop;
+  p_attr->incl_srvc_handle = incl_srvc_handle;
+  p_attr->uuid = uuid;
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_gattc_cache_save
+ *
+ * Description      save the server cache into NV
+ *
+ * Returns          None.
+ *
+ ******************************************************************************/
 void bta_gattc_cache_save(tBTA_GATTC_SERV* p_srvc_cb, uint16_t conn_id) {
   if (p_srvc_cb->srvc_cache.empty()) return;
 
@@ -952,32 +986,29 @@ void bta_gattc_cache_save(tBTA_GATTC_SERV* p_srvc_cb, uint16_t conn_id) {
       (tBTA_GATTC_NV_ATTR*)osi_malloc(db_size * sizeof(tBTA_GATTC_NV_ATTR));
 
   for (const tBTA_GATTC_SERVICE& service : p_srvc_cb->srvc_cache) {
-    nv_attr[i++] = {
-        service.s_handle,
-        service.is_primary ? PRIMARY_SERVICE : SECONDARY_SERVICE,
-        {.service = {.uuid = service.uuid, .e_handle = service.e_handle}}};
+    bta_gattc_fill_nv_attr(&nv_attr[i++], BTA_GATTC_ATTR_TYPE_SRVC,
+                           service.s_handle, service.e_handle, service.uuid,
+                           0 /* properties */, 0 /* incl_srvc_handle */,
+                           service.is_primary);
   }
 
   for (const tBTA_GATTC_SERVICE& service : p_srvc_cb->srvc_cache) {
-    for (const tBTA_GATTC_INCLUDED_SVC& p_isvc : service.included_svc) {
-      nv_attr[i++] = {
-          p_isvc.handle,
-          INCLUDE,
-          {.included_service = {.s_handle = p_isvc.included_service->s_handle,
-                                .e_handle = p_isvc.included_service->e_handle,
-                                .uuid = p_isvc.uuid}}};
-    }
-
     for (const tBTA_GATTC_CHARACTERISTIC& charac : service.characteristics) {
-      nv_attr[i++] = {charac.declaration_handle,
-                      CHARACTERISTIC,
-                      {.characteristic = {.properties = charac.properties,
-                                          .value_handle = charac.value_handle,
-                                          .uuid = charac.uuid}}};
+      bta_gattc_fill_nv_attr(
+          &nv_attr[i++], BTA_GATTC_ATTR_TYPE_CHAR, charac.value_handle, 0,
+          charac.uuid, charac.properties, 0 /* incl_srvc_handle */, false);
 
       for (const tBTA_GATTC_DESCRIPTOR& desc : charac.descriptors) {
-        nv_attr[i++] = {desc.handle, desc.uuid, {}};
+        bta_gattc_fill_nv_attr(&nv_attr[i++], BTA_GATTC_ATTR_TYPE_CHAR_DESCR,
+                               desc.handle, 0, desc.uuid, 0 /* properties */,
+                               0 /* incl_srvc_handle */, false);
       }
+    }
+
+    for (const tBTA_GATTC_INCLUDED_SVC& p_isvc : service.included_svc) {
+      bta_gattc_fill_nv_attr(&nv_attr[i++], BTA_GATTC_ATTR_TYPE_INCL_SRVC,
+                             p_isvc.handle, 0, p_isvc.uuid, 0 /* properties */,
+                             p_isvc.included_service->s_handle, false);
     }
   }
 
