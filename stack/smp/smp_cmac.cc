@@ -121,10 +121,10 @@ static void cmac_aes_cleanup(void) {
  * Returns          void
  *
  ******************************************************************************/
-static void cmac_aes_k_calculate(BT_OCTET16 key, uint8_t* p_signature,
+static bool cmac_aes_k_calculate(BT_OCTET16 key, uint8_t* p_signature,
                                  uint16_t tlen) {
   tSMP_ENC output;
-  uint8_t i = 1;
+  uint8_t i = 1, err = 0;
   uint8_t x[16] = {0};
   uint8_t* p_mac;
 
@@ -134,25 +134,35 @@ static void cmac_aes_k_calculate(BT_OCTET16 key, uint8_t* p_signature,
     smp_xor_128(&cmac_cb.text[(cmac_cb.round - i) * BT_OCTET16_LEN],
                 x); /* Mi' := Mi (+) X  */
 
-    SMP_Encrypt(key, &cmac_cb.text[(cmac_cb.round - i) * BT_OCTET16_LEN],
-                BT_OCTET16_LEN, &output);
+    if (!SMP_Encrypt(key, BT_OCTET16_LEN,
+                     &cmac_cb.text[(cmac_cb.round - i) * BT_OCTET16_LEN],
+                     BT_OCTET16_LEN, &output)) {
+      err = 1;
+      break;
+    }
 
     memcpy(x, output.param_buf, BT_OCTET16_LEN);
     i++;
   }
 
-  p_mac = output.param_buf + (BT_OCTET16_LEN - tlen);
-  memcpy(p_signature, p_mac, tlen);
+  if (!err) {
+    p_mac = output.param_buf + (BT_OCTET16_LEN - tlen);
+    memcpy(p_signature, p_mac, tlen);
 
-  SMP_TRACE_DEBUG("tlen = %d p_mac = %d", tlen, p_mac);
-  SMP_TRACE_DEBUG(
-      "p_mac[0] = 0x%02x p_mac[1] = 0x%02x p_mac[2] = 0x%02x p_mac[3] = "
-      "0x%02x",
-      *p_mac, *(p_mac + 1), *(p_mac + 2), *(p_mac + 3));
-  SMP_TRACE_DEBUG(
-      "p_mac[4] = 0x%02x p_mac[5] = 0x%02x p_mac[6] = 0x%02x p_mac[7] = "
-      "0x%02x",
-      *(p_mac + 4), *(p_mac + 5), *(p_mac + 6), *(p_mac + 7));
+    SMP_TRACE_DEBUG("tlen = %d p_mac = %d", tlen, p_mac);
+    SMP_TRACE_DEBUG(
+        "p_mac[0] = 0x%02x p_mac[1] = 0x%02x p_mac[2] = 0x%02x p_mac[3] = "
+        "0x%02x",
+        *p_mac, *(p_mac + 1), *(p_mac + 2), *(p_mac + 3));
+    SMP_TRACE_DEBUG(
+        "p_mac[4] = 0x%02x p_mac[5] = 0x%02x p_mac[6] = 0x%02x p_mac[7] = "
+        "0x%02x",
+        *(p_mac + 4), *(p_mac + 5), *(p_mac + 6), *(p_mac + 7));
+
+    return true;
+
+  } else
+    return false;
 }
 /*******************************************************************************
  *
@@ -231,14 +241,22 @@ static void cmac_subkey_cont(tSMP_ENC* p) {
  *
  * Parameters       key - CMAC key, expect SRK when used by SMP.
  *
+ * Returns          void
+ *
  ******************************************************************************/
-static void cmac_generate_subkey(BT_OCTET16 key) {
+static bool cmac_generate_subkey(BT_OCTET16 key) {
   BT_OCTET16 z = {0};
+  bool ret = true;
   tSMP_ENC output;
   SMP_TRACE_EVENT(" cmac_generate_subkey");
 
-  SMP_Encrypt(key, z, BT_OCTET16_LEN, &output);
-  cmac_subkey_cont(&output);
+  if (SMP_Encrypt(key, BT_OCTET16_LEN, z, BT_OCTET16_LEN, &output)) {
+    cmac_subkey_cont(&output);
+    ;
+  } else
+    ret = false;
+
+  return ret;
 }
 /*******************************************************************************
  *
@@ -255,12 +273,15 @@ static void cmac_generate_subkey(BT_OCTET16 key) {
  *                  p_signature - data pointer to where signed data to be
  *                                stored, tlen long.
  *
+ * Returns          false if out of resources, true in other cases.
+ *
  ******************************************************************************/
-void aes_cipher_msg_auth_code(BT_OCTET16 key, uint8_t* input, uint16_t length,
+bool aes_cipher_msg_auth_code(BT_OCTET16 key, uint8_t* input, uint16_t length,
                               uint16_t tlen, uint8_t* p_signature) {
   uint16_t len, diff;
   uint16_t n = (length + BT_OCTET16_LEN - 1) /
                BT_OCTET16_LEN; /* n is number of rounds */
+  bool ret = false;
 
   SMP_TRACE_EVENT("%s", __func__);
 
@@ -281,10 +302,12 @@ void aes_cipher_msg_auth_code(BT_OCTET16 key, uint8_t* input, uint16_t length,
   }
 
   /* prepare calculation for subkey s and last block of data */
-  cmac_generate_subkey(key);
-  /* start calculation */
-  cmac_aes_k_calculate(key, p_signature, tlen);
-
+  if (cmac_generate_subkey(key)) {
+    /* start calculation */
+    ret = cmac_aes_k_calculate(key, p_signature, tlen);
+  }
   /* clean up */
   cmac_aes_cleanup();
+
+  return ret;
 }

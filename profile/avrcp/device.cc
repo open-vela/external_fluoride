@@ -20,13 +20,6 @@
 #include "device.h"
 #include "stack_config.h"
 
-#include "packet/avrcp/avrcp_reject_packet.h"
-#include "packet/avrcp/general_reject_packet.h"
-#include "packet/avrcp/get_play_status_packet.h"
-#include "packet/avrcp/pass_through_packet.h"
-#include "packet/avrcp/set_absolute_volume.h"
-#include "packet/avrcp/set_addressed_player.h"
-
 namespace bluetooth {
 namespace avrcp {
 
@@ -1246,29 +1239,40 @@ static std::string volumeToStr(int8_t volume) {
 }
 
 std::ostream& operator<<(std::ostream& out, const Device& d) {
-  out << d.address_.ToString();
+  out << "  " << d.address_.ToString();
   if (d.IsActive()) out << " <Active>";
   out << std::endl;
-
-  ScopedIndent indent(out);
-  out << "Current Volume: " << volumeToStr(d.volume_) << std::endl;
-  out << "Current Browsed Player ID: " << d.curr_browsed_player_id_
+  out << "    Current Volume: " << volumeToStr(d.volume_) << std::endl;
+  out << "    Current Browsed Player ID: " << d.curr_browsed_player_id_
       << std::endl;
-  out << "Registered Notifications:\n";
-  {
-    ScopedIndent indent(out);
-    if (d.track_changed_.first) out << "Track Changed\n";
-    if (d.play_status_changed_.first) out << "Play Status\n";
-    if (d.play_pos_changed_.first) out << "Play Position\n";
-    if (d.now_playing_changed_.first) out << "Now Playing\n";
-    if (d.addr_player_changed_.first) out << "Addressed Player\n";
-    if (d.avail_players_changed_.first) out << "Available Players\n";
-    if (d.uids_changed_.first) out << "UIDs Changed\n";
+  out << "    Registered Notifications: " << std::endl;
+  if (d.track_changed_.first) {
+    out << "      Track Changed" << std::endl;
   }
-  out << "Last Play State: " << d.last_play_status_.state << std::endl;
-  out << "Last Song Sent ID: \"" << d.last_song_info_.media_id << "\"\n";
-  out << "Current Folder: \"" << d.CurrentFolder() << "\"\n";
-  out << "MTU Sizes: CTRL=" << d.ctrl_mtu_ << " BROWSE=" << d.browse_mtu_
+  if (d.play_status_changed_.first) {
+    out << "      Play Status" << std::endl;
+  }
+  if (d.play_pos_changed_.first) {
+    out << "      Play Position" << std::endl;
+  }
+  if (d.now_playing_changed_.first) {
+    out << "      Now Playing" << std::endl;
+  }
+  if (d.addr_player_changed_.first) {
+    out << "      Addressed Player" << std::endl;
+  }
+  if (d.avail_players_changed_.first) {
+    out << "      Available Players" << std::endl;
+  }
+  if (d.uids_changed_.first) {
+    out << "      UIDs Changed" << std::endl;
+  }
+
+  out << "    Last Play State: " << d.last_play_status_.state << std::endl;
+  out << "    Last Song Sent ID: \"" << d.last_song_info_.media_id << "\""
+      << std::endl;
+  out << "    Current Folder: \"" << d.CurrentFolder() << "\"" << std::endl;
+  out << "    MTU Sizes: CTRL=" << d.ctrl_mtu_ << " BROWSE=" << d.browse_mtu_
       << std::endl;
   // TODO (apanicke): Add supported features as well as media keys
   return out;

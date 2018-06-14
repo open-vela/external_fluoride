@@ -22,9 +22,9 @@
 
 #include "avrc_defs.h"
 #include "avrcp_message_converter.h"
+#include "avrcp_packet.h"
 #include "bt_types.h"
 #include "btu.h"
-#include "packet/avrcp/avrcp_packet.h"
 // TODO (apanicke): Remove dependency on this header once we cleanup feature
 // handling.
 #include "bta/include/bta_av_api.h"
@@ -160,9 +160,8 @@ bool ConnectionHandler::SdpLookup(const RawAddress& bdaddr, SdpCallback cb) {
 
   return avrc_->FindService(
              UUID_SERVCLASS_AV_REMOTE_CONTROL, bdaddr, &db_params,
-             base::Bind(&ConnectionHandler::SdpCb,
-                        weak_ptr_factory_.GetWeakPtr(), bdaddr, cb, disc_db)) ==
-         AVRC_SUCCESS;
+             base::Bind(&ConnectionHandler::SdpCb, base::Unretained(this),
+                        bdaddr, cb, disc_db)) == AVRC_SUCCESS;
 }
 
 bool ConnectionHandler::AvrcpConnect(bool initiator, const RawAddress& bdaddr) {
@@ -177,7 +176,7 @@ bool ConnectionHandler::AvrcpConnect(bool initiator, const RawAddress& bdaddr) {
                                     weak_ptr_factory_.GetWeakPtr());
   }
   open_cb.msg_cback =
-      base::Bind(&ConnectionHandler::MessageCb, weak_ptr_factory_.GetWeakPtr());
+      base::Bind(&ConnectionHandler::MessageCb, base::Unretained(this));
   open_cb.company_id = AVRC_CO_GOOGLE;
   open_cb.conn = initiator ? AVRC_CONN_INT
                            : AVRC_CONN_ACP;  // 0 if initiator, 1 if acceptor
@@ -287,7 +286,7 @@ void ConnectionHandler::AcceptorControlCb(uint8_t handle, uint8_t event,
       LOG(INFO) << __PRETTY_FUNCTION__ << ": Connection Opened Event";
 
       auto&& callback = base::Bind(&ConnectionHandler::SendMessage,
-                                   weak_ptr_factory_.GetWeakPtr(), handle);
+                                   base::Unretained(this), handle);
       auto&& ctrl_mtu = avrc_->GetPeerMtu(handle) - AVCT_HDR_LEN;
       auto&& browse_mtu = avrc_->GetBrowseMtu(handle) - AVCT_HDR_LEN;
       std::shared_ptr<Device> newDevice = std::make_shared<Device>(
