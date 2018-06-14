@@ -25,7 +25,6 @@
 #include <gtest/gtest.h>
 
 #include <base/logging.h>
-#include <include/hardware/bt_av.h>
 
 #include "bluetooth/metrics/bluetooth.pb.h"
 #include "osi/include/metrics.h"
@@ -36,7 +35,6 @@
 namespace testing {
 
 using bluetooth::metrics::BluetoothMetricsProto::A2DPSession;
-using bluetooth::metrics::BluetoothMetricsProto::A2dpSourceCodec;
 using bluetooth::metrics::BluetoothMetricsProto::BluetoothLog;
 using bluetooth::metrics::BluetoothMetricsProto::BluetoothSession;
 using bluetooth::metrics::BluetoothMetricsProto::
@@ -113,8 +111,7 @@ ScanEvent* MakeScanEvent(ScanEvent_ScanEventType event_type,
   return event;
 }
 
-A2DPSession* MakeA2DPSession(const A2dpSessionMetrics& metrics,
-                             A2dpSourceCodec source_codec) {
+A2DPSession* MakeA2DPSession(const A2dpSessionMetrics& metrics) {
   A2DPSession* session = new A2DPSession();
   session->set_media_timer_min_millis(metrics.media_timer_min_ms);
   session->set_media_timer_max_millis(metrics.media_timer_max_ms);
@@ -124,8 +121,6 @@ A2DPSession* MakeA2DPSession(const A2dpSessionMetrics& metrics,
   session->set_buffer_underruns_average(metrics.buffer_underruns_average);
   session->set_buffer_underruns_count(metrics.buffer_underruns_count);
   session->set_audio_duration_millis(metrics.audio_duration_ms);
-  session->set_source_codec(source_codec);
-  session->set_is_a2dp_offload(metrics.is_a2dp_offload);
   return session;
 }
 
@@ -192,8 +187,6 @@ void GenerateWakeEvents(size_t start, size_t end,
                 FloatNear((b).buffer_underruns_average, 0.01));              \
     (a).buffer_underruns_average = (b).buffer_underruns_average;             \
     EXPECT_EQ((a).buffer_underruns_count, (b).buffer_underruns_count);       \
-    EXPECT_EQ((a).codec_index, (b).codec_index);                             \
-    EXPECT_EQ((a).is_a2dp_offload, (b).is_a2dp_offload);                     \
   } while (0)
 
 /*
@@ -227,12 +220,6 @@ TEST(BluetoothA2DPSessionMetricsTest, TestUpdateNormal) {
   metrics2.buffer_underruns_count = 2400;
   metrics_sum.buffer_underruns_average = 113.33333333;
   metrics_sum.buffer_underruns_count = 3600;
-  metrics1.codec_index = -1;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  metrics_sum.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  metrics1.is_a2dp_offload = false;
-  metrics2.is_a2dp_offload = true;
-  metrics_sum.is_a2dp_offload = true;
   metrics1.Update(metrics2);
   COMPARE_A2DP_METRICS(metrics1, metrics_sum);
   EXPECT_TRUE(metrics1 == metrics_sum);
@@ -259,10 +246,6 @@ TEST(BluetoothA2DPSessionMetricsTest, TestUpdateNew) {
   metrics2.buffer_underruns_count = 2400;
   metrics_sum.buffer_underruns_average = 130;
   metrics_sum.buffer_underruns_count = 2400;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_APTX;
-  metrics_sum.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_APTX;
-  metrics2.is_a2dp_offload = true;
-  metrics_sum.is_a2dp_offload = true;
   metrics1.Update(metrics2);
   COMPARE_A2DP_METRICS(metrics1, metrics_sum);
   EXPECT_TRUE(metrics1 == metrics_sum);
@@ -289,10 +272,6 @@ TEST(BluetoothA2DPSessionMetricsTest, TestNullUpdate) {
   metrics2.buffer_underruns_count = 2400;
   metrics_sum.buffer_underruns_average = 130;
   metrics_sum.buffer_underruns_count = 2400;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD;
-  metrics_sum.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD;
-  metrics2.is_a2dp_offload = true;
-  metrics_sum.is_a2dp_offload = true;
   metrics2.Update(metrics1);
   COMPARE_A2DP_METRICS(metrics2, metrics_sum);
   EXPECT_TRUE(metrics2 == metrics_sum);
@@ -581,17 +560,10 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesTest) {
   metrics2.buffer_underruns_count = 2400;
   metrics_sum.buffer_underruns_average = 113.33333333;
   metrics_sum.buffer_underruns_count = 3600;
-  metrics1.codec_index = -1;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  metrics_sum.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  metrics1.is_a2dp_offload = false;
-  metrics2.is_a2dp_offload = true;
-  metrics_sum.is_a2dp_offload = true;
   DeviceInfo* info = MakeDeviceInfo(
       BTM_COD_MAJOR_AUDIO_TEST,
       DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
-  A2DPSession* session =
-      MakeA2DPSession(metrics_sum, A2dpSourceCodec::A2DP_SOURCE_CODEC_AAC);
+  A2DPSession* session = MakeA2DPSession(metrics_sum);
   bt_sessions_.push_back(MakeBluetoothSession(
       10,
       BluetoothSession_ConnectionTechnologyType::
@@ -646,13 +618,10 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesSeparatedbyDumpTest) {
   metrics1.buffer_underruns_count = 1200;
   metrics2.buffer_underruns_average = 130;
   metrics2.buffer_underruns_count = 2400;
-  metrics1.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_SBC;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
   DeviceInfo* info = MakeDeviceInfo(
       BTM_COD_MAJOR_AUDIO_TEST,
       DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
-  A2DPSession* session =
-      MakeA2DPSession(metrics1, A2dpSourceCodec::A2DP_SOURCE_CODEC_SBC);
+  A2DPSession* session = MakeA2DPSession(metrics1);
   bt_sessions_.push_back(MakeBluetoothSession(
       1,
       BluetoothSession_ConnectionTechnologyType::
@@ -674,7 +643,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesSeparatedbyDumpTest) {
   info = MakeDeviceInfo(
       BTM_COD_MAJOR_AUDIO_TEST,
       DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
-  session = MakeA2DPSession(metrics2, A2dpSourceCodec::A2DP_SOURCE_CODEC_AAC);
+  session = MakeA2DPSession(metrics2);
   bt_sessions_.push_back(MakeBluetoothSession(
       1,
       BluetoothSession_ConnectionTechnologyType::
@@ -683,86 +652,6 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesSeparatedbyDumpTest) {
           BluetoothSession_DisconnectReasonType_UNKNOWN,
       info, nullptr, session));
   UpdateLog();
-  sleep_ms(1000);
-  BluetoothMetricsLogger::GetInstance()->LogA2dpSession(metrics2);
-  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
-      system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
-  msg_str.clear();
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
-  EXPECT_THAT(msg_str, StrEq(bt_log_str_));
-}
-
-/*
- * Test Case: A2DPSessionTwoUpdatesSeparatedbyEndTest
- *
- * 1. Create Instance
- * 2. LogBluetoothSessionStart
- * 3. LogA2dpSession
- * 4. LogBluetoothSessionEnd
- * 5. LogBluetoothSessionStart
- * 6. LogA2dpSession
- * 7. LogBluetoothSessionEnd
- * 8. WriteString
- *
- */
-TEST_F(BluetoothMetricsLoggerTest, A2DPSessionTwoUpdatesSeparatedbyEndTest) {
-  /* Same metrics from BluetoothA2DPSessionMetricsTest.TestUpdateNormal */
-  A2dpSessionMetrics metrics1;
-  metrics1.audio_duration_ms = 10;
-  metrics1.media_timer_min_ms = 10;
-  metrics1.media_timer_max_ms = 100;
-  metrics1.media_timer_avg_ms = 50;
-  metrics1.total_scheduling_count = 50;
-  metrics1.buffer_overruns_max_count = 70;
-  metrics1.buffer_underruns_average = 80;
-  metrics1.buffer_underruns_count = 1200;
-  metrics1.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_SBC;
-  DeviceInfo* info = MakeDeviceInfo(
-      BTM_COD_MAJOR_AUDIO_TEST,
-      DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
-  A2DPSession* session =
-      MakeA2DPSession(metrics1, A2dpSourceCodec::A2DP_SOURCE_CODEC_SBC);
-  bt_sessions_.push_back(MakeBluetoothSession(
-      1,
-      BluetoothSession_ConnectionTechnologyType::
-          BluetoothSession_ConnectionTechnologyType_CONNECTION_TECHNOLOGY_TYPE_BREDR,
-      BluetoothSession_DisconnectReasonType::
-          BluetoothSession_DisconnectReasonType_UNKNOWN,
-      info, nullptr, session));
-  UpdateLog();
-  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
-      system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
-  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionDeviceInfo(
-      BTM_COD_MAJOR_AUDIO_TEST, system_bt_osi::DEVICE_TYPE_BREDR);
-  BluetoothMetricsLogger::GetInstance()->LogA2dpSession(metrics1);
-  sleep_ms(1000);
-  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
-      system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
-  std::string msg_str;
-  BluetoothMetricsLogger::GetInstance()->WriteString(&msg_str);
-  EXPECT_THAT(msg_str, StrEq(bt_log_str_));
-  ClearLog();
-  A2dpSessionMetrics metrics2;
-  metrics2.audio_duration_ms = 25;
-  metrics2.media_timer_min_ms = 25;
-  metrics2.media_timer_max_ms = 200;
-  metrics2.media_timer_avg_ms = 100;
-  metrics2.total_scheduling_count = 50;
-  metrics2.buffer_overruns_max_count = 80;
-  metrics2.buffer_underruns_average = 130;
-  metrics2.buffer_underruns_count = 2400;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  session = MakeA2DPSession(metrics2, A2dpSourceCodec::A2DP_SOURCE_CODEC_AAC);
-  bt_sessions_.push_back(MakeBluetoothSession(
-      1,
-      BluetoothSession_ConnectionTechnologyType::
-          BluetoothSession_ConnectionTechnologyType_CONNECTION_TECHNOLOGY_TYPE_BREDR,
-      BluetoothSession_DisconnectReasonType::
-          BluetoothSession_DisconnectReasonType_UNKNOWN,
-      nullptr, nullptr, session));
-  UpdateLog();
-  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
-      system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
   sleep_ms(1000);
   BluetoothMetricsLogger::GetInstance()->LogA2dpSession(metrics2);
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
@@ -811,14 +700,10 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionOnlyTest) {
   metrics2.buffer_underruns_count = 2400;
   metrics_sum.buffer_underruns_average = 113.33333333;
   metrics_sum.buffer_underruns_count = 3600;
-  metrics1.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_SBC;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  metrics_sum.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_SBC;
   DeviceInfo* info = MakeDeviceInfo(
       BTM_COD_MAJOR_AUDIO_TEST,
       DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
-  A2DPSession* session =
-      MakeA2DPSession(metrics_sum, A2dpSourceCodec::A2DP_SOURCE_CODEC_SBC);
+  A2DPSession* session = MakeA2DPSession(metrics_sum);
   bt_sessions_.push_back(MakeBluetoothSession(
       1,
       BluetoothSession_ConnectionTechnologyType::
@@ -877,9 +762,6 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionDumpBeforeTwoUpdatesTest) {
   metrics2.buffer_underruns_count = 2400;
   metrics_sum.buffer_underruns_average = 113.33333333;
   metrics_sum.buffer_underruns_count = 3600;
-  metrics1.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_SBC;
-  metrics2.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_AAC;
-  metrics_sum.codec_index = BTAV_A2DP_CODEC_INDEX_SOURCE_SBC;
   DeviceInfo* info = MakeDeviceInfo(
       BTM_COD_MAJOR_AUDIO_TEST,
       DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
@@ -903,8 +785,7 @@ TEST_F(BluetoothMetricsLoggerTest, A2DPSessionDumpBeforeTwoUpdatesTest) {
   info = MakeDeviceInfo(
       BTM_COD_MAJOR_AUDIO_TEST,
       DeviceInfo_DeviceType::DeviceInfo_DeviceType_DEVICE_TYPE_BREDR);
-  A2DPSession* session =
-      MakeA2DPSession(metrics_sum, A2dpSourceCodec::A2DP_SOURCE_CODEC_SBC);
+  A2DPSession* session = MakeA2DPSession(metrics_sum);
   bt_sessions_.push_back(MakeBluetoothSession(
       1,
       BluetoothSession_ConnectionTechnologyType::
