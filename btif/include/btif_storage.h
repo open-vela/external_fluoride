@@ -99,32 +99,6 @@ bt_status_t btif_storage_set_remote_device_property(
 
 /*******************************************************************************
  *
- * Function         btif_storage_get_io_caps
- *
- * Description      BTIF storage API - Fetches the local Input/Output
- *                  capabilities of the device.
- *
- * Returns          Returns local IO Capability of device. If not stored,
- *                  returns BTM_LOCAL_IO_CAPS.
- *
- ******************************************************************************/
-uint8_t btif_storage_get_local_io_caps();
-
-/*******************************************************************************
- *
- * Function         btif_storage_get_io_caps_ble
- *
- * Description      BTIF storage API - Fetches the local Input/Output
- *                  capabilities of the BLE device.
- *
- * Returns          Returns local IO Capability of BLE device. If not stored,
- *                  returns BTM_LOCAL_IO_CAPS_BLE.
- *
- ******************************************************************************/
-uint8_t btif_storage_get_local_io_caps_ble();
-
-/*******************************************************************************
- *
  * Function         btif_storage_add_remote_device
  *
  * Description      BTIF storage API - Adds a newly discovered device to
@@ -242,8 +216,6 @@ void btif_storage_remove_hearing_aid_white_list(const RawAddress& address);
  *
  ******************************************************************************/
 bool btif_storage_is_restricted_device(const RawAddress* remote_bd_addr);
-
-int btif_storage_get_num_bonded_devices(void);
 
 bt_status_t btif_storage_add_ble_bonding_key(RawAddress* remote_bd_addr,
                                              const uint8_t* key,

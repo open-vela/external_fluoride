@@ -46,7 +46,7 @@ using base::Bind;
 #endif
 
 static void smp_process_stk(tSMP_CB* p_cb, tSMP_ENC* p);
-static void smp_calculate_legacy_short_term_key(tSMP_CB* p_cb,
+static bool smp_calculate_legacy_short_term_key(tSMP_CB* p_cb,
                                                 tSMP_ENC* output);
 static void smp_process_private_key(tSMP_CB* p_cb);
 
@@ -98,23 +98,36 @@ void smp_debug_print_nbyte_big_endian(uint8_t* p, const char* key_name,
 #endif
 }
 
-/* This function is called to encrypt data. It uses AES-128 encryption
- * algorithm. |plain_text| is encrypted using |key|, the result is at p_out.
- */
-void smp_encrypt_data(uint8_t* key, uint8_t* plain_text, uint8_t pt_len,
-                      tSMP_ENC* p_out) {
-  CHECK(p_out);
-
+/*******************************************************************************
+ *
+ * Function         smp_encrypt_data
+ *
+ * Description      This function is called to encrypt data.
+ *                  It uses AES-128 encryption algorithm.
+ *                  Plain_text is encrypted using key, the result is at p_out.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+bool smp_encrypt_data(uint8_t* key, uint8_t key_len, uint8_t* plain_text,
+                      uint8_t pt_len, tSMP_ENC* p_out) {
+  aes_context ctx;
+  uint8_t* p_start = NULL;
   uint8_t* p = NULL;
   uint8_t* p_rev_data = NULL;   /* input data in big endilan format */
   uint8_t* p_rev_key = NULL;    /* input key in big endilan format */
   uint8_t* p_rev_output = NULL; /* encrypted output in big endilan format */
 
   SMP_TRACE_DEBUG("%s", __func__);
+  if ((p_out == NULL) || (key_len != SMP_ENCRYT_KEY_SIZE)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    return false;
+  }
+
+  p_start = (uint8_t*)osi_calloc(SMP_ENCRYT_DATA_SIZE * 4);
 
   if (pt_len > SMP_ENCRYT_DATA_SIZE) pt_len = SMP_ENCRYT_DATA_SIZE;
 
-  uint8_t p_start[SMP_ENCRYT_DATA_SIZE * 4];
   p = p_start;
   ARRAY_TO_STREAM(p, plain_text, pt_len);          /* byte 0 to byte 15 */
   p_rev_data = p = p_start + SMP_ENCRYT_DATA_SIZE; /* start at byte 16 */
@@ -129,8 +142,6 @@ void smp_encrypt_data(uint8_t* key, uint8_t* plain_text, uint8_t pt_len,
                                       SMP_ENCRYT_DATA_SIZE);
 #endif
   p_rev_output = p;
-
-  aes_context ctx;
   aes_set_key(p_rev_key, SMP_ENCRYT_KEY_SIZE, &ctx);
   aes_encrypt(p_rev_data, p, &ctx); /* outputs in byte 48 to byte 63 */
 
@@ -144,6 +155,10 @@ void smp_encrypt_data(uint8_t* key, uint8_t* plain_text, uint8_t pt_len,
   p_out->param_len = SMP_ENCRYT_KEY_SIZE;
   p_out->status = HCI_SUCCESS;
   p_out->opcode = HCI_BLE_ENCRYPT;
+
+  osi_free(p_start);
+
+  return true;
 }
 
 /*******************************************************************************
@@ -229,8 +244,12 @@ void smp_generate_stk(tSMP_CB* p_cb, UNUSED_ATTR tSMP_INT_DATA* p_data) {
     output.status = HCI_SUCCESS;
     output.opcode = HCI_BLE_ENCRYPT;
     memcpy(output.param_buf, p_cb->ltk, SMP_ENCRYT_DATA_SIZE);
-  } else {
-    smp_calculate_legacy_short_term_key(p_cb, &output);
+  } else if (!smp_calculate_legacy_short_term_key(p_cb, &output)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_FAIL_UNKNOWN;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+    return;
   }
 
   smp_process_stk(p_cb, &output);
@@ -254,9 +273,19 @@ void smp_compute_csrk(uint16_t div, tSMP_CB* p_cb) {
   UINT16_TO_STREAM(p, p_cb->div);
   UINT16_TO_STREAM(p, r);
 
-  SMP_Encrypt(er, buffer, 4, &output);
-  memcpy((void*)p_cb->csrk, output.param_buf, BT_OCTET16_LEN);
-  smp_send_csrk_info(p_cb, NULL);
+  if (!SMP_Encrypt(er, BT_OCTET16_LEN, buffer, 4, &output)) {
+    SMP_TRACE_ERROR("smp_generate_csrk failed");
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_FAIL_UNKNOWN;
+    if (p_cb->smp_over_br) {
+      smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
+    } else {
+      smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+    }
+  } else {
+    memcpy((void*)p_cb->csrk, output.param_buf, BT_OCTET16_LEN);
+    smp_send_csrk_info(p_cb, NULL);
+  }
 }
 
 /**
@@ -422,7 +451,10 @@ tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, BT_OCTET16 rand,
   /* calculate e1 = e(k, p1'), where k = TK */
   smp_debug_print_nbyte_little_endian(p_cb->tk, "TK", 16);
   memset(output, 0, sizeof(tSMP_ENC));
-  SMP_Encrypt(p_cb->tk, p1, BT_OCTET16_LEN, output);
+  if (!SMP_Encrypt(p_cb->tk, BT_OCTET16_LEN, p1, BT_OCTET16_LEN, output)) {
+    SMP_TRACE_ERROR("%s: failed encryption at e1 = e(k, p1')");
+    return SMP_PAIR_FAIL_UNKNOWN;
+  }
   smp_debug_print_nbyte_little_endian(output->param_buf, "e1 = e(k, p1')", 16);
   /* generate p2 = padding || ia || ra */
   BT_OCTET16 p2;
@@ -432,7 +464,10 @@ tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, BT_OCTET16 rand,
   smp_debug_print_nbyte_little_endian((uint8_t*)p2, "p2' = p2 XOR e1", 16);
   /* calculate: c1 = e(k, p2') */
   memset(output, 0, sizeof(tSMP_ENC));
-  SMP_Encrypt(p_cb->tk, p2, BT_OCTET16_LEN, output);
+  if (!SMP_Encrypt(p_cb->tk, BT_OCTET16_LEN, p2, BT_OCTET16_LEN, output)) {
+    SMP_TRACE_ERROR("%s: failed encryption at e1 = e(k, p2')");
+    return SMP_PAIR_FAIL_UNKNOWN;
+  }
   return SMP_SUCCESS;
 }
 
@@ -593,8 +628,14 @@ static void smp_generate_y(tSMP_CB* p_cb, BT_OCTET8 rand) {
 
   memcpy(p_cb->enc_rand, rand, BT_OCTET8_LEN);
   tSMP_ENC output;
-  SMP_Encrypt(dhk, rand, BT_OCTET8_LEN, &output);
-  smp_process_ediv(p_cb, &output);
+  if (!SMP_Encrypt(dhk, BT_OCTET16_LEN, rand, BT_OCTET8_LEN, &output)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_FAIL_UNKNOWN;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+  } else {
+    smp_process_ediv(p_cb, &output);
+  }
 }
 
 /**
@@ -609,13 +650,20 @@ static void smp_generate_ltk_cont(uint16_t div, tSMP_CB* p_cb) {
 
   tSMP_ENC output;
   /* LTK = d1(ER, DIV, 0)= e(ER, DIV)*/
-  SMP_Encrypt(er, (uint8_t*)&p_cb->div, sizeof(uint16_t), &output);
-  /* mask the LTK */
-  smp_mask_enc_key(p_cb->loc_enc_size, output.param_buf);
-  memcpy((void*)p_cb->ltk, output.param_buf, BT_OCTET16_LEN);
+  if (!SMP_Encrypt(er, BT_OCTET16_LEN, (uint8_t*)&p_cb->div, sizeof(uint16_t),
+                   &output)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_FAIL_UNKNOWN;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+  } else {
+    /* mask the LTK */
+    smp_mask_enc_key(p_cb->loc_enc_size, output.param_buf);
+    memcpy((void*)p_cb->ltk, output.param_buf, BT_OCTET16_LEN);
 
-  /* generate EDIV and rand now */
-  btsnd_hcic_ble_rand(Bind(&smp_generate_y, p_cb));
+    /* generate EDIV and rand now */
+    btsnd_hcic_ble_rand(Bind(&smp_generate_y, p_cb));
+  }
 }
 
 /*******************************************************************************
@@ -662,8 +710,16 @@ void smp_generate_ltk(tSMP_CB* p_cb, UNUSED_ATTR tSMP_INT_DATA* p_data) {
   }
 }
 
-/* The function calculates legacy STK */
-void smp_calculate_legacy_short_term_key(tSMP_CB* p_cb, tSMP_ENC* output) {
+/*******************************************************************************
+ *
+ * Function         smp_calculate_legacy_short_term_key
+ *
+ * Description      The function calculates legacy STK.
+ *
+ * Returns          false if out of resources, true in other cases.
+ *
+ ******************************************************************************/
+bool smp_calculate_legacy_short_term_key(tSMP_CB* p_cb, tSMP_ENC* output) {
   SMP_TRACE_DEBUG("%s", __func__);
 
   BT_OCTET16 ptext;
@@ -678,7 +734,12 @@ void smp_calculate_legacy_short_term_key(tSMP_CB* p_cb, tSMP_ENC* output) {
   }
 
   /* generate STK = Etk(rand|rrand)*/
-  SMP_Encrypt(p_cb->tk, ptext, BT_OCTET16_LEN, output);
+  bool encrypted =
+      SMP_Encrypt(p_cb->tk, BT_OCTET16_LEN, ptext, BT_OCTET16_LEN, output);
+  if (!encrypted) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+  }
+  return encrypted;
 }
 
 /*******************************************************************************
@@ -1088,7 +1149,10 @@ uint32_t smp_calculate_g2(uint8_t* u, uint8_t* v, uint8_t* x, uint8_t* y) {
   smp_debug_print_nbyte_little_endian(p_prnt, "K", BT_OCTET16_LEN);
 #endif
 
-  aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac);
+  if (!aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    return (BTM_MAX_PASSKEY_VAL + 1);
+  }
 
 #if (SMP_DEBUG == TRUE)
   p_prnt = cmac;
@@ -1167,11 +1231,13 @@ uint32_t smp_calculate_g2(uint8_t* u, uint8_t* v, uint8_t* x, uint8_t* y) {
  *                          MacKey  is 128 bits;
  *                          LTK     is 128 bits
  *
+ * Returns          false if out of resources, true in other cases.
+ *
  * Note             The LSB is the first octet, the MSB is the last octet of
  *                  the AES-CMAC input/output stream.
  *
  ******************************************************************************/
-void smp_calculate_f5(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
+bool smp_calculate_f5(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
                       uint8_t* a2, uint8_t* mac_key, uint8_t* ltk) {
   BT_OCTET16 t; /* AES-CMAC output in smp_calculate_f5_key(...), key in */
                 /* smp_calculate_f5_mackey_or_long_term_key(...) */
@@ -1209,26 +1275,36 @@ void smp_calculate_f5(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
   smp_debug_print_nbyte_little_endian(p_prnt, "A2", 7);
 #endif
 
-  smp_calculate_f5_key(w, t);
+  if (!smp_calculate_f5_key(w, t)) {
+    SMP_TRACE_ERROR("%s failed to calc T", __func__);
+    return false;
+  }
 #if (SMP_DEBUG == TRUE)
   p_prnt = t;
   smp_debug_print_nbyte_little_endian(p_prnt, "T", BT_OCTET16_LEN);
 #endif
 
-  smp_calculate_f5_mackey_or_long_term_key(t, counter_mac_key, key_id, n1, n2,
-                                           a1, a2, length, mac_key);
+  if (!smp_calculate_f5_mackey_or_long_term_key(t, counter_mac_key, key_id, n1,
+                                                n2, a1, a2, length, mac_key)) {
+    SMP_TRACE_ERROR("%s failed to calc MacKey", __func__);
+    return false;
+  }
 #if (SMP_DEBUG == TRUE)
   p_prnt = mac_key;
   smp_debug_print_nbyte_little_endian(p_prnt, "MacKey", BT_OCTET16_LEN);
 #endif
 
-  smp_calculate_f5_mackey_or_long_term_key(t, counter_ltk, key_id, n1, n2, a1,
-                                           a2, length, ltk);
+  if (!smp_calculate_f5_mackey_or_long_term_key(t, counter_ltk, key_id, n1, n2,
+                                                a1, a2, length, ltk)) {
+    SMP_TRACE_ERROR("%s failed to calc LTK", __func__);
+    return false;
+  }
 #if (SMP_DEBUG == TRUE)
   p_prnt = ltk;
   smp_debug_print_nbyte_little_endian(p_prnt, "LTK", BT_OCTET16_LEN);
 #endif
 
+  return true;
 }
 
 /*******************************************************************************
@@ -1257,11 +1333,13 @@ void smp_calculate_f5(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
  *                              Length  is 16 bits, its value is 0x0100
  *                  output:     LTK     is 128 bit.
  *
+ * Returns          false if out of resources, true in other cases.
+ *
  * Note             The LSB is the first octet, the MSB is the last octet of
  *                  the AES-CMAC input/output stream.
  *
  ******************************************************************************/
-void smp_calculate_f5_mackey_or_long_term_key(uint8_t* t, uint8_t* counter,
+bool smp_calculate_f5_mackey_or_long_term_key(uint8_t* t, uint8_t* counter,
                                               uint8_t* key_id, uint8_t* n1,
                                               uint8_t* n2, uint8_t* a1,
                                               uint8_t* a2, uint8_t* length,
@@ -1274,6 +1352,7 @@ void smp_calculate_f5_mackey_or_long_term_key(uint8_t* t, uint8_t* counter,
                     BT_OCTET16_LEN /* N2 size */ + 7 /* A1 size*/ +
                     7 /* A2 size*/ + 2 /* Length size */;
   uint8_t msg[1 + 4 + BT_OCTET16_LEN + BT_OCTET16_LEN + 7 + 7 + 2];
+  bool ret = true;
 #if (SMP_DEBUG == TRUE)
   uint8_t* p_prnt = NULL;
 #endif
@@ -1317,7 +1396,10 @@ void smp_calculate_f5_mackey_or_long_term_key(uint8_t* t, uint8_t* counter,
   smp_debug_print_nbyte_little_endian(p_prnt, "M", msg_len);
 #endif
 
-  aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac);
+  if (!aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    ret = false;
+  }
 
 #if (SMP_DEBUG == TRUE)
   p_prnt = cmac;
@@ -1326,6 +1408,7 @@ void smp_calculate_f5_mackey_or_long_term_key(uint8_t* t, uint8_t* counter,
 
   p = mac;
   ARRAY_TO_STREAM(p, cmac, BT_OCTET16_LEN);
+  return ret;
 }
 
 /*******************************************************************************
@@ -1347,7 +1430,7 @@ void smp_calculate_f5_mackey_or_long_term_key(uint8_t* t, uint8_t* counter,
  *                  the AES-CMAC input/output stream.
  *
  ******************************************************************************/
-void smp_calculate_f5_key(uint8_t* w, uint8_t* t) {
+bool smp_calculate_f5_key(uint8_t* w, uint8_t* t) {
   uint8_t* p = NULL;
   /* Please see 2.2.7 LE Secure Connections Key Generation Function f5 */
   /*
@@ -1382,7 +1465,12 @@ void smp_calculate_f5_key(uint8_t* w, uint8_t* t) {
 #endif
 
   BT_OCTET16 cmac;
-  aes_cipher_msg_auth_code(key, msg, BT_OCTET32_LEN, BT_OCTET16_LEN, cmac);
+  bool ret = true;
+  if (!aes_cipher_msg_auth_code(key, msg, BT_OCTET32_LEN, BT_OCTET16_LEN,
+                                cmac)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    ret = false;
+  }
 
 #if (SMP_DEBUG == TRUE)
   p_prnt = cmac;
@@ -1391,6 +1479,7 @@ void smp_calculate_f5_key(uint8_t* w, uint8_t* t) {
 
   p = t;
   ARRAY_TO_STREAM(p, cmac, BT_OCTET16_LEN);
+  return ret;
 }
 
 /*******************************************************************************
@@ -1436,6 +1525,7 @@ void smp_calculate_local_dhkey_check(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
 void smp_calculate_peer_dhkey_check(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   uint8_t iocap[3], a[7], b[7];
   BT_OCTET16 param_buf;
+  bool ret;
   tSMP_KEY key;
 
   SMP_TRACE_DEBUG("%s", __func__);
@@ -1444,19 +1534,26 @@ void smp_calculate_peer_dhkey_check(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
 
   smp_collect_local_ble_address(a, p_cb);
   smp_collect_peer_ble_address(b, p_cb);
-  smp_calculate_f6(p_cb->mac_key, p_cb->rrand, p_cb->rand, p_cb->local_random,
-                   iocap, b, a, param_buf);
+  ret = smp_calculate_f6(p_cb->mac_key, p_cb->rrand, p_cb->rand,
+                         p_cb->local_random, iocap, b, a, param_buf);
 
-  SMP_TRACE_EVENT("peer DHKey check calculation is completed");
+  if (ret) {
+    SMP_TRACE_EVENT("peer DHKey check calculation is completed");
 #if (SMP_DEBUG == TRUE)
-  smp_debug_print_nbyte_little_endian(param_buf, "peer DHKey check",
-                                      BT_OCTET16_LEN);
+    smp_debug_print_nbyte_little_endian(param_buf, "peer DHKey check",
+                                        BT_OCTET16_LEN);
 #endif
-  key.key_type = SMP_KEY_TYPE_PEER_DHK_CHCK;
-  key.p_data = param_buf;
-  tSMP_INT_DATA smp_int_data;
-  smp_int_data.key = key;
-  smp_sm_event(p_cb, SMP_SC_KEY_READY_EVT, &smp_int_data);
+    key.key_type = SMP_KEY_TYPE_PEER_DHK_CHCK;
+    key.p_data = param_buf;
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.key = key;
+    smp_sm_event(p_cb, SMP_SC_KEY_READY_EVT, &smp_int_data);
+  } else {
+    SMP_TRACE_EVENT("peer DHKey check calculation failed");
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_FAIL_UNKNOWN;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+  }
 }
 
 /*******************************************************************************
@@ -1477,11 +1574,13 @@ void smp_calculate_peer_dhkey_check(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
  *                          A2 is 56 bit,
  *                  output: C is 128 bit.
  *
+ * Returns          false if out of resources, true in other cases.
+ *
  * Note             The LSB is the first octet, the MSB is the last octet of
  *                  the AES-CMAC input/output stream.
  *
  ******************************************************************************/
-void smp_calculate_f6(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
+bool smp_calculate_f6(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
                       uint8_t* iocap, uint8_t* a1, uint8_t* a2, uint8_t* c) {
   uint8_t* p = NULL;
   uint8_t msg_len = BT_OCTET16_LEN /* N1 size */ +
@@ -1533,7 +1632,11 @@ void smp_calculate_f6(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
   smp_debug_print_nbyte_little_endian(p_print, "M", msg_len);
 #endif
 
-  aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac);
+  bool ret = true;
+  if (!aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    ret = false;
+  }
 
 #if (SMP_DEBUG == TRUE)
   p_print = cmac;
@@ -1542,6 +1645,7 @@ void smp_calculate_f6(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
 
   p = c;
   ARRAY_TO_STREAM(p, cmac, BT_OCTET16_LEN);
+  return ret;
 }
 
 /*******************************************************************************
@@ -1583,54 +1687,74 @@ bool smp_calculate_link_key_from_long_term_key(tSMP_CB* p_cb) {
   }
 
   BT_OCTET16 intermediate_link_key;
+  bool ret = true;
 
   if (p_cb->key_derivation_h7_used)
-    smp_calculate_h7((uint8_t*)salt, p_cb->ltk, intermediate_link_key);
+    ret = smp_calculate_h7((uint8_t*)salt, p_cb->ltk, intermediate_link_key);
   else
-    smp_calculate_h6(p_cb->ltk, (uint8_t*)"1pmt" /* reversed "tmp1" */,
-                     intermediate_link_key);
-
-  BT_OCTET16 link_key;
-  smp_calculate_h6(intermediate_link_key,
-                   (uint8_t*)"rbel" /* reversed "lebr" */, link_key);
-  uint8_t link_key_type;
-  if (btm_cb.security_mode == BTM_SEC_MODE_SC) {
-    /* Secure Connections Only Mode */
-    link_key_type = BTM_LKEY_TYPE_AUTH_COMB_P_256;
-  } else if (controller_get_interface()->supports_secure_connections()) {
-    /* both transports are SC capable */
-    if (p_cb->sec_level == SMP_SEC_AUTHENTICATED)
-      link_key_type = BTM_LKEY_TYPE_AUTH_COMB_P_256;
-    else
-      link_key_type = BTM_LKEY_TYPE_UNAUTH_COMB_P_256;
-  } else if (btm_cb.security_mode == BTM_SEC_MODE_SP) {
-    /* BR/EDR transport is SSP capable */
-    if (p_cb->sec_level == SMP_SEC_AUTHENTICATED)
-      link_key_type = BTM_LKEY_TYPE_AUTH_COMB;
-    else
-      link_key_type = BTM_LKEY_TYPE_UNAUTH_COMB;
-  } else {
-    SMP_TRACE_ERROR("%s failed to update link_key. Sec Mode = %d, sm4 = 0x%02x",
-                    __func__, btm_cb.security_mode, p_dev_rec->sm4);
-    return false;
+    ret = smp_calculate_h6(p_cb->ltk, (uint8_t*)"1pmt" /* reversed "tmp1" */,
+                           intermediate_link_key);
+  if (!ret) {
+    SMP_TRACE_ERROR("%s failed to derive intermediate_link_key", __func__);
+    return ret;
   }
 
-  link_key_type += BTM_LTK_DERIVED_LKEY_OFFSET;
+  BT_OCTET16 link_key;
+  ret = smp_calculate_h6(intermediate_link_key,
+                         (uint8_t*)"rbel" /* reversed "lebr" */, link_key);
+  if (!ret) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+  } else {
+    uint8_t link_key_type;
+    if (btm_cb.security_mode == BTM_SEC_MODE_SC) {
+      /* Secure Connections Only Mode */
+      link_key_type = BTM_LKEY_TYPE_AUTH_COMB_P_256;
+    } else if (controller_get_interface()->supports_secure_connections()) {
+      /* both transports are SC capable */
+      if (p_cb->sec_level == SMP_SEC_AUTHENTICATED)
+        link_key_type = BTM_LKEY_TYPE_AUTH_COMB_P_256;
+      else
+        link_key_type = BTM_LKEY_TYPE_UNAUTH_COMB_P_256;
+    } else if (btm_cb.security_mode == BTM_SEC_MODE_SP) {
+      /* BR/EDR transport is SSP capable */
+      if (p_cb->sec_level == SMP_SEC_AUTHENTICATED)
+        link_key_type = BTM_LKEY_TYPE_AUTH_COMB;
+      else
+        link_key_type = BTM_LKEY_TYPE_UNAUTH_COMB;
+    } else {
+      SMP_TRACE_ERROR(
+          "%s failed to update link_key. Sec Mode = %d, sm4 = 0x%02x", __func__,
+          btm_cb.security_mode, p_dev_rec->sm4);
+      return false;
+    }
 
-  uint8_t* p;
-  BT_OCTET16 notif_link_key;
-  p = notif_link_key;
-  ARRAY16_TO_STREAM(p, link_key);
+    link_key_type += BTM_LTK_DERIVED_LKEY_OFFSET;
 
-  btm_sec_link_key_notification(bda_for_lk, notif_link_key, link_key_type);
+    uint8_t* p;
+    BT_OCTET16 notif_link_key;
+    p = notif_link_key;
+    ARRAY16_TO_STREAM(p, link_key);
 
-  SMP_TRACE_EVENT("%s is completed", __func__);
+    btm_sec_link_key_notification(bda_for_lk, notif_link_key, link_key_type);
 
-  return true;
+    SMP_TRACE_EVENT("%s is completed", __func__);
+  }
+
+  return ret;
 }
 
-/** The function calculates and saves SC LTK derived from BR/EDR link key. */
+/*******************************************************************************
+ *
+ * Function         smp_calculate_long_term_key_from_link_key
+ *
+ * Description      The function calculates and saves SC LTK derived from BR/EDR
+ *                  link key.
+ *
+ * Returns          false if out of resources, true in other cases.
+ *
+ ******************************************************************************/
 bool smp_calculate_long_term_key_from_link_key(tSMP_CB* p_cb) {
+  bool ret = true;
   tBTM_SEC_DEV_REC* p_dev_rec;
   uint8_t rev_link_key[16];
   BT_OCTET16 salt = {0x32, 0x70, 0x6D, 0x74, 0x00, 0x00, 0x00, 0x00,
@@ -1666,22 +1790,33 @@ bool smp_calculate_long_term_key_from_link_key(tSMP_CB* p_cb) {
 
   BT_OCTET16 intermediate_long_term_key;
   if (p_cb->key_derivation_h7_used) {
-    smp_calculate_h7((uint8_t*)salt, rev_link_key, intermediate_long_term_key);
+    ret = smp_calculate_h7((uint8_t*)salt, rev_link_key,
+                           intermediate_long_term_key);
   } else {
     /* "tmp2" obtained from the spec */
-    smp_calculate_h6(rev_link_key, (uint8_t*)"2pmt" /* reversed "tmp2" */,
-                     intermediate_long_term_key);
+    ret = smp_calculate_h6(rev_link_key, (uint8_t*)"2pmt" /* reversed "tmp2" */,
+                           intermediate_long_term_key);
+  }
+
+  if (!ret) {
+    SMP_TRACE_ERROR("%s failed to derive intermediate_long_term_key", __func__);
+    return ret;
   }
 
   /* "brle" obtained from the spec */
-  smp_calculate_h6(intermediate_long_term_key,
-                   (uint8_t*)"elrb" /* reversed "brle" */, p_cb->ltk);
+  ret = smp_calculate_h6(intermediate_long_term_key,
+                         (uint8_t*)"elrb" /* reversed "brle" */, p_cb->ltk);
 
-  p_cb->sec_level = (br_link_key_type == BTM_LKEY_TYPE_AUTH_COMB_P_256)
-                        ? SMP_SEC_AUTHENTICATED
-                        : SMP_SEC_UNAUTHENTICATE;
-  SMP_TRACE_EVENT("%s is completed", __func__);
-  return true;
+  if (!ret) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+  } else {
+    p_cb->sec_level = (br_link_key_type == BTM_LKEY_TYPE_AUTH_COMB_P_256)
+                          ? SMP_SEC_AUTHENTICATED
+                          : SMP_SEC_UNAUTHENTICATE;
+    SMP_TRACE_EVENT("%s is completed", __func__);
+  }
+
+  return ret;
 }
 
 /*******************************************************************************
@@ -1696,11 +1831,13 @@ bool smp_calculate_long_term_key_from_link_key(tSMP_CB* p_cb) {
  *                          KeyId is 32 bit,
  *                  output: C is 128 bit.
  *
+ * Returns          false if out of resources, true in other cases.
+ *
  * Note             The LSB is the first octet, the MSB is the last octet of
  *                  the AES-CMAC input/output stream.
  *
  ******************************************************************************/
-void smp_calculate_h6(uint8_t* w, uint8_t* keyid, uint8_t* c) {
+bool smp_calculate_h6(uint8_t* w, uint8_t* keyid, uint8_t* c) {
 #if (SMP_DEBUG == TRUE)
   uint8_t* p_print = NULL;
 #endif
@@ -1735,8 +1872,12 @@ void smp_calculate_h6(uint8_t* w, uint8_t* keyid, uint8_t* c) {
   smp_debug_print_nbyte_little_endian(p_print, "M", msg_len);
 #endif
 
+  bool ret = true;
   uint8_t cmac[BT_OCTET16_LEN];
-  aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac);
+  if (!aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac)) {
+    SMP_TRACE_ERROR("%s failed", __func__);
+    ret = false;
+  }
 
 #if (SMP_DEBUG == TRUE)
   p_print = cmac;
@@ -1745,6 +1886,7 @@ void smp_calculate_h6(uint8_t* w, uint8_t* keyid, uint8_t* c) {
 
   p = c;
   ARRAY_TO_STREAM(p, cmac, BT_OCTET16_LEN);
+  return ret;
 }
 
 /*******************************************************************************
@@ -1759,11 +1901,13 @@ void smp_calculate_h6(uint8_t* w, uint8_t* keyid, uint8_t* c) {
 **                          SALT is 128 bit,
 **                  output: C is 128 bit.
 **
+** Returns          FALSE if out of resources, TRUE in other cases.
+**
 ** Note             The LSB is the first octet, the MSB is the last octet of
 **                  the AES-CMAC input/output stream.
 **
 *******************************************************************************/
-void smp_calculate_h7(uint8_t* salt, uint8_t* w, uint8_t* c) {
+bool smp_calculate_h7(uint8_t* salt, uint8_t* w, uint8_t* c) {
   SMP_TRACE_DEBUG("%s", __FUNCTION__);
 
   uint8_t key[BT_OCTET16_LEN];
@@ -1775,11 +1919,16 @@ void smp_calculate_h7(uint8_t* salt, uint8_t* w, uint8_t* c) {
   p = msg;
   ARRAY_TO_STREAM(p, w, BT_OCTET16_LEN);
 
+  bool ret = true;
   uint8_t cmac[BT_OCTET16_LEN];
-  aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac);
+  if (!aes_cipher_msg_auth_code(key, msg, msg_len, BT_OCTET16_LEN, cmac)) {
+    SMP_TRACE_ERROR("%s failed", __FUNCTION__);
+    ret = false;
+  }
 
   p = c;
   ARRAY_TO_STREAM(p, cmac, BT_OCTET16_LEN);
+  return ret;
 }
 
 /**

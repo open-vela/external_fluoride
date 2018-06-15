@@ -132,7 +132,6 @@ class BtifMediaStats {
     media_read_total_underflow_bytes = 0;
     media_read_total_underflow_count = 0;
     media_read_last_underflow_us = 0;
-    codec_index = -1;
   }
 
   uint64_t session_start_us;
@@ -161,8 +160,6 @@ class BtifMediaStats {
   size_t media_read_total_underflow_bytes;
   size_t media_read_total_underflow_count;
   uint64_t media_read_last_underflow_us;
-
-  int codec_index = -1;
 };
 
 class BtWorkerThread {
@@ -383,7 +380,6 @@ void btif_a2dp_source_accumulate_stats(BtifMediaStats* src,
   dst->media_read_total_underflow_count +=
       src->media_read_total_underflow_count;
   dst->media_read_last_underflow_us = src->media_read_last_underflow_us;
-  if (dst->codec_index < 0) dst->codec_index = src->codec_index;
   btif_a2dp_source_accumulate_scheduling_stats(&src->tx_queue_enqueue_stats,
                                                &dst->tx_queue_enqueue_stats);
   btif_a2dp_source_accumulate_scheduling_stats(&src->tx_queue_dequeue_stats,
@@ -431,6 +427,8 @@ static void btif_a2dp_source_startup_delayed(void) {
   raise_priority_a2dp(TASK_HIGH_MEDIA);
   btif_a2dp_control_init();
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateRunning);
+  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
+      system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
 }
 
 bool btif_a2dp_source_start_session(const RawAddress& peer_address) {
@@ -453,9 +451,6 @@ static void btif_a2dp_source_start_session_delayed(
   }
   if (btif_av_is_a2dp_offload_enabled()) {
     btif_a2dp_audio_interface_start_session();
-  } else {
-    BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
-        system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
   }
 }
 
@@ -504,10 +499,6 @@ static void btif_a2dp_source_end_session_delayed(
     const RawAddress& peer_address) {
   LOG_INFO(LOG_TAG, "%s: peer_address=%s", __func__,
            peer_address.ToString().c_str());
-  if (!btif_av_is_a2dp_offload_enabled()) {
-    BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
-        system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
-  }
   if (btif_a2dp_source_cb.State() != BtifA2dpSource::kStateRunning) {
     LOG_ERROR(LOG_TAG, "%s: A2DP Source media task is not running", __func__);
     return;
@@ -547,6 +538,8 @@ static void btif_a2dp_source_shutdown_delayed(void) {
   btif_a2dp_source_cb.tx_audio_queue = nullptr;
 
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateOff);
+  BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
+      system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
 }
 
 void btif_a2dp_source_cleanup(void) {
@@ -634,6 +627,14 @@ void btif_a2dp_source_start_audio_req(void) {
 
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_audio_tx_start_event));
+  btif_a2dp_source_cb.stats.Reset();
+  // Assign session_start_us to 1 when time_get_os_boottime_us() is 0 to
+  // indicate btif_a2dp_source_start_audio_req() has been called
+  btif_a2dp_source_cb.stats.session_start_us = time_get_os_boottime_us();
+  if (btif_a2dp_source_cb.stats.session_start_us == 0) {
+    btif_a2dp_source_cb.stats.session_start_us = 1;
+  }
+  btif_a2dp_source_cb.stats.session_end_us = 0;
 }
 
 void btif_a2dp_source_stop_audio_req(void) {
@@ -641,6 +642,11 @@ void btif_a2dp_source_stop_audio_req(void) {
 
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_audio_tx_stop_event));
+
+  btif_a2dp_source_cb.stats.session_end_us = time_get_os_boottime_us();
+  btif_a2dp_source_update_metrics();
+  btif_a2dp_source_accumulate_stats(&btif_a2dp_source_cb.stats,
+                                    &btif_a2dp_source_cb.accumulated_stats);
 }
 
 void btif_a2dp_source_encoder_user_config_update_req(
@@ -771,31 +777,14 @@ static void btif_a2dp_source_audio_tx_start_event(void) {
   alarm_set(btif_a2dp_source_cb.media_alarm,
             btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms(),
             btif_a2dp_source_alarm_cb, nullptr);
-
-  btif_a2dp_source_cb.stats.Reset();
-  // Assign session_start_us to 1 when time_get_os_boottime_us() is 0 to
-  // indicate btif_a2dp_source_start_audio_req() has been called
-  btif_a2dp_source_cb.stats.session_start_us = time_get_os_boottime_us();
-  if (btif_a2dp_source_cb.stats.session_start_us == 0) {
-    btif_a2dp_source_cb.stats.session_start_us = 1;
-  }
-  btif_a2dp_source_cb.stats.session_end_us = 0;
-  A2dpCodecConfig* codec_config = bta_av_get_a2dp_current_codec();
-  if (codec_config != nullptr) {
-    btif_a2dp_source_cb.stats.codec_index = codec_config->codecIndex();
-  }
 }
 
 static void btif_a2dp_source_audio_tx_stop_event(void) {
   LOG_INFO(LOG_TAG, "%s: media_alarm is %srunning, streaming %s", __func__,
            alarm_is_scheduled(btif_a2dp_source_cb.media_alarm) ? "" : "not ",
            btif_a2dp_source_is_streaming() ? "true" : "false");
-  if (btif_av_is_a2dp_offload_enabled()) return;
 
-  btif_a2dp_source_cb.stats.session_end_us = time_get_os_boottime_us();
-  btif_a2dp_source_update_metrics();
-  btif_a2dp_source_accumulate_stats(&btif_a2dp_source_cb.stats,
-                                    &btif_a2dp_source_cb.accumulated_stats);
+  if (btif_av_is_a2dp_offload_enabled()) return;
 
   uint8_t p_buf[AUDIO_STREAM_OUTPUT_BUFFER_SZ * 2];
   uint16_t event;
@@ -1223,21 +1212,17 @@ void btif_a2dp_source_debug_dump(int fd) {
 }
 
 static void btif_a2dp_source_update_metrics(void) {
-  BtifMediaStats stats = btif_a2dp_source_cb.stats;
-  SchedulingStats enqueue_stats = stats.tx_queue_enqueue_stats;
+  const BtifMediaStats& stats = btif_a2dp_source_cb.stats;
+  const SchedulingStats& enqueue_stats = stats.tx_queue_enqueue_stats;
   A2dpSessionMetrics metrics;
-  metrics.codec_index = stats.codec_index;
-  metrics.is_a2dp_offload = btif_av_is_a2dp_offload_enabled();
   // session_start_us is 0 when btif_a2dp_source_start_audio_req() is not called
   // mark the metric duration as invalid (-1) in this case
   if (stats.session_start_us != 0) {
     int64_t session_end_us = stats.session_end_us == 0
                                  ? time_get_os_boottime_us()
                                  : stats.session_end_us;
-    if (static_cast<uint64_t>(session_end_us) > stats.session_start_us) {
-      metrics.audio_duration_ms =
-          (session_end_us - stats.session_start_us) / 1000;
-    }
+    metrics.audio_duration_ms =
+        (session_end_us - stats.session_start_us) / 1000;
   }
 
   if (enqueue_stats.total_updates > 1) {
