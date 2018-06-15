@@ -246,14 +246,15 @@ void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, Uuid* p_srvc_uuid) {
   bta_sys_sendmsg(p_buf);
 }
 
-void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, const Uuid& srvc_uuid) {
-  do_in_bta_thread(
-      FROM_HERE,
-      base::Bind(
-          base::IgnoreResult<tGATT_STATUS (*)(uint16_t, tGATT_DISC_TYPE,
-                                              uint16_t, uint16_t, const Uuid&)>(
-              &GATTC_Discover),
-          conn_id, GATT_DISC_SRVC_BY_UUID, 0x0001, 0xFFFF, srvc_uuid));
+void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id,
+                                     const Uuid& p_srvc_uuid) {
+  tGATT_DISC_PARAM* param = new tGATT_DISC_PARAM;
+  param->s_handle = 0x0001;
+  param->e_handle = 0xFFFF;
+  param->service = p_srvc_uuid;
+  do_in_bta_thread(FROM_HERE,
+                   base::Bind(base::IgnoreResult(&GATTC_Discover), conn_id,
+                              GATT_DISC_SRVC_BY_UUID, base::Owned(param)));
 }
 
 /*******************************************************************************
@@ -265,10 +266,10 @@ void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, const Uuid& srvc_uuid) {
  *
  * Parameters       conn_id: connection ID which identify the server.
  *
- * Returns          returns list of gatt::Service or NULL.
+ * Returns          returns list of tBTA_GATTC_SERVICE or NULL.
  *
  ******************************************************************************/
-const std::vector<gatt::Service>* BTA_GATTC_GetServices(uint16_t conn_id) {
+const std::vector<tBTA_GATTC_SERVICE>* BTA_GATTC_GetServices(uint16_t conn_id) {
   return bta_gattc_get_services(conn_id);
 }
 
@@ -282,11 +283,11 @@ const std::vector<gatt::Service>* BTA_GATTC_GetServices(uint16_t conn_id) {
  * Parameters       conn_id - connection ID which identify the server.
  *                  handle - characteristic handle
  *
- * Returns          returns pointer to gatt::Characteristic or NULL.
+ * Returns          returns pointer to tBTA_GATTC_CHARACTERISTIC or NULL.
  *
  ******************************************************************************/
-const gatt::Characteristic* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
-                                                        uint16_t handle) {
+const tBTA_GATTC_CHARACTERISTIC* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
+                                                             uint16_t handle) {
   return bta_gattc_get_characteristic(conn_id, handle);
 }
 
@@ -300,25 +301,25 @@ const gatt::Characteristic* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
  * Parameters       conn_id - connection ID which identify the server.
  *                  handle - descriptor handle
  *
- * Returns          returns pointer to gatt::Descriptor or NULL.
+ * Returns          returns pointer to tBTA_GATTC_DESCRIPTOR or NULL.
  *
  ******************************************************************************/
-const gatt::Descriptor* BTA_GATTC_GetDescriptor(uint16_t conn_id,
-                                                uint16_t handle) {
+const tBTA_GATTC_DESCRIPTOR* BTA_GATTC_GetDescriptor(uint16_t conn_id,
+                                                     uint16_t handle) {
   return bta_gattc_get_descriptor(conn_id, handle);
 }
 
 /* Return characteristic that owns descriptor with handle equal to |handle|, or
  * NULL */
-const gatt::Characteristic* BTA_GATTC_GetOwningCharacteristic(uint16_t conn_id,
-                                                              uint16_t handle) {
+const tBTA_GATTC_CHARACTERISTIC* BTA_GATTC_GetOwningCharacteristic(
+    uint16_t conn_id, uint16_t handle) {
   return bta_gattc_get_owning_characteristic(conn_id, handle);
 }
 
 /* Return service that owns descriptor or characteristic with handle equal to
  * |handle|, or NULL */
-const gatt::Service* BTA_GATTC_GetOwningService(uint16_t conn_id,
-                                                uint16_t handle) {
+const tBTA_GATTC_SERVICE* BTA_GATTC_GetOwningService(uint16_t conn_id,
+                                                     uint16_t handle) {
   return bta_gattc_get_service_for_handle(conn_id, handle);
 }
 

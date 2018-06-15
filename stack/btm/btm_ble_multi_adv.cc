@@ -204,7 +204,8 @@ class BleAdvertisingManagerImpl
     BTM_GetDeviceIDRoot(irk);
     tSMP_ENC output;
 
-    SMP_Encrypt(irk, rand, 3, &output);
+    if (!SMP_Encrypt(irk, BT_OCTET16_LEN, rand, 3, &output))
+      LOG_ASSERT(false) << "SMP_Encrypt failed";
 
     /* set hash to be LSB of rpAddress */
     bda.address[5] = output.param_buf[0];
@@ -930,7 +931,7 @@ class BleAdvertisingManagerImpl
     }
   }
 
-  void Suspend() override {
+  void Suspend() {
     std::vector<SetEnableData> sets;
 
     for (AdvertisingInstance& inst : adv_inst) {
