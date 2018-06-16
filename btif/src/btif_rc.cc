@@ -3133,6 +3133,15 @@ static void handle_get_capability_response(tBTA_AV_META_MSG* pmeta_msg,
         list_append(p_dev->rc_supported_event_list, p_event);
       }
     }
+
+    // On occasion a remote device can intermittently send a poorly configured
+    // packet with 0 capabilities. This check ensures the stack does not crash.
+    // Typically the remote device will send a proper packet in the future and
+    // continue operation.
+    if (list_is_empty(p_dev->rc_supported_event_list)) {
+      return;
+    }
+
     p_event =
         (btif_rc_supported_event_t*)list_front(p_dev->rc_supported_event_list);
     if (p_event != NULL) {
@@ -3238,8 +3247,9 @@ static void handle_notification_response(tBTA_AV_META_MSG* pmeta_msg,
 
       case AVRC_EVT_ADDR_PLAYER_CHANGE:
         do_in_jni_thread(
-            FROM_HERE, base::Bind(bt_rc_ctrl_callbacks->set_addressed_player_cb,
-                                  p_dev->rc_addr, BTRC_STS_ADDR_PLAY_CHGD));
+            FROM_HERE,
+            base::Bind(bt_rc_ctrl_callbacks->addressed_player_changed_cb,
+                       p_dev->rc_addr, p_rsp->param.addr_player.player_id));
         break;
 
       case AVRC_EVT_UIDS_CHANGE:

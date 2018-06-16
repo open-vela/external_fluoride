@@ -455,9 +455,13 @@ void AvrcpService::DebugDump(int fd) {
           device_list.size());
 
   std::stringstream stream;
-  for (auto device : device_list) {
-    stream << *device << std::endl;
+  {
+    ScopedIndent indent(stream);
+    for (auto device : device_list) {
+      stream << *device << std::endl;
+    }
   }
+
   dprintf(fd, "%s", stream.str().c_str());
 }
 
