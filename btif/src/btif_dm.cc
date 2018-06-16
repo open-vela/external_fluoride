@@ -2439,6 +2439,20 @@ bt_status_t btif_dm_get_adapter_property(bt_property_t* prop) {
       prop->len = sizeof(DEV_CLASS);
     } break;
 
+    // While fetching IO_CAP* values for the local device, we maintain backward
+    // compatibility by using the value from #define macros BTM_LOCAL_IO_CAPS,
+    // BTM_LOCAL_IO_CAPS_BLE if the values have never been explicitly set.
+
+    case BT_PROPERTY_LOCAL_IO_CAPS: {
+      *(bt_io_cap_t*)prop->val = (bt_io_cap_t)BTM_LOCAL_IO_CAPS;
+      prop->len = sizeof(bt_io_cap_t);
+    } break;
+
+    case BT_PROPERTY_LOCAL_IO_CAPS_BLE: {
+      *(bt_io_cap_t*)prop->val = (bt_io_cap_t)BTM_LOCAL_IO_CAPS_BLE;
+      prop->len = sizeof(bt_io_cap_t);
+    } break;
+
     default:
       prop->len = 0;
       return BT_STATUS_FAIL;
@@ -2831,7 +2845,6 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       state = BT_BOND_STATE_NONE;
     } else {
       btif_dm_save_ble_bonding_keys();
-      BTA_GATTC_Refresh(bd_addr);
       btif_dm_get_remote_services_by_transport(&bd_addr, GATT_TRANSPORT_LE);
     }
   } else {
