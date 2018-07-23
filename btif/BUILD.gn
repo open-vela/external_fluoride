@@ -17,11 +17,14 @@
 static_library("btif") {
   sources = [
     "//audio_a2dp_hw/src/audio_a2dp_hw_utils.cc",
+    "//audio_hearing_aid_hw/src/audio_hearing_aid_hw_utils.cc",
     "src/btif_a2dp.cc",
+    "src/btif_a2dp_audio_interface_linux.cc",
     "src/btif_a2dp_control.cc",
     "src/btif_a2dp_sink.cc",
     "src/btif_a2dp_source.cc",
     "src/btif_av.cc",
+    "avrcp/avrcp_service.cc",
 
     #TODO(jpawlowski): heavily depends on Android,
     #   "src/btif_avrcp_audio_track.cc",
@@ -66,7 +69,6 @@ static_library("btif") {
 
   # BTIF callouts
   sources += [
-    "co/bta_ag_co.cc",
     "co/bta_dm_co.cc",
     "co/bta_av_co.cc",
     "co/bta_hh_co.cc",
@@ -78,7 +80,9 @@ static_library("btif") {
   include_dirs = [
     "include",
     "//",
+    "//linux_include",
     "//audio_a2dp_hw/include",
+    "//audio_hearing_aid_hw/include",
     "//bta/include",
     "//bta/sys",
     "//btcore/include",
@@ -88,15 +92,18 @@ static_library("btif") {
     "//hci/include",
     "//stack/a2dp",
     "//stack/btm",
+    "//stack/l2cap",
     "//stack/include",
     "//third_party/tinyxml2",
     "//internal_include",
     "//udrv/include",
     "//utils/include",
     "//vnd/include",
+    "//profile/avrcp",
   ]
 
   deps = [
-    "//third_party/libchrome:base"
+    "//third_party/libchrome:base",
+    "//profile/avrcp:profile_avrcp"
   ]
 }
