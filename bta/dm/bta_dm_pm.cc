@@ -35,7 +35,6 @@
 #include "bta_dm_int.h"
 #include "bta_sys.h"
 #include "btm_api.h"
-#include "stack/include/btu.h"
 
 static void bta_dm_pm_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
                             uint8_t app_id, const RawAddress& peer_addr);

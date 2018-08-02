@@ -122,7 +122,6 @@ cc_test {
         "libcutils",
     ],
     static_libs: [
-        "libbt-common",
         "libbt-protos-lite",
         "libgmock",
         "libosi",
