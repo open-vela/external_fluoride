@@ -53,6 +53,7 @@
 #include "osi/include/future.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
+#include "osi/include/thread.h"
 #include "stack_config.h"
 
 /*******************************************************************************

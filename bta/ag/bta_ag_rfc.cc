@@ -34,7 +34,6 @@
 #include "osi/include/osi.h"
 #include "port_api.h"
 #include "rfcdefs.h"
-#include "stack/include/btu.h"
 #include "utl.h"
 
 /* Event mask for RfCOMM port callback */

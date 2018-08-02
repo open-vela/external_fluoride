@@ -32,7 +32,6 @@
 #include "device/include/controller.h"
 #include "device/include/esco_parameters.h"
 #include "osi/include/osi.h"
-#include "stack/include/btu.h"
 #include "utl.h"
 
 /* Codec negotiation timeout */
