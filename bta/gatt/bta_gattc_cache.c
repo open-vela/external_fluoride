@@ -314,7 +314,8 @@ static tBTA_GATT_STATUS bta_gattc_add_attr_to_cache(tBTA_GATTC_SERV *p_srvc_cb,
         descriptor->handle = handle;
         memcpy(&descriptor->uuid, p_uuid, sizeof(tBT_UUID));
 
-        if (service->characteristics == NULL) {
+        if (service->characteristics == NULL ||
+            list_is_empty(service->characteristics)) {
             APPL_TRACE_ERROR("%s: Illegal action to add descriptor before adding a characteristic!",
                              __func__);
             osi_free(descriptor);
@@ -1517,12 +1518,6 @@ void bta_gattc_cache_save(tBTA_GATTC_SERV *p_srvc_cb, UINT16 conn_id)
 *******************************************************************************/
 bool bta_gattc_cache_load(tBTA_GATTC_CLCB *p_clcb)
 {
-
-#if (defined WEAR_DISABLE_GATT_CACHE && WEAR_DISABLE_GATT_CACHE == TRUE)
-    LOG_WARN(LOG_TAG, "%s GATT cache not used.", __func__);
-    return false;
-#endif
-
     char fname[255] = {0};
     bta_gattc_generate_cache_file_name(fname, p_clcb->p_srcb->server_bda);
 
