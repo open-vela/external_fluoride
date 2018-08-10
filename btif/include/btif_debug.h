@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 Google Inc.
+ *  Copyright 2015 Google Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,8 +23,3 @@
 // Debug API
 
 void btif_debug_init(void);
-
-// Debug helpers
-
-// Timestamp in us
-uint64_t btif_debug_ts(void);
