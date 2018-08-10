@@ -29,9 +29,26 @@
 #include "bta_ag_api.h"
 #include "bta_ag_at.h"
 
+/* Send RING & CLIP in one AT cmd */
+#ifndef BTA_AG_MULTI_RESULT_INCLUDED
+#define BTA_AG_MULTI_RESULT_INCLUDED      FALSE
+#endif
+
+/* Replace : in VGS and VGM for HSP */
+#ifndef BTA_HSP_RESULT_REPLACE_COLON
+#define BTA_HSP_RESULT_REPLACE_COLON      TRUE
+#endif
+
 /*****************************************************************************
 **  Constants
 *****************************************************************************/
+#define HFP_VERSION_1_1         0x0101
+#define HFP_VERSION_1_5         0x0105
+#define HFP_VERSION_1_6         0x0106
+
+#define HSP_VERSION_1_0         0x0100
+#define HSP_VERSION_1_2         0x0102
+
 /* Number of SCBs (AG service instances that can be registered) */
 #ifndef BTA_AG_NUM_SCB
 #define BTA_AG_NUM_SCB          2
@@ -44,10 +61,6 @@
 
 /* RFCOMM MTU SIZE */
 #define BTA_AG_MTU              256
-
-/* Max number of peer and local HF indicators */
-#define BTA_AG_MAX_NUM_PEER_HF_IND     20
-#define BTA_AG_MAX_NUM_LOCAL_HF_IND    4
 
 /* Internal profile indexes */
 #define BTA_AG_HSP              0       /* index for HSP */
@@ -64,7 +77,6 @@
                                       BTA_AG_FEAT_VTAG | BTA_AG_FEAT_REJECT  | \
                                       BTA_AG_FEAT_ECS  | BTA_AG_FEAT_ECC     | \
                                       BTA_AG_FEAT_EXTERR | BTA_AG_FEAT_CODEC | \
-                                      BTA_AG_FEAT_HF_IND | BTA_AG_FEAT_ESCO  | \
                                       BTA_AG_FEAT_VOIP)
 
 #define BTA_AG_SDP_FEAT_SPEC         (BTA_AG_FEAT_3WAY | BTA_AG_FEAT_ECNR    | \
@@ -286,10 +298,6 @@ typedef struct
     tBTA_AG_SCO_MSBC_SETTINGS codec_msbc_settings; /* settings to be used for the impending eSCO */
 #endif
 
-    tBTA_AG_HF_IND      peer_hf_indicators[BTA_AG_MAX_NUM_PEER_HF_IND];   /* Peer supported
-                                                                      HF indicators */
-    tBTA_AG_HF_IND      local_hf_indicators[BTA_AG_MAX_NUM_LOCAL_HF_IND]; /* Local supported
-                                                                      HF indicators */
 } tBTA_AG_SCB;
 
 /* type for sco data */
@@ -334,7 +342,6 @@ extern tBTA_AG_CB *bta_ag_cb_ptr;
 
 /* config struct */
 extern tBTA_AG_CFG *p_bta_ag_cfg;
-extern tBTA_AG_HF_IND bta_ag_local_hf_ind_cfg[];
 
 /*****************************************************************************
 **  Function prototypes
