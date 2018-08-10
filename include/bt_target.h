@@ -1563,41 +1563,7 @@ The maximum number of payload octets that the local device can receive in a sing
 
 /* Enable/disable LE IO capability overriding to no-input-no-output on first bond */
 #ifndef WEAR_LE_IO_CAP_OVERRIDE
-#define WEAR_LE_IO_CAP_OVERRIDE               FALSE
-#endif
-
-/*
- * Enable/disable LE auto connection parameter update.
- * When enabled, the first bonded device that is also of type LE will be whitelisted
- * to use auto connection parameter update.
- */
-#ifndef WEAR_AUTO_CONN_PARAM_UPDATE
-#define WEAR_AUTO_CONN_PARAM_UPDATE           FALSE
-#endif
-
-/*
- * Idle timeout period in milliseconds for auto connection parameter update.
- * Only used when WEAR_AUTO_CONN_PARAM_UPDATE is enabled.
- */
-#ifndef WEAR_AUTO_CONN_IDLE_TIMEOUT_MS
-#define WEAR_AUTO_CONN_IDLE_TIMEOUT_MS        10000
-#endif
-
-/*
- * Connection interval parameter applied when the connection is detected to be idle for
- * WEAR_AUTO_CONN_IDLE_TIMEOUT_MS of time.
- * Only used when WEAR_AUTO_CONN_PARAM_UPDATE is enabled.
- */
-#ifndef WEAR_AUTO_CONN_IDLE_INTERVAL_1_25_MS
-#define WEAR_AUTO_CONN_IDLE_INTERVAL_1_25_MS  72
-#endif
-
-/*
- * Disable the use of local GATT cache.  This forces service discovery on connection
- * establishment.
- */
-#ifndef WEAR_DISABLE_GATT_CACHE
-#define WEAR_DISABLE_GATT_CACHE               TRUE
+#define WEAR_LE_IO_CAP_OVERRIDE FALSE
 #endif
 
 #endif /* BT_TARGET_H */
