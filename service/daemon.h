@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ class Daemon {
 
   // The global Settings object. All classes have direct access to this through
   // the Daemon object.
-  virtual Settings* GetSettings() const = 0;
+  virtual Settings* GetSettings() const  = 0;
 
   // The main event loop. This should be used for any events and delayed tasks
   // that should be executed on the daemon's main thread.
