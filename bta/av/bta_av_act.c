@@ -35,6 +35,7 @@
 #include "bta_av_api.h"
 #include "bta_av_int.h"
 #include "l2c_api.h"
+#include "log/log.h"
 #include "osi/include/list.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
@@ -800,11 +801,17 @@ tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE  *p_rc_rsp, tBTA_AV_RC_MSG *p_ms
         case AVRC_PDU_GET_CAPABILITIES:
             /* process GetCapabilities command without reporting the event to app */
             evt = 0;
+            if (p_vendor->vendor_len != 5)
+            {
+                android_errorWriteLog(0x534e4554, "111893951");
+                p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
+                break;
+            }
             u8 = *(p_vendor->p_vendor_data + 4);
             p = p_vendor->p_vendor_data + 2;
             p_rc_rsp->get_caps.capability_id = u8;
             BE_STREAM_TO_UINT16 (u16, p);
-            if ((u16 != 1) || (p_vendor->vendor_len != 5))
+            if (u16 != 1)
             {
                 p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
             }
@@ -1613,6 +1620,8 @@ static void bta_av_accept_signalling_timer_cback(void *data)
 
             if (bta_av_is_scb_opening(p_scb))
             {
+                APPL_TRACE_DEBUG("%s: stream state opening: SDP started = %d",
+                                 __func__, p_scb->sdp_discovery_started);
                 if (p_scb->sdp_discovery_started)
                 {
                     /* We are still doing SDP. Run the timer again. */
@@ -1634,6 +1643,7 @@ static void bta_av_accept_signalling_timer_cback(void *data)
             {
                 /* Stay in incoming state if SNK does not start signalling */
 
+                APPL_TRACE_DEBUG("%s: stream state incoming", __func__);
                 /* API open was called right after SNK opened L2C connection. */
                 if (p_scb->coll_mask & BTA_AV_COLL_API_CALLED)
                 {
