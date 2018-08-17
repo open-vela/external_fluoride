@@ -48,13 +48,12 @@ extern tBTM_CB btm_cb;
  *******************************************
 */
 extern void btm_init(void);
-extern void btm_free(void);
 
 /* Internal functions provided by btm_inq.cc
  ******************************************
 */
 extern tBTM_STATUS btm_initiate_rem_name(const RawAddress& remote_bda,
-                                         uint8_t origin, period_ms_t timeout_ms,
+                                         uint8_t origin, uint64_t timeout_ms,
                                          tBTM_CMPL_CB* p_cb);
 
 extern void btm_process_remote_name(const RawAddress* bda, BD_NAME name,
