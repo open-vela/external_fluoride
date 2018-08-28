@@ -59,11 +59,6 @@ void Device::RegisterInterfaces(MediaInterface* media_interface,
   volume_interface_ = volume_interface;
 }
 
-void Device::SetBrowseMtu(uint16_t browse_mtu) {
-  DEVICE_LOG(INFO) << __PRETTY_FUNCTION__ << ": browse_mtu = " << browse_mtu;
-  browse_mtu_ = browse_mtu;
-}
-
 bool Device::IsActive() const {
   return address_ == a2dp_interface_->active_peer();
 }
@@ -1036,7 +1031,7 @@ void Device::GetVFSListResponse(uint8_t label,
       // right now we always use folders of mixed type
       FolderItem folder_item(vfs_ids_.get_uid(folder.media_id), 0x00,
                              folder.is_playable, folder.name);
-      if (!builder->AddFolder(folder_item)) break;
+      builder->AddFolder(folder_item);
     } else if (items[i].type == ListItem::SONG) {
       auto song = items[i].song;
       auto title =
@@ -1053,9 +1048,7 @@ void Device::GetVFSListResponse(uint8_t label,
             filter_attributes_requested(song, pkt->GetAttributesRequested());
       }
 
-      // If we fail to add a song, don't accidentally add one later that might
-      // fit.
-      if (!builder->AddSong(song_item)) break;
+      builder->AddSong(song_item);
     }
   }
 
@@ -1088,10 +1081,7 @@ void Device::GetNowPlayingListResponse(
       item.attributes_ =
           filter_attributes_requested(song, pkt->GetAttributesRequested());
     }
-
-    // If we fail to add a song, don't accidentally add one later that might
-    // fit.
-    if (!builder->AddSong(item)) break;
+    builder->AddSong(item);
   }
 
   send_message(label, true, std::move(builder));
