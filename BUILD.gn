@@ -25,6 +25,7 @@ group("bluetooth") {
   deps = [
     "//main:bluetooth.default",
     "//service:bluetoothtbd",
+    "//vendor_libs:vendor-libs",
   ]
 }
 

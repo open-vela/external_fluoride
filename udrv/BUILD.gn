@@ -16,13 +16,14 @@
 
 source_set("udrv") {
   sources = [
-    "ulinux/uipc.cc",
+    "ulinux/uipc.c",
   ]
 
   include_dirs = [
     "include",
     "uipc",
     "//",
+    "//audio_a2dp_hw",
     "//include",
     "//stack/include",
     "//utils/include",
