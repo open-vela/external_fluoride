@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 Google, Inc.
+ *  Copyright 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -176,16 +176,20 @@ void BluetoothMetricsLogger::LogA2dpSession(
   // TODO(siyuanh): Implement for linux
 }
 
-void BluetoothMetricsLogger::WriteString(std::string* serialized, bool clear) {
+void BluetoothMetricsLogger::LogHeadsetProfileRfcConnection(
+    tBTA_SERVICE_ID service_id) {
+  // TODO: Implement for linux
+}
+
+void BluetoothMetricsLogger::WriteString(std::string* serialized) {
   // TODO(siyuanh): Implement for linux
 }
 
-void BluetoothMetricsLogger::WriteBase64String(std::string* serialized,
-                                               bool clear) {
+void BluetoothMetricsLogger::WriteBase64String(std::string* serialized) {
   // TODO(siyuanh): Implement for linux
 }
 
-void BluetoothMetricsLogger::WriteBase64(int fd, bool clear) {
+void BluetoothMetricsLogger::WriteBase64(int fd) {
   // TODO(siyuanh): Implement for linux
 }
 
