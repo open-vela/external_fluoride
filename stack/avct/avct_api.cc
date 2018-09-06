@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2016 Broadcom Corporation
+ *  Copyright (C) 2003-2016 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -129,8 +129,7 @@ void AVCT_Deregister(void) {
  * Returns          AVCT_SUCCESS if successful, otherwise error.
  *
  ******************************************************************************/
-uint16_t AVCT_CreateConn(uint8_t* p_handle, tAVCT_CC* p_cc,
-                         const RawAddress& peer_addr) {
+uint16_t AVCT_CreateConn(uint8_t* p_handle, tAVCT_CC* p_cc, BD_ADDR peer_addr) {
   uint16_t result = AVCT_SUCCESS;
   tAVCT_CCB* p_ccb;
   tAVCT_LCB* p_lcb;
@@ -167,9 +166,7 @@ uint16_t AVCT_CreateConn(uint8_t* p_handle, tAVCT_CC* p_cc,
         /* bind lcb to ccb */
         p_ccb->p_lcb = p_lcb;
         AVCT_TRACE_DEBUG("ch_state: %d", p_lcb->ch_state);
-        tAVCT_LCB_EVT avct_lcb_evt;
-        avct_lcb_evt.p_ccb = p_ccb;
-        avct_lcb_event(p_lcb, AVCT_LCB_UL_BIND_EVT, &avct_lcb_evt);
+        avct_lcb_event(p_lcb, AVCT_LCB_UL_BIND_EVT, (tAVCT_LCB_EVT*)&p_ccb);
       }
     }
   }
@@ -206,9 +203,8 @@ uint16_t AVCT_RemoveConn(uint8_t handle) {
   }
   /* send unbind event to lcb */
   else {
-    tAVCT_LCB_EVT avct_lcb_evt;
-    avct_lcb_evt.p_ccb = p_ccb;
-    avct_lcb_event(p_ccb->p_lcb, AVCT_LCB_UL_UNBIND_EVT, &avct_lcb_evt);
+    avct_lcb_event(p_ccb->p_lcb, AVCT_LCB_UL_UNBIND_EVT,
+                   (tAVCT_LCB_EVT*)&p_ccb);
   }
   return result;
 }
@@ -269,11 +265,9 @@ uint16_t AVCT_CreateBrowse(uint8_t handle, uint8_t role) {
     if (result == AVCT_SUCCESS) {
       /* bind bcb to ccb */
       p_ccb->p_bcb = p_bcb;
-      p_bcb->peer_addr = p_ccb->p_lcb->peer_addr;
+      memcpy(p_bcb->peer_addr, p_ccb->p_lcb->peer_addr, BD_ADDR_LEN);
       AVCT_TRACE_DEBUG("ch_state: %d", p_bcb->ch_state);
-      tAVCT_LCB_EVT avct_lcb_evt;
-      avct_lcb_evt.p_ccb = p_ccb;
-      avct_bcb_event(p_bcb, AVCT_LCB_UL_BIND_EVT, &avct_lcb_evt);
+      avct_bcb_event(p_bcb, AVCT_LCB_UL_BIND_EVT, (tAVCT_LCB_EVT*)&p_ccb);
     }
   }
 
@@ -306,9 +300,8 @@ uint16_t AVCT_RemoveBrowse(uint8_t handle) {
   } else if (p_ccb->p_bcb != NULL)
   /* send unbind event to bcb */
   {
-    tAVCT_LCB_EVT avct_lcb_evt;
-    avct_lcb_evt.p_ccb = p_ccb;
-    avct_bcb_event(p_ccb->p_bcb, AVCT_LCB_UL_UNBIND_EVT, &avct_lcb_evt);
+    avct_bcb_event(p_ccb->p_bcb, AVCT_LCB_UL_UNBIND_EVT,
+                   (tAVCT_LCB_EVT*)&p_ccb);
   }
 
   return result;
@@ -423,16 +416,14 @@ uint16_t AVCT_MsgReq(uint8_t handle, uint8_t label, uint8_t cr, BT_HDR* p_msg) {
         osi_free(p_msg);
       } else {
         p_ccb->p_bcb = avct_bcb_by_lcb(p_ccb->p_lcb);
-        tAVCT_LCB_EVT avct_lcb_evt;
-        avct_lcb_evt.ul_msg = ul_msg;
-        avct_bcb_event(p_ccb->p_bcb, AVCT_LCB_UL_MSG_EVT, &avct_lcb_evt);
+        avct_bcb_event(p_ccb->p_bcb, AVCT_LCB_UL_MSG_EVT,
+                       (tAVCT_LCB_EVT*)&ul_msg);
       }
     }
     /* send msg event to lcb */
     else {
-      tAVCT_LCB_EVT avct_lcb_evt;
-      avct_lcb_evt.ul_msg = ul_msg;
-      avct_lcb_event(p_ccb->p_lcb, AVCT_LCB_UL_MSG_EVT, &avct_lcb_evt);
+      avct_lcb_event(p_ccb->p_lcb, AVCT_LCB_UL_MSG_EVT,
+                     (tAVCT_LCB_EVT*)&ul_msg);
     }
   }
   return result;
