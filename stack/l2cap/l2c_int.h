@@ -441,7 +441,6 @@ typedef struct t_l2c_linkcb
     UINT16              latency;
     UINT16              timeout;
 
-    tBTA_DM_BLE_CONN_PARAM_CBACK *p_conn_param_update_cb;
 #endif
 
 #if (L2CAP_ROUND_ROBIN_CHANNEL_SERVICE == TRUE)
@@ -683,7 +682,7 @@ extern BOOLEAN  l2cu_lcb_disconnecting (void);
 
 extern BOOLEAN l2cu_create_conn (tL2C_LCB *p_lcb, tBT_TRANSPORT transport);
 extern BOOLEAN l2cu_create_conn_after_switch (tL2C_LCB *p_lcb);
-extern BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb, UINT16 *fixed_cid);
+extern BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb);
 extern void    l2cu_resubmit_pending_sec_req (BD_ADDR p_bda);
 extern void    l2cu_initialize_amp_ccb (tL2C_LCB *p_lcb);
 extern void    l2cu_adjust_out_mps (tL2C_CCB *p_ccb);
