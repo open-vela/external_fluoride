@@ -1804,8 +1804,8 @@ void bta_hh_w4_le_read_char_cmpl(tBTA_HH_DEV_CB *p_dev_cb, tBTA_HH_DATA *p_buf)
         if (tout < BTM_BLE_CONN_TIMEOUT_MIN_DEF)
             tout = BTM_BLE_CONN_TIMEOUT_MIN_DEF;
 
-        BTM_BleSetPrefConnParams(p_dev_cb->addr, min, max, latency, tout);
-        L2CA_UpdateBleConnParams(p_dev_cb->addr, min, max, latency, tout, NULL);
+        BTM_BleSetPrefConnParams (p_dev_cb->addr, min, max, latency, tout);
+        L2CA_UpdateBleConnParams(p_dev_cb->addr, min, max, latency, tout);
     }
     else
     {
@@ -2155,12 +2155,19 @@ void bta_hh_le_input_rpt_notify(tBTA_GATTC_NOTIFY *p_data)
 
     if (p_dev_cb == NULL)
     {
-        APPL_TRACE_ERROR("notification received from Unknown device");
+        APPL_TRACE_ERROR("%s: notification received from Unknown device, conn_id: 0x%04x",
+            __func__, p_data->conn_id);
         return;
     }
 
     const tBTA_GATTC_CHARACTERISTIC *p_char = BTA_GATTC_GetCharacteristic(p_dev_cb->conn_id,
                                                                           p_data->handle);
+    if (p_char == NULL)
+    {
+        APPL_TRACE_ERROR("%s: notification received for Unknown Characteristic, conn_id: 0x%04x, handle: 0x%04x",
+            __func__, p_dev_cb->conn_id, p_data->handle);
+        return;
+    }
 
     app_id= p_dev_cb->app_id;
 
@@ -2170,7 +2177,8 @@ void bta_hh_le_input_rpt_notify(tBTA_GATTC_NOTIFY *p_data)
                                         p_char->handle);
     if (p_rpt == NULL)
     {
-        APPL_TRACE_ERROR("notification received for Unknown Report");
+        APPL_TRACE_ERROR("%s: notification received for Unknown Report, uuid: 0x%04x, handle: 0x%04x",
+            __func__, p_char->uuid.uu.uuid16, p_char->handle);
         return;
     }
 
