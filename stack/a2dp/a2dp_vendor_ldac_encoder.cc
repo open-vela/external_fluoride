@@ -33,7 +33,6 @@
 #include "a2dp_vendor_ldac.h"
 #include "a2dp_vendor_ldac_abr.h"
 #include "bt_common.h"
-#include "common/time_util.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -286,8 +285,7 @@ void a2dp_vendor_ldac_encoder_init(
     a2dp_ldac_abr_free_handle(a2dp_ldac_encoder_cb.ldac_abr_handle);
   memset(&a2dp_ldac_encoder_cb, 0, sizeof(a2dp_ldac_encoder_cb));
 
-  a2dp_ldac_encoder_cb.stats.session_start_us =
-      bluetooth::common::time_get_os_boottime_us();
+  a2dp_ldac_encoder_cb.stats.session_start_us = time_get_os_boottime_us();
 
   a2dp_ldac_encoder_cb.read_callback = read_callback;
   a2dp_ldac_encoder_cb.enqueue_callback = enqueue_callback;
@@ -535,7 +533,7 @@ void a2dp_vendor_ldac_feeding_flush(void) {
   a2dp_ldac_encoder_cb.ldac_feeding_state.counter = 0;
 }
 
-uint64_t a2dp_vendor_ldac_get_encoder_interval_ms(void) {
+period_ms_t a2dp_vendor_ldac_get_encoder_interval_ms(void) {
   return A2DP_LDAC_ENCODER_INTERVAL_MS;
 }
 
@@ -761,7 +759,7 @@ void a2dp_vendor_ldac_set_transmit_queue_length(size_t transmit_queue_length) {
   a2dp_ldac_encoder_cb.TxQueueLength = transmit_queue_length;
 }
 
-uint64_t A2dpCodecConfigLdac::encoderIntervalMs() const {
+period_ms_t A2dpCodecConfigLdac::encoderIntervalMs() const {
   return a2dp_vendor_ldac_get_encoder_interval_ms();
 }
 
