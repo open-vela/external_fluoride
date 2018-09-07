@@ -32,6 +32,7 @@
 #include "device/include/controller.h"
 #include "device/include/esco_parameters.h"
 #include "osi/include/osi.h"
+#include "stack/include/btu.h"
 #include "utl.h"
 
 /* Codec negotiation timeout */
@@ -133,9 +134,9 @@ static void bta_ag_sco_conn_cback(uint16_t sco_idx) {
   }
 
   if (handle != 0) {
-    do_in_bta_thread(FROM_HERE,
-                     base::Bind(&bta_ag_sm_execute_by_handle, handle,
-                                BTA_AG_SCO_OPEN_EVT, tBTA_AG_DATA::kEmpty));
+    do_in_main_thread(FROM_HERE,
+                      base::Bind(&bta_ag_sm_execute_by_handle, handle,
+                                 BTA_AG_SCO_OPEN_EVT, tBTA_AG_DATA::kEmpty));
   } else {
     /* no match found; disconnect sco, init sco variables */
     bta_ag_cb.sco.p_curr_scb = nullptr;
@@ -216,9 +217,9 @@ static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
 
     bta_ag_cb.sco.p_curr_scb->inuse_codec = BTA_AG_CODEC_NONE;
 
-    do_in_bta_thread(FROM_HERE,
-                     base::Bind(&bta_ag_sm_execute_by_handle, handle,
-                                BTA_AG_SCO_CLOSE_EVT, tBTA_AG_DATA::kEmpty));
+    do_in_main_thread(FROM_HERE,
+                      base::Bind(&bta_ag_sm_execute_by_handle, handle,
+                                 BTA_AG_SCO_CLOSE_EVT, tBTA_AG_DATA::kEmpty));
   } else {
     /* no match found */
     APPL_TRACE_DEBUG("no scb for ag_sco_disc_cback");
@@ -372,7 +373,7 @@ static void bta_ag_create_sco(tBTA_AG_SCB* p_scb, bool is_orig) {
                  << " is not active, active_device=" << active_device_addr;
     if (bta_ag_cb.sco.p_curr_scb != nullptr &&
         bta_ag_cb.sco.p_curr_scb->in_use && p_scb == bta_ag_cb.sco.p_curr_scb) {
-      do_in_bta_thread(
+      do_in_main_thread(
           FROM_HERE, base::Bind(&bta_ag_sm_execute, p_scb, BTA_AG_SCO_CLOSE_EVT,
                                 tBTA_AG_DATA::kEmpty));
     }
@@ -385,8 +386,10 @@ static void bta_ag_create_sco(tBTA_AG_SCB* p_scb, bool is_orig) {
     return;
   }
 
+#if (DISABLE_WBS == FALSE)
   if ((p_scb->sco_codec == BTA_AG_CODEC_MSBC) && !p_scb->codec_fallback)
     esco_codec = BTA_AG_CODEC_MSBC;
+#endif
 
   if (p_scb->codec_fallback) {
     p_scb->codec_fallback = false;
@@ -635,9 +638,14 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           /* remove listening connection */
           bta_ag_remove_sco(p_scb, false);
 
+#if (DISABLE_WBS == FALSE)
           /* start codec negotiation */
           p_sco->state = BTA_AG_SCO_CODEC_ST;
           bta_ag_codec_negotiate(p_scb);
+#else
+          bta_ag_create_sco(p_scb, true);
+          p_sco->state = BTA_AG_SCO_OPENING_ST;
+#endif
           break;
 
         case BTA_AG_SCO_SHUTDOWN_E:
@@ -732,11 +740,13 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           }
           break;
 
+#if (DISABLE_WBS == FALSE)
         case BTA_AG_SCO_REOPEN_E:
           /* start codec negotiation */
           p_sco->state = BTA_AG_SCO_CODEC_ST;
           bta_ag_codec_negotiate(p_scb);
           break;
+#endif
 
         case BTA_AG_SCO_XFER_E:
           /* save xfer scb */
@@ -1009,11 +1019,18 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           bta_ag_create_sco(p_scb, false);
           bta_ag_remove_sco(p_sco->p_xfer_scb, false);
 
+#if (DISABLE_WBS == FALSE)
           /* start codec negotiation */
           p_sco->state = BTA_AG_SCO_CODEC_ST;
           tBTA_AG_SCB* p_cn_scb = p_sco->p_xfer_scb;
           p_sco->p_xfer_scb = nullptr;
           bta_ag_codec_negotiate(p_cn_scb);
+#else
+          /* create sco connection to peer */
+          bta_ag_create_sco(p_sco->p_xfer_scb, true);
+          p_sco->p_xfer_scb = nullptr;
+          p_sco->state = BTA_AG_SCO_OPENING_ST;
+#endif
           break;
         }
 
