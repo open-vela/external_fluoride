@@ -8,6 +8,8 @@
 #include "errno.h"
 #include "stdio.h"
 
+#include "osi/include/log.h"
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -109,5 +111,5 @@ class AsyncManager {
 
   std::mutex synchronization_mutex_;
 };
-}  // namespace test_vendor_lib
+}
 #endif  // TEST_VENDOR_LIB_ASYNC_MANAGER_H_

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google Inc.
+ *  Copyright (C) 2015 Google Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,8 +25,9 @@
 #include "btif/include/btif_debug.h"
 #include "btif/include/btif_debug_btsnoop.h"
 #include "hci/include/btsnoop_mem.h"
-#include "internal_include/bt_target.h"
+#include "include/bt_target.h"
 #include "osi/include/ringbuffer.h"
+#include "osi/include/time.h"
 
 #define REDUCE_HCI_TYPE_TO_SIGNIFICANT_BITS(type) ((type) >> 8)
 
@@ -206,7 +207,7 @@ void btif_debug_btsnoop_dump(int fd) {
     rc = btsnoop_compress(ringbuffer, buffer);
   }
 
-  if (!rc) {
+  if (rc == false) {
     dprintf(fd, "%s Log compression failed", __func__);
     goto error;
   }
