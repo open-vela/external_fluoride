@@ -56,13 +56,33 @@ static tAVRC_STS avrc_pars_vendor_rsp(tAVRC_MSG_VENDOR* p_msg,
   if (p_msg->vendor_len == 0) return AVRC_STS_NO_ERROR;
   if (p_msg->p_vendor_data == NULL) return AVRC_STS_INTERNAL_ERR;
 
+  if (p_msg->vendor_len < 4) {
+    android_errorWriteLog(0x534e4554, "111450531");
+    AVRC_TRACE_WARNING("%s: message length %d too short: must be at least 4",
+                       __func__, p_msg->vendor_len);
+    return AVRC_STS_INTERNAL_ERR;
+  }
   p = p_msg->p_vendor_data;
   BE_STREAM_TO_UINT8(p_result->pdu, p);
   p++; /* skip the reserved/packe_type byte */
   BE_STREAM_TO_UINT16(len, p);
-  AVRC_TRACE_DEBUG("%s ctype:0x%x pdu:0x%x, len:%d/0x%x", __func__,
-                   p_msg->hdr.ctype, p_result->pdu, len, len);
+  AVRC_TRACE_DEBUG("%s ctype:0x%x pdu:0x%x, len:%d/0x%x vendor_len=0x%x",
+                   __func__, p_msg->hdr.ctype, p_result->pdu, len, len,
+                   p_msg->vendor_len);
+  if (p_msg->vendor_len < len + 4) {
+    android_errorWriteLog(0x534e4554, "111450531");
+    AVRC_TRACE_WARNING("%s: message length %d too short: must be at least %d",
+                       __func__, p_msg->vendor_len, len + 4);
+    return AVRC_STS_INTERNAL_ERR;
+  }
+
   if (p_msg->hdr.ctype == AVRC_RSP_REJ) {
+    if (len < 1) {
+      android_errorWriteLog(0x534e4554, "111450531");
+      AVRC_TRACE_WARNING("%s: invalid parameter length %d: must be at least 1",
+                         __func__, len);
+      return AVRC_STS_INTERNAL_ERR;
+    }
     p_result->rsp.status = *p;
     return p_result->rsp.status;
   }
@@ -83,12 +103,26 @@ static tAVRC_STS avrc_pars_vendor_rsp(tAVRC_MSG_VENDOR* p_msg,
 
     case AVRC_PDU_REGISTER_NOTIFICATION: /* 0x31 */
 #if (AVRC_ADV_CTRL_INCLUDED == TRUE)
+      if (len < 1) {
+        android_errorWriteLog(0x534e4554, "111450531");
+        AVRC_TRACE_WARNING(
+            "%s: invalid parameter length %d: must be at least 1", __func__,
+            len);
+        return AVRC_STS_INTERNAL_ERR;
+      }
       BE_STREAM_TO_UINT8(eventid, p);
       if (AVRC_EVT_VOLUME_CHANGE == eventid &&
           (AVRC_RSP_CHANGED == p_msg->hdr.ctype ||
            AVRC_RSP_INTERIM == p_msg->hdr.ctype ||
            AVRC_RSP_REJ == p_msg->hdr.ctype ||
            AVRC_RSP_NOT_IMPL == p_msg->hdr.ctype)) {
+        if (len < 2) {
+          android_errorWriteLog(0x534e4554, "111450531");
+          AVRC_TRACE_WARNING(
+              "%s: invalid parameter length %d: must be at least 2", __func__,
+              len);
+          return AVRC_STS_INTERNAL_ERR;
+        }
         p_result->reg_notif.status = p_msg->hdr.ctype;
         p_result->reg_notif.event_id = eventid;
         BE_STREAM_TO_UINT8(p_result->reg_notif.param.volume, p);
@@ -150,9 +184,6 @@ tAVRC_STS avrc_parse_notification_rsp(uint8_t* p_stream, uint16_t len,
       break;
 
     case AVRC_EVT_ADDR_PLAYER_CHANGE:
-      BE_STREAM_TO_UINT16(p_rsp->param.addr_player.player_id, p_stream);
-      BE_STREAM_TO_UINT16(p_rsp->param.addr_player.uid_counter, p_stream);
-
       break;
 
     case AVRC_EVT_UIDS_CHANGE:
@@ -385,7 +416,7 @@ static tAVRC_STS avrc_pars_browse_rsp(tAVRC_MSG_BROWSE* p_msg,
       pkt_len_read += 10;
 
       set_br_pl_rsp->p_folders = (tAVRC_NAME*)osi_malloc(
-          set_br_pl_rsp->folder_depth * sizeof(tAVRC_NAME));
+          set_br_pl_rsp->num_items * sizeof(tAVRC_NAME));
 
       /* Read each of the folder in the depth */
       for (uint32_t i = 0; i < set_br_pl_rsp->folder_depth; i++) {

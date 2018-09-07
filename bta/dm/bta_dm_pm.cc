@@ -35,7 +35,6 @@
 #include "bta_dm_int.h"
 #include "bta_sys.h"
 #include "btm_api.h"
-#include "stack/include/btu.h"
 
 static void bta_dm_pm_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
                             uint8_t app_id, const RawAddress& peer_addr);
@@ -273,7 +272,7 @@ static void bta_dm_pm_stop_timer_by_srvc_id(const RawAddress& peer_addr,
  *
  ******************************************************************************/
 static void bta_dm_pm_start_timer(tBTA_PM_TIMER* p_timer, uint8_t timer_idx,
-                                  uint64_t timeout_ms, uint8_t srvc_id,
+                                  period_ms_t timeout_ms, uint8_t srvc_id,
                                   uint8_t pm_action) {
   std::unique_lock<std::recursive_mutex> schedule_lock(pm_timer_schedule_mutex);
   std::unique_lock<std::recursive_mutex> state_lock(pm_timer_state_mutex);
@@ -501,7 +500,7 @@ static void bta_dm_pm_set_mode(const RawAddress& peer_addr,
                                tBTA_DM_PM_ACTION pm_request,
                                tBTA_DM_PM_REQ pm_req) {
   tBTA_DM_PM_ACTION pm_action = BTA_DM_PM_NO_ACTION;
-  uint64_t timeout_ms = 0;
+  period_ms_t timeout_ms = 0;
   uint8_t i, j;
   tBTA_DM_PM_ACTION failed_pm = 0;
   tBTA_DM_PEER_DEVICE* p_peer_device = NULL;
@@ -514,7 +513,7 @@ static void bta_dm_pm_set_mode(const RawAddress& peer_addr,
   tBTA_DM_SRVCS* p_srvcs = NULL;
   bool timer_started = false;
   uint8_t timer_idx, available_timer = BTA_DM_PM_MODE_TIMER_MAX;
-  uint64_t remaining_ms = 0;
+  period_ms_t remaining_ms = 0;
 
   if (!bta_dm_cb.device_list.count) return;
 
@@ -838,8 +837,8 @@ void bta_dm_pm_active(const RawAddress& peer_addr) {
 static void bta_dm_pm_btm_cback(const RawAddress& bd_addr,
                                 tBTM_PM_STATUS status, uint16_t value,
                                 uint8_t hci_status) {
-  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_pm_btm_status, bd_addr, status,
-                                          value, hci_status));
+  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_pm_btm_status, bd_addr, status,
+                                         value, hci_status));
 }
 
 /*******************************************************************************
@@ -879,7 +878,7 @@ static void bta_dm_pm_timer_cback(void* data) {
   /* no more timers */
   if (i == BTA_DM_NUM_PM_TIMER) return;
 
-  do_in_main_thread(
+  do_in_bta_thread(
       FROM_HERE, base::Bind(bta_dm_pm_timer, bta_dm_cb.pm_timer[i].peer_bdaddr,
                             bta_dm_cb.pm_timer[i].pm_action[j]));
 }
