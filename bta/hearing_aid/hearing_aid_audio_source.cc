@@ -24,15 +24,13 @@
 #include <base/files/file_util.h>
 #include <include/hardware/bt_av.h>
 
-#include "common/time_util.h"
-
 using base::FilePath;
 extern const char* audio_ha_hw_dump_ctrl_event(tHEARING_AID_CTRL_CMD event);
 
 namespace {
-int bit_rate = -1;
-int sample_rate = -1;
-int data_interval_ms = -1;
+int bit_rate = 16;
+int sample_rate = 16000;
+int data_interval_ms = 10 /* msec */;
 int num_channels = 2;
 alarm_t* audio_timer = nullptr;
 
@@ -69,8 +67,7 @@ void send_audio_data(void*) {
   if (bytes_read < bytes_per_tick) {
     stats.media_read_total_underflow_bytes += bytes_per_tick - bytes_read;
     stats.media_read_total_underflow_count++;
-    stats.media_read_last_underflow_us =
-        bluetooth::common::time_get_os_boottime_us();
+    stats.media_read_last_underflow_us = time_get_os_boottime_us();
   }
 
   std::vector<uint8_t> data(p_buf, p_buf + bytes_read);
@@ -96,11 +93,6 @@ void hearing_aid_data_cb(tUIPC_CH_ID, tUIPC_EVENT event) {
                  UIPC_REG_REMOVE_ACTIVE_READSET, NULL);
       UIPC_Ioctl(*uipc_hearing_aid, UIPC_CH_ID_AV_AUDIO, UIPC_SET_READ_POLL_TMO,
                  reinterpret_cast<void*>(0));
-
-      if (data_interval_ms != HA_INTERVAL_10_MS &&
-          data_interval_ms != HA_INTERVAL_20_MS) {
-        LOG(FATAL) << " Unsupported data interval: " << data_interval_ms;
-      }
 
       audio_timer = alarm_new_periodic("hearing_aid_data_timer");
       alarm_set_on_mloop(audio_timer, data_interval_ms, send_audio_data,
@@ -274,11 +266,6 @@ void HearingAidAudioSource::Start(const CodecConfiguration& codecConfiguration,
                                   HearingAidAudioReceiver* audioReceiver) {
   localAudioReceiver = audioReceiver;
   VLOG(2) << "Hearing Aid UIPC Open";
-
-  bit_rate = codecConfiguration.bit_rate;
-  sample_rate = codecConfiguration.sample_rate;
-  data_interval_ms = codecConfiguration.data_interval_ms;
-
   stats.Reset();
 }
 
@@ -299,7 +286,7 @@ void HearingAidAudioSource::CleanUp() {
 }
 
 void HearingAidAudioSource::DebugDump(int fd) {
-  uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
+  uint64_t now_us = time_get_os_boottime_us();
   std::stringstream stream;
   stream << "  Hearing Aid Audio HAL:"
          << "\n    Counts (underflow)                                      : "
