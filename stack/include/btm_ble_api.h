@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -196,14 +196,43 @@ extern tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
                                   tBTM_INQ_RESULTS_CB* p_results_cb,
                                   tBTM_CMPL_CB* p_cmpl_cb);
 
-/** Returns local device encryption root (ER) */
-const Octet16& BTM_GetDeviceEncRoot();
+/*******************************************************************************
+ *
+ * Function         BTM_GetDeviceIDRoot
+ *
+ * Description      This function is called to read the local device identity
+ *                  root.
+ *
+ * Returns          void
+ *                  the local device ER is copied into er
+ *
+ ******************************************************************************/
+extern void BTM_GetDeviceIDRoot(BT_OCTET16 ir);
 
-/** Returns local device identity root (IR) */
-extern const Octet16& BTM_GetDeviceIDRoot();
+/*******************************************************************************
+ *
+ * Function         BTM_GetDeviceEncRoot
+ *
+ * Description      This function is called to read the local device encryption
+ *                  root.
+ *
+ * Returns          void
+ *                  the local device ER is copied into er
+ *
+ ******************************************************************************/
+extern void BTM_GetDeviceEncRoot(BT_OCTET16 er);
 
-/** Return local device DHK. */
-extern const Octet16& BTM_GetDeviceDHK();
+/*******************************************************************************
+ *
+ * Function         BTM_GetDeviceDHK
+ *
+ * Description      This function is called to read the local device DHK.
+ *
+ * Returns          void
+ *                  the local device DHK is copied into dhk
+ *
+ ******************************************************************************/
+extern void BTM_GetDeviceDHK(BT_OCTET16 dhk);
 
 /*******************************************************************************
  *
@@ -734,9 +763,33 @@ extern void BTM_BleAdvFilterParamSetup(
 /**
  * This functions are called to configure the adv data payload filter condition
  */
-extern void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
-                          std::vector<ApcfCommand> commands,
-                          tBTM_BLE_PF_CFG_CBACK cb);
+extern void BTM_LE_PF_srvc_data(tBTM_BLE_SCAN_COND_OP action,
+                                tBTM_BLE_PF_FILT_INDEX filt_index);
+extern void BTM_LE_PF_addr_filter(tBTM_BLE_SCAN_COND_OP action,
+                                  tBTM_BLE_PF_FILT_INDEX filt_index,
+                                  tBLE_BD_ADDR addr, tBTM_BLE_PF_CFG_CBACK cb);
+extern void BTM_LE_PF_local_name(tBTM_BLE_SCAN_COND_OP action,
+                                 tBTM_BLE_PF_FILT_INDEX filt_index,
+                                 std::vector<uint8_t> name,
+                                 tBTM_BLE_PF_CFG_CBACK cb);
+extern void BTM_LE_PF_uuid_filter(tBTM_BLE_SCAN_COND_OP action,
+                                  tBTM_BLE_PF_FILT_INDEX filt_index,
+                                  tBTM_BLE_PF_COND_TYPE filter_type,
+                                  tBT_UUID uuid,
+                                  tBTM_BLE_PF_LOGIC_TYPE cond_logic,
+                                  tBTM_BLE_PF_COND_MASK* p_uuid_mask,
+                                  tBTM_BLE_PF_CFG_CBACK cb);
+extern void BTM_LE_PF_manu_data(tBTM_BLE_SCAN_COND_OP action,
+                                tBTM_BLE_PF_FILT_INDEX filt_index,
+                                uint16_t company_id, uint16_t company_id_mask,
+                                std::vector<uint8_t> data,
+                                std::vector<uint8_t> data_mask,
+                                tBTM_BLE_PF_CFG_CBACK cb);
+extern void BTM_LE_PF_srvc_data_pattern(tBTM_BLE_SCAN_COND_OP action,
+                                        tBTM_BLE_PF_FILT_INDEX filt_index,
+                                        std::vector<uint8_t> data,
+                                        std::vector<uint8_t> data_mask,
+                                        tBTM_BLE_PF_CFG_CBACK cb);
 extern void BTM_LE_PF_clear(tBTM_BLE_PF_FILT_INDEX filt_index,
                             tBTM_BLE_PF_CFG_CBACK cb);
 
