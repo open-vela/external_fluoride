@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -125,6 +125,18 @@ static void btu_ble_rc_param_req_evt(uint8_t* p);
 #if (BLE_PRIVACY_SPT == TRUE)
 static void btu_ble_proc_enhanced_conn_cmpl(uint8_t* p, uint16_t evt_len);
 #endif
+
+static void do_in_hci_thread(const tracked_objects::Location& from_here,
+                             const base::Closure& task) {
+  base::MessageLoop* hci_message_loop = get_message_loop();
+  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
+    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
+              __func__, from_here.ToString().c_str());
+    return;
+  }
+
+  hci_message_loop->task_runner()->PostTask(from_here, task);
+}
 
 /*******************************************************************************
  *
@@ -421,9 +433,9 @@ static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
 
 static void btu_hcif_command_complete_evt_with_cb(BT_HDR* response,
                                                   void* context) {
-  do_in_main_thread(FROM_HERE,
-                    base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
-                               response, context));
+  do_in_hci_thread(FROM_HERE,
+                   base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
+                              response, context));
 }
 
 static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
@@ -454,7 +466,7 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
     return;
   }
 
-  do_in_main_thread(
+  do_in_hci_thread(
       FROM_HERE, base::Bind(btu_hcif_command_status_evt_with_cb_on_task, status,
                             command, context));
 }
@@ -576,13 +588,6 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
 
   handle = HCID_GET_HANDLE(handle);
 
-  if (status != HCI_SUCCESS) {
-    HCI_TRACE_DEBUG(
-        "%s: Connection failed: status=%d, handle=%d, link_type=%d, "
-        "enc_mode=%d",
-        __func__, status, handle, link_type, enc_mode);
-  }
-
   if (link_type == HCI_LINK_TYPE_ACL) {
     btm_sec_connected(bda, handle, status, enc_mode);
 
@@ -646,13 +651,6 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
   STREAM_TO_UINT8(reason, p);
 
   handle = HCID_GET_HANDLE(handle);
-
-  if ((reason != HCI_ERR_CONN_CAUSE_LOCAL_HOST) &&
-      (reason != HCI_ERR_PEER_USER)) {
-    /* Uncommon disconnection reasons */
-    HCI_TRACE_DEBUG("%s: Got Disconn Complete Event: reason=%d, handle=%d",
-                    __func__, reason, handle);
-  }
 
 #if (BTM_SCO_INCLUDED == TRUE)
   /* If L2CAP doesn't know about it, send it to SCO */
@@ -956,13 +954,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     case HCI_BLE_CREATE_LL_CONN:
-    case HCI_LE_EXTENDED_CREATE_CONNECTION:
-      // No command complete event for those commands according to spec
-      LOG(ERROR) << "No command complete expected, but received!";
-      break;
-
-    case HCI_BLE_CREATE_CONN_CANCEL:
-      btm_ble_create_conn_cancel_complete(p);
+      btm_ble_create_ll_conn_complete(*p);
       break;
 
     case HCI_BLE_TRANSMITTER_TEST:
@@ -995,7 +987,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
 #endif
     default:
       if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
-        btm_vsc_complete(p, opcode, evt_len, (tBTM_VSC_CMPL_CB*)p_cplt_cback);
+        btm_vsc_complete(p, opcode, evt_len, (tBTM_CMPL_CB*)p_cplt_cback);
       break;
   }
 }
@@ -1027,8 +1019,8 @@ static void btu_hcif_command_complete_evt_on_task(BT_HDR* event,
 }
 
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
-  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
-                                          response, context));
+  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
+                                         response, context));
 }
 
 /*******************************************************************************
@@ -1062,7 +1054,7 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
         }
       }
 #endif
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case Falls Through */
 
     case HCI_HOLD_MODE:
     case HCI_SNIFF_MODE:
@@ -1137,7 +1129,6 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
             break;
 
           case HCI_BLE_CREATE_LL_CONN:
-          case HCI_LE_EXTENDED_CREATE_CONNECTION:
             btm_ble_create_ll_conn_complete(status);
             break;
 
@@ -1169,14 +1160,14 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
           default:
             if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
               btm_vsc_complete(&status, opcode, 1,
-                               (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+                               (tBTM_CMPL_CB*)p_vsc_status_cback);
             break;
         }
 
       } else {
         if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
           btm_vsc_complete(&status, opcode, 1,
-                           (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+                           (tBTM_CMPL_CB*)p_vsc_status_cback);
       }
   }
 }
@@ -1202,8 +1193,8 @@ static void btu_hcif_command_status_evt_on_task(uint8_t status, BT_HDR* event,
 
 static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
                                         void* context) {
-  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
-                                          status, command, context));
+  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
+                                         status, command, context));
 }
 
 /*******************************************************************************
@@ -1369,11 +1360,11 @@ static void btu_hcif_link_key_request_evt(uint8_t* p) {
  ******************************************************************************/
 static void btu_hcif_link_key_notification_evt(uint8_t* p) {
   RawAddress bda;
-  Octet16 key;
+  LINK_KEY key;
   uint8_t key_type;
 
   STREAM_TO_BDADDR(bda, p);
-  STREAM_TO_ARRAY16(key.data(), p);
+  STREAM_TO_ARRAY16(key, p);
   STREAM_TO_UINT8(key_type, p);
 
   btm_sec_link_key_notification(bda, key, key_type);
