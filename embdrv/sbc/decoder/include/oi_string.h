@@ -1,8 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2014 The Android Open Source Project
- *  Copyright 2002 - 2004 Open Interface North America, Inc. All rights
- *                        reserved.
+ *  Copyright (C) 2014 The Android Open Source Project
+ *  Copyright 2002 - 2004 Open Interface North America, Inc. All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,9 +24,9 @@
  *
  */
 
-/*******************************************************************************
+/**********************************************************************************
   $Revision: #1 $
- ******************************************************************************/
+***********************************************************************************/
 
 #include "oi_cpu_dep.h"
 #include "oi_stddefs.h"
@@ -43,6 +42,7 @@
 extern "C" {
 #endif
 
+
 /*
  * If we are using Native malloc(), we must also use
  * native Ansi string.h functions for memory manipulation.
@@ -55,15 +55,15 @@ extern "C" {
 
 #ifdef USE_NATIVE_MEMCPY
 
-#define OI_MemCopy(to, from, size) memcpy((to), (from), (size))
-#define OI_MemSet(block, val, size) memset((block), (val), (size))
-#define OI_MemZero(block, size) memset((block), 0, (size))
-#define OI_MemCmp(s1, s2, n) memcmp((s1), (s2), (n))
-#define OI_Strcpy(dest, src) strcpy((dest), (src))
-#define OI_Strcat(dest, src) strcat((dest), (src))
-#define OI_StrLen(str) strlen((str))
-#define OI_Strcmp(s1, s2) strcmp((s1), (s2))
-#define OI_Strncmp(s1, s2, n) strncmp((s1), (s2), (n))
+#define OI_MemCopy(to, from, size)    memcpy((to), (from), (size))
+#define OI_MemSet(block, val, size)   memset((block), (val), (size))
+#define OI_MemZero(block, size)       memset((block), 0, (size))
+#define OI_MemCmp(s1, s2, n)          memcmp((s1), (s2), (n))
+#define OI_Strcpy(dest, src)          strcpy((dest),(src))
+#define OI_Strcat(dest, src)          strcat((dest),(src))
+#define OI_StrLen(str)                strlen((str))
+#define OI_Strcmp(s1, s2)             strcmp((s1), (s2))
+#define OI_Strncmp(s1, s2, n)         strncmp((s1), (s2), (n))
 
 #else
 
@@ -74,21 +74,24 @@ extern "C" {
  * The underlying implementation is the ANSI memmove() or equivalant, so
  * overlapping memory copies will work correctly.
  */
-void OI_MemCopy(void* To, void const* From, uint32_t Size);
+void OI_MemCopy(void *To, void const *From, OI_UINT32 Size);
+
 
 /*
  * OI_MemSet
  *
  * Sets all bytes in a block of memory to the same value
  */
-void OI_MemSet(void* Block, uint8_t Val, uint32_t Size);
+void OI_MemSet(void *Block, OI_UINT8 Val, OI_UINT32 Size);
+
 
 /*
  * OI_MemZero
  *
  * Sets all bytes in a block of memory to zero
  */
-void OI_MemZero(void* Block, uint32_t Size);
+void OI_MemZero(void *Block, OI_UINT32 Size);
+
 
 /*
  * OI_MemCmp
@@ -100,7 +103,7 @@ void OI_MemZero(void* Block, uint32_t Size);
  *      < 0, if s1 < s2
  *      > 0, if s2 > s2
  */
-OI_INT OI_MemCmp(void const* s1, void const* s2, uint32_t n);
+OI_INT OI_MemCmp(void const *s1, void const *s2, OI_UINT32 n);
 
 /*
  * OI_Strcpy
@@ -109,7 +112,8 @@ OI_INT OI_MemCmp(void const* s1, void const* s2, uint32_t n);
  * returns pDest.
  */
 
-OI_CHAR* OI_Strcpy(OI_CHAR* pDest, OI_CHAR const* pStr);
+OI_CHAR* OI_Strcpy(OI_CHAR *pDest,
+                   OI_CHAR const *pStr);
 
 /*
  * OI_Strcat
@@ -118,7 +122,8 @@ OI_CHAR* OI_Strcpy(OI_CHAR* pDest, OI_CHAR const* pStr);
  * returns pDest.
  */
 
-OI_CHAR* OI_Strcat(OI_CHAR* pDest, OI_CHAR const* pStr);
+OI_CHAR* OI_Strcat(OI_CHAR *pDest,
+                   OI_CHAR const *pStr) ;
 
 /*
  * OI_StrLen
@@ -126,7 +131,7 @@ OI_CHAR* OI_Strcat(OI_CHAR* pDest, OI_CHAR const* pStr);
  * Calculates the number of OI_CHARs in pStr (not including
  * the Null terminator) and returns the value.
  */
-OI_UINT OI_StrLen(OI_CHAR const* pStr);
+OI_UINT OI_StrLen(OI_CHAR const *pStr) ;
 
 /*
  * OI_Strcmp
@@ -138,7 +143,8 @@ OI_UINT OI_StrLen(OI_CHAR const* pStr);
  *      < 0, if s1 < s2
  *      > 0, if s2 > s2
  */
-OI_INT OI_Strcmp(OI_CHAR const* s1, OI_CHAR const* s2);
+OI_INT OI_Strcmp(OI_CHAR const *s1,
+                 OI_CHAR const *s2);
 
 /*
  * OI_Strncmp
@@ -150,7 +156,10 @@ OI_INT OI_Strcmp(OI_CHAR const* s1, OI_CHAR const* s2);
  *      < 0, if s1 < s2
  *      > 0, if s2 > s2
  */
-OI_INT OI_Strncmp(OI_CHAR const* s1, OI_CHAR const* s2, uint32_t len);
+OI_INT OI_Strncmp(OI_CHAR const *s1,
+                  OI_CHAR const *s2,
+                  OI_UINT32      len);
+
 
 #endif /* USE_NATIVE_MEMCPY */
 
@@ -166,7 +175,8 @@ OI_INT OI_Strncmp(OI_CHAR const* s1, OI_CHAR const* s2, uint32_t len);
  *      < 0, if s1 < s2
  *      > 0, if s2 > s2
  */
-OI_INT OI_StrcmpInsensitive(OI_CHAR const* s1, OI_CHAR const* s2);
+OI_INT OI_StrcmpInsensitive(OI_CHAR const *s1,
+                            OI_CHAR const *s2);
 
 /*
  * OI_StrncmpInsensitive
@@ -181,7 +191,11 @@ OI_INT OI_StrcmpInsensitive(OI_CHAR const* s1, OI_CHAR const* s2);
  *      < 0, if s1 < s2
  *      > 0, if s2 > s2
  */
-OI_INT OI_StrncmpInsensitive(OI_CHAR const* s1, OI_CHAR const* s2, OI_UINT len);
+OI_INT OI_StrncmpInsensitive(OI_CHAR const *s1,
+                             OI_CHAR const *s2,
+                             OI_UINT        len);
+
+
 
 #ifdef __cplusplus
 }
@@ -191,3 +205,4 @@ OI_INT OI_StrncmpInsensitive(OI_CHAR const* s1, OI_CHAR const* s2, OI_UINT len);
 
 /*****************************************************************************/
 #endif /* OI_STRING_H */
+
