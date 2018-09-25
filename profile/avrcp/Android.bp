@@ -22,7 +22,6 @@ cc_library_static {
 
 cc_test {
     name: "net_test_avrcp",
-    test_suites: ["general-tests"],
     defaults: ["fluoride_defaults"],
     host_supported: true,
     include_dirs: [
@@ -38,11 +37,11 @@ cc_test {
     static_libs: [
         "libgmock",
         "lib-bt-packets",
+        "avrcp-target-service",
+        "libbtdevice",
         "libosi",
         "liblog",
         "libcutils",
-        "libbtdevice",
-        "avrcp-target-service",
     ],
     sanitize: {
         cfi: false,
