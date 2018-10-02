@@ -126,6 +126,18 @@ static void btu_ble_rc_param_req_evt(uint8_t* p);
 static void btu_ble_proc_enhanced_conn_cmpl(uint8_t* p, uint16_t evt_len);
 #endif
 
+static void do_in_hci_thread(const tracked_objects::Location& from_here,
+                             const base::Closure& task) {
+  base::MessageLoop* hci_message_loop = get_message_loop();
+  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
+    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
+              __func__, from_here.ToString().c_str());
+    return;
+  }
+
+  hci_message_loop->task_runner()->PostTask(from_here, task);
+}
+
 /*******************************************************************************
  *
  * Function         btu_hcif_process_event
@@ -421,9 +433,9 @@ static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
 
 static void btu_hcif_command_complete_evt_with_cb(BT_HDR* response,
                                                   void* context) {
-  do_in_main_thread(FROM_HERE,
-                    base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
-                               response, context));
+  do_in_hci_thread(FROM_HERE,
+                   base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
+                              response, context));
 }
 
 static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
@@ -454,7 +466,7 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
     return;
   }
 
-  do_in_main_thread(
+  do_in_hci_thread(
       FROM_HERE, base::Bind(btu_hcif_command_status_evt_with_cb_on_task, status,
                             command, context));
 }
@@ -1027,8 +1039,8 @@ static void btu_hcif_command_complete_evt_on_task(BT_HDR* event,
 }
 
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
-  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
-                                          response, context));
+  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
+                                         response, context));
 }
 
 /*******************************************************************************
@@ -1062,7 +1074,7 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
         }
       }
 #endif
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case Falls Through */
 
     case HCI_HOLD_MODE:
     case HCI_SNIFF_MODE:
@@ -1202,8 +1214,8 @@ static void btu_hcif_command_status_evt_on_task(uint8_t status, BT_HDR* event,
 
 static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
                                         void* context) {
-  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
-                                          status, command, context));
+  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
+                                         status, command, context));
 }
 
 /*******************************************************************************
@@ -1369,11 +1381,11 @@ static void btu_hcif_link_key_request_evt(uint8_t* p) {
  ******************************************************************************/
 static void btu_hcif_link_key_notification_evt(uint8_t* p) {
   RawAddress bda;
-  Octet16 key;
+  LINK_KEY key;
   uint8_t key_type;
 
   STREAM_TO_BDADDR(bda, p);
-  STREAM_TO_ARRAY16(key.data(), p);
+  STREAM_TO_ARRAY16(key, p);
   STREAM_TO_UINT8(key_type, p);
 
   btm_sec_link_key_notification(bda, key, key_type);
