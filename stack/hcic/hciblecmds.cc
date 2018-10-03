@@ -405,7 +405,8 @@ void btsnd_hcic_ble_rand(base::Callback<void(BT_OCTET8)> cb) {
 
 void btsnd_hcic_ble_start_enc(uint16_t handle,
                               uint8_t rand[HCIC_BLE_RAND_DI_SIZE],
-                              uint16_t ediv, const Octet16& ltk) {
+                              uint16_t ediv,
+                              uint8_t ltk[HCIC_BLE_ENCRYT_KEY_SIZE]) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -418,12 +419,13 @@ void btsnd_hcic_ble_start_enc(uint16_t handle,
   UINT16_TO_STREAM(pp, handle);
   ARRAY_TO_STREAM(pp, rand, HCIC_BLE_RAND_DI_SIZE);
   UINT16_TO_STREAM(pp, ediv);
-  ARRAY_TO_STREAM(pp, ltk.data(), HCIC_BLE_ENCRYT_KEY_SIZE);
+  ARRAY_TO_STREAM(pp, ltk, HCIC_BLE_ENCRYT_KEY_SIZE);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-void btsnd_hcic_ble_ltk_req_reply(uint16_t handle, const Octet16& ltk) {
+void btsnd_hcic_ble_ltk_req_reply(uint16_t handle,
+                                  uint8_t ltk[HCIC_BLE_ENCRYT_KEY_SIZE]) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -434,7 +436,7 @@ void btsnd_hcic_ble_ltk_req_reply(uint16_t handle, const Octet16& ltk) {
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_LTK_REQ_REPLY);
 
   UINT16_TO_STREAM(pp, handle);
-  ARRAY_TO_STREAM(pp, ltk.data(), HCIC_BLE_ENCRYT_KEY_SIZE);
+  ARRAY_TO_STREAM(pp, ltk, HCIC_BLE_ENCRYT_KEY_SIZE);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
@@ -558,10 +560,9 @@ void btsnd_hcic_ble_rc_param_req_neg_reply(uint16_t handle, uint8_t reason) {
 }
 #endif
 
-void btsnd_hcic_ble_add_device_resolving_list(uint8_t addr_type_peer,
-                                              const RawAddress& bda_peer,
-                                              const Octet16& irk_peer,
-                                              const Octet16& irk_local) {
+void btsnd_hcic_ble_add_device_resolving_list(
+    uint8_t addr_type_peer, const RawAddress& bda_peer,
+    uint8_t irk_peer[HCIC_BLE_IRK_SIZE], uint8_t irk_local[HCIC_BLE_IRK_SIZE]) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -572,8 +573,8 @@ void btsnd_hcic_ble_add_device_resolving_list(uint8_t addr_type_peer,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_BLE_ADD_DEV_RESOLVING_LIST);
   UINT8_TO_STREAM(pp, addr_type_peer);
   BDADDR_TO_STREAM(pp, bda_peer);
-  ARRAY_TO_STREAM(pp, irk_peer.data(), HCIC_BLE_ENCRYT_KEY_SIZE);
-  ARRAY_TO_STREAM(pp, irk_local.data(), HCIC_BLE_ENCRYT_KEY_SIZE);
+  ARRAY_TO_STREAM(pp, irk_peer, HCIC_BLE_ENCRYT_KEY_SIZE);
+  ARRAY_TO_STREAM(pp, irk_local, HCIC_BLE_ENCRYT_KEY_SIZE);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
