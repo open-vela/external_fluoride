@@ -67,9 +67,6 @@ constexpr uint8_t CONTROL_POINT_OP_STOP = 0x02;
 constexpr int8_t VOLUME_UNKNOWN = 127;
 constexpr int8_t VOLUME_MIN = -127;
 
-// audio type
-constexpr uint8_t AUDIOTYPE_UNKNOWN = 0x00;
-
 namespace {
 
 // clang-format off
@@ -189,7 +186,7 @@ struct HearingDevice {
         gap_handle(0),
         psm(0) {}
 
-  HearingDevice() : HearingDevice(RawAddress::kEmpty, false) {}
+  HearingDevice() { HearingDevice(RawAddress::kEmpty, false); }
 
   /* return true if this device represents left Hearing Aid. Returned value is
    * valid only after capabilities are discovered */
@@ -328,6 +325,18 @@ class HearingAidImpl : public HearingAid {
     BTA_GATTC_Open(gatt_if, address, true, GATT_TRANSPORT_LE, false);
   }
 
+  void AddToWhiteList(const RawAddress& address) override {
+    VLOG(2) << __func__ << " address: " << address;
+    hearingDevices.Add(HearingDevice(address, true));
+    BTA_GATTC_Open(gatt_if, address, false, GATT_TRANSPORT_LE, false);
+    BTA_DmBleStartAutoConn();
+  }
+
+  void RemoveFromWhiteList(const RawAddress& address) override {
+    VLOG(2) << __func__ << " address: " << address;
+    BTA_GATTC_CancelOpen(gatt_if, address, false);
+  }
+
   void AddFromStorage(const RawAddress& address, uint16_t psm,
                       uint8_t capabilities, uint16_t codecs,
                       uint16_t audio_control_point_handle,
@@ -399,7 +408,7 @@ class HearingAidImpl : public HearingAid {
 
     // Set data length
     // TODO(jpawlowski: for 16khz only 87 is required, optimize
-    BTM_SetBleDataLength(address, 167);
+    BTM_SetBleDataLength(address, 168);
 
     tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(address);
     if (p_dev_rec) {
@@ -503,10 +512,11 @@ class HearingAidImpl : public HearingAid {
       return;
     }
 
-    const std::vector<gatt::Service>* services = BTA_GATTC_GetServices(conn_id);
+    const std::vector<tBTA_GATTC_SERVICE>* services =
+        BTA_GATTC_GetServices(conn_id);
 
-    const gatt::Service* service = nullptr;
-    for (const gatt::Service& tmp : *services) {
+    const tBTA_GATTC_SERVICE* service = nullptr;
+    for (const tBTA_GATTC_SERVICE& tmp : *services) {
       if (tmp.uuid != HEARING_AID_UUID) continue;
       LOG(INFO) << "Found Hearing Aid service, handle=" << loghex(tmp.handle);
       service = &tmp;
@@ -521,7 +531,7 @@ class HearingAidImpl : public HearingAid {
     }
 
     uint16_t psm_handle = 0x0000;
-    for (const gatt::Characteristic& charac : service->characteristics) {
+    for (const tBTA_GATTC_CHARACTERISTIC& charac : service->characteristics) {
       if (charac.uuid == READ_ONLY_PROPERTIES_UUID) {
         DVLOG(2) << "Reading read only properties "
                  << loghex(charac.value_handle);
@@ -829,7 +839,7 @@ class HearingAidImpl : public HearingAid {
 
   void SendStart(const HearingDevice& device) {
     std::vector<uint8_t> start({CONTROL_POINT_OP_START, codec_in_use,
-                                AUDIOTYPE_UNKNOWN, (uint8_t)current_volume});
+                                0x02 /* media */, (uint8_t)current_volume});
 
     if (current_volume == VOLUME_UNKNOWN) start[3] = (uint8_t)VOLUME_MIN;
 
@@ -1121,8 +1131,7 @@ class HearingAidImpl : public HearingAid {
                           tBTA_GATT_REASON reason) {
     HearingDevice* hearingDevice = hearingDevices.FindByConnId(conn_id);
     if (!hearingDevice) {
-      VLOG(2) << "Skipping unknown device disconnect, conn_id="
-              << loghex(conn_id);
+      VLOG(2) << "Skipping unknown device disconnect, conn_id=" << conn_id;
       return;
     }
 
@@ -1319,8 +1328,7 @@ void HearingAid::CleanUp() {
 };
 
 void HearingAid::DebugDump(int fd) {
-  dprintf(fd, "Hearing Aid Manager:\n");
+  dprintf(fd, "\nHearing Aid Manager:\n");
   if (instance) instance->Dump(fd);
   HearingAidAudioSource::DebugDump(fd);
-  dprintf(fd, "\n");
 }
