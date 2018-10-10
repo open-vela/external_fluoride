@@ -24,8 +24,6 @@
 #include <base/files/file_util.h>
 #include <include/hardware/bt_av.h>
 
-#include "common/time_util.h"
-
 using base::FilePath;
 extern const char* audio_ha_hw_dump_ctrl_event(tHEARING_AID_CTRL_CMD event);
 
@@ -69,8 +67,7 @@ void send_audio_data(void*) {
   if (bytes_read < bytes_per_tick) {
     stats.media_read_total_underflow_bytes += bytes_per_tick - bytes_read;
     stats.media_read_total_underflow_count++;
-    stats.media_read_last_underflow_us =
-        bluetooth::common::time_get_os_boottime_us();
+    stats.media_read_last_underflow_us = time_get_os_boottime_us();
   }
 
   std::vector<uint8_t> data(p_buf, p_buf + bytes_read);
@@ -132,7 +129,7 @@ void hearing_aid_recv_ctrl_data() {
     return;
   }
 
-  LOG(INFO) << __func__ << " " << audio_ha_hw_dump_ctrl_event(cmd);
+  VLOG(2) << __func__ << " " << audio_ha_hw_dump_ctrl_event(cmd);
   //  a2dp_cmd_pending = cmd;
 
   switch (cmd) {
@@ -248,9 +245,8 @@ void hearing_aid_recv_ctrl_data() {
       hearing_aid_send_ack(HEARING_AID_CTRL_ACK_FAILURE);
       break;
   }
-  LOG(INFO) << __func__
-            << " a2dp-ctrl-cmd : " << audio_ha_hw_dump_ctrl_event(cmd)
-            << " DONE";
+  VLOG(2) << __func__ << " a2dp-ctrl-cmd : " << audio_ha_hw_dump_ctrl_event(cmd)
+          << " DONE";
 }
 
 void hearing_aid_ctrl_cb(tUIPC_CH_ID, tUIPC_EVENT event) {
@@ -300,7 +296,7 @@ void HearingAidAudioSource::CleanUp() {
 }
 
 void HearingAidAudioSource::DebugDump(int fd) {
-  uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
+  uint64_t now_us = time_get_os_boottime_us();
   std::stringstream stream;
   stream << "  Hearing Aid Audio HAL:"
          << "\n    Counts (underflow)                                      : "

@@ -318,6 +318,7 @@ bool gatt_is_srv_chg_ind_pending(tGATT_TCB* p_tcb) {
  *
  ******************************************************************************/
 tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(const RawAddress& bda) {
+  tGATTS_SRV_CHG* p_buf = NULL;
 
   VLOG(1) << __func__ << ": " << bda;
 
@@ -329,11 +330,11 @@ tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(const RawAddress& bda) {
     tGATTS_SRV_CHG* p_buf = (tGATTS_SRV_CHG*)list_node(node);
     if (bda == p_buf->bda) {
       VLOG(1) << "bda is in the srv chg clt list";
-      return p_buf;
+      break;
     }
   }
 
-  return NULL;
+  return p_buf;
 }
 
 /*******************************************************************************
@@ -528,7 +529,7 @@ bool gatt_parse_uuid_from_cmd(Uuid* p_uuid_rec, uint16_t uuid_size,
  *
  ******************************************************************************/
 void gatt_start_rsp_timer(tGATT_CLCB* p_clcb) {
-  uint64_t timeout_ms = GATT_WAIT_FOR_RSP_TIMEOUT_MS;
+  period_ms_t timeout_ms = GATT_WAIT_FOR_RSP_TIMEOUT_MS;
 
   if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY &&
       p_clcb->op_subtype == GATT_DISC_SRVC_ALL) {
