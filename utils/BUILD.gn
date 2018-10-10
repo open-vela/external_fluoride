@@ -23,6 +23,5 @@ static_library("utils") {
     "include",
     "//",
     "//stack/include",
-    "//third_party/libchrome",
   ]
 }
