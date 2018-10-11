@@ -57,11 +57,14 @@ class Settings {
   // Binder IPC must be used.
   inline bool UseSocketIPC() const {
     return !android_ipc_socket_suffix().empty() ||
-        !create_ipc_socket_path().empty();
+           !create_ipc_socket_path().empty();
   }
+
+  bool EnableOnStart() const { return enable_on_start_; }
 
  private:
   bool initialized_;
+  bool enable_on_start_;
   std::string android_ipc_socket_suffix_;
   base::FilePath create_ipc_socket_path_;
 

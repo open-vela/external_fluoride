@@ -14,6 +14,8 @@
 //  limitations under the License.
 //
 
+#pragma once
+
 #include <mutex>
 #include <string>
 
@@ -24,7 +26,7 @@ namespace util {
 // A simple atomic container class for std::string.
 class AtomicString final {
  public:
-  AtomicString(const std::string& str);
+  explicit AtomicString(const std::string& str);
   ~AtomicString() = default;
 
   std::string Get() const;
