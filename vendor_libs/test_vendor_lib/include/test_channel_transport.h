@@ -1,65 +1,77 @@
-/*
- * Copyright 2015 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+//
+// Copyright 2015 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
 #pragma once
 
-#include <functional>
-#include <memory>
 #include <string>
-#include <vector>
+#include <memory>
 
 #include "base/files/scoped_file.h"
+#include "base/message_loop/message_loop.h"
 
 namespace test_vendor_lib {
 
 // Manages communications between test channel and the controller. Mirrors the
 // HciTransport for the test channel.
-class TestChannelTransport {
+class TestChannelTransport : public base::MessageLoopForIO::Watcher {
  public:
-  TestChannelTransport() {}
+  TestChannelTransport(bool enabled, int port);
 
-  ~TestChannelTransport() {}
-
-  // Opens a port and returns the file descriptor for the socket.
-  // Returns -1 on an error.
-  int SetUp(int port);
-
-  // Closes the port (if succesfully opened in SetUp).
-  void CleanUp();
+  ~TestChannelTransport() = default;
 
   // Waits for a connection request from the test channel program and
-  // returns the file descriptor to watch for run-time parameters.
-  // Returns -1 on an error.
-  int Accept(int listen_fd);
+  // allocates the file descriptor to watch for run-time parameters at. This
+  // file descriptor gets stored in |fd_|.
+  bool SetUp();
 
-  // Sets the callback that fires when data is read in WatchFd().
+  int GetFd();
+
+  // Because it imposes a different flow of work, the test channel must be
+  // actively enabled to be used. |enabled_| is set by the vendor manager.
+  bool IsEnabled();
+
+  // Turns the test channel off for use in circumstances where an error occurs
+  // and leaving the channel on would crash Bluetooth (e.g. if the test channel
+  // is unable to bind to its socket, Bluetooth should still start without the
+  // channel enabled).
+  void Disable();
+
+  // Sets the callback that fires when data is read in
+  // |OnFileCanReadWithoutBlocking|.
   void RegisterCommandHandler(
-      const std::function<void(const std::string&,
-                               const std::vector<std::string>&)>& callback);
-
-  void OnCommandReady(int fd, std::function<void(void)> unwatch);
+      std::function<void(const std::string&, const std::vector<std::string>&)>
+          callback);
 
  private:
+  // base::MessageLoopForIO::Watcher overrides:
+  void OnFileCanReadWithoutBlocking(int fd) override;
+
+  void OnFileCanWriteWithoutBlocking(int fd) override;
+
   std::function<void(const std::string&, const std::vector<std::string>&)>
       command_handler_;
 
-  int listen_fd_ = -1;
+  // File descriptor to watch for test hook data.
+  std::unique_ptr<base::ScopedFD> fd_;
 
-  TestChannelTransport(const TestChannelTransport& cmdPckt) = delete;
-  TestChannelTransport& operator=(const TestChannelTransport& cmdPckt) = delete;
+  // TODO(dennischeng): Get port and enabled flag from a config file.
+  int port_;
+  bool enabled_;
+
+  DISALLOW_COPY_AND_ASSIGN(TestChannelTransport);
 };
 
 }  // namespace test_vendor_lib
