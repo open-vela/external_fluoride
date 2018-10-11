@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,11 +32,12 @@
 #include <base/threading/thread.h>
 #include "bt_common.h"
 #include "bt_target.h"
-#include "common/message_loop_thread.h"
 #include "osi/include/alarm.h"
 
 /* Global BTU data */
 extern uint8_t btu_trace_level;
+
+extern const BD_ADDR BT_BD_ANY;
 
 /* Functions provided by btu_hcif.cc
  ***********************************
@@ -57,9 +58,7 @@ void btu_free_core(void);
 /* Functions provided by btu_task.cc
  ***********************************
 */
-base::MessageLoop* get_main_message_loop();
-bt_status_t do_in_main_thread(const tracked_objects::Location& from_here,
-                              base::OnceClosure task);
+base::MessageLoop* get_message_loop();
 
 void BTU_StartUp(void);
 void BTU_ShutDown(void);
