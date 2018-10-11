@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -61,17 +61,15 @@ class AdvertiseSettings {
     TX_POWER_LEVEL_HIGH = 0x03,
   };
 
-  AdvertiseSettings(Mode mode,
-                    base::TimeDelta timeout,
-                    TxPowerLevel tx_power_level,
-                    bool connectable);
+  AdvertiseSettings(Mode mode, base::TimeDelta timeout,
+                    TxPowerLevel tx_power_level, bool connectable);
 
   // The default constructor sets all fields to defaults:
   //   mode: MODE_LOW_POWER
   //   TX power level: TX_POWER_LEVEL_MEDIUM
   //   connectable: true
   AdvertiseSettings();
-  ~AdvertiseSettings() = default;
+  virtual ~AdvertiseSettings() = default;
 
   // Returns the advertise mode.
   Mode mode() const { return mode_; }
@@ -88,7 +86,7 @@ class AdvertiseSettings {
   // Comparison operator.
   bool operator==(const AdvertiseSettings& rhs) const;
 
- private:
+ protected:
   Mode mode_;
   base::TimeDelta timeout_;
   TxPowerLevel tx_power_level_;
