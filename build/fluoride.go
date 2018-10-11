@@ -1,4 +1,4 @@
-// Copyright 2016 The Android Open Source Project
+// Copyright (C) 2016 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,50 +14,52 @@
 package fluoride
 
 import (
-	"strings"
+  "strings"
 
-	"android/soong/android"
-	"android/soong/cc"
+  "android/soong/android"
+  "android/soong/cc"
+
+  "github.com/google/blueprint"
 )
 
 func init() {
-	android.RegisterModuleType("fluoride_defaults", fluorideDefaultsFactory)
+  android.RegisterModuleType("fluoride_defaults", fluorideDefaultsFactory)
 }
 
-func fluorideDefaultsFactory() android.Module {
-	module := cc.DefaultsFactory()
-	android.AddLoadHook(module, fluorideDefaults)
+func fluorideDefaultsFactory() (blueprint.Module, []interface{}) {
+  module, props := cc.DefaultsFactory()
+  android.AddLoadHook(module, fluorideDefaults)
 
-	return module
+  return module, props
 }
 
 func fluorideDefaults(ctx android.LoadHookContext) {
-	type props struct {
-		Include_dirs []string
-		Cflags       []string
-	}
+  type props struct {
+    Include_dirs []string
+    Cflags []string
+  }
 
-	p := &props{}
-	p.Cflags, p.Include_dirs = globalDefaults(ctx)
+  p := &props{}
+  p.Cflags, p.Include_dirs = globalDefaults(ctx)
 
-	ctx.AppendProperties(p)
+  ctx.AppendProperties(p)
 }
 
 func globalDefaults(ctx android.BaseContext) ([]string, []string) {
-	var cflags []string
-	var includeDirs []string
+  var cflags []string
+  var includeDirs []string
 
-	board_bt_buildcfg_include_dir := ctx.DeviceConfig().BtConfigIncludeDir()
-	if len(board_bt_buildcfg_include_dir) > 0 {
-		cflags = append(cflags, "-DHAS_BDROID_BUILDCFG")
-		board_bt_buildcfg_include_dir_list :=
-			strings.Fields(board_bt_buildcfg_include_dir)
-		for _, buildcfg_dir := range board_bt_buildcfg_include_dir_list {
-			includeDirs = append(includeDirs, buildcfg_dir)
-		}
-	} else {
-		cflags = append(cflags, "-DHAS_NO_BDROID_BUILDCFG")
-	}
+  board_bt_buildcfg_include_dir := ctx.DeviceConfig().BtConfigIncludeDir()
+  if (len(board_bt_buildcfg_include_dir) > 0) {
+    cflags = append(cflags, "-DHAS_BDROID_BUILDCFG")
+    board_bt_buildcfg_include_dir_list :=
+        strings.Fields(board_bt_buildcfg_include_dir)
+    for _, buildcfg_dir := range board_bt_buildcfg_include_dir_list {
+      includeDirs = append(includeDirs, buildcfg_dir)
+    }
+  } else {
+    cflags = append(cflags, "-DHAS_NO_BDROID_BUILDCFG")
+  }
 
-	return cflags, includeDirs
+  return cflags, includeDirs
 }
