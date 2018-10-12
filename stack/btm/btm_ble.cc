@@ -1294,16 +1294,17 @@ void btm_sec_save_le_key(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
 
       case BTM_LE_KEY_PID:
         p_rec->ble.keys.irk = p_keys->pid_key.irk;
-        p_rec->ble.static_addr = p_keys->pid_key.static_addr;
-        p_rec->ble.static_addr_type = p_keys->pid_key.addr_type;
+        p_rec->ble.identity_addr = p_keys->pid_key.identity_addr;
+        p_rec->ble.identity_addr_type = p_keys->pid_key.identity_addr_type;
         p_rec->ble.key_type |= BTM_LE_KEY_PID;
         BTM_TRACE_DEBUG(
             "%s: BTM_LE_KEY_PID key_type=0x%x save peer IRK, change bd_addr=%s "
-            "to static_addr=%s",
+            "to id_addr=%s id_addr_type=0x%x",
             __func__, p_rec->ble.key_type, p_rec->bd_addr.ToString().c_str(),
-            p_keys->pid_key.static_addr.ToString().c_str());
-        /* update device record address as static address */
-        p_rec->bd_addr = p_keys->pid_key.static_addr;
+            p_keys->pid_key.identity_addr.ToString().c_str(),
+            p_keys->pid_key.identity_addr_type);
+        /* update device record address as identity address */
+        p_rec->bd_addr = p_keys->pid_key.identity_addr;
         /* combine DUMO device security record if needed */
         btm_consolidate_dev(p_rec);
         break;
@@ -1922,11 +1923,15 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
 
 #if (BLE_PRIVACY_SPT == TRUE)
     peer_addr_type = bda_type;
-    match = btm_identity_addr_to_random_pseudo(&bda, &bda_type, true);
+
+    if (peer_addr_type & BLE_ADDR_TYPE_ID_BIT) {
+      match = btm_identity_addr_to_random_pseudo(&bda, &bda_type, true);
+    }
 
     /* possiblly receive connection complete with resolvable random while
        the device has been paired */
-    if (!match && BTM_BLE_IS_RESOLVE_BDA(bda)) {
+    if (!match && peer_addr_type == BLE_ADDR_RANDOM &&
+        BTM_BLE_IS_RESOLVE_BDA(bda)) {
       tBTM_SEC_DEV_REC* match_rec = btm_ble_resolve_random_addr(bda);
       if (match_rec) {
         LOG_INFO(LOG_TAG, "%s matched and resolved random address", __func__);
