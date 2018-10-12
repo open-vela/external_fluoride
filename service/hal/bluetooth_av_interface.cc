@@ -318,7 +318,7 @@ bool BluetoothAvInterface::Initialize() {
   std::unique_lock<shared_mutex_impl> lock(g_instance_lock);
   CHECK(!g_interface);
 
-  auto impl = std::make_unique<BluetoothAvInterfaceImpl>();
+  auto impl = base::MakeUnique<BluetoothAvInterfaceImpl>();
   if (!impl->Initialize()) {
     LOG(ERROR) << "Failed to initialize BluetoothAvInterface";
     return false;
