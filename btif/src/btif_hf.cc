@@ -36,6 +36,7 @@
 #include <hardware/bluetooth_headset_callbacks.h>
 #include <hardware/bluetooth_headset_interface.h>
 #include <hardware/bt_hf.h>
+#include <log/log.h>
 
 #include "bta/include/utl.h"
 #include "bta_ag_api.h"
@@ -43,7 +44,7 @@
 #include "btif_hf.h"
 #include "btif_profile_queue.h"
 #include "btif_util.h"
-#include "osi/include/metrics.h"
+#include "common/metrics.h"
 
 namespace bluetooth {
 namespace headset {
@@ -117,16 +118,6 @@ struct btif_hf_cb_t {
 };
 
 static btif_hf_cb_t btif_hf_cb[BTA_AG_MAX_NUM_CLIENTS];
-
-/* By default, even though codec negotiation is enabled, we will not use WBS as
- * the default
- * codec unless this variable is set to true.
- */
-#ifndef BTIF_HF_WBS_PREFERRED
-#define BTIF_HF_WBS_PREFERRED false
-#endif
-
-static bool btif_conf_hf_force_wbs = BTIF_HF_WBS_PREFERRED;
 
 static const char* dump_hf_call_state(bthf_call_state_t call_state) {
   switch (call_state) {
@@ -341,7 +332,7 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
         btif_hf_cb[idx].state = BTHF_CONNECTION_STATE_CONNECTED;
         btif_hf_cb[idx].peer_feat = 0;
         clear_phone_state_multihf(&btif_hf_cb[idx]);
-        system_bt_osi::BluetoothMetricsLogger::GetInstance()
+        bluetooth::common::BluetoothMetricsLogger::GetInstance()
             ->LogHeadsetProfileRfcConnection(p_data->open.service_id);
         bt_hf_callbacks->ConnectionStateCallback(
             btif_hf_cb[idx].state, &btif_hf_cb[idx].connected_bda);
@@ -511,7 +502,7 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
       we should set the BTA AG Codec to mSBC. This would trigger a +BCS to mSBC
       at the time
       of SCO connection establishment */
-      if ((btif_conf_hf_force_wbs) && (p_data->val.num & BTA_AG_CODEC_MSBC)) {
+      if (p_data->val.num & BTA_AG_CODEC_MSBC) {
         BTIF_TRACE_EVENT("%s: btif_hf override-Preferred Codec to MSBC",
                          __func__);
         BTA_AgSetCodec(btif_hf_cb[idx].handle, BTA_AG_CODEC_MSBC);
