@@ -170,7 +170,7 @@ typedef struct {
   uint8_t le_supported_states[BTM_LE_SUPPORT_STATE_SIZE];
 
   tBTM_BLE_LOCAL_ID_KEYS id_keys;      /* local BLE ID keys */
-  Octet16 ble_encryption_key_value;    /* BLE encryption key */
+  BT_OCTET16 ble_encryption_key_value; /* BLE encryption key */
 
 #if (BTM_BLE_CONFORMANCE_TESTING == TRUE)
   bool no_disc_if_pair_fail;
@@ -210,7 +210,7 @@ typedef struct {
 } tINQ_BDADDR;
 
 typedef struct {
-  uint64_t time_of_resp;
+  uint32_t time_of_resp;
   uint32_t
       inq_count; /* "timestamps" the entry with a particular inquiry count   */
                  /* Used for determining if a response has already been      */
@@ -415,12 +415,12 @@ typedef struct {
 
 /* LE Security information of device in Slave Role */
 typedef struct {
-  Octet16 irk;   /* peer diverified identity root */
-  Octet16 pltk;  /* peer long term key */
-  Octet16 pcsrk; /* peer SRK peer device used to secured sign local data  */
+  BT_OCTET16 irk;   /* peer diverified identity root */
+  BT_OCTET16 pltk;  /* peer long term key */
+  BT_OCTET16 pcsrk; /* peer SRK peer device used to secured sign local data  */
 
-  Octet16 lltk;  /* local long term key */
-  Octet16 lcsrk; /* local SRK peer device used to secured sign local data  */
+  BT_OCTET16 lltk;  /* local long term key */
+  BT_OCTET16 lcsrk; /* local SRK peer device used to secured sign local data  */
 
   BT_OCTET8 rand;        /* random vector for LTK generation */
   uint16_t ediv;         /* LTK diversifier of this slave device */
@@ -440,8 +440,8 @@ typedef struct {
   RawAddress pseudo_addr; /* LE pseudo address of the device if different from
                           device address  */
   tBLE_ADDR_TYPE ble_addr_type; /* LE device type: public or random address */
-  tBLE_ADDR_TYPE identity_addr_type; /* identity address type */
-  RawAddress identity_addr;          /* identity address */
+  tBLE_ADDR_TYPE static_addr_type; /* static address type */
+  RawAddress static_addr;          /* static address */
 
 #define BTM_WHITE_LIST_BIT 0x01
 #define BTM_RESOLVING_LIST_BIT 0x02
@@ -479,7 +479,7 @@ typedef struct {
   uint16_t clock_offset;   /* Latest known clock offset          */
   RawAddress bd_addr;      /* BD_ADDR of the device              */
   DEV_CLASS dev_class;     /* DEV_CLASS of the device            */
-  LinkKey link_key;        /* Device link key                    */
+  LINK_KEY link_key;       /* Device link key                    */
   uint8_t pin_code_length; /* Length of the pin_code used for paring */
 
 #define BTM_SEC_AUTHORIZED BTM_SEC_FLAG_AUTHORIZED       /* 0x01 */
@@ -801,7 +801,8 @@ typedef struct {
 
   tBTM_SEC_DEV_REC* p_collided_dev_rec;
   alarm_t* sec_collision_timer;
-  uint64_t collision_start_time;
+  uint32_t collision_start_time;
+  uint32_t max_collision_delay;
   uint32_t dev_rec_count; /* Counter used for device record timestamp */
   uint8_t security_mode;
   bool pairing_disabled;

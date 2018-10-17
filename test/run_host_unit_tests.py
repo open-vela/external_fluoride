@@ -21,9 +21,9 @@ import argparse
 # Registered host based unit tests
 # Must have 'host_supported: true'
 HOST_TESTS = [
-  'bluetooth_test_common',
   'bluetoothtbd_test',
   'net_test_avrcp',
+  'net_test_btif_state_machine',
   'net_test_btcore',
   'net_test_types',
   'net_test_btpackets',
