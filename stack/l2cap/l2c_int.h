@@ -28,7 +28,6 @@
 
 #include "bt_common.h"
 #include "btm_api.h"
-#include "btm_ble_api.h"
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/alarm.h"
@@ -53,8 +52,6 @@ constexpr uint16_t L2CAP_LE_CREDIT_THRESHOLD = 0x0040;
 
 static_assert(L2CAP_LE_CREDIT_THRESHOLD < L2CAP_LE_CREDIT_DEFAULT,
               "Threshold must be smaller then default credits");
-
-#define L2CAP_NO_IDLE_TIMEOUT 0xFFFF
 
 /*
  * Timeout values (in milliseconds).
@@ -212,7 +209,7 @@ typedef struct {
   alarm_t* mon_retrans_timer; /* Timer Monitor or Retransmission */
 
 #if (L2CAP_ERTM_STATS == TRUE)
-  uint64_t connect_tick_count;  /* Time channel was established */
+  uint32_t connect_tick_count;  /* Time channel was established */
   uint32_t ertm_pkt_counts[2];  /* Packets sent and received */
   uint32_t ertm_byte_counts[2]; /* Bytes   sent and received */
   uint32_t s_frames_sent[4];    /* S-frames sent (RR, REJ, RNR, SREJ) */
@@ -803,11 +800,10 @@ extern void l2cble_credit_based_conn_res(tL2C_CCB* p_ccb, uint16_t result);
 extern void l2cble_send_peer_disc_req(tL2C_CCB* p_ccb);
 extern void l2cble_send_flow_control_credit(tL2C_CCB* p_ccb,
                                             uint16_t credit_value);
-extern tL2CAP_LE_RESULT_CODE l2ble_sec_access_req(const RawAddress& bd_addr,
-                                                  uint16_t psm,
-                                                  bool is_originator,
-                                                  tL2CAP_SEC_CBACK* p_callback,
-                                                  void* p_ref_data);
+extern bool l2ble_sec_access_req(const RawAddress& bd_addr, uint16_t psm,
+                                 bool is_originator,
+                                 tL2CAP_SEC_CBACK* p_callback,
+                                 void* p_ref_data);
 
 #if (BLE_LLT_INCLUDED == TRUE)
 extern void l2cble_process_rc_param_request_evt(uint16_t handle,
