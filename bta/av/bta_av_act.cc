@@ -35,7 +35,6 @@
 #include "bta_av_api.h"
 #include "bta_av_int.h"
 #include "l2c_api.h"
-#include "log/log.h"
 #include "osi/include/list.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
@@ -326,6 +325,7 @@ uint8_t bta_av_rc_create(tBTA_AV_CB* p_cb, uint8_t role, uint8_t shdl,
     p_rcb = bta_av_get_rcb_by_shdl(shdl);
     if (p_rcb != NULL) {
       APPL_TRACE_ERROR("%s: ACP handle exist for shdl:%d", __func__, shdl);
+      p_rcb->lidx = lidx;
       return p_rcb->handle;
     }
   }
@@ -785,16 +785,11 @@ tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE* p_rc_rsp,
       case AVRC_PDU_GET_CAPABILITIES:
         /* process GetCapabilities command without reporting the event to app */
         evt = 0;
-        if (p_vendor->vendor_len != 5) {
-          android_errorWriteLog(0x534e4554, "111893951");
-          p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
-          break;
-        }
         u8 = *(p_vendor->p_vendor_data + 4);
         p = p_vendor->p_vendor_data + 2;
         p_rc_rsp->get_caps.capability_id = u8;
         BE_STREAM_TO_UINT16(u16, p);
-        if (u16 != 1) {
+        if ((u16 != 1) || (p_vendor->vendor_len != 5)) {
           p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
         } else {
           p_rc_rsp->get_caps.status = AVRC_STS_NO_ERROR;
@@ -1939,11 +1934,6 @@ void bta_av_rc_closed(tBTA_AV_DATA* p_data) {
       } else {
         /* AVCT CCB is still there. dealloc */
         bta_av_del_rc(p_rcb);
-
-        /* if the AVRCP is no longer listening, create the listening channel */
-        if (bta_av_cb.rc_acp_handle == BTA_AV_RC_HANDLE_NONE &&
-            bta_av_cb.features & BTA_AV_FEAT_RCTG)
-          bta_av_rc_create(&bta_av_cb, AVCT_ACP, 0, BTA_AV_NUM_LINKS + 1);
       }
     } else if ((p_rcb->handle != BTA_AV_RC_HANDLE_NONE) &&
                (p_rcb->status & BTA_AV_RC_CONN_MASK)) {
@@ -1964,6 +1954,9 @@ void bta_av_rc_closed(tBTA_AV_DATA* p_data) {
   tBTA_AV bta_av_data;
   bta_av_data.rc_close = rc_close;
   (*p_cb->p_cback)(BTA_AV_RC_CLOSE_EVT, &bta_av_data);
+  if (bta_av_cb.rc_acp_handle == BTA_AV_RC_HANDLE_NONE
+                  && bta_av_cb.features & BTA_AV_FEAT_RCTG)
+      bta_av_rc_create(&bta_av_cb, AVCT_ACP, 0, BTA_AV_NUM_LINKS + 1);
 }
 
 /*******************************************************************************
