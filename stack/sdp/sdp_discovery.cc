@@ -280,6 +280,11 @@ static void process_service_search_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   uint16_t total, cur_handles, orig;
   uint8_t cont_len;
 
+  if (p_reply + 8 > p_reply_end) {
+    android_errorWriteLog(0x534e4554, "74249842");
+    sdp_disconnect(p_ccb, SDP_GENERIC_ERROR);
+    return;
+  }
   /* Skip transaction, and param len */
   p_reply += 4;
   BE_STREAM_TO_UINT16(total, p_reply);
@@ -297,6 +302,12 @@ static void process_service_search_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   if (total > sdp_cb.max_recs_per_search) total = sdp_cb.max_recs_per_search;
   if (p_ccb->num_handles > sdp_cb.max_recs_per_search)
     p_ccb->num_handles = sdp_cb.max_recs_per_search;
+
+  if (p_reply + ((p_ccb->num_handles - orig) * 4) + 1 > p_reply_end) {
+    android_errorWriteLog(0x534e4554, "74249842");
+    sdp_disconnect(p_ccb, SDP_GENERIC_ERROR);
+    return;
+  }
 
   for (xx = orig; xx < p_ccb->num_handles; xx++)
     BE_STREAM_TO_UINT32(p_ccb->handles[xx], p_reply);
@@ -357,8 +368,15 @@ static void sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
     p = &p_ccb->rsp_list[0];
 
     if (offset) {
+      cpy_len -= 1;
       type = *p++;
+      uint8_t* old_p = p;
       p = sdpu_get_len_from_type(p, type, &list_len);
+      if ((int)cpy_len < (p - old_p)) {
+        SDP_TRACE_WARNING("%s: no bytes left for data", __func__);
+        return;
+      }
+      cpy_len -= (p - old_p);
     }
     if (list_len < cpy_len) {
       cpy_len = list_len;
@@ -877,7 +895,7 @@ static uint8_t* add_attr(uint8_t* p, tSDP_DISCOVERY_DB* p_db,
           break;
         }
       }
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case falls through */
 
     case TWO_COMP_INT_DESC_TYPE:
       switch (attr_len) {
