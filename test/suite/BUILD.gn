@@ -17,8 +17,8 @@
 executable("net_test_bluetooth") {
   testonly = true
   sources = [
-    "adapter/adapter_unittest.cc",
-    "adapter/bluetooth_test.cc",
+    "adapter/adapter_unittest.cpp",
+    "adapter/bluetooth_test.cpp",
   ]
 
   include_dirs = [
@@ -40,6 +40,5 @@ executable("net_test_bluetooth") {
     "-lpthread",
     "-lrt",
     "-ldl",
-    "-latomic",
   ]
 }
