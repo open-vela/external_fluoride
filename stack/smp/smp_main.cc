@@ -18,7 +18,7 @@
 
 #include "bt_target.h"
 
-#include <log/log.h>
+#include <cutils/log.h>
 #include <string.h>
 #include "smp_int.h"
 

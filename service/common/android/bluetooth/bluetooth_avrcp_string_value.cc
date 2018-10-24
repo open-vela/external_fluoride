@@ -30,7 +30,7 @@ status_t BluetoothAvrcpStringValue::writeToParcel(Parcel* parcel) const {
   status_t status = parcel->writeInt32(id_);
   if (status != OK) return status;
 
-  status = parcel->writeString16(String16(value_.c_str(), value_.size()));
+  status = parcel->writeString16(value_);
   if (status != OK) return status;
 
   return status;
@@ -42,10 +42,8 @@ status_t BluetoothAvrcpStringValue::readFromParcel(const Parcel* parcel) {
   if (status != OK) return status;
   id_ = tmp;
 
-  String16 value;
-  status = parcel->readString16(&value);
+  status = parcel->readString16(&value_);
   if (status != OK) return status;
-  value_ = String8(value).string();
 
   return status;
 }
