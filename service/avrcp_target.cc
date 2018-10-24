@@ -49,6 +49,7 @@
 
 #define TRY_RET_FUNC(expr) TRY_RET(expr, __func__ << " failed")
 
+using android::String8;
 using LockGuard = std::lock_guard<std::mutex>;
 
 namespace bluetooth {
@@ -60,13 +61,13 @@ std::vector<btrc_player_setting_text_t> StringValueToPlayerSettingsText(
   std::vector<btrc_player_setting_text_t> btrc_attrs(attrs.size());
   for (size_t i = 0; i < attrs.size(); ++i) {
     btrc_attrs[i].id = attrs[i].id();
-    std::string str(attrs[i].value());
-    size_t to_copy = std::min(sizeof(btrc_attrs[i].text) - 1, str.size());
-    if (to_copy < str.size()) {
+    String8 str(attrs[i].value());
+    size_t to_copy = std::min(sizeof(btrc_attrs[i].text) - 1, str.bytes());
+    if (to_copy < str.bytes()) {
       LOG(WARNING) << "Value truncated";
     }
 
-    memcpy(btrc_attrs[i].text, str.data(), to_copy);
+    memcpy(btrc_attrs[i].text, str.string(), to_copy);
     btrc_attrs[i].text[to_copy] = '\0';
   }
 
@@ -78,13 +79,13 @@ std::vector<btrc_element_attr_val_t> StringValueToElementAttrVal(
   std::vector<btrc_element_attr_val_t> btrc_attrs(attrs.size());
   for (size_t i = 0; i < attrs.size(); ++i) {
     btrc_attrs[i].attr_id = attrs[i].id();
-    std::string str(attrs[i].value());
-    size_t to_copy = std::min(sizeof(btrc_attrs[i].text) - 1, str.size());
-    if (to_copy < str.size()) {
+    String8 str(attrs[i].value());
+    size_t to_copy = std::min(sizeof(btrc_attrs[i].text) - 1, str.bytes());
+    if (to_copy < str.bytes()) {
       LOG(WARNING) << "Value truncated";
     }
 
-    memcpy(btrc_attrs[i].text, str.data(), to_copy);
+    memcpy(btrc_attrs[i].text, str.string(), to_copy);
     btrc_attrs[i].text[to_copy] = '\0';
   }
 
