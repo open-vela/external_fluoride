@@ -3,6 +3,7 @@
 cc_library_static {
     name: "libbtdevice",
     defaults: ["fluoride_defaults"],
+    host_supported: true,
     local_include_dirs: [
         "include",
     ],
@@ -10,7 +11,7 @@ cc_library_static {
         "system/bt",
         "system/bt/btcore/include",
         "system/bt/hci/include",
-        "system/bt/include",
+        "system/bt/internal_include",
         "system/bt/stack/include",
     ],
     srcs: [
@@ -27,6 +28,7 @@ cc_library_static {
 // ========================================================
 cc_test {
     name: "net_test_device",
+    test_suites: ["device-tests"],
     defaults: ["fluoride_defaults"],
     include_dirs: ["system/bt"],
     srcs: [
@@ -42,5 +44,6 @@ cc_test {
         "libosi",
         "libosi-AllocationTestHarness",
         "libcutils",
+        "libbluetooth-types",
     ],
 }
