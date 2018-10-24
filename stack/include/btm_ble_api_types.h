@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -135,7 +135,7 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_CONN_SUP_TOUT_MAX 0x0C80
 /* use this value when a specific value not to be overwritten */
 #define BTM_BLE_CONN_PARAM_UNDEF 0xffff
-#define BTM_BLE_SCAN_PARAM_UNDEF 0xffff
+#define BTM_BLE_SCAN_PARAM_UNDEF 0xffffffff
 
 /* default connection parameters if not configured, use GAP recommended value
  * for auto/selective connection */
@@ -195,12 +195,6 @@ typedef uint8_t tBTM_BLE_SFP;
 /* minimum acceptable connection interval */
 #ifndef BTM_BLE_CONN_INT_MIN_LIMIT
 #define BTM_BLE_CONN_INT_MIN_LIMIT 0x0009
-#endif
-
-/* minimum acceptable connection interval when there is bonded Hearing Aid
- * device */
-#ifndef BTM_BLE_CONN_INT_MIN_HEARINGAID
-#define BTM_BLE_CONN_INT_MIN_HEARINGAID 0x0010
 #endif
 
 #define BTM_BLE_DIR_CONN_FALLBACK_UNDIR 1
@@ -279,7 +273,7 @@ typedef struct {
   uint8_t status;
   uint8_t param_len;
   uint16_t opcode;
-  uint8_t param_buf[OCTET16_LEN];
+  uint8_t param_buf[BT_OCTET16_LEN];
 } tBTM_RAND_ENC;
 
 /* General callback function for notifying an application that a synchronous
@@ -335,8 +329,15 @@ typedef void(tBTM_RAND_ENC_CB)(tBTM_RAND_ENC* p1);
 /*  Preferred maximum number of microseconds that the local Controller
     should use to transmit a single Link Layer Data Channel PDU. */
 #define BTM_BLE_DATA_TX_TIME_MIN 0x0148
-#define BTM_BLE_DATA_TX_TIME_MAX_LEGACY  0x0848
-#define BTM_BLE_DATA_TX_TIME_MAX         0x4290
+#define BTM_BLE_DATA_TX_TIME_MAX 0x0848
+
+/* adv tx power level */
+#define BTM_BLE_ADV_TX_POWER_MIN 0   /* minimum tx power */
+#define BTM_BLE_ADV_TX_POWER_LOW 1   /* low tx power     */
+#define BTM_BLE_ADV_TX_POWER_MID 2   /* middle tx power  */
+#define BTM_BLE_ADV_TX_POWER_UPPER 3 /* upper tx power   */
+#define BTM_BLE_ADV_TX_POWER_MAX 4   /* maximum tx power */
+typedef uint8_t tBTM_BLE_ADV_TX_POWER;
 
 /* adv tx power in dBm */
 typedef struct {
@@ -457,6 +458,12 @@ using tBTM_BLE_PF_STATUS_CBACK =
 /* BLE adv payload filtering param setup complete callback */
 using tBTM_BLE_PF_PARAM_CB = base::Callback<void(
     uint8_t /* avbl_space */, uint8_t /* action */, uint8_t /* status */)>;
+
+typedef union {
+  uint16_t uuid16_mask;
+  uint32_t uuid32_mask;
+  uint8_t uuid128_mask[LEN_UUID_128];
+} tBTM_BLE_PF_COND_MASK;
 
 /* per device filter + one generic filter indexed by 0 */
 #define BTM_BLE_MAX_FILTER_COUNTER (BTM_BLE_MAX_ADDR_FILTER + 1)
