@@ -1,5 +1,5 @@
 //
-//  Copyright 2017 Google, Inc.
+//  Copyright (C) 2017 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -14,25 +14,16 @@
 //  limitations under the License.
 //
 
-#include "bluetooth/avrcp_media_attr.h"
+#include "bluetooth/avrcp_string_value.h"
 
 using android::String16;
 
 namespace bluetooth {
 
-AvrcpMediaAttr::AvrcpMediaAttr() = default;
-AvrcpMediaAttr::AvrcpMediaAttr(const AvrcpMediaAttr& other) = default;
-AvrcpMediaAttr::AvrcpMediaAttr(const String16& title, const String16& artist,
-                               const String16& album, const String16& genre,
-                               int track_num, int num_tracks, int play_time)
-    : title_(title),
-      artist_(artist),
-      album_(album),
-      genre_(genre),
-      track_num_(track_num),
-      num_tracks_(num_tracks),
-      play_time_(play_time) {}
-
-AvrcpMediaAttr::~AvrcpMediaAttr() = default;
+AvrcpStringValue::AvrcpStringValue() = default;
+AvrcpStringValue::AvrcpStringValue(const AvrcpStringValue& other) = default;
+AvrcpStringValue::AvrcpStringValue(int id, const String16& value)
+    : id_(id), value_(value) {}
+AvrcpStringValue::~AvrcpStringValue() = default;
 
 }  // namespace bluetooth
