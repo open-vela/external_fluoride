@@ -29,11 +29,10 @@ namespace android {
 namespace bluetooth {
 
 status_t BluetoothRemoteDeviceProps::writeToParcel(Parcel* parcel) const {
-  status_t status =
-      parcel->writeString16(String16(name_.c_str(), name_.size()));
+  status_t status = parcel->writeString16(name_);
   if (status != OK) return status;
 
-  status = parcel->writeString16(String16(address_.c_str(), address_.size()));
+  status = parcel->writeString16(address_);
   if (status != OK) return status;
 
   std::vector<UUID> uuids;
@@ -57,15 +56,11 @@ status_t BluetoothRemoteDeviceProps::writeToParcel(Parcel* parcel) const {
 }
 
 status_t BluetoothRemoteDeviceProps::readFromParcel(const Parcel* parcel) {
-  String16 name;
-  status_t status = parcel->readString16(&name);
+  status_t status = parcel->readString16(&name_);
   if (status != OK) return status;
-  name_ = String8(name).string();
 
-  String16 address;
-  status = parcel->readString16(&address);
+  status = parcel->readString16(&address_);
   if (status != OK) return status;
-  address_ = String8(address).string();
 
   std::vector<UUID> uuids;
   status = parcel->readParcelableVector(&uuids);

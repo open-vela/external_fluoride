@@ -16,23 +16,23 @@
 
 #pragma once
 
-#include <string>
+#include <utils/String16.h>
 
 namespace bluetooth {
 
 class AvrcpStringValue {
  public:
-  AvrcpStringValue() = default;
-  AvrcpStringValue(const AvrcpStringValue& other) = default;
-  AvrcpStringValue(int id, const std::string& value) : id_(id), value_(value){};
-  ~AvrcpStringValue() = default;
+  AvrcpStringValue();
+  AvrcpStringValue(const AvrcpStringValue& other);
+  AvrcpStringValue(int id, const android::String16& value);
+  ~AvrcpStringValue();
 
   int id() const { return id_; }
-  const std::string& value() const { return value_; }
+  const android::String16& value() const { return value_; }
 
  protected:
   int id_ = 0;
-  std::string value_;
+  android::String16 value_;
 };
 
 }  // namespace bluetooth
