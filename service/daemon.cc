@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,16 +19,12 @@
 #include <memory>
 
 #include <base/logging.h>
-#include <base/run_loop.h>
 
 #include "service/adapter.h"
-#include "service/hal/bluetooth_av_interface.h"
-#include "service/hal/bluetooth_avrcp_interface.h"
 #include "service/hal/bluetooth_gatt_interface.h"
 #include "service/hal/bluetooth_interface.h"
 #include "service/ipc/ipc_manager.h"
 #include "service/settings.h"
-#include "service/switches.h"
 
 namespace bluetooth {
 
@@ -37,7 +33,7 @@ namespace {
 // The global Daemon instance.
 Daemon* g_daemon = nullptr;
 
-class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
+class DaemonImpl : public Daemon {
  public:
   DaemonImpl() : initialized_(false) {}
 
@@ -47,7 +43,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     CleanUpBluetoothStack();
   }
 
-  void StartMainLoop() override { base::RunLoop().Run(); }
+  void StartMainLoop() override { message_loop_->Run(); }
 
   Settings* GetSettings() const override { return settings_.get(); }
 
@@ -56,24 +52,10 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
   }
 
  private:
-  // ipc::IPCManager::Delegate implementation:
-  void OnIPCHandlerStarted(ipc::IPCManager::Type /* type */) override {
-    if (!settings_->EnableOnStart()) return;
-    adapter_->Enable();
-  }
-
-  void OnIPCHandlerStopped(ipc::IPCManager::Type /* type */) override {
-    // Do nothing.
-  }
-
   bool StartUpBluetoothInterfaces() {
     if (!hal::BluetoothInterface::Initialize()) goto failed;
 
     if (!hal::BluetoothGattInterface::Initialize()) goto failed;
-
-    if (!hal::BluetoothAvInterface::Initialize()) goto failed;
-
-    if (!hal::BluetoothAvrcpInterface::Initialize()) goto failed;
 
     return true;
 
@@ -87,10 +69,6 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
       hal::BluetoothGattInterface::CleanUp();
     if (hal::BluetoothInterface::IsInitialized())
       hal::BluetoothInterface::CleanUp();
-    if (hal::BluetoothAvInterface::IsInitialized())
-      hal::BluetoothAvInterface::CleanUp();
-    if (hal::BluetoothAvrcpInterface::IsInitialized())
-      hal::BluetoothAvrcpInterface::CleanUp();
   }
 
   void CleanUpBluetoothStack() {
@@ -104,7 +82,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     // If an IPC socket path was given, initialize IPC with it. Otherwise
     // initialize Binder IPC.
     if (settings_->UseSocketIPC()) {
-      if (!ipc_manager_->Start(ipc::IPCManager::TYPE_LINUX, this)) {
+      if (!ipc_manager_->Start(ipc::IPCManager::TYPE_LINUX, nullptr)) {
         LOG(ERROR) << "Failed to set up UNIX domain-socket IPCManager";
         return false;
       }
@@ -112,12 +90,12 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     }
 
 #if !defined(OS_GENERIC)
-    if (!ipc_manager_->Start(ipc::IPCManager::TYPE_BINDER, this)) {
+    if (!ipc_manager_->Start(ipc::IPCManager::TYPE_BINDER, nullptr)) {
       LOG(ERROR) << "Failed to set up Binder IPCManager";
       return false;
     }
 #else
-    if (!ipc_manager_->Start(ipc::IPCManager::TYPE_DBUS, this)) {
+    if (!ipc_manager_->Start(ipc::IPCManager::TYPE_DBUS, nullptr)) {
       LOG(ERROR) << "Failed to set up DBus IPCManager";
       return false;
     }
