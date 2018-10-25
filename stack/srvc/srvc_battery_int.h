@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,47 +20,62 @@
 #define SRVC_BATTERY_INT_H
 
 #include "bt_target.h"
-#include "gatt_api.h"
 #include "srvc_api.h"
+#include "gatt_api.h"
 
 #ifndef BA_MAX_INT_NUM
-#define BA_MAX_INT_NUM 4
+#define BA_MAX_INT_NUM     4
 #endif
 
-#define BATTERY_LEVEL_SIZE 1
+#define BATTERY_LEVEL_SIZE      1
 
-typedef struct {
-  uint8_t app_id;
-  uint16_t ba_level_hdl;
-  uint16_t clt_cfg_hdl;
-  uint16_t rpt_ref_hdl;
-  uint16_t pres_fmt_hdl;
 
-  tBA_CBACK* p_cback;
+typedef struct
+{
+    UINT8           app_id;
+    UINT16          ba_level_hdl;
+    UINT16          clt_cfg_hdl;
+    UINT16          rpt_ref_hdl;
+    UINT16          pres_fmt_hdl;
 
-  uint16_t pending_handle;
-  uint8_t pending_clcb_idx;
-  uint8_t pending_evt;
+    tBA_CBACK       *p_cback;
 
-} tBA_INST;
+    UINT16          pending_handle;
+    UINT8           pending_clcb_idx;
+    UINT8           pending_evt;
 
-typedef struct {
-  tBA_INST battery_inst[BA_MAX_INT_NUM];
-  uint8_t inst_id;
-  bool enabled;
+}tBA_INST;
 
-} tBATTERY_CB;
+typedef struct
+{
+    tBA_INST                battery_inst[BA_MAX_INT_NUM];
+    UINT8                   inst_id;
+    BOOLEAN                 enabled;
+
+}tBATTERY_CB;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Global GATT data */
+#if GATT_DYNAMIC_MEMORY == FALSE
 extern tBATTERY_CB battery_cb;
+#else
+extern tBATTERY_CB *battery_cb_ptr;
+#define battery_cb (*battery_cb_ptr)
+#endif
 
-extern bool battery_valid_handle_range(uint16_t handle);
 
-extern uint8_t battery_s_write_attr_value(uint8_t clcb_idx,
-                                          tGATT_WRITE_REQ* p_value,
-                                          tGATT_STATUS* p_status);
-extern uint8_t battery_s_read_attr_value(uint8_t clcb_idx, uint16_t handle,
-                                         tGATT_VALUE* p_value, bool is_long,
-                                         tGATT_STATUS* p_status);
+extern BOOLEAN battery_valid_handle_range(UINT16 handle);
 
+extern UINT8 battery_s_write_attr_value(UINT8 clcb_idx, tGATT_WRITE_REQ * p_value,
+                                 tGATT_STATUS *p_status);
+extern UINT8 battery_s_read_attr_value (UINT8 clcb_idx, UINT16 handle, tGATT_VALUE *p_value, BOOLEAN is_long, tGATT_STATUS* p_status);
+
+
+
+#ifdef __cplusplus
+}
+#endif
 #endif
