@@ -37,6 +37,7 @@
 #include "service/low_energy_client.h"
 #include "service/low_energy_scanner.h"
 
+using android::String16;
 using std::lock_guard;
 using std::mutex;
 
@@ -46,8 +47,8 @@ namespace {
 
 RemoteDeviceProps ParseRemoteDeviceProps(int num_properties,
                                          bt_property_t* properties) {
-  std::string name;
-  std::string address;
+  android::String16 name;
+  android::String16 address;
   std::vector<Uuid> service_uuids;
   int32_t device_class = 0;
   int32_t device_type = 0;
@@ -62,7 +63,7 @@ RemoteDeviceProps ParseRemoteDeviceProps(int num_properties,
           break;
         }
         bt_bdname_t* hal_name = reinterpret_cast<bt_bdname_t*>(property->val);
-        name = reinterpret_cast<char*>(hal_name->name);
+        name = String16(reinterpret_cast<char*>(hal_name->name));
         break;
       }
       case BT_PROPERTY_BDADDR: {
@@ -70,7 +71,9 @@ RemoteDeviceProps ParseRemoteDeviceProps(int num_properties,
           NOTREACHED() << "Invalid length for BT_PROPERTY_BDADDR";
           break;
         }
-        address = BtAddrString(reinterpret_cast<RawAddress*>(property->val));
+        std::string remote_bdaddr_str =
+            BtAddrString(reinterpret_cast<RawAddress*>(property->val));
+        address = String16(remote_bdaddr_str.c_str(), remote_bdaddr_str.size());
         break;
       }
       case BT_PROPERTY_UUIDS: {
@@ -620,7 +623,9 @@ class AdapterImpl : public Adapter, public hal::BluetoothInterface::Observer {
     RemoteDeviceProps props =
         ParseRemoteDeviceProps(num_properties, properties);
 
-    std::string address = BtAddrString(remote_bdaddr);
+    std::string remote_bdaddr_str = BtAddrString(remote_bdaddr);
+    android::String16 address =
+        String16(remote_bdaddr_str.c_str(), remote_bdaddr_str.size());
     props.set_address(address);
 
     lock_guard<mutex> lock(observers_lock_);
