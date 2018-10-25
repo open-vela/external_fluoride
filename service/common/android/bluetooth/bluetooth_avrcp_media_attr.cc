@@ -27,17 +27,16 @@ namespace android {
 namespace bluetooth {
 
 status_t BluetoothAvrcpMediaAttr::writeToParcel(Parcel* parcel) const {
-  status_t status =
-      parcel->writeString16(String16(title_.c_str(), title_.size()));
+  status_t status = parcel->writeString16(title_);
   if (status != OK) return status;
 
-  status = parcel->writeString16(String16(artist_.c_str(), artist_.size()));
+  status = parcel->writeString16(artist_);
   if (status != OK) return status;
 
-  status = parcel->writeString16(String16(album_.c_str(), album_.size()));
+  status = parcel->writeString16(album_);
   if (status != OK) return status;
 
-  status = parcel->writeString16(String16(genre_.c_str(), genre_.size()));
+  status = parcel->writeString16(genre_);
   if (status != OK) return status;
 
   status = parcel->writeInt32(track_num_);
@@ -53,25 +52,17 @@ status_t BluetoothAvrcpMediaAttr::writeToParcel(Parcel* parcel) const {
 }
 
 status_t BluetoothAvrcpMediaAttr::readFromParcel(const Parcel* parcel) {
-  String16 title;
-  status_t status = parcel->readString16(&title);
+  status_t status = parcel->readString16(&title_);
   if (status != OK) return status;
-  title_ = String8(title).string();
 
-  String16 artist;
-  status = parcel->readString16(&artist);
+  status = parcel->readString16(&artist_);
   if (status != OK) return status;
-  artist_ = String8(artist).string();
 
-  String16 album;
-  status = parcel->readString16(&album);
+  status = parcel->readString16(&album_);
   if (status != OK) return status;
-  album_ = String8(album).string();
 
-  String16 genre;
-  status = parcel->readString16(&genre);
+  status = parcel->readString16(&genre_);
   if (status != OK) return status;
-  genre_ = String8(genre).string();
 
   int32_t tmp;
   status = parcel->readInt32(&tmp);
