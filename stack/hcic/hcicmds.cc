@@ -1,20 +1,20 @@
 /******************************************************************************
- *
- *  Copyright 1999-2012 Broadcom Corporation
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at:
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- ******************************************************************************/
+*
+*  Copyright (C) 1999-2012 Broadcom Corporation
+*
+*  Licensed under the Apache License, Version 2.0 (the "License");
+*  you may not use this file except in compliance with the License.
+*  You may obtain a copy of the License at:
+*
+*  http://www.apache.org/licenses/LICENSE-2.0
+*
+*  Unless required by applicable law or agreed to in writing, software
+*  distributed under the License is distributed on an "AS IS" BASIS,
+*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*  See the License for the specific language governing permissions and
+*  limitations under the License.
+*
+******************************************************************************/
 
 /******************************************************************************
  *
@@ -207,7 +207,7 @@ void btsnd_hcic_reject_conn(const RawAddress& dest, uint8_t reason) {
 }
 
 void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
-                                   const LinkKey& link_key) {
+                                   LINK_KEY link_key) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -218,7 +218,7 @@ void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_LINK_KEY_REQ_REPLY);
 
   BDADDR_TO_STREAM(pp, bd_addr);
-  ARRAY16_TO_STREAM(pp, link_key.data());
+  ARRAY16_TO_STREAM(pp, link_key);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
@@ -1196,8 +1196,8 @@ void btsnd_hcic_user_passkey_neg_reply(const RawAddress& bd_addr) {
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, const Octet16& c,
-                              const Octet16& r) {
+void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, uint8_t* p_c,
+                              uint8_t* p_r) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -1208,8 +1208,8 @@ void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, const Octet16& c,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_REM_OOB_REPLY);
 
   BDADDR_TO_STREAM(pp, bd_addr);
-  ARRAY16_TO_STREAM(pp, c.data());
-  ARRAY16_TO_STREAM(pp, r.data());
+  ARRAY16_TO_STREAM(pp, p_c);
+  ARRAY16_TO_STREAM(pp, p_r);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
