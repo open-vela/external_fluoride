@@ -28,8 +28,7 @@ typedef enum {
 } btif_debug_conn_state_t;
 
 // Report a connection state change
-void btif_debug_conn_state(const RawAddress& bda,
-                           const btif_debug_conn_state_t state,
-                           const tGATT_DISCONN_REASON disconnect_reason);
+void btif_debug_conn_state(const bt_bdaddr_t bda, const btif_debug_conn_state_t state,
+    const tGATT_DISCONN_REASON disconnect_reason);
 
 void btif_debug_conn_dump(int fd);

@@ -35,7 +35,8 @@ namespace ipc {
 // Implements a Linux sequential packet domain-socket based IPCHandler
 class IPCHandlerLinux : public IPCHandler {
  public:
-  IPCHandlerLinux(bluetooth::Adapter* adapter, IPCManager::Delegate* delegate);
+  IPCHandlerLinux(bluetooth::Adapter* adapter,
+                 IPCManager::Delegate* delegate);
   ~IPCHandlerLinux() override;
 
   // IPCHandler overrides:
@@ -59,12 +60,8 @@ class IPCHandlerLinux : public IPCHandler {
   void NotifyStoppedOnOriginThread();
   void NotifyStoppedOnCurrentThread();
 
-// True, if the IPC mechanism is running.
-#if defined(__APPLE__)
-  bool running_ ATTRIBUTE_UNUSED;
-#else
+  // True, if the IPC mechanism is running.
   bool running_;
-#endif
 
   // The server socket on which we listen to incoming connections.
   base::ScopedFD socket_;
