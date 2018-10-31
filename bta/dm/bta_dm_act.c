@@ -2881,6 +2881,8 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
     /*case BTM_SP_KEY_REQ_EVT: */
     case BTM_SP_KEY_NOTIF_EVT:
 #endif
+        bta_dm_cb.num_val = sec_event.key_notif.passkey = p_data->key_notif.passkey;
+
         if(BTM_SP_CFM_REQ_EVT == event)
         {
           /* Due to the switch case falling through below to BTM_SP_KEY_NOTIF_EVT,
@@ -2906,7 +2908,6 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
            }
         }
 
-        bta_dm_cb.num_val = sec_event.key_notif.passkey = p_data->key_notif.passkey;
         if (BTM_SP_KEY_NOTIF_EVT == event)
         {
             /* If the device name is not known, save bdaddr and devclass
@@ -4397,6 +4398,11 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
             bta_dm_cb.p_sec_cback(BTA_DM_BLE_NC_REQ_EVT, &sec_event);
             break;
 
+        case BTM_LE_SC_OOB_REQ_EVT:
+            bdcpy(sec_event.ble_req.bd_addr, bda);
+            bta_dm_cb.p_sec_cback(BTA_DM_BLE_SC_OOB_REQ_EVT, &sec_event);
+            break;
+
         case BTM_LE_KEY_EVT:
             bdcpy(sec_event.ble_key.bd_addr, bda);
             sec_event.ble_key.key_type = p_data->key.key_type;
@@ -4666,11 +4672,10 @@ void bta_dm_ble_set_conn_scan_params (tBTA_DM_MSG *p_data)
 void bta_dm_ble_update_conn_params (tBTA_DM_MSG *p_data)
 {
     if (!L2CA_UpdateBleConnParams(p_data->ble_update_conn_params.bd_addr,
-                                  p_data->ble_update_conn_params.min_int,
-                                  p_data->ble_update_conn_params.max_int,
-                                  p_data->ble_update_conn_params.latency,
-                                  p_data->ble_update_conn_params.timeout,
-                                  p_data->ble_update_conn_params.p_conn_param_update_cback))
+                                 p_data->ble_update_conn_params.min_int,
+                                 p_data->ble_update_conn_params.max_int,
+                                 p_data->ble_update_conn_params.latency,
+                                 p_data->ble_update_conn_params.timeout))
     {
         APPL_TRACE_ERROR("Update connection parameters failed!");
     }
