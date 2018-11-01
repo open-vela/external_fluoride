@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -81,9 +81,14 @@ typedef uint8_t tBTM_BLE_SEC_REQ_ACT;
 #define BLE_RESOLVE_ADDR_MSB 0x40
 /* bit 6, and bit7 */
 #define BLE_RESOLVE_ADDR_MASK 0xc0
-inline bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x) {
-  return ((x.address)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB;
-}
+#define BTM_BLE_IS_RESOLVE_BDA(x) \
+  (((x)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB)
+
+#define BLE_PUBLIC_ADDR_MSB_MASK 0xC0
+/*  most significant bit, bit7, bit6 is 10 to be public address*/
+#define BLE_PUBLIC_ADDR_MSB 0x80
+#define BTM_IS_PUBLIC_BDA(x) \
+  (((x)[0] & BLE_PUBLIC_ADDR_MSB_MASK) == BLE_PUBLIC_ADDR_MSB)
 
 /* LE scan activity bit mask, continue with LE inquiry bits */
 /* observe is in progress */
@@ -157,13 +162,13 @@ typedef struct {
 /* random address resolving complete callback */
 typedef void(tBTM_BLE_RESOLVE_CBACK)(void* match_rec, void* p);
 
-typedef void(tBTM_BLE_ADDR_CBACK)(const RawAddress& static_random, void* p);
+typedef void(tBTM_BLE_ADDR_CBACK)(BD_ADDR_PTR static_random, void* p);
 
 /* random address management control block */
 typedef struct {
   tBLE_ADDR_TYPE own_addr_type; /* local device LE address type */
-  RawAddress private_addr;
-  RawAddress random_bda;
+  BD_ADDR private_addr;
+  BD_ADDR random_bda;
   tBTM_BLE_ADDR_CBACK* p_generate_cback;
   void* p;
   alarm_t* refresh_raddr_timer;
@@ -178,7 +183,7 @@ typedef struct {
 } tBTM_LE_CONN_PRAMS;
 
 typedef struct {
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint8_t attr;
   bool is_connected;
   bool in_use;
@@ -246,7 +251,7 @@ typedef uint16_t tBTM_BLE_STATE_MASK;
 #endif
 
 typedef struct {
-  RawAddress* resolve_q_random_pseudo;
+  BD_ADDR* resolve_q_random_pseudo;
   uint8_t* resolve_q_action;
   uint8_t q_next;
   uint8_t q_pending;
@@ -255,7 +260,7 @@ typedef struct {
 typedef struct {
   bool in_use;
   bool to_add;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint8_t attr;
 } tBTM_BLE_WL_OP;
 
