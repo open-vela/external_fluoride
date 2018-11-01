@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -197,12 +197,6 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_CONN_INT_MIN_LIMIT 0x0009
 #endif
 
-/* minimum acceptable connection interval when there is bonded Hearing Aid
- * device */
-#ifndef BTM_BLE_CONN_INT_MIN_HEARINGAID
-#define BTM_BLE_CONN_INT_MIN_HEARINGAID 0x0010
-#endif
-
 #define BTM_BLE_DIR_CONN_FALLBACK_UNDIR 1
 #define BTM_BLE_DIR_CONN_FALLBACK_NO_ADV 2
 
@@ -337,6 +331,14 @@ typedef void(tBTM_RAND_ENC_CB)(tBTM_RAND_ENC* p1);
 #define BTM_BLE_DATA_TX_TIME_MIN 0x0148
 #define BTM_BLE_DATA_TX_TIME_MAX 0x0848
 
+/* adv tx power level */
+#define BTM_BLE_ADV_TX_POWER_MIN 0   /* minimum tx power */
+#define BTM_BLE_ADV_TX_POWER_LOW 1   /* low tx power     */
+#define BTM_BLE_ADV_TX_POWER_MID 2   /* middle tx power  */
+#define BTM_BLE_ADV_TX_POWER_UPPER 3 /* upper tx power   */
+#define BTM_BLE_ADV_TX_POWER_MAX 4   /* maximum tx power */
+typedef uint8_t tBTM_BLE_ADV_TX_POWER;
+
 /* adv tx power in dBm */
 typedef struct {
   uint8_t adv_inst_max; /* max adv instance supported in controller */
@@ -457,6 +459,12 @@ using tBTM_BLE_PF_STATUS_CBACK =
 using tBTM_BLE_PF_PARAM_CB = base::Callback<void(
     uint8_t /* avbl_space */, uint8_t /* action */, uint8_t /* status */)>;
 
+typedef union {
+  uint16_t uuid16_mask;
+  uint32_t uuid32_mask;
+  uint8_t uuid128_mask[LEN_UUID_128];
+} tBTM_BLE_PF_COND_MASK;
+
 /* per device filter + one generic filter indexed by 0 */
 #define BTM_BLE_MAX_FILTER_COUNTER (BTM_BLE_MAX_ADDR_FILTER + 1)
 
@@ -466,7 +474,7 @@ using tBTM_BLE_PF_PARAM_CB = base::Callback<void(
 
 typedef struct {
   bool in_use;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint8_t pf_counter[BTM_BLE_PF_TYPE_MAX]; /* number of filter indexed by
                                               tBTM_BLE_PF_COND_TYPE */
 } tBTM_BLE_PF_COUNT;
@@ -533,8 +541,19 @@ typedef struct {
   tBTM_BLE_ENERGY_INFO_CBACK* p_ener_cback;
 } tBTM_BLE_ENERGY_INFO_CB;
 
+typedef bool(tBTM_BLE_SEL_CBACK)(BD_ADDR random_bda, uint8_t* p_remote_name);
 typedef void(tBTM_BLE_CTRL_FEATURES_CBACK)(tBTM_STATUS status);
 
+/* callback function for SMP signing algorithm, signed data in little endian
+ * order with tlen bits long */
+typedef void(tBTM_BLE_SIGN_CBACK)(void* p_ref_data, uint8_t* p_signing_data);
+typedef void(tBTM_BLE_VERIFY_CBACK)(void* p_ref_data, bool match);
+/* random address set complete callback */
+typedef void(tBTM_BLE_RANDOM_SET_CBACK)(BD_ADDR random_bda);
+
+typedef void(tBTM_BLE_SCAN_REQ_CBACK)(BD_ADDR remote_bda,
+                                      tBLE_ADDR_TYPE addr_type,
+                                      uint8_t adv_evt);
 typedef void (*tBLE_SCAN_PARAM_SETUP_CBACK)(tGATT_IF client_if,
                                             tBTM_STATUS status);
 
