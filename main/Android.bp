@@ -61,7 +61,6 @@ cc_library_shared {
     ],
     whole_static_libs: [
         "libbt-bta",
-        "libbt-common",
         "libbtdevice",
         "libbtif",
         "libbt-hci",
