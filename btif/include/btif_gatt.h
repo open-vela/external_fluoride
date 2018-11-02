@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2013 Broadcom Corporation
+ *  Copyright 2009-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,19 +16,20 @@
  *
  ******************************************************************************/
 
-
 /*****************************************************************************
-**
-**  Name:          btif_gatt.h
-**
-**  Description:
-**
-******************************************************************************/
+ *
+ *  Name:          btif_gatt.h
+ *
+ *  Description:
+ *
+ *****************************************************************************/
 
 #ifndef BTIF_GATT_H
 #define BTIF_GATT_H
 
+extern const btgatt_client_interface_t btgattClientInterface;
+extern const btgatt_server_interface_t btgattServerInterface;
 
-
+BleAdvertiserInterface* get_ble_advertiser_instance();
+BleScannerInterface* get_ble_scanner_instance();
 #endif
-
