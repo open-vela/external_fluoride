@@ -1357,8 +1357,7 @@ void GATT_StartIf (tGATT_IF gatt_if)
 ** Returns          TRUE if connection started; FALSE if connection start failure.
 **
 *******************************************************************************/
-BOOLEAN GATT_Connect (tGATT_IF gatt_if, BD_ADDR bd_addr, BOOLEAN is_direct,
-                      tBT_TRANSPORT transport, BOOLEAN opportunistic)
+BOOLEAN GATT_Connect (tGATT_IF gatt_if, BD_ADDR bd_addr, BOOLEAN is_direct, tBT_TRANSPORT transport)
 {
     tGATT_REG    *p_reg;
     BOOLEAN status = FALSE;
@@ -1373,7 +1372,7 @@ BOOLEAN GATT_Connect (tGATT_IF gatt_if, BD_ADDR bd_addr, BOOLEAN is_direct,
     }
 
     if (is_direct)
-        status = gatt_act_connect (p_reg, bd_addr, transport, opportunistic);
+        status = gatt_act_connect (p_reg, bd_addr, transport);
     else
     {
         if (transport == BT_TRANSPORT_LE)

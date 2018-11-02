@@ -23,8 +23,7 @@ LOCAL_PATH := $(call my-dir)
 
 # HAL layer
 btifCommonSrc := \
-  src/bluetooth.c \
-  ../EventLogTags.logtags
+  src/bluetooth.c
 
 # BTIF implementation
 btifCommonSrc += \
