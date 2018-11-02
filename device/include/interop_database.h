@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 Google, Inc.
+ *  Copyright 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@
 #pragma once
 
 #include "device/include/interop.h"
+#include "raw_address.h"
 
 typedef struct {
-  bt_bdaddr_t addr;
+  RawAddress addr;
   size_t length;
   interop_feature_t feature;
 } interop_addr_entry_t;
@@ -136,6 +137,9 @@ static const interop_addr_entry_t interop_addr_database[] = {
 
     // Jeep Uconnect
     {{{0x00, 0x54, 0xaf, 0, 0, 0}}, 3, INTEROP_DISABLE_ROLE_SWITCH},
+
+    // deepblue2 - cannot change smoothly the volume: b/37834035
+    {{{0x0c, 0xa6, 0x94, 0, 0, 0}}, 3, INTEROP_DISABLE_ABSOLUTE_VOLUME},
 };
 
 typedef struct {
