@@ -582,16 +582,17 @@ static void l2cble_start_conn_update (tL2C_LCB *p_lcb)
 ** Returns          void
 **
 *******************************************************************************/
-void l2cble_process_conn_update_evt (UINT16 handle, UINT8 status,
-                  UINT16 interval, UINT16 latency, UINT16 timeout)
+void l2cble_process_conn_update_evt (UINT16 handle, UINT8 status)
 {
-    L2CAP_TRACE_DEBUG("%s", __func__);
+    tL2C_LCB *p_lcb;
+
+    L2CAP_TRACE_DEBUG("l2cble_process_conn_update_evt");
 
     /* See if we have a link control block for the remote device */
-    tL2C_LCB *p_lcb = l2cu_find_lcb_by_handle(handle);
+    p_lcb = l2cu_find_lcb_by_handle(handle);
     if (!p_lcb)
     {
-        L2CAP_TRACE_WARNING("%s: Invalid handle: %d", __func__, handle);
+        L2CAP_TRACE_WARNING("l2cble_process_conn_update_evt: Invalid handle: %d", handle);
         return;
     }
 
@@ -599,14 +600,13 @@ void l2cble_process_conn_update_evt (UINT16 handle, UINT8 status,
 
     if (status != HCI_SUCCESS)
     {
-        L2CAP_TRACE_WARNING("%s: Error status: %d", __func__, status);
+        L2CAP_TRACE_WARNING("l2cble_process_conn_update_evt: Error status: %d", status);
     }
 
     l2cble_start_conn_update(p_lcb);
 
-    L2CAP_TRACE_DEBUG("%s: conn_update_mask=%d", __func__, p_lcb->conn_update_mask);
+    L2CAP_TRACE_DEBUG("l2cble_process_conn_update_evt: conn_update_mask=%d", p_lcb->conn_update_mask);
 }
-
 /*******************************************************************************
 **
 ** Function         l2cble_process_sig_cmd
