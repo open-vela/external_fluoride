@@ -715,7 +715,6 @@ void bta_gattc_conn(tBTA_GATTC_CLCB *p_clcb, tBTA_GATTC_DATA *p_data)
             {
                 p_clcb->p_srcb->state = BTA_GATTC_SERV_LOAD;
                 if (bta_gattc_cache_load(p_clcb)) {
-                    p_clcb->p_srcb->state = BTA_GATTC_SERV_IDLE;
                     bta_gattc_reset_discover_st(p_clcb->p_srcb, BTA_GATT_OK);
                 } else {
                     p_clcb->p_srcb->state = BTA_GATTC_SERV_DISC;
@@ -1396,10 +1395,8 @@ void  bta_gattc_op_cmpl(tBTA_GATTC_CLCB *p_clcb, tBTA_GATTC_DATA *p_data)
             return;
         }
 
-        /* Except for MTU configuration, discard responses if service change indication is
-         * received before operation completed */
-        if (p_clcb->auto_update == BTA_GATTC_DISC_WAITING && p_clcb->p_srcb->srvc_hdl_chg &&
-            op != GATTC_OPTYPE_CONFIG)
+        /* discard responses if service change indication is received before operation completed */
+        if (p_clcb->auto_update == BTA_GATTC_DISC_WAITING && p_clcb->p_srcb->srvc_hdl_chg)
         {
             APPL_TRACE_DEBUG("Discard all responses when service change indication is received.");
             p_data->op_cmpl.status = GATT_ERROR;
