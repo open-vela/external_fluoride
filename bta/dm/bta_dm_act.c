@@ -2881,8 +2881,6 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
     /*case BTM_SP_KEY_REQ_EVT: */
     case BTM_SP_KEY_NOTIF_EVT:
 #endif
-        bta_dm_cb.num_val = sec_event.key_notif.passkey = p_data->key_notif.passkey;
-
         if(BTM_SP_CFM_REQ_EVT == event)
         {
           /* Due to the switch case falling through below to BTM_SP_KEY_NOTIF_EVT,
@@ -2908,6 +2906,7 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
            }
         }
 
+        bta_dm_cb.num_val = sec_event.key_notif.passkey = p_data->key_notif.passkey;
         if (BTM_SP_KEY_NOTIF_EVT == event)
         {
             /* If the device name is not known, save bdaddr and devclass
@@ -3511,19 +3510,24 @@ static void bta_dm_reset_sec_dev_pending(BD_ADDR remote_bd_addr)
 *******************************************************************************/
 static void bta_dm_remove_sec_dev_entry(BD_ADDR remote_bd_addr)
 {
+    UINT16 index = 0;
     if ( BTM_IsAclConnectionUp(remote_bd_addr, BT_TRANSPORT_LE) ||
          BTM_IsAclConnectionUp(remote_bd_addr, BT_TRANSPORT_BR_EDR))
     {
-        APPL_TRACE_DEBUG("%s ACL is not down. Schedule for  Dev Removal when ACL closes",
-                            __func__);
-        BTM_SecClearSecurityFlags (remote_bd_addr);
-        for (int i = 0; i < bta_dm_cb.device_list.count; i++)
+         APPL_TRACE_DEBUG("%s ACL is not down. Schedule for  Dev Removal when ACL closes",
+                            __FUNCTION__);
+        for (index = 0; index < bta_dm_cb.device_list.count; index ++)
         {
-            if (!bdcmp( bta_dm_cb.device_list.peer_device[i].peer_bdaddr, remote_bd_addr))
-            {
-                bta_dm_cb.device_list.peer_device[i].remove_dev_pending = TRUE;
+            if (!bdcmp( bta_dm_cb.device_list.peer_device[index].peer_bdaddr, remote_bd_addr))
                 break;
-            }
+        }
+        if (index != bta_dm_cb.device_list.count)
+        {
+            bta_dm_cb.device_list.peer_device[index].remove_dev_pending = TRUE;
+        }
+        else
+        {
+            APPL_TRACE_ERROR(" %s Device does not exist in DB", __FUNCTION__);
         }
     }
     else
@@ -4396,11 +4400,6 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
             strlcpy((char*)sec_event.key_notif.bd_name, bta_dm_get_remname(), (BD_NAME_LEN));
             sec_event.key_notif.passkey = p_data->key_notif;
             bta_dm_cb.p_sec_cback(BTA_DM_BLE_NC_REQ_EVT, &sec_event);
-            break;
-
-        case BTM_LE_SC_OOB_REQ_EVT:
-            bdcpy(sec_event.ble_req.bd_addr, bda);
-            bta_dm_cb.p_sec_cback(BTA_DM_BLE_SC_OOB_REQ_EVT, &sec_event);
             break;
 
         case BTM_LE_KEY_EVT:
