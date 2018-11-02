@@ -452,7 +452,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
       btm_cb.ble_ctr_cb.scan_activity |= BTM_LE_OBSERVE_ACTIVE;
       if (duration != 0) {
         /* start observer timer */
-        period_ms_t duration_ms = duration * 1000;
+        uint64_t duration_ms = duration * 1000;
         alarm_set_on_mloop(btm_cb.ble_ctr_cb.observer_timer, duration_ms,
                            btm_ble_observer_timer_timeout, NULL);
       }
@@ -513,8 +513,8 @@ static void btm_ble_vendor_capability_vsc_cmpl_cback(
   if (btm_cb.cmn_ble_vsc_cb.version_supported >=
       BTM_VSC_CHIP_CAPABILITY_M_VERSION) {
     STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.total_trackable_advertisers, p);
-    STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.extended_scan_support, p);
-    STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.debug_logging_supported, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.extended_scan_support, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.debug_logging_supported, p);
   }
   btm_cb.cmn_ble_vsc_cb.values_read = true;
 
@@ -696,57 +696,15 @@ bool BTM_BleLocalPrivacyEnabled(void) {
 #endif
 }
 
-/**
- * Set BLE connectable mode to auto connect
- */
+/** Set BLE connectable mode to auto connect */
 void BTM_BleStartAutoConn() {
   BTM_TRACE_EVENT("%s", __func__);
   if (!controller_get_interface()->supports_ble()) return;
 
   if (btm_cb.ble_ctr_cb.bg_conn_type != BTM_BLE_CONN_AUTO) {
-    btm_ble_start_auto_conn(true);
+    btm_ble_start_auto_conn();
     btm_cb.ble_ctr_cb.bg_conn_type = BTM_BLE_CONN_AUTO;
   }
-}
-
-/*******************************************************************************
- *
- * Function         BTM_BleClearBgConnDev
- *
- * Description      This function is called to clear the whitelist,
- *                  end any pending whitelist connections,
- *                  and reset the local bg device list.
- *
- * Parameters       void
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTM_BleClearBgConnDev(void) {
-  if (!controller_get_interface()->supports_ble()) return;
-  btm_ble_start_auto_conn(false);
-  btm_ble_clear_white_list();
-  gatt_reset_bgdev_list();
-}
-
-/*******************************************************************************
- *
- * Function         BTM_BleUpdateBgConnDev
- *
- * Description      This function is called to add or remove a device into/from
- *                  background connection procedure. The background connection
- *                  procedure is decided by the background connection type, it
- *                  can be auto connection, or selective connection.
- *
- * Parameters       add_remove: true to add; false to remove.
- *                  remote_bda: device address to add/remove.
- *
- * Returns          void
- *
- ******************************************************************************/
-bool BTM_BleUpdateBgConnDev(bool add_remove, const RawAddress& remote_bda) {
-  BTM_TRACE_EVENT("%s() add=%d", __func__, add_remove);
-  return btm_update_dev_to_white_list(add_remove, remote_bda);
 }
 
 /*******************************************************************************
@@ -822,8 +780,8 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
         if ((p_dev_rec = btm_find_or_alloc_dev(p_cb->direct_bda.bda)) != NULL &&
             p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT) {
           btm_ble_enable_resolving_list(BTM_BLE_RL_ADV);
-          p_peer_addr_ptr = p_dev_rec->ble.static_addr;
-          *p_peer_addr_type = p_dev_rec->ble.static_addr_type;
+          p_peer_addr_ptr = p_dev_rec->ble.identity_addr;
+          *p_peer_addr_type = p_dev_rec->ble.identity_addr_type;
           *p_own_addr_type = BLE_ADDR_RANDOM_ID;
           return evt_type;
         }
@@ -853,8 +811,8 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
        * peer */
       tBTM_SEC_DEV_REC* p_dev_rec =
           static_cast<tBTM_SEC_DEV_REC*>(list_node(n));
-      p_peer_addr_ptr = p_dev_rec->ble.static_addr;
-      *p_peer_addr_type = p_dev_rec->ble.static_addr_type;
+      p_peer_addr_ptr = p_dev_rec->ble.identity_addr;
+      *p_peer_addr_type = p_dev_rec->ble.identity_addr_type;
 
       *p_own_addr_type = BLE_ADDR_RANDOM_ID;
     } else {
@@ -1416,7 +1374,7 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t mode, uint8_t duration) {
 
     if (duration != 0) {
       /* start inquiry timer */
-      period_ms_t duration_ms = duration * 1000;
+      uint64_t duration_ms = duration * 1000;
       alarm_set_on_mloop(p_ble_cb->inq_var.inquiry_timer, duration_ms,
                          btm_ble_inquiry_timer_timeout, NULL);
     }
