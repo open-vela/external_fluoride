@@ -34,8 +34,6 @@
 #include "btm_int.h"
 #include "hcidefs.h"
 #include "bt_utils.h"
-#include "device/include/controller.h"
-
 
 #if BTM_SCO_INCLUDED == TRUE
 
@@ -61,7 +59,7 @@ static const tBTM_ESCO_PARAMS btm_esco_defaults =
 {
     BTM_64KBITS_RATE,               /* TX Bandwidth (64 kbits/sec)              */
     BTM_64KBITS_RATE,               /* RX Bandwidth (64 kbits/sec)              */
-    0x000c,                         /* 12 ms (HS/HF can use EV3, 2-EV3, 3-EV3)  */
+    0x000a,                         /* 10 ms (HS/HF can use EV3, 2-EV3, 3-EV3)  */
     0x0060,                         /* Inp Linear, Air CVSD, 2s Comp, 16bit     */
     (BTM_SCO_PKT_TYPES_MASK_HV1 +   /* Packet Types                             */
      BTM_SCO_PKT_TYPES_MASK_HV2 +
@@ -69,7 +67,7 @@ static const tBTM_ESCO_PARAMS btm_esco_defaults =
      BTM_SCO_PKT_TYPES_MASK_EV3 +
      BTM_SCO_PKT_TYPES_MASK_EV4 +
      BTM_SCO_PKT_TYPES_MASK_EV5),
-   BTM_ESCO_RETRANS_QUALITY         /* Retransmission Effort */
+     BTM_ESCO_RETRANS_POWER        /* Retransmission Effort (Power)   */
 };
 
 /*******************************************************************************
@@ -670,7 +668,7 @@ tBTM_STATUS BTM_CreateSco (BD_ADDR remote_bda, BOOLEAN is_orig, UINT16 pkt_types
                              btm_cb.btm_sco_pkt_types_supported);
 
             /* OR in any exception packet types */
-            if (controller_get_interface()->get_bt_version()->hci_version >= HCI_PROTO_VERSION_2_0)
+            if (btm_cb.sco_cb.desired_sco_mode == HCI_LINK_TYPE_ESCO)
             {
                 temp_pkt_types |= ((p_setup->packet_types & BTM_SCO_EXCEPTION_PKTS_MASK) |
                     (btm_cb.btm_sco_pkt_types_supported & BTM_SCO_EXCEPTION_PKTS_MASK));
