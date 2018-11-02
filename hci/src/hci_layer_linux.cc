@@ -1,7 +1,7 @@
 /**********************************************************************
  *
- *  Copyright 2017 The Android Open Source Project
- *  Copyright 2015 Intel Corporation
+ *  Copyright (C) 2017 The Android Open Source Project
+ *  Copyright (C) 2015 Intel Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -93,7 +93,8 @@ enum HciPacketType {
 };
 
 extern void initialization_complete();
-extern void hci_event_received(const base::Location& from_here, BT_HDR* packet);
+extern void hci_event_received(const tracked_objects::Location& from_here,
+                               BT_HDR* packet);
 extern void acl_event_received(BT_HDR* packet);
 extern void sco_data_received(BT_HDR* packet);
 
