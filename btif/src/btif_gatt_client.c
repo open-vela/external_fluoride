@@ -497,12 +497,6 @@ static void btif_gattc_upstreams_evt(uint16_t event, char* p_param)
             break;
         }
 
-        case BTA_GATTC_SEARCH_RES_EVT:
-        {
-            /* Do nothing */
-            break;
-        }
-
         case BTA_GATTC_READ_DESCR_EVT:
         {
             btgatt_read_params_t data;
