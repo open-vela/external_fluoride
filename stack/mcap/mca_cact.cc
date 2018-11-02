@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@
 #include "osi/include/osi.h"
 
 #include "btu.h"
-
-extern fixed_queue_t* btu_general_alarm_queue;
 
 /*****************************************************************************
  * constants
@@ -131,9 +129,9 @@ void mca_ccb_snd_req(tMCA_CCB* p_ccb, tMCA_CCB_EVT* p_data) {
       p_msg->hdr.layer_specific = true; /* mark this message as sent */
       p_pkt->len = p - p_start;
       L2CA_DataWrite(p_ccb->lcid, p_pkt);
-      period_ms_t interval_ms = p_ccb->p_rcb->reg.rsp_tout * 1000;
-      alarm_set_on_queue(p_ccb->mca_ccb_timer, interval_ms,
-                         mca_ccb_timer_timeout, p_ccb, btu_general_alarm_queue);
+      uint64_t interval_ms = p_ccb->p_rcb->reg.rsp_tout * 1000;
+      alarm_set_on_mloop(p_ccb->mca_ccb_timer, interval_ms,
+                         mca_ccb_timer_timeout, p_ccb);
     }
     /* else the L2CAP channel is congested. keep the message to be sent later */
   } else {
@@ -451,23 +449,12 @@ void mca_ccb_hdl_rsp(tMCA_CCB* p_ccb, tMCA_CCB_EVT* p_data) {
   tMCA_RESULT result = MCA_BAD_HANDLE;
   tMCA_TC_TBL* p_tbl;
 
-  if (p_pkt->len < sizeof(evt_data.hdr.op_code) +
-                       sizeof(evt_data.rsp.rsp_code) +
-                       sizeof(evt_data.hdr.mdl_id)) {
-    android_errorWriteLog(0x534e4554, "116319076");
-    MCA_TRACE_ERROR("%s: Response packet is too short", __func__);
-  } else if (p_ccb->p_tx_req) {
+  if (p_ccb->p_tx_req) {
     /* verify that the received response matches the sent request */
     p = (uint8_t*)(p_pkt + 1) + p_pkt->offset;
     evt_data.hdr.op_code = *p++;
-    if ((evt_data.hdr.op_code == MCA_OP_MDL_CREATE_RSP) &&
-        (p_pkt->len <
-         sizeof(evt_data.hdr.op_code) + sizeof(evt_data.rsp.rsp_code) +
-             sizeof(evt_data.hdr.mdl_id) + sizeof(evt_data.create_cfm.cfg))) {
-      android_errorWriteLog(0x534e4554, "116319076");
-      MCA_TRACE_ERROR("%s: MDL Create Response packet is too short", __func__);
-    } else if ((evt_data.hdr.op_code == 0) ||
-               ((p_ccb->p_tx_req->op_code + 1) == evt_data.hdr.op_code)) {
+    if ((evt_data.hdr.op_code == 0) ||
+        ((p_ccb->p_tx_req->op_code + 1) == evt_data.hdr.op_code)) {
       evt_data.rsp.rsp_code = *p++;
       mca_stop_timer(p_ccb);
       BE_STREAM_TO_UINT16(evt_data.hdr.mdl_id, p);
@@ -544,7 +531,7 @@ void mca_ccb_ll_open(tMCA_CCB* p_ccb, tMCA_CCB_EVT* p_data) {
   tMCA_CTRL evt_data;
   p_ccb->cong = false;
   evt_data.connect_ind.mtu = p_data->open.peer_mtu;
-  memcpy(evt_data.connect_ind.bd_addr, p_ccb->peer_addr, BD_ADDR_LEN);
+  evt_data.connect_ind.bd_addr = p_ccb->peer_addr;
   mca_ccb_report_event(p_ccb, MCA_CONNECT_IND_EVT, &evt_data);
 }
 
