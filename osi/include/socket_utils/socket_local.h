@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006 The Android Open Source Project
+ * Copyright 2006 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,5 +32,5 @@
  *
  * @return 0 on success or -1 on failure
  */
-int osi_socket_make_sockaddr_un(const char *name, int namespaceId,
-                                struct sockaddr_un *p_addr, socklen_t *alen);
+int osi_socket_make_sockaddr_un(const char* name, int namespaceId,
+                                struct sockaddr_un* p_addr, socklen_t* alen);
