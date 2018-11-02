@@ -17,14 +17,13 @@
  ******************************************************************************/
 
 #include "audio_hearing_aid_hw/include/audio_hearing_aid_hw.h"
+#include "bta_closure_api.h"
 #include "bta_hearing_aid_api.h"
 #include "osi/include/alarm.h"
 #include "uipc.h"
 
 #include <base/files/file_util.h>
 #include <include/hardware/bt_av.h>
-
-#include "common/time_util.h"
 
 using base::FilePath;
 extern const char* audio_ha_hw_dump_ctrl_event(tHEARING_AID_CTRL_CMD event);
@@ -69,8 +68,7 @@ void send_audio_data(void*) {
   if (bytes_read < bytes_per_tick) {
     stats.media_read_total_underflow_bytes += bytes_per_tick - bytes_read;
     stats.media_read_total_underflow_count++;
-    stats.media_read_last_underflow_us =
-        bluetooth::common::time_get_os_boottime_us();
+    stats.media_read_last_underflow_us = time_get_os_boottime_us();
   }
 
   std::vector<uint8_t> data(p_buf, p_buf + bytes_read);
@@ -141,7 +139,17 @@ void hearing_aid_recv_ctrl_data() {
       break;
 
     case HEARING_AID_CTRL_CMD_START:
-      if (localAudioReceiver) localAudioReceiver->OnAudioResume();
+      if (localAudioReceiver) {
+        // Call OnAudioResume and block till it returns.
+        std::promise<void> do_resume_promise;
+        std::future<void> do_resume_future = do_resume_promise.get_future();
+        do_in_bta_thread_once(
+            FROM_HERE, base::BindOnce(&HearingAidAudioReceiver::OnAudioResume,
+                                      base::Unretained(localAudioReceiver),
+                                      std::move(do_resume_promise)));
+        do_resume_future.wait();
+      }
+
       // timer is restarted in UIPC_Open
       UIPC_Open(*uipc_hearing_aid, UIPC_CH_ID_AV_AUDIO, hearing_aid_data_cb,
                 HEARING_AID_DATA_PATH);
@@ -154,7 +162,16 @@ void hearing_aid_recv_ctrl_data() {
 
     case HEARING_AID_CTRL_CMD_SUSPEND:
       if (audio_timer) alarm_cancel(audio_timer);
-      if (localAudioReceiver) localAudioReceiver->OnAudioSuspend();
+      if (localAudioReceiver) {
+        // Call OnAudioSuspend and block till it returns.
+        std::promise<void> do_suspend_promise;
+        std::future<void> do_suspend_future = do_suspend_promise.get_future();
+        do_in_bta_thread_once(
+            FROM_HERE, base::BindOnce(&HearingAidAudioReceiver::OnAudioSuspend,
+                                      base::Unretained(localAudioReceiver),
+                                      std::move(do_suspend_promise)));
+        do_suspend_future.wait();
+      }
       hearing_aid_send_ack(HEARING_AID_CTRL_ACK_SUCCESS);
       break;
 
@@ -300,7 +317,7 @@ void HearingAidAudioSource::CleanUp() {
 }
 
 void HearingAidAudioSource::DebugDump(int fd) {
-  uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
+  uint64_t now_us = time_get_os_boottime_us();
   std::stringstream stream;
   stream << "  Hearing Aid Audio HAL:"
          << "\n    Counts (underflow)                                      : "
