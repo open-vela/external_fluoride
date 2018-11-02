@@ -23,14 +23,6 @@ FILES="\.h$|\.c$|\.cpp$|\.cc$|\.patch$"
 
 # Search/replace terms, separated by ":"
 TYPES=(
-  "UINT8   :uint8_t "
-  "UINT16   :uint16_t "
-  "UINT32   :uint32_t "
-  "UINT64   :uint64_t "
-  "INT8   :int8_t "
-  "INT16   :int16_t "
-  "INT32   :int32_t "
-  "INT64   :int64_t "
   "UINT8:uint8_t"
   "UINT16:uint16_t"
   "UINT32:uint32_t"
@@ -39,7 +31,7 @@ TYPES=(
   "INT16:int16_t"
   "INT32:int32_t"
   "INT64:int64_t"
-  "BOOLEAN:bool   "
+  "BOOLEAN:bool"
   "TRUE:true"
   "FALSE:false"
   "__FUNCTION__:__func__"
@@ -55,7 +47,7 @@ function process_file
     after=${tt#*:}
 
     echo -n "."
-    sed -i -e "s/\b${before}/${after}/g; s/${after}_/${before}_/g;" "$1"
+    sed -i -e "s/\b${before}\b/${after}/g" "$1"
   done
   echo
 }
