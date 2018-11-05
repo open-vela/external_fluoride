@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,4 +23,6 @@
 // Represents a mask which can be used to tell the controller which
 // HCI events the stack wishes to be informed about. See the bluetooth
 // spec for more information on what each bit means.
-typedef struct { const uint8_t as_array[8]; } bt_event_mask_t;
+typedef struct {
+  uint8_t as_array[8];
+} bt_event_mask_t;
