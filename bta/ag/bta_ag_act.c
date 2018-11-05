@@ -68,7 +68,7 @@ const tBTA_SERVICE_MASK bta_ag_svc_mask[BTA_AG_NUM_IDX] =
 };
 
 typedef void (*tBTA_AG_ATCMD_CBACK)(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
-                                    char *p_arg, char *p_end, INT16 int_arg);
+                                    char *p_arg, INT16 int_arg);
 
 const tBTA_AG_ATCMD_CBACK bta_ag_at_cback_tbl[BTA_AG_NUM_IDX] =
 {
@@ -431,9 +431,6 @@ void bta_ag_rfc_close(tBTA_AG_SCB *p_scb, tBTA_AG_DATA *p_data)
     p_scb->svc_conn = FALSE;
     p_scb->hsp_version = HSP_VERSION_1_2;
     bta_ag_at_reinit(&p_scb->at_cb);
-
-    memset(&(p_scb->peer_hf_indicators), 0, sizeof(p_scb->peer_hf_indicators));
-    memset(&(p_scb->local_hf_indicators), 0, sizeof(p_scb->local_hf_indicators));
 
     /* stop timers */
     alarm_cancel(p_scb->ring_timer);

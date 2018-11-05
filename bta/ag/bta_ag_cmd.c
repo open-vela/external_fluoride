@@ -16,8 +16,11 @@
  *
  ******************************************************************************/
 
-#define LOG_TAG "bta_ag_cmd"
-
+/******************************************************************************
+ *
+ *  This file contains functions for processing AT commands and results.
+ *
+ ******************************************************************************/
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,9 +32,7 @@
 #include "bta_ag_int.h"
 #include "bta_api.h"
 #include "bta_sys.h"
-#include "log/log.h"
 #include "bt_common.h"
-#include "osi/include/log.h"
 #include "port_api.h"
 #include "utl.h"
 
@@ -54,73 +55,112 @@
 #define BTA_AG_CLIP_TYPE_DEFAULT    129
 #define BTA_AG_CLIP_TYPE_VOIP       255
 
-#define COLON_IDX_4_VGSVGM    4
+#if defined(BTA_AG_MULTI_RESULT_INCLUDED) && (BTA_AG_MULTI_RESULT_INCLUDED == TRUE)
+#define BTA_AG_AT_MULTI_LEN            2
+#define AT_SET_RES_CB(res_cb, c, p, i) {res_cb.code = c; res_cb.p_arg = p; res_cb.int_arg = i;}
 
-/* Local events which will not trigger a higher layer callback */
+/* type for AT result code block */
+typedef struct
+{
+    UINT8 code;
+    char *p_arg;
+    INT16 int_arg;
+} tBTA_AG_RESULT_CB;
+
+/* type for multiple AT result codes block */
+typedef struct
+{
+    UINT8 num_result;
+    tBTA_AG_RESULT_CB res_cb[BTA_AG_AT_MULTI_LEN];
+} tBTA_AG_MULTI_RESULT_CB;
+#endif
+
+/* enumeration of HSP AT commands matches HSP command interpreter table */
 enum
 {
-    BTA_AG_LOCAL_EVT_FIRST = 0x100,
-    BTA_AG_LOCAL_EVT_CCWA,
-    BTA_AG_LOCAL_EVT_CLIP,
-    BTA_AG_LOCAL_EVT_CMER,
-    BTA_AG_LOCAL_EVT_BRSF,
-    BTA_AG_LOCAL_EVT_CMEE,
-    BTA_AG_LOCAL_EVT_BIA,
-    BTA_AG_LOCAL_EVT_BCC,
+    BTA_AG_HS_CMD_CKPD,
+    BTA_AG_HS_CMD_VGS,
+    BTA_AG_HS_CMD_VGM
+};
+
+/* enumeration of HFP AT commands matches HFP command interpreter table */
+enum
+{
+    BTA_AG_HF_CMD_A,
+    BTA_AG_HF_CMD_D,
+    BTA_AG_HF_CMD_VGS,
+    BTA_AG_HF_CMD_VGM,
+    BTA_AG_HF_CMD_CCWA,
+    BTA_AG_HF_CMD_CHLD,
+    BTA_AG_HF_CMD_CHUP,
+    BTA_AG_HF_CMD_CIND,
+    BTA_AG_HF_CMD_CLIP,
+    BTA_AG_HF_CMD_CMER,
+    BTA_AG_HF_CMD_VTS,
+    BTA_AG_HF_CMD_BINP,
+    BTA_AG_HF_CMD_BLDN,
+    BTA_AG_HF_CMD_BVRA,
+    BTA_AG_HF_CMD_BRSF,
+    BTA_AG_HF_CMD_NREC,
+    BTA_AG_HF_CMD_CNUM,
+    BTA_AG_HF_CMD_BTRH,
+    BTA_AG_HF_CMD_CLCC,
+    BTA_AG_HF_CMD_COPS,
+    BTA_AG_HF_CMD_CMEE,
+    BTA_AG_HF_CMD_BIA,
+    BTA_AG_HF_CMD_CBC,
+    BTA_AG_HF_CMD_BCC,
+    BTA_AG_HF_CMD_BCS,
+    BTA_AG_HF_CMD_BAC
 };
 
 /* AT command interpreter table for HSP */
 const tBTA_AG_AT_CMD bta_ag_hsp_cmd[] =
 {
-    {"+CKPD", BTA_AG_AT_CKPD_EVT, BTA_AG_AT_SET,   BTA_AG_AT_INT, 200, 200},
-    {"+VGS",  BTA_AG_SPK_EVT,     BTA_AG_AT_SET,   BTA_AG_AT_INT,   0,  15},
-    {"+VGM",  BTA_AG_MIC_EVT,     BTA_AG_AT_SET,   BTA_AG_AT_INT,   0,  15},
-    /* End-of-table marker used to stop lookup iteration */
-    {"", 0, 0, 0, 0, 0}
+    {"+CKPD",   BTA_AG_AT_SET,                      BTA_AG_AT_INT, 200, 200},
+    {"+VGS",    BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,  15},
+    {"+VGM",    BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,  15},
+    {"",        BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0}
 };
 
 /* AT command interpreter table for HFP */
 const tBTA_AG_AT_CMD bta_ag_hfp_cmd[] =
 {
-    {"A",     BTA_AG_AT_A_EVT,    BTA_AG_AT_NONE, BTA_AG_AT_STR,   0,   0},
-    {"D",     BTA_AG_AT_D_EVT,    BTA_AG_AT_NONE | BTA_AG_AT_FREE, BTA_AG_AT_STR, 0, 0},
-    {"+VGS",  BTA_AG_SPK_EVT,     BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,  15},
-    {"+VGM",  BTA_AG_MIC_EVT,     BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,  15},
-    {"+CCWA", BTA_AG_LOCAL_EVT_CCWA, BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,   1},
+    {"A",       BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0},
+    {"D",       (BTA_AG_AT_NONE | BTA_AG_AT_FREE),  BTA_AG_AT_STR,   0,   0},
+    {"+VGS",    BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,  15},
+    {"+VGM",    BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,  15},
+    {"+CCWA",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   1},
     /* Consider CHLD as str to take care of indexes for ECC */
-    {"+CHLD", BTA_AG_AT_CHLD_EVT, BTA_AG_AT_SET | BTA_AG_AT_TEST, BTA_AG_AT_STR, 0, 4},
-    {"+CHUP", BTA_AG_AT_CHUP_EVT, BTA_AG_AT_NONE, BTA_AG_AT_STR,   0,   0},
-    {"+CIND", BTA_AG_AT_CIND_EVT, BTA_AG_AT_READ | BTA_AG_AT_TEST, BTA_AG_AT_STR, 0, 0},
-    {"+CLIP", BTA_AG_LOCAL_EVT_CLIP, BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,   1},
-    {"+CMER", BTA_AG_LOCAL_EVT_CMER, BTA_AG_AT_SET,  BTA_AG_AT_STR,   0,   0},
-    {"+VTS",  BTA_AG_AT_VTS_EVT,  BTA_AG_AT_SET,  BTA_AG_AT_STR,   0,   0},
-    {"+BINP", BTA_AG_AT_BINP_EVT, BTA_AG_AT_SET,  BTA_AG_AT_INT,   1,   1},
-    {"+BLDN", BTA_AG_AT_BLDN_EVT, BTA_AG_AT_NONE, BTA_AG_AT_STR,   0,   0},
-    {"+BVRA", BTA_AG_AT_BVRA_EVT, BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,   1},
-    {"+BRSF", BTA_AG_LOCAL_EVT_BRSF, BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,   BTA_AG_CMD_MAX_VAL},
-    {"+NREC", BTA_AG_AT_NREC_EVT, BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,   0},
-    {"+CNUM", BTA_AG_AT_CNUM_EVT, BTA_AG_AT_NONE, BTA_AG_AT_STR,   0,   0},
-    {"+BTRH", BTA_AG_AT_BTRH_EVT, BTA_AG_AT_READ | BTA_AG_AT_SET, BTA_AG_AT_INT, 0, 2},
-    {"+CLCC", BTA_AG_AT_CLCC_EVT, BTA_AG_AT_NONE, BTA_AG_AT_STR,   0,   0},
-    {"+COPS", BTA_AG_AT_COPS_EVT, BTA_AG_AT_READ | BTA_AG_AT_SET, BTA_AG_AT_STR, 0, 0},
-    {"+CMEE", BTA_AG_LOCAL_EVT_CMEE, BTA_AG_AT_SET,  BTA_AG_AT_INT,   0,   1},
-    {"+BIA",  BTA_AG_LOCAL_EVT_BIA,  BTA_AG_AT_SET,  BTA_AG_AT_STR,   0,  20},
-    {"+CBC",  BTA_AG_AT_CBC_EVT,  BTA_AG_AT_SET,  BTA_AG_AT_INT,   0, 100},
-    {"+BCC",  BTA_AG_LOCAL_EVT_BCC,  BTA_AG_AT_NONE, BTA_AG_AT_STR,   0,   0},
-    {"+BCS",  BTA_AG_AT_BCS_EVT,  BTA_AG_AT_SET,  BTA_AG_AT_INT,   0, BTA_AG_CMD_MAX_VAL},
-    {"+BIND", BTA_AG_AT_BIND_EVT, BTA_AG_AT_SET | BTA_AG_AT_READ | BTA_AG_AT_TEST, BTA_AG_AT_STR, 0, 0},
-    {"+BIEV", BTA_AG_AT_BIEV_EVT, BTA_AG_AT_SET,  BTA_AG_AT_STR,   0,   0},
-    {"+BAC",  BTA_AG_AT_BAC_EVT,  BTA_AG_AT_SET,  BTA_AG_AT_STR,   0,   0},
-    /* End-of-table marker used to stop lookup iteration */
-    {"", 0, 0, 0, 0, 0}
+    {"+CHLD",   (BTA_AG_AT_SET | BTA_AG_AT_TEST),   BTA_AG_AT_STR,   0,   4},
+    {"+CHUP",   BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0},
+    {"+CIND",   (BTA_AG_AT_READ | BTA_AG_AT_TEST),  BTA_AG_AT_STR,   0,   0},
+    {"+CLIP",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   1},
+    {"+CMER",   BTA_AG_AT_SET,                      BTA_AG_AT_STR,   0,   0},
+    {"+VTS",    BTA_AG_AT_SET,                      BTA_AG_AT_STR,   0,   0},
+    {"+BINP",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   1,   1},
+    {"+BLDN",   BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0},
+    {"+BVRA",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   1},
+    {"+BRSF",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   BTA_AG_CMD_MAX_VAL},
+    {"+NREC",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   0},
+    {"+CNUM",   BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0},
+    {"+BTRH",   (BTA_AG_AT_READ | BTA_AG_AT_SET),   BTA_AG_AT_INT,   0,   2},
+    {"+CLCC",   BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0},
+    {"+COPS",   (BTA_AG_AT_READ | BTA_AG_AT_SET),   BTA_AG_AT_STR,   0,   0},
+    {"+CMEE",   BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   1},
+    {"+BIA",    BTA_AG_AT_SET,                      BTA_AG_AT_STR,   0,   20},
+    {"+CBC",    BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   100},
+    {"+BCC",    BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0},
+    {"+BCS",    BTA_AG_AT_SET,                      BTA_AG_AT_INT,   0,   BTA_AG_CMD_MAX_VAL},
+    {"+BAC",    BTA_AG_AT_SET,                      BTA_AG_AT_STR,   0,   0},
+    {"",        BTA_AG_AT_NONE,                     BTA_AG_AT_STR,   0,   0}
 };
 
 /* AT result code table element */
 typedef struct
 {
-    const char  *result_string;       /* AT result string */
-    size_t      result_id;            /* Local or BTA result id */
-    UINT8       arg_type;             /* whether argument is int or string */
+    const char  *p_res;         /* AT result string */
+    UINT8       fmt;            /* whether argument is int or string */
 } tBTA_AG_RESULT;
 
 /* AT result code argument types */
@@ -131,56 +171,60 @@ enum
     BTA_AG_RES_FMT_STR         /* string argument */
 };
 
-/* Local AT command result codes not defined in bta_ag_api.h */
+/* enumeration of AT result codes, matches constant table */
 enum
 {
-    BTA_AG_LOCAL_RES_FIRST = 0x0100,
-    BTA_AG_LOCAL_RES_OK,
-    BTA_AG_LOCAL_RES_ERROR,
-    BTA_AG_LOCAL_RES_RING,
-    BTA_AG_LOCAL_RES_CLIP,
-    BTA_AG_LOCAL_RES_BRSF,
-    BTA_AG_LOCAL_RES_CMEE,
-    BTA_AG_LOCAL_RES_BCS
+    BTA_AG_RES_OK,
+    BTA_AG_RES_ERROR,
+    BTA_AG_RES_RING,
+    BTA_AG_RES_VGS,
+    BTA_AG_RES_VGM,
+    BTA_AG_RES_CCWA,
+    BTA_AG_RES_CHLD,
+    BTA_AG_RES_CIND,
+    BTA_AG_RES_CLIP,
+    BTA_AG_RES_CIEV,
+    BTA_AG_RES_BINP,
+    BTA_AG_RES_BVRA,
+    BTA_AG_RES_BRSF,
+    BTA_AG_RES_BSIR,
+    BTA_AG_RES_CNUM,
+    BTA_AG_RES_BTRH,
+    BTA_AG_RES_CLCC,
+    BTA_AG_RES_COPS,
+    BTA_AG_RES_CMEE,
+    BTA_AG_RES_BCS,
+    BTA_AG_RES_UNAT
 };
 
-/* AT result code constant table */
+#if defined(BTA_HSP_RESULT_REPLACE_COLON) && (BTA_HSP_RESULT_REPLACE_COLON == TRUE)
+#define COLON_IDX_4_VGSVGM    4
+#endif
+/* AT result code constant table  (Indexed by result code) */
 const tBTA_AG_RESULT bta_ag_result_tbl[] =
 {
-    {"OK",      BTA_AG_LOCAL_RES_OK,    BTA_AG_RES_FMT_NONE},
-    {"ERROR",   BTA_AG_LOCAL_RES_ERROR, BTA_AG_RES_FMT_NONE},
-    {"RING",    BTA_AG_LOCAL_RES_RING,  BTA_AG_RES_FMT_NONE},
-    {"+VGS: ",  BTA_AG_SPK_RES,         BTA_AG_RES_FMT_INT},
-    {"+VGM: ",  BTA_AG_MIC_RES,         BTA_AG_RES_FMT_INT},
-    {"+CCWA: ", BTA_AG_CALL_WAIT_RES,   BTA_AG_RES_FMT_STR},
-    {"+CHLD: ", BTA_AG_IN_CALL_HELD_RES,BTA_AG_RES_FMT_STR},
-    {"+CIND: ", BTA_AG_CIND_RES,        BTA_AG_RES_FMT_STR},
-    {"+CLIP: ", BTA_AG_LOCAL_RES_CLIP,  BTA_AG_RES_FMT_STR},
-    {"+CIEV: ", BTA_AG_IND_RES,         BTA_AG_RES_FMT_STR},
-    {"+BINP: ", BTA_AG_BINP_RES,        BTA_AG_RES_FMT_STR},
-    {"+BVRA: ", BTA_AG_BVRA_RES,        BTA_AG_RES_FMT_INT},
-    {"+BRSF: ", BTA_AG_LOCAL_RES_BRSF,  BTA_AG_RES_FMT_INT},
-    {"+BSIR: ", BTA_AG_INBAND_RING_RES, BTA_AG_RES_FMT_INT},
-    {"+CNUM: ", BTA_AG_CNUM_RES,        BTA_AG_RES_FMT_STR},
-    {"+BTRH: ", BTA_AG_BTRH_RES,        BTA_AG_RES_FMT_INT},
-    {"+CLCC: ", BTA_AG_CLCC_RES,        BTA_AG_RES_FMT_STR},
-    {"+COPS: ", BTA_AG_COPS_RES,        BTA_AG_RES_FMT_STR},
-    {"+CME ERROR: ", BTA_AG_LOCAL_RES_CMEE, BTA_AG_RES_FMT_INT},
-    {"+BCS: ",  BTA_AG_LOCAL_RES_BCS,   BTA_AG_RES_FMT_INT},
-    {"+BIND: ", BTA_AG_BIND_RES,        BTA_AG_RES_FMT_STR},
-    {"",        BTA_AG_UNAT_RES,        BTA_AG_RES_FMT_STR}
+    {"OK",      BTA_AG_RES_FMT_NONE},
+    {"ERROR",   BTA_AG_RES_FMT_NONE},
+    {"RING",    BTA_AG_RES_FMT_NONE},
+    {"+VGS: ",  BTA_AG_RES_FMT_INT},
+    {"+VGM: ",  BTA_AG_RES_FMT_INT},
+    {"+CCWA: ", BTA_AG_RES_FMT_STR},
+    {"+CHLD: ", BTA_AG_RES_FMT_STR},
+    {"+CIND: ", BTA_AG_RES_FMT_STR},
+    {"+CLIP: ", BTA_AG_RES_FMT_STR},
+    {"+CIEV: ", BTA_AG_RES_FMT_STR},
+    {"+BINP: ", BTA_AG_RES_FMT_STR},
+    {"+BVRA: ", BTA_AG_RES_FMT_INT},
+    {"+BRSF: ", BTA_AG_RES_FMT_INT},
+    {"+BSIR: ", BTA_AG_RES_FMT_INT},
+    {"+CNUM: ", BTA_AG_RES_FMT_STR},
+    {"+BTRH: ", BTA_AG_RES_FMT_INT},
+    {"+CLCC: ", BTA_AG_RES_FMT_STR},
+    {"+COPS: ", BTA_AG_RES_FMT_STR},
+    {"+CME ERROR: ", BTA_AG_RES_FMT_INT},
+    {"+BCS: ",  BTA_AG_RES_FMT_INT},
+    {"",        BTA_AG_RES_FMT_STR}
 };
-
-static const tBTA_AG_RESULT* bta_ag_result_by_code(size_t code)
-{
-    for (size_t i = 0; i != sizeof(bta_ag_result_tbl) /
-      sizeof(bta_ag_result_tbl[0]); ++i)
-    {
-        if (code == bta_ag_result_tbl[i].result_id)
-            return &bta_ag_result_tbl[i];
-    }
-    return 0;
-}
 
 const tBTA_AG_AT_CMD *bta_ag_at_tbl[BTA_AG_NUM_IDX] =
 {
@@ -188,31 +232,95 @@ const tBTA_AG_AT_CMD *bta_ag_at_tbl[BTA_AG_NUM_IDX] =
     bta_ag_hfp_cmd
 };
 
-typedef struct
+/* callback event lookup table for HSP */
+const tBTA_AG_EVT bta_ag_hsp_cb_evt[] =
 {
-    size_t result_code;
-    size_t indicator;
-} tBTA_AG_INDICATOR_MAP;
-
-/* callsetup indicator value lookup table */
-const tBTA_AG_INDICATOR_MAP callsetup_indicator_map[] =
-{
-    {BTA_AG_IN_CALL_RES,        BTA_AG_CALLSETUP_INCOMING},
-    {BTA_AG_CALL_WAIT_RES,      BTA_AG_CALLSETUP_INCOMING},
-    {BTA_AG_OUT_CALL_ORIG_RES,  BTA_AG_CALLSETUP_OUTGOING},
-    {BTA_AG_OUT_CALL_ALERT_RES, BTA_AG_CALLSETUP_ALERTING}
+    BTA_AG_AT_CKPD_EVT,     /* BTA_AG_HS_CMD_CKPD */
+    BTA_AG_SPK_EVT,         /* BTA_AG_HS_CMD_VGS */
+    BTA_AG_MIC_EVT          /* BTA_AG_HS_CMD_VGM */
 };
 
-static size_t bta_ag_indicator_by_result_code(size_t code)
+/* callback event lookup table for HFP  (Indexed by command) */
+const tBTA_AG_EVT bta_ag_hfp_cb_evt[] =
 {
-    for (size_t i = 0; i != sizeof(callsetup_indicator_map) /
-      sizeof(callsetup_indicator_map[0]); ++i)
-    {
-        if (code == callsetup_indicator_map[i].result_code)
-            return callsetup_indicator_map[i].indicator;
-    }
-    return BTA_AG_CALLSETUP_NONE;
-}
+    BTA_AG_AT_A_EVT,        /* BTA_AG_HF_CMD_A */
+    BTA_AG_AT_D_EVT,        /* BTA_AG_HF_CMD_D */
+    BTA_AG_SPK_EVT,         /* BTA_AG_HF_CMD_VGS */
+    BTA_AG_MIC_EVT,         /* BTA_AG_HF_CMD_VGM */
+    0,                      /* BTA_AG_HF_CMD_CCWA */
+    BTA_AG_AT_CHLD_EVT,     /* BTA_AG_HF_CMD_CHLD */
+    BTA_AG_AT_CHUP_EVT,     /* BTA_AG_HF_CMD_CHUP */
+    BTA_AG_AT_CIND_EVT,     /* BTA_AG_HF_CMD_CIND */
+    0,                      /* BTA_AG_HF_CMD_CLIP */
+    0,                      /* BTA_AG_HF_CMD_CMER */
+    BTA_AG_AT_VTS_EVT,      /* BTA_AG_HF_CMD_VTS */
+    BTA_AG_AT_BINP_EVT,     /* BTA_AG_HF_CMD_BINP */
+    BTA_AG_AT_BLDN_EVT,     /* BTA_AG_HF_CMD_BLDN */
+    BTA_AG_AT_BVRA_EVT,     /* BTA_AG_HF_CMD_BVRA */
+    0,                      /* BTA_AG_HF_CMD_BRSF */
+    BTA_AG_AT_NREC_EVT,     /* BTA_AG_HF_CMD_NREC */
+    BTA_AG_AT_CNUM_EVT,     /* BTA_AG_HF_CMD_CNUM */
+    BTA_AG_AT_BTRH_EVT,     /* BTA_AG_HF_CMD_BTRH */
+    BTA_AG_AT_CLCC_EVT,     /* BTA_AG_HF_CMD_CLCC */
+    BTA_AG_AT_COPS_EVT,     /* BTA_AG_HF_CMD_COPS */
+    0,                      /* BTA_AG_HF_CMD_CMEE */
+    0,                      /* BTA_AG_HF_CMD_BIA */
+    BTA_AG_AT_CBC_EVT,      /* BTA_AG_HF_CMD_CBC */
+    0,                      /* BTA_AG_HF_CMD_BCC */
+    BTA_AG_AT_BCS_EVT,      /* BTA_AG_HF_CMD_BCS */
+    BTA_AG_AT_BAC_EVT       /* BTA_AG_HF_CMD_BAC */
+};
+
+/* translation of API result code values to internal values */
+const UINT8 bta_ag_trans_result[] =
+{
+    BTA_AG_RES_VGS,     /* BTA_AG_SPK_RES */
+    BTA_AG_RES_VGM,     /* BTA_AG_MIC_RES */
+    BTA_AG_RES_BSIR,    /* BTA_AG_INBAND_RING_RES */
+    BTA_AG_RES_CIND,    /* BTA_AG_CIND_RES */
+    BTA_AG_RES_BINP,    /* BTA_AG_BINP_RES */
+    BTA_AG_RES_CIEV,    /* BTA_AG_IND_RES */
+    BTA_AG_RES_BVRA,    /* BTA_AG_BVRA_RES */
+    BTA_AG_RES_CNUM,    /* BTA_AG_CNUM_RES */
+    BTA_AG_RES_BTRH,    /* BTA_AG_BTRH_RES */
+    BTA_AG_RES_CLCC,    /* BTA_AG_CLCC_RES */
+    BTA_AG_RES_COPS,    /* BTA_AG_COPS_RES */
+    0,                  /* BTA_AG_IN_CALL_RES */
+    0,                  /* BTA_AG_IN_CALL_CONN_RES */
+    BTA_AG_RES_CCWA,    /* BTA_AG_CALL_WAIT_RES */
+    0,                  /* BTA_AG_OUT_CALL_ORIG_RES */
+    0,                  /* BTA_AG_OUT_CALL_ALERT_RES */
+    0,                  /* BTA_AG_OUT_CALL_CONN_RES */
+    0,                  /* BTA_AG_CALL_CANCEL_RES */
+    0,                  /* BTA_AG_END_CALL_RES */
+    0,                  /* BTA_AG_IN_CALL_HELD_RES */
+    BTA_AG_RES_UNAT     /* BTA_AG_UNAT_RES */
+};
+
+/* callsetup indicator value lookup table */
+const UINT8 bta_ag_callsetup_ind_tbl[] =
+{
+    0,                          /* BTA_AG_SPK_RES */
+    0,                          /* BTA_AG_MIC_RES */
+    0,                          /* BTA_AG_INBAND_RING_RES */
+    0,                          /* BTA_AG_CIND_RES */
+    0,                          /* BTA_AG_BINP_RES */
+    0,                          /* BTA_AG_IND_RES */
+    0,                          /* BTA_AG_BVRA_RES */
+    0,                          /* BTA_AG_CNUM_RES */
+    0,                          /* BTA_AG_BTRH_RES */
+    0,                          /* BTA_AG_CLCC_RES */
+    0,                          /* BTA_AG_COPS_RES */
+    BTA_AG_CALLSETUP_INCOMING,  /* BTA_AG_IN_CALL_RES */
+    BTA_AG_CALLSETUP_NONE,      /* BTA_AG_IN_CALL_CONN_RES */
+    BTA_AG_CALLSETUP_INCOMING,  /* BTA_AG_CALL_WAIT_RES */
+    BTA_AG_CALLSETUP_OUTGOING,  /* BTA_AG_OUT_CALL_ORIG_RES */
+    BTA_AG_CALLSETUP_ALERTING,  /* BTA_AG_OUT_CALL_ALERT_RES */
+    BTA_AG_CALLSETUP_NONE,      /* BTA_AG_OUT_CALL_CONN_RES */
+    BTA_AG_CALLSETUP_NONE,      /* BTA_AG_CALL_CANCEL_RES */
+    BTA_AG_CALLSETUP_NONE,      /* BTA_AG_END_CALL_RES */
+    BTA_AG_CALLSETUP_NONE       /* BTA_AG_IN_CALL_HELD_RES */
+};
 
 /*******************************************************************************
 **
@@ -224,50 +332,49 @@ static size_t bta_ag_indicator_by_result_code(size_t code)
 ** Returns          void
 **
 *******************************************************************************/
-static void bta_ag_send_result(tBTA_AG_SCB *p_scb, size_t code, char *p_arg,
+static void bta_ag_send_result(tBTA_AG_SCB *p_scb, UINT8 code, char *p_arg,
                                INT16 int_arg)
 {
-    const tBTA_AG_RESULT *result = bta_ag_result_by_code(code);
-    if (result == 0)
-    {
-        LOG_ERROR(LOG_TAG, "%s Unable to lookup result for code %zu", __func__, code);
-        return;
-    }
+    char    buf[BTA_AG_AT_MAX_LEN + 16];
+    char    *p = buf;
+    UINT16  len;
 
-    char buf[BTA_AG_AT_MAX_LEN + 16];
-    char *p = buf;
-    memset(buf, 0, sizeof(buf));
-
+#if defined(BTA_AG_RESULT_DEBUG) && (BTA_AG_RESULT_DEBUG == TRUE)
+    memset(buf, NULL, sizeof(buf));
+#endif
     /* init with \r\n */
     *p++ = '\r';
     *p++ = '\n';
 
     /* copy result code string */
-    strlcpy(p, result->result_string, sizeof(buf) - 2);
-
-    if (p_scb->conn_service == BTA_AG_HSP)
+    strlcpy(p, bta_ag_result_tbl[code].p_res, sizeof(buf) - 2);
+#if defined(BTA_HSP_RESULT_REPLACE_COLON) && (BTA_HSP_RESULT_REPLACE_COLON == TRUE)
+    if(p_scb->conn_service == BTA_AG_HSP)
     {
         /* If HSP then ":"symbol should be changed as "=" for HSP compatibility */
         switch(code)
         {
-        case BTA_AG_SPK_RES:
-        case BTA_AG_MIC_RES:
+        case BTA_AG_RES_VGS:
+        case BTA_AG_RES_VGM:
             if(*(p+COLON_IDX_4_VGSVGM) == ':')
             {
+                #if defined(BTA_AG_RESULT_DEBUG) && (BTA_AG_RESULT_DEBUG == TRUE)
+                APPL_TRACE_DEBUG("[HSP] ':'symbol is changed as '=' for HSP compatibility");
+                #endif
                 *(p+COLON_IDX_4_VGSVGM) = '=';
             }
             break;
         }
     }
-
-    p += strlen(result->result_string);
+#endif
+    p += strlen(bta_ag_result_tbl[code].p_res);
 
     /* copy argument if any */
-    if (result->arg_type == BTA_AG_RES_FMT_INT)
+    if (bta_ag_result_tbl[code].fmt == BTA_AG_RES_FMT_INT)
     {
         p += utl_itoa((UINT16) int_arg, p);
     }
-    else if (result->arg_type == BTA_AG_RES_FMT_STR)
+    else if (bta_ag_result_tbl[code].fmt == BTA_AG_RES_FMT_STR)
     {
         strcpy(p, p_arg);
         p += strlen(p_arg);
@@ -277,10 +384,78 @@ static void bta_ag_send_result(tBTA_AG_SCB *p_scb, size_t code, char *p_arg,
     *p++ = '\r';
     *p++ = '\n';
 
+#if defined(BTA_AG_RESULT_DEBUG) && (BTA_AG_RESULT_DEBUG == TRUE)
+    APPL_TRACE_DEBUG("bta_ag_send_result: %s", buf);
+#endif
+
     /* send to RFCOMM */
-    UINT16 len = 0;
     PORT_WriteData(p_scb->conn_handle, buf, (UINT16) (p - buf), &len);
 }
+
+#if defined(BTA_AG_MULTI_RESULT_INCLUDED) && (BTA_AG_MULTI_RESULT_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         bta_ag_send_multi_result
+**
+** Description      Send multiple AT result codes.
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+static void bta_ag_send_multi_result(tBTA_AG_SCB *p_scb, tBTA_AG_MULTI_RESULT_CB *m_res_cb)
+{
+    char    buf[BTA_AG_AT_MAX_LEN * BTA_AG_AT_MULTI_LEN + 16];
+    char    *p = buf;
+    UINT16  len;
+    UINT8   res_idx = 0;
+
+    if((!m_res_cb) || (m_res_cb->num_result == 0) || (m_res_cb->num_result > BTA_AG_AT_MULTI_LEN))
+    {
+        APPL_TRACE_DEBUG("m_res_cb is NULL or num_result is out of range.");
+        return;
+    }
+
+#if defined(BTA_AG_RESULT_DEBUG) && (BTA_AG_RESULT_DEBUG == TRUE)
+    memset(buf, NULL, sizeof(buf));
+#endif
+
+    while(res_idx < m_res_cb->num_result)
+    {
+        /* init with \r\n */
+        *p++ = '\r';
+        *p++ = '\n';
+
+        /* copy result code string */
+        strcpy(p, bta_ag_result_tbl[m_res_cb->res_cb[res_idx].code].p_res);
+        p += strlen(bta_ag_result_tbl[m_res_cb->res_cb[res_idx].code].p_res);
+
+        /* copy argument if any */
+        if (bta_ag_result_tbl[m_res_cb->res_cb[res_idx].code].fmt == BTA_AG_RES_FMT_INT)
+        {
+            p += utl_itoa((UINT16) m_res_cb->res_cb[res_idx].int_arg, p);
+        }
+        else if (bta_ag_result_tbl[m_res_cb->res_cb[res_idx].code].fmt == BTA_AG_RES_FMT_STR)
+        {
+            strcpy(p, m_res_cb->res_cb[res_idx].p_arg);
+            p += strlen(m_res_cb->res_cb[res_idx].p_arg);
+        }
+
+        /* finish with \r\n */
+        *p++ = '\r';
+        *p++ = '\n';
+
+        res_idx++;
+    }
+
+#if defined(BTA_AG_RESULT_DEBUG) && (BTA_AG_RESULT_DEBUG == TRUE)
+    APPL_TRACE_DEBUG("send_result: %s", buf);
+#endif
+
+    /* send to RFCOMM */
+    PORT_WriteData(p_scb->conn_handle, buf, (UINT16) (p - buf), &len);
+}
+#endif
 
 /*******************************************************************************
 **
@@ -294,7 +469,7 @@ static void bta_ag_send_result(tBTA_AG_SCB *p_scb, size_t code, char *p_arg,
 *******************************************************************************/
 static void bta_ag_send_ok(tBTA_AG_SCB *p_scb)
 {
-    bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_OK, NULL, 0);
+    bta_ag_send_result(p_scb, BTA_AG_RES_OK, NULL, 0);
 }
 
 /*******************************************************************************
@@ -312,9 +487,9 @@ static void bta_ag_send_error(tBTA_AG_SCB *p_scb, INT16 errcode)
 {
     /* If HFP and extended audio gateway error codes are enabled */
     if (p_scb->conn_service == BTA_AG_HFP && p_scb->cmee_enabled)
-        bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_CMEE, NULL, errcode);
+        bta_ag_send_result(p_scb, BTA_AG_RES_CMEE, NULL, errcode);
     else
-        bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_ERROR, NULL, 0);
+        bta_ag_send_result(p_scb, BTA_AG_RES_ERROR, NULL, 0);
 }
 
 /*******************************************************************************
@@ -399,7 +574,7 @@ static void bta_ag_send_ind(tBTA_AG_SCB *p_scb, UINT16 id, UINT16 value, BOOLEAN
         p += utl_itoa(id, p);
         *p++ = ',';
         utl_itoa(value, p);
-        bta_ag_send_result(p_scb, BTA_AG_IND_RES, str, 0);
+        bta_ag_send_result(p_scb, BTA_AG_RES_CIEV, str, 0);
     }
 }
 
@@ -413,25 +588,25 @@ static void bta_ag_send_ind(tBTA_AG_SCB *p_scb, UINT16 id, UINT16 value, BOOLEAN
 ** Returns          TRUE if parsed ok, FALSE otherwise.
 **
 *******************************************************************************/
-static BOOLEAN bta_ag_parse_cmer(char *p_s, char *p_end, BOOLEAN *p_enabled)
+static BOOLEAN bta_ag_parse_cmer(char *p_s, BOOLEAN *p_enabled)
 {
     INT16   n[4] = {-1, -1, -1, -1};
     int     i;
     char    *p;
 
-    for (i = 0; i < 4; i++, p_s = p + 1)
+    for (i = 0; i < 4; i++)
     {
         /* skip to comma delimiter */
-        for (p = p_s; p < p_end && *p != ',' && *p != 0; p++);
+        for (p = p_s; *p != ',' && *p != 0; p++);
 
         /* get integer value */
-        if (p > p_end) {
-            android_errorWriteLog(0x534e4554, "112860487");
-            return FALSE;
-        }
         *p = 0;
         n[i] = utl_str2int(p_s);
         p_s = p + 1;
+        if (p_s == 0)
+        {
+            break;
+        }
     }
 
     /* process values */
@@ -497,8 +672,7 @@ static UINT8 bta_ag_parse_chld(tBTA_AG_SCB *p_scb, char *p_s)
 ** Returns          Returns bitmap of supported codecs.
 **
 *******************************************************************************/
-static tBTA_AG_PEER_CODEC bta_ag_parse_bac(tBTA_AG_SCB *p_scb, char *p_s,
-                                           char *p_end)
+static tBTA_AG_PEER_CODEC bta_ag_parse_bac(tBTA_AG_SCB *p_scb, char *p_s)
 {
     tBTA_AG_PEER_CODEC  retval = BTA_AG_CODEC_NONE;
     UINT16  uuid_codec;
@@ -508,13 +682,9 @@ static tBTA_AG_PEER_CODEC bta_ag_parse_bac(tBTA_AG_SCB *p_scb, char *p_s,
     while(p_s)
     {
         /* skip to comma delimiter */
-        for(p = p_s; p < p_end && *p != ',' && *p != 0; p++);
+        for(p = p_s; *p != ',' && *p != 0; p++);
 
         /* get integre value */
-        if (p > p_end) {
-            android_errorWriteLog(0x534e4554, "112860487");
-            break;
-        }
         if (*p != 0)
         {
             *p = 0;
@@ -632,9 +802,10 @@ BOOLEAN bta_ag_inband_enabled(tBTA_AG_SCB *p_scb)
 void bta_ag_send_call_inds(tBTA_AG_SCB *p_scb, tBTA_AG_RES result)
 {
     UINT8 call = p_scb->call_ind;
+    UINT8 callsetup;
 
     /* set new call and callsetup values based on BTA_AgResult */
-    size_t callsetup = bta_ag_indicator_by_result_code(result);
+    callsetup = bta_ag_callsetup_ind_tbl[result];
 
     if (result == BTA_AG_END_CALL_RES)
     {
@@ -665,245 +836,24 @@ void bta_ag_send_call_inds(tBTA_AG_SCB *p_scb, tBTA_AG_RES result)
 ** Returns          void
 **
 *******************************************************************************/
-void bta_ag_at_hsp_cback(tBTA_AG_SCB *p_scb, UINT16 command_id, UINT8 arg_type,
-                                char *p_arg, char *p_end, INT16 int_arg)
+void bta_ag_at_hsp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
+                                char *p_arg, INT16 int_arg)
 {
-    APPL_TRACE_DEBUG("AT cmd:%d arg_type:%d arg:%d arg:%s", command_id, arg_type,
+    tBTA_AG_VAL val;
+
+    APPL_TRACE_DEBUG("AT cmd:%d arg_type:%d arg:%d arg:%s", cmd, arg_type,
                       int_arg, p_arg);
 
+    /* send OK */
     bta_ag_send_ok(p_scb);
 
-    tBTA_AG_VAL val;
     val.hdr.handle = bta_ag_scb_to_idx(p_scb);
     val.hdr.app_id = p_scb->app_id;
     val.num = (UINT16) int_arg;
-
-    if ((p_end - p_arg + 1) >= (long)sizeof(val.str)) {
-        APPL_TRACE_ERROR("%s: p_arg is too long, send error and return", __func__);
-        bta_ag_send_error(p_scb, BTA_AG_ERR_TEXT_TOO_LONG);
-        android_errorWriteLog(0x534e4554, "112860487");
-        return;
-    }
-    strlcpy(val.str, p_arg, sizeof(val.str));
+    strlcpy(val.str, p_arg, BTA_AG_AT_MAX_LEN);
 
     /* call callback with event */
-    (*bta_ag_cb.p_cback)(command_id, (tBTA_AG *) &val);
-}
-
-/*******************************************************************************
-**
-** Function         bta_ag_find_empty_hf_ind)
-**
-** Description      This function returns the index of an empty HF indicator
-**                  structure.
-**
-** Returns          int : index of the empty HF indicator structure or
-**                            -1 if no empty indicator
-**                            is available.
-**
-*******************************************************************************/
-static int bta_ag_find_empty_hf_ind(tBTA_AG_SCB *p_scb)
-{
-    for (int index = 0; index < BTA_AG_MAX_NUM_PEER_HF_IND; index++)
-    {
-        if (p_scb->peer_hf_indicators[index].ind_id == 0)
-            return index;
-    }
-
-    return -1;
-}
-
-
-/*******************************************************************************
-**
-** Function         bta_ag_find_hf_ind_by_id
-**
-** Description      This function returns the index of the HF indicator
-**                  structure by the indicator id
-**
-** Returns          int : index of the HF indicator structure
-**                            -1 if the indicator
-**                            was not found.
-**
-*******************************************************************************/
-static int bta_ag_find_hf_ind_by_id(tBTA_AG_HF_IND *p_hf_ind, int size, uint32_t ind_id)
-{
-    for (int index = 0; index < size; index++)
-    {
-        if (p_hf_ind[index].ind_id == ind_id)
-            return index;
-    }
-
-    return -1;
-}
-
-/*******************************************************************************
-**
-** Function         bta_ag_parse_bind_set
-**
-** Description      Parse AT+BIND set command and save the indicators
-**
-** Returns          true if successful
-**
-*******************************************************************************/
-static bool bta_ag_parse_bind_set(tBTA_AG_SCB *p_scb, tBTA_AG_VAL val)
-{
-    char *p_token = strtok(val.str, ",");
-    if (p_token == NULL)
-        return false;
-
-    while (p_token != NULL)
-    {
-        uint16_t rcv_ind_id = atoi(p_token);
-        int index = bta_ag_find_empty_hf_ind(p_scb);
-        if (index == -1)
-        {
-            APPL_TRACE_WARNING("%s Can't save more indicators", __func__);
-            return false;
-        }
-
-        p_scb->peer_hf_indicators[index].ind_id = rcv_ind_id;
-        APPL_TRACE_DEBUG("%s peer_hf_ind[%d] = %d", __func__, index, rcv_ind_id);
-
-        p_token = strtok(NULL, ",");
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-**
-** Function         bta_ag_bind_response
-**
-** Description      Send response for the AT+BIND command (HFP 1.7) received
-**                  from the headset based on the argument types.
-**
-** Returns          Void
-**
-*******************************************************************************/
-static void bta_ag_bind_response(tBTA_AG_SCB *p_scb, uint8_t arg_type)
-{
-    char buffer[BTA_AG_AT_MAX_LEN];
-    memset(buffer, 0, BTA_AG_AT_MAX_LEN);
-
-    if (arg_type == BTA_AG_AT_TEST)
-    {
-        int index = 0;
-        buffer[index++] = '(';
-
-        for (uint32_t i = 0; i < bta_ag_local_hf_ind_cfg[0].ind_id; i++)
-        {
-            if (bta_ag_local_hf_ind_cfg[i+1].is_supported == true)
-            {
-                /* Add ',' from second indicator */
-                if (index > 1)
-                    buffer[index++] = ',';
-                sprintf(&buffer[index++], "%d", bta_ag_local_hf_ind_cfg[i+1].ind_id);
-            }
-        }
-
-        buffer[index++] = ')';
-
-        bta_ag_send_result(p_scb, BTA_AG_BIND_RES, buffer, 0);
-        bta_ag_send_ok(p_scb);
-    }
-    else if (arg_type == BTA_AG_AT_READ)
-    {
-        char *p = buffer;
-
-        /* bta_ag_local_hf_ind_cfg[0].ind_id is used as BTA_AG_NUM_LOCAL_HF_IND */
-        for (uint32_t i = 0; i < bta_ag_local_hf_ind_cfg[0].ind_id; i++)
-        {
-            if (i == BTA_AG_MAX_NUM_LOCAL_HF_IND)
-            {
-                APPL_TRACE_WARNING("%s No space for more HF indicators", __func__);
-                break;
-            }
-
-            p_scb->local_hf_indicators[i].ind_id = bta_ag_local_hf_ind_cfg[i+1].ind_id;
-            p_scb->local_hf_indicators[i].is_supported = bta_ag_local_hf_ind_cfg[i+1].is_supported;
-            p_scb->local_hf_indicators[i].is_enable = bta_ag_local_hf_ind_cfg[i+1].is_enable;
-
-            int peer_index = bta_ag_find_hf_ind_by_id(p_scb->peer_hf_indicators,
-                                                    BTA_AG_MAX_NUM_PEER_HF_IND,
-                                                    p_scb->local_hf_indicators[i].ind_id);
-
-            /* Check whether local and peer sides support this indicator */
-            if (p_scb->local_hf_indicators[i].is_supported == true && peer_index != -1)
-            {
-                /* In the format of ind, state */
-                p += utl_itoa((uint16_t) p_scb->local_hf_indicators[i].ind_id, p);
-                *p++ = ',';
-                p += utl_itoa((uint16_t) p_scb->local_hf_indicators[i].is_enable, p);
-
-                bta_ag_send_result(p_scb, BTA_AG_BIND_RES, buffer, 0);
-
-                memset(buffer, 0, sizeof(buffer));
-                p = buffer;
-            } else {
-                /* If indicator is not supported, also set it to disable */
-                p_scb->local_hf_indicators[i].is_enable = false;
-            }
-        }
-
-        bta_ag_send_ok(p_scb);
-
-        /* If the service level connection wan't already open, now it's open */
-        if (!p_scb->svc_conn)
-            bta_ag_svc_conn_open(p_scb, NULL);
-    }
-}
-
-/*******************************************************************************
-**
-** Function         bta_ag_parse_biev_response
-**
-** Description      Send response for AT+BIEV command (HFP 1.7) received from
-**                  the headset based on the argument types.
-**
-** Returns          true if the response was parsed successfully
-**
-*******************************************************************************/
-static bool bta_ag_parse_biev_response(tBTA_AG_SCB *p_scb, tBTA_AG_VAL *val)
-{
-    char *p_token = strtok(val->str, ",");
-    uint16_t rcv_ind_id = atoi(p_token);
-
-    p_token = strtok(NULL, ",");
-    uint16_t rcv_ind_val = atoi(p_token);
-
-    APPL_TRACE_DEBUG("%s BIEV indicator id %d, value %d", __func__, rcv_ind_id, rcv_ind_val);
-
-    /* Check whether indicator ID is valid or not */
-    if (rcv_ind_id > BTA_AG_NUM_LOCAL_HF_IND)
-    {
-        APPL_TRACE_WARNING("%s received invalid indicator id %d", __func__, rcv_ind_id);
-        return false;
-    }
-
-    /* Check this indicator is support or not and enabled or not */
-    int local_index = bta_ag_find_hf_ind_by_id(p_scb->local_hf_indicators,
-                                BTA_AG_MAX_NUM_LOCAL_HF_IND, rcv_ind_id);
-    if (local_index == -1 ||
-        p_scb->local_hf_indicators[local_index].is_supported != true ||
-        p_scb->local_hf_indicators[local_index].is_enable != true)
-    {
-        APPL_TRACE_WARNING("%s indicator id %d not supported or disabled", __func__, rcv_ind_id);
-        return false;
-    }
-
-    /* For each indicator ID, check whether the indicator value is in range */
-    if (rcv_ind_val < bta_ag_local_hf_ind_cfg[rcv_ind_id].ind_min_val ||
-        rcv_ind_val > bta_ag_local_hf_ind_cfg[rcv_ind_id].ind_max_val)
-    {
-        APPL_TRACE_WARNING("%s invalid ind_val %d", __func__, rcv_ind_val);
-        return false;
-    }
-
-    val->lidx = rcv_ind_id;
-    val->num = rcv_ind_val;
-
-    return true;
+    (*bta_ag_cb.p_cback)(bta_ag_hsp_cb_evt[cmd], (tBTA_AG *) &val);
 }
 
 /*******************************************************************************
@@ -917,9 +867,10 @@ static bool bta_ag_parse_biev_response(tBTA_AG_SCB *p_scb, tBTA_AG_VAL *val)
 **
 *******************************************************************************/
 void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
-                                char *p_arg, char *p_end, INT16 int_arg)
+                                char *p_arg, INT16 int_arg)
 {
     tBTA_AG_VAL     val;
+    tBTA_AG_EVT   event;
     tBTA_AG_SCB     *ag_scb;
     UINT32          i, ind_id;
     UINT32          bia_masked_out;
@@ -936,48 +887,31 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
     APPL_TRACE_DEBUG("HFP AT cmd:%d arg_type:%d arg:%d arg:%s", cmd, arg_type,
                       int_arg, p_arg);
 
-    memset(&val, 0, sizeof(tBTA_AG_VAL));
     val.hdr.handle = bta_ag_scb_to_idx(p_scb);
     val.hdr.app_id = p_scb->app_id;
-    val.hdr.status = BTA_AG_SUCCESS;
     val.num = int_arg;
     bdcpy(val.bd_addr, p_scb->peer_addr);
+    strlcpy(val.str, p_arg, BTA_AG_AT_MAX_LEN);
 
-    if ((p_end - p_arg + 1) >= (long)sizeof(val.str)) {
-        APPL_TRACE_ERROR("%s: p_arg is too long, send error and return", __func__);
-        bta_ag_send_error(p_scb, BTA_AG_ERR_TEXT_TOO_LONG);
-        android_errorWriteLog(0x534e4554, "112860487");
-        return;
-    }
-    strlcpy(val.str, p_arg, sizeof(val.str));
-
-    /**
-     * Unless this this is a local event, by default we'll forward
-     * the event code to the application.
-     * If |event| is 0 at the end of this function, the application
-     * callback is NOT invoked.
-     */
-    tBTA_AG_EVT event = 0;
-    if (cmd < BTA_AG_LOCAL_EVT_FIRST)
-        event = cmd;
+    event = bta_ag_hfp_cb_evt[cmd];
 
     switch (cmd)
     {
-        case BTA_AG_AT_A_EVT:
-        case BTA_AG_SPK_EVT:
-        case BTA_AG_MIC_EVT:
-        case BTA_AG_AT_CHUP_EVT:
-        case BTA_AG_AT_CBC_EVT:
+        case BTA_AG_HF_CMD_A:
+        case BTA_AG_HF_CMD_VGS:
+        case BTA_AG_HF_CMD_VGM:
+        case BTA_AG_HF_CMD_CHUP:
+        case BTA_AG_HF_CMD_CBC:
             /* send OK */
             bta_ag_send_ok(p_scb);
             break;
 
-        case BTA_AG_AT_BLDN_EVT:
+        case BTA_AG_HF_CMD_BLDN:
             /* Do not send OK, App will send error or OK depending on
             ** last dial number enabled or not */
             break;
 
-        case BTA_AG_AT_D_EVT:
+        case BTA_AG_HF_CMD_D:
             /* Do not send OK for Dial cmds
             ** Let application decide whether to send OK or ERROR*/
 
@@ -1011,7 +945,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_LOCAL_EVT_CCWA:
+        case BTA_AG_HF_CMD_CCWA:
             /* store setting */
             p_scb->ccwa_enabled = (BOOLEAN) int_arg;
 
@@ -1019,7 +953,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             bta_ag_send_ok(p_scb);
             break;
 
-        case BTA_AG_AT_CHLD_EVT:
+        case BTA_AG_HF_CMD_CHLD:
             if (arg_type == BTA_AG_AT_TEST)
             {
                 /* don't call callback */
@@ -1030,17 +964,16 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
                 if ((p_scb->peer_version >= HFP_VERSION_1_5) &&
                     (p_scb->features & BTA_AG_FEAT_ECC) &&
                     (p_scb->peer_features & BTA_AG_PEER_FEAT_ECC))
-                    bta_ag_send_result(p_scb, BTA_AG_IN_CALL_HELD_RES,
-                                       p_bta_ag_cfg->chld_val_ecc, 0);
+                    bta_ag_send_result(p_scb, BTA_AG_RES_CHLD, p_bta_ag_cfg->chld_val_ecc, 0);
                 else
-                    bta_ag_send_result(p_scb, BTA_AG_IN_CALL_HELD_RES,
-                                       p_bta_ag_cfg->chld_val, 0);
+                    bta_ag_send_result(p_scb, BTA_AG_RES_CHLD, p_bta_ag_cfg->chld_val, 0);
 
                 /* send OK */
                 bta_ag_send_ok(p_scb);
 
                 /* if service level conn. not already open, now it's open */
                 bta_ag_svc_conn_open(p_scb, NULL);
+
             }
             else
             {
@@ -1084,58 +1017,27 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_BIND_EVT:
-            APPL_TRACE_DEBUG("%s BTA_AG_AT_BIND_EVT arg_type: %d", __func__, arg_type);
-            if (arg_type == BTA_AG_AT_SET)
-            {
-                if (bta_ag_parse_bind_set(p_scb, val))
-                {
-                    bta_ag_send_ok(p_scb);
-                } else {
-                    event = 0;/* don't call callback */
-                    bta_ag_send_error(p_scb, BTA_AG_ERR_INVALID_INDEX);
-                }
-            } else {
-                bta_ag_bind_response(p_scb, arg_type);
-
-                /* Need not pass this command beyond BTIF.*/
-                /* Stack handles it internally */
-                event = 0;/* don't call callback */
-            }
-            break;
-
-        case BTA_AG_AT_BIEV_EVT:
-            if (bta_ag_parse_biev_response(p_scb, &val))
-            {
-                bta_ag_send_ok(p_scb);
-            } else {
-                bta_ag_send_error(p_scb, BTA_AG_ERR_INVALID_INDEX);
-                /* don't call callback receiving invalid indicator */
-                event = 0;
-            }
-            break;
-
-        case BTA_AG_AT_CIND_EVT:
+        case BTA_AG_HF_CMD_CIND:
             if (arg_type == BTA_AG_AT_TEST)
             {
                 /* don't call callback */
                 event = 0;
 
                 /* send CIND string, send OK */
-                bta_ag_send_result(p_scb, BTA_AG_CIND_RES, p_bta_ag_cfg->cind_info, 0);
+                bta_ag_send_result(p_scb, BTA_AG_RES_CIND, p_bta_ag_cfg->cind_info, 0);
                 bta_ag_send_ok(p_scb);
             }
             break;
 
-        case BTA_AG_LOCAL_EVT_CLIP:
+        case BTA_AG_HF_CMD_CLIP:
             /* store setting, send OK */
             p_scb->clip_enabled = (BOOLEAN) int_arg;
             bta_ag_send_ok(p_scb);
             break;
 
-        case BTA_AG_LOCAL_EVT_CMER:
+        case BTA_AG_HF_CMD_CMER:
             /* if parsed ok store setting, send OK */
-            if (bta_ag_parse_cmer(p_arg, p_end, &p_scb->cmer_enabled))
+            if (bta_ag_parse_cmer(p_arg, &p_scb->cmer_enabled))
             {
                 bta_ag_send_ok(p_scb);
 
@@ -1154,7 +1056,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_VTS_EVT:
+        case BTA_AG_HF_CMD_VTS:
             /* check argument */
             if (strlen(p_arg) == 1)
             {
@@ -1167,7 +1069,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_BINP_EVT:
+        case BTA_AG_HF_CMD_BINP:
             /* if feature not set don't call callback, send ERROR */
             if (!(p_scb->features & BTA_AG_FEAT_VTAG))
             {
@@ -1176,7 +1078,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_BVRA_EVT:
+        case BTA_AG_HF_CMD_BVRA:
             /* if feature not supported don't call callback, send ERROR. App will send OK */
             if (!(p_scb->features & BTA_AG_FEAT_VREC))
             {
@@ -1185,27 +1087,17 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_LOCAL_EVT_BRSF:
-        {
+        case BTA_AG_HF_CMD_BRSF:
             /* store peer features */
-            p_scb->peer_features = (uint16_t) int_arg;
-
-            tBTA_AG_FEAT features = p_scb->features;
-            if (p_scb->peer_version < HFP_VERSION_1_7)
-            {
-                features &= HFP_1_6_FEAT_MASK;
-            }
-
-            APPL_TRACE_DEBUG("%s BRSF HF: 0x%x, phone: 0x%x", __func__,
-                p_scb->peer_features, features);
+            p_scb->peer_features = (UINT16) int_arg;
 
             /* send BRSF, send OK */
-            bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_BRSF, NULL, (int16_t) features);
+            bta_ag_send_result(p_scb, BTA_AG_RES_BRSF, NULL,
+                               (INT16) (p_scb->features & BTA_AG_BSRF_FEAT_SPEC));
             bta_ag_send_ok(p_scb);
             break;
-        }
 
-        case BTA_AG_AT_NREC_EVT:
+        case BTA_AG_HF_CMD_NREC:
             /* if feature send OK, else don't call callback, send ERROR */
             if (p_scb->features & BTA_AG_FEAT_ECNR)
             {
@@ -1218,7 +1110,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_BTRH_EVT:
+        case BTA_AG_HF_CMD_BTRH:
             /* if feature send BTRH, send OK:, else don't call callback, send ERROR */
             if (p_scb->features & BTA_AG_FEAT_BTRH)
             {
@@ -1229,7 +1121,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
                     {
                         if (ag_scb->in_use)
                         {
-                            bta_ag_send_result(ag_scb, BTA_AG_BTRH_RES, NULL, int_arg);
+                            bta_ag_send_result(ag_scb, BTA_AG_RES_BTRH, NULL, int_arg);
                         }
                     }
                     bta_ag_send_ok(p_scb);
@@ -1246,7 +1138,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_COPS_EVT:
+        case BTA_AG_HF_CMD_COPS:
             if (arg_type == BTA_AG_AT_SET)
             {
                 /* don't call callback */
@@ -1257,7 +1149,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_LOCAL_EVT_CMEE:
+        case BTA_AG_HF_CMD_CMEE:
             if (p_scb->features & BTA_AG_FEAT_EXTERR)
             {
                 /* store setting */
@@ -1274,7 +1166,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             event = 0;
             break;
 
-        case BTA_AG_LOCAL_EVT_BIA:
+        case BTA_AG_HF_CMD_BIA:
             /* don't call callback */
             event = 0;
 
@@ -1306,10 +1198,9 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
                 bta_ag_send_error (p_scb, BTA_AG_ERR_INVALID_INDEX);
             break;
 
-        case BTA_AG_AT_CNUM_EVT:
+        case BTA_AG_HF_CMD_CNUM:
             break;
-
-        case BTA_AG_AT_CLCC_EVT:
+        case BTA_AG_HF_CMD_CLCC:
             if(!(p_scb->features & BTA_AG_FEAT_ECS))
             {
                 event = 0;
@@ -1318,13 +1209,13 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             break;
 
 #if (BTM_WBS_INCLUDED == TRUE )
-        case BTA_AG_AT_BAC_EVT:
+        case BTA_AG_HF_CMD_BAC:
             bta_ag_send_ok(p_scb);
 
             /* store available codecs from the peer */
             if((p_scb->peer_features & BTA_AG_PEER_FEAT_CODEC) && (p_scb->features & BTA_AG_FEAT_CODEC))
             {
-                p_scb->peer_codecs = bta_ag_parse_bac(p_scb, p_arg, p_end);
+                p_scb->peer_codecs = bta_ag_parse_bac(p_scb, p_arg);
                 p_scb->codec_updated = TRUE;
 
                 if (p_scb->peer_codecs & BTA_AG_CODEC_MSBC)
@@ -1354,7 +1245,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             }
             break;
 
-        case BTA_AG_AT_BCS_EVT:
+        case BTA_AG_HF_CMD_BCS:
             bta_ag_send_ok(p_scb);
             alarm_cancel(p_scb->codec_negotiation_timer);
 
@@ -1382,7 +1273,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
             val.num = codec_sent;
             break;
 
-        case BTA_AG_LOCAL_EVT_BCC:
+        case BTA_AG_HF_CMD_BCC:
             bta_ag_send_ok(p_scb);
             bta_ag_sco_open(p_scb, NULL);
             break;
@@ -1426,7 +1317,6 @@ void bta_ag_at_err_cback(tBTA_AG_SCB *p_scb, BOOLEAN unknown, char *p_arg)
     {
         val.hdr.handle = bta_ag_scb_to_idx(p_scb);
         val.hdr.app_id = p_scb->app_id;
-        val.hdr.status = BTA_AG_SUCCESS;
         val.num = 0;
         strlcpy(val.str, p_arg, BTA_AG_AT_MAX_LEN);
         (*bta_ag_cb.p_cback)(BTA_AG_AT_UNAT_EVT, (tBTA_AG *) &val);
@@ -1449,13 +1339,15 @@ void bta_ag_at_err_cback(tBTA_AG_SCB *p_scb, BOOLEAN unknown, char *p_arg)
 *******************************************************************************/
 void bta_ag_hsp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
 {
+    UINT8 code = bta_ag_trans_result[p_result->result];
+
     APPL_TRACE_DEBUG("bta_ag_hsp_result : res = %d", p_result->result);
 
     switch(p_result->result)
     {
         case BTA_AG_SPK_RES:
         case BTA_AG_MIC_RES:
-            bta_ag_send_result(p_scb, p_result->result, NULL, p_result->data.num);
+            bta_ag_send_result(p_scb, code, NULL, p_result->data.num);
             break;
 
         case BTA_AG_IN_CALL_RES:
@@ -1529,7 +1421,7 @@ void bta_ag_hsp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
             {
                 if (p_result->data.str[0] != 0)
                 {
-                    bta_ag_send_result(p_scb, p_result->result, p_result->data.str, 0);
+                    bta_ag_send_result(p_scb, code, p_result->data.str, 0);
                 }
 
                 if (p_result->data.ok_flag == BTA_AG_OK_DONE)
@@ -1559,13 +1451,15 @@ void bta_ag_hsp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
 *******************************************************************************/
 void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
 {
+    UINT8 code = bta_ag_trans_result[p_result->result];
+
     APPL_TRACE_DEBUG("bta_ag_hfp_result : res = %d", p_result->result);
 
     switch(p_result->result)
     {
         case BTA_AG_SPK_RES:
         case BTA_AG_MIC_RES:
-            bta_ag_send_result(p_scb, p_result->result, NULL, p_result->data.num);
+            bta_ag_send_result(p_scb, code, NULL, p_result->data.num);
             break;
 
         case BTA_AG_IN_CALL_RES:
@@ -1722,7 +1616,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
         case BTA_AG_INBAND_RING_RES:
             p_scb->inband_enabled = p_result->data.state;
             APPL_TRACE_DEBUG("inband_enabled set to %d", p_scb->inband_enabled);
-            bta_ag_send_result(p_scb, p_result->result, NULL, p_result->data.state);
+            bta_ag_send_result(p_scb, code, NULL, p_result->data.state);
             break;
 
         case BTA_AG_CIND_RES:
@@ -1736,7 +1630,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
             p_scb->callheld_ind = p_result->data.str[12] - '0';
             APPL_TRACE_DEBUG("cind call:%d callsetup:%d", p_scb->call_ind, p_scb->callsetup_ind);
 
-            bta_ag_send_result(p_scb, p_result->result, p_result->data.str, 0);
+            bta_ag_send_result(p_scb, code, p_result->data.str, 0);
             bta_ag_send_ok(p_scb);
             break;
 
@@ -1748,7 +1642,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
             {
                 if (p_result->data.str[0] != 0)
                 {
-                   bta_ag_send_result(p_scb, p_result->result, p_result->data.str, 0);
+                   bta_ag_send_result(p_scb, code, p_result->data.str, 0);
                 }
 
                 if (p_result->data.ok_flag == BTA_AG_OK_DONE)
@@ -1768,7 +1662,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
                 {
                     bta_ag_process_unat_res(p_result->data.str);
                     APPL_TRACE_DEBUG("BTA_AG_RES :%s",p_result->data.str);
-                    bta_ag_send_result(p_scb, p_result->result, p_result->data.str, 0);
+                    bta_ag_send_result(p_scb, code, p_result->data.str, 0);
                 }
 
                 if (p_result->data.ok_flag == BTA_AG_OK_DONE)
@@ -1783,7 +1677,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
         case BTA_AG_CALL_WAIT_RES:
             if (p_scb->ccwa_enabled)
             {
-                bta_ag_send_result(p_scb, p_result->result, p_result->data.str, 0);
+                bta_ag_send_result(p_scb, code, p_result->data.str, 0);
             }
             bta_ag_send_call_inds(p_scb, p_result->result);
             break;
@@ -1793,7 +1687,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
             break;
 
         case BTA_AG_BVRA_RES:
-            bta_ag_send_result(p_scb, p_result->result, NULL, p_result->data.state);
+            bta_ag_send_result(p_scb, code, NULL, p_result->data.state);
             break;
 
         case BTA_AG_BTRH_RES:
@@ -1802,7 +1696,7 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
                 /* Don't respond to read if not in response & hold state */
                 if (p_result->data.num != BTA_AG_BTRH_NO_RESP)
                 {
-                    bta_ag_send_result(p_scb, p_result->result, NULL, p_result->data.num);
+                    bta_ag_send_result(p_scb, code, NULL, p_result->data.num);
                 }
 
                 /* In case of a response to a read request we need to send OK */
@@ -1815,52 +1709,11 @@ void bta_ag_hfp_result(tBTA_AG_SCB *p_scb, tBTA_AG_API_RESULT *p_result)
             }
             break;
 
-        case BTA_AG_BIND_RES:
-        {
-            /* Find whether ind_id is supported by local device or not */
-            int local_index = bta_ag_find_hf_ind_by_id(p_scb->local_hf_indicators,
-                                      BTA_AG_MAX_NUM_LOCAL_HF_IND, p_result->data.ind.id);
-            if (local_index == -1)
-            {
-                APPL_TRACE_WARNING("%s Invalid HF Indicator ID %d", __func__,
-                    p_result->data.ind.id);
-                return;
-            }
-
-            /* Find whether ind_id is supported by peer device or not */
-            int peer_index = bta_ag_find_hf_ind_by_id(p_scb->peer_hf_indicators,
-                                      BTA_AG_MAX_NUM_PEER_HF_IND, p_result->data.ind.id);
-            if (peer_index == -1)
-            {
-                APPL_TRACE_WARNING("%s Invalid HF Indicator ID %d", __func__,
-                    p_result->data.ind.id);
-                return;
-            } else {
-                /* If the current state is different from the one upper layer request
-                   change current state and send out the result */
-                if (p_scb->local_hf_indicators[local_index].is_enable != p_result->data.ind.on_demand)
-                {
-                    char buffer[BTA_AG_AT_MAX_LEN] = {0};
-                    char *p = buffer;
-
-                    p_scb->local_hf_indicators[local_index].is_enable = p_result->data.ind.on_demand;
-                    p += utl_itoa(p_result->data.ind.id, p);
-                    *p++ = ',';
-                    p += utl_itoa(p_scb->local_hf_indicators[local_index].is_enable, p);
-
-                    bta_ag_send_result(p_scb, p_result->result, buffer, 0);
-                } else {
-                    APPL_TRACE_DEBUG("%s HF Indicator %d already %s", p_result->data.ind.id,
-                        (p_result->data.ind.on_demand == true) ? "Enabled" : "Disabled");
-                }
-            }
-            break;
-        }
-
-        default:
+       default:
             break;
     }
 }
+
 
 /*******************************************************************************
 **
@@ -1918,7 +1771,7 @@ void bta_ag_send_bcs(tBTA_AG_SCB *p_scb, tBTA_AG_DATA *p_data)
 
     /* send +BCS */
     APPL_TRACE_DEBUG("send +BCS codec is %d", codec_uuid);
-    bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_BCS, NULL, codec_uuid);
+    bta_ag_send_result(p_scb, BTA_AG_RES_BCS, NULL, codec_uuid);
 
 }
 #endif
@@ -1937,14 +1790,34 @@ void bta_ag_send_ring(tBTA_AG_SCB *p_scb, tBTA_AG_DATA *p_data)
 {
     UNUSED(p_data);
 
+#if defined(BTA_AG_MULTI_RESULT_INCLUDED) && (BTA_AG_MULTI_RESULT_INCLUDED == TRUE)
+    tBTA_AG_MULTI_RESULT_CB m_res_cb;
+
+    if (p_scb->conn_service == BTA_AG_HFP && p_scb->clip_enabled && p_scb->clip[0] != 0)
+    {
+        memset(&m_res_cb, NULL, sizeof(tBTA_AG_MULTI_RESULT_CB));
+
+        m_res_cb.num_result = 2;
+        AT_SET_RES_CB(m_res_cb.res_cb[0], BTA_AG_RES_RING, NULL, 0)
+        AT_SET_RES_CB(m_res_cb.res_cb[1], BTA_AG_RES_CLIP, p_scb->clip, 0)
+
+        bta_ag_send_multi_result(p_scb, &m_res_cb);
+    }
+    else
+    {
+        /* send RING ONLY */
+        bta_ag_send_result(p_scb, BTA_AG_RES_RING, NULL, 0);
+    }
+#else
     /* send RING */
-    bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_RING, NULL, 0);
+    bta_ag_send_result(p_scb, BTA_AG_RES_RING, NULL, 0);
 
     /* if HFP and clip enabled and clip data send CLIP */
     if (p_scb->conn_service == BTA_AG_HFP && p_scb->clip_enabled && p_scb->clip[0] != 0)
     {
-        bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_CLIP, p_scb->clip, 0);
+        bta_ag_send_result(p_scb, BTA_AG_RES_CLIP, p_scb->clip, 0);
     }
+#endif
 
     bta_sys_start_timer(p_scb->ring_timer, BTA_AG_RING_TIMEOUT_MS,
                         BTA_AG_RING_TIMEOUT_EVT, bta_ag_scb_to_idx(p_scb));
