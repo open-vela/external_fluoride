@@ -593,7 +593,8 @@ typedef UINT8 tBTA_SIG_STRENGTH_MASK;
 #define BTA_DM_HW_ERROR_EVT             26      /* BT Chip H/W error */
 #define BTA_DM_LE_FEATURES_READ         27      /* Cotroller specific LE features are read */
 #define BTA_DM_ENER_INFO_READ           28      /* Energy info read */
-typedef UINT8 tBTA_DM_SEC_EVT;
+#define BTA_DM_BLE_SC_OOB_REQ_EVT       29      /* SMP SC OOB request event */
+typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_ENABLE_EVT */
 typedef struct
@@ -933,9 +934,6 @@ typedef void (tBTA_DM_BLE_PF_PARAM_CBACK) (UINT8 action_type, tBTA_DM_BLE_PF_AVB
 typedef void (tBTA_DM_BLE_PF_STATUS_CBACK) (UINT8 action, tBTA_STATUS status,
                                             tBTA_DM_BLE_REF_VALUE ref_value);
 
-/* Connection update callback */
-typedef void (tBTA_DM_BLE_CONN_PARAM_CBACK) (BD_ADDR bd_addr, UINT16 interval, UINT16 latency,
-                                             UINT16 timeout, tBTA_STATUS status);
 
 #define BTA_DM_BLE_PF_BRDCAST_ADDR_FILT  1
 #define BTA_DM_BLE_PF_SERV_DATA_CHG_FILT 2
@@ -2113,7 +2111,7 @@ extern void BTA_BleDisableAdvInstance(UINT8 inst_id);
 **
 ** Description      Update connection parameters, can only be used when connection is up.
 **
-** Parameters:      bd_addr   -     BD address of the peer
+** Parameters:      bd_addr   - BD address of the peer
 **                  min_int   -     minimum connection interval, [0x0004~ 0x4000]
 **                  max_int   -     maximum connection interval, [0x0004~ 0x4000]
 **                  latency   -     slave latency [0 ~ 500]
@@ -2122,9 +2120,8 @@ extern void BTA_BleDisableAdvInstance(UINT8 inst_id);
 ** Returns          void
 **
 *******************************************************************************/
-extern void BTA_DmBleUpdateConnectionParams(BD_ADDR bd_addr, UINT16 min_int, UINT16 max_int,
-                                            UINT16 latency, UINT16 timeout,
-                                            tBTA_DM_BLE_CONN_PARAM_CBACK p_cback);
+extern void BTA_DmBleUpdateConnectionParams(BD_ADDR bd_addr, UINT16 min_int,
+                                   UINT16 max_int, UINT16 latency, UINT16 timeout);
 
 /*******************************************************************************
 **
