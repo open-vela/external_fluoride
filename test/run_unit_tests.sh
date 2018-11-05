@@ -1,7 +1,6 @@
 #!/bin/sh
 
 known_tests=(
-  bluetooth_test_common
   bluetoothtbd_test
   net_test_audio_a2dp_hw
   net_test_avrcp
@@ -10,6 +9,7 @@ known_tests=(
   net_test_bta
   net_test_btif
   net_test_btif_profile_queue
+  net_test_btif_state_machine
   net_test_device
   net_test_hci
   net_test_stack
