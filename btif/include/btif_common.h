@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <stdlib.h>
 
 #include <base/bind.h>
-#include <base/location.h>
-#include <base/message_loop/message_loop.h>
+#include <base/tracked_objects.h>
 #include <hardware/bluetooth.h>
 
 #include "bt_types.h"
@@ -78,14 +77,14 @@
 
 extern bt_callbacks_t* bt_hal_cbacks;
 
-#define HAL_CBACK(P_CB, P_CBACK, ...)                              \
-  do {                                                             \
-    if ((P_CB) && (P_CB)->P_CBACK) {                               \
-      BTIF_TRACE_API("%s: HAL %s->%s", __func__, #P_CB, #P_CBACK); \
-      (P_CB)->P_CBACK(__VA_ARGS__);                                \
-    } else {                                                       \
-      ASSERTC(0, "Callback is NULL", 0);                           \
-    }                                                              \
+#define HAL_CBACK(P_CB, P_CBACK, ...)                \
+  do {                                               \
+    if ((P_CB) && (P_CB)->P_CBACK) {                 \
+      BTIF_TRACE_API("HAL %s->%s", #P_CB, #P_CBACK); \
+      (P_CB)->P_CBACK(__VA_ARGS__);                  \
+    } else {                                         \
+      ASSERTC(0, "Callback is NULL", 0);             \
+    }                                                \
   } while (0)
 
 /**
@@ -174,21 +173,19 @@ typedef struct {
  *  Functions
  ******************************************************************************/
 
-extern bt_status_t do_in_jni_thread(base::OnceClosure task);
-extern bt_status_t do_in_jni_thread(const base::Location& from_here,
-                                    base::OnceClosure task);
-extern bool is_on_jni_thread();
-extern base::MessageLoop* get_jni_message_loop();
+extern bt_status_t do_in_jni_thread(const base::Closure& task);
+extern bt_status_t do_in_jni_thread(const tracked_objects::Location& from_here,
+                                    const base::Closure& task);
 /**
  * This template wraps callback into callback that will be executed on jni
  * thread
  */
 template <typename R, typename... Args>
-base::Callback<R(Args...)> jni_thread_wrapper(const base::Location& from_here,
-                                              base::Callback<R(Args...)> cb) {
+base::Callback<R(Args...)> jni_thread_wrapper(
+    const tracked_objects::Location& from_here, base::Callback<R(Args...)> cb) {
   return base::Bind(
-      [](const base::Location& from_here, base::Callback<R(Args...)> cb,
-         Args... args) {
+      [](const tracked_objects::Location& from_here,
+         base::Callback<R(Args...)> cb, Args... args) {
         do_in_jni_thread(from_here,
                          base::Bind(cb, std::forward<Args>(args)...));
       },
