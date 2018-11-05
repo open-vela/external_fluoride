@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #pragma once
 
 #include <atomic>
-
 #include <base/files/file_path.h>
 #include <base/files/scoped_file.h>
 #include <base/macros.h>
@@ -35,8 +34,7 @@ namespace ipc {
 // Implements a Linux sequential packet domain-socket based IPCHandler
 class IPCHandlerLinux : public IPCHandler {
  public:
-  IPCHandlerLinux(bluetooth::Adapter* adapter,
-                 IPCManager::Delegate* delegate);
+  IPCHandlerLinux(bluetooth::Adapter* adapter, IPCManager::Delegate* delegate);
   ~IPCHandlerLinux() override;
 
   // IPCHandler overrides:
@@ -60,8 +58,12 @@ class IPCHandlerLinux : public IPCHandler {
   void NotifyStoppedOnOriginThread();
   void NotifyStoppedOnCurrentThread();
 
-  // True, if the IPC mechanism is running.
+// True, if the IPC mechanism is running.
+#if defined(__APPLE__)
+  bool running_ ATTRIBUTE_UNUSED;
+#else
   bool running_;
+#endif
 
   // The server socket on which we listen to incoming connections.
   base::ScopedFD socket_;
