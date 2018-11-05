@@ -135,7 +135,7 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_CONN_SUP_TOUT_MAX 0x0C80
 /* use this value when a specific value not to be overwritten */
 #define BTM_BLE_CONN_PARAM_UNDEF 0xffff
-#define BTM_BLE_SCAN_PARAM_UNDEF 0xffffffff
+#define BTM_BLE_SCAN_PARAM_UNDEF 0xffff
 
 /* default connection parameters if not configured, use GAP recommended value
  * for auto/selective connection */
@@ -279,7 +279,7 @@ typedef struct {
   uint8_t status;
   uint8_t param_len;
   uint16_t opcode;
-  uint8_t param_buf[BT_OCTET16_LEN];
+  uint8_t param_buf[OCTET16_LEN];
 } tBTM_RAND_ENC;
 
 /* General callback function for notifying an application that a synchronous
@@ -335,7 +335,8 @@ typedef void(tBTM_RAND_ENC_CB)(tBTM_RAND_ENC* p1);
 /*  Preferred maximum number of microseconds that the local Controller
     should use to transmit a single Link Layer Data Channel PDU. */
 #define BTM_BLE_DATA_TX_TIME_MIN 0x0148
-#define BTM_BLE_DATA_TX_TIME_MAX 0x0848
+#define BTM_BLE_DATA_TX_TIME_MAX_LEGACY  0x0848
+#define BTM_BLE_DATA_TX_TIME_MAX         0x4290
 
 /* adv tx power in dBm */
 typedef struct {
