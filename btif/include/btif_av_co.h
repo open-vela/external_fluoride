@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,66 +19,156 @@
 #ifndef BTIF_AV_CO_H
 #define BTIF_AV_CO_H
 
-#include "btif/include/btif_a2dp_source.h"
-#include "stack/include/a2dp_codec_api.h"
+#include "btif_media.h"
 
-// Sets the active peer to |peer_addr|.
-// Returns true on success, otherwise false.
-bool bta_av_co_set_active_peer(const RawAddress& peer_addr);
+/*******************************************************************************
+**  Constants & Macros
+********************************************************************************/
 
-// Gets the A2DP peer parameters that are used to initialize the encoder.
-// The peer address is |peer_addr|.
-// The parameters are stored in |p_peer_params|.
-// |p_peer_params| cannot be null.
-void bta_av_co_get_peer_params(const RawAddress& peer_addr,
-                               tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params);
+enum
+{
+    BTIF_SV_AV_AA_SBC_INDEX = 0,
+    BTIF_SV_AV_AA_SBC_SINK_INDEX,
+    BTIF_SV_AV_AA_SEP_INDEX  /* Last index */
+};
 
-// Gets the current A2DP encoder interface that can be used to encode and
-// prepare A2DP packets for transmission - see |tA2DP_ENCODER_INTERFACE|.
-// Returns the A2DP encoder interface if the current codec is setup,
-// otherwise NULL.
-const tA2DP_ENCODER_INTERFACE* bta_av_co_get_encoder_interface(void);
 
-// Gets the current A2DP decoder interface that can be used to decode received
-// A2DP packets - see |tA2DP_DECODER_INTERFACE|.
-// Returns the A2DP decoder interface if the current codec is setup, otherwise
-// NULL.
-const tA2DP_DECODER_INTERFACE* bta_av_co_get_decoder_interface(void);
+/*******************************************************************************
+**  Functions
+********************************************************************************/
 
-// Sets the user preferred codec configuration.
-// The peer address is |peer_addr|.
-// |codec_user_config| contains the preferred codec configuration.
-// Returns true on success, otherwise false.
-bool bta_av_co_set_codec_user_config(
-    const RawAddress& peer_addr,
-    const btav_a2dp_codec_config_t& codec_user_config);
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_cp_is_active
+ **
+ ** Description      Get the current configuration of content protection
+ **
+ ** Returns          TRUE if the current streaming has CP, FALSE otherwise
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_cp_is_active(void);
 
-// Sets the Audio HAL selected audio feeding parameters.
-// Those parameters are applied only to the currently selected codec.
-// |codec_audio_config| contains the selected audio feeding configuration.
-// Returns true on success, otherwise false.
-bool bta_av_co_set_codec_audio_config(
-    const btav_a2dp_codec_config_t& codec_audio_config);
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_cp_get_flag
+ **
+ ** Description      Get content protection flag
+ **                  BTA_AV_CP_SCMS_COPY_NEVER
+ **                  BTA_AV_CP_SCMS_COPY_ONCE
+ **                  BTA_AV_CP_SCMS_COPY_FREE
+ **
+ ** Returns          The current flag value
+ **
+ *******************************************************************************/
+UINT8 bta_av_co_cp_get_flag(void);
 
-// Initializes the control block.
-// |codec_priorities| contains the A2DP Source codec priorities to use.
-void bta_av_co_init(
-    const std::vector<btav_a2dp_codec_config_t>& codec_priorities);
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_cp_set_flag
+ **
+ ** Description      Set content protection flag
+ **                  BTA_AV_CP_SCMS_COPY_NEVER
+ **                  BTA_AV_CP_SCMS_COPY_ONCE
+ **                  BTA_AV_CP_SCMS_COPY_FREE
+ **
+ ** Returns          TRUE if setting the SCMS flag is supported else FALSE
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_cp_set_flag(UINT8 cp_flag);
 
-// Gets the current A2DP codec for the active peer.
-// Returns a pointer to the current |A2dpCodecConfig| if valid, otherwise
-// nullptr.
-A2dpCodecConfig* bta_av_get_a2dp_current_codec(void);
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_audio_codec_reset
+ **
+ ** Description      Reset the current codec configuration
+ **
+ ** Returns          void
+ **
+ *******************************************************************************/
+void bta_av_co_audio_codec_reset(void);
 
-// Gets the current A2DP codec for a peer identified by |peer_address|.
-// Returns a pointer to the current |A2dpCodecConfig| if valid, otherwise
-// nullptr.
-A2dpCodecConfig* bta_av_get_a2dp_peer_current_codec(
-    const RawAddress& peer_address);
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_audio_codec_supported
+ **
+ ** Description      Check if all opened connections are compatible with a codec
+ **                  configuration
+ **
+ ** Returns          TRUE if all opened devices support this codec, FALSE otherwise
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_audio_codec_supported(tBTIF_STATUS *p_status);
 
-// Dump A2DP codec debug-related information for the A2DP module.
-// |fd| is the file descriptor to use for writing the ASCII formatted
-// information.
-void btif_a2dp_codec_debug_dump(int fd);
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_audio_set_codec
+ **
+ ** Description      Set the current codec configuration from the feeding type.
+ **                  This function is starting to modify the configuration, it
+ **                  should be protected.
+ **
+ ** Returns          TRUE if successful, FALSE otherwise
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_audio_set_codec(const tBTIF_AV_MEDIA_FEEDINGS *p_feeding, tBTIF_STATUS *p_status);
 
-#endif  // BTIF_AV_CO_H
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_audio_get_sbc_config
+ **
+ ** Description      Retrieves the SBC codec configuration.  If the codec in use
+ **                  is not SBC, return the default SBC codec configuration.
+ **
+ ** Returns          TRUE if codec is SBC, FALSE otherwise
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_audio_get_sbc_config(tA2D_SBC_CIE *p_sbc_config, UINT16 *p_minmtu);
+
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_audio_discard_config
+ **
+ ** Description      Discard the codec configuration of a connection
+ **
+ ** Returns          Nothing
+ **
+ *******************************************************************************/
+void bta_av_co_audio_discard_config(tBTA_AV_HNDL hndl);
+
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_init
+ **
+ ** Description      Initialization
+ **
+ ** Returns          Nothing
+ **
+ *******************************************************************************/
+void bta_av_co_init(void);
+
+
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_peer_cp_supported
+ **
+ ** Description      Checks if the peer supports CP
+ **
+ ** Returns          TRUE if the peer supports CP
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_peer_cp_supported(tBTA_AV_HNDL hndl);
+
+/*******************************************************************************
+ **
+ ** Function         bta_av_co_get_remote_bitpool_pref
+ **
+ ** Description      Check if remote side did a setconfig within the limits
+ **                  of our exported bitpool range. If set we will set the
+ **                  remote preference.
+ **
+ ** Returns          TRUE if config set, FALSE otherwize
+ **
+ *******************************************************************************/
+BOOLEAN bta_av_co_get_remote_bitpool_pref(UINT8 *min, UINT8 *max);
+
+#endif
