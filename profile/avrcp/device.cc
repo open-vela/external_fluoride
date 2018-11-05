@@ -13,11 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "device.h"
 
 #include <base/message_loop/message_loop.h>
 
 #include "connection_handler.h"
-#include "device.h"
+#include "packet/avrcp/avrcp_reject_packet.h"
+#include "packet/avrcp/general_reject_packet.h"
+#include "packet/avrcp/get_play_status_packet.h"
+#include "packet/avrcp/pass_through_packet.h"
+#include "packet/avrcp/set_absolute_volume.h"
+#include "packet/avrcp/set_addressed_player.h"
 #include "stack_config.h"
 
 namespace bluetooth {
@@ -50,6 +56,11 @@ void Device::RegisterInterfaces(MediaInterface* media_interface,
   a2dp_interface_ = a2dp_interface;
   media_interface_ = media_interface;
   volume_interface_ = volume_interface;
+}
+
+void Device::SetBrowseMtu(uint16_t browse_mtu) {
+  DEVICE_LOG(INFO) << __PRETTY_FUNCTION__ << ": browse_mtu = " << browse_mtu;
+  browse_mtu_ = browse_mtu;
 }
 
 bool Device::IsActive() const {
@@ -1024,7 +1035,7 @@ void Device::GetVFSListResponse(uint8_t label,
       // right now we always use folders of mixed type
       FolderItem folder_item(vfs_ids_.get_uid(folder.media_id), 0x00,
                              folder.is_playable, folder.name);
-      builder->AddFolder(folder_item);
+      if (!builder->AddFolder(folder_item)) break;
     } else if (items[i].type == ListItem::SONG) {
       auto song = items[i].song;
       auto title =
@@ -1041,7 +1052,9 @@ void Device::GetVFSListResponse(uint8_t label,
             filter_attributes_requested(song, pkt->GetAttributesRequested());
       }
 
-      builder->AddSong(song_item);
+      // If we fail to add a song, don't accidentally add one later that might
+      // fit.
+      if (!builder->AddSong(song_item)) break;
     }
   }
 
@@ -1074,7 +1087,10 @@ void Device::GetNowPlayingListResponse(
       item.attributes_ =
           filter_attributes_requested(song, pkt->GetAttributesRequested());
     }
-    builder->AddSong(item);
+
+    // If we fail to add a song, don't accidentally add one later that might
+    // fit.
+    if (!builder->AddSong(item)) break;
   }
 
   send_message(label, true, std::move(builder));
@@ -1265,40 +1281,29 @@ static std::string volumeToStr(int8_t volume) {
 }
 
 std::ostream& operator<<(std::ostream& out, const Device& d) {
-  out << "  " << d.address_.ToString();
+  out << d.address_.ToString();
   if (d.IsActive()) out << " <Active>";
   out << std::endl;
-  out << "    Current Volume: " << volumeToStr(d.volume_) << std::endl;
-  out << "    Current Browsed Player ID: " << d.curr_browsed_player_id_
-      << std::endl;
-  out << "    Registered Notifications: " << std::endl;
-  if (d.track_changed_.first) {
-    out << "      Track Changed" << std::endl;
-  }
-  if (d.play_status_changed_.first) {
-    out << "      Play Status" << std::endl;
-  }
-  if (d.play_pos_changed_.first) {
-    out << "      Play Position" << std::endl;
-  }
-  if (d.now_playing_changed_.first) {
-    out << "      Now Playing" << std::endl;
-  }
-  if (d.addr_player_changed_.first) {
-    out << "      Addressed Player" << std::endl;
-  }
-  if (d.avail_players_changed_.first) {
-    out << "      Available Players" << std::endl;
-  }
-  if (d.uids_changed_.first) {
-    out << "      UIDs Changed" << std::endl;
-  }
 
-  out << "    Last Play State: " << d.last_play_status_.state << std::endl;
-  out << "    Last Song Sent ID: \"" << d.last_song_info_.media_id << "\""
+  ScopedIndent indent(out);
+  out << "Current Volume: " << volumeToStr(d.volume_) << std::endl;
+  out << "Current Browsed Player ID: " << d.curr_browsed_player_id_
       << std::endl;
-  out << "    Current Folder: \"" << d.CurrentFolder() << "\"" << std::endl;
-  out << "    MTU Sizes: CTRL=" << d.ctrl_mtu_ << " BROWSE=" << d.browse_mtu_
+  out << "Registered Notifications:\n";
+  {
+    ScopedIndent indent(out);
+    if (d.track_changed_.first) out << "Track Changed\n";
+    if (d.play_status_changed_.first) out << "Play Status\n";
+    if (d.play_pos_changed_.first) out << "Play Position\n";
+    if (d.now_playing_changed_.first) out << "Now Playing\n";
+    if (d.addr_player_changed_.first) out << "Addressed Player\n";
+    if (d.avail_players_changed_.first) out << "Available Players\n";
+    if (d.uids_changed_.first) out << "UIDs Changed\n";
+  }
+  out << "Last Play State: " << d.last_play_status_.state << std::endl;
+  out << "Last Song Sent ID: \"" << d.last_song_info_.media_id << "\"\n";
+  out << "Current Folder: \"" << d.CurrentFolder() << "\"\n";
+  out << "MTU Sizes: CTRL=" << d.ctrl_mtu_ << " BROWSE=" << d.browse_mtu_
       << std::endl;
   // TODO (apanicke): Add supported features as well as media keys
   return out;
