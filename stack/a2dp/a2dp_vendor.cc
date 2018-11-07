@@ -54,32 +54,23 @@ bool A2DP_IsVendorSourceCodecValid(const uint8_t* p_codec_info) {
   return false;
 }
 
-bool A2DP_IsVendorSinkCodecValid(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
+bool A2DP_IsVendorSinkCodecValid(UNUSED_ATTR const uint8_t* p_codec_info) {
+  // uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
+  // uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
   // Add checks based on <vendor_id, codec_id>
   // NOTE: Should be done only for local Sink codecs.
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_IsVendorSinkCodecValidLdac(p_codec_info);
-  }
 
   return false;
 }
 
-bool A2DP_IsVendorPeerSourceCodecValid(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
+bool A2DP_IsVendorPeerSourceCodecValid(
+    UNUSED_ATTR const uint8_t* p_codec_info) {
+  // uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
+  // uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
   // Add checks based on <vendor_id, codec_id>
   // NOTE: Should be done only for local Sink codecs.
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_IsVendorPeerSourceCodecValidLdac(p_codec_info);
-  }
 
   return false;
 }
@@ -110,32 +101,23 @@ bool A2DP_IsVendorPeerSinkCodecValid(const uint8_t* p_codec_info) {
   return false;
 }
 
-bool A2DP_IsVendorSinkCodecSupported(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
+bool A2DP_IsVendorSinkCodecSupported(UNUSED_ATTR const uint8_t* p_codec_info) {
+  // uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
+  // uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
   // Add checks based on <vendor_id, codec_id>
   // NOTE: Should be done only for local Sink codecs.
 
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_IsVendorSinkCodecSupportedLdac(p_codec_info);
-  }
-
   return false;
 }
 
-bool A2DP_IsVendorPeerSourceCodecSupported(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
+bool A2DP_IsVendorPeerSourceCodecSupported(
+    UNUSED_ATTR const uint8_t* p_codec_info) {
+  // uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
+  // uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
   // Add checks based on <vendor_id, codec_id> and peer codec capabilities
   // NOTE: Should be done only for local Sink codecs.
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_IsPeerSourceCodecSupportedLdac(p_codec_info);
-  }
 
   return false;
 }
@@ -188,7 +170,7 @@ bool A2DP_VendorUsesRtpHeader(bool content_protection_enabled,
   return true;
 }
 
-const char* A2DP_VendorCodecName(const uint8_t* p_codec_info) {
+const char* A2DP_VendorCodecName(UNUSED_ATTR const uint8_t* p_codec_info) {
   uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
   uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
@@ -346,32 +328,6 @@ int A2DP_VendorGetTrackSampleRate(const uint8_t* p_codec_info) {
   return -1;
 }
 
-int A2DP_VendorGetTrackBitsPerSample(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
-
-  // Check for aptX
-  if (vendor_id == A2DP_APTX_VENDOR_ID &&
-      codec_id == A2DP_APTX_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorGetTrackBitsPerSampleAptx(p_codec_info);
-  }
-
-  // Check for aptX-HD
-  if (vendor_id == A2DP_APTX_HD_VENDOR_ID &&
-      codec_id == A2DP_APTX_HD_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorGetTrackBitsPerSampleAptxHd(p_codec_info);
-  }
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_VendorGetTrackBitsPerSampleLdac(p_codec_info);
-  }
-
-  // Add checks based on <vendor_id, codec_id>
-
-  return -1;
-}
-
 int A2DP_VendorGetTrackChannelCount(const uint8_t* p_codec_info) {
   uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
   uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
@@ -398,17 +354,13 @@ int A2DP_VendorGetTrackChannelCount(const uint8_t* p_codec_info) {
   return -1;
 }
 
-int A2DP_VendorGetSinkTrackChannelType(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
+int A2DP_VendorGetSinkTrackChannelType(
+    UNUSED_ATTR const uint8_t* p_codec_info) {
+  // uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
+  // uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
   // Add checks based on <vendor_id, codec_id>
   // NOTE: Should be done only for local Sink codecs.
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_VendorGetSinkTrackChannelTypeLdac(p_codec_info);
-  }
 
   return -1;
 }
@@ -501,17 +453,7 @@ const tA2DP_ENCODER_INTERFACE* A2DP_VendorGetEncoderInterface(
 
 const tA2DP_DECODER_INTERFACE* A2DP_VendorGetDecoderInterface(
     const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
-
-  // Add checks based on <vendor_id, codec_id>
-  // NOTE: Should be done only for local Sink codecs.
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_VendorGetDecoderInterfaceLdac(p_codec_info);
-  }
-
+  // We do not support vendor codecs for decoding right now.
   return NULL;
 }
 
@@ -569,16 +511,10 @@ btav_a2dp_codec_index_t A2DP_VendorSourceCodecIndex(
 }
 
 btav_a2dp_codec_index_t A2DP_VendorSinkCodecIndex(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
+  // uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
+  // uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
 
   // Add checks based on <vendor_id, codec_id>
-  // NOTE: Should be done only for local Sink codecs.
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_VendorSinkCodecIndexLdac(p_codec_info);
-  }
 
   return BTAV_A2DP_CODEC_INDEX_MAX;
 }
@@ -597,8 +533,6 @@ const char* A2DP_VendorCodecIndexStr(btav_a2dp_codec_index_t codec_index) {
       return A2DP_VendorCodecIndexStrAptxHd();
     case BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC:
       return A2DP_VendorCodecIndexStrLdac();
-    case BTAV_A2DP_CODEC_INDEX_SINK_LDAC:
-      return A2DP_VendorCodecIndexStrLdacSink();
     // Add a switch statement for each vendor-specific codec
     case BTAV_A2DP_CODEC_INDEX_MAX:
       break;
@@ -622,8 +556,6 @@ bool A2DP_VendorInitCodecConfig(btav_a2dp_codec_index_t codec_index,
       return A2DP_VendorInitCodecConfigAptxHd(p_cfg);
     case BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC:
       return A2DP_VendorInitCodecConfigLdac(p_cfg);
-    case BTAV_A2DP_CODEC_INDEX_SINK_LDAC:
-      return A2DP_VendorInitCodecConfigLdacSink(p_cfg);
     // Add a switch statement for each vendor-specific codec
     case BTAV_A2DP_CODEC_INDEX_MAX:
       break;
