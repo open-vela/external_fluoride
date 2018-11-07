@@ -200,7 +200,7 @@ struct HearingDevice {
         psm(0),
         playback_started(false) {}
 
-  HearingDevice() { HearingDevice(RawAddress::kEmpty, false); }
+  HearingDevice() : HearingDevice(RawAddress::kEmpty, false) {}
 
   /* return true if this device represents left Hearing Aid. Returned value is
    * valid only after capabilities are discovered */
@@ -343,18 +343,6 @@ class HearingAidImpl : public HearingAid {
     DVLOG(2) << __func__ << " " << address;
     hearingDevices.Add(HearingDevice(address, true));
     BTA_GATTC_Open(gatt_if, address, true, GATT_TRANSPORT_LE, false);
-  }
-
-  void AddToWhiteList(const RawAddress& address) override {
-    VLOG(2) << __func__ << " address: " << address;
-    hearingDevices.Add(HearingDevice(address, true));
-    BTA_GATTC_Open(gatt_if, address, false, GATT_TRANSPORT_LE, false);
-    BTA_DmBleStartAutoConn();
-  }
-
-  void RemoveFromWhiteList(const RawAddress& address) override {
-    VLOG(2) << __func__ << " address: " << address;
-    BTA_GATTC_CancelOpen(gatt_if, address, false);
   }
 
   void AddFromStorage(const RawAddress& address, uint16_t psm,
@@ -554,11 +542,10 @@ class HearingAidImpl : public HearingAid {
       return;
     }
 
-    const std::vector<tBTA_GATTC_SERVICE>* services =
-        BTA_GATTC_GetServices(conn_id);
+    const std::vector<gatt::Service>* services = BTA_GATTC_GetServices(conn_id);
 
-    const tBTA_GATTC_SERVICE* service = nullptr;
-    for (const tBTA_GATTC_SERVICE& tmp : *services) {
+    const gatt::Service* service = nullptr;
+    for (const gatt::Service& tmp : *services) {
       if (tmp.uuid != HEARING_AID_UUID) continue;
       LOG(INFO) << "Found Hearing Aid service, handle=" << loghex(tmp.handle);
       service = &tmp;
@@ -573,7 +560,7 @@ class HearingAidImpl : public HearingAid {
     }
 
     uint16_t psm_handle = 0x0000;
-    for (const tBTA_GATTC_CHARACTERISTIC& charac : service->characteristics) {
+    for (const gatt::Characteristic& charac : service->characteristics) {
       if (charac.uuid == READ_ONLY_PROPERTIES_UUID) {
         DVLOG(2) << "Reading read only properties "
                  << loghex(charac.value_handle);
@@ -945,20 +932,6 @@ class HearingAidImpl : public HearingAid {
     if (num_samples % 2 != 0)
       LOG(FATAL) << "num_samples is not even: " << num_samples;
 
-    std::vector<uint16_t> chan_left;
-    std::vector<uint16_t> chan_right;
-    // TODO: encode data into G.722 left/right or mono.
-    for (int i = 0; i < num_samples; i++) {
-      const uint8_t* sample = data.data() + i * 4;
-
-      uint16_t left = (int16_t)((*(sample + 1) << 8) + *sample) >> 1;
-      chan_left.push_back(left);
-
-      sample += 2;
-      uint16_t right = (int16_t)((*(sample + 1) << 8) + *sample) >> 1;
-      chan_right.push_back(right);
-    }
-
     // TODO: we should cache left/right and current state, instad of recomputing
     // it for each packet, 100 times a second.
     HearingDevice* left = nullptr;
@@ -976,6 +949,34 @@ class HearingAidImpl : public HearingAid {
       HearingAidAudioSource::Stop();
       current_volume = VOLUME_UNKNOWN;
       return;
+    }
+
+    std::vector<uint16_t> chan_left;
+    std::vector<uint16_t> chan_right;
+    if (left == nullptr || right == nullptr) {
+      for (int i = 0; i < num_samples; i++) {
+        const uint8_t* sample = data.data() + i * 4;
+
+        int16_t left = (int16_t)((*(sample + 1) << 8) + *sample) >> 1;
+
+        sample += 2;
+        int16_t right = (int16_t)((*(sample + 1) << 8) + *sample) >> 1;
+
+        uint16_t mono_data = (int16_t)(((uint32_t)left + (uint32_t)right) >> 1);
+        chan_left.push_back(mono_data);
+        chan_right.push_back(mono_data);
+      }
+    } else {
+      for (int i = 0; i < num_samples; i++) {
+        const uint8_t* sample = data.data() + i * 4;
+
+        uint16_t left = (int16_t)((*(sample + 1) << 8) + *sample) >> 1;
+        chan_left.push_back(left);
+
+        sample += 2;
+        uint16_t right = (int16_t)((*(sample + 1) << 8) + *sample) >> 1;
+        chan_right.push_back(right);
+      }
     }
 
     // TODO: monural, binarual check
@@ -1230,7 +1231,8 @@ class HearingAidImpl : public HearingAid {
                           tBTA_GATT_REASON reason) {
     HearingDevice* hearingDevice = hearingDevices.FindByConnId(conn_id);
     if (!hearingDevice) {
-      VLOG(2) << "Skipping unknown device disconnect, conn_id=" << conn_id;
+      VLOG(2) << "Skipping unknown device disconnect, conn_id="
+              << loghex(conn_id);
       return;
     }
 
@@ -1433,7 +1435,8 @@ void HearingAid::CleanUp() {
 };
 
 void HearingAid::DebugDump(int fd) {
-  dprintf(fd, "\nHearing Aid Manager:\n");
+  dprintf(fd, "Hearing Aid Manager:\n");
   if (instance) instance->Dump(fd);
   HearingAidAudioSource::DebugDump(fd);
+  dprintf(fd, "\n");
 }
