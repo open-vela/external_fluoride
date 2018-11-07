@@ -34,6 +34,7 @@
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btu.h"
+#include "common/time_util.h"
 #include "hcimsgs.h"
 #include "l2c_api.h"
 #include "l2c_int.h"
@@ -231,7 +232,8 @@ void l2c_fcr_cleanup(tL2C_CCB* p_ccb) {
 #if (L2CAP_ERTM_STATS == TRUE)
   if ((p_ccb->local_cid >= L2CAP_BASE_APPL_CID) &&
       (p_ccb->peer_cfg.fcr.mode == L2CAP_FCR_ERTM_MODE)) {
-    uint32_t dur = time_get_os_boottime_ms() - p_ccb->fcrb.connect_tick_count;
+    uint64_t dur = bluetooth::common::time_get_os_boottime_ms() -
+                   p_ccb->fcrb.connect_tick_count;
     size_t p_str_size = 120;
     char* p_str = (char*)osi_malloc(p_str_size);
     uint16_t i;
@@ -836,14 +838,6 @@ void l2c_lcc_proc_pdu(tL2C_CCB* p_ccb, BT_HDR* p_buf) {
     STREAM_TO_UINT16(sdu_length, p);
     /* Check the SDU Length with local MTU size */
     if (sdu_length > p_ccb->local_conn_cfg.mtu) {
-      /* Discard the buffer */
-      osi_free(p_buf);
-      return;
-    }
-
-    if (sdu_length < p_buf->len) {
-      L2CAP_TRACE_ERROR("%s: Invalid sdu_length: %d", __func__, sdu_length);
-      android_errorWriteWithInfoLog(0x534e4554, "112321180", -1, NULL, 0);
       /* Discard the buffer */
       osi_free(p_buf);
       return;
@@ -1794,7 +1788,9 @@ BT_HDR* l2c_fcr_get_next_xmit_sdu_seg(tL2C_CCB* p_ccb,
        * to include extra 4 octets at the end.
        */
       p = ((uint8_t*)(p_wack + 1)) + p_wack->offset + p_wack->len;
-      UINT32_TO_STREAM(p, time_get_os_boottime_ms());
+      // Have to cast to uint32_t which wraps in 49.7 days
+      UINT32_TO_STREAM(p, static_cast<uint32_t>(
+                              bluetooth::common::time_get_os_boottime_ms()));
 #endif
       /* We will not save the FCS in case we reconfigure and change options */
       if (p_ccb->bypass_fcs != L2CAP_BYPASS_FCS) p_wack->len -= L2CAP_FCS_LEN;
@@ -2385,7 +2381,9 @@ static void l2c_fcr_collect_ack_delay(tL2C_CCB* p_ccb, uint8_t num_bufs_acked) {
         }
 
         STREAM_TO_UINT32(timestamp, p);
-        delay = time_get_os_boottime_ms() - timestamp;
+        delay = static_cast<uint32_t>(
+                    bluetooth::common::time_get_os_boottime_ms()) -
+                timestamp;
 
         p_ccb->fcrb.ack_delay_avg[index] += delay;
         if (delay > p_ccb->fcrb.ack_delay_max[index])
@@ -2406,7 +2404,7 @@ static void l2c_fcr_collect_ack_delay(tL2C_CCB* p_ccb, uint8_t num_bufs_acked) {
     p_ccb->fcrb.ack_delay_avg[index] /= L2CAP_ERTM_STATS_AVG_NUM_SAMPLES;
 
     /* calculate throughput */
-    timestamp = time_get_os_boottime_ms();
+    timestamp = bluetooth::common::time_get_os_boottime_ms();
     if (timestamp - p_ccb->fcrb.throughput_start > 0)
       p_ccb->fcrb.throughput[index] /=
           (timestamp - p_ccb->fcrb.throughput_start);
