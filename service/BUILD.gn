@@ -1,5 +1,5 @@
 #
-#  Copyright (C) 2015 Google
+#  Copyright 2015 Google
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,18 +16,26 @@
 
 source_set("service") {
   sources = [
+    "a2dp_sink.cc",
+    "a2dp_source.cc",
     "adapter.cc",
+    "avrcp_control.cc",
+    "avrcp_target.cc",
+    "common/bluetooth/a2dp_codec_config.cc",
     "common/bluetooth/adapter_state.cc",
     "common/bluetooth/advertise_data.cc",
     "common/bluetooth/advertise_settings.cc",
+    "common/bluetooth/avrcp_int_value.cc",
+    "common/bluetooth/avrcp_media_attr.cc",
+    "common/bluetooth/avrcp_register_notification_response.cc",
     "common/bluetooth/characteristic.cc",
     "common/bluetooth/descriptor.cc",
+    "common/bluetooth/remote_device_props.cc",
     "common/bluetooth/scan_filter.cc",
     "common/bluetooth/scan_result.cc",
     "common/bluetooth/scan_settings.cc",
     "common/bluetooth/service.cc",
     "common/bluetooth/util/atomic_string.cc",
-    "common/bluetooth/uuid.cc",
     "daemon.cc",
     "gatt_client.cc",
     "gatt_server.cc",
@@ -36,6 +44,8 @@ source_set("service") {
     "hal/bluetooth_interface.cc",
     "ipc/dbus/bluetooth_adapter.cc",
     "ipc/dbus/ipc_handler_dbus.cc",
+    "hal/bluetooth_av_interface.cc",
+    "hal/bluetooth_avrcp_interface.cc",
     "hal/fake_bluetooth_gatt_interface.cc",
     "hal/fake_bluetooth_interface.cc",
     "ipc/ipc_handler.cc",
@@ -51,13 +61,15 @@ source_set("service") {
 
   include_dirs = [
     "//",
+    "//linux_include",
+    "//include",
     "//service/common",
     "//third_party/modp_b64/modp64",
-    "//third_party/libhardware/include",
   ]
 
   deps = [
     "//types",
+    "//osi",
     "//third_party/libchrome:base",
   ]
 }
@@ -88,7 +100,6 @@ executable("service_unittests") {
   sources = [
     "test/fake_hal_util.cc",
     "test/settings_unittest.cc",
-    "test/uuid_unittest.cc",
   ]
 
   include_dirs = [ "//" ]
