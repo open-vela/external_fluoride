@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
  *
  ******************************************************************************/
 
-#include <cutils/log.h>
 #include <string.h>
 #include "a2dp_codec_api.h"
 #include "avdt_api.h"
@@ -40,7 +39,7 @@
  * state machine API request event.  Note that state machine API request
  * events are at the beginning of the event list starting at zero, thus
  * allowing for this table.
-*/
+ */
 const uint8_t avdt_scb_cback_evt[] = {
     0,                     /* API_REMOVE_EVT (no event) */
     AVDT_WRITE_CFM_EVT,    /* API_WRITE_REQ_EVT */
@@ -63,10 +62,10 @@ const uint8_t avdt_scb_cback_evt[] = {
  * Returns          SSRC value.
  *
  ******************************************************************************/
-uint32_t avdt_scb_gen_ssrc(tAVDT_SCB* p_scb) {
+uint32_t avdt_scb_gen_ssrc(AvdtpScb* p_scb) {
   /* combine the value of the media type and codec type of the SCB */
-  return (
-      (uint32_t)(p_scb->cs.cfg.codec_info[1] | p_scb->cs.cfg.codec_info[2]));
+  return ((uint32_t)(p_scb->stream_config.cfg.codec_info[1] |
+                     p_scb->stream_config.cfg.codec_info[2]));
 }
 
 /*******************************************************************************
@@ -79,7 +78,7 @@ uint32_t avdt_scb_gen_ssrc(tAVDT_SCB* p_scb) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_abort_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_abort_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_scb->role = AVDT_CLOSE_ACP;
   avdt_scb_event(p_scb, AVDT_SCB_API_ABORT_RSP_EVT, p_data);
 }
@@ -94,7 +93,7 @@ void avdt_scb_hdl_abort_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_abort_rsp(UNUSED_ATTR tAVDT_SCB* p_scb,
+void avdt_scb_hdl_abort_rsp(UNUSED_ATTR AvdtpScb* p_scb,
                             UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   return;
 }
@@ -109,7 +108,7 @@ void avdt_scb_hdl_abort_rsp(UNUSED_ATTR tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_close_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_close_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_scb->role = AVDT_CLOSE_ACP;
   avdt_scb_event(p_scb, AVDT_SCB_API_CLOSE_RSP_EVT, p_data);
 }
@@ -124,7 +123,7 @@ void avdt_scb_hdl_close_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_close_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_close_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_scb->close_code = p_data->msg.hdr.err_code;
 }
 
@@ -139,7 +138,7 @@ void avdt_scb_hdl_close_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_getconfig_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_getconfig_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_data->msg.svccap.p_cfg = &p_scb->curr_cfg;
 
   avdt_scb_event(p_scb, AVDT_SCB_API_GETCONFIG_RSP_EVT, p_data);
@@ -155,7 +154,7 @@ void avdt_scb_hdl_getconfig_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_getconfig_rsp(UNUSED_ATTR tAVDT_SCB* p_scb,
+void avdt_scb_hdl_getconfig_rsp(UNUSED_ATTR AvdtpScb* p_scb,
                                 UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   return;
 }
@@ -170,7 +169,7 @@ void avdt_scb_hdl_getconfig_rsp(UNUSED_ATTR tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_open_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_open_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   avdt_scb_event(p_scb, AVDT_SCB_API_OPEN_RSP_EVT, p_data);
 }
 
@@ -186,7 +185,7 @@ void avdt_scb_hdl_open_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_open_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_open_rej(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   /* do exactly same as setconfig reject */
   avdt_scb_hdl_setconfig_rej(p_scb, p_data);
 }
@@ -201,8 +200,7 @@ void avdt_scb_hdl_open_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_open_rsp(tAVDT_SCB* p_scb,
-                           UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_open_rsp(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   /* initiate opening of trans channels for this SEID */
   p_scb->role = AVDT_OPEN_INT;
   avdt_ad_open_req(AVDT_CHAN_MEDIA, p_scb->p_ccb, p_scb, AVDT_INT);
@@ -222,7 +220,7 @@ void avdt_scb_hdl_open_rsp(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_pkt_no_frag(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_pkt_no_frag(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   uint8_t *p, *p_start;
   uint8_t o_v, o_p, o_x, o_cc;
   uint8_t m_pt;
@@ -232,14 +230,10 @@ void avdt_scb_hdl_pkt_no_frag(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
   uint16_t offset;
   uint16_t ex_len;
   uint8_t pad_len = 0;
-  uint16_t len = p_data->p_pkt->len;
 
   p = p_start = (uint8_t*)(p_data->p_pkt + 1) + p_data->p_pkt->offset;
 
   /* parse media packet header */
-  offset = 12;
-  // AVDT_MSG_PRS_OCTET1(1) + AVDT_MSG_PRS_M_PT(1) + UINT16(2) + UINT32(4) + 4
-  if (offset > len) goto length_error;
   AVDT_MSG_PRS_OCTET1(p, o_v, o_p, o_x, o_cc);
   AVDT_MSG_PRS_M_PT(p, m_pt, marker);
   BE_STREAM_TO_UINT16(seq, p);
@@ -247,18 +241,17 @@ void avdt_scb_hdl_pkt_no_frag(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
   p += 4;
 
   /* skip over any csrc's in packet */
-  offset += o_cc * 4;
   p += o_cc * 4;
 
   /* check for and skip over extension header */
   if (o_x) {
-    offset += 4;
-    if (offset > len) goto length_error;
     p += 2;
     BE_STREAM_TO_UINT16(ex_len, p);
-    offset += ex_len * 4;
     p += ex_len * 4;
   }
+
+  /* save our new offset */
+  offset = (uint16_t)(p - p_start);
 
   /* adjust length for any padding at end of packet */
   if (o_p) {
@@ -277,25 +270,18 @@ void avdt_scb_hdl_pkt_no_frag(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
     p_data->p_pkt->len -= (offset + pad_len);
     p_data->p_pkt->offset += offset;
 
-    if (p_scb->cs.p_sink_data_cback != NULL) {
+    if (p_scb->stream_config.p_sink_data_cback != NULL) {
       /* report sequence number */
       p_data->p_pkt->layer_specific = seq;
-      (*p_scb->cs.p_sink_data_cback)(avdt_scb_to_hdl(p_scb), p_data->p_pkt,
-                                     time_stamp,
-                                     (uint8_t)(m_pt | (marker << 7)));
+      (*p_scb->stream_config.p_sink_data_cback)(
+          avdt_scb_to_hdl(p_scb), p_data->p_pkt, time_stamp,
+          (uint8_t)(m_pt | (marker << 7)));
     } else {
       osi_free_and_reset((void**)&p_data->p_pkt);
     }
   }
-  return;
-length_error:
-  android_errorWriteLog(0x534e4554, "111450156");
-  AVDT_TRACE_WARNING("%s: hdl packet length %d too short: must be at least %d",
-                     __func__, len, offset);
-  osi_free_and_reset((void**)&p_data->p_pkt);
 }
 
-#if (AVDT_REPORTING == TRUE)
 /*******************************************************************************
  *
  * Function         avdt_scb_hdl_report
@@ -305,26 +291,17 @@ length_error:
  * Returns          Nothing.
  *
  ******************************************************************************/
-uint8_t* avdt_scb_hdl_report(tAVDT_SCB* p_scb, uint8_t* p, uint16_t len) {
+uint8_t* avdt_scb_hdl_report(AvdtpScb* p_scb, uint8_t* p, uint16_t len) {
   uint16_t result = AVDT_SUCCESS;
   uint8_t* p_start = p;
   uint32_t ssrc;
   uint8_t o_v, o_p, o_cc;
-  uint16_t min_len = 0;
   AVDT_REPORT_TYPE pt;
   tAVDT_REPORT_DATA report;
 
   AVDT_TRACE_DEBUG("%s", __func__);
-  if (p_scb->cs.p_report_cback) {
+  if (p_scb->stream_config.p_report_cback) {
     /* parse report packet header */
-    min_len += 8;
-    if (min_len > len) {
-      android_errorWriteLog(0x534e4554, "111450156");
-      AVDT_TRACE_WARNING(
-          "%s: hdl packet length %d too short: must be at least %d", __func__,
-          len, min_len);
-      goto avdt_scb_hdl_report_exit;
-    }
     AVDT_MSG_PRS_RPT_OCTET1(p, o_v, o_p, o_cc);
     pt = *p++;
     p += 2;
@@ -332,14 +309,6 @@ uint8_t* avdt_scb_hdl_report(tAVDT_SCB* p_scb, uint8_t* p, uint16_t len) {
 
     switch (pt) {
       case AVDT_RTCP_PT_SR: /* the packet type - SR (Sender Report) */
-        min_len += 20;
-        if (min_len > len) {
-          android_errorWriteLog(0x534e4554, "111450156");
-          AVDT_TRACE_WARNING(
-              "%s: hdl packet length %d too short: must be at least %d",
-              __func__, len, min_len);
-          goto avdt_scb_hdl_report_exit;
-        }
         BE_STREAM_TO_UINT32(report.sr.ntp_sec, p);
         BE_STREAM_TO_UINT32(report.sr.ntp_frac, p);
         BE_STREAM_TO_UINT32(report.sr.rtp_time, p);
@@ -348,14 +317,6 @@ uint8_t* avdt_scb_hdl_report(tAVDT_SCB* p_scb, uint8_t* p, uint16_t len) {
         break;
 
       case AVDT_RTCP_PT_RR: /* the packet type - RR (Receiver Report) */
-        min_len += 20;
-        if (min_len > len) {
-          android_errorWriteLog(0x534e4554, "111450156");
-          AVDT_TRACE_WARNING(
-              "%s: hdl packet length %d too short: must be at least %d",
-              __func__, len, min_len);
-          goto avdt_scb_hdl_report_exit;
-        }
         report.rr.frag_lost = *p;
         BE_STREAM_TO_UINT32(report.rr.packet_lost, p);
         report.rr.packet_lost &= 0xFFFFFF;
@@ -367,25 +328,9 @@ uint8_t* avdt_scb_hdl_report(tAVDT_SCB* p_scb, uint8_t* p, uint16_t len) {
 
       case AVDT_RTCP_PT_SDES: /* the packet type - SDES (Source Description) */
         uint8_t sdes_type;
-        min_len += 1;
-        if (min_len > len) {
-          android_errorWriteLog(0x534e4554, "111450156");
-          AVDT_TRACE_WARNING(
-              "%s: hdl packet length %d too short: must be at least %d",
-              __func__, len, min_len);
-          goto avdt_scb_hdl_report_exit;
-        }
         BE_STREAM_TO_UINT8(sdes_type, p);
         if (sdes_type == AVDT_RTCP_SDES_CNAME) {
           uint8_t name_length;
-          min_len += 1;
-          if (min_len > len) {
-            android_errorWriteLog(0x534e4554, "111450156");
-            AVDT_TRACE_WARNING(
-                "%s: hdl packet length %d too short: must be at least %d",
-                __func__, len, min_len);
-            goto avdt_scb_hdl_report_exit;
-          }
           BE_STREAM_TO_UINT8(name_length, p);
           if (name_length > len - 2 || name_length > AVDT_MAX_CNAME_SIZE) {
             result = AVDT_BAD_PARAMS;
@@ -393,13 +338,6 @@ uint8_t* avdt_scb_hdl_report(tAVDT_SCB* p_scb, uint8_t* p, uint16_t len) {
             BE_STREAM_TO_ARRAY(p, &(report.cname[0]), name_length);
           }
         } else {
-          if (min_len + 1 > len) {
-            android_errorWriteLog(0x534e4554, "111450156");
-            AVDT_TRACE_WARNING(
-                "%s: hdl packet length %d too short: must be at least %d",
-                __func__, len, min_len + 2);
-            goto avdt_scb_hdl_report_exit;
-          }
           AVDT_TRACE_WARNING(" - SDES SSRC=0x%08x sc=%d %d len=%d %s", ssrc,
                              o_cc, *p, *(p + 1), p + 2);
           result = AVDT_BUSY;
@@ -412,13 +350,12 @@ uint8_t* avdt_scb_hdl_report(tAVDT_SCB* p_scb, uint8_t* p, uint16_t len) {
     }
 
     if (result == AVDT_SUCCESS)
-      (*p_scb->cs.p_report_cback)(avdt_scb_to_hdl(p_scb), pt, &report);
+      (*p_scb->stream_config.p_report_cback)(avdt_scb_to_hdl(p_scb), pt,
+                                             &report);
   }
-avdt_scb_hdl_report_exit:
   p_start += len;
   return p_start;
 }
-#endif
 
 /*******************************************************************************
  *
@@ -429,15 +366,14 @@ avdt_scb_hdl_report_exit:
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_pkt(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-#if (AVDT_REPORTING == TRUE)
+void avdt_scb_hdl_pkt(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_data->p_pkt->layer_specific == AVDT_CHAN_REPORT) {
     uint8_t* p = (uint8_t*)(p_data->p_pkt + 1) + p_data->p_pkt->offset;
     avdt_scb_hdl_report(p_scb, p, p_data->p_pkt->len);
     osi_free_and_reset((void**)&p_data->p_pkt);
-  } else
-#endif
+  } else {
     avdt_scb_hdl_pkt_no_frag(p_scb, p_data);
+  }
 }
 
 /*******************************************************************************
@@ -450,7 +386,7 @@ void avdt_scb_hdl_pkt(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_drop_pkt(UNUSED_ATTR tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_drop_pkt(UNUSED_ATTR AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   AVDT_TRACE_ERROR("%s dropped incoming media packet", __func__);
   osi_free_and_reset((void**)&p_data->p_pkt);
 }
@@ -465,21 +401,21 @@ void avdt_scb_drop_pkt(UNUSED_ATTR tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_reconfig_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_reconfig_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   /* if command not supported */
-  if (p_scb->cs.nsc_mask & AVDT_NSC_RECONFIG) {
+  if (p_scb->stream_config.nsc_mask & AvdtpStreamConfig::AVDT_NSC_RECONFIG) {
     /* send reject */
     p_data->msg.hdr.err_code = AVDT_ERR_NSC;
     p_data->msg.hdr.err_param = 0;
     avdt_scb_event(p_scb, AVDT_SCB_API_RECONFIG_RSP_EVT, p_data);
   } else {
     /* store requested configuration */
-    memcpy(&p_scb->req_cfg, p_data->msg.reconfig_cmd.p_cfg, sizeof(tAVDT_CFG));
+    p_scb->req_cfg = *p_data->msg.reconfig_cmd.p_cfg;
 
     /* call application callback */
-    (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL,
-                              AVDT_RECONFIG_IND_EVT,
-                              (tAVDT_CTRL*)&p_data->msg.reconfig_cmd);
+    (*p_scb->stream_config.p_avdt_ctrl_cback)(
+        avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_RECONFIG_IND_EVT,
+        (tAVDT_CTRL*)&p_data->msg.reconfig_cmd, p_scb->stream_config.scb_index);
   }
 }
 
@@ -493,7 +429,7 @@ void avdt_scb_hdl_reconfig_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_reconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_reconfig_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_data->msg.hdr.err_code == 0) {
     /* store new configuration */
     if (p_scb->req_cfg.num_codec > 0) {
@@ -511,8 +447,9 @@ void avdt_scb_hdl_reconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
   p_data->msg.svccap.p_cfg = &p_scb->curr_cfg;
 
   /* call application callback */
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL, AVDT_RECONFIG_CFM_EVT,
-                            (tAVDT_CTRL*)&p_data->msg.svccap);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_RECONFIG_CFM_EVT,
+      (tAVDT_CTRL*)&p_data->msg.svccap, p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -525,17 +462,17 @@ void avdt_scb_hdl_reconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_security_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_security_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   /* if command not supported */
-  if (p_scb->cs.nsc_mask & AVDT_NSC_SECURITY) {
+  if (p_scb->stream_config.nsc_mask & AvdtpStreamConfig::AVDT_NSC_SECURITY) {
     /* send reject */
     p_data->msg.hdr.err_code = AVDT_ERR_NSC;
     avdt_scb_event(p_scb, AVDT_SCB_API_SECURITY_RSP_EVT, p_data);
   } else {
     /* call application callback */
-    (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL,
-                              AVDT_SECURITY_IND_EVT,
-                              (tAVDT_CTRL*)&p_data->msg.security_cmd);
+    (*p_scb->stream_config.p_avdt_ctrl_cback)(
+        avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_SECURITY_IND_EVT,
+        (tAVDT_CTRL*)&p_data->msg.security_cmd, p_scb->stream_config.scb_index);
   }
 }
 
@@ -549,10 +486,11 @@ void avdt_scb_hdl_security_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_security_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_security_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   /* call application callback */
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL, AVDT_SECURITY_CFM_EVT,
-                            (tAVDT_CTRL*)&p_data->msg.security_cmd);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_SECURITY_CFM_EVT,
+      (tAVDT_CTRL*)&p_data->msg.security_cmd, p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -566,30 +504,44 @@ void avdt_scb_hdl_security_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_setconfig_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-  tAVDT_CFG* p_cfg;
-
-  AVDT_TRACE_DEBUG("%s: p_scb->in_use=%d", __func__, p_scb->in_use);
+void avdt_scb_hdl_setconfig_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
+  AVDT_TRACE_DEBUG("%s: p_scb->in_use=%d p_avdt_scb=%p scb_index=%d", __func__,
+                   p_scb->in_use, p_scb, p_scb->stream_config.scb_index);
 
   if (!p_scb->in_use) {
-    A2DP_DumpCodecInfo(p_scb->cs.cfg.codec_info);
-    A2DP_DumpCodecInfo(p_data->msg.config_cmd.p_cfg->codec_info);
-    p_cfg = p_data->msg.config_cmd.p_cfg;
-    if (A2DP_GetCodecType(p_scb->cs.cfg.codec_info) ==
+    AVDT_TRACE_DEBUG(
+        "%s: codec: %s", __func__,
+        A2DP_CodecInfoString(p_scb->stream_config.cfg.codec_info).c_str());
+    AVDT_TRACE_DEBUG(
+        "%s: codec: %s", __func__,
+        A2DP_CodecInfoString(p_data->msg.config_cmd.p_cfg->codec_info).c_str());
+    AvdtpSepConfig* p_cfg = p_data->msg.config_cmd.p_cfg;
+    if (A2DP_GetCodecType(p_scb->stream_config.cfg.codec_info) ==
         A2DP_GetCodecType(p_cfg->codec_info)) {
+      /* copy info to scb */
+      AvdtpCcb* p_ccb = avdt_ccb_by_idx(p_data->msg.config_cmd.hdr.ccb_idx);
+      if (p_scb->p_ccb != p_ccb) {
+        AVDT_TRACE_ERROR(
+            "%s: mismatch in AVDTP SCB/CCB state: (p_scb->p_ccb=%p != "
+            "p_ccb=%p): "
+            "p_scb=%p scb_handle=%d ccb_idx=%d",
+            __func__, p_scb->p_ccb, p_ccb, p_scb, p_scb->ScbHandle(),
+            p_data->msg.config_cmd.hdr.ccb_idx);
+        avdt_scb_rej_not_in_use(p_scb, p_data);
+        return;
+      }
       /* set sep as in use */
       p_scb->in_use = true;
 
-      /* copy info to scb */
-      p_scb->p_ccb = avdt_ccb_by_idx(p_data->msg.config_cmd.hdr.ccb_idx);
       p_scb->peer_seid = p_data->msg.config_cmd.int_seid;
-      memcpy(&p_scb->req_cfg, p_cfg, sizeof(tAVDT_CFG));
+      p_scb->req_cfg = *p_cfg;
       /* call app callback */
       /* handle of scb- which is same as sep handle of bta_av_cb.p_scb*/
-      (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                                p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                                AVDT_CONFIG_IND_EVT,
-                                (tAVDT_CTRL*)&p_data->msg.config_cmd);
+      (*p_scb->stream_config.p_avdt_ctrl_cback)(
+          avdt_scb_to_hdl(p_scb),
+          p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+          AVDT_CONFIG_IND_EVT, (tAVDT_CTRL*)&p_data->msg.config_cmd,
+          p_scb->stream_config.scb_index);
     } else {
       p_data->msg.hdr.err_code = AVDT_ERR_UNSUP_CFG;
       p_data->msg.hdr.err_param = 0;
@@ -613,7 +565,7 @@ void avdt_scb_hdl_setconfig_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_setconfig_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_setconfig_rej(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   /* clear scb variables */
   avdt_scb_clr_vars(p_scb, p_data);
 
@@ -622,8 +574,9 @@ void avdt_scb_hdl_setconfig_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
                  AVDT_CCB_UL_CLOSE_EVT, NULL);
 
   /* call application callback */
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL, AVDT_OPEN_CFM_EVT,
-                            (tAVDT_CTRL*)&p_data->msg.hdr);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_OPEN_CFM_EVT,
+      (tAVDT_CTRL*)&p_data->msg.hdr, p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -636,13 +589,13 @@ void avdt_scb_hdl_setconfig_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_setconfig_rsp(tAVDT_SCB* p_scb,
+void avdt_scb_hdl_setconfig_rsp(AvdtpScb* p_scb,
                                 UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_EVT_HDR single;
 
   if (p_scb->p_ccb != NULL) {
     /* save configuration */
-    memcpy(&p_scb->curr_cfg, &p_scb->req_cfg, sizeof(tAVDT_CFG));
+    p_scb->curr_cfg = p_scb->req_cfg;
 
     /* initiate open */
     single.seid = p_scb->peer_seid;
@@ -662,11 +615,12 @@ void avdt_scb_hdl_setconfig_rsp(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_start_cmd(tAVDT_SCB* p_scb,
+void avdt_scb_hdl_start_cmd(AvdtpScb* p_scb,
                             UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                            p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                            AVDT_START_IND_EVT, NULL);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+      AVDT_START_IND_EVT, NULL, p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -679,10 +633,12 @@ void avdt_scb_hdl_start_cmd(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_start_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                            p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                            AVDT_START_CFM_EVT, (tAVDT_CTRL*)&p_data->msg.hdr);
+void avdt_scb_hdl_start_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+      AVDT_START_CFM_EVT, (tAVDT_CTRL*)&p_data->msg.hdr,
+      p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -695,11 +651,12 @@ void avdt_scb_hdl_start_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_suspend_cmd(tAVDT_SCB* p_scb,
+void avdt_scb_hdl_suspend_cmd(AvdtpScb* p_scb,
                               UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                            p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                            AVDT_SUSPEND_IND_EVT, NULL);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+      AVDT_SUSPEND_IND_EVT, NULL, p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -712,10 +669,12 @@ void avdt_scb_hdl_suspend_cmd(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_suspend_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-  (*p_scb->cs.p_ctrl_cback)(
-      avdt_scb_to_hdl(p_scb), p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-      AVDT_SUSPEND_CFM_EVT, (tAVDT_CTRL*)&p_data->msg.hdr);
+void avdt_scb_hdl_suspend_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+      AVDT_SUSPEND_CFM_EVT, (tAVDT_CTRL*)&p_data->msg.hdr,
+      p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -734,13 +693,14 @@ void avdt_scb_hdl_suspend_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_tc_close(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_tc_close(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   uint8_t hdl = avdt_scb_to_hdl(p_scb);
-  tAVDT_CTRL_CBACK* p_ctrl_cback = p_scb->cs.p_ctrl_cback;
+  tAVDT_CTRL_CBACK* p_avdt_ctrl_cback = p_scb->stream_config.p_avdt_ctrl_cback;
   tAVDT_CTRL avdt_ctrl;
   uint8_t event;
-  tAVDT_CCB* p_ccb = p_scb->p_ccb;
+  AvdtpCcb* p_ccb = p_scb->p_ccb;
   RawAddress remote_addr = p_ccb->peer_addr;
+  uint8_t scb_index = p_scb->stream_config.scb_index;
 
   /* set up hdr */
   avdt_ctrl.hdr.err_code = p_scb->close_code;
@@ -768,7 +728,7 @@ void avdt_scb_hdl_tc_close(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
   }
 
   /* call app callback */
-  (*p_ctrl_cback)(hdl, &remote_addr, event, &avdt_ctrl);
+  (*p_avdt_ctrl_cback)(hdl, remote_addr, event, &avdt_ctrl, scb_index);
 }
 
 /*******************************************************************************
@@ -781,7 +741,7 @@ void avdt_scb_hdl_tc_close(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_delay_rpt_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_delay_rpt_req(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   avdt_msg_send_cmd(p_scb->p_ccb, p_scb, AVDT_SIG_DELAY_RPT,
                     (tAVDT_MSG*)&p_data->apidelay);
 }
@@ -796,10 +756,12 @@ void avdt_scb_snd_delay_rpt_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_delay_rpt_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-  (*p_scb->cs.p_ctrl_cback)(
-      avdt_scb_to_hdl(p_scb), p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-      AVDT_DELAY_REPORT_EVT, (tAVDT_CTRL*)&p_data->msg.hdr);
+void avdt_scb_hdl_delay_rpt_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+      AVDT_DELAY_REPORT_EVT, (tAVDT_CTRL*)&p_data->msg.hdr,
+      p_scb->stream_config.scb_index);
 
   if (p_scb->p_ccb)
     avdt_msg_send_rsp(p_scb->p_ccb, AVDT_SIG_DELAY_RPT, &p_data->msg);
@@ -817,13 +779,14 @@ void avdt_scb_hdl_delay_rpt_cmd(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_delay_rpt_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-  (*p_scb->cs.p_ctrl_cback)(
-      avdt_scb_to_hdl(p_scb), p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-      AVDT_DELAY_REPORT_CFM_EVT, (tAVDT_CTRL*)&p_data->msg.hdr);
+void avdt_scb_hdl_delay_rpt_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+      AVDT_DELAY_REPORT_CFM_EVT, (tAVDT_CTRL*)&p_data->msg.hdr,
+      p_scb->stream_config.scb_index);
 }
 
-#if (AVDT_REPORTING == TRUE)
 /*******************************************************************************
  *
  * Function         avdt_scb_hdl_tc_close_sto
@@ -834,7 +797,7 @@ void avdt_scb_hdl_delay_rpt_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_tc_close_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_tc_close_sto(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   tAVDT_CTRL avdt_ctrl;
   /* AVDT_CHAN_SIG does not visit this action */
   if (p_data && p_data->close.type != AVDT_CHAN_MEDIA) {
@@ -844,9 +807,10 @@ void avdt_scb_hdl_tc_close_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
       avdt_ctrl.hdr.err_code = 0;
       avdt_ctrl.hdr.err_param = 0;
       /* call app callback */
-      (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                                p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                                AVDT_REPORT_DISCONN_EVT, &avdt_ctrl);
+      (*p_scb->stream_config.p_avdt_ctrl_cback)(
+          avdt_scb_to_hdl(p_scb),
+          p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+          AVDT_REPORT_DISCONN_EVT, &avdt_ctrl, p_scb->stream_config.scb_index);
     }
   } else {
     /* must be in OPEN state. need to go back to idle */
@@ -854,7 +818,6 @@ void avdt_scb_hdl_tc_close_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
     avdt_scb_hdl_tc_close(p_scb, p_data);
   }
 }
-#endif
 
 /*******************************************************************************
  *
@@ -868,11 +831,9 @@ void avdt_scb_hdl_tc_close_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_tc_open(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_tc_open(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   uint8_t event;
-#if (AVDT_REPORTING == TRUE)
   uint8_t role;
-#endif
 
   alarm_cancel(p_scb->transport_channel_timer);
 
@@ -880,24 +841,22 @@ void avdt_scb_hdl_tc_open(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
       (p_scb->role == AVDT_OPEN_INT) ? AVDT_OPEN_CFM_EVT : AVDT_OPEN_IND_EVT;
   p_data->open.hdr.err_code = 0;
 
-  AVDT_TRACE_DEBUG("psc_mask: cfg: 0x%x, req:0x%x, cur: 0x%x",
-                   p_scb->cs.cfg.psc_mask, p_scb->req_cfg.psc_mask,
+  AVDT_TRACE_DEBUG("%s: psc_mask: cfg: 0x%x, req:0x%x, cur: 0x%x", __func__,
+                   p_scb->stream_config.cfg.psc_mask, p_scb->req_cfg.psc_mask,
                    p_scb->curr_cfg.psc_mask);
-#if (AVDT_REPORTING == TRUE)
   if (p_scb->curr_cfg.psc_mask & AVDT_PSC_REPORT) {
     /* open the reporting channel, if both devices support it */
     role = (p_scb->role == AVDT_OPEN_INT) ? AVDT_INT : AVDT_ACP;
     avdt_ad_open_req(AVDT_CHAN_REPORT, p_scb->p_ccb, p_scb, role);
   }
-#endif
 
   /* call app callback */
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                            p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                            event, (tAVDT_CTRL*)&p_data->open);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb),
+      p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty, event,
+      (tAVDT_CTRL*)&p_data->open, p_scb->stream_config.scb_index);
 }
 
-#if (AVDT_REPORTING == TRUE)
 /*******************************************************************************
  *
  * Function         avdt_scb_hdl_tc_open_sto
@@ -910,7 +869,7 @@ void avdt_scb_hdl_tc_open(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_tc_open_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_tc_open_sto(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   tAVDT_CTRL avdt_ctrl;
   /* open reporting channel here, when it is implemented */
 
@@ -918,12 +877,12 @@ void avdt_scb_hdl_tc_open_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_data->open.hdr.err_code == AVDT_CHAN_REPORT) {
     avdt_ctrl.hdr.err_code = 0;
     avdt_ctrl.hdr.err_param = 1;
-    (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb),
-                              p_scb->p_ccb ? &p_scb->p_ccb->peer_addr : NULL,
-                              AVDT_REPORT_CONN_EVT, &avdt_ctrl);
+    (*p_scb->stream_config.p_avdt_ctrl_cback)(
+        avdt_scb_to_hdl(p_scb),
+        p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
+        AVDT_REPORT_CONN_EVT, &avdt_ctrl, p_scb->stream_config.scb_index);
   }
 }
-#endif
 
 /*******************************************************************************
  *
@@ -936,7 +895,7 @@ void avdt_scb_hdl_tc_open_sto(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_hdl_write_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_hdl_write_req(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   uint8_t* p;
   uint32_t ssrc;
   bool add_rtp_header = !(p_data->apiwrite.opt & AVDT_DATA_OPT_NO_RTP);
@@ -984,7 +943,7 @@ void avdt_scb_hdl_write_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_abort_req(tAVDT_SCB* p_scb,
+void avdt_scb_snd_abort_req(AvdtpScb* p_scb,
                             UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_EVT_HDR hdr;
 
@@ -1010,7 +969,7 @@ void avdt_scb_snd_abort_req(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_abort_rsp(UNUSED_ATTR tAVDT_SCB* p_scb,
+void avdt_scb_snd_abort_rsp(UNUSED_ATTR AvdtpScb* p_scb,
                             tAVDT_SCB_EVT* p_data) {
   avdt_msg_send_rsp(avdt_ccb_by_idx(p_data->msg.hdr.ccb_idx), AVDT_SIG_ABORT,
                     &p_data->msg);
@@ -1025,7 +984,7 @@ void avdt_scb_snd_abort_rsp(UNUSED_ATTR tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_close_req(tAVDT_SCB* p_scb,
+void avdt_scb_snd_close_req(AvdtpScb* p_scb,
                             UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_EVT_HDR hdr;
 
@@ -1047,7 +1006,7 @@ void avdt_scb_snd_close_req(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_stream_close(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_stream_close(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   osi_free_and_reset((void**)&p_scb->p_pkt);
   avdt_scb_snd_close_req(p_scb, p_data);
 }
@@ -1061,7 +1020,7 @@ void avdt_scb_snd_stream_close(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_close_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_close_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   avdt_msg_send_rsp(p_scb->p_ccb, AVDT_SIG_CLOSE, &p_data->msg);
 }
 
@@ -1074,7 +1033,7 @@ void avdt_scb_snd_close_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_getconfig_req(tAVDT_SCB* p_scb,
+void avdt_scb_snd_getconfig_req(AvdtpScb* p_scb,
                                 UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_EVT_HDR hdr;
 
@@ -1094,7 +1053,7 @@ void avdt_scb_snd_getconfig_req(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_getconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_getconfig_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   avdt_msg_send_rsp(p_scb->p_ccb, AVDT_SIG_GETCONFIG, &p_data->msg);
 }
 
@@ -1107,8 +1066,7 @@ void avdt_scb_snd_getconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_open_req(tAVDT_SCB* p_scb,
-                           UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_open_req(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_EVT_HDR hdr;
 
   hdr.seid = p_scb->peer_seid;
@@ -1129,7 +1087,7 @@ void avdt_scb_snd_open_req(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_open_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_open_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   /* notify adaption that we're waiting for transport channel open */
   p_scb->role = AVDT_OPEN_ACP;
   avdt_ad_open_req(AVDT_CHAN_MEDIA, p_scb->p_ccb, p_scb, AVDT_ACP);
@@ -1152,12 +1110,14 @@ void avdt_scb_snd_open_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_reconfig_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_reconfig_req(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   AVDT_TRACE_DEBUG("%s: p_scb->peer_seid=%d p_data->msg.hdr.seid=%d", __func__,
                    p_scb->peer_seid, p_data->msg.hdr.seid);
-  A2DP_DumpCodecInfo(p_data->msg.config_cmd.p_cfg->codec_info);
+  AVDT_TRACE_DEBUG(
+      "%s: codec: %s", __func__,
+      A2DP_CodecInfoString(p_data->msg.config_cmd.p_cfg->codec_info).c_str());
 
-  memcpy(&p_scb->req_cfg, p_data->msg.config_cmd.p_cfg, sizeof(tAVDT_CFG));
+  p_scb->req_cfg = *p_data->msg.config_cmd.p_cfg;
   p_data->msg.hdr.seid = p_scb->peer_seid;
   avdt_msg_send_cmd(p_scb->p_ccb, p_scb, AVDT_SIG_RECONFIG, &p_data->msg);
 }
@@ -1172,7 +1132,7 @@ void avdt_scb_snd_reconfig_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_reconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_reconfig_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_data->msg.hdr.err_code == 0) {
     /* store new configuration */
     if (p_scb->req_cfg.num_codec > 0) {
@@ -1203,7 +1163,7 @@ void avdt_scb_snd_reconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_security_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_security_req(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_data->msg.hdr.seid = p_scb->peer_seid;
   avdt_msg_send_cmd(p_scb->p_ccb, p_scb, AVDT_SIG_SECURITY, &p_data->msg);
 }
@@ -1217,7 +1177,7 @@ void avdt_scb_snd_security_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_security_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_security_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_data->msg.hdr.err_code == 0) {
     avdt_msg_send_rsp(p_scb->p_ccb, AVDT_SIG_SECURITY, &p_data->msg);
   } else {
@@ -1235,7 +1195,7 @@ void avdt_scb_snd_security_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_setconfig_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_setconfig_rej(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_scb->p_ccb != NULL) {
     avdt_msg_send_rej(p_scb->p_ccb, AVDT_SIG_SETCONFIG, &p_data->msg);
 
@@ -1256,19 +1216,30 @@ void avdt_scb_snd_setconfig_rej(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_setconfig_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
-  tAVDT_CFG *p_req, *p_cfg;
+void avdt_scb_snd_setconfig_req(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
+  AvdtpSepConfig *p_req, *p_cfg;
 
-  AVDT_TRACE_DEBUG("%s", __func__);
-  A2DP_DumpCodecInfo(p_data->msg.config_cmd.p_cfg->codec_info);
+  AVDT_TRACE_DEBUG(
+      "%s: codec: %s", __func__,
+      A2DP_CodecInfoString(p_data->msg.config_cmd.p_cfg->codec_info).c_str());
 
   /* copy API parameters to scb, set scb as in use */
+
+  AvdtpCcb* p_ccb = avdt_ccb_by_idx(p_data->msg.config_cmd.hdr.ccb_idx);
+  if (p_scb->p_ccb != p_ccb) {
+    AVDT_TRACE_ERROR(
+        "%s: mismatch in AVDTP SCB/CCB state: (p_scb->p_ccb=%p != p_ccb=%p): "
+        "p_scb=%p scb_handle=%d ccb_idx=%d",
+        __func__, p_scb->p_ccb, p_ccb, p_scb, p_scb->ScbHandle(),
+        p_data->msg.config_cmd.hdr.ccb_idx);
+    avdt_scb_rej_not_in_use(p_scb, p_data);
+    return;
+  }
   p_scb->in_use = true;
-  p_scb->p_ccb = avdt_ccb_by_idx(p_data->msg.config_cmd.hdr.ccb_idx);
   p_scb->peer_seid = p_data->msg.config_cmd.hdr.seid;
   p_req = p_data->msg.config_cmd.p_cfg;
-  p_cfg = &p_scb->cs.cfg;
-  memcpy(&p_scb->req_cfg, p_data->msg.config_cmd.p_cfg, sizeof(tAVDT_CFG));
+  p_cfg = &p_scb->stream_config.cfg;
+  p_scb->req_cfg = *p_data->msg.config_cmd.p_cfg;
 
   avdt_msg_send_cmd(p_scb->p_ccb, p_scb, AVDT_SIG_SETCONFIG, &p_data->msg);
 
@@ -1287,9 +1258,9 @@ void avdt_scb_snd_setconfig_req(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_setconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_snd_setconfig_rsp(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   if (p_scb->p_ccb != NULL) {
-    memcpy(&p_scb->curr_cfg, &p_scb->req_cfg, sizeof(tAVDT_CFG));
+    p_scb->curr_cfg = p_scb->req_cfg;
 
     avdt_msg_send_rsp(p_scb->p_ccb, AVDT_SIG_SETCONFIG, &p_data->msg);
   }
@@ -1305,12 +1276,9 @@ void avdt_scb_snd_setconfig_rsp(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_snd_tc_close(tAVDT_SCB* p_scb,
-                           UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
-#if (AVDT_REPORTING == TRUE)
+void avdt_scb_snd_tc_close(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   if (p_scb->curr_cfg.psc_mask & AVDT_PSC_REPORT)
     avdt_ad_close_req(AVDT_CHAN_REPORT, p_scb->p_ccb, p_scb);
-#endif
   avdt_ad_close_req(AVDT_CHAN_MEDIA, p_scb->p_ccb, p_scb);
 }
 
@@ -1324,7 +1292,7 @@ void avdt_scb_snd_tc_close(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_cb_err(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_cb_err(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_CTRL avdt_ctrl;
 
   /* set error code and parameter */
@@ -1332,8 +1300,10 @@ void avdt_scb_cb_err(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   avdt_ctrl.hdr.err_param = 0;
 
   /* call callback, using lookup table to get callback event */
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL,
-                            avdt_scb_cback_evt[p_scb->curr_evt], &avdt_ctrl);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb), RawAddress::kEmpty,
+      avdt_scb_cback_evt[p_scb->curr_evt], &avdt_ctrl,
+      p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -1346,7 +1316,7 @@ void avdt_scb_cb_err(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_cong_state(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_cong_state(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_scb->cong = p_data->llcong;
 }
 
@@ -1360,7 +1330,7 @@ void avdt_scb_cong_state(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_rej_state(UNUSED_ATTR tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_rej_state(UNUSED_ATTR AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_data->msg.hdr.err_code = AVDT_ERR_BAD_STATE;
   p_data->msg.hdr.err_param = 0;
   avdt_msg_send_rej(avdt_ccb_by_idx(p_data->msg.hdr.ccb_idx),
@@ -1377,7 +1347,7 @@ void avdt_scb_rej_state(UNUSED_ATTR tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_rej_in_use(UNUSED_ATTR tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_rej_in_use(UNUSED_ATTR AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   p_data->msg.hdr.err_code = AVDT_ERR_IN_USE;
   p_data->msg.hdr.err_param = 0;
   avdt_msg_send_rej(avdt_ccb_by_idx(p_data->msg.hdr.ccb_idx),
@@ -1394,7 +1364,7 @@ void avdt_scb_rej_in_use(UNUSED_ATTR tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_rej_not_in_use(UNUSED_ATTR tAVDT_SCB* p_scb,
+void avdt_scb_rej_not_in_use(UNUSED_ATTR AvdtpScb* p_scb,
                              tAVDT_SCB_EVT* p_data) {
   p_data->msg.hdr.err_code = AVDT_ERR_NOT_IN_USE;
   p_data->msg.hdr.err_param = 0;
@@ -1411,7 +1381,7 @@ void avdt_scb_rej_not_in_use(UNUSED_ATTR tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_set_remove(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_set_remove(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   p_scb->remove = true;
 }
 
@@ -1424,7 +1394,7 @@ void avdt_scb_set_remove(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_free_pkt(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
+void avdt_scb_free_pkt(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
   tAVDT_CTRL avdt_ctrl;
 
   /* set error code and parameter */
@@ -1436,8 +1406,9 @@ void avdt_scb_free_pkt(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
   AVDT_TRACE_WARNING("Dropped media packet");
 
   /* we need to call callback to keep data flow going */
-  (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL, AVDT_WRITE_CFM_EVT,
-                            &avdt_ctrl);
+  (*p_scb->stream_config.p_avdt_ctrl_cback)(
+      avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_WRITE_CFM_EVT,
+      &avdt_ctrl, p_scb->stream_config.scb_index);
 }
 
 /*******************************************************************************
@@ -1449,9 +1420,9 @@ void avdt_scb_free_pkt(tAVDT_SCB* p_scb, tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_clr_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_clr_pkt(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_CTRL avdt_ctrl;
-  tAVDT_CCB* p_ccb;
+  AvdtpCcb* p_ccb;
   uint8_t tcid;
   uint16_t lcid;
 
@@ -1464,7 +1435,7 @@ void avdt_scb_clr_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
     /* get tcid from type, scb */
     tcid = avdt_ad_type_to_tcid(AVDT_CHAN_MEDIA, p_scb);
 
-    lcid = avdt_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
+    lcid = avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
     L2CA_FlushChannel(lcid, L2CAP_FLUSH_CHANS_ALL);
   }
 
@@ -1474,8 +1445,9 @@ void avdt_scb_clr_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
     AVDT_TRACE_DEBUG("Dropped stored media packet");
 
     /* we need to call callback to keep data flow going */
-    (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL, AVDT_WRITE_CFM_EVT,
-                              &avdt_ctrl);
+    (*p_scb->stream_config.p_avdt_ctrl_cback)(
+        avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_WRITE_CFM_EVT,
+        &avdt_ctrl, p_scb->stream_config.scb_index);
   }
 }
 
@@ -1491,7 +1463,7 @@ void avdt_scb_clr_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_chk_snd_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_chk_snd_pkt(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   tAVDT_CTRL avdt_ctrl;
   BT_HDR* p_pkt;
 
@@ -1503,8 +1475,9 @@ void avdt_scb_chk_snd_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
       p_scb->p_pkt = NULL;
       avdt_ad_write_req(AVDT_CHAN_MEDIA, p_scb->p_ccb, p_scb, p_pkt);
 
-      (*p_scb->cs.p_ctrl_cback)(avdt_scb_to_hdl(p_scb), NULL,
-                                AVDT_WRITE_CFM_EVT, &avdt_ctrl);
+      (*p_scb->stream_config.p_avdt_ctrl_cback)(
+          avdt_scb_to_hdl(p_scb), RawAddress::kEmpty, AVDT_WRITE_CFM_EVT,
+          &avdt_ctrl, p_scb->stream_config.scb_index);
     }
   }
 }
@@ -1520,7 +1493,7 @@ void avdt_scb_chk_snd_pkt(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_transport_channel_timer(tAVDT_SCB* p_scb,
+void avdt_scb_transport_channel_timer(AvdtpScb* p_scb,
                                       UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   alarm_set_on_mloop(p_scb->transport_channel_timer,
                      AVDT_SCB_TC_DISC_TIMEOUT_MS,
@@ -1536,8 +1509,7 @@ void avdt_scb_transport_channel_timer(tAVDT_SCB* p_scb,
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_scb_clr_vars(tAVDT_SCB* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
+void avdt_scb_clr_vars(AvdtpScb* p_scb, UNUSED_ATTR tAVDT_SCB_EVT* p_data) {
   p_scb->in_use = false;
-  p_scb->p_ccb = NULL;
   p_scb->peer_seid = 0;
 }
