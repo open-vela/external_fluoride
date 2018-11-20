@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,8 +31,7 @@ typedef struct {
   bool (*get_stack_is_running)(void);
 } stack_manager_t;
 
-const stack_manager_t* stack_manager_get_interface();
+const stack_manager_t *stack_manager_get_interface();
 
-// TODO(zachoverflow): remove this terrible hack once the startup sequence is
-// more sane
-future_t* stack_manager_get_hack_future();
+// TODO(zachoverflow): remove this terrible hack once the startup sequence is more sane
+future_t *stack_manager_get_hack_future();
