@@ -51,7 +51,6 @@ cc_library_shared {
         "libutils",
         "libtinyxml2",
         "libz",
-        "libcrypto",
     ],
     static_libs: [
         "libbt-sbc-decoder",
@@ -62,7 +61,6 @@ cc_library_shared {
     ],
     whole_static_libs: [
         "libbt-bta",
-        "libbt-common",
         "libbtdevice",
         "libbtif",
         "libbt-hci",

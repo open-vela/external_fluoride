@@ -901,7 +901,7 @@ static uint8_t* add_attr(uint8_t* p, uint8_t* p_end, tSDP_DISCOVERY_DB* p_db,
           break;
         }
       }
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case falls through */
 
     case TWO_COMP_INT_DESC_TYPE:
       switch (attr_len) {
