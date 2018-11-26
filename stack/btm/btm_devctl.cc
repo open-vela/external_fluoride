@@ -34,17 +34,16 @@
 #include "btcore/include/module.h"
 #include "btm_int.h"
 #include "btu.h"
-#include "common/message_loop_thread.h"
 #include "device/include/controller.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
 #include "osi/include/osi.h"
-#include "stack/gatt/connection_manager.h"
+#include "osi/include/thread.h"
 
 #include "gatt_int.h"
 
-extern bluetooth::common::MessageLoopThread bt_startup_thread;
+extern thread_t* bt_workqueue_thread;
 
 /******************************************************************************/
 /*               L O C A L    D A T A    D E F I N I T I O N S                */
@@ -77,7 +76,7 @@ static void btm_decode_ext_features_page(uint8_t page_number,
  * Returns          void
  *
  ******************************************************************************/
-void btm_dev_init() {
+void btm_dev_init(void) {
   /* Initialize nonzero defaults */
   memset(btm_cb.cfg.bd_name, 0, sizeof(tBTM_LOC_BD_NAME));
 
@@ -190,7 +189,7 @@ static void reset_complete(void* result) {
 
   btm_cb.ble_ctr_cb.conn_state = BLE_CONN_IDLE;
   btm_cb.ble_ctr_cb.bg_conn_type = BTM_BLE_CONN_NONE;
-  gatt::connection_manager::reset(true);
+  gatt_reset_bgdev_list();
 
   btm_pm_reset();
 
@@ -232,7 +231,7 @@ void BTM_DeviceReset(UNUSED_ATTR tBTM_CMPL_CB* p_cb) {
   btm_db_reset();
 
   module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
-                                     &bt_startup_thread, reset_complete);
+                                     bt_workqueue_thread, reset_complete);
 }
 
 /*******************************************************************************
