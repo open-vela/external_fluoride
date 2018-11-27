@@ -1,5 +1,5 @@
 //
-//  Copyright 2016 The Android Open Source Project
+//  Copyright (C) 2016 The Android Open Source Project
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include "service/ipc/dbus/bluetooth_adapter.h"
 #include <base/files/file_util.h>
 #include <base/logging.h>
+#include "service/common/bluetooth/util/address_helper.h"
 #include "service/hal/bluetooth_interface.h"
 
 using ::dbus::Bus;

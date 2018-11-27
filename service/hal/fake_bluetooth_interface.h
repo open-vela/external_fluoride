@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -51,11 +51,11 @@ class FakeBluetoothInterface : public BluetoothInterface {
   void NotifyAdapterPropertiesChanged(int num_properties,
                                       bt_property_t* properties);
   void NotifyAdapterNamePropertyChanged(const std::string& name);
-  void NotifyAdapterAddressPropertyChanged(const RawAddress* address);
+  void NotifyAdapterAddressPropertyChanged(const bt_bdaddr_t* address);
   void NotifyAdapterLocalLeFeaturesPropertyChanged(
       const bt_local_le_features_t* features);
   void NotifyAclStateChangedCallback(bt_status_t status,
-                                     const RawAddress& remote_bdaddr,
+                                     const bt_bdaddr_t& remote_bdaddr,
                                      bt_acl_state_t state);
 
   // hal::BluetoothInterface overrides:
@@ -63,6 +63,7 @@ class FakeBluetoothInterface : public BluetoothInterface {
   void RemoveObserver(Observer* observer) override;
   const bt_interface_t* GetHALInterface() const override;
   bt_callbacks_t* GetHALCallbacks() const override;
+  const bluetooth_device_t* GetHALAdapter() const override;
 
  private:
   base::ObserverList<Observer> observers_;
