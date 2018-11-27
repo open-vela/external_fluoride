@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -26,7 +26,8 @@ namespace ipc {
 // Implements a Binder based IPCHandler.
 class IPCHandlerBinder : public IPCHandler {
  public:
-  IPCHandlerBinder(bluetooth::Adapter* adapter, IPCManager::Delegate* delegate);
+  IPCHandlerBinder(bluetooth::Adapter* adapter,
+                   IPCManager::Delegate* delegate);
   ~IPCHandlerBinder() override;
 
   // IPCHandler overrides:

@@ -1,5 +1,5 @@
 #
-#  Copyright 2015 Google, Inc.
+#  Copyright (C) 2015 Google, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,28 +16,25 @@
 
 static_library("device") {
   sources = [
-    "src/controller.cc",
-    "src/esco_parameters.cc",
-    "src/interop.cc",
+    "src/classic/peer.c",
+    "src/controller.c",
+    "src/interop.c",
   ]
 
   include_dirs = [
     "//",
     "//btcore/include",
     "//hci/include",
-    "//internal_include",
+    "//include",
     "//stack/include",
-  ]
-
-  deps = [
-    "//third_party/libchrome:base",
   ]
 }
 
 executable("net_test_device") {
   testonly = true
   sources = [
-    "//osi/test/AllocationTestHarness.cc",
+    "//osi/test/AllocationTestHarness.cpp",
+    "test/classic/peer_test.cpp",
   ]
 
   include_dirs = [ "//" ]
@@ -47,7 +44,6 @@ executable("net_test_device") {
     "//btcore",
     "//osi",
     "//third_party/googletest:gtest_main",
-    "//third_party/libchrome:base",
   ]
 
   libs = [
