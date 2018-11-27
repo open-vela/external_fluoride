@@ -30,8 +30,8 @@ class HearingAidAudioReceiver {
  public:
   virtual ~HearingAidAudioReceiver() = default;
   virtual void OnAudioDataReady(const std::vector<uint8_t>& data) = 0;
-  virtual void OnAudioSuspend(std::promise<void> do_suspend_promise);
-  virtual void OnAudioResume(std::promise<void> do_resume_promise);
+  virtual void OnAudioSuspend(std::promise<void> do_suspend_promise) = 0;
+  virtual void OnAudioResume(std::promise<void> do_resume_promise) = 0;
 };
 
 class HearingAid {
@@ -56,8 +56,6 @@ class HearingAid {
 
   virtual void Connect(const RawAddress& address) = 0;
   virtual void Disconnect(const RawAddress& address) = 0;
-  virtual void AddToWhiteList(const RawAddress& address) = 0;
-  virtual void RemoveFromWhiteList(const RawAddress& address) = 0;
   virtual void SetVolume(int8_t volume) = 0;
 };
 
