@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -324,10 +324,10 @@ typedef struct {
     for (ijk = 0; ijk < (len); ijk++) *(p)++ = (uint8_t)(a)[(len)-1 - ijk]; \
   }
 
-#define STREAM_TO_INT8(u8, p)   \
-  {                             \
-    (u8) = (*((int8_t*)(p)));   \
-    (p) += 1;                   \
+#define STREAM_TO_INT8(u8, p) \
+  {                           \
+    (u8) = (*((int8_t*)p));   \
+    (p) += 1;                 \
   }
 #define STREAM_TO_UINT8(u8, p) \
   {                            \
@@ -351,17 +351,6 @@ typedef struct {
              ((((uint32_t)(*((p) + 2)))) << 16) +                     \
              ((((uint32_t)(*((p) + 3)))) << 24));                     \
     (p) += 4;                                                         \
-  }
-#define STREAM_TO_UINT64(u64, p)                                      \
-  {                                                                   \
-    (u64) = (((uint64_t)(*(p))) + ((((uint64_t)(*((p) + 1)))) << 8) + \
-             ((((uint64_t)(*((p) + 2)))) << 16) +                     \
-             ((((uint64_t)(*((p) + 3)))) << 24) +                     \
-             ((((uint64_t)(*((p) + 4)))) << 32) +                     \
-             ((((uint64_t)(*((p) + 5)))) << 40) +                     \
-             ((((uint64_t)(*((p) + 6)))) << 48) +                     \
-             ((((uint64_t)(*((p) + 7)))) << 56));                     \
-    (p) += 8;                                                         \
   }
 #define STREAM_TO_ARRAY32(a, p)                     \
   {                                                 \
@@ -538,8 +527,7 @@ typedef struct {
 #define BD_ADDR_LEN 6 /* Device address length */
 
 #ifdef __cplusplus
-#include <bluetooth/uuid.h>
-#include <include/hardware/bluetooth.h>
+#include <hardware/bluetooth.h>
 
 inline void BDADDR_TO_STREAM(uint8_t*& p, const RawAddress& a) {
   for (int ijk = 0; ijk < BD_ADDR_LEN; ijk++)
@@ -561,22 +549,15 @@ typedef uint8_t tAMP_KEY_TYPE;
 #define BT_OCTET8_LEN 8
 typedef uint8_t BT_OCTET8[BT_OCTET8_LEN]; /* octet array: size 16 */
 
+#define LINK_KEY_LEN 16
+typedef uint8_t LINK_KEY[LINK_KEY_LEN]; /* Link Key */
+
 #define AMP_LINK_KEY_LEN 32
 typedef uint8_t
     AMP_LINK_KEY[AMP_LINK_KEY_LEN]; /* Dedicated AMP and GAMP Link Keys */
 
-/* Some C files include this header file */
-#ifdef __cplusplus
-
-#include <array>
-
-constexpr int OCTET16_LEN = 16;
-typedef std::array<uint8_t, OCTET16_LEN> Octet16;
-
-constexpr int LINK_KEY_LEN = OCTET16_LEN;
-typedef Octet16 LinkKey; /* Link Key */
-
-#endif
+#define BT_OCTET16_LEN 16
+typedef uint8_t BT_OCTET16[BT_OCTET16_LEN]; /* octet array: size 16 */
 
 #define PIN_CODE_LEN 16
 typedef uint8_t PIN_CODE[PIN_CODE_LEN]; /* Pin Code (upto 128 bits) MSB is 0 */
@@ -658,6 +639,23 @@ typedef uint8_t ACCESS_CODE[ACCESS_CODE_BYTE_LEN];
 
 #define BT_1SEC_TIMEOUT_MS (1 * 1000) /* 1 second */
 
+/* Maximum UUID size - 16 bytes, and structure to hold any type of UUID. */
+#define MAX_UUID_SIZE 16
+typedef struct {
+#define LEN_UUID_16 2
+#define LEN_UUID_32 4
+#define LEN_UUID_128 16
+
+  uint16_t len;
+
+  union {
+    uint16_t uuid16;
+    uint32_t uuid32;
+    uint8_t uuid128[MAX_UUID_SIZE];
+  } uu;
+
+} tBT_UUID;
+
 #define BT_EIR_FLAGS_TYPE 0x01
 #define BT_EIR_MORE_16BITS_UUID_TYPE 0x02
 #define BT_EIR_COMPLETE_16BITS_UUID_TYPE 0x03
@@ -730,7 +728,6 @@ typedef struct {
 #define BLE_ADDR_RANDOM 0x01
 #define BLE_ADDR_PUBLIC_ID 0x02
 #define BLE_ADDR_RANDOM_ID 0x03
-#define BLE_ADDR_ANONYMOUS 0xFF
 typedef uint8_t tBLE_ADDR_TYPE;
 #define BLE_ADDR_TYPE_MASK (BLE_ADDR_RANDOM | BLE_ADDR_PUBLIC)
 
