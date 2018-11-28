@@ -31,6 +31,7 @@
 #define GATT_OP_CODE_SIZE 1
 #define GATT_START_END_HANDLE_SIZE 4
 
+using base::StringPrintf;
 /**********************************************************************
  *   ATT protocl message building utility                              *
  **********************************************************************/
@@ -302,8 +303,8 @@ BT_HDR* attp_build_value_cmd(uint16_t payload_size, uint8_t op_code,
       /* update handle value pair length */
       if (op_code == GATT_RSP_READ_BY_TYPE) *p_pair_len = (len + 2);
 
-      GATT_TRACE_WARNING("attribute value too long, to be truncated to %d",
-                         len);
+      LOG(WARNING) << StringPrintf(
+          "attribute value too long, to be truncated to %d", len);
     }
 
     ARRAY_TO_STREAM(p, p_data, len);
@@ -326,35 +327,27 @@ tGATT_STATUS attp_send_msg_to_l2cap(tGATT_TCB& tcb, BT_HDR* p_toL2CAP) {
   if (tcb.att_lcid == L2CAP_ATT_CID)
     l2cap_ret = L2CA_SendFixedChnlData(L2CAP_ATT_CID, tcb.peer_bda, p_toL2CAP);
   else
-
     l2cap_ret = (uint16_t)L2CA_DataWrite(tcb.att_lcid, p_toL2CAP);
 
   if (l2cap_ret == L2CAP_DW_FAILED) {
-    GATT_TRACE_ERROR("ATT failed to pass msg to L2CAP");
+    LOG(ERROR) << __func__ << ": failed to write data to L2CAP";
     return GATT_INTERNAL_ERROR;
   } else if (l2cap_ret == L2CAP_DW_CONGESTED) {
-    GATT_TRACE_DEBUG("ATT congested, message accepted");
+    VLOG(1) << StringPrintf("ATT congested, message accepted");
     return GATT_CONGESTED;
   }
   return GATT_SUCCESS;
 }
 
-/*******************************************************************************
- *
- * Function         attp_build_sr_msg
- *
- * Description      Build ATT Server PDUs.
- *
- ******************************************************************************/
+/** Build ATT Server PDUs */
 BT_HDR* attp_build_sr_msg(tGATT_TCB& tcb, uint8_t op_code,
                           tGATT_SR_MSG* p_msg) {
-  BT_HDR* p_cmd = NULL;
   uint16_t offset = 0;
 
   switch (op_code) {
     case GATT_RSP_READ_BLOB:
     case GATT_RSP_PREPARE_WRITE:
-      GATT_TRACE_EVENT(
+      VLOG(1) << StringPrintf(
           "ATT_RSP_READ_BLOB/GATT_RSP_PREPARE_WRITE: len = %d offset = %d",
           p_msg->attr_value.len, p_msg->attr_value.offset);
       offset = p_msg->attr_value.offset;
@@ -365,36 +358,27 @@ BT_HDR* attp_build_sr_msg(tGATT_TCB& tcb, uint8_t op_code,
     case GATT_RSP_READ:
     case GATT_HANDLE_VALUE_NOTIF:
     case GATT_HANDLE_VALUE_IND:
-      p_cmd = attp_build_value_cmd(
+      return attp_build_value_cmd(
           tcb.payload_size, op_code, p_msg->attr_value.handle, offset,
           p_msg->attr_value.len, p_msg->attr_value.value);
-      break;
 
     case GATT_RSP_WRITE:
-      p_cmd = attp_build_opcode_cmd(op_code);
-      break;
+      return attp_build_opcode_cmd(op_code);
 
     case GATT_RSP_ERROR:
-      p_cmd = attp_build_err_cmd(p_msg->error.cmd_code, p_msg->error.handle,
-                                 p_msg->error.reason);
-      break;
+      return attp_build_err_cmd(p_msg->error.cmd_code, p_msg->error.handle,
+                                p_msg->error.reason);
 
     case GATT_RSP_EXEC_WRITE:
-      p_cmd = attp_build_exec_write_cmd(op_code, 0);
-      break;
+      return attp_build_exec_write_cmd(op_code, 0);
 
     case GATT_RSP_MTU:
-      p_cmd = attp_build_mtu_cmd(op_code, p_msg->mtu);
-      break;
+      return attp_build_mtu_cmd(op_code, p_msg->mtu);
 
     default:
-      GATT_TRACE_DEBUG("attp_build_sr_msg: unknown op code = %d", op_code);
-      break;
+      LOG(FATAL) << "attp_build_sr_msg: unknown op code = " << +op_code;
+      return nullptr;
   }
-
-  if (!p_cmd) GATT_TRACE_ERROR("No resources");
-
-  return p_cmd;
 }
 
 /*******************************************************************************
