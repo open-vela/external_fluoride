@@ -47,10 +47,10 @@
 #include <hardware/bt_sdp.h>
 #include <hardware/bt_sock.h>
 
-#include "avrcp_service.h"
 #include "bt_utils.h"
 #include "bta/include/bta_hearing_aid_api.h"
 #include "bta/include/bta_hf_client_api.h"
+#include "btif/avrcp/avrcp_service.h"
 #include "btif_a2dp.h"
 #include "btif_api.h"
 #include "btif_av.h"
@@ -62,13 +62,14 @@
 #include "btif_storage.h"
 #include "btsnoop.h"
 #include "btsnoop_mem.h"
+#include "common/metrics.h"
 #include "device/include/interop.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocation_tracker.h"
 #include "osi/include/log.h"
-#include "osi/include/metrics.h"
 #include "osi/include/osi.h"
 #include "osi/include/wakelock.h"
+#include "stack/gatt/connection_manager.h"
 #include "stack_manager.h"
 
 /* Test interface includes */
@@ -323,15 +324,14 @@ static void dump(int fd, const char** arguments) {
   osi_allocator_debug_dump(fd);
   alarm_debug_dump(fd);
   HearingAid::DebugDump(fd);
+  gatt::connection_manager::dump(fd);
 #if (BTSNOOP_MEM == TRUE)
   btif_debug_btsnoop_dump(fd);
 #endif
-
-  close(fd);
 }
 
 static void dumpMetrics(std::string* output) {
-  system_bt_osi::BluetoothMetricsLogger::GetInstance()->WriteString(output);
+  bluetooth::common::BluetoothMetricsLogger::GetInstance()->WriteString(output);
 }
 
 static const void* get_profile_interface(const char* profile_id) {
