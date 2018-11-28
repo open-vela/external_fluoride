@@ -2027,7 +2027,7 @@ static void bte_search_devices_evt(tBTA_DM_SEARCH_EVT event,
    * to the end of the tBTA_DM_SEARCH */
   switch (event) {
     case BTA_DM_INQ_RES_EVT: {
-      if (p_data->inq_res.p_eir) param_len += HCI_EXT_INQ_RESPONSE_LEN;
+      if (p_data->inq_res.p_eir) param_len += p_data->inq_res.eir_len;
     } break;
 
     case BTA_DM_DISC_RES_EVT: {
@@ -2909,7 +2909,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       state = BT_BOND_STATE_NONE;
     } else {
       btif_dm_save_ble_bonding_keys();
-      BTA_GATTC_Refresh(bd_addr.address);
+      BTA_GATTC_Refresh(bd_addr);
       btif_dm_get_remote_services_by_transport(&bd_addr, BTA_GATT_TRANSPORT_LE);
     }
   } else {
