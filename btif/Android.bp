@@ -101,7 +101,6 @@ cc_library_static {
         "libhidltransport",
         "libhwbinder",
         "libutils",
-        "libcrypto",
     ],
     whole_static_libs: [
         "avrcp-target-service",
@@ -131,7 +130,6 @@ cc_test {
         "libprotobuf-cpp-lite",
         "libcutils",
         "libutils",
-        "libcrypto",
     ],
     static_libs: [
         "libbt-bta",
