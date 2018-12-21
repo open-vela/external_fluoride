@@ -159,10 +159,15 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
   /* See if we have a link control block for the remote device */
   p_lcb = l2cu_find_lcb_by_bd_addr(ci.bd_addr, BT_TRANSPORT_BR_EDR);
 
-  /* If we don't have one, this is an error */
-  if (!p_lcb) {
-    L2CAP_TRACE_WARNING("L2CAP got conn_comp for unknown BD_ADDR");
-    return (false);
+  /* If we don't have one, allocate one */
+  if (p_lcb == nullptr) {
+    L2CAP_TRACE_WARNING("No available link control block, try allocate one");
+    p_lcb = l2cu_allocate_lcb(ci.bd_addr, false, BT_TRANSPORT_BR_EDR);
+    if (p_lcb == nullptr) {
+      L2CAP_TRACE_WARNING("%s: Failed to allocate an LCB", __func__);
+      return (false);
+    }
+    p_lcb->link_state = LST_CONNECTING;
   }
 
   if (p_lcb->link_state != LST_CONNECTING) {
@@ -217,7 +222,7 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
       alarm_set_on_mloop(p_lcb->l2c_lcb_timer, L2CAP_ECHO_RSP_TIMEOUT_MS,
                          l2c_lcb_timer_timeout, p_lcb);
     } else if (!p_lcb->ccb_queue.p_first_ccb) {
-      period_ms_t timeout_ms = L2CAP_LINK_STARTUP_TOUT * 1000;
+      uint64_t timeout_ms = L2CAP_LINK_STARTUP_TOUT * 1000;
       alarm_set_on_mloop(p_lcb->l2c_lcb_timer, timeout_ms,
                          l2c_lcb_timer_timeout, p_lcb);
     }
@@ -253,7 +258,7 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
          * controller */
         p_lcb->link_state = LST_CONNECTING;
       } else {
-        l2cu_create_conn(p_lcb, BT_TRANSPORT_BR_EDR);
+        l2cu_create_conn_br_edr(p_lcb);
       }
     }
   }
@@ -441,8 +446,13 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
         }
 #endif
       }
-      if (l2cu_create_conn(p_lcb, transport))
-        lcb_is_free = false; /* still using this lcb */
+      if (p_lcb->transport == BT_TRANSPORT_LE) {
+        if (l2cu_create_conn_le(p_lcb))
+          lcb_is_free = false; /* still using this lcb */
+      } else {
+        if (l2cu_create_conn_br_edr(p_lcb))
+          lcb_is_free = false; /* still using this lcb */
+      }
     }
 
     p_lcb->p_pending_ccb = NULL;
@@ -455,7 +465,7 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
   if (lcb_is_free &&
       ((p_lcb = l2cu_find_lcb_by_state(LST_CONNECT_HOLDING)) != NULL)) {
     /* we found one-- create a connection */
-    l2cu_create_conn(p_lcb, BT_TRANSPORT_BR_EDR);
+    l2cu_create_conn_br_edr(p_lcb);
   }
 
   return status;
@@ -557,7 +567,7 @@ void l2c_link_timeout(tL2C_LCB* p_lcb) {
 
     /* If no channels in use, drop the link. */
     if (!p_lcb->ccb_queue.p_first_ccb) {
-      period_ms_t timeout_ms;
+      uint64_t timeout_ms;
       bool start_timeout = true;
 
       rc = btm_sec_disconnect(p_lcb->handle, HCI_ERR_PEER_USER);
