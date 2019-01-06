@@ -47,13 +47,18 @@ interface IBluetooth
     BluetoothClass getBluetoothClass();
     boolean setBluetoothClass(in BluetoothClass bluetoothClass);
 
+    int getIoCapability();
+    boolean setIoCapability(int capability);
+    int getLeIoCapability();
+    boolean setLeIoCapability(int capability);
+
     int getScanMode();
     boolean setScanMode(int mode, int duration);
 
     int getDiscoverableTimeout();
     boolean setDiscoverableTimeout(int timeout);
 
-    boolean startDiscovery();
+    boolean startDiscovery(String callingPackage);
     boolean cancelDiscovery();
     boolean isDiscovering();
     long getDiscoveryEndMillis();
