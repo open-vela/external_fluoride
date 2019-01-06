@@ -66,6 +66,18 @@ typedef enum {
 /** Bluetooth Adapter State */
 typedef enum { BT_STATE_OFF, BT_STATE_ON } bt_state_t;
 
+/** Bluetooth Adapter Input Output Capabilities which determine Pairing/Security
+ */
+typedef enum {
+  BT_IO_CAP_OUT,    /* DisplayOnly */
+  BT_IO_CAP_IO,     /* DisplayYesNo */
+  BT_IO_CAP_IN,     /* KeyboardOnly */
+  BT_IO_CAP_NONE,   /* NoInputNoOutput */
+  BT_IO_CAP_KBDISP, /* Keyboard display */
+  BT_IO_CAP_MAX,
+  BT_IO_CAP_UNKNOWN = 0xFF /* Unknown value */
+} bt_io_cap_t;
+
 /** Bluetooth Error Status */
 /** We need to build on this */
 
@@ -239,6 +251,20 @@ typedef enum {
    * Data type   - bt_local_le_features_t.
    */
   BT_PROPERTY_LOCAL_LE_FEATURES,
+
+  /**
+   * Description - Local Input/Output Capabilities for classic Bluetooth
+   * Access mode - GET and SET
+   * Data Type - bt_io_cap_t.
+   */
+  BT_PROPERTY_LOCAL_IO_CAPS,
+
+  /**
+   * Description - Local Input/Output Capabilities for BLE
+   * Access mode - GET and SET
+   * Data Type - bt_io_cap_t.
+   */
+  BT_PROPERTY_LOCAL_IO_CAPS_BLE,
 
   BT_PROPERTY_REMOTE_DEVICE_TIMESTAMP = 0xFF,
 } bt_property_type_t;
@@ -590,6 +616,14 @@ typedef struct {
    * Get the AvrcpTarget Service interface to interact with the Avrcp Service
    */
   bluetooth::avrcp::ServiceInterface* (*get_avrcp_service)(void);
+
+  /**
+   * Obfuscate Bluetooth MAC address into a PII free ID string
+   *
+   * @param address Bluetooth MAC address to be obfuscated
+   * @return a string of uint8_t that is unique to this MAC address
+   */
+  std::string (*obfuscate_address)(const RawAddress& address);
 } bt_interface_t;
 
 #define BLUETOOTH_INTERFACE_STRING "bluetoothInterface"
