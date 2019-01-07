@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -114,20 +114,18 @@ void BTA_HlUpdate(uint8_t app_id, tBTA_HL_REG_PARAM* p_reg_param,
         (p_reg_param->sec_mask | BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT);
     p_buf->p_cback = p_cback;
     if (p_reg_param->p_srv_name)
-      strlcpy(p_buf->srv_name, p_reg_param->p_srv_name,
-              sizeof(p_buf->srv_name));
+      strlcpy(p_buf->srv_name, p_reg_param->p_srv_name, BTA_SERVICE_NAME_LEN);
     else
       p_buf->srv_name[0] = 0;
 
     if (p_reg_param->p_srv_desp)
-      strlcpy(p_buf->srv_desp, p_reg_param->p_srv_desp,
-              sizeof(p_buf->srv_desp));
+      strlcpy(p_buf->srv_desp, p_reg_param->p_srv_desp, BTA_SERVICE_DESP_LEN);
     else
       p_buf->srv_desp[0] = 0;
 
     if (p_reg_param->p_provider_name)
       strlcpy(p_buf->provider_name, p_reg_param->p_provider_name,
-              sizeof(p_buf->provider_name));
+              BTA_PROVIDER_NAME_LEN);
     else
       p_buf->provider_name[0] = 0;
   }
@@ -161,18 +159,18 @@ void BTA_HlRegister(uint8_t app_id, tBTA_HL_REG_PARAM* p_reg_param,
   p_buf->p_cback = p_cback;
 
   if (p_reg_param->p_srv_name)
-    strlcpy(p_buf->srv_name, p_reg_param->p_srv_name, sizeof(p_buf->srv_name));
+    strlcpy(p_buf->srv_name, p_reg_param->p_srv_name, BTA_SERVICE_NAME_LEN);
   else
     p_buf->srv_name[0] = 0;
 
   if (p_reg_param->p_srv_desp)
-    strlcpy(p_buf->srv_desp, p_reg_param->p_srv_desp, sizeof(p_buf->srv_desp));
+    strlcpy(p_buf->srv_desp, p_reg_param->p_srv_desp, BTA_SERVICE_DESP_LEN);
   else
     p_buf->srv_desp[0] = 0;
 
   if (p_reg_param->p_provider_name)
     strlcpy(p_buf->provider_name, p_reg_param->p_provider_name,
-            sizeof(p_buf->provider_name));
+            BTA_PROVIDER_NAME_LEN);
   else
     p_buf->provider_name[0] = 0;
 
@@ -229,7 +227,7 @@ void BTA_HlCchOpen(uint8_t app_id, tBTA_HL_APP_HANDLE app_handle,
   p_buf->app_handle = app_handle;
   p_buf->sec_mask =
       (p_open_param->sec_mask | BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT);
-  p_buf->bd_addr = p_open_param->bd_addr;
+  bdcpy(p_buf->bd_addr, p_open_param->bd_addr);
   p_buf->ctrl_psm = p_open_param->ctrl_psm;
 
   bta_sys_sendmsg(p_buf);
@@ -445,14 +443,14 @@ void BTA_HlDchEchoTest(tBTA_HL_MCL_HANDLE mcl_handle,
  *
  ******************************************************************************/
 void BTA_HlSdpQuery(uint8_t app_id, tBTA_HL_APP_HANDLE app_handle,
-                    const RawAddress& bd_addr) {
+                    BD_ADDR bd_addr) {
   tBTA_HL_API_SDP_QUERY* p_buf =
       (tBTA_HL_API_SDP_QUERY*)osi_malloc(sizeof(tBTA_HL_API_SDP_QUERY));
 
   p_buf->hdr.event = BTA_HL_API_SDP_QUERY_EVT;
   p_buf->app_id = app_id;
   p_buf->app_handle = app_handle;
-  p_buf->bd_addr = bd_addr;
+  bdcpy(p_buf->bd_addr, bd_addr);
 
   bta_sys_sendmsg(p_buf);
 }
