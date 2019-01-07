@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,17 +34,16 @@
 #include "btcore/include/module.h"
 #include "btm_int.h"
 #include "btu.h"
-#include "common/message_loop_thread.h"
 #include "device/include/controller.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
 #include "osi/include/osi.h"
-#include "stack/gatt/connection_manager.h"
+#include "osi/include/thread.h"
 
 #include "gatt_int.h"
 
-extern bluetooth::common::MessageLoopThread bt_startup_thread;
+extern thread_t* bt_workqueue_thread;
 
 /******************************************************************************/
 /*               L O C A L    D A T A    D E F I N I T I O N S                */
@@ -77,7 +76,7 @@ static void btm_decode_ext_features_page(uint8_t page_number,
  * Returns          void
  *
  ******************************************************************************/
-void btm_dev_init() {
+void btm_dev_init(void) {
   /* Initialize nonzero defaults */
   memset(btm_cb.cfg.bd_name, 0, sizeof(tBTM_LOC_BD_NAME));
 
@@ -118,6 +117,7 @@ void btm_dev_init() {
  ******************************************************************************/
 static void btm_db_reset(void) {
   tBTM_CMPL_CB* p_cb;
+  tBTM_STATUS status = BTM_DEV_RESET;
 
   btm_inq_db_reset();
 
@@ -132,33 +132,21 @@ static void btm_db_reset(void) {
     p_cb = btm_cb.devcb.p_rssi_cmpl_cb;
     btm_cb.devcb.p_rssi_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_RSSI_RESULT btm_rssi_result;
-      btm_rssi_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_rssi_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_RSSI_RESULT*)&status);
   }
 
   if (btm_cb.devcb.p_failed_contact_counter_cmpl_cb) {
     p_cb = btm_cb.devcb.p_failed_contact_counter_cmpl_cb;
     btm_cb.devcb.p_failed_contact_counter_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_FAILED_CONTACT_COUNTER_RESULT btm_failed_contact_counter_result;
-      btm_failed_contact_counter_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_failed_contact_counter_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_FAILED_CONTACT_COUNTER_RESULT*)&status);
   }
 
   if (btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb) {
     p_cb = btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb;
     btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT btm_automatic_flush_timeout_result;
-      btm_automatic_flush_timeout_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_automatic_flush_timeout_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT*)&status);
   }
 }
 
@@ -189,7 +177,8 @@ static void reset_complete(void* result) {
   btm_cb.btm_inq_vars.page_scan_type = HCI_DEF_SCAN_TYPE;
 
   btm_cb.ble_ctr_cb.conn_state = BLE_CONN_IDLE;
-  connection_manager::reset(true);
+  btm_cb.ble_ctr_cb.bg_conn_type = BTM_BLE_CONN_NONE;
+  gatt_reset_bgdev_list();
 
   btm_pm_reset();
 
@@ -231,7 +220,7 @@ void BTM_DeviceReset(UNUSED_ATTR tBTM_CMPL_CB* p_cb) {
   btm_db_reset();
 
   module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
-                                     &bt_startup_thread, reset_complete);
+                                     bt_workqueue_thread, reset_complete);
 }
 
 /*******************************************************************************
@@ -320,7 +309,9 @@ static void btm_decode_ext_features_page(uint8_t page_number,
 
       /* Create (e)SCO supported packet types mask */
       btm_cb.btm_sco_pkt_types_supported = 0;
+#if (BTM_SCO_INCLUDED == TRUE)
       btm_cb.sco_cb.esco_supported = false;
+#endif
       if (HCI_SCO_LINK_SUPPORTED(p_features)) {
         btm_cb.btm_sco_pkt_types_supported = ESCO_PKT_TYPES_MASK_HV1;
 
@@ -616,7 +607,7 @@ void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
  *
  ******************************************************************************/
 void btm_vsc_complete(uint8_t* p, uint16_t opcode, uint16_t evt_len,
-                      tBTM_VSC_CMPL_CB* p_vsc_cplt_cback) {
+                      tBTM_CMPL_CB* p_vsc_cplt_cback) {
   tBTM_VSC_CMPL vcs_cplt_params;
 
   /* If there was a callback address for vcs complete, call it */
@@ -656,7 +647,7 @@ tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb, bool is_register) {
       free_idx = i;
     } else if (btm_cb.devcb.p_vend_spec_cb[i] == p_cb) {
       /* Found callback in lookup table. If deregistering, clear the entry. */
-      if (!is_register) {
+      if (is_register == false) {
         btm_cb.devcb.p_vend_spec_cb[i] = NULL;
         BTM_TRACE_EVENT("BTM Deregister For VSEvents is successfully");
       }
