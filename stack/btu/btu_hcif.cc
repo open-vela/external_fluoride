@@ -49,10 +49,11 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
-using tracked_objects::Location;
+using base::Location;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
+extern void smp_cancel_start_encryption_attempt();
 
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
@@ -125,18 +126,6 @@ static void btu_ble_rc_param_req_evt(uint8_t* p);
 #if (BLE_PRIVACY_SPT == TRUE)
 static void btu_ble_proc_enhanced_conn_cmpl(uint8_t* p, uint16_t evt_len);
 #endif
-
-static void do_in_hci_thread(const tracked_objects::Location& from_here,
-                             const base::Closure& task) {
-  base::MessageLoop* hci_message_loop = get_message_loop();
-  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
-    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
-              __func__, from_here.ToString().c_str());
-    return;
-  }
-
-  hci_message_loop->task_runner()->PostTask(from_here, task);
-}
 
 /*******************************************************************************
  *
@@ -395,8 +384,8 @@ void btu_hcif_send_cmd(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_buf) {
       vsc_callback);
 }
 
-using hci_cmd_cb = base::Callback<void(uint8_t* /* return_parameters */,
-                                       uint16_t /* return_parameters_length*/)>;
+using hci_cmd_cb = base::OnceCallback<void(
+    uint8_t* /* return_parameters */, uint16_t /* return_parameters_length*/)>;
 
 struct cmd_with_cb_data {
   hci_cmd_cb cb;
@@ -424,7 +413,7 @@ static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
   cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)context;
   HCI_TRACE_DEBUG("command complete for: %s",
                   cb_wrapper->posted_from.ToString().c_str());
-  cb_wrapper->cb.Run(stream, event->len - 5);
+  std::move(cb_wrapper->cb).Run(stream, event->len - 5);
   cmd_with_cb_data_cleanup(cb_wrapper);
   osi_free(cb_wrapper);
 
@@ -433,9 +422,9 @@ static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
 
 static void btu_hcif_command_complete_evt_with_cb(BT_HDR* response,
                                                   void* context) {
-  do_in_hci_thread(FROM_HERE,
-                   base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
-                              response, context));
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
+                               response, context));
 }
 
 static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
@@ -451,7 +440,7 @@ static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
   cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)context;
   HCI_TRACE_DEBUG("command status for: %s",
                   cb_wrapper->posted_from.ToString().c_str());
-  cb_wrapper->cb.Run(&status, sizeof(uint16_t));
+  std::move(cb_wrapper->cb).Run(&status, sizeof(uint16_t));
   cmd_with_cb_data_cleanup(cb_wrapper);
   osi_free(cb_wrapper);
 
@@ -466,7 +455,7 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
     return;
   }
 
-  do_in_hci_thread(
+  do_in_main_thread(
       FROM_HERE, base::Bind(btu_hcif_command_status_evt_with_cb_on_task, status,
                             command, context));
 }
@@ -474,9 +463,9 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
 /* This function is called to send commands to the Host Controller. |cb| is
  * called when command status event is called with error code, or when the
  * command complete event is received. */
-void btu_hcif_send_cmd_with_cb(const tracked_objects::Location& posted_from,
-                               uint16_t opcode, uint8_t* params,
-                               uint8_t params_len, hci_cmd_cb cb) {
+void btu_hcif_send_cmd_with_cb(const Location& posted_from, uint16_t opcode,
+                               uint8_t* params, uint8_t params_len,
+                               hci_cmd_cb cb) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -493,7 +482,7 @@ void btu_hcif_send_cmd_with_cb(const tracked_objects::Location& posted_from,
       (cmd_with_cb_data*)osi_malloc(sizeof(cmd_with_cb_data));
 
   cmd_with_cb_data_init(cb_wrapper);
-  cb_wrapper->cb = cb;
+  cb_wrapper->cb = std::move(cb);
   cb_wrapper->posted_from = posted_from;
 
   hci_layer_get_interface()->transmit_command(
@@ -576,9 +565,7 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
   RawAddress bda;
   uint8_t link_type;
   uint8_t enc_mode;
-#if (BTM_SCO_INCLUDED == TRUE)
   tBTM_ESCO_DATA esco_data;
-#endif
 
   STREAM_TO_UINT8(status, p);
   STREAM_TO_UINT16(handle, p);
@@ -599,15 +586,12 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
     btm_sec_connected(bda, handle, status, enc_mode);
 
     l2c_link_hci_conn_comp(status, handle, bda);
-  }
-#if (BTM_SCO_INCLUDED == TRUE)
-  else {
+  } else {
     memset(&esco_data, 0, sizeof(tBTM_ESCO_DATA));
     /* esco_data.link_type = HCI_LINK_TYPE_SCO; already zero */
     esco_data.bd_addr = bda;
     btm_sco_connected(status, &bda, handle, &esco_data);
   }
-#endif /* BTM_SCO_INCLUDED */
 }
 
 /*******************************************************************************
@@ -632,12 +616,9 @@ static void btu_hcif_connection_request_evt(uint8_t* p) {
   /* passing request to l2cap */
   if (link_type == HCI_LINK_TYPE_ACL) {
     btm_sec_conn_req(bda, dc);
-  }
-#if (BTM_SCO_INCLUDED == TRUE)
-  else {
+  } else {
     btm_sco_conn_req(bda, dc, link_type);
   }
-#endif /* BTM_SCO_INCLUDED */
 }
 
 /*******************************************************************************
@@ -666,12 +647,8 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
                     __func__, reason, handle);
   }
 
-#if (BTM_SCO_INCLUDED == TRUE)
   /* If L2CAP doesn't know about it, send it to SCO */
   if (!l2c_link_hci_disc_comp(handle, reason)) btm_sco_removed(handle, reason);
-#else
-  l2c_link_hci_disc_comp(handle, reason);
-#endif /* BTM_SCO_INCLUDED */
 
   /* Notify security manager */
   btm_sec_disconnected(handle, reason);
@@ -736,6 +713,11 @@ static void btu_hcif_encryption_change_evt(uint8_t* p) {
   STREAM_TO_UINT8(status, p);
   STREAM_TO_UINT16(handle, p);
   STREAM_TO_UINT8(encr_enable, p);
+
+  if (status == HCI_ERR_CONNECTION_TOUT) {
+    smp_cancel_start_encryption_attempt();
+    return;
+  }
 
   btm_acl_encrypt_change(handle, status, encr_enable);
   btm_sec_encrypt_change(handle, status, encr_enable);
@@ -827,7 +809,6 @@ static void btu_hcif_qos_setup_comp_evt(uint8_t* p) {
  *
  ******************************************************************************/
 static void btu_hcif_esco_connection_comp_evt(uint8_t* p) {
-#if (BTM_SCO_INCLUDED == TRUE)
   tBTM_ESCO_DATA data;
   uint16_t handle;
   RawAddress bda;
@@ -846,7 +827,6 @@ static void btu_hcif_esco_connection_comp_evt(uint8_t* p) {
 
   data.bd_addr = bda;
   btm_sco_connected(status, &bda, handle, &data);
-#endif
 }
 
 /*******************************************************************************
@@ -859,7 +839,6 @@ static void btu_hcif_esco_connection_comp_evt(uint8_t* p) {
  *
  ******************************************************************************/
 static void btu_hcif_esco_connection_chg_evt(uint8_t* p) {
-#if (BTM_SCO_INCLUDED == TRUE)
   uint16_t handle;
   uint16_t tx_pkt_len;
   uint16_t rx_pkt_len;
@@ -877,7 +856,6 @@ static void btu_hcif_esco_connection_chg_evt(uint8_t* p) {
 
   btm_esco_proc_conn_chg(status, handle, tx_interval, retrans_window,
                          rx_pkt_len, tx_pkt_len);
-#endif
 }
 
 /*******************************************************************************
@@ -942,18 +920,6 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     /* BLE Commands sComplete*/
-    case HCI_BLE_ADD_WHITE_LIST:
-      btm_ble_add_2_white_list_complete(*p);
-      break;
-
-    case HCI_BLE_CLEAR_WHITE_LIST:
-      btm_ble_clear_white_list_complete(p, evt_len);
-      break;
-
-    case HCI_BLE_REMOVE_WHITE_LIST:
-      btm_ble_remove_from_white_list_complete(p, evt_len);
-      break;
-
     case HCI_BLE_RAND:
     case HCI_BLE_ENCRYPT:
       btm_ble_rand_enc_complete(p, opcode, (tBTM_RAND_ENC_CB*)p_cplt_cback);
@@ -1039,8 +1005,8 @@ static void btu_hcif_command_complete_evt_on_task(BT_HDR* event,
 }
 
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
-  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
-                                         response, context));
+  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
+                                          response, context));
 }
 
 /*******************************************************************************
@@ -1055,27 +1021,107 @@ static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
 static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
                                         uint8_t* p_cmd,
                                         void* p_vsc_status_cback) {
+  CHECK_NE(p_cmd, nullptr) << "Null command for opcode 0x" << loghex(opcode);
+  p_cmd++;  // Skip parameter total length
+
   RawAddress bd_addr;
   uint16_t handle;
-#if (BTM_SCO_INCLUDED == TRUE)
-  tBTM_ESCO_DATA esco_data;
-#endif
 
   switch (opcode) {
-    case HCI_EXIT_SNIFF_MODE:
-    case HCI_EXIT_PARK_MODE:
-#if (BTM_SCO_WAKE_PARKED_LINK == TRUE)
+    // Link Control Commands
+    case HCI_INQUIRY:
       if (status != HCI_SUCCESS) {
-        /* Allow SCO initiation to continue if waiting for change mode event */
-        if (p_cmd != NULL) {
-          p_cmd++; /* bypass length field */
-          STREAM_TO_UINT16(handle, p_cmd);
-          btm_sco_chk_pend_unpark(status, handle);
+        // Tell inquiry processing that we are done
+        btm_process_inq_complete(status, BTM_BR_INQUIRY_MASK);
+      }
+      break;
+    case HCI_QOS_SETUP:
+      if (status != HCI_SUCCESS) {
+        // Tell qos setup that we are done
+        btm_qos_setup_complete(status, 0, nullptr);
+      }
+      break;
+    case HCI_SWITCH_ROLE:
+      if (status != HCI_SUCCESS) {
+        // Tell BTM that the command failed
+        STREAM_TO_BDADDR(bd_addr, p_cmd);
+        btm_acl_role_changed(status, &bd_addr, BTM_ROLE_UNDEFINED);
+        l2c_link_role_changed(nullptr, BTM_ROLE_UNDEFINED,
+                              HCI_ERR_COMMAND_DISALLOWED);
+      }
+      break;
+    case HCI_CREATE_CONNECTION:
+      if (status != HCI_SUCCESS) {
+        STREAM_TO_BDADDR(bd_addr, p_cmd);
+        btm_sec_connected(bd_addr, HCI_INVALID_HANDLE, status, 0);
+        l2c_link_hci_conn_comp(status, HCI_INVALID_HANDLE, bd_addr);
+      }
+      break;
+    case HCI_AUTHENTICATION_REQUESTED:
+      if (status != HCI_SUCCESS) {
+        // Device refused to start authentication
+        // This is treated as an authentication failure
+        btm_sec_auth_complete(BTM_INVALID_HCI_HANDLE, status);
+      }
+      break;
+    case HCI_SET_CONN_ENCRYPTION:
+      if (status != HCI_SUCCESS) {
+        // Device refused to start encryption
+        // This is treated as an encryption failure
+        btm_sec_encrypt_change(BTM_INVALID_HCI_HANDLE, status, false);
+      }
+      break;
+    case HCI_RMT_NAME_REQUEST:
+      if (status != HCI_SUCCESS) {
+        // Tell inquiry processing that we are done
+        btm_process_remote_name(nullptr, nullptr, 0, status);
+        btm_sec_rmt_name_request_complete(nullptr, nullptr, status);
+      }
+      break;
+    case HCI_READ_RMT_EXT_FEATURES:
+      if (status != HCI_SUCCESS) {
+        STREAM_TO_UINT16(handle, p_cmd);
+        btm_read_remote_ext_features_failed(status, handle);
+      }
+      break;
+    case HCI_SETUP_ESCO_CONNECTION:
+    case HCI_ENH_SETUP_ESCO_CONNECTION:
+      if (status != HCI_SUCCESS) {
+        STREAM_TO_UINT16(handle, p_cmd);
+        // Determine if initial connection failed or is a change of setup
+        if (btm_is_sco_active(handle)) {
+          btm_esco_proc_conn_chg(status, handle, 0, 0, 0, 0);
+        } else {
+          btm_sco_connected(status, nullptr, handle, nullptr);
         }
       }
-#endif
-    /* Case Falls Through */
+      break;
 
+    // BLE Commands
+    case HCI_BLE_CREATE_LL_CONN:
+    case HCI_LE_EXTENDED_CREATE_CONNECTION:
+      if (status != HCI_SUCCESS) {
+        btm_ble_create_ll_conn_complete(status);
+      }
+      break;
+    case HCI_BLE_START_ENC:
+      // Race condition: disconnection happened right before we send
+      // "LE Encrypt", controller responds with no connection, we should
+      // cancel the encryption attempt, rather than unpair the device.
+      if (status == HCI_ERR_NO_CONNECTION) {
+        smp_cancel_start_encryption_attempt();
+      }
+      break;
+
+    // Link Policy Commands
+    case HCI_EXIT_SNIFF_MODE:
+    case HCI_EXIT_PARK_MODE:
+      if (status != HCI_SUCCESS) {
+        // Allow SCO initiation to continue if waiting for change mode event
+        STREAM_TO_UINT16(handle, p_cmd);
+        btm_sco_chk_pend_unpark(status, handle);
+      }
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case HCI_HOLD_MODE:
     case HCI_SNIFF_MODE:
     case HCI_PARK_MODE:
@@ -1083,112 +1129,9 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
       break;
 
     default:
-      /* If command failed to start, we may need to tell BTM */
-      if (status != HCI_SUCCESS) {
-        switch (opcode) {
-          case HCI_INQUIRY:
-            /* Tell inquiry processing that we are done */
-            btm_process_inq_complete(status, BTM_BR_INQUIRY_MASK);
-            break;
-
-          case HCI_RMT_NAME_REQUEST:
-            /* Tell inquiry processing that we are done */
-            btm_process_remote_name(NULL, NULL, 0, status);
-
-            btm_sec_rmt_name_request_complete(NULL, NULL, status);
-            break;
-
-          case HCI_QOS_SETUP_COMP_EVT:
-            /* Tell qos setup that we are done */
-            btm_qos_setup_complete(status, 0, NULL);
-            break;
-
-          case HCI_SWITCH_ROLE:
-            /* Tell BTM that the command failed */
-            /* read bd addr out of stored command */
-            if (p_cmd != NULL) {
-              p_cmd++;
-              STREAM_TO_BDADDR(bd_addr, p_cmd);
-              btm_acl_role_changed(status, &bd_addr, BTM_ROLE_UNDEFINED);
-            } else
-              btm_acl_role_changed(status, NULL, BTM_ROLE_UNDEFINED);
-            l2c_link_role_changed(nullptr, BTM_ROLE_UNDEFINED,
-                                  HCI_ERR_COMMAND_DISALLOWED);
-            break;
-
-          case HCI_CREATE_CONNECTION:
-            /* read bd addr out of stored command */
-            if (p_cmd != NULL) {
-              p_cmd++;
-              STREAM_TO_BDADDR(bd_addr, p_cmd);
-              btm_sec_connected(bd_addr, HCI_INVALID_HANDLE, status, 0);
-              l2c_link_hci_conn_comp(status, HCI_INVALID_HANDLE, bd_addr);
-            }
-            break;
-
-          case HCI_READ_RMT_EXT_FEATURES:
-            if (p_cmd != NULL) {
-              p_cmd++; /* skip command length */
-              STREAM_TO_UINT16(handle, p_cmd);
-            } else
-              handle = HCI_INVALID_HANDLE;
-
-            btm_read_remote_ext_features_failed(status, handle);
-            break;
-
-          case HCI_AUTHENTICATION_REQUESTED:
-            /* Device refused to start authentication.  That should be treated
-             * as authentication failure. */
-            btm_sec_auth_complete(BTM_INVALID_HCI_HANDLE, status);
-            break;
-
-          case HCI_SET_CONN_ENCRYPTION:
-            /* Device refused to start encryption.  That should be treated as
-             * encryption failure. */
-            btm_sec_encrypt_change(BTM_INVALID_HCI_HANDLE, status, false);
-            break;
-
-          case HCI_BLE_CREATE_LL_CONN:
-          case HCI_LE_EXTENDED_CREATE_CONNECTION:
-            btm_ble_create_ll_conn_complete(status);
-            break;
-
-#if (BTM_SCO_INCLUDED == TRUE)
-          case HCI_SETUP_ESCO_CONNECTION:
-          case HCI_ENH_SETUP_ESCO_CONNECTION:
-            /* read handle out of stored command */
-            if (p_cmd != NULL) {
-              p_cmd++;
-              STREAM_TO_UINT16(handle, p_cmd);
-
-              /* Determine if initial connection failed or is a change
-               * of setup */
-              if (btm_is_sco_active(handle))
-                btm_esco_proc_conn_chg(status, handle, 0, 0, 0, 0);
-              else
-                btm_sco_connected(status, NULL, handle, &esco_data);
-            }
-            break;
-#endif
-
-          /* This is commented out until an upper layer cares about returning
-          event
-          #if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
-                      case HCI_ENHANCED_FLUSH:
-                          break;
-          #endif
-          */
-          default:
-            if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
-              btm_vsc_complete(&status, opcode, 1,
-                               (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
-            break;
-        }
-
-      } else {
-        if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
-          btm_vsc_complete(&status, opcode, 1,
-                           (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+      if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC) {
+        btm_vsc_complete(&status, opcode, 1,
+                         (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
       }
   }
 }
@@ -1214,8 +1157,8 @@ static void btu_hcif_command_status_evt_on_task(uint8_t status, BT_HDR* event,
 
 static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
                                         void* context) {
-  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
-                                         status, command, context));
+  do_in_main_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
+                                          status, command, context));
 }
 
 /*******************************************************************************
@@ -1308,9 +1251,7 @@ static void btu_hcif_mode_change_evt(uint8_t* p) {
   STREAM_TO_UINT16(handle, p);
   STREAM_TO_UINT8(current_mode, p);
   STREAM_TO_UINT16(interval, p);
-#if (BTM_SCO_WAKE_PARKED_LINK == TRUE)
   btm_sco_chk_pend_unpark(status, handle);
-#endif
   btm_pm_proc_mode_change(status, handle, current_mode, interval);
 
 #if (HID_DEV_INCLUDED == TRUE && HID_DEV_PM_INCLUDED == TRUE)
@@ -1381,11 +1322,11 @@ static void btu_hcif_link_key_request_evt(uint8_t* p) {
  ******************************************************************************/
 static void btu_hcif_link_key_notification_evt(uint8_t* p) {
   RawAddress bda;
-  LINK_KEY key;
+  Octet16 key;
   uint8_t key_type;
 
   STREAM_TO_BDADDR(bda, p);
-  STREAM_TO_ARRAY16(key, p);
+  STREAM_TO_ARRAY16(key.data(), p);
   STREAM_TO_UINT8(key_type, p);
 
   btm_sec_link_key_notification(bda, key, key_type);
