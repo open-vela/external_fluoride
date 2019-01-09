@@ -19,8 +19,6 @@ cc_library_shared {
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
         "android/bluetooth/IBluetoothHeadsetPhone.aidl",
-        "android/bluetooth/IBluetoothHealth.aidl",
-        "android/bluetooth/IBluetoothHealthCallback.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
@@ -77,6 +75,9 @@ cc_library_shared {
         "-Wextra",
         "-Wno-unused-parameter",
     ],
+    sanitize: {
+        scs: true,
+    },
 }
 
 // AIDL interface between libbluetooth-binder and framework.jar
@@ -92,8 +93,6 @@ filegroup {
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
         "android/bluetooth/IBluetoothHeadsetPhone.aidl",
-        "android/bluetooth/IBluetoothHealth.aidl",
-        "android/bluetooth/IBluetoothHealthCallback.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
