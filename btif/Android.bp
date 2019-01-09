@@ -39,7 +39,6 @@ cc_library_static {
         "co/bta_dm_co.cc",
         "co/bta_av_co.cc",
         "co/bta_hh_co.cc",
-        "co/bta_hl_co.cc",
         "co/bta_pan_co.cc",
         "co/bta_gatts_co.cc",
         // HAL layer
@@ -71,7 +70,6 @@ cc_library_static {
         "src/btif_hf_client.cc",
         "src/btif_hh.cc",
         "src/btif_hd.cc",
-        "src/btif_hl.cc",
         "src/btif_mce.cc",
         "src/btif_pan.cc",
         "src/btif_profile_queue.cc",
@@ -101,13 +99,17 @@ cc_library_static {
         "libhidltransport",
         "libhwbinder",
         "libutils",
+        "libcrypto",
     ],
     whole_static_libs: [
         "avrcp-target-service",
         "libaudio-a2dp-hw-utils",
         "lib-bt-packets",
     ],
-    cflags: ["-DBUILDCFG"],
+    cflags: [
+        "-DBUILDCFG",
+        "-Wno-implicit-fallthrough",
+    ],
 
 }
 
@@ -127,11 +129,14 @@ cc_test {
         "libprotobuf-cpp-lite",
         "libcutils",
         "libutils",
+        "libcrypto",
     ],
     static_libs: [
         "libbt-bta",
         "libbtcore",
+        "libbt-common",
         "libbt-stack",
+        "libbt-sbc-decoder",
         "libbt-sbc-encoder",
         "libbt-utils",
         "libFraunhoferAAC",
@@ -159,28 +164,6 @@ cc_test {
     srcs: [
       "src/btif_profile_queue.cc",
       "test/btif_profile_queue_test.cc"
-    ],
-    header_libs: ["libbluetooth_headers"],
-    shared_libs: [
-        "liblog",
-        "libcutils",
-    ],
-    static_libs: [
-        "libbluetooth-types",
-        "libosi",
-    ],
-    cflags: ["-DBUILDCFG"],
-}
-
-// btif state machine unit tests for target
-// ========================================================
-cc_test {
-    name: "net_test_btif_state_machine",
-    defaults: ["fluoride_defaults"],
-    include_dirs: btifCommonIncludes,
-    host_supported: true,
-    srcs: [
-      "test/btif_state_machine_test.cc"
     ],
     header_libs: ["libbluetooth_headers"],
     shared_libs: [
