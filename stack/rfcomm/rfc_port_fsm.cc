@@ -64,11 +64,11 @@ static void rfc_set_port_state(tPORT_STATE* port_pars, MX_FRAME* p_frame);
  *
  ******************************************************************************/
 void rfc_port_sm_execute(tPORT* p_port, uint16_t event, void* p_data) {
-  CHECK(p_port != nullptr) << __func__ << ": NULL port event " << event;
-  VLOG(1) << __func__ << ": BD_ADDR=" << p_port->bd_addr
-          << ", PORT=" << std::to_string(p_port->handle)
-          << ", STATE=" << std::to_string(p_port->rfc.state)
-          << ", EVENT=" << event;
+  if (!p_port) {
+    RFCOMM_TRACE_WARNING("NULL port event %d", event);
+    return;
+  }
+
   switch (p_port->rfc.state) {
     case RFC_STATE_CLOSED:
       rfc_port_sm_state_closed(p_port, event, p_data);
@@ -143,8 +143,7 @@ void rfc_port_sm_state_closed(tPORT* p_port, uint16_t event, void* p_data) {
       return;
 
     case RFC_EVENT_DM:
-      RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM, index=%d", __func__,
-                           p_port->handle);
+      RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM, index=%d", __func__, p_port->inx);
       rfc_port_closed(p_port);
       return;
 
@@ -195,7 +194,7 @@ void rfc_port_sm_sabme_wait_ua(tPORT* p_port, uint16_t event, void* p_data) {
 
     case RFC_EVENT_CLEAR:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_CLEAR, index=%d", __func__,
-                           p_port->handle);
+                           p_port->inx);
       rfc_port_closed(p_port);
       return;
 
@@ -211,8 +210,7 @@ void rfc_port_sm_sabme_wait_ua(tPORT* p_port, uint16_t event, void* p_data) {
       return;
 
     case RFC_EVENT_DM:
-      RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM, index=%d", __func__,
-                           p_port->handle);
+      RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM, index=%d", __func__, p_port->inx);
       p_port->rfc.p_mcb->is_disc_initiator = true;
       PORT_DlcEstablishCnf(p_port->rfc.p_mcb, p_port->dlci,
                            p_port->rfc.p_mcb->peer_l2cap_mtu, RFCOMM_ERROR);
@@ -221,7 +219,7 @@ void rfc_port_sm_sabme_wait_ua(tPORT* p_port, uint16_t event, void* p_data) {
 
     case RFC_EVENT_DISC:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DISC, index=%d", __func__,
-                           p_port->handle);
+                           p_port->inx);
       rfc_send_ua(p_port->rfc.p_mcb, p_port->dlci);
       PORT_DlcEstablishCnf(p_port->rfc.p_mcb, p_port->dlci,
                            p_port->rfc.p_mcb->peer_l2cap_mtu, RFCOMM_ERROR);
@@ -284,7 +282,7 @@ void rfc_port_sm_term_wait_sec_check(tPORT* p_port, uint16_t event,
 
     case RFC_EVENT_CLEAR:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_CLEAR, index=%d", __func__,
-                           p_port->handle);
+                           p_port->inx);
       btm_sec_abort_access_req(p_port->rfc.p_mcb->bd_addr);
       rfc_port_closed(p_port);
       return;
@@ -341,8 +339,7 @@ void rfc_port_sm_orig_wait_sec_check(tPORT* p_port, uint16_t event,
     case RFC_EVENT_SEC_COMPLETE:
       if (*((uint8_t*)p_data) != BTM_SUCCESS) {
         RFCOMM_TRACE_ERROR("%s, RFC_EVENT_SEC_COMPLETE, index=%d, result=%d",
-                           __func__, event, p_port->handle,
-                           *((uint8_t*)p_data));
+                           __func__, event, p_port->inx, *((uint8_t*)p_data));
         p_port->rfc.p_mcb->is_disc_initiator = true;
         PORT_DlcEstablishCnf(p_port->rfc.p_mcb, p_port->dlci, 0,
                              RFCOMM_SECURITY_ERR);
@@ -362,7 +359,7 @@ void rfc_port_sm_orig_wait_sec_check(tPORT* p_port, uint16_t event,
 
     case RFC_EVENT_CLOSE:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_CLOSE, index=%d", __func__,
-                           p_port->handle);
+                           p_port->inx);
       btm_sec_abort_access_req(p_port->rfc.p_mcb->bd_addr);
       rfc_port_closed(p_port);
       return;
@@ -406,7 +403,7 @@ void rfc_port_sm_opened(tPORT* p_port, uint16_t event, void* p_data) {
 
     case RFC_EVENT_CLEAR:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_CLEAR, index=%d", __func__,
-                           p_port->handle);
+                           p_port->inx);
       rfc_port_closed(p_port);
       return;
 
@@ -438,8 +435,7 @@ void rfc_port_sm_opened(tPORT* p_port, uint16_t event, void* p_data) {
       return;
 
     case RFC_EVENT_DM:
-      RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM, index=%d", __func__,
-                           p_port->handle);
+      RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM, index=%d", __func__, p_port->inx);
       PORT_DlcReleaseInd(p_port->rfc.p_mcb, p_port->dlci);
       rfc_port_closed(p_port);
       return;
@@ -488,7 +484,7 @@ void rfc_port_sm_disc_wait_ua(tPORT* p_port, uint16_t event, void* p_data) {
 
     case RFC_EVENT_CLEAR:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_CLEAR, index=%d", __func__, event,
-                           p_port->handle);
+                           p_port->inx);
       rfc_port_closed(p_port);
       return;
 
@@ -498,11 +494,11 @@ void rfc_port_sm_disc_wait_ua(tPORT* p_port, uint16_t event, void* p_data) {
 
     case RFC_EVENT_UA:
       p_port->rfc.p_mcb->is_disc_initiator = true;
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* Case falls through */
 
     case RFC_EVENT_DM:
       RFCOMM_TRACE_WARNING("%s, RFC_EVENT_DM|RFC_EVENT_UA[%d], index=%d",
-                           __func__, event, p_port->handle);
+                           __func__, event, p_port->inx);
       rfc_port_closed(p_port);
       return;
 
@@ -521,7 +517,7 @@ void rfc_port_sm_disc_wait_ua(tPORT* p_port, uint16_t event, void* p_data) {
 
     case RFC_EVENT_TIMEOUT:
       RFCOMM_TRACE_ERROR("%s, RFC_EVENT_TIMEOUT, index=%d", __func__,
-                         p_port->handle);
+                         p_port->inx);
       rfc_port_closed(p_port);
       return;
   }
@@ -549,9 +545,7 @@ void rfc_port_uplink_data(tPORT* p_port, BT_HDR* p_buf) {
  *
  ******************************************************************************/
 void rfc_process_pn(tRFC_MCB* p_mcb, bool is_command, MX_FRAME* p_frame) {
-  RFCOMM_TRACE_DEBUG("%s: is_initiator=%d, is_cmd=%d, state=%d, bd_addr=%s",
-                     __func__, p_mcb->is_initiator, is_command, p_mcb->state,
-                     p_mcb->bd_addr.ToString().c_str());
+  tPORT* p_port;
   uint8_t dlci = p_frame->dlci;
 
   if (is_command) {
@@ -569,7 +563,7 @@ void rfc_process_pn(tRFC_MCB* p_mcb, bool is_command, MX_FRAME* p_frame) {
     return;
   }
   /* If we are not awaiting response just ignore it */
-  tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
+  p_port = port_find_mcb_dlci_port(p_mcb, dlci);
   if ((p_port == nullptr) || !(p_port->rfc.expected_rsp & RFC_RSP_PN)) {
     LOG(WARNING) << ": Ignore unwanted response, p_mcb=" << p_mcb
                  << ", bd_addr=" << p_mcb->bd_addr
