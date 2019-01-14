@@ -8,7 +8,6 @@ cc_library_shared {
     srcs: [
         "android/bluetooth/bluetooth_device.cc",
         "android/bluetooth/IBluetoothSocketManager.aidl",
-        "android/os/parcel_file_descriptor.cc",
         "android/os/parcel_uuid.cc",
 /* TODO: Uncomment this files as they get converted one-by-one into native implementation
         "android/bluetooth/IBluetooth.aidl",
@@ -20,8 +19,6 @@ cc_library_shared {
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
         "android/bluetooth/IBluetoothHeadsetPhone.aidl",
-        "android/bluetooth/IBluetoothHealth.aidl",
-        "android/bluetooth/IBluetoothHealthCallback.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
@@ -93,8 +90,6 @@ filegroup {
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
         "android/bluetooth/IBluetoothHeadsetPhone.aidl",
-        "android/bluetooth/IBluetoothHealth.aidl",
-        "android/bluetooth/IBluetoothHealthCallback.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
