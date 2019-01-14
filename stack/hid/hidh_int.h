@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ enum { HID_DEV_NO_CONN, HID_DEV_CONNECTED };
 
 typedef struct per_device_ctb {
   bool in_use;
-  BD_ADDR addr;       /* BD-Addr of the host device */
+  RawAddress addr;    /* BD-Addr of the host device */
   uint16_t attr_mask; /* 0x01- virtual_cable; 0x02- normally_connectable; 0x03-
                          reconn_initiate;
                                  0x04- sdp_disable; */
