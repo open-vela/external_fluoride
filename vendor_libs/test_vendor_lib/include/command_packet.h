@@ -1,18 +1,18 @@
-/*
- * Copyright 2015 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+//
+// Copyright 2015 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
 #pragma once
 
@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "base/macros.h"
-#include "packet.h"
+#include "vendor_libs/test_vendor_lib/include/packet.h"
 
 namespace test_vendor_lib {
 
@@ -42,14 +42,8 @@ namespace test_vendor_lib {
 // in size.
 class CommandPacket : public Packet {
  public:
-  explicit CommandPacket(std::vector<uint8_t> header);
-  explicit CommandPacket(uint16_t opcode);
-  CommandPacket(std::vector<uint8_t> header, std::vector<uint8_t> payload);
+  CommandPacket();
 
-  CommandPacket(const CommandPacket&) = default;
-  CommandPacket& operator=(const CommandPacket&) = default;
-  CommandPacket(CommandPacket&&) = default;
-  CommandPacket& operator=(CommandPacket&&) = default;
   virtual ~CommandPacket() override = default;
 
   // Returns the command opcode as defined in stack/include/hcidefs.h.
@@ -74,8 +68,13 @@ class CommandPacket : public Packet {
   // within an opcode group field. The upper 6 bits will be zero filled.
   uint16_t GetOCF() const;
 
-  // Size of a command packet header, which consists of a 2 octet opcode
-  static const size_t kCommandHeaderSize = 2;
+  // Size in octets of a command packet header, which consists of a 2 octet
+  // opcode and a 1 octet payload size.
+  static const size_t kCommandHeaderSize = 3;
+
+ private:
+  // Disallow any copies of the singleton to be made.
+  DISALLOW_COPY_AND_ASSIGN(CommandPacket);
 };
 
 }  // namespace test_vendor_lib
