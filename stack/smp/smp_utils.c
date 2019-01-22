@@ -374,6 +374,30 @@ void smp_rsp_timeout(UNUSED_ATTR void *data)
 
 /*******************************************************************************
 **
+** Function         smp_delayed_auth_complete_timeout
+**
+** Description      Called when no pairing failed command received within timeout
+**                  period.
+**
+** Returns          void
+**
+*******************************************************************************/
+void smp_delayed_auth_complete_timeout(UNUSED_ATTR void *data)
+{
+    /*
+     * Waited for potential pair failure. Send SMP_AUTH_CMPL_EVT if
+     * the state is still in bond pending.
+     */
+    if (smp_get_state() == SMP_STATE_BOND_PENDING)
+    {
+        UINT8 reason = SMP_SUCCESS;
+        SMP_TRACE_EVENT("%s sending delayed auth complete.", __func__);
+        smp_sm_event(&smp_cb, SMP_AUTH_CMPL_EVT, &reason);
+    }
+}
+
+/*******************************************************************************
+**
 ** Function         smp_build_pairing_req_cmd
 **
 ** Description      Build pairing request command.
@@ -841,10 +865,12 @@ void smp_cb_cleanup(tSMP_CB   *p_cb)
     SMP_TRACE_EVENT("smp_cb_cleanup");
 
     alarm_free(p_cb->smp_rsp_timer_ent);
+    alarm_free(p_cb->delayed_auth_timer_ent);
     memset(p_cb, 0, sizeof(tSMP_CB));
     p_cb->p_callback = p_callback;
     p_cb->trace_level = trace_level;
     p_cb->smp_rsp_timer_ent = alarm_new("smp.smp_rsp_timer_ent");
+    p_cb->delayed_auth_timer_ent = alarm_new("smp.delayed_auth_timer_ent");
 }
 
 /*******************************************************************************
@@ -1433,23 +1459,23 @@ BOOLEAN smp_check_commitment(tSMP_CB *p_cb)
 *******************************************************************************/
 void smp_save_secure_connections_long_term_key(tSMP_CB *p_cb)
 {
-    tBTM_LE_LENC_KEYS   lle_key;
-    tBTM_LE_PENC_KEYS   ple_key;
+    tBTM_LE_KEY_VALUE   lle_key;
+    tBTM_LE_KEY_VALUE   ple_key;
 
     SMP_TRACE_DEBUG("%s-Save LTK as local LTK key", __func__);
-    memcpy(lle_key.ltk, p_cb->ltk, BT_OCTET16_LEN);
-    lle_key.div = 0;
-    lle_key.key_size = p_cb->loc_enc_size;
-    lle_key.sec_level = p_cb->sec_level;
-    btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_LENC, (tBTM_LE_KEY_VALUE *)&lle_key, TRUE);
+    memcpy(lle_key.lenc_key.ltk, p_cb->ltk, BT_OCTET16_LEN);
+    lle_key.lenc_key.div = 0;
+    lle_key.lenc_key.key_size = p_cb->loc_enc_size;
+    lle_key.lenc_key.sec_level = p_cb->sec_level;
+    btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_LENC, &lle_key, TRUE);
 
     SMP_TRACE_DEBUG("%s-Save LTK as peer LTK key", __func__);
-    ple_key.ediv = 0;
-    memset(ple_key.rand, 0, BT_OCTET8_LEN);
-    memcpy(ple_key.ltk, p_cb->ltk, BT_OCTET16_LEN);
-    ple_key.sec_level = p_cb->sec_level;
-    ple_key.key_size  = p_cb->loc_enc_size;
-    btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_PENC, (tBTM_LE_KEY_VALUE *)&ple_key, TRUE);
+    ple_key.penc_key.ediv = 0;
+    memset(ple_key.penc_key.rand, 0, BT_OCTET8_LEN);
+    memcpy(ple_key.penc_key.ltk, p_cb->ltk, BT_OCTET16_LEN);
+    ple_key.penc_key.sec_level = p_cb->sec_level;
+    ple_key.penc_key.key_size  = p_cb->loc_enc_size;
+    btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_PENC, &ple_key, TRUE);
 }
 
 /*******************************************************************************
