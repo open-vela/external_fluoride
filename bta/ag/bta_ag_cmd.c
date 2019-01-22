@@ -1200,7 +1200,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
                 p_scb->peer_features, features);
 
             /* send BRSF, send OK */
-            bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_BRSF, NULL, (int16_t)features);
+            bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_BRSF, NULL, (int16_t) features);
             bta_ag_send_ok(p_scb);
             break;
         }
