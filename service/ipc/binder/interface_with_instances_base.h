@@ -21,8 +21,8 @@
 
 #include <base/macros.h>
 
+#include "bluetooth/uuid.h"
 #include "service/bluetooth_instance.h"
-#include "service/common/bluetooth/uuid.h"
 #include "service/ipc/binder/remote_callback_map.h"
 
 namespace ipc {
@@ -44,7 +44,7 @@ class InterfaceWithInstancesBase
 
  protected:
   // The initial entry point for registering a instance. Invoke this from the
-  // registration API to add a instance/UUID pair to the pending list and set up
+  // registration API to add a instance/Uuid pair to the pending list and set up
   // the generic asynchronous callback handler and initiate the process with the
   // given |factory| instance. Returns false, if there were any errors that
   // could be synchronously reported.
@@ -56,6 +56,8 @@ class InterfaceWithInstancesBase
 
   // Unregisters all registered instances.
   void UnregisterAllBase();
+
+  void ForEachCallback(const std::function<void(IInterface*)>& func);
 
   // Returns a handle to the lock used to synchronize access to the internal
   // data structures. Subclasses should acquire this before accessing the maps.
@@ -74,7 +76,7 @@ class InterfaceWithInstancesBase
  private:
   // Base implementation of the register callback.
   void OnRegisterInstance(
-      bluetooth::BLEStatus status, const bluetooth::UUID& uuid,
+      bluetooth::BLEStatus status, const bluetooth::Uuid& uuid,
       std::unique_ptr<bluetooth::BluetoothInstance> instance);
 
   // Called when the callback registration has completed. |instance| is owned by
@@ -89,7 +91,7 @@ class InterfaceWithInstancesBase
 
   // Instances that are pending registration. Once their registration is
   // complete, the entry will be removed from this map.
-  RemoteCallbackMap<bluetooth::UUID, android::IInterface> pending_callbacks_;
+  RemoteCallbackMap<bluetooth::Uuid, android::IInterface> pending_callbacks_;
 
   // We keep two maps here: one from instance_id IDs to callback Binders and one
   // from instance_id IDs to the BluetoothInstance structures themselves.
