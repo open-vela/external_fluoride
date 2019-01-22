@@ -923,6 +923,33 @@ void smp_proc_pairing_cmpl(tSMP_CB* p_cb) {
 
 /*******************************************************************************
  *
+ * Function         smp_command_has_invalid_length
+ *
+ * Description      Checks if the received SMP command has invalid length
+ *                  It returns true if the command has invalid length.
+ *
+ * Returns          true if the command has invalid length, false otherwise.
+ *
+ ******************************************************************************/
+bool smp_command_has_invalid_length(tSMP_CB* p_cb) {
+  uint8_t cmd_code = p_cb->rcvd_cmd_code;
+
+  if ((cmd_code > (SMP_OPCODE_MAX + 1 /* for SMP_OPCODE_PAIR_COMMITM */)) ||
+      (cmd_code < SMP_OPCODE_MIN)) {
+    SMP_TRACE_WARNING("%s: Received command with RESERVED code 0x%02x",
+                      __func__, cmd_code);
+    return true;
+  }
+
+  if (!smp_command_has_valid_fixed_length(p_cb)) {
+    return true;
+  }
+
+  return false;
+}
+
+/*******************************************************************************
+ *
  * Function         smp_command_has_invalid_parameters
  *
  * Description      Checks if the received SMP command has invalid parameters
@@ -1411,25 +1438,23 @@ bool smp_check_commitment(tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_save_secure_connections_long_term_key(tSMP_CB* p_cb) {
-  tBTM_LE_LENC_KEYS lle_key;
-  tBTM_LE_PENC_KEYS ple_key;
+  tBTM_LE_KEY_VALUE lle_key;
+  tBTM_LE_KEY_VALUE ple_key;
 
   SMP_TRACE_DEBUG("%s-Save LTK as local LTK key", __func__);
-  lle_key.ltk = p_cb->ltk;
-  lle_key.div = 0;
-  lle_key.key_size = p_cb->loc_enc_size;
-  lle_key.sec_level = p_cb->sec_level;
-  btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_LENC,
-                      (tBTM_LE_KEY_VALUE*)&lle_key, true);
+  lle_key.lenc_key.ltk = p_cb->ltk;
+  lle_key.lenc_key.div = 0;
+  lle_key.lenc_key.key_size = p_cb->loc_enc_size;
+  lle_key.lenc_key.sec_level = p_cb->sec_level;
+  btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_LENC, &lle_key, true);
 
   SMP_TRACE_DEBUG("%s-Save LTK as peer LTK key", __func__);
-  ple_key.ediv = 0;
-  memset(ple_key.rand, 0, BT_OCTET8_LEN);
-  ple_key.ltk = p_cb->ltk;
-  ple_key.sec_level = p_cb->sec_level;
-  ple_key.key_size = p_cb->loc_enc_size;
-  btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_PENC,
-                      (tBTM_LE_KEY_VALUE*)&ple_key, true);
+  ple_key.penc_key.ediv = 0;
+  memset(ple_key.penc_key.rand, 0, BT_OCTET8_LEN);
+  ple_key.penc_key.ltk = p_cb->ltk;
+  ple_key.penc_key.sec_level = p_cb->sec_level;
+  ple_key.penc_key.key_size = p_cb->loc_enc_size;
+  btm_sec_save_le_key(p_cb->pairing_bda, BTM_LE_KEY_PENC, &ple_key, true);
 }
 
 /** The function calculates MacKey and LTK and saves them in CB. To calculate
