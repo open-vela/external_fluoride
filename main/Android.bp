@@ -47,6 +47,7 @@ cc_library_shared {
         "libhidltransport",
         "libhwbinder",
         "liblog",
+        "libprocessgroup",
         "libprotobuf-cpp-lite",
         "libutils",
         "libtinyxml2",
@@ -87,6 +88,9 @@ cc_library_shared {
     cflags: [
         "-DBUILDCFG",
     ],
+    sanitize: {
+        scs: true,
+    },
 }
 
 cc_library_static {
