@@ -17,19 +17,17 @@
  ******************************************************************************/
 
 #include "ble_advertiser_hci_interface.h"
+#include <base/callback.h>
+#include <base/location.h>
+#include <base/logging.h>
+#include <queue>
+#include <utility>
 #include "btm_api.h"
 #include "btm_ble_api.h"
 #include "btm_int_types.h"
 #include "device/include/controller.h"
 #include "hcidefs.h"
-
-#include <queue>
-#include <utility>
-
-#include <base/bind.h>
-#include <base/callback.h>
-#include <base/location.h>
-#include <base/logging.h>
+#include "log/log.h"
 
 #define BTM_BLE_MULTI_ADV_SET_RANDOM_ADDR_LEN 8
 #define BTM_BLE_MULTI_ADV_ENB_LEN 3
@@ -45,11 +43,11 @@
 
 using status_cb = BleAdvertiserHciInterface::status_cb;
 
-using hci_cmd_cb = base::OnceCallback<void(
-    uint8_t* /* return_parameters */, uint16_t /* return_parameters_length*/)>;
-extern void btu_hcif_send_cmd_with_cb(const base::Location& posted_from,
-                                      uint16_t opcode, uint8_t* params,
-                                      uint8_t params_len, hci_cmd_cb cb);
+using hci_cmd_cb = base::Callback<void(uint8_t* /* return_parameters */,
+                                       uint16_t /* return_parameters_length*/)>;
+extern void btu_hcif_send_cmd_with_cb(
+    const tracked_objects::Location& posted_from, uint16_t opcode,
+    uint8_t* params, uint8_t params_len, hci_cmd_cb cb);
 
 namespace {
 BleAdvertiserHciInterface* instance = nullptr;
@@ -94,8 +92,9 @@ void known_tx_pwr(BleAdvertiserHciInterface::parameters_cb cb, int8_t tx_power,
 }
 
 class BleAdvertiserVscHciInterfaceImpl : public BleAdvertiserHciInterface {
-  void SendAdvCmd(const base::Location& posted_from, uint8_t param_len,
-                  uint8_t* param_buf, status_cb command_complete) {
+  void SendAdvCmd(const tracked_objects::Location& posted_from,
+                  uint8_t param_len, uint8_t* param_buf,
+                  status_cb command_complete) {
     btu_hcif_send_cmd_with_cb(posted_from, HCI_BLE_MULTI_ADV_OCF, param_buf,
                               param_len,
                               base::Bind(&btm_ble_multi_adv_vsc_cmpl_cback,
@@ -164,6 +163,14 @@ class BleAdvertiserVscHciInterfaceImpl : public BleAdvertiserHciInterface {
     uint8_t param[BTM_BLE_MULTI_ADV_WRITE_DATA_LEN];
     memset(param, 0, BTM_BLE_MULTI_ADV_WRITE_DATA_LEN);
 
+    if (data_length > BTM_BLE_AD_DATA_LEN) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__
+                 << ": data_length=" << static_cast<int>(data_length)
+                 << ", is longer than size limit " << BTM_BLE_AD_DATA_LEN;
+      data_length = BTM_BLE_AD_DATA_LEN;
+    }
+
     uint8_t* pp = param;
     UINT8_TO_STREAM(pp, BTM_BLE_MULTI_ADV_WRITE_ADV_DATA);
     UINT8_TO_STREAM(pp, data_length);
@@ -182,6 +189,14 @@ class BleAdvertiserVscHciInterfaceImpl : public BleAdvertiserHciInterface {
     VLOG(1) << __func__;
     uint8_t param[BTM_BLE_MULTI_ADV_WRITE_DATA_LEN];
     memset(param, 0, BTM_BLE_MULTI_ADV_WRITE_DATA_LEN);
+
+    if (scan_response_data_length > BTM_BLE_AD_DATA_LEN) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__ << ": scan_response_data_length="
+                 << static_cast<int>(scan_response_data_length)
+                 << ", is longer than size limit " << BTM_BLE_AD_DATA_LEN;
+      scan_response_data_length = BTM_BLE_AD_DATA_LEN;
+    }
 
     uint8_t* pp = param;
     UINT8_TO_STREAM(pp, BTM_BLE_MULTI_ADV_WRITE_SCAN_RSP_DATA);
@@ -306,7 +321,7 @@ void adv_cmd_cmpl_cback(status_cb cb, uint8_t* return_parameters,
 }
 
 class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
-  void SendAdvCmd(const base::Location& posted_from, uint16_t opcode,
+  void SendAdvCmd(const tracked_objects::Location& posted_from, uint16_t opcode,
                   uint8_t* param_buf, uint8_t param_buf_len,
                   status_cb command_complete) {
     btu_hcif_send_cmd_with_cb(
@@ -374,6 +389,15 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
 
     uint8_t param[HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1];
 
+    if (data_length > HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__
+                 << ": data_length=" << static_cast<int>(data_length)
+                 << ", is longer than size limit "
+                 << HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+      data_length = HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+    }
+
     uint8_t* pp = param;
     memset(pp, 0, HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1);
     UINT8_TO_STREAM(pp, data_length);
@@ -390,6 +414,15 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
                            status_cb command_complete) override {
     VLOG(1) << __func__;
     uint8_t param[HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1];
+
+    if (scan_response_data_length > HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__ << ": scan_response_data_length="
+                 << static_cast<int>(scan_response_data_length)
+                 << ", is longer than size limit "
+                 << HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+      scan_response_data_length = HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+    }
 
     uint8_t* pp = param;
     memset(pp, 0, HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1);
@@ -477,7 +510,7 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
 };
 
 class BleAdvertiserHciExtendedImpl : public BleAdvertiserHciInterface {
-  void SendAdvCmd(const base::Location& posted_from, uint16_t opcode,
+  void SendAdvCmd(const tracked_objects::Location& posted_from, uint16_t opcode,
                   uint8_t* param_buf, uint8_t param_buf_len,
                   status_cb command_complete) {
     btu_hcif_send_cmd_with_cb(
