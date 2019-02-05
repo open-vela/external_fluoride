@@ -3,9 +3,7 @@ subdirs = [
     "build",
     "btif",
     "btcore",
-    "common",
     "audio_a2dp_hw",
-    "audio_bluetooth_hw",
     "audio_hearing_aid_hw",
     "hci",
     "utils",
@@ -24,10 +22,3 @@ subdirs = [
     "tools",
     "proto",
 ]
-
-filegroup {
-  name: "BluetoothTestConfigTemplate",
-  srcs: [
-    "AndroidTestTemplate.xml"
-  ]
-}
