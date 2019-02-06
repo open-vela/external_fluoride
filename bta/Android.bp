@@ -135,7 +135,6 @@ cc_test {
     static_libs: [
         "libbtcore",
         "libbt-bta",
-        "libbt-audio-hal-interface",
         "libbluetooth-types",
         "libbt-protos-lite",
         "libosi",
