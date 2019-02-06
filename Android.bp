@@ -6,7 +6,6 @@ subdirs = [
     "common",
     "audio_a2dp_hw",
     "audio_bluetooth_hw",
-    "audio_hal_interface",
     "audio_hearing_aid_hw",
     "hci",
     "utils",
