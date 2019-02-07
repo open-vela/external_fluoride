@@ -203,12 +203,12 @@ void hci_initialize() {
   addr.hci_dev = hci_interface;
   addr.hci_channel = HCI_CHANNEL_USER;
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    PLOG(FATAL) << "socket bind error";
+    LOG(FATAL) << "socket bind error " << strerror(errno);
   }
 
   int sv[2];
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
-    PLOG(FATAL) << "socketpair failed";
+    LOG(FATAL) << "socketpair failed: " << strerror(errno);
   }
 
   reader_thread_ctrl_fd = sv[0];
@@ -274,7 +274,7 @@ void hci_transmit(BT_HDR* packet) {
 
   if (ret != packet->len + 1) LOG(ERROR) << "Should have send whole packet";
 
-  if (ret == -1) PLOG(FATAL) << "write failed";
+  if (ret == -1) LOG(FATAL) << strerror(errno);
 }
 
 static int wait_hcidev(void) {
@@ -288,7 +288,7 @@ static int wait_hcidev(void) {
 
   fd = socket(PF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
   if (fd < 0) {
-    PLOG(ERROR) << "Bluetooth socket error";
+    LOG(ERROR) << "Bluetooth socket error: %s" << strerror(errno);
     return -1;
   }
 
@@ -298,7 +298,7 @@ static int wait_hcidev(void) {
   addr.hci_channel = HCI_CHANNEL_CONTROL;
 
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    PLOG(ERROR) << "HCI Channel Control";
+    LOG(ERROR) << "HCI Channel Control: " << strerror(errno);
     close(fd);
     return -1;
   }
@@ -314,7 +314,7 @@ static int wait_hcidev(void) {
   ssize_t wrote;
   OSI_NO_INTR(wrote = write(fd, &ev, 6));
   if (wrote != 6) {
-    PLOG(ERROR) << "Unable to write mgmt command";
+    LOG(ERROR) << "Unable to write mgmt command: " << strerror(errno);
     ret = -1;
     goto end;
   }
@@ -323,7 +323,7 @@ static int wait_hcidev(void) {
     int n;
     OSI_NO_INTR(n = poll(fds, 1, MGMT_EV_POLL_TIMEOUT));
     if (n == -1) {
-      PLOG(ERROR) << "Poll error";
+      LOG(ERROR) << "Poll error: " << strerror(errno);
       ret = -1;
       break;
     } else if (n == 0) {
@@ -335,7 +335,7 @@ static int wait_hcidev(void) {
     if (fds[0].revents & POLLIN) {
       OSI_NO_INTR(n = read(fd, &ev, sizeof(struct mgmt_pkt)));
       if (n < 0) {
-        PLOG(ERROR) << "Error reading control channel";
+        LOG(ERROR) << "Error reading control channel: " << strerror(errno);
         ret = -1;
         break;
       }
