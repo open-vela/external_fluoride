@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 Google, Inc.
+ *  Copyright 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@
 #pragma once
 
 #include "device/include/interop.h"
+#include "raw_address.h"
 
 typedef struct {
-  bt_bdaddr_t addr;
+  RawAddress addr;
   size_t length;
   interop_feature_t feature;
 } interop_addr_entry_t;
