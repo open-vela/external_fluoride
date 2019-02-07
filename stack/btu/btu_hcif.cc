@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -588,13 +588,6 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
 
   handle = HCID_GET_HANDLE(handle);
 
-  if (status != HCI_SUCCESS) {
-    HCI_TRACE_DEBUG(
-        "%s: Connection failed: status=%d, handle=%d, link_type=%d, "
-        "enc_mode=%d",
-        __func__, status, handle, link_type, enc_mode);
-  }
-
   if (link_type == HCI_LINK_TYPE_ACL) {
     btm_sec_connected(bda, handle, status, enc_mode);
 
@@ -658,13 +651,6 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
   STREAM_TO_UINT8(reason, p);
 
   handle = HCID_GET_HANDLE(handle);
-
-  if ((reason != HCI_ERR_CONN_CAUSE_LOCAL_HOST) &&
-      (reason != HCI_ERR_PEER_USER)) {
-    /* Uncommon disconnection reasons */
-    HCI_TRACE_DEBUG("%s: Got Disconn Complete Event: reason=%d, handle=%d",
-                    __func__, reason, handle);
-  }
 
 #if (BTM_SCO_INCLUDED == TRUE)
   /* If L2CAP doesn't know about it, send it to SCO */
@@ -968,13 +954,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     case HCI_BLE_CREATE_LL_CONN:
-    case HCI_LE_EXTENDED_CREATE_CONNECTION:
-      // No command complete event for those commands according to spec
-      LOG(ERROR) << "No command complete expected, but received!";
-      break;
-
-    case HCI_BLE_CREATE_CONN_CANCEL:
-      btm_ble_create_conn_cancel_complete(p);
+      btm_ble_create_ll_conn_complete(*p);
       break;
 
     case HCI_BLE_TRANSMITTER_TEST:
@@ -1007,7 +987,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
 #endif
     default:
       if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
-        btm_vsc_complete(p, opcode, evt_len, (tBTM_VSC_CMPL_CB*)p_cplt_cback);
+        btm_vsc_complete(p, opcode, evt_len, (tBTM_CMPL_CB*)p_cplt_cback);
       break;
   }
 }
@@ -1149,7 +1129,6 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
             break;
 
           case HCI_BLE_CREATE_LL_CONN:
-          case HCI_LE_EXTENDED_CREATE_CONNECTION:
             btm_ble_create_ll_conn_complete(status);
             break;
 
@@ -1181,14 +1160,14 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
           default:
             if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
               btm_vsc_complete(&status, opcode, 1,
-                               (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+                               (tBTM_CMPL_CB*)p_vsc_status_cback);
             break;
         }
 
       } else {
         if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
           btm_vsc_complete(&status, opcode, 1,
-                           (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+                           (tBTM_CMPL_CB*)p_vsc_status_cback);
       }
   }
 }
