@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 
 #include "adapter/bluetooth_test.h"
 #include <mutex>
+#include "btcore/include/bdaddr.h"
 #include "btcore/include/property.h"
-#include "osi/include/properties.h"
 
 namespace {
 
@@ -47,8 +47,6 @@ void BluetoothTest::SetUp() {
   adapter_state_changed_callback_sem_ = semaphore_new(0);
   discovery_state_changed_callback_sem_ = semaphore_new(0);
 
-  osi_property_set("debug.bluetooth.unittest", "true");
-
   bluetooth::hal::BluetoothInterface::Initialize();
   ASSERT_TRUE(bluetooth::hal::BluetoothInterface::IsInitialized());
   auto bt_hal_interface = bluetooth::hal::BluetoothInterface::Get();
@@ -67,8 +65,6 @@ void BluetoothTest::TearDown() {
   bt_hal_interface->RemoveObserver(this);
   bt_hal_interface->CleanUp();
   ASSERT_FALSE(bt_hal_interface->IsInitialized());
-
-  osi_property_set("debug.bluetooth.unittest", "false");
 }
 
 void BluetoothTest::ClearSemaphore(semaphore_t* sem) {
@@ -93,9 +89,9 @@ bt_property_t* BluetoothTest::GetProperty(bt_property_type_t type) {
   return nullptr;
 }
 
-bt_property_t* BluetoothTest::GetRemoteDeviceProperty(const RawAddress* addr,
+bt_property_t* BluetoothTest::GetRemoteDeviceProperty(const bt_bdaddr_t* addr,
                                                       bt_property_type_t type) {
-  if (curr_remote_device_ != *addr) return nullptr;
+  if (!bdaddr_equals(&curr_remote_device_, addr)) return nullptr;
 
   for (int i = 0; i < remote_device_properties_changed_count_; i++) {
     if (remote_device_last_changed_properties_[i].type == type) {
@@ -133,10 +129,10 @@ void BluetoothTest::AdapterPropertiesCallback(bt_status_t status,
 
 // callback
 void BluetoothTest::RemoteDevicePropertiesCallback(bt_status_t status,
-                                                   RawAddress* remote_bd_addr,
+                                                   bt_bdaddr_t* remote_bd_addr,
                                                    int num_properties,
                                                    bt_property_t* properties) {
-  curr_remote_device_ = *remote_bd_addr;
+  bdaddr_copy(&curr_remote_device_, remote_bd_addr);
   property_free_array(remote_device_last_changed_properties_,
                       remote_device_properties_changed_count_);
   remote_device_last_changed_properties_ =
