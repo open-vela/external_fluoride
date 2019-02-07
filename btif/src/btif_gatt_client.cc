@@ -255,7 +255,8 @@ bt_status_t btif_gattc_unregister_app(int client_if) {
 }
 
 void btif_gattc_open_impl(int client_if, BD_ADDR address, bool is_direct,
-                          int transport_p, int initiating_phys) {
+                          int transport_p, bool opportunistic,
+                          int initiating_phys) {
   // Ensure device is in inquiry database
   int addr_type = 0;
   int device_type = 0;
@@ -308,14 +309,15 @@ void btif_gattc_open_impl(int client_if, BD_ADDR address, bool is_direct,
   }
 
   // Connect!
-  BTIF_TRACE_DEBUG("%s Transport=%d, device type=%d, phy=%d", __func__,
-                   transport, device_type, initiating_phys);
-  BTA_GATTC_Open(client_if, address, is_direct, transport, false,
+  BTIF_TRACE_DEBUG("%s Transport=%d, device type=%d, opportunistic=%d, phy=%d",
+                   __func__, transport, device_type, opportunistic,
+                   initiating_phys);
+  BTA_GATTC_Open(client_if, address, is_direct, transport, opportunistic,
                  initiating_phys);
 }
 
 bt_status_t btif_gattc_open(int client_if, const bt_bdaddr_t* bd_addr,
-                            bool is_direct, int transport,
+                            bool is_direct, int transport, bool opportunistic,
                             int initiating_phys) {
   CHECK_BTGATT_INIT();
   // Closure will own this value and free it.
@@ -323,7 +325,7 @@ bt_status_t btif_gattc_open(int client_if, const bt_bdaddr_t* bd_addr,
   bdcpy(address, bd_addr->address);
   return do_in_jni_thread(Bind(&btif_gattc_open_impl, client_if,
                                base::Owned(address), is_direct, transport,
-                               initiating_phys));
+                               opportunistic, initiating_phys));
 }
 
 void btif_gattc_close_impl(int client_if, BD_ADDR address, int conn_id) {
@@ -349,10 +351,7 @@ bt_status_t btif_gattc_close(int client_if, const bt_bdaddr_t* bd_addr,
 
 bt_status_t btif_gattc_refresh(int client_if, const bt_bdaddr_t* bd_addr) {
   CHECK_BTGATT_INIT();
-  // Closure will own this value and free it.
-  uint8_t* address = new BD_ADDR;
-  bdcpy(address, bd_addr->address);
-  return do_in_jni_thread(Bind(&BTA_GATTC_Refresh, base::Owned(address)));
+  return do_in_jni_thread(Bind(&BTA_GATTC_Refresh, *bd_addr));
 }
 
 bt_status_t btif_gattc_search_service(int conn_id, bt_uuid_t* filter_uuid) {
@@ -402,7 +401,9 @@ void read_char_cb(uint16_t conn_id, tGATT_STATUS status, uint16_t handle,
   CHECK(len <= BTGATT_MAX_ATTR_LEN);
   if (len > 0) memcpy(params->value.value, value, len);
 
-  CLI_CBACK_IN_JNI(read_characteristic_cb, conn_id, status,
+  // clang-tidy analyzer complains about |params| is leaked.  It doesn't know
+  // that |param| will be freed by the callback function.
+  CLI_CBACK_IN_JNI(read_characteristic_cb, conn_id, status, /* NOLINT */
                    base::Owned(params));
 }
 
@@ -423,7 +424,9 @@ void read_using_char_uuid_cb(uint16_t conn_id, tGATT_STATUS status,
   CHECK(len <= BTGATT_MAX_ATTR_LEN);
   if (len > 0) memcpy(params->value.value, value, len);
 
-  CLI_CBACK_IN_JNI(read_characteristic_cb, conn_id, status,
+  // clang-tidy analyzer complains about |params| is leaked.  It doesn't know
+  // that |param| will be freed by the callback function.
+  CLI_CBACK_IN_JNI(read_characteristic_cb, conn_id, status, /* NOLINT */
                    base::Owned(params));
 }
 
@@ -448,7 +451,10 @@ void read_desc_cb(uint16_t conn_id, tGATT_STATUS status, uint16_t handle,
   CHECK(len <= BTGATT_MAX_ATTR_LEN);
   if (len > 0) memcpy(params->value.value, value, len);
 
-  CLI_CBACK_IN_JNI(read_descriptor_cb, conn_id, status, base::Owned(params));
+  // clang-tidy analyzer complains about |params| is leaked.  It doesn't know
+  // that |param| will be freed by the callback function.
+  CLI_CBACK_IN_JNI(read_descriptor_cb, conn_id, status,
+                   base::Owned(params)); /* NOLINT */
 }
 
 bt_status_t btif_gattc_read_char_descr(int conn_id, uint16_t handle,
