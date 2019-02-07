@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -142,6 +142,11 @@
 #define ATTR_ID_HID_BOOT_DEVICE 0x020E
 #define ATTR_ID_HID_SSR_HOST_MAX_LAT 0x020F
 #define ATTR_ID_HID_SSR_HOST_MIN_TOUT 0x0210
+
+/* These values are for the HDP profile */
+#define ATTR_ID_HDP_SUP_FEAT_LIST 0x0200  /* Supported features list */
+#define ATTR_ID_HDP_DATA_EXCH_SPEC 0x0301 /* Data exchange specification */
+#define ATTR_ID_HDP_MCAP_SUP_PROC 0x0302  /* MCAP supported procedures */
 
 /* Define common 16-bit protocol UUIDs
 */
