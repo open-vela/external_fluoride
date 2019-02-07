@@ -155,16 +155,14 @@ void bta_ag_process_at(tBTA_AG_AT_CB *p_cb, char *p_end)
                 else
                 {
 
-                    (*p_cb->p_cmd_cback)(p_cb->p_user,
-                                         p_cb->p_at_tbl[idx].command_id,
-                                         arg_type, p_arg, p_end, int_arg);
+                    (*p_cb->p_cmd_cback)(p_cb->p_user, idx, arg_type, p_arg,
+                                         p_end, int_arg);
                 }
             }
             else
             {
-                (*p_cb->p_cmd_cback)(p_cb->p_user,
-                                     p_cb->p_at_tbl[idx].command_id,
-                                     arg_type, p_arg, p_end, int_arg);
+                (*p_cb->p_cmd_cback)(p_cb->p_user, idx, arg_type, p_arg,
+                                     p_end, int_arg);
             }
         }
         /* else error */
