@@ -30,7 +30,6 @@
 #include "osi/include/osi.h"
 
 #include "bt_utils.h"
-#include "hci/include/btsnoop.h"
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "port_api.h"
@@ -74,7 +73,7 @@ void rfcomm_l2cap_if_init(void) {
   p_l2c->pL2CA_CongestionStatus_Cb = RFCOMM_CongestionStatusInd;
   p_l2c->pL2CA_TxComplete_Cb = NULL;
 
-  L2CA_Register(BT_PSM_RFCOMM, p_l2c, true /* enable_snoop */);
+  L2CA_Register(BT_PSM_RFCOMM, p_l2c);
 }
 
 /*******************************************************************************
