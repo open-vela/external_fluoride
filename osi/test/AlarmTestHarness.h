@@ -23,11 +23,15 @@
 extern int64_t TIMER_INTERVAL_FOR_WAKELOCK_IN_MS;
 
 class AlarmTestHarness : public AllocationTestHarness {
- protected:
-  virtual void SetUp();
-  virtual void TearDown();
+  protected:
+    virtual void SetUp();
+    virtual void TearDown();
 
- public:
-  // Returns true if a wake lock is held.
-  bool WakeLockHeld();
+    std::string tmp_dir_;
+    std::string lock_path_;
+    std::string unlock_path_;
+
+  public:
+    // Returns true if a wake lock is held.
+    bool WakeLockHeld();
 };
