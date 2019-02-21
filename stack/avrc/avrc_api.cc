@@ -1150,11 +1150,7 @@ uint16_t AVRC_MsgReq(uint8_t handle, uint8_t label, uint8_t ctype,
     AVRC_CO_ID_TO_BE_STREAM(p_data, AVRC_CO_METADATA);
   } else {
     chk_frag = false;
-    if (p_pkt->layer_specific == AVCT_DATA_BROWSE) {
-      peer_mtu = AVCT_GetBrowseMtu(handle);
-    } else {
-      peer_mtu = AVCT_GetPeerMtu(handle);
-    }
+    peer_mtu = AVCT_GetBrowseMtu(handle);
     if (p_pkt->len > (peer_mtu - AVCT_HDR_LEN_SINGLE)) {
       AVRC_TRACE_ERROR(
           "%s bigger than peer mtu (p_pkt->len(%d) > peer_mtu(%d-%d))",
