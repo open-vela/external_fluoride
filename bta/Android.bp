@@ -129,7 +129,6 @@ cc_test {
         "test/gatt/database_test.cc",
     ],
     shared_libs: [
-        "libcrypto",
         "liblog",
         "libprotobuf-cpp-lite",
     ],
