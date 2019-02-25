@@ -22,9 +22,9 @@
 #include <memory>
 
 #include "avrcp_internal.h"
-#include "packet/avrcp/avrcp_packet.h"
-#include "packet/base/packet.h"
-#include "profile/avrcp/device.h"
+#include "avrcp_packet.h"
+#include "device.h"
+#include "packet.h"
 #include "raw_address.h"
 
 namespace bluetooth {
