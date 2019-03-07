@@ -29,16 +29,6 @@
 #include "bta_ag_api.h"
 #include "bta_ag_at.h"
 
-/* Send RING & CLIP in one AT cmd */
-#ifndef BTA_AG_MULTI_RESULT_INCLUDED
-#define BTA_AG_MULTI_RESULT_INCLUDED      FALSE
-#endif
-
-/* Replace : in VGS and VGM for HSP */
-#ifndef BTA_HSP_RESULT_REPLACE_COLON
-#define BTA_HSP_RESULT_REPLACE_COLON      TRUE
-#endif
-
 /*****************************************************************************
 **  Constants
 *****************************************************************************/
@@ -388,9 +378,9 @@ extern void bta_ag_sco_conn_rsp(tBTA_AG_SCB *p_scb, tBTM_ESCO_CONN_REQ_EVT_DATA 
 
 /* AT command functions */
 extern void bta_ag_at_hsp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
-                                char *p_arg, INT16 int_arg);
+                                char *p_arg, char *p_end, INT16 int_arg);
 extern void bta_ag_at_hfp_cback(tBTA_AG_SCB *p_scb, UINT16 cmd, UINT8 arg_type,
-                                char *p_arg, INT16 int_arg);
+                                char *p_arg, char *p_end, INT16 int_arg);
 extern void bta_ag_at_err_cback(tBTA_AG_SCB *p_scb, BOOLEAN unknown, char *p_arg);
 extern BOOLEAN bta_ag_inband_enabled(tBTA_AG_SCB *p_scb);
 extern void bta_ag_send_call_inds(tBTA_AG_SCB *p_scb, tBTA_AG_RES result);
