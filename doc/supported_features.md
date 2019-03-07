@@ -1,7 +1,7 @@
-# Fluoride 1.0
+# Fluoride 1.1
 
-Declaration ID: [D0026807](https://www.bluetooth.org/tpg/QLI_viewQDL.cfm?qid=26807)  
-Qualified Design ID: 67282
+Declaration ID: [D024527](https://www.bluetooth.org/tpg/QLI_viewQDL.cfm?qid=24527)
+Qualified Design ID: 83953
 
 Protocol / Profile | Version | Roles
 -------------------+---------+-------
@@ -15,6 +15,5 @@ AVCTP              | 1.4     | Controller, Target
 AVDTP              | 1.2     | Source, Initiator, Acceptor
 BNEP               | 1.0     |
 GAVDP              | 1.2     | Initiator, Acceptor
-MCAP               | 1.0     | Sink
 RFCOMM             | 1.2     |
 SPP                | 1.2     | A, B
