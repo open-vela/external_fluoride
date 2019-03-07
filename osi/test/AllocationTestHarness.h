@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <gtest/gtest.h>
 
 class AllocationTestHarness : public ::testing::Test {
- protected:
-  virtual void SetUp();
-  virtual void TearDown();
+  protected:
+    virtual void SetUp();
+    virtual void TearDown();
 };

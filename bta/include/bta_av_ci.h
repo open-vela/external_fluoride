@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2005-2012 Broadcom Corporation
+ *  Copyright (C) 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,37 +27,47 @@
 #include "bta_av_api.h"
 
 /*****************************************************************************
- *  Function Declarations
- ****************************************************************************/
+**  Function Declarations
+*****************************************************************************/
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /*******************************************************************************
- *
- * Function         bta_av_ci_src_data_ready
- *
- * Description      This function sends an event to the AV indicating that
- *                  the phone has audio stream data ready to send and AV
- *                  should call bta_av_co_audio_source_data_path().
- *
- * Returns          void
- *
- ******************************************************************************/
+**
+** Function         bta_av_ci_src_data_ready
+**
+** Description      This function sends an event to the AV indicating that
+**                  the phone has audio stream data ready to send and AV
+**                  should call bta_av_co_audio_src_data_path() or
+**                  bta_av_co_video_src_data_path().
+**
+** Returns          void
+**
+*******************************************************************************/
 extern void bta_av_ci_src_data_ready(tBTA_AV_CHNL chnl);
 
 /*******************************************************************************
- *
- * Function         bta_av_ci_setconfig
- *
- * Description      This function must be called in response to function
- *                  bta_av_co_audio_setconfig().
- *                  Parameter err_code is set to an AVDTP status value;
- *                  AVDT_SUCCESS if the codec configuration is ok,
- *                  otherwise error.
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void bta_av_ci_setconfig(tBTA_AV_HNDL bta_av_handle, uint8_t err_code,
-                                uint8_t category, uint8_t num_seid,
-                                uint8_t* p_seid, bool recfg_needed,
-                                uint8_t avdt_handle);
+**
+** Function         bta_av_ci_setconfig
+**
+** Description      This function must be called in response to function
+**                  bta_av_co_audio_setconfig() or bta_av_co_video_setconfig.
+**                  Parameter err_code is set to an AVDTP status value;
+**                  AVDT_SUCCESS if the codec configuration is ok,
+**                  otherwise error.
+**
+** Returns          void
+**
+*******************************************************************************/
+extern void bta_av_ci_setconfig(tBTA_AV_HNDL hndl, UINT8 err_code,
+                                        UINT8 category, UINT8 num_seid, UINT8 *p_seid,
+                                        BOOLEAN recfg_needed, UINT8 avdt_handle);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* BTA_AV_CI_H */
