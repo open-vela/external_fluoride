@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -173,7 +173,9 @@ void avct_lcb_chnl_open(tAVCT_LCB* p_lcb, UNUSED_ATTR tAVCT_LCB_EVT* p_data) {
   p_lcb->ch_lcid = L2CA_ConnectReq(AVCT_PSM, p_lcb->peer_addr);
   if (p_lcb->ch_lcid == 0) {
     /* if connect req failed, send ourselves close event */
-    avct_lcb_event(p_lcb, AVCT_LCB_LL_CLOSE_EVT, (tAVCT_LCB_EVT*)&result);
+    tAVCT_LCB_EVT avct_lcb_evt;
+    avct_lcb_evt.result = result;
+    avct_lcb_event(p_lcb, AVCT_LCB_LL_CLOSE_EVT, &avct_lcb_evt);
   }
 }
 
@@ -217,7 +219,7 @@ void avct_lcb_open_ind(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
         bind = true;
         L2CA_SetTxPriority(p_lcb->ch_lcid, L2CAP_CHNL_PRIORITY_HIGH);
         p_ccb->cc.p_ctrl_cback(avct_ccb_to_idx(p_ccb), AVCT_CONNECT_CFM_EVT, 0,
-                               p_lcb->peer_addr);
+                               &p_lcb->peer_addr);
       }
       /* if unbound acceptor and lcb doesn't already have a ccb for this PID */
       else if ((p_ccb->p_lcb == NULL) && (p_ccb->cc.role == AVCT_ACP) &&
@@ -227,13 +229,13 @@ void avct_lcb_open_ind(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
         p_ccb->p_lcb = p_lcb;
         L2CA_SetTxPriority(p_lcb->ch_lcid, L2CAP_CHNL_PRIORITY_HIGH);
         p_ccb->cc.p_ctrl_cback(avct_ccb_to_idx(p_ccb), AVCT_CONNECT_IND_EVT, 0,
-                               p_lcb->peer_addr);
+                               &p_lcb->peer_addr);
       }
     }
   }
 
   /* if no ccbs bound to this lcb, disconnect */
-  if (bind == false) {
+  if (!bind) {
     avct_lcb_event(p_lcb, AVCT_LCB_INT_CLOSE_EVT, p_data);
   }
 }
@@ -256,7 +258,7 @@ void avct_lcb_open_fail(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
   for (i = 0; i < AVCT_NUM_CONN; i++, p_ccb++) {
     if (p_ccb->allocated && (p_ccb->p_lcb == p_lcb)) {
       avct_ccb_dealloc(p_ccb, AVCT_CONNECT_CFM_EVT, p_data->result,
-                       p_lcb->peer_addr);
+                       &p_lcb->peer_addr);
     }
   }
 }
@@ -279,11 +281,12 @@ void avct_lcb_close_ind(tAVCT_LCB* p_lcb, UNUSED_ATTR tAVCT_LCB_EVT* p_data) {
   for (i = 0; i < AVCT_NUM_CONN; i++, p_ccb++) {
     if (p_ccb->allocated && (p_ccb->p_lcb == p_lcb)) {
       if (p_ccb->cc.role == AVCT_INT) {
-        avct_ccb_dealloc(p_ccb, AVCT_DISCONNECT_IND_EVT, 0, p_lcb->peer_addr);
+        avct_ccb_dealloc(p_ccb, AVCT_DISCONNECT_IND_EVT, 0, &p_lcb->peer_addr);
       } else {
         p_ccb->p_lcb = NULL;
         (*p_ccb->cc.p_ctrl_cback)(avct_ccb_to_idx(p_ccb),
-                                  AVCT_DISCONNECT_IND_EVT, 0, p_lcb->peer_addr);
+                                  AVCT_DISCONNECT_IND_EVT, 0,
+                                  &p_lcb->peer_addr);
       }
     }
   }
@@ -316,11 +319,11 @@ void avct_lcb_close_cfm(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
       }
 
       if (p_ccb->cc.role == AVCT_INT) {
-        avct_ccb_dealloc(p_ccb, event, p_data->result, p_lcb->peer_addr);
+        avct_ccb_dealloc(p_ccb, event, p_data->result, &p_lcb->peer_addr);
       } else {
         p_ccb->p_lcb = NULL;
         (*p_ccb->cc.p_ctrl_cback)(avct_ccb_to_idx(p_ccb), event, p_data->result,
-                                  p_lcb->peer_addr);
+                                  &p_lcb->peer_addr);
       }
     }
   }
@@ -339,7 +342,7 @@ void avct_lcb_close_cfm(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
 void avct_lcb_bind_conn(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
   p_data->p_ccb->p_lcb = p_lcb;
   (*p_data->p_ccb->cc.p_ctrl_cback)(avct_ccb_to_idx(p_data->p_ccb),
-                                    AVCT_CONNECT_CFM_EVT, 0, p_lcb->peer_addr);
+                                    AVCT_CONNECT_CFM_EVT, 0, &p_lcb->peer_addr);
 }
 
 /*******************************************************************************
@@ -416,7 +419,7 @@ void avct_lcb_cong_ind(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
   /* set event */
   event = (p_data->cong) ? AVCT_CONG_IND_EVT : AVCT_UNCONG_IND_EVT;
   p_lcb->cong = p_data->cong;
-  if (p_lcb->cong == false && !fixed_queue_is_empty(p_lcb->tx_q)) {
+  if (!p_lcb->cong && !fixed_queue_is_empty(p_lcb->tx_q)) {
     while (!p_lcb->cong &&
            (p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_lcb->tx_q)) != NULL) {
       if (L2CA_DataWrite(p_lcb->ch_lcid, p_buf) == L2CAP_DW_CONGESTED) {
@@ -429,7 +432,7 @@ void avct_lcb_cong_ind(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
   for (i = 0; i < AVCT_NUM_CONN; i++, p_ccb++) {
     if (p_ccb->allocated && (p_ccb->p_lcb == p_lcb)) {
       (*p_ccb->cc.p_ctrl_cback)(avct_ccb_to_idx(p_ccb), event, 0,
-                                p_lcb->peer_addr);
+                                &p_lcb->peer_addr);
     }
   }
 }
@@ -525,7 +528,7 @@ void avct_lcb_send_msg(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
       UINT16_TO_BE_STREAM(p, p_data->ul_msg.p_ccb->cc.pid);
     }
 
-    if (p_lcb->cong == true) {
+    if (p_lcb->cong) {
       fixed_queue_enqueue(p_lcb->tx_q, p_buf);
     }
 
