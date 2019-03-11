@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2000-2012 Broadcom Corporation
+ *  Copyright (C) 2000-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -87,13 +87,11 @@ void btu_init_core(void) {
  *****************************************************************************/
 void btu_free_core(void) {
   /* Free the mandatory core stack components */
-  gatt_free();
-
   l2c_free();
 
   sdp_free();
 
-  btm_free();
+  gatt_free();
 }
 
 /*****************************************************************************
