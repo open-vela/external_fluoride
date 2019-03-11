@@ -77,28 +77,10 @@ cc_library {
         linux: {
             srcs: [
                 ":BluetoothOsSources_linux_generic",
-            ],
-        },
-        host: {
-            srcs: [
-                ":BluetoothHalSources_hci_rootcanal",
-            ],
-        },
-        android: {
-            srcs: [
-                ":BluetoothHalSources_hci_android_hidl",
-            ],
-            shared_libs: [
-                "android.hardware.bluetooth@1.0",
-                "libhwbinder",
-                "libhidlbase",
-                "libhidltransport",
-                "libutils",
-            ],
-        },
+            ]
+        }
     },
     srcs: [
-        "stack_manager.cc",
         ":BluetoothCommonSources",
         ":BluetoothPacketSources",
     ]
@@ -116,62 +98,18 @@ cc_test {
         linux: {
             srcs: [
                 ":BluetoothOsTestSources_linux_generic",
-            ],
-        },
-        host: {
-            srcs: [
-                ":BluetoothHalTestSources_hci_rootcanal",
-            ],
-        },
-        android: {
-            srcs: [
-                ":BluetoothHalTestSources_hci_android_hidl",
-            ],
-            shared_libs: [
-                "android.hardware.bluetooth@1.0",
-                "libhwbinder",
-                "libhidlbase",
-                "libhidltransport",
-                "libutils",
-            ],
-        },
+            ]
+        }
     },
     srcs: [
         ":BluetoothCommonTestSources",
-        ":BluetoothHciTestSources",
-        ":BluetoothL2capTestSources",
         ":BluetoothPacketTestSources",
-    ],
-    generated_headers : [
-        "BluetoothGeneratedPackets_h",
     ],
     static_libs : [
         "libbluetooth_gd",
     ],
     sanitize: {
-        address: true,
-    },
-}
-
-cc_test {
-    name: "bluetooth_packet_parser_test",
-    test_suites: ["device-tests"],
-    defaults: [
-        "gd_defaults",
-        "gd_clang_coverage_bin",
-    ],
-    host_supported: true,
-    srcs: [
-        ":BluetoothCommonSources",
-        ":BluetoothPacketSources",
-        ":BluetoothPacketParserTestPacketTestSources",
-    ],
-    generated_headers : [
-        "BluetoothPacketParserTestPacketPdlGen_h",
-    ],
-    sanitize: {
-        address: true,
-        cfi: true,
+        cfi: false,
     },
 }
 
@@ -184,22 +122,6 @@ cc_benchmark {
         ":BluetoothOsBenchmarkSources",
     ],
     static_libs : [
-        "libbluetooth_gd",
-    ],
-}
-
-genrule {
-    name: "BluetoothGeneratedPackets_h",
-    tools: [
-        "bluetooth_packetgen",
-    ],
-    cmd: "$(location bluetooth_packetgen) --include=system/bt/gd --out=$(genDir) $(in)",
-    srcs: [
-        "hci/hci_packets.pdl",
-        "l2cap/l2cap_packets.pdl",
-    ],
-    out: [
-        "hci/hci_packets.h",
-        "l2cap/l2cap_packets.h",
+            "libbluetooth_gd",
     ],
 }
