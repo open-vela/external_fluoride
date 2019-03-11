@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 Google, Inc.
+ *  Copyright (C) 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,16 +19,19 @@
 #include "rfcomm/rfcomm_test.h"
 #include "adapter/bluetooth_test.h"
 
-using bluetooth::Uuid;
+#include "btcore/include/bdaddr.h"
+#include "btcore/include/uuid.h"
 
 namespace bttest {
 
-const Uuid RFCommTest::HFP_UUID = Uuid::From16Bit(0x111E);
+const bt_uuid_t RFCommTest::HFP_UUID = {{0x00, 0x00, 0x11, 0x1E, 0x00, 0x00,
+                                         0x10, 0x00, 0x80, 0x00, 0x00, 0x80,
+                                         0x5F, 0x9B, 0x34, 0xFB}};
 
 void RFCommTest::SetUp() {
   BluetoothTest::SetUp();
 
-  ASSERT_EQ(bt_interface()->enable(), BT_STATUS_SUCCESS);
+  ASSERT_EQ(bt_interface()->enable(false), BT_STATUS_SUCCESS);
   semaphore_wait(adapter_state_changed_callback_sem_);
   ASSERT_TRUE(GetState() == BT_STATE_ON);
   socket_interface_ =
@@ -37,14 +40,16 @@ void RFCommTest::SetUp() {
   ASSERT_NE(socket_interface_, nullptr);
 
   // Find a bonded device that supports HFP
-  bt_remote_bdaddr_ = RawAddress::kEmpty;
+  string_to_bdaddr("00:00:00:00:00:00", &bt_remote_bdaddr_);
+  char value[1280];
 
   bt_property_t* bonded_devices_prop =
       GetProperty(BT_PROPERTY_ADAPTER_BONDED_DEVICES);
-  RawAddress* devices = (RawAddress*)bonded_devices_prop->val;
-  int num_bonded_devices = bonded_devices_prop->len / sizeof(RawAddress);
+  bt_bdaddr_t* devices = (bt_bdaddr_t*)bonded_devices_prop->val;
+  int num_bonded_devices = bonded_devices_prop->len / sizeof(bt_bdaddr_t);
 
-  for (int i = 0; i < num_bonded_devices && bt_remote_bdaddr_.IsEmpty(); i++) {
+  for (int i = 0; i < num_bonded_devices && bdaddr_is_empty(&bt_remote_bdaddr_);
+       i++) {
     ClearSemaphore(remote_device_properties_callback_sem_);
     bt_interface()->get_remote_device_property(&devices[i], BT_PROPERTY_UUIDS);
     semaphore_wait(remote_device_properties_callback_sem_);
@@ -52,18 +57,19 @@ void RFCommTest::SetUp() {
     bt_property_t* uuid_prop =
         GetRemoteDeviceProperty(&devices[i], BT_PROPERTY_UUIDS);
     if (uuid_prop == nullptr) continue;
-    Uuid* uuids = reinterpret_cast<Uuid*>(uuid_prop->val);
-    int num_uuids = uuid_prop->len / sizeof(Uuid);
+    bt_uuid_t* uuids = (bt_uuid_t*)uuid_prop->val;
+    int num_uuids = uuid_prop->len / sizeof(bt_uuid_t);
 
     for (int j = 0; j < num_uuids; j++) {
-      if (!memcmp(uuids + j, &HFP_UUID, sizeof(Uuid))) {
-        bt_remote_bdaddr_ = *(devices + i);
+      uuid_to_string(&uuids[j], (uuid_string_t*)value);
+      if (!memcmp(uuids + j, &HFP_UUID, sizeof(bt_uuid_t))) {
+        bdaddr_copy(&bt_remote_bdaddr_, devices + i);
         break;
       }
     }
   }
 
-  ASSERT_FALSE(bt_remote_bdaddr_.IsEmpty())
+  ASSERT_FALSE(bdaddr_is_empty(&bt_remote_bdaddr_))
       << "Could not find paired device that supports HFP";
 }
 

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2017 The Android Open Source Project
+ *  Copyright (C) 2017 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,32 +18,9 @@
 
 #pragma once
 
-#include <array>
 #include <vector>
 
-// Scan Response data from Traxxas
-static constexpr std::array<uint8_t, 18> trx_quirk{
-    {0x14, 0x09, 0x54, 0xFF, 0xFF, 0x20, 0x42, 0x4C, 0x45, 0x05, 0x12, 0xFF,
-     0x00, 0xE8, 0x03, 0x02, 0x0A, 0x00}};
-
 class AdvertiseDataParser {
-  // Return true if the packet is malformed, but should be considered valid for
-  // compatibility with already existing devices
-  static bool MalformedPacketQuirk(const std::vector<uint8_t>& ad,
-                                   size_t position) {
-    auto data_start = ad.begin() + position;
-
-    // Traxxas - bad name length
-    if ((ad.size() - position) >= 18 &&
-        std::equal(data_start, data_start + 3, trx_quirk.begin()) &&
-        std::equal(data_start + 5, data_start + 11, trx_quirk.begin() + 5) &&
-        std::equal(data_start + 12, data_start + 18, trx_quirk.begin() + 12)) {
-      return true;
-    }
-
-    return false;
-  }
-
  public:
   static void RemoveTrailingZeros(std::vector<uint8_t>& ad) {
     size_t position = 0;
@@ -58,7 +35,12 @@ class AdvertiseDataParser {
       // end of the packet. Otherwise i.e. gluing scan response to advertise
       // data will result in data with zero padding in the middle.
       if (len == 0) {
-        ad.erase(ad.begin() + position, ad.end());
+        size_t zeros_start = position;
+        for (size_t i = position + 1; i < ad_len; i++) {
+          if (ad[i] != 0) return;
+        }
+
+        ad.erase(ad.begin() + zeros_start, ad.end());
         return;
       }
 
@@ -93,8 +75,6 @@ class AdvertiseDataParser {
       // If the length of the current field would exceed the total data length,
       // then the data is badly formatted.
       if (position + len >= ad_len) {
-        if (MalformedPacketQuirk(ad, position)) return true;
-
         return false;
       }
 

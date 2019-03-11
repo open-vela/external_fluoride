@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,16 +19,15 @@
 #include <deque>
 #include <functional>
 #include <mutex>
-#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include <base/macros.h>
-#include <bluetooth/uuid.h>
 
 #include "service/bluetooth_instance.h"
 #include "service/common/bluetooth/service.h"
+#include "service/common/bluetooth/uuid.h"
 #include "service/hal/bluetooth_gatt_interface.h"
 
 namespace bluetooth {
@@ -116,7 +115,7 @@ class GattServer : public BluetoothInstance,
   void SetDelegate(Delegate* delegate);
 
   // BluetoothClientInstace overrides:
-  const Uuid& GetAppIdentifier() const override;
+  const UUID& GetAppIdentifier() const override;
   int GetInstanceId() const override;
 
   // Callback type used to report the status of an asynchronous GATT server
@@ -134,7 +133,7 @@ class GattServer : public BluetoothInstance,
   // we can add other services to this server instance? Do we need to clean up
   // all the entries or does the upper-layer need to remove the service? Or are
   // we in a stuck-state where the service declaration hasn't ended?
-  bool AddService(const Service&, const ResultCallback& callback);
+  bool AddService(const bluetooth::Service&, const ResultCallback& callback);
 
   // Sends a response for a pending notification. |request_id| and
   // |device_address| should match those that were received through one of the
@@ -169,13 +168,13 @@ class GattServer : public BluetoothInstance,
   // request ID and the device address for the connection. If |request_id| is -1
   // then no ATT read/write request is currently pending.
   struct Connection {
-    Connection(int conn_id, const RawAddress& bdaddr)
+    Connection(int conn_id, const bt_bdaddr_t& bdaddr)
         : conn_id(conn_id), bdaddr(bdaddr) {}
     Connection() : conn_id(-1) { memset(&bdaddr, 0, sizeof(bdaddr)); }
 
     int conn_id;
     std::unordered_map<int, int> request_id_to_handle;
-    RawAddress bdaddr;
+    bt_bdaddr_t bdaddr;
   };
 
   // Used to keep track of a pending Handle-Value indication.
@@ -189,12 +188,12 @@ class GattServer : public BluetoothInstance,
 
   // Constructor shouldn't be called directly as instances are meant to be
   // obtained from the factory.
-  GattServer(const Uuid& uuid, int server_id);
+  GattServer(const UUID& uuid, int server_id);
 
   // hal::BluetoothGattInterface::ServerObserver overrides:
   void ConnectionCallback(hal::BluetoothGattInterface* gatt_iface, int conn_id,
                           int server_id, int connected,
-                          const RawAddress& bda) override;
+                          const bt_bdaddr_t& bda) override;
   void ServiceAddedCallback(hal::BluetoothGattInterface* gatt_iface, int status,
                             int server_if,
                             std::vector<btgatt_db_element_t>) override;
@@ -203,25 +202,26 @@ class GattServer : public BluetoothInstance,
                               int service_handle) override;
   void RequestReadCharacteristicCallback(
       hal::BluetoothGattInterface* gatt_iface, int conn_id, int trans_id,
-      const RawAddress& bda, int attribute_handle, int offset,
+      const bt_bdaddr_t& bda, int attribute_handle, int offset,
       bool is_long) override;
   void RequestReadDescriptorCallback(hal::BluetoothGattInterface* gatt_iface,
                                      int conn_id, int trans_id,
-                                     const RawAddress& bda,
+                                     const bt_bdaddr_t& bda,
                                      int attribute_handle, int offset,
                                      bool is_long) override;
   void RequestWriteCharacteristicCallback(
       hal::BluetoothGattInterface* gatt_iface, int conn_id, int trans_id,
-      const RawAddress& bda, int attr_handle, int offset, bool need_rsp,
+      const bt_bdaddr_t& bda, int attr_handle, int offset, bool need_rsp,
       bool is_prep, std::vector<uint8_t> value) override;
   void RequestWriteDescriptorCallback(hal::BluetoothGattInterface* gatt_iface,
                                       int conn_id, int trans_id,
-                                      const RawAddress& bda, int attr_handle,
+                                      const bt_bdaddr_t& bda, int attr_handle,
                                       int offset, bool need_rsp, bool is_prep,
                                       std::vector<uint8_t> value) override;
   void RequestExecWriteCallback(hal::BluetoothGattInterface* gatt_iface,
                                 int conn_id, int trans_id,
-                                const RawAddress& bda, int exec_write) override;
+                                const bt_bdaddr_t& bda,
+                                int exec_write) override;
   void IndicationSentCallback(hal::BluetoothGattInterface* gatt_iface,
                               int conn_id, int status) override;
 
@@ -233,11 +233,11 @@ class GattServer : public BluetoothInstance,
 
   // Helper method that returns a pointer to an internal Connection instance
   // that matches the given parameters.
-  std::shared_ptr<Connection> GetConnection(int conn_id, const RawAddress& bda,
+  std::shared_ptr<Connection> GetConnection(int conn_id, const bt_bdaddr_t& bda,
                                             int request_id);
 
   // See getters for documentation.
-  Uuid app_identifier_;
+  UUID app_identifier_;
   int server_id_;
 
   // Mutex that synchronizes access to the entries below.
@@ -277,18 +277,18 @@ class GattServerFactory : public BluetoothInstanceFactory,
   ~GattServerFactory() override;
 
   // BluetoothInstanceFactory override:
-  bool RegisterInstance(const Uuid& uuid,
+  bool RegisterInstance(const UUID& uuid,
                         const RegisterCallback& callback) override;
 
  private:
   // hal::BluetoothGattInterface::ServerObserver override:
   void RegisterServerCallback(hal::BluetoothGattInterface* gatt_iface,
                               int status, int server_id,
-                              const Uuid& app_uuid) override;
+                              const bt_uuid_t& app_uuid) override;
 
   // Map of pending calls to register.
   std::mutex pending_calls_lock_;
-  std::unordered_map<Uuid, RegisterCallback> pending_calls_;
+  std::unordered_map<UUID, RegisterCallback> pending_calls_;
 
   DISALLOW_COPY_AND_ASSIGN(GattServerFactory);
 };

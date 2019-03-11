@@ -2,8 +2,8 @@
 
 /******************************************************************************
  *
- *  Copyright 2014 The Android Open Source Project
- *  Copyright 2003-2012 Broadcom Corporation
+ *  Copyright (C) 2014 The Android Open Source Project
+ *  Copyright (C) 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,10 +35,52 @@
  *  Constants
  ****************************************************************************/
 
+enum {
+  /* these events are handled by the state machine */
+  BTA_SDP_API_ENABLE_EVT = BTA_SYS_EVT_START(BTA_ID_SDP),
+  BTA_SDP_API_SEARCH_EVT,
+  BTA_SDP_API_CREATE_RECORD_USER_EVT,
+  BTA_SDP_API_REMOVE_RECORD_USER_EVT,
+  BTA_SDP_MAX_INT_EVT
+};
+
+enum {
+  BTA_SDP_ACTIVE_NONE = 0,
+  BTA_SDP_ACTIVE_YES /* waiting for SDP result */
+};
+
+/* data type for BTA_SDP_API_ENABLE_EVT */
+typedef struct {
+  BT_HDR hdr;
+  tBTA_SDP_DM_CBACK* p_cback;
+} tBTA_SDP_API_ENABLE;
+
+/* data type for BTA_SDP_API_SEARCH_EVT */
+typedef struct {
+  BT_HDR hdr;
+  BD_ADDR bd_addr;
+  tSDP_UUID uuid;
+} tBTA_SDP_API_SEARCH;
+
+/* data type for BTA_SDP_API_SEARCH_EVT */
+typedef struct {
+  BT_HDR hdr;
+  void* user_data;
+} tBTA_SDP_API_RECORD_USER;
+
+/* union of all data types */
+typedef union {
+  /* GKI event buffer header */
+  BT_HDR hdr;
+  tBTA_SDP_API_ENABLE enable;
+  tBTA_SDP_API_SEARCH get_search;
+  tBTA_SDP_API_RECORD_USER record;
+} tBTA_SDP_MSG;
+
 /* SDP control block */
 typedef struct {
-  bool sdp_active;
-  RawAddress remote_addr;
+  uint8_t sdp_active; /* see BTA_SDP_SDP_ACT_* */
+  BD_ADDR remote_addr;
   tBTA_SDP_DM_CBACK* p_dm_cback;
 } tBTA_SDP_CB;
 
@@ -48,10 +90,11 @@ extern tBTA_SDP_CB bta_sdp_cb;
 /* config struct */
 extern tBTA_SDP_CFG* p_bta_sdp_cfg;
 
-extern void bta_sdp_enable(tBTA_SDP_DM_CBACK* p_cback);
-extern void bta_sdp_search(const RawAddress bd_addr,
-                           const bluetooth::Uuid uuid);
-extern void bta_sdp_create_record(void* user_data);
-extern void bta_sdp_remove_record(void* user_data);
+extern bool bta_sdp_sm_execute(BT_HDR* p_msg);
+
+extern void bta_sdp_enable(tBTA_SDP_MSG* p_data);
+extern void bta_sdp_search(tBTA_SDP_MSG* p_data);
+extern void bta_sdp_create_record(tBTA_SDP_MSG* p_data);
+extern void bta_sdp_remove_record(tBTA_SDP_MSG* p_data);
 
 #endif /* BTA_SDP_INT_H */

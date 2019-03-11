@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #include "btm_ble_api.h"
 #include "btu.h"
 #include "smp_api.h"
-#include "stack/crypto_toolbox/crypto_toolbox.h"
 
 /* Legacy mode */
 #define SMP_MODEL_ENCRYPTION_ONLY 0 /* Just Works model */
@@ -222,7 +221,6 @@ typedef struct {
 typedef union {
   uint8_t* p_data; /* uint8_t type data pointer */
   tSMP_KEY key;
-  uint8_t status;
   uint16_t reason;
   uint32_t passkey;
   tSMP_OOB_DATA_TYPE req_oob_type;
@@ -245,8 +243,12 @@ typedef union {
 /* check if authentication requirement need MITM protection */
 #define SMP_NO_MITM_REQUIRED(x) (((x)&SMP_AUTH_YN_BIT) == 0)
 
+#define SMP_ENCRYT_KEY_SIZE 16
+#define SMP_ENCRYT_DATA_SIZE 16
+#define SMP_ECNCRPYT_STATUS HCI_SUCCESS
+
 typedef struct {
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   BT_HDR* p_copy;
 } tSMP_REQ_Q_ENTRY;
 
@@ -255,12 +257,12 @@ typedef struct {
   tSMP_CALLBACK* p_callback;
   alarm_t* smp_rsp_timer_ent;
   uint8_t trace_level;
-  RawAddress pairing_bda;
+  BD_ADDR pairing_bda;
   tSMP_STATE state;
   bool derive_lk;
   bool id_addr_rcvd;
   tBLE_ADDR_TYPE id_addr_type;
-  RawAddress id_addr;
+  BD_ADDR id_addr;
   bool smp_over_br;
   tSMP_BR_STATE br_state; /* if SMP over BR/ERD has priority over SMP */
   uint8_t failure;
@@ -270,18 +272,18 @@ typedef struct {
   uint8_t cb_evt;
   tSMP_SEC_LEVEL sec_level;
   bool connect_initialized;
-  Octet16 confirm;
-  Octet16 rconfirm;
-  Octet16 rrand; /* for SC this is peer nonce */
-  Octet16 rand;  /* for SC this is local nonce */
+  BT_OCTET16 confirm;
+  BT_OCTET16 rconfirm;
+  BT_OCTET16 rrand; /* for SC this is peer nonce */
+  BT_OCTET16 rand;  /* for SC this is local nonce */
   BT_OCTET32 private_key;
   BT_OCTET32 dhkey;
-  Octet16 commitment;
-  Octet16 remote_commitment;
-  Octet16 local_random; /* local randomizer - passkey or OOB randomizer */
-  Octet16 peer_random;  /* peer randomizer - passkey or OOB randomizer */
-  Octet16 dhkey_check;
-  Octet16 remote_dhkey_check;
+  BT_OCTET16 commitment;
+  BT_OCTET16 remote_commitment;
+  BT_OCTET16 local_random; /* local randomizer - passkey or OOB randomizer */
+  BT_OCTET16 peer_random;  /* peer randomizer - passkey or OOB randomizer */
+  BT_OCTET16 dhkey_check;
+  BT_OCTET16 remote_dhkey_check;
   tSMP_PUBLIC_KEY loc_publ_key;
   tSMP_PUBLIC_KEY peer_publ_key;
   tSMP_OOB_DATA_TYPE req_oob_type;
@@ -304,7 +306,7 @@ typedef struct {
   uint8_t
       round; /* authentication stage 1 round for passkey association model */
   uint32_t number_to_display;
-  Octet16 mac_key;
+  BT_OCTET16 mac_key;
   uint8_t peer_enc_size;
   uint8_t loc_enc_size;
   uint8_t peer_i_key;
@@ -312,14 +314,14 @@ typedef struct {
   uint8_t local_i_key;
   uint8_t local_r_key;
 
-  Octet16 tk;
-  Octet16 ltk;
+  BT_OCTET16 tk;
+  BT_OCTET16 ltk;
   uint16_t div;
-  Octet16 csrk; /* storage for local CSRK */
+  BT_OCTET16 csrk; /* storage for local CSRK */
   uint16_t ediv;
   BT_OCTET8 enc_rand;
   uint8_t addr_type;
-  RawAddress local_bda;
+  BD_ADDR local_bda;
   bool is_pair_cancel;
   bool discard_sec_req;
   uint8_t rcvd_cmd_code;
@@ -339,15 +341,39 @@ extern tSMP_CB smp_cb;
 extern void smp_init(void);
 
 /* smp main */
-extern void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event,
-                         tSMP_INT_DATA* p_data);
+extern void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event, void* p_data);
 
+extern void smp_proc_sec_request(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
+extern void smp_set_fail_nc(bool enable);
+extern void smp_set_fail_conf(bool enable);
+extern void smp_set_passk_entry_fail(bool enable);
+extern void smp_set_oob_fail(bool enable);
+extern void smp_set_peer_sc_notif(bool enable);
+extern void smp_aes_cmac_rfc4493_chk(uint8_t* key, uint8_t* msg,
+                                     uint8_t msg_len, uint8_t mac_len,
+                                     uint8_t* mac);
+extern void smp_f4_calc_chk(uint8_t* U, uint8_t* V, uint8_t* X, uint8_t* Z,
+                            uint8_t* mac);
+extern void smp_g2_calc_chk(uint8_t* U, uint8_t* V, uint8_t* X, uint8_t* Y);
+extern void smp_h6_calc_chk(uint8_t* key, uint8_t* key_id, uint8_t* mac);
+extern void smp_f5_key_calc_chk(uint8_t* w, uint8_t* mac);
+extern void smp_f5_mackey_or_ltk_calc_chk(uint8_t* t, uint8_t* counter,
+                                          uint8_t* key_id, uint8_t* n1,
+                                          uint8_t* n2, uint8_t* a1, uint8_t* a2,
+                                          uint8_t* length, uint8_t* mac);
+extern void smp_f5_calc_chk(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
+                            uint8_t* a2, uint8_t* mac_key, uint8_t* ltk);
+extern void smp_f6_calc_chk(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
+                            uint8_t* iocap, uint8_t* a1, uint8_t* a2,
+                            uint8_t* mac);
+/* smp_main */
+extern void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event, void* p_data);
 extern tSMP_STATE smp_get_state(void);
 extern void smp_set_state(tSMP_STATE state);
 
 /* smp_br_main */
 extern void smp_br_state_machine_event(tSMP_CB* p_cb, tSMP_BR_EVENT event,
-                                       tSMP_INT_DATA* p_data);
+                                       void* p_data);
 extern tSMP_BR_STATE smp_get_br_state(void);
 extern void smp_set_br_state(tSMP_BR_STATE state);
 
@@ -393,6 +419,7 @@ extern void smp_send_pair_rsp(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_key_distribution(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_proc_srk_info(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_generate_csrk(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
+extern void smp_fast_conn_param(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_key_pick_key(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_both_have_public_keys(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_start_secure_connection_phase1(tSMP_CB* p_cb,
@@ -437,22 +464,22 @@ extern void smp_br_pairing_complete(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 
 /* smp_l2c */
 extern void smp_l2cap_if_init(void);
-extern void smp_data_ind(const RawAddress& bd_addr, BT_HDR* p_buf);
+extern void smp_data_ind(BD_ADDR bd_addr, BT_HDR* p_buf);
 
 /* smp_util.cc */
-extern void smp_log_metrics(const RawAddress& bd_addr, bool is_outgoing,
-                            const uint8_t* p_buf, size_t buf_len);
 extern bool smp_send_cmd(uint8_t cmd_code, tSMP_CB* p_cb);
 extern void smp_cb_cleanup(tSMP_CB* p_cb);
 extern void smp_reset_control_value(tSMP_CB* p_cb);
 extern void smp_proc_pairing_cmpl(tSMP_CB* p_cb);
-extern void smp_convert_string_to_tk(Octet16* tk, uint32_t passkey);
-extern void smp_mask_enc_key(uint8_t loc_enc_size, Octet16* p_data);
+extern void smp_convert_string_to_tk(BT_OCTET16 tk, uint32_t passkey);
+extern void smp_mask_enc_key(uint8_t loc_enc_size, uint8_t* p_data);
 extern void smp_rsp_timeout(void* data);
 extern void smp_delayed_auth_complete_timeout(void* data);
-extern bool smp_command_has_invalid_length(tSMP_CB* p_cb);
+extern void smp_xor_128(BT_OCTET16 a, BT_OCTET16 b);
+extern bool smp_encrypt_data(uint8_t* key, uint8_t key_len, uint8_t* plain_text,
+                             uint8_t pt_len, tSMP_ENC* p_out);
 extern bool smp_command_has_invalid_parameters(tSMP_CB* p_cb);
-extern void smp_reject_unexpected_pairing_command(const RawAddress& bd_addr);
+extern void smp_reject_unexpected_pairing_command(BD_ADDR bd_addr);
 extern tSMP_ASSO_MODEL smp_select_association_model(tSMP_CB* p_cb);
 extern void smp_reverse_array(uint8_t* arr, uint8_t len);
 extern uint8_t smp_calculate_random_input(uint8_t* random, uint8_t round);
@@ -462,7 +489,7 @@ extern void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb);
 extern void smp_collect_peer_ble_address(uint8_t* le_addr, tSMP_CB* p_cb);
 extern bool smp_check_commitment(tSMP_CB* p_cb);
 extern void smp_save_secure_connections_long_term_key(tSMP_CB* p_cb);
-extern void smp_calculate_f5_mackey_and_long_term_key(tSMP_CB* p_cb);
+extern bool smp_calculate_f5_mackey_and_long_term_key(tSMP_CB* p_cb);
 extern void smp_remove_fixed_channel(tSMP_CB* p_cb);
 extern bool smp_request_oob_data(tSMP_CB* p_cb);
 
@@ -478,7 +505,7 @@ extern void smp_create_private_key(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_use_oob_private_key(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_compute_dhkey(tSMP_CB* p_cb);
 extern void smp_calculate_local_commitment(tSMP_CB* p_cb);
-extern Octet16 smp_calculate_peer_commitment(tSMP_CB* p_cb);
+extern void smp_calculate_peer_commitment(tSMP_CB* p_cb, BT_OCTET16 output_buf);
 extern void smp_calculate_numeric_comparison_display_number(
     tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_calculate_local_dhkey_check(tSMP_CB* p_cb,
@@ -488,21 +515,31 @@ extern void smp_calculate_peer_dhkey_check(tSMP_CB* p_cb,
 extern void smp_start_nonce_generation(tSMP_CB* p_cb);
 extern bool smp_calculate_link_key_from_long_term_key(tSMP_CB* p_cb);
 extern bool smp_calculate_long_term_key_from_link_key(tSMP_CB* p_cb);
-
+extern void smp_calculate_f4(uint8_t* u, uint8_t* v, uint8_t* x, uint8_t z,
+                             uint8_t* c);
+extern uint32_t smp_calculate_g2(uint8_t* u, uint8_t* v, uint8_t* x,
+                                 uint8_t* y);
+extern bool smp_calculate_f5(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
+                             uint8_t* a2, uint8_t* mac_key, uint8_t* ltk);
+extern bool smp_calculate_f5_mackey_or_long_term_key(
+    uint8_t* t, uint8_t* counter, uint8_t* key_id, uint8_t* n1, uint8_t* n2,
+    uint8_t* a1, uint8_t* a2, uint8_t* length, uint8_t* mac);
+extern bool smp_calculate_f5_key(uint8_t* w, uint8_t* t);
+extern bool smp_calculate_f6(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
+                             uint8_t* iocap, uint8_t* a1, uint8_t* a2,
+                             uint8_t* f3);
+extern bool smp_calculate_h6(uint8_t* w, uint8_t* keyid, uint8_t* h2);
+extern bool smp_calculate_h7(uint8_t* salt, uint8_t* w, uint8_t* h2);
 #if (SMP_DEBUG == TRUE)
 extern void smp_debug_print_nbyte_little_endian(uint8_t* p,
                                                 const char* key_name,
                                                 uint8_t len);
-
-inline void smp_debug_print_nbyte_little_endian(const Octet16& p,
-                                                const char* key_name,
-                                                uint8_t len) {
-  smp_debug_print_nbyte_little_endian(const_cast<uint8_t*>(p.data()), key_name,
-                                      len);
-}
 #endif
 
-extern void print128(const Octet16& x, const uint8_t* key_name);
-extern void smp_xor_128(Octet16* a, const Octet16& b);
+/* smp_cmac.cc */
+extern bool aes_cipher_msg_auth_code(BT_OCTET16 key, uint8_t* input,
+                                     uint16_t length, uint16_t tlen,
+                                     uint8_t* p_signature);
+extern void print128(BT_OCTET16 x, const uint8_t* key_name);
 
 #endif /* SMP_INT_H */

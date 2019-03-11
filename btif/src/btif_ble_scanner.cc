@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
+ *  Copyright (C) 2016 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include <unordered_set>
 #include "device/include/controller.h"
 
+#include "btcore/include/bdaddr.h"
 #include "btif_common.h"
 #include "btif_util.h"
 
@@ -35,6 +36,7 @@
 
 #include "advertise_data_parser.h"
 #include "bta_api.h"
+#include "bta_closure_api.h"
 #include "bta_gatt_api.h"
 #include "btif_config.h"
 #include "btif_dm.h"
@@ -42,7 +44,6 @@
 #include "btif_gatt_util.h"
 #include "btif_storage.h"
 #include "osi/include/log.h"
-#include "stack/include/btu.h"
 #include "vendor_api.h"
 
 using base::Bind;
@@ -63,31 +64,67 @@ extern const btgatt_callbacks_t* bt_gatt_callbacks;
     }                                                                \
   } while (0)
 
+namespace std {
+template <>
+struct hash<bt_bdaddr_t> {
+  size_t operator()(const bt_bdaddr_t& f) const {
+    return f.address[0] + f.address[1] + f.address[2] + f.address[3] +
+           f.address[4] + f.address[5];
+  }
+};
+
+template <>
+struct equal_to<bt_bdaddr_t> {
+  size_t operator()(const bt_bdaddr_t& x, const bt_bdaddr_t& y) const {
+    return (memcmp(x.address, y.address, BD_ADDR_LEN) == 0);
+  }
+};
+}
+
 namespace {
 
 // all access to this variable should be done on the jni thread
-std::set<RawAddress> remote_bdaddr_cache;
-std::queue<RawAddress> remote_bdaddr_cache_ordered;
-const size_t remote_bdaddr_cache_max_size = 1024;
+std::unordered_set<bt_bdaddr_t> p_dev_cb;
 
-void btif_address_cache_add(const RawAddress& p_bda, uint8_t addr_type) {
-  // Remove the oldest entries
-  while (remote_bdaddr_cache.size() >= remote_bdaddr_cache_max_size) {
-    const RawAddress& raw_address = remote_bdaddr_cache_ordered.front();
-    remote_bdaddr_cache.erase(raw_address);
-    remote_bdaddr_cache_ordered.pop();
+void btif_gattc_add_remote_bdaddr(BD_ADDR p_bda, uint8_t addr_type) {
+  bt_bdaddr_t bd_addr;
+  memcpy(bd_addr.address, p_bda, BD_ADDR_LEN);
+  p_dev_cb.insert(bd_addr);
+}
+
+bool btif_gattc_find_bdaddr(BD_ADDR p_bda) {
+  bt_bdaddr_t bd_addr;
+  memcpy(bd_addr.address, p_bda, BD_ADDR_LEN);
+  return (p_dev_cb.count(bd_addr) != 0);
+}
+
+void btif_gattc_init_dev_cb(void) { p_dev_cb.clear(); }
+
+void btif_gatts_upstreams_evt(uint16_t event, char* p_param) {
+  LOG_VERBOSE(LOG_TAG, "%s: Event %d", __func__, event);
+
+  tBTA_GATTC* p_data = (tBTA_GATTC*)p_param;
+  switch (event) {
+    case BTA_GATTC_DEREG_EVT:
+      break;
+
+    case BTA_GATTC_SEARCH_CMPL_EVT: {
+      HAL_CBACK(bt_gatt_callbacks, client->search_complete_cb,
+                p_data->search_cmpl.conn_id, p_data->search_cmpl.status);
+      break;
+    }
+
+    default:
+      LOG_DEBUG(LOG_TAG, "%s: Unhandled event (%d)", __func__, event);
+      break;
   }
-  remote_bdaddr_cache.insert(p_bda);
-  remote_bdaddr_cache_ordered.push(p_bda);
 }
 
-bool btif_address_cache_find(const RawAddress& p_bda) {
-  return (remote_bdaddr_cache.find(p_bda) != remote_bdaddr_cache.end());
-}
-
-void btif_address_cache_init(void) {
-  remote_bdaddr_cache.clear();
-  remote_bdaddr_cache_ordered = {};
+void bta_gatts_cback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
+  bt_status_t status =
+      btif_transfer_context(btif_gatts_upstreams_evt, (uint16_t)event,
+                            (char*)p_data, sizeof(tBTA_GATTC), NULL);
+  ASSERTC(status == BT_STATUS_SUCCESS, "Context transfer failed!", status);
 }
 
 void bta_batch_scan_threshold_cb(tBTM_BLE_REF_VALUE ref_value) {
@@ -101,7 +138,7 @@ void bta_batch_scan_reports_cb(int client_id, tBTA_STATUS status,
                     num_records, std::move(data));
 }
 
-void bta_scan_results_cb_impl(RawAddress bd_addr, tBT_DEVICE_TYPE device_type,
+void bta_scan_results_cb_impl(bt_bdaddr_t bd_addr, tBT_DEVICE_TYPE device_type,
                               int8_t rssi, uint8_t addr_type,
                               uint16_t ble_evt_type, uint8_t ble_primary_phy,
                               uint8_t ble_secondary_phy,
@@ -121,8 +158,8 @@ void bta_scan_results_cb_impl(RawAddress bd_addr, tBT_DEVICE_TYPE device_type,
   }
 
   if ((addr_type != BLE_ADDR_RANDOM) || (p_eir_remote_name)) {
-    if (!btif_address_cache_find(bd_addr)) {
-      btif_address_cache_add(bd_addr, addr_type);
+    if (!btif_gattc_find_bdaddr(bd_addr.address)) {
+      btif_gattc_add_remote_bdaddr(bd_addr.address, addr_type);
 
       if (p_eir_remote_name) {
         if (remote_name_len > BD_NAME_LEN + 1 ||
@@ -141,7 +178,8 @@ void bta_scan_results_cb_impl(RawAddress bd_addr, tBT_DEVICE_TYPE device_type,
 
         LOG_VERBOSE(LOG_TAG, "%s BLE device name=%s len=%d dev_type=%d",
                     __func__, bdname.name, remote_name_len, device_type);
-        btif_dm_update_ble_remote_properties(bd_addr, bdname.name, device_type);
+        btif_dm_update_ble_remote_properties(bd_addr.address, bdname.name,
+                                             device_type);
       }
     }
   }
@@ -183,7 +221,9 @@ void bta_scan_results_cb(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH* p_data) {
   }
 
   tBTA_DM_INQ_RES* r = &p_data->inq_res;
-  do_in_jni_thread(Bind(bta_scan_results_cb_impl, r->bd_addr, r->device_type,
+  bt_bdaddr_t bdaddr;
+  bdcpy(bdaddr.address, r->bd_addr);
+  do_in_jni_thread(Bind(bta_scan_results_cb_impl, bdaddr, r->device_type,
                         r->rssi, r->ble_addr_type, r->ble_evt_type,
                         r->ble_primary_phy, r->ble_secondary_phy,
                         r->ble_advertising_sid, r->ble_tx_power,
@@ -200,38 +240,37 @@ void bta_track_adv_event_cb(tBTM_BLE_TRACK_ADV_DATA* p_track_adv_data) {
   SCAN_CBACK_IN_JNI(track_adv_event_cb, Owned(btif_scan_track_cb));
 }
 
-void bta_cback(tBTA_GATTC_EVT, tBTA_GATTC*) {}
-
 class BleScannerInterfaceImpl : public BleScannerInterface {
   ~BleScannerInterfaceImpl(){};
 
   void RegisterScanner(RegisterCallback cb) override {
-    do_in_main_thread(FROM_HERE,
-                      Bind(
-                          [](RegisterCallback cb) {
-                            BTA_GATTC_AppRegister(
-                                bta_cback,
-                                jni_thread_wrapper(FROM_HERE, std::move(cb)));
-                          },
-                          std::move(cb)));
+    do_in_bta_thread(FROM_HERE,
+                     Bind(
+                         [](RegisterCallback cb) {
+                           BTA_GATTC_AppRegister(
+                               bta_gatts_cback,
+                               jni_thread_wrapper(FROM_HERE, std::move(cb)));
+                         },
+                         std::move(cb)));
   }
 
   void Unregister(int scanner_id) override {
-    do_in_main_thread(FROM_HERE, Bind(&BTA_GATTC_AppDeregister, scanner_id));
+    do_in_bta_thread(FROM_HERE, Bind(&BTA_GATTC_AppDeregister, scanner_id));
   }
 
   void Scan(bool start) override {
     do_in_jni_thread(Bind(
         [](bool start) {
           if (!start) {
-            do_in_main_thread(FROM_HERE,
-                              Bind(&BTA_DmBleObserve, false, 0, nullptr));
+            do_in_bta_thread(FROM_HERE,
+                             Bind(&BTA_DmBleObserve, false, 0, nullptr));
             return;
           }
 
-          btif_address_cache_init();
-          do_in_main_thread(
-              FROM_HERE, Bind(&BTA_DmBleObserve, true, 0, bta_scan_results_cb));
+          btif_gattc_init_dev_cb();
+          do_in_bta_thread(FROM_HERE,
+                           Bind(&BTA_DmBleObserve, true, 0,
+                                (tBTA_DM_SEARCH_CBACK*)bta_scan_results_cb));
         },
         start));
   }
@@ -243,51 +282,126 @@ class BleScannerInterfaceImpl : public BleScannerInterface {
     BTIF_TRACE_DEBUG("%s", __func__);
 
     if (filt_param && filt_param->dely_mode == 1) {
-      do_in_main_thread(
+      do_in_bta_thread(
           FROM_HERE, base::Bind(BTM_BleTrackAdvertiser, bta_track_adv_event_cb,
                                 client_if));
     }
 
-    do_in_main_thread(
-        FROM_HERE, base::Bind(&BTM_BleAdvFilterParamSetup, action, filt_index,
-                              base::Passed(&filt_param),
-                              jni_thread_wrapper(FROM_HERE, std::move(cb))));
+    do_in_bta_thread(FROM_HERE,
+                     base::Bind(&BTM_BleAdvFilterParamSetup, action, filt_index,
+                                base::Passed(&filt_param),
+                                jni_thread_wrapper(FROM_HERE, std::move(cb))));
   }
 
-  void ScanFilterAdd(int filter_index, std::vector<ApcfCommand> filters,
-                     FilterConfigCallback cb) override {
-    BTIF_TRACE_DEBUG("%s: %d", __func__, filter_index);
+  void ScanFilterAddRemove(int action, int filt_type, int filt_index,
+                           int company_id, int company_id_mask,
+                           const bt_uuid_t* p_uuid,
+                           const bt_uuid_t* p_uuid_mask,
+                           const bt_bdaddr_t* bd_addr, char addr_type,
+                           vector<uint8_t> data, vector<uint8_t> mask,
+                           FilterConfigCallback cb) override {
+    BTIF_TRACE_DEBUG("%s, %d, %d", __func__, action, filt_type);
 
-    do_in_main_thread(
-        FROM_HERE,
-        base::Bind(
-            &BTM_LE_PF_set, filter_index, std::move(filters),
-            jni_thread_wrapper(
-                FROM_HERE,
-                Bind(std::move(cb),
-                     0 /*TODO: this used to be filter type, unused ?*/))));
+    /* If data is passed, both mask and data have to be the same length */
+    if (data.size() != mask.size() && data.size() != 0 && mask.size() != 0)
+      return;
+
+    switch (filt_type) {
+      case BTM_BLE_PF_ADDR_FILTER: {
+        tBLE_BD_ADDR target_addr;
+        bdcpy(target_addr.bda, bd_addr->address);
+        target_addr.type = addr_type;
+
+        do_in_bta_thread(
+            FROM_HERE,
+            base::Bind(&BTM_LE_PF_addr_filter, action, filt_index,
+                       std::move(target_addr),
+                       jni_thread_wrapper(FROM_HERE, Bind(cb, filt_type))));
+        return;
+      }
+
+      case BTM_BLE_PF_SRVC_DATA:
+        do_in_bta_thread(FROM_HERE,
+                         base::Bind(&BTM_LE_PF_srvc_data, action, filt_index));
+        return;
+
+      case BTM_BLE_PF_SRVC_UUID:
+      case BTM_BLE_PF_SRVC_SOL_UUID: {
+        tBT_UUID bt_uuid;
+        btif_to_bta_uuid(&bt_uuid, p_uuid);
+
+        if (p_uuid_mask == NULL) {
+          do_in_bta_thread(
+              FROM_HERE,
+              base::Bind(&BTM_LE_PF_uuid_filter, action, filt_index, filt_type,
+                         bt_uuid, BTM_BLE_PF_LOGIC_AND, nullptr,
+                         jni_thread_wrapper(FROM_HERE, Bind(cb, filt_type))));
+          return;
+        }
+
+        tBTM_BLE_PF_COND_MASK* mask = new tBTM_BLE_PF_COND_MASK;
+        btif_to_bta_uuid_mask(mask, p_uuid_mask, p_uuid);
+        do_in_bta_thread(
+            FROM_HERE,
+            base::Bind(&BTM_LE_PF_uuid_filter, action, filt_index, filt_type,
+                       bt_uuid, BTM_BLE_PF_LOGIC_AND, base::Owned(mask),
+                       jni_thread_wrapper(FROM_HERE, Bind(cb, filt_type))));
+        return;
+      }
+
+      case BTM_BLE_PF_LOCAL_NAME: {
+        do_in_bta_thread(
+            FROM_HERE,
+            base::Bind(&BTM_LE_PF_local_name, action, filt_index,
+                       std::move(data),
+                       jni_thread_wrapper(FROM_HERE, Bind(cb, filt_type))));
+        return;
+      }
+
+      case BTM_BLE_PF_MANU_DATA: {
+        do_in_bta_thread(
+            FROM_HERE,
+            base::Bind(&BTM_LE_PF_manu_data, action, filt_index, company_id,
+                       company_id_mask, std::move(data), std::move(mask),
+                       jni_thread_wrapper(FROM_HERE, Bind(cb, filt_type))));
+        return;
+      }
+
+      case BTM_BLE_PF_SRVC_DATA_PATTERN: {
+        do_in_bta_thread(
+            FROM_HERE,
+            base::Bind(&BTM_LE_PF_srvc_data_pattern, action, filt_index,
+                       std::move(data), std::move(mask),
+                       jni_thread_wrapper(FROM_HERE, Bind(cb, filt_type))));
+        return;
+      }
+
+      default:
+        LOG_ERROR(LOG_TAG, "%s: Unknown filter type (%d)!", __func__, action);
+        return;
+    }
   }
 
   void ScanFilterClear(int filter_index, FilterConfigCallback cb) override {
     BTIF_TRACE_DEBUG("%s: filter_index: %d", __func__, filter_index);
-    do_in_main_thread(
-        FROM_HERE, base::Bind(&BTM_LE_PF_clear, filter_index,
-                              jni_thread_wrapper(
-                                  FROM_HERE, Bind(cb, BTM_BLE_PF_TYPE_ALL))));
+    do_in_bta_thread(FROM_HERE,
+                     base::Bind(&BTM_LE_PF_clear, filter_index,
+                                jni_thread_wrapper(
+                                    FROM_HERE, Bind(cb, BTM_BLE_PF_TYPE_ALL))));
   }
 
   void ScanFilterEnable(bool enable, EnableCallback cb) override {
     BTIF_TRACE_DEBUG("%s: enable: %d", __func__, enable);
 
     uint8_t action = enable ? 1 : 0;
-    do_in_main_thread(FROM_HERE,
-                      base::Bind(&BTM_BleEnableDisableFilterFeature, action,
-                                 jni_thread_wrapper(FROM_HERE, std::move(cb))));
+    do_in_bta_thread(FROM_HERE,
+                     base::Bind(&BTM_BleEnableDisableFilterFeature, action,
+                                jni_thread_wrapper(FROM_HERE, std::move(cb))));
   }
 
   void SetScanParameters(int scan_interval, int scan_window,
                          Callback cb) override {
-    do_in_main_thread(
+    do_in_bta_thread(
         FROM_HERE, base::Bind(&BTM_BleSetScanParams, scan_interval, scan_window,
                               BTM_BLE_SCAN_MODE_ACTI,
                               jni_thread_wrapper(FROM_HERE, std::move(cb))));
@@ -297,7 +411,7 @@ class BleScannerInterfaceImpl : public BleScannerInterface {
                               int batch_scan_trunc_max,
                               int batch_scan_notify_threshold,
                               Callback cb) override {
-    do_in_main_thread(
+    do_in_bta_thread(
         FROM_HERE,
         base::Bind(&BTM_BleSetStorageConfig, (uint8_t)batch_scan_full_max,
                    (uint8_t)batch_scan_trunc_max,
@@ -308,24 +422,24 @@ class BleScannerInterfaceImpl : public BleScannerInterface {
 
   void BatchscanEnable(int scan_mode, int scan_interval, int scan_window,
                        int addr_type, int discard_rule, Callback cb) override {
-    do_in_main_thread(
+    do_in_bta_thread(
         FROM_HERE, base::Bind(&BTM_BleEnableBatchScan, scan_mode, scan_interval,
                               scan_window, discard_rule, addr_type,
                               jni_thread_wrapper(FROM_HERE, cb)));
   }
 
   void BatchscanDisable(Callback cb) override {
-    do_in_main_thread(FROM_HERE, base::Bind(&BTM_BleDisableBatchScan,
-                                            jni_thread_wrapper(FROM_HERE, cb)));
+    do_in_bta_thread(FROM_HERE, base::Bind(&BTM_BleDisableBatchScan,
+                                           jni_thread_wrapper(FROM_HERE, cb)));
   }
 
   void BatchscanReadReports(int client_if, int scan_mode) override {
-    do_in_main_thread(FROM_HERE,
-                      base::Bind(&BTM_BleReadScanReports, (uint8_t)scan_mode,
-                                 Bind(bta_batch_scan_reports_cb, client_if)));
+    do_in_bta_thread(FROM_HERE,
+                     base::Bind(&BTM_BleReadScanReports, (uint8_t)scan_mode,
+                                Bind(bta_batch_scan_reports_cb, client_if)));
   }
 
-  void StartSync(uint8_t sid, RawAddress address, uint16_t skip,
+  void StartSync(uint8_t sid, bt_bdaddr_t address, uint16_t skip,
                  uint16_t timeout, StartSyncCb start_cb, SyncReportCb report_cb,
                  SyncLostCb lost_cb) override {}
 

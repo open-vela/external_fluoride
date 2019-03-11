@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2013 Broadcom Corporation
+ *  Copyright (C) 1999-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,14 +23,14 @@
 #include "osi/include/osi.h"
 #include "srvc_eng_int.h"
 
+#include "srvc_battery_int.h"
 #include "srvc_dis_int.h"
 
-using base::StringPrintf;
 static void srvc_eng_s_request_cback(uint16_t conn_id, uint32_t trans_id,
                                      uint8_t op_code, tGATTS_DATA* p_data);
-static void srvc_eng_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
-                                   const RawAddress& bda, uint16_t conn_id,
-                                   bool connected, tGATT_DISCONN_REASON reason,
+static void srvc_eng_connect_cback(UNUSED_ATTR tGATT_IF gatt_if, BD_ADDR bda,
+                                   uint16_t conn_id, bool connected,
+                                   tGATT_DISCONN_REASON reason,
                                    tBT_TRANSPORT transport);
 static void srvc_eng_c_cmpl_cback(uint16_t conn_id, tGATTC_OPTYPE op,
                                   tGATT_STATUS status,
@@ -65,13 +65,14 @@ tSRVC_ENG_CB srvc_eng_cb;
  * Returns          total number of clcb found.
  *
  ******************************************************************************/
-uint16_t srvc_eng_find_conn_id_by_bd_addr(const RawAddress& bda) {
+uint16_t srvc_eng_find_conn_id_by_bd_addr(BD_ADDR bda) {
   uint8_t i_clcb;
   tSRVC_CLCB* p_clcb = NULL;
 
   for (i_clcb = 0, p_clcb = srvc_eng_cb.clcb; i_clcb < SRVC_MAX_APPS;
        i_clcb++, p_clcb++) {
-    if (p_clcb->in_use && p_clcb->connected && p_clcb->bda == bda) {
+    if (p_clcb->in_use && p_clcb->connected &&
+        !memcmp(p_clcb->bda, bda, BD_ADDR_LEN)) {
       return p_clcb->conn_id;
     }
   }
@@ -88,13 +89,14 @@ uint16_t srvc_eng_find_conn_id_by_bd_addr(const RawAddress& bda) {
  * Returns          Pointer to the found link conenction control block.
  *
  ******************************************************************************/
-tSRVC_CLCB* srvc_eng_find_clcb_by_bd_addr(const RawAddress& bda) {
+tSRVC_CLCB* srvc_eng_find_clcb_by_bd_addr(BD_ADDR bda) {
   uint8_t i_clcb;
   tSRVC_CLCB* p_clcb = NULL;
 
   for (i_clcb = 0, p_clcb = srvc_eng_cb.clcb; i_clcb < SRVC_MAX_APPS;
        i_clcb++, p_clcb++) {
-    if (p_clcb->in_use && p_clcb->connected && p_clcb->bda == bda) {
+    if (p_clcb->in_use && p_clcb->connected &&
+        !memcmp(p_clcb->bda, bda, BD_ADDR_LEN)) {
       return p_clcb;
     }
   }
@@ -155,7 +157,7 @@ uint8_t srvc_eng_find_clcb_idx_by_conn_id(uint16_t conn_id) {
  *                  block.
  *
  ******************************************************************************/
-tSRVC_CLCB* srvc_eng_clcb_alloc(uint16_t conn_id, const RawAddress& bda) {
+tSRVC_CLCB* srvc_eng_clcb_alloc(uint16_t conn_id, BD_ADDR bda) {
   uint8_t i_clcb = 0;
   tSRVC_CLCB* p_clcb = NULL;
 
@@ -165,7 +167,7 @@ tSRVC_CLCB* srvc_eng_clcb_alloc(uint16_t conn_id, const RawAddress& bda) {
       p_clcb->in_use = true;
       p_clcb->conn_id = conn_id;
       p_clcb->connected = true;
-      p_clcb->bda = bda;
+      memcpy(p_clcb->bda, bda, BD_ADDR_LEN);
       break;
     }
   }
@@ -212,6 +214,12 @@ uint8_t srvc_eng_process_read_req(uint8_t clcb_idx, tGATT_READ_REQ* p_data,
   if (dis_valid_handle_range(p_data->handle))
     act = dis_read_attr_value(clcb_idx, p_data->handle, &p_rsp->attr_value,
                               p_data->is_long, p_status);
+
+  else if (battery_valid_handle_range(p_data->handle))
+    act =
+        battery_s_read_attr_value(clcb_idx, p_data->handle, &p_rsp->attr_value,
+                                  p_data->is_long, p_status);
+
   else
     *p_status = status;
   return act;
@@ -226,6 +234,8 @@ uint8_t srvc_eng_process_write_req(uint8_t clcb_idx, tGATT_WRITE_REQ* p_data,
 
   if (dis_valid_handle_range(p_data->handle)) {
     act = dis_write_attr_value(p_data, p_status);
+  } else if (battery_valid_handle_range(p_data->handle)) {
+    act = battery_s_write_attr_value(clcb_idx, p_data, p_status);
   } else
     *p_status = GATT_NOT_FOUND;
 
@@ -249,8 +259,7 @@ static void srvc_eng_s_request_cback(uint16_t conn_id, uint32_t trans_id,
   uint8_t act = SRVC_ACT_IGNORE;
   uint8_t clcb_idx = srvc_eng_find_clcb_idx_by_conn_id(conn_id);
 
-  VLOG(1) << StringPrintf("srvc_eng_s_request_cback : recv type (0x%02x)",
-                          type);
+  GATT_TRACE_EVENT("srvc_eng_s_request_cback : recv type (0x%02x)", type);
 
   memset(&rsp_msg, 0, sizeof(tGATTS_RSP));
 
@@ -271,16 +280,15 @@ static void srvc_eng_s_request_cback(uint16_t conn_id, uint32_t trans_id,
       break;
 
     case GATTS_REQ_TYPE_WRITE_EXEC:
-      VLOG(1) << "Ignore GATT_REQ_EXEC_WRITE/WRITE_CMD";
+      GATT_TRACE_EVENT("Ignore GATT_REQ_EXEC_WRITE/WRITE_CMD");
       break;
 
     case GATTS_REQ_TYPE_MTU:
-      VLOG(1) << "Get MTU exchange new mtu size: " << p_data->mtu;
+      GATT_TRACE_EVENT("Get MTU exchange new mtu size: %d", p_data->mtu);
       break;
 
     default:
-      VLOG(1) << StringPrintf("Unknown/unexpected LE GAP ATT request: 0x%02x",
-                              type);
+      GATT_TRACE_EVENT("Unknown/unexpected LE GAP ATT request: 0x%02x", type);
       break;
   }
 
@@ -303,11 +311,11 @@ static void srvc_eng_c_cmpl_cback(uint16_t conn_id, tGATTC_OPTYPE op,
                                   tGATT_CL_COMPLETE* p_data) {
   tSRVC_CLCB* p_clcb = srvc_eng_find_clcb_by_conn_id(conn_id);
 
-  VLOG(1) << StringPrintf(
-      "srvc_eng_c_cmpl_cback() - op_code: 0x%02x  status: 0x%02x ", op, status);
+  GATT_TRACE_EVENT("srvc_eng_c_cmpl_cback() - op_code: 0x%02x  status: 0x%02x ",
+                   op, status);
 
   if (p_clcb == NULL) {
-    LOG(ERROR) << __func__ << " received for unknown connection";
+    GATT_TRACE_ERROR("srvc_eng_c_cmpl_cback received for unknown connection");
     return;
   }
 
@@ -324,17 +332,19 @@ static void srvc_eng_c_cmpl_cback(uint16_t conn_id, tGATTC_OPTYPE op,
  * Returns          void
  *
  ******************************************************************************/
-static void srvc_eng_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
-                                   const RawAddress& bda, uint16_t conn_id,
-                                   bool connected, tGATT_DISCONN_REASON reason,
+static void srvc_eng_connect_cback(UNUSED_ATTR tGATT_IF gatt_if, BD_ADDR bda,
+                                   uint16_t conn_id, bool connected,
+                                   tGATT_DISCONN_REASON reason,
                                    UNUSED_ATTR tBT_TRANSPORT transport) {
-  VLOG(1) << __func__ << ": from " << bda
-          << StringPrintf(" connected:%d conn_id=%d reason = 0x%04x", connected,
-                          conn_id, reason);
+  GATT_TRACE_EVENT(
+      "srvc_eng_connect_cback: from %08x%04x connected:%d conn_id=%d reason = "
+      "0x%04x",
+      (bda[0] << 24) + (bda[1] << 16) + (bda[2] << 8) + bda[3],
+      (bda[4] << 8) + bda[5], connected, conn_id, reason);
 
   if (connected) {
     if (srvc_eng_clcb_alloc(conn_id, bda) == NULL) {
-      LOG(ERROR) << __func__ << "srvc_eng_connect_cback: no_resource";
+      GATT_TRACE_ERROR("srvc_eng_connect_cback: no_resource");
       return;
     }
   } else {
@@ -350,7 +360,7 @@ static void srvc_eng_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
  * Returns          void
  *
  ******************************************************************************/
-bool srvc_eng_request_channel(const RawAddress& remote_bda, uint8_t srvc_id) {
+bool srvc_eng_request_channel(BD_ADDR remote_bda, uint8_t srvc_id) {
   bool set = true;
   tSRVC_CLCB* p_clcb = srvc_eng_find_clcb_by_bd_addr(remote_bda);
 
@@ -376,7 +386,7 @@ void srvc_eng_release_channel(uint16_t conn_id) {
   tSRVC_CLCB* p_clcb = srvc_eng_find_clcb_by_conn_id(conn_id);
 
   if (p_clcb == NULL) {
-    LOG(ERROR) << __func__ << ": invalid connection id " << conn_id;
+    GATT_TRACE_ERROR("%s: invalid connection id %d", __func__, conn_id);
     return;
   }
 
@@ -393,19 +403,18 @@ void srvc_eng_release_channel(uint16_t conn_id) {
  *
  ******************************************************************************/
 tGATT_STATUS srvc_eng_init(void) {
+  tBT_UUID app_uuid = {LEN_UUID_16, {UUID_SERVCLASS_DEVICE_INFO}};
 
   if (srvc_eng_cb.enabled) {
-    LOG(ERROR) << "DIS already initalized";
+    GATT_TRACE_ERROR("DIS already initalized");
   } else {
     memset(&srvc_eng_cb, 0, sizeof(tSRVC_ENG_CB));
 
     /* Create a GATT profile service */
-    bluetooth::Uuid app_uuid =
-        bluetooth::Uuid::From16Bit(UUID_SERVCLASS_DEVICE_INFO);
-    srvc_eng_cb.gatt_if = GATT_Register(app_uuid, &srvc_gatt_cback);
+    srvc_eng_cb.gatt_if = GATT_Register(&app_uuid, &srvc_gatt_cback);
     GATT_StartIf(srvc_eng_cb.gatt_if);
 
-    VLOG(1) << "Srvc_Init:  gatt_if=" << +srvc_eng_cb.gatt_if;
+    GATT_TRACE_DEBUG("Srvc_Init:  gatt_if=%d  ", srvc_eng_cb.gatt_if);
 
     srvc_eng_cb.enabled = true;
     dis_cb.dis_read_uuid_idx = 0xff;
@@ -421,7 +430,7 @@ void srvc_sr_rsp(uint8_t clcb_idx, tGATT_STATUS st, tGATTS_RSP* p_rsp) {
     srvc_eng_cb.clcb[clcb_idx].trans_id = 0;
   }
 }
-void srvc_sr_notify(const RawAddress& remote_bda, uint16_t handle, uint16_t len,
+void srvc_sr_notify(BD_ADDR remote_bda, uint16_t handle, uint16_t len,
                     uint8_t* p_value) {
   uint16_t conn_id = srvc_eng_find_conn_id_by_bd_addr(remote_bda);
 
