@@ -171,24 +171,6 @@ static void write_rpt_ctl_cfg_cb(uint16_t conn_id, tGATT_STATUS status,
 g722_encode_state_t* encoder_state_left = nullptr;
 g722_encode_state_t* encoder_state_right = nullptr;
 
-inline void encoder_state_init() {
-  if (encoder_state_left != nullptr) {
-    LOG(WARNING) << __func__ << ": encoder already initialized";
-    return;
-  }
-  encoder_state_left = g722_encode_init(nullptr, 64000, G722_PACKED);
-  encoder_state_right = g722_encode_init(nullptr, 64000, G722_PACKED);
-}
-
-inline void encoder_state_release() {
-  if (encoder_state_left != nullptr) {
-    g722_encode_release(encoder_state_left);
-    encoder_state_left = nullptr;
-    g722_encode_release(encoder_state_right);
-    encoder_state_right = nullptr;
-  }
-}
-
 class HearingAidImpl : public HearingAid {
  private:
   // Keep track of whether the Audio Service has resumed audio playback
@@ -262,17 +244,6 @@ class HearingAidImpl : public HearingAid {
     DVLOG(2) << __func__ << " " << address;
     hearingDevices.Add(HearingDevice(address, true));
     BTA_GATTC_Open(gatt_if, address, true, GATT_TRANSPORT_LE, false);
-  }
-
-  void AddToWhiteList(const RawAddress& address) override {
-    VLOG(2) << __func__ << " address: " << address;
-    hearingDevices.Add(HearingDevice(address, true));
-    BTA_GATTC_Open(gatt_if, address, false, GATT_TRANSPORT_LE, false);
-  }
-
-  void RemoveFromWhiteList(const RawAddress& address) override {
-    VLOG(2) << __func__ << " address: " << address;
-    BTA_GATTC_CancelOpen(gatt_if, address, false);
   }
 
   void AddFromStorage(const HearingDevice& dev_info, uint16_t is_white_listed) {
@@ -864,7 +835,8 @@ class HearingAidImpl : public HearingAid {
     VLOG(0) << __func__ << ": device=" << hearingDevice.address;
 
     if (encoder_state_left == nullptr) {
-      encoder_state_init();
+      encoder_state_left = g722_encode_init(nullptr, 64000, G722_PACKED);
+      encoder_state_right = g722_encode_init(nullptr, 64000, G722_PACKED);
       seq_counter = 0;
 
       // use the best codec avaliable for this pair of devices.
@@ -926,8 +898,12 @@ class HearingAidImpl : public HearingAid {
     audio_running = true;
 
     // TODO: shall we also reset the encoder ?
-    encoder_state_release();
-    encoder_state_init();
+    if (encoder_state_left != nullptr) {
+      g722_encode_release(encoder_state_left);
+      g722_encode_release(encoder_state_right);
+    }
+    encoder_state_left = g722_encode_init(nullptr, 64000, G722_PACKED);
+    encoder_state_right = g722_encode_init(nullptr, 64000, G722_PACKED);
     seq_counter = 0;
 
     for (auto& device : hearingDevices.devices) {
@@ -1015,7 +991,12 @@ class HearingAidImpl : public HearingAid {
 
     if (left == nullptr && right == nullptr) {
       HearingAidAudioSource::Stop();
-      encoder_state_release();
+      if (encoder_state_left != nullptr) {
+        g722_encode_release(encoder_state_left);
+        encoder_state_left = nullptr;
+        g722_encode_release(encoder_state_right);
+        encoder_state_right = nullptr;
+      }
       current_volume = VOLUME_UNKNOWN;
       return;
     }
@@ -1271,10 +1252,6 @@ class HearingAidImpl : public HearingAid {
     LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
               << ", playback_started=" << hearingDevice->playback_started;
 
-    LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
-              << ", playback_started=" << hearingDevice->playback_started;
-    hearingDevice->playback_started = false;
-
     if (hearingDevice->connecting_actively) {
       // cancel pending direct connect
       BTA_GATTC_CancelOpen(gatt_if, address, true);
@@ -1287,8 +1264,6 @@ class HearingAidImpl : public HearingAid {
     std::vector<uint8_t> inform_disconn_state(
         {CONTROL_POINT_OP_STATE_CHANGE, STATE_CHANGE_OTHER_SIDE_DISCONNECTED});
     send_state_change_to_other_side(hearingDevice, inform_disconn_state);
-
-    DoDisconnectCleanUp(hearingDevice);
 
     DoDisconnectCleanUp(hearingDevice);
 
@@ -1368,8 +1343,6 @@ class HearingAidImpl : public HearingAid {
     }
 
     hearingDevices.devices.clear();
-
-    encoder_state_release();
   }
 
  private:
