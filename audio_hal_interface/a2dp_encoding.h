@@ -23,6 +23,8 @@ namespace bluetooth {
 namespace audio {
 namespace a2dp {
 
+bool is_hal_2_0_supported();
+
 // Check if new bluetooth_audio is enabled
 bool is_hal_2_0_enabled();
 
