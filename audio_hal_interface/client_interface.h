@@ -131,10 +131,6 @@ class BluetoothAudioClientInterface {
 
   ~BluetoothAudioClientInterface();
 
-  bool IsValid() const {
-    return provider_ != nullptr;
-  }
-
   std::vector<AudioCapabilities> GetAudioCapabilities() const;
 
   bool UpdateAudioConfig(const AudioConfiguration& audioConfig);
