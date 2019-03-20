@@ -16,7 +16,6 @@
  *
  ******************************************************************************/
 
-#include <cutils/log.h>
 #include <log/log.h>
 #include <string.h>
 #include "btif_common.h"
@@ -489,15 +488,7 @@ void smp_proc_sec_grant(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
  ******************************************************************************/
 void smp_proc_pair_fail(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   SMP_TRACE_DEBUG("%s", __func__);
-
-  if (p_cb->rcvd_cmd_len < 2) {
-    android_errorWriteLog(0x534e4554, "111214739");
-    SMP_TRACE_WARNING("%s: rcvd_cmd_len %d too short: must be at least 2",
-                      __func__, p_cb->rcvd_cmd_len);
-    p_cb->status = SMP_INVALID_PARAMETERS;
-  } else {
-    p_cb->status = p_data->status;
-  }
+  p_cb->status = p_data->status;
 
   /* Cancel pending auth complete timer if set */
   alarm_cancel(p_cb->delayed_auth_timer_ent);
@@ -519,14 +510,6 @@ void smp_proc_pair_cmd(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
     btm_sec_clear_ble_keys(p_dev_rec);
 
   p_cb->flags |= SMP_PAIR_FLAG_ENC_AFTER_PAIR;
-
-  if (smp_command_has_invalid_length(p_cb)) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_INVALID_PARAMETERS;
-    android_errorWriteLog(0x534e4554, "111850706");
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-    return;
-  }
 
   STREAM_TO_UINT8(p_cb->peer_io_caps, p);
   STREAM_TO_UINT8(p_cb->peer_oob_flag, p);
@@ -796,14 +779,6 @@ void smp_br_process_pairing_command(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
 
   p_cb->flags |= SMP_PAIR_FLAG_ENC_AFTER_PAIR;
 
-  if (smp_command_has_invalid_length(p_cb)) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_INVALID_PARAMETERS;
-    android_errorWriteLog(0x534e4554, "111213909");
-    smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
-    return;
-  }
-
   STREAM_TO_UINT8(p_cb->peer_io_caps, p);
   STREAM_TO_UINT8(p_cb->peer_oob_flag, p);
   STREAM_TO_UINT8(p_cb->peer_auth_req, p);
@@ -933,15 +908,6 @@ void smp_proc_enc_info(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   uint8_t* p = p_data->p_data;
 
   SMP_TRACE_DEBUG("%s", __func__);
-
-  if (smp_command_has_invalid_parameters(p_cb)) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_INVALID_PARAMETERS;
-    android_errorWriteLog(0x534e4554, "111937065");
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-    return;
-  }
-
   STREAM_TO_ARRAY(p_cb->ltk.data(), p, OCTET16_LEN);
 
   smp_key_distribution(p_cb, NULL);
@@ -953,21 +919,13 @@ void smp_proc_master_id(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   tBTM_LE_KEY_VALUE le_key;
 
   SMP_TRACE_DEBUG("%s", __func__);
-
-  if (p_cb->rcvd_cmd_len < 11) {  // 1(Code) + 2(EDIV) + 8(Rand)
-    android_errorWriteLog(0x534e4554, "111937027");
-    SMP_TRACE_ERROR("%s: Invalid command length: %d, should be at least 11",
-                    __func__, p_cb->rcvd_cmd_len);
-    return;
-  }
-
   smp_update_key_mask(p_cb, SMP_SEC_KEY_TYPE_ENC, true);
 
   STREAM_TO_UINT16(le_key.penc_key.ediv, p);
   STREAM_TO_ARRAY(le_key.penc_key.rand, p, BT_OCTET8_LEN);
 
   /* store the encryption keys from peer device */
-  le_key.penc_key.ltk = p_cb->ltk;
+  le_key.lenc_key.ltk = p_cb->ltk;
   le_key.penc_key.sec_level = p_cb->sec_level;
   le_key.penc_key.key_size = p_cb->loc_enc_size;
 
@@ -983,15 +941,6 @@ void smp_proc_id_info(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   uint8_t* p = p_data->p_data;
 
   SMP_TRACE_DEBUG("%s", __func__);
-
-  if (smp_command_has_invalid_parameters(p_cb)) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_INVALID_PARAMETERS;
-    android_errorWriteLog(0x534e4554, "111937065");
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-    return;
-  }
-
   STREAM_TO_ARRAY(p_cb->tk.data(), p, OCTET16_LEN); /* reuse TK for IRK */
   smp_key_distribution_by_transport(p_cb, NULL);
 }
@@ -1002,15 +951,6 @@ void smp_proc_id_addr(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   tBTM_LE_KEY_VALUE pid_key;
 
   SMP_TRACE_DEBUG("%s", __func__);
-
-  if (smp_command_has_invalid_parameters(p_cb)) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_INVALID_PARAMETERS;
-    android_errorWriteLog(0x534e4554, "111214770");
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-    return;
-  }
-
   smp_update_key_mask(p_cb, SMP_SEC_KEY_TYPE_ID, true);
 
   STREAM_TO_UINT8(pid_key.pid_key.identity_addr_type, p);
@@ -1034,15 +974,6 @@ void smp_proc_srk_info(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   tBTM_LE_KEY_VALUE le_key;
 
   SMP_TRACE_DEBUG("%s", __func__);
-
-  if (smp_command_has_invalid_parameters(p_cb)) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_INVALID_PARAMETERS;
-    android_errorWriteLog(0x534e4554, "111214470");
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-    return;
-  }
-
   smp_update_key_mask(p_cb, SMP_SEC_KEY_TYPE_CSRK, true);
 
   /* save CSRK to security record */
