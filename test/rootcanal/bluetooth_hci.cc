@@ -19,10 +19,14 @@
 #include "bluetooth_hci.h"
 
 #include <base/logging.h>
+#include <cutils/properties.h>
 #include <string.h>
 #include <utils/Log.h>
 
+#include "acl_packet.h"
+#include "event_packet.h"
 #include "hci_internals.h"
+#include "sco_packet.h"
 
 namespace android {
 namespace hardware {
@@ -31,13 +35,24 @@ namespace V1_0 {
 namespace sim {
 
 using android::hardware::hidl_vec;
+using test_vendor_lib::AclPacket;
 using test_vendor_lib::AsyncManager;
 using test_vendor_lib::AsyncTaskId;
 using test_vendor_lib::CommandPacket;
 using test_vendor_lib::DualModeController;
 using test_vendor_lib::EventPacket;
+using test_vendor_lib::ScoPacket;
 using test_vendor_lib::TaskCallback;
 using test_vendor_lib::TestChannelTransport;
+
+namespace {
+
+bool BtTestConsoleEnabled() {
+  // Assume enabled by default.
+  return property_get_bool("bt.rootcanal_test_console", true);
+}
+
+}  // namespace
 
 class BluetoothDeathRecipient : public hidl_death_recipient {
  public:
@@ -92,10 +107,24 @@ Return<void> BluetoothHci::initialize(const sp<IBluetoothHciCallbacks>& cb) {
     cb->hciEventReceived(hci_event);
   });
 
-  /* RegisterAcl and RegisterSco
-        cb->aclDataReceived(hci_packet);
-        cb->scoDataReceived(hci_packet);
-  */
+  controller_.RegisterAclChannel([cb](std::unique_ptr<AclPacket> packet) {
+    std::vector<uint8_t> acl_vector = packet->GetPacket();
+    hidl_vec<uint8_t> acl_packet = acl_vector;
+
+    cb->aclDataReceived(acl_packet);
+  });
+
+  controller_.RegisterScoChannel([cb](std::unique_ptr<ScoPacket> packet) {
+    size_t header_bytes = packet->GetHeaderSize();
+    size_t payload_bytes = packet->GetPayloadSize();
+    hidl_vec<uint8_t> sco_packet;
+    sco_packet.resize(header_bytes + payload_bytes);
+    memcpy(sco_packet.data(), packet->GetHeader().data(), header_bytes);
+    memcpy(sco_packet.data() + header_bytes, packet->GetPayload().data(),
+           payload_bytes);
+
+    cb->scoDataReceived(sco_packet);
+  });
 
   controller_.RegisterTaskScheduler(
       [this](std::chrono::milliseconds delay, const TaskCallback& task) {
@@ -111,7 +140,9 @@ Return<void> BluetoothHci::initialize(const sp<IBluetoothHciCallbacks>& cb) {
   controller_.RegisterTaskCancel(
       [this](AsyncTaskId task) { async_manager_.CancelAsyncTask(task); });
 
-  SetUpTestChannel(6111);
+  if (BtTestConsoleEnabled()) {
+    SetUpTestChannel(6111);
+  }
 
   unlink_cb_ = [cb](sp<BluetoothDeathRecipient>& death_recipient) {
     if (death_recipient->getHasDied())
@@ -142,13 +173,36 @@ Return<void> BluetoothHci::sendHciCommand(const hidl_vec<uint8_t>& packet) {
   return Void();
 }
 
-Return<void> BluetoothHci::sendAclData(const hidl_vec<uint8_t>& /* packet */) {
-  CHECK(false) << __func__ << " not yet implemented";
+Return<void> BluetoothHci::sendAclData(const hidl_vec<uint8_t>& packet) {
+  async_manager_.ExecAsync(std::chrono::milliseconds(0), [this, packet]() {
+    uint16_t channel = (packet[0] | (packet[1] << 8)) & 0xfff;
+    AclPacket::PacketBoundaryFlags boundary_flags =
+        static_cast<AclPacket::PacketBoundaryFlags>((packet[1] & 0x30) >> 4);
+    AclPacket::BroadcastFlags broadcast_flags =
+        static_cast<AclPacket::BroadcastFlags>((packet[1] & 0xC0) >> 6);
+
+    std::unique_ptr<AclPacket> acl = std::unique_ptr<AclPacket>(
+        new AclPacket(channel, boundary_flags, broadcast_flags));
+    for (size_t i = 4; i < packet.size(); i++)
+      acl->AddPayloadOctets1(packet[i]);
+
+    controller_.HandleAcl(std::move(acl));
+  });
   return Void();
 }
 
-Return<void> BluetoothHci::sendScoData(const hidl_vec<uint8_t>& /* packet */) {
-  CHECK(false) << __func__ << " not yet implemented";
+Return<void> BluetoothHci::sendScoData(const hidl_vec<uint8_t>& packet) {
+  async_manager_.ExecAsync(std::chrono::milliseconds(0), [this, packet]() {
+    uint16_t channel = (packet[0] | (packet[1] << 8)) & 0xfff;
+    ScoPacket::PacketStatusFlags packet_status =
+        static_cast<ScoPacket::PacketStatusFlags>((packet[1] & 0x30) >> 4);
+    std::unique_ptr<ScoPacket> sco =
+        std::unique_ptr<ScoPacket>(new ScoPacket(channel, packet_status));
+    for (size_t i = 3; i < packet.size(); i++)
+      sco->AddPayloadOctets1(packet[i]);
+
+    controller_.HandleSco(std::move(sco));
+  });
   return Void();
 }
 
@@ -174,6 +228,11 @@ void BluetoothHci::SetUpTestChannel(int port) {
       });
     });
   });
+}
+
+/* Fallback to shared library if there is no service. */
+IBluetoothHci* HIDL_FETCH_IBluetoothHci(const char* /* name */) {
+  return new BluetoothHci();
 }
 
 }  // namespace gce
