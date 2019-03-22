@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
- *  Copyright (C) 2006-2012 Broadcom Corporation
+ *  Copyright 2014 The Android Open Source Project
+ *  Copyright 2006-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ typedef struct {
 /* data associated with BTA_MCE_MAS_DISCOVERY_COMP_EVT */
 typedef struct {
   tBTA_MCE_STATUS status;
-  BD_ADDR remote_addr;
+  RawAddress remote_addr;
   int num_mas;
   tBTA_MCE_MAS_INFO mas[BTA_MCE_MAX_MAS_INSTANCES];
 } tBTA_MCE_MAS_DISCOVERY_COMP;
@@ -116,6 +116,6 @@ extern tBTA_MCE_STATUS BTA_MceEnable(tBTA_MCE_DM_CBACK* p_cback);
  *                  BTA_MCE_FAILURE, otherwise.
  *
  ******************************************************************************/
-extern tBTA_MCE_STATUS BTA_MceGetRemoteMasInstances(BD_ADDR bd_addr);
+extern tBTA_MCE_STATUS BTA_MceGetRemoteMasInstances(const RawAddress& bd_addr);
 
 #endif /* BTA_MCE_API_H */

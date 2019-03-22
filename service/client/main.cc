@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -158,6 +158,60 @@ class CLIBluetoothCallback : public android::bluetooth::BnBluetoothCallback {
          << COLOR_OFF;
     EndAsyncOut();
 
+    return Status::ok();
+  }
+
+  Status OnSspRequest(const String16& device_address,
+                      const String16& device_name, int32_t cod,
+                      int32_t pairing_variant, int32_t pass_key) override {
+    // no-op
+    return Status::ok();
+  }
+
+  Status OnGetBondedDevices(
+      int32_t status,
+      const ::std::vector<String16>& device_addresses) override {
+    BeginAsyncOut();
+    std::cout << "Bonded devices:\n";
+    for (const auto& device_address : device_addresses) {
+      std::cout << "    " << device_address << "\n";
+    }
+    EndAsyncOut();
+    return Status::ok();
+  }
+
+  Status OnBondStateChanged(int32_t status, const String16& device_address,
+                            int32_t state) override {
+    BeginAsyncOut();
+    std::cout << COLOR_BOLDWHITE "Device address: " << COLOR_BOLDYELLOW "["
+              << device_address << " bond state: " << state << " ] "
+              << COLOR_BOLDWHITE "- status: "
+              << (status == 0 ? "SUCCESS" : "FAIL") << COLOR_OFF;
+    EndAsyncOut();
+    return Status::ok();
+  }
+
+  Status OnGetRemoteDeviceProperties(
+      int32_t status, const String16& device_address,
+      const android::bluetooth::BluetoothRemoteDeviceProps& props) override {
+    // no-op
+    return Status::ok();
+  }
+
+  Status OnDeviceFound(
+      const android::bluetooth::BluetoothRemoteDeviceProps& props) override {
+    // no-op
+    return Status::ok();
+  }
+
+  Status OnDeviceConnectionStateChanged(const String16& device_address,
+                                        bool connected) override {
+    // no-op
+    return Status::ok();
+  }
+
+  Status OnScanEnableChanged(bool scan_enabled) override {
+    // no-op
     return Status::ok();
   }
 
@@ -337,7 +391,7 @@ void HandleDisable(IBluetooth* bt_iface, const vector<string>& args) {
 void HandleEnable(IBluetooth* bt_iface, const vector<string>& args) {
   bool is_restricted_mode = false;
 
-  for (auto iter : args) {
+  for (const auto& iter : args) {
     const std::string& arg = iter;
     if (arg == "-h") {
       static const char kUsage[] =
@@ -593,7 +647,7 @@ void HandleStartAdv(IBluetooth* bt_iface, const vector<string>& args) {
   bool connectable = false;
   bool set_manufacturer_data = false;
   bool set_uuid = false;
-  bluetooth::UUID uuid;
+  bluetooth::Uuid uuid;
 
   for (auto iter = args.begin(); iter != args.end(); ++iter) {
     const std::string& arg = *iter;
@@ -609,14 +663,15 @@ void HandleStartAdv(IBluetooth* bt_iface, const vector<string>& args) {
       // This flag has a single argument.
       ++iter;
       if (iter == args.end()) {
-        PrintError("Expected a UUID after -u");
+        PrintError("Expected a Uuid after -u");
         return;
       }
 
       std::string uuid_str = *iter;
-      uuid = bluetooth::UUID(uuid_str);
-      if (!uuid.is_valid()) {
-        PrintError("Invalid UUID: " + uuid_str);
+      bool is_valid = false;
+      uuid = bluetooth::Uuid::FromString(uuid_str, &is_valid);
+      if (!is_valid) {
+        PrintError("Invalid Uuid: " + uuid_str);
         return;
       }
 
@@ -661,19 +716,19 @@ void HandleStartAdv(IBluetooth* bt_iface, const vector<string>& args) {
     // Determine the type and length bytes.
     int uuid_size = uuid.GetShortestRepresentationSize();
     uint8_t type;
-    if (uuid_size == bluetooth::UUID::kNumBytes128)
-      type = bluetooth::kEIRTypeComplete128BitUUIDs;
-    else if (uuid_size == bluetooth::UUID::kNumBytes32)
-      type = bluetooth::kEIRTypeComplete32BitUUIDs;
-    else if (uuid_size == bluetooth::UUID::kNumBytes16)
-      type = bluetooth::kEIRTypeComplete16BitUUIDs;
+    if (uuid_size == bluetooth::Uuid::kNumBytes128)
+      type = bluetooth::kEIRTypeComplete128BitUuids;
+    else if (uuid_size == bluetooth::Uuid::kNumBytes32)
+      type = bluetooth::kEIRTypeComplete32BitUuids;
+    else if (uuid_size == bluetooth::Uuid::kNumBytes16)
+      type = bluetooth::kEIRTypeComplete16BitUuids;
     else
       NOTREACHED() << "Unexpected size: " << uuid_size;
 
     data.push_back(uuid_size + 1);
     data.push_back(type);
 
-    auto uuid_bytes = uuid.GetFullLittleEndian();
+    auto uuid_bytes = uuid.To128BitLE();
     int index = (uuid_size == 16) ? 0 : 12;
     data.insert(data.end(), uuid_bytes.data() + index,
                 uuid_bytes.data() + index + uuid_size);
