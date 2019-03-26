@@ -58,14 +58,14 @@
 #define DISABLED "disabled"
 static const char* TIME_STRING_FORMAT = "%Y-%m-%d %H:%M:%S";
 
+#define BT_CONFIG_METRICS_SECTION "Metrics"
+#define BT_CONFIG_METRICS_SALT_256BIT "Salt256Bit"
+using bluetooth::common::AddressObfuscator;
 constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
 
 static bool use_key_attestation() { return getuid() == AID_BLUETOOTH; }
 
-#define BT_CONFIG_METRICS_SECTION "Metrics"
-#define BT_CONFIG_METRICS_SALT_256BIT "Salt256Bit"
 using bluetooth::BtifKeystore;
-using bluetooth::common::AddressObfuscator;
 
 // TODO(armansito): Find a better way than searching by a hardcoded path.
 #if defined(OS_GENERIC)
@@ -451,12 +451,6 @@ bool btif_config_set_bin(const std::string& section, const std::string& key,
 
   if (length > 0) CHECK(value != NULL);
 
-  size_t max_value = ((size_t)-1);
-  if (((max_value - 1) / 2) < length) {
-    LOG(ERROR) << __func__ << ": length too long";
-    return false;
-  }
-
   char* str = (char*)osi_calloc(length * 2 + 1);
 
   for (size_t i = 0; i < length; ++i) {
@@ -652,7 +646,7 @@ static std::string hash_file(const char* filename) {
   uint8_t hash[SHA256_DIGEST_LENGTH];
   SHA256_CTX sha256;
   SHA256_Init(&sha256);
-  std::array<std::byte, kBufferSize> buffer;
+  std::array<unsigned char, kBufferSize> buffer;
   int bytes_read = 0;
   while ((bytes_read = fread(buffer.data(), 1, buffer.size(), fp))) {
     SHA256_Update(&sha256, buffer.data(), bytes_read);
