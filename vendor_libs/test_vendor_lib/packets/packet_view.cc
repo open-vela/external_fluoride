@@ -24,7 +24,8 @@ namespace test_vendor_lib {
 namespace packets {
 
 template <bool little_endian>
-PacketView<little_endian>::PacketView(const std::forward_list<class View> fragments)
+PacketView<little_endian>::PacketView(
+    const std::forward_list<class View> fragments)
     : fragments_(fragments), length_(0) {
   for (auto fragment : fragments_) {
     length_ += fragment.size();
@@ -32,7 +33,8 @@ PacketView<little_endian>::PacketView(const std::forward_list<class View> fragme
 }
 
 template <bool little_endian>
-PacketView<little_endian>::PacketView(std::shared_ptr<std::vector<uint8_t>> packet)
+PacketView<little_endian>::PacketView(
+    std::shared_ptr<std::vector<uint8_t>> packet)
     : fragments_({View(packet, 0, packet->size())}), length_(packet->size()) {}
 
 template <bool little_endian>
@@ -69,7 +71,8 @@ size_t PacketView<little_endian>::size() const {
 }
 
 template <bool little_endian>
-std::forward_list<View> PacketView<little_endian>::SubViewList(size_t begin, size_t end) const {
+std::forward_list<View> PacketView<little_endian>::SubViewList(
+    size_t begin, size_t end) const {
   CHECK(begin <= end) << "Begin " << begin << " is past end";
   CHECK(end <= length_) << "End " << end << " is too large";
   std::forward_list<View> view_list;
@@ -79,7 +82,8 @@ std::forward_list<View> PacketView<little_endian>::SubViewList(size_t begin, siz
     if (begin >= fragment.size()) {
       begin -= fragment.size();
     } else {
-      View view(fragment, begin, begin + std::min(length, fragment.size() - begin));
+      View view(fragment, begin,
+                begin + std::min(length, fragment.size() - begin));
       length -= view.size();
       it = view_list.insert_after(it, view);
       begin = 0;
@@ -89,12 +93,14 @@ std::forward_list<View> PacketView<little_endian>::SubViewList(size_t begin, siz
 }
 
 template <bool little_endian>
-PacketView<true> PacketView<little_endian>::SubViewLittleEndian(size_t begin, size_t end) const {
+PacketView<true> PacketView<little_endian>::SubViewLittleEndian(
+    size_t begin, size_t end) const {
   return PacketView<true>(SubViewList(begin, end));
 }
 
 template <bool little_endian>
-PacketView<false> PacketView<little_endian>::SubViewBigEndian(size_t begin, size_t end) const {
+PacketView<false> PacketView<little_endian>::SubViewBigEndian(
+    size_t begin, size_t end) const {
   return PacketView<false>(SubViewList(begin, end));
 }
 

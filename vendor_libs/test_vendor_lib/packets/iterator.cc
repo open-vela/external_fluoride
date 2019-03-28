@@ -92,7 +92,8 @@ Iterator<little_endian>& Iterator<little_endian>::operator--() {
 }
 
 template <bool little_endian>
-Iterator<little_endian>& Iterator<little_endian>::operator=(const Iterator<little_endian>& itr) {
+Iterator<little_endian>& Iterator<little_endian>::operator=(
+    const Iterator<little_endian>& itr) {
   data_ = itr.data_;
   index_ = itr.index_;
 
@@ -100,38 +101,45 @@ Iterator<little_endian>& Iterator<little_endian>::operator=(const Iterator<littl
 }
 
 template <bool little_endian>
-bool Iterator<little_endian>::operator==(const Iterator<little_endian>& itr) const {
+bool Iterator<little_endian>::operator==(
+    const Iterator<little_endian>& itr) const {
   return index_ == itr.index_;
 }
 
 template <bool little_endian>
-bool Iterator<little_endian>::operator!=(const Iterator<little_endian>& itr) const {
+bool Iterator<little_endian>::operator!=(
+    const Iterator<little_endian>& itr) const {
   return !(*this == itr);
 }
 
 template <bool little_endian>
-bool Iterator<little_endian>::operator<(const Iterator<little_endian>& itr) const {
+bool Iterator<little_endian>::operator<(
+    const Iterator<little_endian>& itr) const {
   return index_ < itr.index_;
 }
 
 template <bool little_endian>
-bool Iterator<little_endian>::operator>(const Iterator<little_endian>& itr) const {
+bool Iterator<little_endian>::operator>(
+    const Iterator<little_endian>& itr) const {
   return index_ > itr.index_;
 }
 
 template <bool little_endian>
-bool Iterator<little_endian>::operator<=(const Iterator<little_endian>& itr) const {
+bool Iterator<little_endian>::operator<=(
+    const Iterator<little_endian>& itr) const {
   return index_ <= itr.index_;
 }
 
 template <bool little_endian>
-bool Iterator<little_endian>::operator>=(const Iterator<little_endian>& itr) const {
+bool Iterator<little_endian>::operator>=(
+    const Iterator<little_endian>& itr) const {
   return index_ >= itr.index_;
 }
 
 template <bool little_endian>
 uint8_t Iterator<little_endian>::operator*() const {
-  CHECK(index_ < length_) << "Index " << index_ << " out of bounds: " << length_;
+  CHECK(index_ < length_) << "Index " << index_
+                          << " out of bounds: " << length_;
   size_t index = index_;
 
   for (auto view : data_) {
