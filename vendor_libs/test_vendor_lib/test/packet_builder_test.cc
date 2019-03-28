@@ -24,8 +24,9 @@ using std::vector;
 
 namespace {
 vector<uint8_t> count_all = {
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
+    0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
 };
 
 vector<uint8_t> count_1 = {
@@ -39,7 +40,8 @@ vector<uint8_t> count_2 = {
 };
 
 vector<uint8_t> count_3 = {
-    0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
+    0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
 };
 }  // namespace
 
@@ -49,23 +51,30 @@ namespace packets {
 template <bool little_endian>
 class EndianBuilder : public PacketBuilder<little_endian> {
  public:
-  EndianBuilder(uint8_t byte, uint16_t two_bytes, uint32_t four_bytes, uint64_t eight_bytes)
-      : byte_(byte), two_bytes_(two_bytes), four_bytes_(four_bytes), eight_bytes_(eight_bytes) {}
+  EndianBuilder(uint8_t byte, uint16_t two_bytes, uint32_t four_bytes,
+                uint64_t eight_bytes)
+      : byte_(byte),
+        two_bytes_(two_bytes),
+        four_bytes_(four_bytes),
+        eight_bytes_(eight_bytes) {}
   ~EndianBuilder() = default;
 
   virtual size_t size() const override {
-    return sizeof(signature_) + sizeof(byte_) + sizeof(two_bytes_) + sizeof(four_bytes_) + sizeof(eight_bytes_);
+    return sizeof(signature_) + sizeof(byte_) + sizeof(two_bytes_) +
+           sizeof(four_bytes_) + sizeof(eight_bytes_);
   }
 
   virtual const std::unique_ptr<std::vector<uint8_t>> FinalPacket() {
-    std::unique_ptr<std::vector<uint8_t>> packet = std::make_unique<std::vector<uint8_t>>();
+    std::unique_ptr<std::vector<uint8_t>> packet =
+        std::make_unique<std::vector<uint8_t>>();
     packet->reserve(size());
     std::back_insert_iterator<std::vector<uint8_t>> it(*packet);
     Serialize(it);
     return packet;
   }
 
-  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(
+      std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     PacketBuilder<little_endian>::insert(signature_, it);
     PacketBuilder<little_endian>::insert(byte_, it);
     PacketBuilder<little_endian>::insert(two_bytes_, it);
@@ -103,19 +112,19 @@ class VectorBuilder : public PacketBuilder<true> {
   }
   ~VectorBuilder() = default;
 
-  virtual size_t size() const override {
-    return vect_.size() * sizeof(T);
-  }
+  virtual size_t size() const override { return vect_.size() * sizeof(T); }
 
   virtual const std::unique_ptr<std::vector<uint8_t>> FinalPacket() {
-    std::unique_ptr<std::vector<uint8_t>> packet = std::make_unique<std::vector<uint8_t>>();
+    std::unique_ptr<std::vector<uint8_t>> packet =
+        std::make_unique<std::vector<uint8_t>>();
     packet->reserve(size());
     std::back_insert_iterator<std::vector<uint8_t>> it(*packet);
     Serialize(it);
     return packet;
   }
 
-  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(
+      std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     PacketBuilder<true>::insert_vector(vect_, it);
   }
 
@@ -133,19 +142,19 @@ class InsertElementsBuilder : public PacketBuilder<true> {
   }
   virtual ~InsertElementsBuilder() = default;
 
-  virtual size_t size() const override {
-    return vect_.size() * sizeof(T);
-  }
+  virtual size_t size() const override { return vect_.size() * sizeof(T); }
 
   virtual const std::unique_ptr<std::vector<uint8_t>> FinalPacket() {
-    std::unique_ptr<std::vector<uint8_t>> packet = std::make_unique<std::vector<uint8_t>>();
+    std::unique_ptr<std::vector<uint8_t>> packet =
+        std::make_unique<std::vector<uint8_t>>();
     packet->reserve(size());
     std::back_insert_iterator<std::vector<uint8_t>> it(*packet);
     Serialize(it);
     return packet;
   }
 
-  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(
+      std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     for (T elem : vect_) {
       PacketBuilder<true>::insert(elem, it);
     }
@@ -156,8 +165,9 @@ class InsertElementsBuilder : public PacketBuilder<true> {
 };
 
 std::vector<uint64_t> vector_data{
-    0x7060504030201000, 0x7161514131211101, 0x7262524232221202, 0x7363534333231303, 0x7464544434241404,
-    0x7565554535251505, 0x7666564636261606, 0x7767574737271707, 0x7868584838281808,
+    0x7060504030201000, 0x7161514131211101, 0x7262524232221202,
+    0x7363534333231303, 0x7464544434241404, 0x7565554535251505,
+    0x7666564636261606, 0x7767574737271707, 0x7868584838281808,
 };
 
 template <typename T>
@@ -167,8 +177,10 @@ class VectorBuilderTest : public ::testing::Test {
   ~VectorBuilderTest() = default;
 
   void SetUp() {
-    packet_1_ = std::shared_ptr<VectorBuilder<T>>(new VectorBuilder<T>(vector_data));
-    packet_2_ = std::shared_ptr<InsertElementsBuilder<T>>(new InsertElementsBuilder<T>(vector_data));
+    packet_1_ =
+        std::shared_ptr<VectorBuilder<T>>(new VectorBuilder<T>(vector_data));
+    packet_2_ = std::shared_ptr<InsertElementsBuilder<T>>(
+        new InsertElementsBuilder<T>(vector_data));
   }
 
   void TearDown() {
@@ -180,11 +192,13 @@ class VectorBuilderTest : public ::testing::Test {
   std::shared_ptr<InsertElementsBuilder<T>> packet_2_;
 };
 
-using VectorBaseTypes = ::testing::Types<uint8_t, uint16_t, uint32_t, uint64_t, int8_t, int16_t, int32_t, int64_t>;
+using VectorBaseTypes = ::testing::Types<uint8_t, uint16_t, uint32_t, uint64_t,
+                                         int8_t, int16_t, int32_t, int64_t>;
 TYPED_TEST_CASE(VectorBuilderTest, VectorBaseTypes);
 
 TYPED_TEST(VectorBuilderTest, insertVectorTest) {
-  ASSERT_EQ(*(this->packet_1_->FinalPacket()), *(this->packet_2_->FinalPacket()));
+  ASSERT_EQ(*(this->packet_1_->FinalPacket()),
+            *(this->packet_2_->FinalPacket()));
 }
 
 class NestedBuilder : public PacketBuilder<true> {
@@ -200,19 +214,23 @@ class NestedBuilder : public PacketBuilder<true> {
     return std::unique_ptr<NestedBuilder>(new NestedBuilder(level));
   }
 
-  static std::unique_ptr<NestedBuilder> CreateNested(std::unique_ptr<BasePacketBuilder> payload, uint8_t level) {
-    return std::unique_ptr<NestedBuilder>(new NestedBuilder(std::move(payload), level));
+  static std::unique_ptr<NestedBuilder> CreateNested(
+      std::unique_ptr<BasePacketBuilder> payload, uint8_t level) {
+    return std::unique_ptr<NestedBuilder>(
+        new NestedBuilder(std::move(payload), level));
   }
 
   virtual const std::unique_ptr<std::vector<uint8_t>> FinalPacket() {
-    std::unique_ptr<std::vector<uint8_t>> packet = std::make_unique<std::vector<uint8_t>>();
+    std::unique_ptr<std::vector<uint8_t>> packet =
+        std::make_unique<std::vector<uint8_t>>();
     packet->reserve(size());
     std::back_insert_iterator<std::vector<uint8_t>> it(*packet);
     Serialize(it);
     return packet;
   }
 
-  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(
+      std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     PacketBuilder<true>::insert(level_, it);
     if (payload_) {
       payload_->Serialize(it);
@@ -223,7 +241,8 @@ class NestedBuilder : public PacketBuilder<true> {
   std::unique_ptr<BasePacketBuilder> payload_;
   uint8_t level_;
 
-  NestedBuilder(std::unique_ptr<BasePacketBuilder> inner, uint8_t level) : payload_(std::move(inner)), level_(level) {}
+  NestedBuilder(std::unique_ptr<BasePacketBuilder> inner, uint8_t level)
+      : payload_(std::move(inner)), level_(level) {}
   NestedBuilder(uint8_t level) : level_(level) {}
 };
 
@@ -231,11 +250,16 @@ class BuilderBuilderTest : public ::testing::Test {};
 
 TEST(BuilderBuilderTest, nestingTest) {
   std::unique_ptr<BasePacketBuilder> innermost = NestedBuilder::Create(0);
-  std::unique_ptr<BasePacketBuilder> number_1 = NestedBuilder::CreateNested(std::move(innermost), 1);
-  std::unique_ptr<BasePacketBuilder> number_2 = NestedBuilder::CreateNested(std::move(number_1), 2);
-  std::unique_ptr<BasePacketBuilder> number_3 = NestedBuilder::CreateNested(std::move(number_2), 3);
-  std::unique_ptr<BasePacketBuilder> number_4 = NestedBuilder::CreateNested(std::move(number_3), 4);
-  std::unique_ptr<NestedBuilder> number_5 = NestedBuilder::CreateNested(std::move(number_4), 5);
+  std::unique_ptr<BasePacketBuilder> number_1 =
+      NestedBuilder::CreateNested(std::move(innermost), 1);
+  std::unique_ptr<BasePacketBuilder> number_2 =
+      NestedBuilder::CreateNested(std::move(number_1), 2);
+  std::unique_ptr<BasePacketBuilder> number_3 =
+      NestedBuilder::CreateNested(std::move(number_2), 3);
+  std::unique_ptr<BasePacketBuilder> number_4 =
+      NestedBuilder::CreateNested(std::move(number_3), 4);
+  std::unique_ptr<NestedBuilder> number_5 =
+      NestedBuilder::CreateNested(std::move(number_4), 5);
 
   std::vector<uint8_t> count_down{5, 4, 3, 2, 1, 0};
   ASSERT_EQ(*number_5->FinalPacket(), count_down);
