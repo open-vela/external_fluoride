@@ -19,10 +19,11 @@
 #pragma once
 
 #include <stdint.h>
+#include <memory>
+#include <string>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace system_bt_osi {
+
 // Typedefs to hide protobuf definition to the rest of stack
 
 typedef enum {
@@ -57,40 +58,209 @@ typedef enum {
   DISCONNECT_REASON_NEXT_START_WITHOUT_END_PREVIOUS,
 } disconnect_reason_t;
 
-typedef struct {
-  int64_t audio_duration_ms;
-  int32_t media_timer_min_ms;
-  int32_t media_timer_max_ms;
-  int32_t media_timer_avg_ms;
-  int64_t total_scheduling_count;
-  int32_t buffer_overruns_max_count;
-  int32_t buffer_overruns_total;
-  float buffer_underruns_average;
-  int32_t buffer_underruns_count;
-} A2dpSessionMetrics_t;
+/* Values of A2DP metrics that we care about
+ *
+ *    audio_duration_ms : sum of audio duration (in milliseconds).
+ *    device_class: device class of the paired device.
+ *    media_timer_min_ms : minimum scheduled time (in milliseconds)
+ *                         of the media timer.
+ *    media_timer_max_ms: maximum scheduled time (in milliseconds)
+ *                        of the media timer.
+ *    media_timer_avg_ms: average scheduled time (in milliseconds)
+ *                        of the media timer.
+ *    buffer_overruns_max_count: TODO - not clear what this is.
+ *    buffer_overruns_total : number of times the media buffer with
+ *                            audio data has overrun
+ *    buffer_underruns_average: TODO - not clear what this is.
+ *    buffer_underruns_count: number of times there was no enough
+ *                            audio data to add to the media buffer.
+ * NOTE: Negative values are invalid
+*/
+class A2dpSessionMetrics {
+ public:
+  A2dpSessionMetrics() {}
 
-void metrics_log_pair_event(uint32_t disconnect_reason, uint64_t timestamp_ms,
+  /*
+   * Update the metrics value in the current metrics object using the metrics
+   * objects supplied
+   */
+  void Update(const A2dpSessionMetrics& metrics);
+
+  /*
+   * Compare whether two metrics objects are equal
+   */
+  bool operator==(const A2dpSessionMetrics& rhs) const;
+
+  /*
+   * Initialize all values to -1 which is invalid in order to make a distinction
+   * between 0 and invalid values
+   */
+  int64_t audio_duration_ms = -1;
+  int32_t media_timer_min_ms = -1;
+  int32_t media_timer_max_ms = -1;
+  int32_t media_timer_avg_ms = -1;
+  int64_t total_scheduling_count = -1;
+  int32_t buffer_overruns_max_count = -1;
+  int32_t buffer_overruns_total = -1;
+  float buffer_underruns_average = -1;
+  int32_t buffer_underruns_count = -1;
+};
+
+class BluetoothMetricsLogger {
+ public:
+  static BluetoothMetricsLogger* GetInstance() {
+    static BluetoothMetricsLogger* instance = new BluetoothMetricsLogger();
+    return instance;
+  }
+
+  /*
+   * Record a pairing event
+   *
+   * Parameters:
+   *    timestamp_ms: Unix epoch time in milliseconds
+   *    device_class: class of remote device
+   *    device_type: type of remote device
+   *    disconnect_reason: HCI reason for pairing disconnection.
+   *                       See: stack/include/hcidefs.h
+   */
+  void LogPairEvent(uint32_t disconnect_reason, uint64_t timestamp_ms,
                     uint32_t device_class, device_type_t device_type);
 
-void metrics_log_wake_event(wake_event_type_t type, const char* requestor,
-                    const char* name, uint64_t timestamp_ms);
+  /*
+   * Record a wake event
+   *
+   * Parameters:
+   *    timestamp_ms: Unix epoch time in milliseconds
+   *    type: whether it was acquired or released
+   *    requestor: if provided is the service requesting the wake lock
+   *    name: the name of the wake lock held
+   */
+  void LogWakeEvent(wake_event_type_t type, const std::string& requestor,
+                    const std::string& name, uint64_t timestamp_ms);
 
-void metrics_log_scan_event(bool start, const char* initator, scan_tech_t type,
+  /*
+   * Record a scan event
+   *
+   * Parameters
+   *    timestamp_ms : Unix epoch time in milliseconds
+   *    start : true if this is the beginning of the scan
+   *    initiator: a unique ID identifying the app starting the scan
+   *    type: whether the scan reports BR/EDR, LE, or both.
+   *    results: number of results to be reported.
+   */
+  void LogScanEvent(bool start, const std::string& initator, scan_tech_t type,
                     uint32_t results, uint64_t timestamp_ms);
 
-void metrics_log_bluetooth_session_start(connection_tech_t connection_tech_type,
+  /*
+   * Start logging a Bluetooth session
+   *
+   * A Bluetooth session is defined a a connection between this device and
+   * another remote device which may include multiple profiles and protocols
+   *
+   * Only one Bluetooth session can exist at one time. Calling this method twice
+   * without LogBluetoothSessionEnd will result in logging a premature end of
+   * current Bluetooth session
+   *
+   * Parameters:
+   *    connection_tech_type : type of connection technology
+   *    timestamp_ms : the timestamp for session start, 0 means now
+   *
+   */
+  void LogBluetoothSessionStart(connection_tech_t connection_tech_type,
                                 uint64_t timestamp_ms);
 
-void metrics_log_bluetooth_session_end(disconnect_reason_t disconnect_reason,
-  uint64_t timestamp_ms);
+  /*
+   * Stop logging a Bluetooth session and pushes it to the log queue
+   *
+   * If no Bluetooth session exist, this method exits immediately
+   *
+   * Parameters:
+   *    disconnect_reason : A string representation of disconnect reason
+   *    timestamp_ms : the timestamp of session end, 0 means now
+   *
+   */
+  void LogBluetoothSessionEnd(disconnect_reason_t disconnect_reason,
+                              uint64_t timestamp_ms);
 
-void metrics_log_bluetooth_session_device_info(uint32_t device_class,
+  /*
+   * Log information about remote device in a current Bluetooth session
+   *
+   * If a Bluetooth session does not exist, create one with default parameter
+   * and timestamp now
+   *
+   * Parameters:
+   *    device_class : device_class defined in btm_api_types.h
+   *    device_type : type of remote device
+   */
+  void LogBluetoothSessionDeviceInfo(uint32_t device_class,
                                      device_type_t device_type);
 
-void metrics_log_a2dp_session(A2dpSessionMetrics_t* metrics);
+  /*
+   * Log A2DP Audio Session Information
+   *
+   * - Repeated calls to this method will override previous metrics if in the
+   *   same Bluetooth connection
+   * - If a Bluetooth session does not exist, create one with default parameter
+   *   and timestamp now
+   *
+   * Parameters:
+   *    a2dp_session_metrics - pointer to struct holding a2dp stats
+   *
+   */
+  void LogA2dpSession(const A2dpSessionMetrics& a2dp_session_metrics);
 
-void metrics_write_base64(int fd, bool clear);
+  /*
+   * Writes the metrics, in base64 protobuf format, into the descriptor FD
+   * If CLEAR is true, metrics events are cleared afterwards.
+   */
+  void WriteBase64(int fd, bool clear);
+  void WriteBase64String(std::string* serialized, bool clear);
+  void WriteString(std::string* serialized, bool clear);
 
-#ifdef __cplusplus
+  /*
+   * Reset the metrics logger by cleaning up its staging queues and existing
+   * protobuf objects.
+   */
+  void Reset();
+
+  /*
+   * Maximum number of log entries for each session or event
+   */
+  static const size_t kMaxNumBluetoothSession = 50;
+  static const size_t kMaxNumPairEvent = 50;
+  static const size_t kMaxNumWakeEvent = 1000;
+  static const size_t kMaxNumScanEvent = 50;
+
+ private:
+  BluetoothMetricsLogger();
+
+  /*
+   * When a Bluetooth session is on and the user initiates a metrics dump, we
+   * need to be able to upload whatever we have first. This method breaks the
+   * ongoing Bluetooth session into two sessions with the previous one labeled
+   * as "METRICS_DUMP" for the disconnect reason.
+   */
+  void CutoffSession();
+
+  /*
+   * Build the internal metrics object using information gathered
+   */
+  void Build();
+
+  /*
+   * Reset objects related to current Bluetooth session
+   */
+  void ResetSession();
+
+  /*
+   * Reset the underlining BluetoothLog object
+   */
+  void ResetLog();
+
+  /*
+   * PIMPL style implementation to hide internal dependencies
+   */
+  struct impl;
+  std::unique_ptr<impl> const pimpl_;
+};
 }
-#endif
