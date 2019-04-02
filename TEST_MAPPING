@@ -50,9 +50,7 @@
     },
     {
       "name" : "net_test_types"
-    }
-  ],
-  "presubmit" : [
+    },
     {
       "name" : "bluetooth_test_common",
       "host" : true
