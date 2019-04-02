@@ -80,10 +80,6 @@ cc_library {
             ]
         }
     },
-    srcs: [
-        ":BluetoothCommonSources",
-        ":BluetoothPacketSources",
-    ]
 }
 
 cc_test {
@@ -101,10 +97,6 @@ cc_test {
             ]
         }
     },
-    srcs: [
-        ":BluetoothCommonTestSources",
-        ":BluetoothPacketTestSources",
-    ],
     static_libs : [
         "libbluetooth_gd",
     ],
