@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "bdaddr.h"
 #include "device_features.h"
 #include "hci_layer.h"
 #include "hci_packet_factory.h"
@@ -32,7 +31,7 @@ static const char CONTROLLER_MODULE[] = "controller_module";
 typedef struct controller_t {
   bool (*get_is_ready)(void);
 
-  const bt_bdaddr_t* (*get_address)(void);
+  const RawAddress* (*get_address)(void);
   const bt_version_t* (*get_bt_version)(void);
 
   const bt_device_features_t* (*get_features_classic)(int index);
@@ -56,6 +55,7 @@ typedef struct controller_t {
   bool (*supports_ble_packet_extension)(void);
   bool (*supports_ble_connection_parameters_request)(void);
   bool (*supports_ble_privacy)(void);
+  bool (*supports_ble_set_privacy_mode)(void);
   bool (*supports_ble_2m_phy)(void);
   bool (*supports_ble_coded_phy)(void);
   bool (*supports_ble_extended_advertising)(void);
@@ -72,6 +72,7 @@ typedef struct controller_t {
   uint16_t (*get_acl_packet_size_ble)(void);
 
   uint16_t (*get_ble_default_data_packet_length)(void);
+  uint16_t (*get_ble_maximum_tx_data_length)(void);
   uint16_t (*get_ble_maxium_advertising_data_length)(void);
   uint8_t (*get_ble_number_of_supported_advertising_sets)(void);
 
