@@ -26,6 +26,8 @@
 #include "a2dp_vendor.h"
 #include "a2dp_vendor_aptx.h"
 #include "bt_common.h"
+#include "common/scoped_scs_exit.h"
+#include "common/time_util.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -52,6 +54,25 @@ typedef int (*tAPTX_ENCODER_SIZEOF_PARAMS)(void);
 static tAPTX_ENCODER_INIT aptx_encoder_init_func;
 static tAPTX_ENCODER_ENCODE_STEREO aptx_encoder_encode_stereo_func;
 static tAPTX_ENCODER_SIZEOF_PARAMS aptx_encoder_sizeof_params_func;
+
+__attribute__((no_sanitize("shadow-call-stack")))
+static int aptx_encoder_init(void* state, short endian) {
+  ScopedSCSExit x;
+  return aptx_encoder_init_func(state, endian);
+}
+
+__attribute__((no_sanitize("shadow-call-stack")))
+static int aptx_encoder_encode_stereo(void* state, void* pcmL, void* pcmR,
+                                      void* buffer) {
+  ScopedSCSExit x;
+  return aptx_encoder_encode_stereo_func(state, pcmL, pcmR, buffer);
+}
+
+__attribute__((no_sanitize("shadow-call-stack")))
+static int aptx_encoder_sizeof_params() {
+  ScopedSCSExit x;
+  return aptx_encoder_sizeof_params_func();
+}
 
 // offset
 #if (BTA_AV_CO_CP_SCMS_T == TRUE)
@@ -174,7 +195,8 @@ void a2dp_vendor_aptx_encoder_init(
     a2dp_source_enqueue_callback_t enqueue_callback) {
   memset(&a2dp_aptx_encoder_cb, 0, sizeof(a2dp_aptx_encoder_cb));
 
-  a2dp_aptx_encoder_cb.stats.session_start_us = time_get_os_boottime_us();
+  a2dp_aptx_encoder_cb.stats.session_start_us =
+      bluetooth::common::time_get_os_boottime_us();
 
   a2dp_aptx_encoder_cb.read_callback = read_callback;
   a2dp_aptx_encoder_cb.enqueue_callback = enqueue_callback;
@@ -190,9 +212,9 @@ void a2dp_vendor_aptx_encoder_init(
 #endif
 
   a2dp_aptx_encoder_cb.aptx_encoder_state =
-      osi_malloc(aptx_encoder_sizeof_params_func());
+      osi_malloc(aptx_encoder_sizeof_params());
   if (a2dp_aptx_encoder_cb.aptx_encoder_state != NULL) {
-    aptx_encoder_init_func(a2dp_aptx_encoder_cb.aptx_encoder_state, 0);
+    aptx_encoder_init(a2dp_aptx_encoder_cb.aptx_encoder_state, 0);
   } else {
     LOG_ERROR(LOG_TAG, "%s: Cannot allocate aptX encoder state", __func__);
     // TODO: Return an error?
@@ -369,7 +391,7 @@ void a2dp_vendor_aptx_feeding_flush(void) {
   aptx_init_framing_params(&a2dp_aptx_encoder_cb.framing_params);
 }
 
-period_ms_t a2dp_vendor_aptx_get_encoder_interval_ms(void) {
+uint64_t a2dp_vendor_aptx_get_encoder_interval_ms(void) {
   return a2dp_aptx_encoder_cb.framing_params.sleep_time_ns / (1000 * 1000);
 }
 
@@ -464,8 +486,8 @@ static size_t aptx_encode_16bit(tAPTX_FRAMING_PARAMS* framing_params,
       pcmR[i] = (uint16_t) * (data16_in + ((2 * j) + 1));
     }
 
-    aptx_encoder_encode_stereo_func(a2dp_aptx_encoder_cb.aptx_encoder_state,
-                                    &pcmL, &pcmR, &encoded_sample);
+    aptx_encoder_encode_stereo(a2dp_aptx_encoder_cb.aptx_encoder_state, &pcmL,
+                               &pcmR, &encoded_sample);
 
     data_out[*data_out_index + 0] = (uint8_t)((encoded_sample[0] >> 8) & 0xff);
     data_out[*data_out_index + 1] = (uint8_t)((encoded_sample[0] >> 0) & 0xff);
@@ -480,7 +502,7 @@ static size_t aptx_encode_16bit(tAPTX_FRAMING_PARAMS* framing_params,
   return pcm_bytes_encoded;
 }
 
-period_ms_t A2dpCodecConfigAptx::encoderIntervalMs() const {
+uint64_t A2dpCodecConfigAptx::encoderIntervalMs() const {
   return a2dp_vendor_aptx_get_encoder_interval_ms();
 }
 
