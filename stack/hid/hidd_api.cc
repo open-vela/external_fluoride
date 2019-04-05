@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,7 +34,9 @@
 #include "hidd_int.h"
 #include "hiddefs.h"
 
+#if HID_DYNAMIC_MEMORY == FALSE
 tHID_DEV_CTB hd_cb;
+#endif
 
 /*******************************************************************************
  *
@@ -293,13 +295,7 @@ tHID_STATUS HID_DevAddRecord(uint32_t handle, char* p_name, char* p_description,
       uint8_t* p_buf;
       uint8_t seq_len = 4 + desc_len;
 
-      if (desc_len > HIDD_APP_DESCRIPTOR_LEN) {
-        HIDD_TRACE_ERROR("%s: descriptor length = %d, larger than max %d",
-                         __func__, desc_len, HIDD_APP_DESCRIPTOR_LEN);
-        return HID_ERR_NOT_REGISTERED;
-      };
-
-      p_buf = (uint8_t*)osi_malloc(HIDD_APP_DESCRIPTOR_LEN + 6);
+      p_buf = (uint8_t*)osi_malloc(2048);
 
       if (p_buf == NULL) {
         HIDD_TRACE_ERROR("%s: Buffer allocation failure for size = 2048 ",
@@ -428,9 +424,9 @@ tHID_STATUS HID_DevVirtualCableUnplug(void) {
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-tHID_STATUS HID_DevPlugDevice(const RawAddress& addr) {
+tHID_STATUS HID_DevPlugDevice(BD_ADDR addr) {
   hd_cb.device.in_use = TRUE;
-  hd_cb.device.addr = addr;
+  memcpy(hd_cb.device.addr, addr, sizeof(BD_ADDR));
 
   return HID_SUCCESS;
 }
@@ -444,8 +440,8 @@ tHID_STATUS HID_DevPlugDevice(const RawAddress& addr) {
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-tHID_STATUS HID_DevUnplugDevice(const RawAddress& addr) {
-  if (hd_cb.device.addr == addr) {
+tHID_STATUS HID_DevUnplugDevice(BD_ADDR addr) {
+  if (!memcmp(hd_cb.device.addr, addr, sizeof(BD_ADDR))) {
     hd_cb.device.in_use = FALSE;
     hd_cb.device.conn.conn_state = HID_CONN_STATE_UNUSED;
     hd_cb.device.conn.ctrl_cid = 0;
@@ -570,11 +566,11 @@ tHID_STATUS HID_DevReportError(uint8_t error) {
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-tHID_STATUS HID_DevGetDevice(RawAddress* addr) {
+tHID_STATUS HID_DevGetDevice(BD_ADDR* addr) {
   HIDD_TRACE_API("%s", __func__);
 
   if (hd_cb.device.in_use) {
-    *addr = hd_cb.device.addr;
+    memcpy(addr, hd_cb.device.addr, sizeof(BD_ADDR));
   } else {
     return HID_ERR_NOT_REGISTERED;
   }
