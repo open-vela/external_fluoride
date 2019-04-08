@@ -77,13 +77,8 @@ cc_library {
         linux: {
             srcs: [
                 ":BluetoothOsSources_linux_generic",
-            ],
-        },
-        host: {
-            srcs: [
-                ":BluetoothHalSources_hci_rootcanal",
-            ],
-        },
+            ]
+        }
     },
     srcs: [
         ":BluetoothCommonSources",
@@ -103,13 +98,8 @@ cc_test {
         linux: {
             srcs: [
                 ":BluetoothOsTestSources_linux_generic",
-            ],
-        },
-        host: {
-            srcs: [
-                ":BluetoothHalTestSources_hci_rootcanal",
-            ],
-        },
+            ]
+        }
     },
     srcs: [
         ":BluetoothCommonTestSources",
