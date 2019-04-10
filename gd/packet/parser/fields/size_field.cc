@@ -34,10 +34,9 @@ std::string SizeField::GetType() const {
 }
 
 void SizeField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) const {
-  s << "protected:";
+  // Write the Getter Function Definiton
   s << GetType();
   s << " Get" << GetName() << "() const {";
-  s << "ASSERT(was_validated_);";
 
   // Write the Getter Function Body
   int num_leading_bits = 0;
@@ -62,7 +61,6 @@ void SizeField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) c
   if (num_leading_bits == 0 && util::RoundSizeUp(size_) == size_) {
     s << "return it.extract<" << GetType() << ">();";
     s << "}\n";
-    s << "public:\n";
     return;
   }
 
@@ -94,7 +92,6 @@ void SizeField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) c
     s << "return value;";
   }
   s << "}\n";
-  s << "public:\n";
 }
 
 bool SizeField::GenBuilderParameter(std::ostream&) const {
