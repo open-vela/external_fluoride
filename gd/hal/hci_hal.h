@@ -25,16 +25,17 @@ using HciPacket = std::vector<uint8_t>;
 
 enum class Status : int32_t { SUCCESS, TRANSPORT_ERROR, INITIALIZATION_ERROR, UNKNOWN };
 
-// Mirrors hardware/interfaces/bluetooth/1.0/IBluetoothHciCallbacks.hal in Android, but moved initializationComplete
-// callback to BluetoothInitializationCompleteCallback
-
+// Mirrors hardware/interfaces/bluetooth/1.0/IBluetoothHciCallbacks.hal in Android
 // The interface from the Bluetooth Controller to the stack
 class BluetoothHciHalCallbacks {
  public:
   virtual ~BluetoothHciHalCallbacks() = default;
 
-  // This function is invoked when an HCI event is received from the
-  // Bluetooth controller to be forwarded to the Bluetooth stack
+  // Invoked when the Bluetooth controller initialization has been completed
+  virtual void initializationComplete(Status status) = 0;
+
+  // This function is invoked when an HCI event is received from the Bluetooth controller to be forwarded to the
+  // Bluetooth stack
   // @param event is the HCI event to be sent to the Bluetooth stack
   virtual void hciEventReceived(HciPacket event) = 0;
 
@@ -45,15 +46,6 @@ class BluetoothHciHalCallbacks {
   // Send a SCO data packet form the controller to the host
   // @param data the SCO HCI packet to be passed to the host stack
   virtual void scoDataReceived(HciPacket data) = 0;
-};
-
-// Callback for BluetoothHciHal::initialize()
-class BluetoothInitializationCompleteCallback {
- public:
-  virtual ~BluetoothInitializationCompleteCallback() = default;
-
-  // Invoked when the Bluetooth controller initialization has been completed
-  virtual void initializationComplete(Status status) = 0;
 };
 
 // Mirrors hardware/interfaces/bluetooth/1.0/IBluetoothHci.hal in Android
@@ -73,25 +65,15 @@ class BluetoothHciHal {
   // required to communicate with the Bluetooth hardware in the
   // device.
   //
-  // The |InitializationCompleteCallback| callback must be invoked in response
+  // The |oninitializationComplete| callback must be invoked in response
   // to this function to indicate success before any other function
   // (sendHciCommand, sendAclData, * sendScoData) is invoked on this
   // interface.
   //
-  // @param callback implements BluetoothInitializationCompleteCallback which will
-  //    receive callbacks when incoming HCI initialization is complete
-  virtual void initialize(BluetoothInitializationCompleteCallback* callback) = 0;
-
-  // Register the callback for incoming packets. All incoming packets are dropped before
-  // this callback is registered. Callback can only be registered once, but will be reset
-  // after close().
-  //
-  // Call this function before initialize() to guarantee all incoming packets are received.
-  //
-  // @param callback implements BluetoothHciHalCallbacks which will
+  // @param callback implements IBluetoothHciCallbacks which will
   //    receive callbacks when incoming HCI packets are received
   //    from the controller to be sent to the host.
-  virtual void registerIncomingPacketCallback(BluetoothHciHalCallbacks* callback) = 0;
+  virtual void initialize(BluetoothHciHalCallbacks* callback) = 0;
 
   // Send an HCI command (as specified in the Bluetooth Specification
   // V4.2, Vol 2, Part 5, Section 5.4.1) to the Bluetooth controller.
