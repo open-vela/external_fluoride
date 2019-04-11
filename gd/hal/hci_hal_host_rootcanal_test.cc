@@ -50,15 +50,12 @@ using H4Packet = std::vector<uint8_t>;
 
 std::queue<std::pair<uint8_t, HciPacket>> incoming_packets_queue_;
 
-class TestBluetoothInitializationCompleteCallback : public BluetoothInitializationCompleteCallback {
+class TestBluetoothHciHalCallbacks : public BluetoothHciHalCallbacks {
  public:
   void initializationComplete(Status status) override {
     EXPECT_EQ(status, Status::SUCCESS);
   }
-};
 
-class TestBluetoothHciHalCallbacks : public BluetoothHciHalCallbacks {
- public:
   void hciEventReceived(HciPacket packet) override {
     incoming_packets_queue_.emplace(kH4Event, packet);
   }
@@ -142,8 +139,7 @@ class HciHalRootcanalTest : public ::testing::Test {
     HciHalHostRootcanalConfig::Get()->SetPort(kTestPort);
     fake_server_ = new FakeRootcanalDesktopHciServer;
     hal_ = GetBluetoothHciHal();
-    hal_->initialize(&init_callback_);
-    hal_->registerIncomingPacketCallback(&callbacks_);
+    hal_->initialize(&callbacks_);
     fake_server_socket_ = fake_server_->Accept();  // accept() after client is connected to avoid blocking
     std::queue<std::pair<uint8_t, HciPacket>> empty;
     std::swap(incoming_packets_queue_, empty);
@@ -163,7 +159,6 @@ class HciHalRootcanalTest : public ::testing::Test {
 
   FakeRootcanalDesktopHciServer* fake_server_ = nullptr;
   BluetoothHciHal* hal_ = nullptr;
-  TestBluetoothInitializationCompleteCallback init_callback_;
   TestBluetoothHciHalCallbacks callbacks_;
   int fake_server_socket_ = -1;
 };

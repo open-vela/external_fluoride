@@ -1,19 +1,3 @@
-/*
- * Copyright 2019 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include "hal/hci_hal.h"
 
 #include <chrono>
@@ -27,12 +11,18 @@ namespace {
 
 std::promise<void>* g_promise;
 
-class TestBluetoothInitializationCompleteCallback : public BluetoothInitializationCompleteCallback {
+class TestBluetoothHciHalCallbacks : public BluetoothHciHalCallbacks {
  public:
   void initializationComplete(Status status) override {
     EXPECT_EQ(status, Status::SUCCESS);
     g_promise->set_value();
   }
+
+  void hciEventReceived(HciPacket) override {}
+
+  void aclDataReceived(HciPacket) override {}
+
+  void scoDataReceived(HciPacket) override {}
 };
 
 class HciHalHidlTest : public ::testing::Test {
@@ -40,7 +30,7 @@ class HciHalHidlTest : public ::testing::Test {
   void SetUp() override {
     g_promise = new std::promise<void>;
     hal_ = GetBluetoothHciHal();
-    hal_->initialize(&init_callback_);
+    hal_->initialize(&callbacks_);
   }
 
   void TearDown() override {
@@ -50,7 +40,7 @@ class HciHalHidlTest : public ::testing::Test {
   }
 
   BluetoothHciHal* hal_ = nullptr;
-  TestBluetoothInitializationCompleteCallback init_callback_;
+  TestBluetoothHciHalCallbacks callbacks_;
 };
 
 TEST_F(HciHalHidlTest, init_and_close) {
