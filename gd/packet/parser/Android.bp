@@ -29,8 +29,4 @@ cc_binary_host  {
     "-fuse-ld=ld",
     "-O0",
   ],
-  yacc: {
-    gen_location_hh: true,
-    gen_position_hh: true,
-  },
 }
