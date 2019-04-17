@@ -63,7 +63,6 @@
 %token FIXED "fixed"
 %token RESERVED "reserved"
 %token GROUP "group"
-%token CUSTOM_FIELD "custom_field"
 
 %type<enum_definition> enum_definition
 %type<enumeration_values> enumeration_list
@@ -119,10 +118,6 @@ declaration
     {
       // All actions are handled in group_definition
     }
-  | custom_field_definition
-    {
-      // All actions are handled in custom_field_definition
-    }
 
 enum_definition
   : ENUM IDENTIFIER ':' INTEGER '{' enumeration_list ',' '}'
@@ -168,14 +163,6 @@ group_definition
     {
       decls->AddGroupDef(*$2, $4);
       delete $2;
-    }
-
-custom_field_definition
-  : CUSTOM_FIELD IDENTIFIER ':' INTEGER STRING
-    {
-      decls->AddCustomFieldDef(*$2, CustomFieldDef(*$2, *$5, $4));
-      delete $2;
-      delete $5;
     }
 
 packet_definition
@@ -430,8 +417,6 @@ special_field_definition
       std::cerr << "Special field " << *$1 << " : " << *$3 << "\n";
       if (auto enum_def = decls->GetEnumDef(*$3)) {
           $$ = new EnumField(*$1, *enum_def, "", LOC);
-      } else if (auto custom_field_def = decls->GetCustomFieldDef(*$3)) {
-          $$ = custom_field_def->GetCustomField(*$1, LOC);
       } else {
           ERRORLOC(LOC) << "No type with this name\n";
       }
