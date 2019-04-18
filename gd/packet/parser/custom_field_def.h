@@ -26,13 +26,11 @@ class CustomFieldDef : public TypeDef {
  public:
   CustomFieldDef(std::string name, std::string include, int size);
 
-  virtual PacketField* GetNewField(const std::string& name, ParseLocation loc) const override;
+  CustomField* GetCustomField(std::string name, ParseLocation loc) const;
 
-  virtual Type GetDefinitionType() const override;
+  void GenInclude(std::ostream& s) const;
 
-  virtual void GenInclude(std::ostream& s) const;
-
-  virtual void GenUsing(std::ostream& s) const;
+  void GenUsing(std::ostream& s) const;
 
   const std::string include_;
 };
