@@ -25,12 +25,8 @@ CustomFieldDef::CustomFieldDef(std::string name, std::string include, int size)
   }
 }
 
-PacketField* CustomFieldDef::GetNewField(const std::string& name, ParseLocation loc) const {
+CustomField* CustomFieldDef::GetCustomField(std::string name, ParseLocation loc) const {
   return new CustomField(name, name_, size_, loc);
-}
-
-TypeDef::Type CustomFieldDef::GetDefinitionType() const {
-  return TypeDef::Type::CUSTOM;
 }
 
 void CustomFieldDef::GenInclude(std::ostream& s) const {

@@ -17,8 +17,6 @@
 #pragma once
 
 #include "fields/body_field.h"
-#include "fields/checksum_field.h"
-#include "fields/checksum_start_field.h"
 #include "fields/custom_field.h"
 #include "fields/enum_field.h"
 #include "fields/fixed_field.h"
