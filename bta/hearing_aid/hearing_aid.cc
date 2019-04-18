@@ -1389,8 +1389,6 @@ class HearingAidImpl : public HearingAid {
     LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
               << ", playback_started=" << hearingDevice->playback_started;
 
-    hearingDevice->playback_started = false;
-
     if (hearingDevice->connecting_actively) {
       // cancel pending direct connect
       BTA_GATTC_CancelOpen(gatt_if, address, true);
@@ -1553,9 +1551,9 @@ class HearingAidImpl : public HearingAid {
       // Send the data packet
       LOG(INFO) << __func__ << ": Send State Change. device=" << device->address
                 << ", status=" << loghex(payload[1]);
-      BtaGattQueue::WriteCharacteristic(
-          device->conn_id, device->audio_control_point_handle, payload,
-          GATT_WRITE_NO_RSP, nullptr, nullptr);
+      BtaGattQueue::WriteCharacteristic(device->conn_id,
+                                        device->audio_control_point_handle,
+                                        payload, GATT_WRITE, nullptr, nullptr);
     }
   }
 
