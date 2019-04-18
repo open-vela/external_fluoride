@@ -46,7 +46,7 @@ base::MessageLoop* get_main_message_loop() { return message_loop_; }
 
 class AlarmTest : public AlarmTestHarness {
  protected:
-  void SetUp() override {
+  virtual void SetUp() {
     AlarmTestHarness::SetUp();
     cb_counter = 0;
     cb_misordered_counter = 0;
@@ -54,7 +54,7 @@ class AlarmTest : public AlarmTestHarness {
     semaphore = semaphore_new(0);
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     semaphore_free(semaphore);
     AlarmTestHarness::TearDown();
   }
@@ -341,6 +341,20 @@ TEST_F(AlarmTest, test_callback_free_race) {
     alarm_t* alarm = alarm_new(alarm_name.c_str());
     alarm_set(alarm, 0, cb, NULL);
     alarm_free(alarm);
+  }
+  alarm_cleanup();
+}
+
+static void remove_cb(void* data) {
+  alarm_free((alarm_t*)data);
+  semaphore_post(semaphore);
+}
+
+TEST_F(AlarmTest, test_delete_during_callback) {
+  for (int i = 0; i < 1000; ++i) {
+    alarm_t* alarm = alarm_new("alarm_test.test_delete_during_callback");
+    alarm_set(alarm, 0, remove_cb, alarm);
+    semaphore_wait(semaphore);
   }
   alarm_cleanup();
 }
