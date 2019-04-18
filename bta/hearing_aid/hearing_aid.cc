@@ -220,7 +220,7 @@ class HearingAidImpl : public HearingAid {
   bool audio_running;
 
  public:
-  virtual ~HearingAidImpl() = default;
+  ~HearingAidImpl() override = default;
 
   HearingAidImpl(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                  Closure initCb)
@@ -1388,6 +1388,8 @@ class HearingAidImpl : public HearingAid {
 
     LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
               << ", playback_started=" << hearingDevice->playback_started;
+
+    hearingDevice->playback_started = false;
 
     if (hearingDevice->connecting_actively) {
       // cancel pending direct connect
