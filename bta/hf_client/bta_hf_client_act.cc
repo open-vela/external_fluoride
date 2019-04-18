@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright 2003-2012 Broadcom Corporation
+ *  Copyright (C) 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -98,13 +98,13 @@ void bta_hf_client_start_open(tBTA_HF_CLIENT_DATA* p_data) {
 
   /* store parameters */
   if (p_data) {
-    client_cb->peer_addr = p_data->api_open.bd_addr;
+    bdcpy(client_cb->peer_addr, p_data->api_open.bd_addr);
     client_cb->cli_sec_mask = p_data->api_open.sec_mask;
   }
 
   /* Check if RFCOMM has any incoming connection to avoid collision. */
-  RawAddress pending_bd_addr = RawAddress::kEmpty;
-  if (PORT_IsOpening(&pending_bd_addr)) {
+  BD_ADDR pending_bd_addr;
+  if (PORT_IsOpening(pending_bd_addr)) {
     /* Let the incoming connection goes through.                        */
     /* Issue collision for now.                                         */
     /* We will decide what to do when we find incoming connection later.*/
@@ -164,24 +164,28 @@ void bta_hf_client_rfc_acp_open(tBTA_HF_CLIENT_DATA* p_data) {
                      p_data->hdr.layer_specific);
     return;
   }
+
+  uint16_t lcid;
+  BD_ADDR dev_addr;
+  int status;
+
   /* set role */
   client_cb->role = BTA_HF_CLIENT_ACP;
 
   APPL_TRACE_DEBUG("%s: conn_handle %d", __func__, client_cb->conn_handle);
 
   /* get bd addr of peer */
-  uint16_t lcid = 0;
-  RawAddress dev_addr = RawAddress::kEmpty;
-  int status = PORT_CheckConnection(client_cb->conn_handle, &dev_addr, &lcid);
-  if (status != PORT_SUCCESS) {
-    LOG(ERROR) << __func__ << ": PORT_CheckConnection returned " << status;
+  if (PORT_SUCCESS != (status = PORT_CheckConnection(client_cb->conn_handle,
+                                                     dev_addr, &lcid))) {
+    APPL_TRACE_DEBUG("%s: error PORT_CheckConnection returned status %d",
+                     __func__, status);
   }
 
   /* Collision Handling */
   if (alarm_is_scheduled(client_cb->collision_timer)) {
     alarm_cancel(client_cb->collision_timer);
 
-    if (dev_addr == client_cb->peer_addr) {
+    if (bdcmp(dev_addr, client_cb->peer_addr) == 0) {
       /* If incoming and outgoing device are same, nothing more to do. */
       /* Outgoing conn will be aborted because we have successful incoming conn.
        */
@@ -191,7 +195,7 @@ void bta_hf_client_rfc_acp_open(tBTA_HF_CLIENT_DATA* p_data) {
     }
   }
 
-  client_cb->peer_addr = dev_addr;
+  bdcpy(client_cb->peer_addr, dev_addr);
 
   /* do service discovery to get features */
   bta_hf_client_do_disc(client_cb);
@@ -296,10 +300,10 @@ void bta_hf_client_rfc_close(tBTA_HF_CLIENT_DATA* p_data) {
   /* call close cback */
   tBTA_HF_CLIENT evt;
   memset(&evt, 0, sizeof(evt));
-  evt.conn.bd_addr = client_cb->peer_addr;
+  bdcpy(evt.conn.bd_addr, client_cb->peer_addr);
 
   /* if not deregistering reopen server */
-  if (!bta_hf_client_cb_arr.deregister) {
+  if (bta_hf_client_cb_arr.deregister == false) {
     /* Make sure SCO is shutdown */
     bta_hf_client_sco_shutdown(client_cb);
 
@@ -309,7 +313,7 @@ void bta_hf_client_rfc_close(tBTA_HF_CLIENT_DATA* p_data) {
   else {
     tBTA_HF_CLIENT evt;
     memset(&evt, 0, sizeof(evt));
-    evt.reg.bd_addr = client_cb->peer_addr;
+    bdcpy(evt.reg.bd_addr, client_cb->peer_addr);
     bta_hf_client_app_callback(BTA_HF_CLIENT_DISABLE_EVT, &evt);
   }
 }
@@ -450,7 +454,7 @@ void bta_hf_client_svc_conn_open(tBTA_HF_CLIENT_DATA* p_data) {
     client_cb->svc_conn = true;
 
     /* call callback */
-    evt.conn.bd_addr = client_cb->peer_addr;
+    bdcpy(evt.conn.bd_addr, client_cb->peer_addr);
     evt.conn.peer_feat = client_cb->peer_features;
     evt.conn.chld_feat = client_cb->chld_features;
 
