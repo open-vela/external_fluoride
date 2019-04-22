@@ -34,7 +34,6 @@
 #include "packets/link_layer/inquiry_view.h"
 #include "packets/link_layer/io_capability_view.h"
 #include "packets/link_layer/le_advertisement_view.h"
-#include "packets/link_layer/page_reject_view.h"
 #include "packets/link_layer/page_response_view.h"
 #include "packets/link_layer/page_view.h"
 #include "packets/link_layer/response_view.h"
@@ -55,7 +54,7 @@ static uint8_t GetRssi() {
   return -(rssi);
 }
 
-void LinkLayerController::SendLeLinkLayerPacket(std::shared_ptr<LinkLayerPacketBuilder> packet) {
+void LinkLayerController::SendLELinkLayerPacket(std::shared_ptr<LinkLayerPacketBuilder> packet) {
   if (schedule_task_) {
     schedule_task_(milliseconds(50), [this, packet]() { send_to_remote_(packet, Phy::Type::LOW_ENERGY); });
   } else {
@@ -178,9 +177,6 @@ void LinkLayerController::IncomingPacket(LinkLayerPacketView incoming) {
       if (page_scans_enabled_) {
         IncomingPagePacket(incoming);
       }
-      break;
-    case Link::PacketType::PAGE_REJECT:
-      IncomingPageRejectPacket(incoming);
       break;
     case Link::PacketType::PAGE_RESPONSE:
       IncomingPageResponsePacket(incoming);
@@ -523,7 +519,7 @@ void LinkLayerController::IncomingLeAdvertisementPacket(LinkLayerPacketView inco
   if (le_scan_enable_ && le_scan_type_ == 1) {
     std::shared_ptr<LinkLayerPacketBuilder> to_send =
         LinkLayerPacketBuilder::WrapLeScan(properties_.GetLeAddress(), incoming.GetSourceAddress());
-    SendLeLinkLayerPacket(to_send);
+    SendLELinkLayerPacket(to_send);
   }
 }
 
@@ -535,7 +531,7 @@ void LinkLayerController::IncomingLeScanPacket(LinkLayerPacketView incoming) {
       properties_.GetLeScanResponse());
   std::shared_ptr<LinkLayerPacketBuilder> to_send = LinkLayerPacketBuilder::WrapLeScanResponse(
       std::move(response), properties_.GetLeAddress(), incoming.GetSourceAddress());
-  SendLeLinkLayerPacket(to_send);
+  SendLELinkLayerPacket(to_send);
 }
 
 void LinkLayerController::IncomingLeScanResponsePacket(LinkLayerPacketView incoming) {
@@ -553,6 +549,7 @@ void LinkLayerController::IncomingLeScanResponsePacket(LinkLayerPacketView incom
                                           incoming.GetSourceAddress(), ad, GetRssi())) {
     LOG_INFO(LOG_TAG, "Couldn't add the scan response.");
   } else {
+    LOG_INFO(LOG_TAG, "Sending scan response");
     send_event_(le_adverts->ToVector());
   }
 }
@@ -571,15 +568,6 @@ void LinkLayerController::IncomingPagePacket(LinkLayerPacketView incoming) {
                   ->ToVector());
 }
 
-void LinkLayerController::IncomingPageRejectPacket(LinkLayerPacketView incoming) {
-  LOG_INFO(LOG_TAG, "%s: %s", __func__, incoming.GetSourceAddress().ToString().c_str());
-  PageRejectView reject = PageRejectView::GetPageReject(incoming);
-  LOG_INFO(LOG_TAG, "%s: Sending CreateConnectionComplete", __func__);
-  send_event_(EventPacketBuilder::CreateConnectionCompleteEvent(static_cast<hci::Status>(reject.GetReason()), 0x0eff,
-                                                                incoming.GetSourceAddress(), hci::LinkType::ACL, false)
-                  ->ToVector());
-}
-
 void LinkLayerController::IncomingPageResponsePacket(LinkLayerPacketView incoming) {
   LOG_INFO(LOG_TAG, "%s: %s", __func__, incoming.GetSourceAddress().ToString().c_str());
   uint16_t handle = classic_connections_.CreateConnection(incoming.GetSourceAddress());
@@ -587,6 +575,7 @@ void LinkLayerController::IncomingPageResponsePacket(LinkLayerPacketView incomin
     LOG_WARN(LOG_TAG, "%s: No free handles", __func__);
     return;
   }
+  LOG_INFO(LOG_TAG, "%s: Sending CreateConnectionComplete", __func__);
   send_event_(EventPacketBuilder::CreateConnectionCompleteEvent(hci::Status::SUCCESS, handle,
                                                                 incoming.GetSourceAddress(), hci::LinkType::ACL, false)
                   ->ToVector());
@@ -649,38 +638,7 @@ void LinkLayerController::IncomingResponsePacket(LinkLayerPacketView incoming) {
 void LinkLayerController::TimerTick() {
   if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) Inquiry();
   if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) PageScan();
-  LeAdvertising();
   Connections();
-}
-
-void LinkLayerController::LeAdvertising() {
-  if (!le_advertising_enable_) {
-    return;
-  }
-  steady_clock::time_point now = steady_clock::now();
-  if (duration_cast<milliseconds>(now - last_le_advertisement_) < milliseconds(200)) {
-    return;
-  }
-
-  LeAdvertisement::AddressType own_address_type =
-      static_cast<LeAdvertisement::AddressType>(properties_.GetLeAdvertisingOwnAddressType());
-  std::shared_ptr<packets::LinkLayerPacketBuilder> to_send;
-  std::unique_ptr<packets::LeAdvertisementBuilder> ad;
-  if (own_address_type == LeAdvertisement::AddressType::PUBLIC) {
-    ad = packets::LeAdvertisementBuilder::Create(
-        LeAdvertisement::AddressType::PUBLIC,
-        static_cast<LeAdvertisement::AdvertisementType>(properties_.GetLeAdvertisementType()),
-        properties_.GetLeAdvertisement());
-    to_send = packets::LinkLayerPacketBuilder::WrapLeAdvertisement(std::move(ad), properties_.GetAddress());
-  } else if (own_address_type == LeAdvertisement::AddressType::RANDOM) {
-    ad = packets::LeAdvertisementBuilder::Create(
-        LeAdvertisement::AddressType::RANDOM,
-        static_cast<LeAdvertisement::AdvertisementType>(properties_.GetLeAdvertisementType()),
-        properties_.GetLeAdvertisement());
-    to_send = packets::LinkLayerPacketBuilder::WrapLeAdvertisement(std::move(ad), properties_.GetLeAddress());
-  }
-  CHECK(to_send != nullptr);
-  SendLeLinkLayerPacket(to_send);
 }
 
 void LinkLayerController::Connections() {
@@ -989,12 +947,7 @@ hci::Status LinkLayerController::RejectConnectionRequest(const Address& addr, ui
 }
 
 void LinkLayerController::RejectSlaveConnection(const Address& addr, uint8_t reason) {
-  std::shared_ptr<LinkLayerPacketBuilder> to_send = LinkLayerPacketBuilder::WrapPageReject(
-      PageRejectBuilder::Create(reason), properties_.GetAddress(), addr);
-  LOG_INFO(LOG_TAG, "%s sending page reject to %s", __func__, addr.ToString().c_str());
-  SendLinkLayerPacket(to_send);
-
-  CHECK(reason >= 0x0d && reason <= 0x0f);
+  CHECK(reason > 0x0f || reason < 0x0d);
   send_event_(EventPacketBuilder::CreateConnectionCompleteEvent(static_cast<hci::Status>(reason), 0xeff, addr,
                                                                 hci::LinkType::ACL, false)
                   ->ToVector());
