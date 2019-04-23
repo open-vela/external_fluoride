@@ -124,7 +124,8 @@ void gatt_init(void) {
   L2CA_RegisterFixedChannel(L2CAP_ATT_CID, &fixed_reg);
 
   /* Now, register with L2CAP for ATT PSM over BR/EDR */
-  if (!L2CA_Register(BT_PSM_ATT, (tL2CAP_APPL_INFO*)&dyn_info)) {
+  if (!L2CA_Register(BT_PSM_ATT, (tL2CAP_APPL_INFO*)&dyn_info,
+                     false /* enable_snoop */)) {
     LOG(ERROR) << "ATT Dynamic Registration failed";
   }
 
@@ -331,16 +332,14 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb,
   // device, skip updating the device state.
   if (!gatt_update_app_hold_link_status(gatt_if, p_tcb, is_add)) return;
 
-  if (!check_acl_link) {
+  if (!check_acl_link ||
+      (BTM_GetHCIConnHandle(p_tcb->peer_bda, p_tcb->transport) ==
+       GATT_INVALID_ACL_HANDLE)) {
     return;
   }
 
-  bool is_valid_handle =
-      (BTM_GetHCIConnHandle(p_tcb->peer_bda, p_tcb->transport) !=
-       GATT_INVALID_ACL_HANDLE);
-
   if (is_add) {
-    if (p_tcb->att_lcid == L2CAP_ATT_CID && is_valid_handle) {
+    if (p_tcb->att_lcid == L2CAP_ATT_CID) {
       VLOG(1) << "disable link idle timer";
       /* acl link is connected disable the idle timeout */
       GATT_SetIdleTimeout(p_tcb->peer_bda, GATT_LINK_NO_IDLE_TIMEOUT,
@@ -349,7 +348,7 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb,
   } else {
     if (p_tcb->app_hold_link.empty()) {
       // acl link is connected but no application needs to use the link
-      if (p_tcb->att_lcid == L2CAP_ATT_CID && is_valid_handle) {
+      if (p_tcb->att_lcid == L2CAP_ATT_CID) {
         /* for fixed channel, set the timeout value to
            GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP seconds */
         VLOG(1) << " start link idle timer = "
