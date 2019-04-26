@@ -18,7 +18,6 @@
 
 #include <stdlib.h>
 #include <vector>
-#include <future>
 
 #include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
 #include <android/hardware/bluetooth/1.0/IBluetoothHciCallbacks.h>
@@ -51,10 +50,9 @@ android::sp<BluetoothHciDeathRecipient> bluetooth_hci_death_recipient_ = new Blu
 
 class HciHalBluetoothHciCallbacks : public IBluetoothHciCallbacks {
  public:
-  HciHalBluetoothHciCallbacks(BluetoothSnoopLogger* btsnoop_logger)
-      : btsnoop_logger_(btsnoop_logger) {
-    init_promise_ = new std::promise<void>();
-  }
+  HciHalBluetoothHciCallbacks(BluetoothInitializationCompleteCallback* initialization_callback,
+                              BluetoothSnoopLogger* btsnoop_logger)
+      : initialization_callback_(initialization_callback), btsnoop_logger_(btsnoop_logger) {}
 
   void SetCallback(BluetoothHciHalCallbacks* callback) {
     ASSERT(callback_ == nullptr && callback != nullptr);
@@ -65,13 +63,9 @@ class HciHalBluetoothHciCallbacks : public IBluetoothHciCallbacks {
     callback_ = nullptr;
   }
 
-  std::promise<void>* GetInitPromise() {
-    return init_promise_;
-  }
-
   Return<void> initializationComplete(HidlStatus status) {
     ASSERT(status == HidlStatus::SUCCESS);
-    init_promise_->set_value();
+    initialization_callback_->initializationComplete(Status::SUCCESS);
     return Void();
   }
 
@@ -106,7 +100,7 @@ class HciHalBluetoothHciCallbacks : public IBluetoothHciCallbacks {
   }
 
  private:
-  std::promise<void>* init_promise_ = nullptr;
+  BluetoothInitializationCompleteCallback* initialization_callback_ = nullptr;
   BluetoothHciHalCallbacks* callback_ = nullptr;
   BluetoothSnoopLogger* btsnoop_logger_ = nullptr;
 };
@@ -115,6 +109,19 @@ class HciHalBluetoothHciCallbacks : public IBluetoothHciCallbacks {
 
 class BluetoothHciHalHidl : public BluetoothHciHal {
  public:
+  void initialize(BluetoothInitializationCompleteCallback* callback) override {
+    btsnoop_logger_ = new BluetoothSnoopLogger(kDefaultBtsnoopPath);
+    bt_hci_ = IBluetoothHci::getService();
+    ASSERT(bt_hci_ != nullptr);
+    auto death_link = bt_hci_->linkToDeath(bluetooth_hci_death_recipient_, 0);
+    ASSERT_LOG(death_link.isOk(), "Unable to set the death recipient for the Bluetooth HAL");
+    // Block allows allocation of a variable that might be bypassed by goto.
+    {
+      callbacks_ = new HciHalBluetoothHciCallbacks(callback, btsnoop_logger_);
+      bt_hci_->initialize(callbacks_);
+    }
+  }
+
   void registerIncomingPacketCallback(BluetoothHciHalCallbacks* callback) override {
     callbacks_->SetCallback(callback);
   }
@@ -134,27 +141,7 @@ class BluetoothHciHalHidl : public BluetoothHciHal {
     bt_hci_->sendScoData(packet);
   }
 
- protected:
-  void ListDependencies(ModuleList* list) override {
-    // We have no dependencies
-  }
-
-  void Start(const ModuleRegistry* registry) override {
-    btsnoop_logger_ = new BluetoothSnoopLogger(kDefaultBtsnoopPath);
-    bt_hci_ = IBluetoothHci::getService();
-    ASSERT(bt_hci_ != nullptr);
-    auto death_link = bt_hci_->linkToDeath(bluetooth_hci_death_recipient_, 0);
-    ASSERT_LOG(death_link.isOk(), "Unable to set the death recipient for the Bluetooth HAL");
-    // Block allows allocation of a variable that might be bypassed by goto.
-    {
-      callbacks_ = new HciHalBluetoothHciCallbacks(btsnoop_logger_);
-      bt_hci_->initialize(callbacks_);
-      // Don't timeout here, time out at a higher layer
-      callbacks_->GetInitPromise()->get_future().wait();
-    }
-  }
-
-  void Stop(const ModuleRegistry* registry) override {
+  void close() override {
     ASSERT(bt_hci_ != nullptr);
     auto death_unlink = bt_hci_->unlinkToDeath(bluetooth_hci_death_recipient_);
     if (!death_unlink.isOk()) {
@@ -173,9 +160,10 @@ class BluetoothHciHalHidl : public BluetoothHciHal {
   BluetoothSnoopLogger* btsnoop_logger_;
 };
 
-const ModuleFactory BluetoothHciHal::Factory = ModuleFactory([]() {
-  return new BluetoothHciHalHidl();
-});
+BluetoothHciHal* GetBluetoothHciHal() {
+  static auto* instance = new BluetoothHciHalHidl;
+  return instance;
+}
 
 }  // namespace hal
 }  // namespace bluetooth

@@ -21,29 +21,52 @@
 
 #include <grpc++/grpc++.h>
 
-#include "grpc/grpc_module.h"
-#include "hal/hci_hal.h"
+#include "facade/facade_manager.h"
 
 namespace bluetooth {
 namespace hal {
 namespace facade {
+// Get cert facade. This instance has static storage.
+::bluetooth::facade::CertFacade* GetFacadeModule();
 
-class HciTransportationService;
-
-class HalFacadeModule : public ::bluetooth::grpc::GrpcFacadeModule {
+class HalFacadeModule : public ::bluetooth::facade::CertFacade {
  public:
-  static const ModuleFactory Factory;
+  void StartUp(::grpc::ServerCompletionQueue* cq) override;
 
-  void ListDependencies(ModuleList* list) override;
+  void ShutDown() override;
 
-  void Start(const ModuleRegistry* registry) override;
-  void Stop(const ModuleRegistry* registry) override;
+  ::grpc::Service* GetModuleGrpcService() const override;
 
-  ::grpc::Service* GetService() const override;
+  struct HciEvtListener {
+    virtual ~HciEvtListener() = default;
+    virtual void operator()(const hal::HciPacket&) {}
+  };
+
+  void RegisterHciEvtListener(HciEvtListener* listener);
+  void UnregisterHciEvtListener(HciEvtListener* listener);
+
+  struct HciAclListener {
+    virtual ~HciAclListener() = default;
+    virtual void operator()(const hal::HciPacket&) {}
+  };
+
+  void RegisterHciAclListener(HciAclListener* listener);
+  void UnregisterHciAclListener(HciAclListener* listener);
+
+  struct HciScoListener {
+    virtual ~HciScoListener() = default;
+    virtual void operator()(const hal::HciPacket&) {}
+  };
+
+  void RegisterHciScoListener(HciScoListener* listener);
+  void UnregisterHciScoListener(HciScoListener* listener);
 
  private:
-  HciTransportationService* service_;
+  std::mutex mutex_;
   friend class IncomingPacketCallback;
+  std::list<HciEvtListener*> registered_evt_listener_;
+  std::list<HciAclListener*> registered_acl_listener_;
+  std::list<HciScoListener*> registered_sco_listener_;
 };
 
 }  // namespace facade

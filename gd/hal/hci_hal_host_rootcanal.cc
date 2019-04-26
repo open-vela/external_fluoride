@@ -17,7 +17,6 @@
 #include "hal/hci_hal_host_rootcanal.h"
 #include "hal/hci_hal.h"
 
-#include <csignal>
 #include <fcntl.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -86,6 +85,18 @@ namespace hal {
 
 class BluetoothHciHalHostRootcanal : public BluetoothHciHal {
  public:
+  void initialize(BluetoothInitializationCompleteCallback* callback) override {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ASSERT(sock_fd_ == INVALID_FD && callback != nullptr);
+    sock_fd_ = ConnectToRootCanal(config_->GetServerAddress(), config_->GetPort());
+    ASSERT(sock_fd_ != INVALID_FD);
+    reactable_ =
+        hci_incoming_thread_.GetReactor()->Register(sock_fd_, [this]() { this->incoming_packet_received(); }, nullptr);
+    callback->initializationComplete(Status::SUCCESS);
+    btsnoop_logger_ = new BluetoothSnoopLogger(kDefaultBtsnoopPath);
+    LOG_INFO("Rootcanal HAL opened successfully");
+  }
+
   void registerIncomingPacketCallback(BluetoothHciHalCallbacks* callback) override {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(incoming_packet_callback_ == nullptr && callback != nullptr);
@@ -119,23 +130,7 @@ class BluetoothHciHalHostRootcanal : public BluetoothHciHal {
     write_to_rootcanal_fd(packet);
   }
 
- protected:
-  void ListDependencies(ModuleList* list) override {
-    // We have no dependencies
-  }
-
-  void Start(const ModuleRegistry* registry) override {
-    std::lock_guard<std::mutex> lock(mutex_);
-    ASSERT(sock_fd_ == INVALID_FD);
-    sock_fd_ = ConnectToRootCanal(config_->GetServerAddress(), config_->GetPort());
-    ASSERT(sock_fd_ != INVALID_FD);
-    reactable_ =
-        hci_incoming_thread_.GetReactor()->Register(sock_fd_, [this]() { this->incoming_packet_received(); }, nullptr);
-    btsnoop_logger_ = new BluetoothSnoopLogger(kDefaultBtsnoopPath);
-    LOG_INFO("Rootcanal HAL opened successfully");
-  }
-
-  void Stop(const ModuleRegistry* registry) override {
+  void close() override {
     std::lock_guard<std::mutex> lock(mutex_);
     delete btsnoop_logger_;
     btsnoop_logger_ = nullptr;
@@ -192,8 +187,8 @@ class BluetoothHciHalHostRootcanal : public BluetoothHciHal {
     RUN_NO_INTR(received_size = recv(sock_fd_, buf, kH4HeaderSize, 0));
     ASSERT_LOG(received_size != -1, "Can't receive from socket: %s", strerror(errno));
     if (received_size == 0) {
-      LOG_WARN("Can't read H4 header.");
-      raise(SIGINT);
+      LOG_WARN("Can't read H4 header. Closing this Rootcanal HAL.");
+      close();
       return;
     }
 
@@ -252,9 +247,18 @@ class BluetoothHciHalHostRootcanal : public BluetoothHciHal {
   }
 };
 
-const ModuleFactory BluetoothHciHal::Factory = ModuleFactory([]() {
-  return new BluetoothHciHalHostRootcanal();
-});
+namespace {
+BluetoothHciHalHostRootcanal* instance = new BluetoothHciHalHostRootcanal;
+}
+
+BluetoothHciHal* GetBluetoothHciHal() {
+  return instance;
+}
+
+void ResetRootcanalHal() {
+  delete instance;
+  instance = new BluetoothHciHalHostRootcanal;
+}
 
 }  // namespace hal
 }  // namespace bluetooth

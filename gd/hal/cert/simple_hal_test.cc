@@ -21,6 +21,7 @@
 #include <string>
 #include <thread>
 
+#include "facade/facade_manager.h"
 #include "hal/facade/api.grpc.pb.h"
 #include "hci/hci_packets.h"
 #include "os/log.h"
@@ -39,7 +40,7 @@ using ::bluetooth::hal::facade::LoopbackModeSettings;
 class HalAdapterCertTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    int port = 8899;
+    int port = ::bluetooth::facade::FacadeConfig::Get()->GetGrpcPort();
     std::string channel = "localhost:" + std::to_string(port);
     stub_ = HciTransportation::NewStub(grpc::CreateChannel(channel, grpc::InsecureChannelCredentials()));
   }
