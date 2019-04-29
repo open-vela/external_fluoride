@@ -61,8 +61,6 @@ class GdBaseTestClass(BaseTestClass):
             builtin=True)
 
     def teardown_class(self):
-        self.unregister_controllers()
         self.rootcanal_process.send_signal(signal.SIGINT)
-        self.rootcanal_process.wait()
         self.rootcanal_logs.close()
 
