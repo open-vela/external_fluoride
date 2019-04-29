@@ -34,12 +34,12 @@ class BlockingQueue {
     }
   };
 
-  T take() {
+  const T& take() {
     std::unique_lock<std::mutex> lock(mutex_);
     while (queue_.empty()) {
       not_empty_.wait(lock);
     }
-    T data = queue_.front();
+    const T& data = queue_.front();
     queue_.pop();
     return data;
   };

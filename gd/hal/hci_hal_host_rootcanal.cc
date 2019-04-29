@@ -24,7 +24,7 @@
 #include <mutex>
 #include <queue>
 
-#include "hal/snoop_logger.h"
+#include "hal/bluetooth_snoop_logger.h"
 #include "os/log.h"
 #include "os/reactor.h"
 #include "os/thread.h"
@@ -84,9 +84,9 @@ int ConnectToRootCanal(const std::string& server, int port) {
 namespace bluetooth {
 namespace hal {
 
-class HciHalHostRootcanal : public HciHal {
+class BluetoothHciHalHostRootcanal : public BluetoothHciHal {
  public:
-  void registerIncomingPacketCallback(HciHalCallbacks* callback) override {
+  void registerIncomingPacketCallback(BluetoothHciHalCallbacks* callback) override {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(incoming_packet_callback_ == nullptr && callback != nullptr);
     incoming_packet_callback_ = callback;
@@ -96,7 +96,7 @@ class HciHalHostRootcanal : public HciHal {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(command);
-    btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::CMD);
+    btsnoop_logger_->capture(packet, BluetoothSnoopLogger::Direction::OUTGOING, BluetoothSnoopLogger::PacketType::CMD);
     packet.insert(packet.cbegin(), kH4Command);
     write_to_rootcanal_fd(packet);
   }
@@ -105,7 +105,7 @@ class HciHalHostRootcanal : public HciHal {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(data);
-    btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::ACL);
+    btsnoop_logger_->capture(packet, BluetoothSnoopLogger::Direction::OUTGOING, BluetoothSnoopLogger::PacketType::ACL);
     packet.insert(packet.cbegin(), kH4Acl);
     write_to_rootcanal_fd(packet);
   }
@@ -114,7 +114,7 @@ class HciHalHostRootcanal : public HciHal {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(data);
-    btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::SCO);
+    btsnoop_logger_->capture(packet, BluetoothSnoopLogger::Direction::OUTGOING, BluetoothSnoopLogger::PacketType::SCO);
     packet.insert(packet.cbegin(), kH4Sco);
     write_to_rootcanal_fd(packet);
   }
@@ -131,7 +131,7 @@ class HciHalHostRootcanal : public HciHal {
     ASSERT(sock_fd_ != INVALID_FD);
     reactable_ =
         hci_incoming_thread_.GetReactor()->Register(sock_fd_, [this]() { this->incoming_packet_received(); }, nullptr);
-    btsnoop_logger_ = new SnoopLogger(kDefaultBtsnoopPath);
+    btsnoop_logger_ = new BluetoothSnoopLogger(kDefaultBtsnoopPath);
     LOG_INFO("Rootcanal HAL opened successfully");
   }
 
@@ -153,13 +153,13 @@ class HciHalHostRootcanal : public HciHal {
  private:
   std::mutex mutex_;
   HciHalHostRootcanalConfig* config_ = HciHalHostRootcanalConfig::Get();
-  HciHalCallbacks* incoming_packet_callback_ = nullptr;
+  BluetoothHciHalCallbacks* incoming_packet_callback_ = nullptr;
   int sock_fd_ = INVALID_FD;
   bluetooth::os::Thread hci_incoming_thread_ =
       bluetooth::os::Thread("hci_incoming_thread", bluetooth::os::Thread::Priority::NORMAL);
   bluetooth::os::Reactor::Reactable* reactable_ = nullptr;
   std::queue<std::vector<uint8_t>> hci_outgoing_queue_;
-  SnoopLogger* btsnoop_logger_;
+  BluetoothSnoopLogger* btsnoop_logger_;
 
   void write_to_rootcanal_fd(HciPacket packet) {
     // TODO: replace this with new queue when it's ready
@@ -211,8 +211,8 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciEvtHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING,
-                               SnoopLogger::PacketType::EVT);
+      btsnoop_logger_->capture(receivedHciPacket, BluetoothSnoopLogger::Direction::INCOMING,
+                               BluetoothSnoopLogger::PacketType::EVT);
       incoming_packet_callback_->hciEventReceived(receivedHciPacket);
     }
 
@@ -229,8 +229,8 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciAclHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING,
-                               SnoopLogger::PacketType::ACL);
+      btsnoop_logger_->capture(receivedHciPacket, BluetoothSnoopLogger::Direction::INCOMING,
+                               BluetoothSnoopLogger::PacketType::ACL);
       incoming_packet_callback_->aclDataReceived(receivedHciPacket);
     }
 
@@ -244,16 +244,16 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciScoHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING,
-                               SnoopLogger::PacketType::SCO);
+      btsnoop_logger_->capture(receivedHciPacket, BluetoothSnoopLogger::Direction::INCOMING,
+                               BluetoothSnoopLogger::PacketType::SCO);
       incoming_packet_callback_->scoDataReceived(receivedHciPacket);
     }
     memset(buf, 0, kBufSize);
   }
 };
 
-const ModuleFactory HciHal::Factory = ModuleFactory([]() {
-  return new HciHalHostRootcanal();
+const ModuleFactory BluetoothHciHal::Factory = ModuleFactory([]() {
+  return new BluetoothHciHalHostRootcanal();
 });
 
 }  // namespace hal
