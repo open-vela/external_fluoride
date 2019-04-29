@@ -24,7 +24,7 @@ namespace bluetooth {
 
 class StackManager {
  public:
-  void StartUp(ModuleList *modules, os::Thread* stack_thread);
+  void StartUp(ModuleList *modules);
   void ShutDown();
 
   template <class T>

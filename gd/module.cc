@@ -16,39 +16,30 @@
 
 #include "module.h"
 
-using ::bluetooth::os::Handler;
-using ::bluetooth::os::Thread;
-
 namespace bluetooth {
 
 ModuleFactory::ModuleFactory(std::function<Module*()> ctor) : ctor_(ctor) {
-}
-
-Handler* Module::GetHandler() {
-  return handler_;
 }
 
 bool ModuleRegistry::IsStarted(const ModuleFactory* factory) const {
   return started_modules_.find(factory) != started_modules_.end();
 }
 
-void ModuleRegistry::Start(ModuleList* modules, Thread* thread) {
+void ModuleRegistry::Start(ModuleList* modules) {
   for (auto it = modules->list_.begin(); it != modules->list_.end(); it++) {
-    Start(*it, thread);
+    Start(*it);
   }
 }
 
-void ModuleRegistry::Start(const ModuleFactory* module, Thread* thread) {
+void ModuleRegistry::Start(const ModuleFactory* module) {
   if (IsStarted(module)) {
     return;
   }
 
   Module* instance = module->ctor_();
-  instance->handler_ = new Handler(thread);
-
   ModuleList dependencies;
   instance->ListDependencies(&dependencies);
-  Start(&dependencies, thread);
+  Start(&dependencies);
 
   instance->Start(this);
   start_order_.push_back(module);
@@ -63,7 +54,6 @@ void ModuleRegistry::StopAll() {
     ASSERT(instance != started_modules_.end());
     instance->second->Stop(this);
 
-    delete instance->second->handler_;
     delete instance->second;
     started_modules_.erase(instance);
   }
