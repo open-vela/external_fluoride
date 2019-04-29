@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <stdint.h>
 
+#include "bdaddr.h"
 #include "bt_types.h"
 #include "device_features.h"
 #include "features.h"
@@ -37,7 +38,7 @@ typedef struct {
                                                  bt_version_t* bt_version_ptr);
 
   void (*parse_read_bd_addr_response)(BT_HDR* response,
-                                      RawAddress* address_ptr);
+                                      bt_bdaddr_t* address_ptr);
 
   void (*parse_read_local_supported_commands_response)(
       BT_HDR* response, uint8_t* supported_commands_ptr,
@@ -66,12 +67,6 @@ typedef struct {
 
   void (*parse_ble_read_suggested_default_data_length_response)(
       BT_HDR* response, uint16_t* ble_default_packet_length_ptr);
-
-  void (*parse_ble_read_maximum_data_length_response)(
-      BT_HDR* response, uint16_t* ble_supported_max_tx_octets,
-      uint16_t* ble_supported_max_tx_time,
-      uint16_t* ble_supported_max_rx_octets,
-      uint16_t* ble_supported_max_rx_time);
 
   void (*parse_ble_read_maximum_advertising_data_length)(
       BT_HDR* response, uint16_t* ble_maximum_advertising_data_length_ptr);
