@@ -139,15 +139,15 @@ void HalFacadeModule::ListDependencies(ModuleList* list) {
   list->add<HciHal>();
 }
 
-void HalFacadeModule::Start() {
-  ::bluetooth::grpc::GrpcFacadeModule::Start();
-  auto hal = GetDependency<HciHal>();
+void HalFacadeModule::Start(const ModuleRegistry* registry) {
+  ::bluetooth::grpc::GrpcFacadeModule::Start(registry);
+  auto hal = registry->GetInstance<HciHal>();
 
   service_ = new HciTransportationService(hal);
   hal->registerIncomingPacketCallback(service_);
 }
 
-void HalFacadeModule::Stop() {
+void HalFacadeModule::Stop(const ModuleRegistry* registry) {
   delete service_;
 }
 

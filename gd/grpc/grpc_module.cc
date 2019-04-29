@@ -28,11 +28,11 @@ namespace grpc {
 void GrpcModule::ListDependencies(ModuleList* list) {
 }
 
-void GrpcModule::Start() {
+void GrpcModule::Start(const ModuleRegistry* registry) {
   ASSERT(!started_);
 }
 
-void GrpcModule::Stop() {
+void GrpcModule::Stop(const ModuleRegistry* registry) {
   ASSERT(!started_);
 }
 
@@ -111,12 +111,12 @@ void GrpcFacadeModule::ListDependencies(ModuleList* list) {
   list->add<GrpcModule>();
 }
 
-void GrpcFacadeModule::Start() {
-  GetDependency<GrpcModule>()->Register(this);
+void GrpcFacadeModule::Start(const ModuleRegistry* registry) {
+  registry->GetInstance<GrpcModule>()->Register(this);
 }
 
-void GrpcFacadeModule::Stop() {
-  GetDependency<GrpcModule>()->Unregister(this);
+void GrpcFacadeModule::Stop(const ModuleRegistry* registry) {
+  registry->GetInstance<GrpcModule>()->Unregister(this);
 }
 
 }  // namespace grpc

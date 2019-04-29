@@ -29,7 +29,7 @@ class StackManager {
 
   template <class T>
   T* GetInstance() const {
-    return static_cast<T*>(registry_.Get(&T::Factory));
+    return registry_.GetInstance<T>();
   }
 
  private:
