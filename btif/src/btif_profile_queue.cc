@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,116 +28,126 @@
 
 #include "btif_profile_queue.h"
 
-#include <base/bind.h>
-#include <base/callback.h>
 #include <base/logging.h>
-#include <base/strings/stringprintf.h>
 #include <string.h>
-#include <list>
 
 #include "bt_common.h"
+#include "btcore/include/bdaddr.h"
 #include "btif_common.h"
+#include "osi/include/allocator.h"
+#include "osi/include/list.h"
 #include "stack_manager.h"
 
 /*******************************************************************************
  *  Local type definitions
  ******************************************************************************/
 
-// Class to store connect info.
-class ConnectNode {
- public:
-  ConnectNode(const RawAddress& address, uint16_t uuid,
-              btif_connect_cb_t connect_cb)
-      : address_(address), uuid_(uuid), busy_(false), connect_cb_(connect_cb) {}
+typedef enum {
+  BTIF_QUEUE_CONNECT_EVT,
+  BTIF_QUEUE_ADVANCE_EVT,
+  BTIF_QUEUE_CLEANUP_EVT
+} btif_queue_event_t;
 
-  std::string ToString() const {
-    return base::StringPrintf("address=%s UUID=%04X busy=%s",
-                              address_.ToString().c_str(), uuid_,
-                              (busy_) ? "true" : "false");
-  }
-
-  const RawAddress& address() const { return address_; }
-  uint16_t uuid() const { return uuid_; }
-
-  /**
-   * Initiate the connection.
-   *
-   * @return BT_STATUS_SUCCESS on success, othewise the corresponding error
-   * code. Note: if a previous connect request hasn't been completed, the
-   * return value is BT_STATUS_SUCCESS.
-   */
-  bt_status_t connect() {
-    if (busy_) return BT_STATUS_SUCCESS;
-    busy_ = true;
-    return connect_cb_(&address_, uuid_);
-  }
-
- private:
-  RawAddress address_;
-  uint16_t uuid_;
-  bool busy_;
-  btif_connect_cb_t connect_cb_;
-};
+typedef struct {
+  bt_bdaddr_t bda;
+  uint16_t uuid;
+  bool busy;
+  btif_connect_cb_t connect_cb;
+} connect_node_t;
 
 /*******************************************************************************
  *  Static variables
  ******************************************************************************/
 
-static std::list<ConnectNode> connect_queue;
+static list_t* connect_queue;
 
-static const size_t MAX_REASONABLE_REQUESTS = 20;
+static const size_t MAX_REASONABLE_REQUESTS = 10;
 
 /*******************************************************************************
  *  Queue helper functions
  ******************************************************************************/
 
-static void queue_int_add(uint16_t uuid, const RawAddress& bda,
-                          btif_connect_cb_t connect_cb) {
-  // Sanity check to make sure we're not leaking connection requests
-  CHECK(connect_queue.size() < MAX_REASONABLE_REQUESTS);
+static void queue_int_add(connect_node_t* p_param) {
+  if (!connect_queue) {
+    LOG_INFO(LOG_TAG, "%s: allocating profile queue", __func__);
+    connect_queue = list_new(osi_free);
+    CHECK(connect_queue != NULL);
+  }
 
-  ConnectNode param(bda, uuid, connect_cb);
-  for (const auto& node : connect_queue) {
-    if (node.uuid() == param.uuid() && node.address() == param.address()) {
-      LOG_ERROR(LOG_TAG, "%s: dropping duplicate connection request: %s",
-                __func__, param.ToString().c_str());
+  // Sanity check to make sure we're not leaking connection requests
+  CHECK(list_length(connect_queue) < MAX_REASONABLE_REQUESTS);
+
+  for (const list_node_t* node = list_begin(connect_queue);
+       node != list_end(connect_queue); node = list_next(node)) {
+    if (((connect_node_t*)list_node(node))->uuid == p_param->uuid) {
+      bdstr_t bd_addr_str;
+      LOG_ERROR(
+          LOG_TAG,
+          "%s dropping duplicate connection request UUID=%04X, "
+          "bd_addr=%s, busy=%d",
+          __func__, p_param->uuid,
+          bdaddr_to_string(&p_param->bda, bd_addr_str, sizeof(bd_addr_str)),
+          p_param->busy);
       return;
     }
   }
 
-  LOG_INFO(LOG_TAG, "%s: adding connection request: %s", __func__,
-           param.ToString().c_str());
-  connect_queue.push_back(param);
-
-  btif_queue_connect_next();
+  connect_node_t* p_node = (connect_node_t*)osi_malloc(sizeof(connect_node_t));
+  memcpy(p_node, p_param, sizeof(connect_node_t));
+  list_append(connect_queue, p_node);
 }
 
 static void queue_int_advance() {
-  if (connect_queue.empty()) return;
-
-  const ConnectNode& head = connect_queue.front();
-  LOG_INFO(LOG_TAG, "%s: removing connection request: %s", __func__,
-           head.ToString().c_str());
-  connect_queue.pop_front();
-
-  btif_queue_connect_next();
+  if (connect_queue && !list_is_empty(connect_queue))
+    list_remove(connect_queue, list_front(connect_queue));
 }
 
-static void queue_int_cleanup(uint16_t uuid) {
+static void queue_int_cleanup(uint16_t* p_uuid) {
+  if (!p_uuid) {
+    LOG_ERROR(LOG_TAG, "%s: UUID is null", __func__);
+    return;
+  }
+  uint16_t uuid = *p_uuid;
   LOG_INFO(LOG_TAG, "%s: UUID=%04X", __func__, uuid);
-
-  for (auto it = connect_queue.begin(); it != connect_queue.end();) {
-    auto it_prev = it++;
-    const ConnectNode& node = *it_prev;
-    if (node.uuid() == uuid) {
-      LOG_INFO(LOG_TAG, "%s: removing connection request: %s", __func__,
-               node.ToString().c_str());
-      connect_queue.erase(it_prev);
+  if (!connect_queue) {
+    return;
+  }
+  connect_node_t* connection_request;
+  const list_node_t* node = list_begin(connect_queue);
+  while (node && node != list_end(connect_queue)) {
+    connection_request = (connect_node_t*)list_node(node);
+    node = list_next(node);
+    if (connection_request->uuid == uuid) {
+      bdstr_t bd_addr_str;
+      LOG_INFO(LOG_TAG,
+               "%s: removing connection request UUID=%04X, bd_addr=%s, busy=%d",
+               __func__, connection_request->uuid,
+               bdaddr_to_string(&connection_request->bda, bd_addr_str,
+                                sizeof(bd_addr_str)),
+               connection_request->busy);
+      list_remove(connect_queue, connection_request);
     }
   }
 }
 
-static void queue_int_release() { connect_queue.clear(); }
+static void queue_int_handle_evt(uint16_t event, char* p_param) {
+  switch (event) {
+    case BTIF_QUEUE_CONNECT_EVT:
+      queue_int_add((connect_node_t*)p_param);
+      break;
+
+    case BTIF_QUEUE_ADVANCE_EVT:
+      queue_int_advance();
+      break;
+
+    case BTIF_QUEUE_CLEANUP_EVT:
+      queue_int_cleanup((uint16_t*)(p_param));
+      return;
+  }
+
+  if (stack_manager_get_interface()->get_stack_is_running())
+    btif_queue_connect_next();
+}
 
 /*******************************************************************************
  *
@@ -149,10 +159,16 @@ static void queue_int_release() { connect_queue.clear(); }
  * Returns          BT_STATUS_SUCCESS if successful
  *
  ******************************************************************************/
-bt_status_t btif_queue_connect(uint16_t uuid, const RawAddress* bda,
+bt_status_t btif_queue_connect(uint16_t uuid, const bt_bdaddr_t* bda,
                                btif_connect_cb_t connect_cb) {
-  return do_in_jni_thread(FROM_HERE,
-                          base::Bind(&queue_int_add, uuid, *bda, connect_cb));
+  connect_node_t node;
+  memset(&node, 0, sizeof(connect_node_t));
+  memcpy(&node.bda, bda, sizeof(bt_bdaddr_t));
+  node.uuid = uuid;
+  node.connect_cb = connect_cb;
+
+  return btif_transfer_context(queue_int_handle_evt, BTIF_QUEUE_CONNECT_EVT,
+                               (char*)&node, sizeof(connect_node_t), NULL);
 }
 
 /*******************************************************************************
@@ -165,7 +181,8 @@ bt_status_t btif_queue_connect(uint16_t uuid, const RawAddress* bda,
  *
  ******************************************************************************/
 void btif_queue_cleanup(uint16_t uuid) {
-  do_in_jni_thread(FROM_HERE, base::Bind(&queue_int_cleanup, uuid));
+  btif_transfer_context(queue_int_handle_evt, BTIF_QUEUE_CLEANUP_EVT,
+                        (char*)&uuid, sizeof(uint16_t), NULL);
 }
 
 /*******************************************************************************
@@ -179,23 +196,29 @@ void btif_queue_cleanup(uint16_t uuid) {
  *
  ******************************************************************************/
 void btif_queue_advance() {
-  do_in_jni_thread(FROM_HERE, base::Bind(&queue_int_advance));
+  btif_transfer_context(queue_int_handle_evt, BTIF_QUEUE_ADVANCE_EVT, NULL, 0,
+                        NULL);
 }
 
+// This function dispatches the next pending connect request. It is called from
+// stack_manager when the stack comes up.
 bt_status_t btif_queue_connect_next(void) {
-  // The call must be on the JNI thread, otherwise the access to connect_queue
-  // is not thread-safe.
-  CHECK(is_on_jni_thread());
+  if (!connect_queue || list_is_empty(connect_queue)) return BT_STATUS_FAIL;
 
-  if (connect_queue.empty()) return BT_STATUS_FAIL;
-  if (!stack_manager_get_interface()->get_stack_is_running())
-    return BT_STATUS_FAIL;
+  connect_node_t* p_head = (connect_node_t*)list_front(connect_queue);
 
-  ConnectNode& head = connect_queue.front();
+  bdstr_t bd_addr_str;
+  LOG_INFO(LOG_TAG,
+           "%s: executing connection request UUID=%04X, bd_addr=%s, busy=%d",
+           __func__, p_head->uuid,
+           bdaddr_to_string(&p_head->bda, bd_addr_str, sizeof(bd_addr_str)),
+           p_head->busy);
+  // If the queue is currently busy, we return success anyway,
+  // since the connection has been queued...
+  if (p_head->busy) return BT_STATUS_SUCCESS;
 
-  LOG_INFO(LOG_TAG, "%s: executing connection request: %s", __func__,
-           head.ToString().c_str());
-  return head.connect();
+  p_head->busy = true;
+  return p_head->connect_cb(&p_head->bda, p_head->uuid);
 }
 
 /*******************************************************************************
@@ -209,8 +232,6 @@ bt_status_t btif_queue_connect_next(void) {
  ******************************************************************************/
 void btif_queue_release() {
   LOG_INFO(LOG_TAG, "%s", __func__);
-  if (do_in_jni_thread(FROM_HERE, base::Bind(&queue_int_release)) !=
-      BT_STATUS_SUCCESS) {
-    LOG(FATAL) << __func__ << ": Failed to schedule on JNI thread";
-  }
+  list_free(connect_queue);
+  connect_queue = NULL;
 }
