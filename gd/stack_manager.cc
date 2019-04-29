@@ -31,13 +31,13 @@ using ::bluetooth::os::Thread;
 
 namespace bluetooth {
 
-void StackManager::StartUp(ModuleList* modules, Thread* stack_thread) {
+void StackManager::StartUp(ModuleList* modules) {
   management_thread_ = new Thread("management_thread", Thread::Priority::NORMAL);
   handler_ = new Handler(management_thread_);
 
   std::promise<void>* promise = new std::promise<void>();
-  handler_->Post([this, promise, modules, stack_thread]() {
-    registry_.Start(modules, stack_thread);
+  handler_->Post([this, promise, modules]() {
+    registry_.Start(modules);
     promise->set_value();
   });
 
