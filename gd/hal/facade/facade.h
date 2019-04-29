@@ -36,8 +36,8 @@ class HalFacadeModule : public ::bluetooth::grpc::GrpcFacadeModule {
 
   void ListDependencies(ModuleList* list) override;
 
-  void Start() override;
-  void Stop() override;
+  void Start(const ModuleRegistry* registry) override;
+  void Stop(const ModuleRegistry* registry) override;
 
   ::grpc::Service* GetService() const override;
 
