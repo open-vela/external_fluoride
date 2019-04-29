@@ -26,9 +26,9 @@
 namespace bluetooth {
 namespace hal {
 
-class SnoopLogger {
+class BluetoothSnoopLogger {
  public:
-  explicit SnoopLogger(const std::string& filename);
+  explicit BluetoothSnoopLogger(const std::string& filename);
 
   enum class PacketType {
     CMD = 1,
