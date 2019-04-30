@@ -34,8 +34,8 @@ filegroup {
 }
 
 filegroup {
-    name: "BluetoothFacade_hci_hal",
+    name: "BluetoothCertFacade_hci_hal",
     srcs: [
-        "facade.cc",
+        "facade/facade.cc",
     ],
 }
