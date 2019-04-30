@@ -22,19 +22,13 @@
 #include <string>
 
 #include "hal/hci_hal.h"
-#include "module.h"
 
 namespace bluetooth {
 namespace hal {
 
-class SnoopLogger : public ::bluetooth::Module {
+class SnoopLogger {
  public:
-  static const ModuleFactory Factory;
-
-  // Each transport using SnoopLogger should define its own DefaultFilepath
-  static const std::string DefaultFilePath;
-  // Set File Path before module is started to ensure all packets are written to the right file
-  static void SetFilePath(const std::string& filename);
+  explicit SnoopLogger(const std::string& filename);
 
   enum class PacketType {
     CMD = 1,
@@ -50,14 +44,8 @@ class SnoopLogger : public ::bluetooth::Module {
 
   void capture(const HciPacket& packet, Direction direction, PacketType type);
 
- protected:
-  void ListDependencies(ModuleList* list) override;
-  void Start() override;
-  void Stop() override;
-
  private:
-  SnoopLogger();
-  static std::string file_path;
+  bool file_exists_;
   std::ofstream btsnoop_ostream_;
   std::mutex file_mutex_;
 };

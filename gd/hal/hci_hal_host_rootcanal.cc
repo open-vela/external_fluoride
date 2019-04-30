@@ -44,6 +44,8 @@ constexpr uint8_t kHciScoHeaderSize = 3;
 constexpr uint8_t kHciEvtHeaderSize = 2;
 constexpr int kBufSize = 1024;
 
+constexpr char kDefaultBtsnoopPath[] = "/tmp/btsnoop_hci.log";
+
 int ConnectToRootCanal(const std::string& server, int port) {
   int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (socket_fd < 1) {
@@ -86,8 +88,6 @@ int ConnectToRootCanal(const std::string& server, int port) {
 namespace bluetooth {
 namespace hal {
 
-const std::string SnoopLogger::DefaultFilePath = "/tmp/btsnoop_hci.log";
-
 class HciHalHostRootcanal : public HciHal {
  public:
   void registerIncomingPacketCallback(HciHalCallbacks* callback) override {
@@ -125,7 +125,7 @@ class HciHalHostRootcanal : public HciHal {
 
  protected:
   void ListDependencies(ModuleList* list) override {
-    list->add<SnoopLogger>();
+    // We have no dependencies
   }
 
   void Start() override {
@@ -135,12 +135,14 @@ class HciHalHostRootcanal : public HciHal {
     ASSERT(sock_fd_ != INVALID_FD);
     reactable_ =
         hci_incoming_thread_.GetReactor()->Register(sock_fd_, [this]() { this->incoming_packet_received(); }, nullptr);
-    btsnoop_logger_ = GetDependency<SnoopLogger>();
+    btsnoop_logger_ = new SnoopLogger(kDefaultBtsnoopPath);
     LOG_INFO("Rootcanal HAL opened successfully");
   }
 
   void Stop() override {
     std::lock_guard<std::mutex> lock(mutex_);
+    delete btsnoop_logger_;
+    btsnoop_logger_ = nullptr;
     if (reactable_ != nullptr) {
       hci_incoming_thread_.GetReactor()->Unregister(reactable_);
       ASSERT(sock_fd_ != INVALID_FD);
