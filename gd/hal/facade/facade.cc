@@ -21,7 +21,7 @@
 
 #include "common/blocking_queue.h"
 #include "grpc/grpc_event_stream.h"
-#include "hal/facade.grpc.pb.h"
+#include "hal/facade/api.grpc.pb.h"
 #include "hal/hci_hal.h"
 #include "hci/hci_packets.h"
 #include "os/log.h"
@@ -31,23 +31,20 @@ using ::grpc::ServerAsyncWriter;
 using ::grpc::ServerCompletionQueue;
 using ::grpc::ServerContext;
 
-using ::bluetooth::facade::EventStreamRequest;
-
 namespace bluetooth {
 namespace hal {
+namespace facade {
 
-class HciHalFacadeService
-    : public HciHalFacade::Service,
+class HciTransportationService
+    : public HciTransportation::Service,
       public ::bluetooth::hal::HciHalCallbacks {
  public:
-  HciHalFacadeService(HciHal* hal)
+  HciTransportationService(HciHal* hal)
       : hal_(hal), hci_event_stream_(&hci_event_stream_callback_), hci_acl_stream_(&hci_acl_stream_callback_),
-        hci_sco_stream_(&hci_sco_stream_callback_) {
-    hal->registerIncomingPacketCallback(this);
-  }
+        hci_sco_stream_(&hci_sco_stream_callback_) {}
 
   ::grpc::Status SetLoopbackMode(::grpc::ServerContext* context,
-                                 const ::bluetooth::hal::LoopbackModeSettings* request,
+                                 const ::bluetooth::hal::facade::LoopbackModeSettings* request,
                                  ::google::protobuf::Empty* response) override {
     bool enable = request->enable();
     auto packet = hci::WriteLoopbackModeBuilder::Create(enable ? hci::LoopbackMode::ENABLE_LOCAL
@@ -59,38 +56,38 @@ class HciHalFacadeService
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SendHciCommand(::grpc::ServerContext* context, const ::bluetooth::hal::HciCommandPacket* request,
+  ::grpc::Status SendHciCommand(::grpc::ServerContext* context, const ::bluetooth::hal::facade::HciCmdPacket* request,
                                 ::google::protobuf::Empty* response) override {
     std::string req_string = request->payload();
     hal_->sendHciCommand(std::vector<uint8_t>(req_string.begin(), req_string.end()));
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SendHciAcl(::grpc::ServerContext* context, const ::bluetooth::hal::HciAclPacket* request,
+  ::grpc::Status SendHciAcl(::grpc::ServerContext* context, const ::bluetooth::hal::facade::HciAclPacket* request,
                             ::google::protobuf::Empty* response) override {
     std::string req_string = request->payload();
     hal_->sendAclData(std::vector<uint8_t>(req_string.begin(), req_string.end()));
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SendHciSco(::grpc::ServerContext* context, const ::bluetooth::hal::HciScoPacket* request,
+  ::grpc::Status SendHciSco(::grpc::ServerContext* context, const ::bluetooth::hal::facade::HciScoPacket* request,
                             ::google::protobuf::Empty* response) override {
     std::string req_string = request->payload();
     hal_->sendScoData(std::vector<uint8_t>(req_string.begin(), req_string.end()));
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status FetchHciEvent(::grpc::ServerContext* context, const EventStreamRequest* request,
-                               ::grpc::ServerWriter<HciEventPacket>* writer) override {
+  ::grpc::Status FetchHciEvent(::grpc::ServerContext* context, const ::bluetooth::facade::EventStreamRequest* request,
+                               ::grpc::ServerWriter<HciEvtPacket>* writer) override {
     return hci_event_stream_.HandleRequest(context, request, writer);
   };
 
-  ::grpc::Status FetchHciAcl(::grpc::ServerContext* context, const EventStreamRequest* request,
+  ::grpc::Status FetchHciAcl(::grpc::ServerContext* context, const ::bluetooth::facade::EventStreamRequest* request,
                              ::grpc::ServerWriter<HciAclPacket>* writer) override {
     return hci_acl_stream_.HandleRequest(context, request, writer);
   };
 
-  ::grpc::Status FetchHciSco(::grpc::ServerContext* context, const EventStreamRequest* request,
+  ::grpc::Status FetchHciSco(::grpc::ServerContext* context, const ::bluetooth::facade::EventStreamRequest* request,
                              ::grpc::ServerWriter<HciScoPacket>* writer) override {
     return hci_sco_stream_.HandleRequest(context, request, writer);
   };
@@ -111,14 +108,14 @@ class HciHalFacadeService
  private:
   HciHal* hal_;
 
-  class HciEventStreamCallback : public ::bluetooth::grpc::GrpcEventStreamCallback<HciEventPacket, HciPacket> {
+  class HciEventStreamCallback : public ::bluetooth::grpc::GrpcEventStreamCallback<HciEvtPacket, HciPacket> {
    public:
-    void OnWriteResponse(HciEventPacket* response, const HciPacket& event) override {
+    void OnWriteResponse(HciEvtPacket* response, const HciPacket& event) override {
       std::string response_str = std::string(event.begin(), event.end());
       response->set_payload(std::string(event.begin(), event.end()));
     }
   } hci_event_stream_callback_;
-  ::bluetooth::grpc::GrpcEventStream<HciEventPacket, HciPacket> hci_event_stream_;
+  ::bluetooth::grpc::GrpcEventStream<HciEvtPacket, HciPacket> hci_event_stream_;
 
   class HciAclStreamCallback : public ::bluetooth::grpc::GrpcEventStreamCallback<HciAclPacket, HciPacket> {
    public:
@@ -137,27 +134,31 @@ class HciHalFacadeService
   ::bluetooth::grpc::GrpcEventStream<HciScoPacket, HciPacket> hci_sco_stream_;
 };
 
-void HciHalFacadeModule::ListDependencies(ModuleList* list) {
+void HalFacadeModule::ListDependencies(ModuleList* list) {
   ::bluetooth::grpc::GrpcFacadeModule::ListDependencies(list);
   list->add<HciHal>();
 }
 
-void HciHalFacadeModule::Start() {
-  ::bluetooth::grpc::GrpcFacadeModule::Start();
-  service_ = new HciHalFacadeService(GetDependency<HciHal>());
+void HalFacadeModule::Start(const ModuleRegistry* registry) {
+  ::bluetooth::grpc::GrpcFacadeModule::Start(registry);
+  auto hal = registry->GetInstance<HciHal>();
+
+  service_ = new HciTransportationService(hal);
+  hal->registerIncomingPacketCallback(service_);
 }
 
-void HciHalFacadeModule::Stop() {
+void HalFacadeModule::Stop(const ModuleRegistry* registry) {
   delete service_;
 }
 
-::grpc::Service* HciHalFacadeModule::GetService() const {
+::grpc::Service* HalFacadeModule::GetService() const {
   return service_;
 }
 
-const ModuleFactory HciHalFacadeModule::Factory = ::bluetooth::ModuleFactory([]() {
-  return new HciHalFacadeModule();
+const ModuleFactory HalFacadeModule::Factory = ::bluetooth::ModuleFactory([]() {
+  return new HalFacadeModule();
 });
 
+}  // namespace facade
 }  // namespace hal
 }  // namespace bluetooth
