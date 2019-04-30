@@ -17,11 +17,10 @@
 #include "hal/hci_hal_host_rootcanal.h"
 #include "hal/hci_hal.h"
 
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include <csignal>
+#include <fcntl.h>
+#include <netdb.h>
+#include <unistd.h>
 #include <mutex>
 #include <queue>
 
@@ -72,11 +71,8 @@ int ConnectToRootCanal(const std::string& server, int port) {
     return INVALID_FD;
   }
 
-  timeval socket_timeout{
-      .tv_sec = 3,
-      .tv_usec = 0,
-  };
-  int ret = setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
+  int flags = fcntl(socket_fd, F_GETFL, NULL);
+  int ret = fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK);
   if (ret == -1) {
     LOG_ERROR("can't control socket fd: %s", strerror(errno));
     return INVALID_FD;
@@ -128,7 +124,7 @@ class HciHalHostRootcanal : public HciHal {
     // We have no dependencies
   }
 
-  void Start() override {
+  void Start(const ModuleRegistry* registry) override {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ == INVALID_FD);
     sock_fd_ = ConnectToRootCanal(config_->GetServerAddress(), config_->GetPort());
@@ -139,7 +135,7 @@ class HciHalHostRootcanal : public HciHal {
     LOG_INFO("Rootcanal HAL opened successfully");
   }
 
-  void Stop() override {
+  void Stop(const ModuleRegistry* registry) override {
     std::lock_guard<std::mutex> lock(mutex_);
     delete btsnoop_logger_;
     btsnoop_logger_ = nullptr;
@@ -203,14 +199,12 @@ class HciHalHostRootcanal : public HciHal {
 
     if (buf[0] == kH4Event) {
       RUN_NO_INTR(received_size = recv(sock_fd_, buf + kH4HeaderSize, kHciEvtHeaderSize, 0));
-      ASSERT_LOG(received_size != -1, "Can't receive from socket: %s", strerror(errno));
       ASSERT_LOG(received_size == kHciEvtHeaderSize, "malformed HCI event header received");
 
       uint8_t hci_evt_parameter_total_length = buf[2];
       ssize_t payload_size;
       RUN_NO_INTR(payload_size =
                       recv(sock_fd_, buf + kH4HeaderSize + kHciEvtHeaderSize, hci_evt_parameter_total_length, 0));
-      ASSERT_LOG(payload_size != -1, "Can't receive from socket: %s", strerror(errno));
       ASSERT_LOG(payload_size == hci_evt_parameter_total_length,
                  "malformed HCI event total parameter size received: %zu != %d", payload_size,
                  hci_evt_parameter_total_length);
@@ -223,14 +217,12 @@ class HciHalHostRootcanal : public HciHal {
     }
 
     if (buf[0] == kH4Acl) {
-      RUN_NO_INTR(received_size = recv(sock_fd_, buf + kH4HeaderSize, kHciAclHeaderSize, 0));
-      ASSERT_LOG(received_size != -1, "Can't receive from socket: %s", strerror(errno));
+      received_size = recv(sock_fd_, buf + kH4HeaderSize, kHciAclHeaderSize, 0);
       ASSERT_LOG(received_size == kHciAclHeaderSize, "malformed ACL header received");
 
       uint16_t hci_acl_data_total_length = buf[4] * 256 + buf[3];
       int payload_size;
       RUN_NO_INTR(payload_size = recv(sock_fd_, buf + kH4HeaderSize + kHciAclHeaderSize, hci_acl_data_total_length, 0));
-      ASSERT_LOG(payload_size != -1, "Can't receive from socket: %s", strerror(errno));
       ASSERT_LOG(payload_size == hci_acl_data_total_length, "malformed ACL length received: %d != %d", payload_size,
                  hci_acl_data_total_length);
       ASSERT_LOG(hci_acl_data_total_length <= kBufSize - kH4HeaderSize - kHciAclHeaderSize, "packet too long");
@@ -243,14 +235,11 @@ class HciHalHostRootcanal : public HciHal {
     }
 
     if (buf[0] == kH4Sco) {
-      RUN_NO_INTR(received_size = recv(sock_fd_, buf + kH4HeaderSize, kHciScoHeaderSize, 0));
-      ASSERT_LOG(received_size != -1, "Can't receive from socket: %s", strerror(errno));
+      received_size = recv(sock_fd_, buf + kH4HeaderSize, kHciScoHeaderSize, 0);
       ASSERT_LOG(received_size == kHciScoHeaderSize, "malformed SCO header received");
 
       uint8_t hci_sco_data_total_length = buf[3];
-      int payload_size;
-      RUN_NO_INTR(payload_size = recv(sock_fd_, buf + kH4HeaderSize + kHciScoHeaderSize, hci_sco_data_total_length, 0));
-      ASSERT_LOG(payload_size != -1, "Can't receive from socket: %s", strerror(errno));
+      int payload_size = recv(sock_fd_, buf + kH4HeaderSize + kHciScoHeaderSize, hci_sco_data_total_length, 0);
       ASSERT_LOG(payload_size == hci_sco_data_total_length, "malformed SCO packet received: size mismatch");
 
       HciPacket receivedHciPacket;
