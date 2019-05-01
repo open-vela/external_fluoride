@@ -780,7 +780,7 @@ static void bta_hl_api_cch_open(UNUSED_ATTR tBTA_HL_CB* p_cb,
         p_mcb->in_use = true;
         p_mcb->req_ctrl_psm = p_data->api_cch_open.ctrl_psm;
         p_mcb->sec_mask = p_data->api_cch_open.sec_mask;
-        bdcpy(p_mcb->bd_addr, p_data->api_cch_open.bd_addr);
+        p_mcb->bd_addr = p_data->api_cch_open.bd_addr;
         p_mcb->cch_oper = BTA_HL_CCH_OP_LOCAL_OPEN;
       } else {
         status = BTA_HL_STATUS_NO_RESOURCE;
@@ -1328,7 +1328,7 @@ static void bta_hl_api_sdp_query(UNUSED_ATTR tBTA_HL_CB* p_cb,
       if (bta_hl_find_avail_mcl_idx(app_idx, &mcl_idx)) {
         p_mcb = BTA_HL_GET_MCL_CB_PTR(app_idx, mcl_idx);
         p_mcb->in_use = true;
-        bdcpy(p_mcb->bd_addr, p_data->api_sdp_query.bd_addr);
+        p_mcb->bd_addr = p_data->api_sdp_query.bd_addr;
         APPL_TRACE_DEBUG(
             "bta_hl_api_sdp_query p_mcb->app_id %d app_idx %d mcl_idx %d",
             p_mcb->app_id, app_idx, mcl_idx);
@@ -1404,13 +1404,14 @@ static void bta_hl_sdp_query_results(UNUSED_ATTR tBTA_HL_CB* p_cb,
   tBTA_HL_MCL_CB* p_mcb = BTA_HL_GET_MCL_CB_PTR(app_idx, mcl_idx);
   tBTA_HL_SDP* p_sdp = NULL;
   uint16_t event;
+  bool release_sdp_buf = false;
 
   event = p_data->hdr.event;
 
   if (event == BTA_HL_SDP_QUERY_OK_EVT) {
-    // this is freed in btif_hl_proc_sdp_query_cfm
     p_sdp = (tBTA_HL_SDP*)osi_malloc(sizeof(tBTA_HL_SDP));
     memcpy(p_sdp, &p_mcb->sdp, sizeof(tBTA_HL_SDP));
+    release_sdp_buf = true;
   } else {
     status = BTA_HL_STATUS_SDP_FAIL;
   }
@@ -1428,6 +1429,8 @@ static void bta_hl_sdp_query_results(UNUSED_ATTR tBTA_HL_CB* p_cb,
   bta_hl_build_sdp_query_cfm(&evt_data, p_mcb->app_id, p_acb->app_handle,
                              p_mcb->bd_addr, p_sdp, status);
   p_acb->p_cback(BTA_HL_SDP_QUERY_CFM_EVT, (tBTA_HL*)&evt_data);
+
+  if (release_sdp_buf) osi_free_and_reset((void**)&p_sdp);
 
   if (p_data->cch_sdp.release_mcl_cb) {
     memset(p_mcb, 0, sizeof(tBTA_HL_MCL_CB));
