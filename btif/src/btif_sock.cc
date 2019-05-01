@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 
 #include <base/logging.h>
 
-#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_sock.h>
 
@@ -35,32 +34,24 @@
 #include "btif_sock_thread.h"
 #include "btif_uid.h"
 #include "btif_util.h"
-#include "common/metrics.h"
-#include "device/include/controller.h"
 #include "osi/include/thread.h"
 
-using bluetooth::Uuid;
-
 static bt_status_t btsock_listen(btsock_type_t type, const char* service_name,
-                                 const Uuid* uuid, int channel, int* sock_fd,
+                                 const uint8_t* uuid, int channel, int* sock_fd,
                                  int flags, int app_uid);
-static bt_status_t btsock_connect(const RawAddress* bd_addr, btsock_type_t type,
-                                  const Uuid* uuid, int channel, int* sock_fd,
-                                  int flags, int app_uid);
-
-static void btsock_request_max_tx_data_length(const RawAddress& bd_addr);
+static bt_status_t btsock_connect(const bt_bdaddr_t* bd_addr,
+                                  btsock_type_t type, const uint8_t* uuid,
+                                  int channel, int* sock_fd, int flags,
+                                  int app_uid);
 
 static void btsock_signaled(int fd, int type, int flags, uint32_t user_id);
 
 static std::atomic_int thread_handle{-1};
 static thread_t* thread;
 
-const btsock_interface_t* btif_sock_get_interface(void) {
-  static btsock_interface_t interface = {
-      sizeof(interface), btsock_listen, /* listen */
-      btsock_connect,                   /* connect */
-      btsock_request_max_tx_data_length /* request_max_tx_data_length */
-  };
+btsock_interface_t* btif_sock_get_interface(void) {
+  static btsock_interface_t interface = {sizeof(interface), btsock_listen,
+                                         btsock_connect};
 
   return &interface;
 }
@@ -130,21 +121,16 @@ void btif_sock_cleanup(void) {
 }
 
 static bt_status_t btsock_listen(btsock_type_t type, const char* service_name,
-                                 const Uuid* service_uuid, int channel,
+                                 const uint8_t* service_uuid, int channel,
                                  int* sock_fd, int flags, int app_uid) {
   if ((flags & BTSOCK_FLAG_NO_SDP) == 0) {
+    CHECK(service_uuid != NULL || channel > 0);
     CHECK(sock_fd != NULL);
   }
 
   *sock_fd = INVALID_FD;
   bt_status_t status = BT_STATUS_FAIL;
-  int original_channel = channel;
 
-  bluetooth::common::LogSocketConnectionState(
-      RawAddress::kEmpty, 0, type,
-      android::bluetooth::SocketConnectionstateEnum::
-          SOCKET_CONNECTION_STATE_LISTENING,
-      0, 0, app_uid, channel, android::bluetooth::SOCKET_ROLE_LISTEN);
   switch (type) {
     case BTSOCK_RFCOMM:
       status = btsock_rfc_listen(service_name, service_uuid, channel, sock_fd,
@@ -154,23 +140,7 @@ static bt_status_t btsock_listen(btsock_type_t type, const char* service_name,
       status =
           btsock_l2cap_listen(service_name, channel, sock_fd, flags, app_uid);
       break;
-    case BTSOCK_L2CAP_LE:
-      if (flags & BTSOCK_FLAG_NO_SDP) {
-        /* Set channel to zero so that it will be assigned */
-        channel = 0;
-      } else if (channel <= 0) {
-        LOG_ERROR(LOG_TAG, "%s: type BTSOCK_L2CAP_LE: invalid channel=%d",
-                  __func__, channel);
-        break;
-      }
-      flags |= BTSOCK_FLAG_LE_COC;
-      LOG_DEBUG(
-          LOG_TAG,
-          "%s: type=BTSOCK_L2CAP_LE, channel=0x%x, original=0x%x, flags=0x%x",
-          __func__, channel, original_channel, flags);
-      status =
-          btsock_l2cap_listen(service_name, channel, sock_fd, flags, app_uid);
-      break;
+
     case BTSOCK_SCO:
       status = btsock_sco_listen(sock_fd, flags);
       break;
@@ -181,30 +151,20 @@ static bt_status_t btsock_listen(btsock_type_t type, const char* service_name,
       status = BT_STATUS_UNSUPPORTED;
       break;
   }
-  if (status != BT_STATUS_SUCCESS) {
-    bluetooth::common::LogSocketConnectionState(
-        RawAddress::kEmpty, 0, type,
-        android::bluetooth::SocketConnectionstateEnum::
-            SOCKET_CONNECTION_STATE_DISCONNECTED,
-        0, 0, app_uid, channel, android::bluetooth::SOCKET_ROLE_LISTEN);
-  }
   return status;
 }
 
-static bt_status_t btsock_connect(const RawAddress* bd_addr, btsock_type_t type,
-                                  const Uuid* uuid, int channel, int* sock_fd,
-                                  int flags, int app_uid) {
+static bt_status_t btsock_connect(const bt_bdaddr_t* bd_addr,
+                                  btsock_type_t type, const uint8_t* uuid,
+                                  int channel, int* sock_fd, int flags,
+                                  int app_uid) {
+  CHECK(uuid != NULL || channel > 0);
   CHECK(bd_addr != NULL);
   CHECK(sock_fd != NULL);
 
   *sock_fd = INVALID_FD;
   bt_status_t status = BT_STATUS_FAIL;
 
-  bluetooth::common::LogSocketConnectionState(
-      *bd_addr, 0, type,
-      android::bluetooth::SocketConnectionstateEnum::
-          SOCKET_CONNECTION_STATE_CONNECTING,
-      0, 0, app_uid, channel, android::bluetooth::SOCKET_ROLE_CONNECTION);
   switch (type) {
     case BTSOCK_RFCOMM:
       status =
@@ -212,13 +172,6 @@ static bt_status_t btsock_connect(const RawAddress* bd_addr, btsock_type_t type,
       break;
 
     case BTSOCK_L2CAP:
-      status = btsock_l2cap_connect(bd_addr, channel, sock_fd, flags, app_uid);
-      break;
-
-    case BTSOCK_L2CAP_LE:
-      flags |= BTSOCK_FLAG_LE_COC;
-      LOG_DEBUG(LOG_TAG, "%s: type=BTSOCK_L2CAP_LE, channel=0x%x, flags=0x%x",
-                __func__, channel, flags);
       status = btsock_l2cap_connect(bd_addr, channel, sock_fd, flags, app_uid);
       break;
 
@@ -232,23 +185,7 @@ static bt_status_t btsock_connect(const RawAddress* bd_addr, btsock_type_t type,
       status = BT_STATUS_UNSUPPORTED;
       break;
   }
-  if (status != BT_STATUS_SUCCESS) {
-    bluetooth::common::LogSocketConnectionState(
-        *bd_addr, 0, type,
-        android::bluetooth::SocketConnectionstateEnum::
-            SOCKET_CONNECTION_STATE_DISCONNECTED,
-        0, 0, app_uid, channel, android::bluetooth::SOCKET_ROLE_CONNECTION);
-  }
   return status;
-}
-
-static void btsock_request_max_tx_data_length(const RawAddress& remote_device) {
-  const controller_t* controller = controller_get_interface();
-  uint16_t max_len = controller->get_ble_maximum_tx_data_length();
-
-  DVLOG(2) << __func__ << ": max_len=" << max_len;
-
-  BTA_DmBleSetDataLength(remote_device, max_len);
 }
 
 static void btsock_signaled(int fd, int type, int flags, uint32_t user_id) {
@@ -257,14 +194,10 @@ static void btsock_signaled(int fd, int type, int flags, uint32_t user_id) {
       btsock_rfc_signaled(fd, flags, user_id);
       break;
     case BTSOCK_L2CAP:
-    case BTSOCK_L2CAP_LE:
-      /* Note: The caller may not distinguish between BTSOCK_L2CAP and
-       * BTSOCK_L2CAP_LE correctly */
       btsock_l2cap_signaled(fd, flags, user_id);
       break;
     default:
-      LOG(FATAL) << "Invalid socket type! type=" << type << " fd=" << fd
-                 << " flags=" << flags << " user_id=" << user_id;
+      CHECK(false && "Invalid socket type");
       break;
   }
 }
