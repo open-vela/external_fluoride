@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -44,19 +43,6 @@ class BlockingQueue {
     queue_.pop();
     return data;
   };
-
-  bool take_for(std::chrono::milliseconds time, T& data) {
-    std::unique_lock<std::mutex> lock(mutex_);
-    while (queue_.empty()) {
-      if (not_empty_.wait_for(lock, time) == std::cv_status::timeout) {
-        return false;
-      }
-    }
-    data = queue_.front();
-    queue_.pop();
-
-    return true;
-  }
 
   bool empty() const {
     std::unique_lock<std::mutex> lock(mutex_);
