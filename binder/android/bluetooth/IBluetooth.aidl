@@ -17,7 +17,6 @@
 package android.bluetooth;
 
 import android.bluetooth.IBluetoothCallback;
-import android.bluetooth.IBluetoothMetadataListener;
 import android.bluetooth.IBluetoothSocketManager;
 import android.bluetooth.IBluetoothStateChangeCallback;
 import android.bluetooth.BluetoothActivityEnergyInfo;
@@ -48,18 +47,13 @@ interface IBluetooth
     BluetoothClass getBluetoothClass();
     boolean setBluetoothClass(in BluetoothClass bluetoothClass);
 
-    int getIoCapability();
-    boolean setIoCapability(int capability);
-    int getLeIoCapability();
-    boolean setLeIoCapability(int capability);
-
     int getScanMode();
     boolean setScanMode(int mode, int duration);
 
     int getDiscoverableTimeout();
     boolean setDiscoverableTimeout(int timeout);
 
-    boolean startDiscovery(String callingPackage);
+    boolean startDiscovery();
     boolean cancelDiscovery();
     boolean isDiscovering();
     long getDiscoveryEndMillis();
@@ -94,8 +88,6 @@ interface IBluetooth
     boolean setPairingConfirmation(in BluetoothDevice device, boolean accept);
 
     int getPhonebookAccessPermission(in BluetoothDevice device);
-    boolean setSilenceMode(in BluetoothDevice device, boolean silence);
-    boolean getSilenceMode(in BluetoothDevice device);
     boolean setPhonebookAccessPermission(in BluetoothDevice device, int value);
     int getMessageAccessPermission(in BluetoothDevice device);
     boolean setMessageAccessPermission(in BluetoothDevice device, int value);
@@ -122,13 +114,6 @@ interface IBluetooth
     boolean isLePeriodicAdvertisingSupported();
     int getLeMaximumAdvertisingDataLength();
     BluetoothActivityEnergyInfo reportActivityInfo();
-
-    // For Metadata
-    boolean registerMetadataListener(in IBluetoothMetadataListener listener, in BluetoothDevice device);
-    boolean unregisterMetadataListener(in BluetoothDevice device);
-    boolean setMetadata(in BluetoothDevice device, in int key, in byte[] value);
-    byte[] getMetadata(in BluetoothDevice device, in int key);
-
 
     /**
      * Requests the controller activity info asynchronously.
