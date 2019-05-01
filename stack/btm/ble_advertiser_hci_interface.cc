@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright 2016 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "btm_int_types.h"
 #include "device/include/controller.h"
 #include "hcidefs.h"
+#include "log/log.h"
 
 #define BTM_BLE_MULTI_ADV_SET_RANDOM_ADDR_LEN 8
 #define BTM_BLE_MULTI_ADV_ENB_LEN 3
@@ -162,6 +163,14 @@ class BleAdvertiserVscHciInterfaceImpl : public BleAdvertiserHciInterface {
     uint8_t param[BTM_BLE_MULTI_ADV_WRITE_DATA_LEN];
     memset(param, 0, BTM_BLE_MULTI_ADV_WRITE_DATA_LEN);
 
+    if (data_length > BTM_BLE_AD_DATA_LEN) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__
+                 << ": data_length=" << static_cast<int>(data_length)
+                 << ", is longer than size limit " << BTM_BLE_AD_DATA_LEN;
+      data_length = BTM_BLE_AD_DATA_LEN;
+    }
+
     uint8_t* pp = param;
     UINT8_TO_STREAM(pp, BTM_BLE_MULTI_ADV_WRITE_ADV_DATA);
     UINT8_TO_STREAM(pp, data_length);
@@ -180,6 +189,14 @@ class BleAdvertiserVscHciInterfaceImpl : public BleAdvertiserHciInterface {
     VLOG(1) << __func__;
     uint8_t param[BTM_BLE_MULTI_ADV_WRITE_DATA_LEN];
     memset(param, 0, BTM_BLE_MULTI_ADV_WRITE_DATA_LEN);
+
+    if (scan_response_data_length > BTM_BLE_AD_DATA_LEN) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__ << ": scan_response_data_length="
+                 << static_cast<int>(scan_response_data_length)
+                 << ", is longer than size limit " << BTM_BLE_AD_DATA_LEN;
+      scan_response_data_length = BTM_BLE_AD_DATA_LEN;
+    }
 
     uint8_t* pp = param;
     UINT8_TO_STREAM(pp, BTM_BLE_MULTI_ADV_WRITE_SCAN_RSP_DATA);
@@ -318,7 +335,9 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
   }
 
   void SetAdvertisingEventObserver(
-      AdvertisingEventObserver* observer) override {}
+      AdvertisingEventObserver* observer) override {
+    this->advertising_event_observer = observer;
+  }
 
   void SetParameters(uint8_t handle, uint16_t properties, uint32_t adv_int_min,
                      uint32_t adv_int_max, uint8_t channel_map,
@@ -370,6 +389,15 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
 
     uint8_t param[HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1];
 
+    if (data_length > HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__
+                 << ": data_length=" << static_cast<int>(data_length)
+                 << ", is longer than size limit "
+                 << HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+      data_length = HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+    }
+
     uint8_t* pp = param;
     memset(pp, 0, HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1);
     UINT8_TO_STREAM(pp, data_length);
@@ -386,6 +414,15 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
                            status_cb command_complete) override {
     VLOG(1) << __func__;
     uint8_t param[HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1];
+
+    if (scan_response_data_length > HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA) {
+      android_errorWriteLog(0x534e4554, "121145627");
+      LOG(ERROR) << __func__ << ": scan_response_data_length="
+                 << static_cast<int>(scan_response_data_length)
+                 << ", is longer than size limit "
+                 << HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+      scan_response_data_length = HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA;
+    }
 
     uint8_t* pp = param;
     memset(pp, 0, HCIC_PARAM_SIZE_BLE_WRITE_ADV_DATA + 1);
@@ -457,6 +494,19 @@ class BleAdvertiserLegacyHciInterfaceImpl : public BleAdvertiserHciInterface {
     // Legacy Advertising don't have remove method.
     command_complete.Run(0);
   }
+
+ public:
+  void OnAdvertisingSetTerminated(uint8_t status, uint16_t connection_handle) {
+    VLOG(1) << __func__;
+
+    AdvertisingEventObserver* observer = this->advertising_event_observer;
+    if (observer)
+      observer->OnAdvertisingSetTerminated(status, 0 /*advertising_handle*/,
+                                           connection_handle, 0);
+  }
+
+ private:
+  AdvertisingEventObserver* advertising_event_observer = nullptr;
 };
 
 class BleAdvertiserHciExtendedImpl : public BleAdvertiserHciInterface {
@@ -697,6 +747,15 @@ void btm_le_on_advertising_set_terminated(uint8_t* p, uint16_t length) {
   }
 }
 
+bool legacy_advertising_in_use = false;
+void btm_ble_advertiser_notify_terminated_legacy(uint8_t status,
+                                                 uint16_t connection_handle) {
+  if (BleAdvertiserHciInterface::Get() && legacy_advertising_in_use) {
+    ((BleAdvertiserLegacyHciInterfaceImpl*)BleAdvertiserHciInterface::Get())
+        ->OnAdvertisingSetTerminated(status, connection_handle);
+  }
+}
+
 void BleAdvertiserHciInterface::Initialize() {
   VLOG(1) << __func__;
   LOG_ASSERT(instance == nullptr) << "Was already initialized.";
@@ -712,6 +771,7 @@ void BleAdvertiserHciInterface::Initialize() {
   } else {
     LOG(INFO) << "Legacy advertising will be in use";
     instance = new BleAdvertiserLegacyHciInterfaceImpl();
+    legacy_advertising_in_use = true;
   }
 }
 
