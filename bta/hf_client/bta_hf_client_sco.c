@@ -231,7 +231,7 @@ static void bta_hf_client_sco_conn_cback(UINT16 sco_idx)
     /* no match found; disconnect sco, init sco variables */
     else
     {
-        /* should not force the sco state to shutdown state here */
+        bta_hf_client_cb.scb.sco_state = BTA_HF_CLIENT_SCO_SHUTDOWN_ST;
         BTM_RemoveSco(sco_idx);
     }
 }
