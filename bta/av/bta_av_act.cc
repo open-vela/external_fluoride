@@ -1873,9 +1873,9 @@ void bta_av_rc_disc_done(UNUSED_ATTR tBTA_AV_DATA* p_data) {
       /*
        * In case scb is not created by the time we are done with SDP
        * we still need to send RC feature event. So we need to get BD
-       * from Message.  Note that lidx is 1 based not 0 based
+       * from Message
        */
-      rc_feat.peer_addr = p_cb->lcb[p_cb->rcb[rc_handle].lidx - 1].addr;
+      rc_feat.peer_addr = p_cb->lcb[p_cb->rcb[rc_handle].lidx].addr;
     } else {
       rc_feat.peer_addr = p_scb->PeerAddress();
     }
