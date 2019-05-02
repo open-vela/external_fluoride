@@ -42,6 +42,7 @@ class HciHalFacadeModule : public ::bluetooth::grpc::GrpcFacadeModule {
 
  private:
   HciHalFacadeService* service_;
+  friend class IncomingPacketCallback;
 };
 
 }  // namespace hal

@@ -80,7 +80,6 @@ int main(int argc, const char** argv) {
 
   stack->ShutDown();
   delete stack;
-  delete stack_thread;
 
   return 0;
 }
