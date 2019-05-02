@@ -1419,6 +1419,8 @@ class HearingAidImpl : public HearingAid {
     LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
               << ", playback_started=" << hearingDevice->playback_started;
 
+    hearingDevice->playback_started = false;
+
     if (hearingDevice->connecting_actively) {
       // cancel pending direct connect
       BTA_GATTC_CancelOpen(gatt_if, address, true);
