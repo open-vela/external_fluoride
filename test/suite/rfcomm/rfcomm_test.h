@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 Google, Inc.
+ *  Copyright 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,9 +36,9 @@ class RFCommTest : public BluetoothTest {
   // TearDown cleans up the Bluetooth and RFCOMM interfaces
   virtual void TearDown();
 
-  bt_bdaddr_t bt_remote_bdaddr_;
+  RawAddress bt_remote_bdaddr_;
 
-  static const bt_uuid_t HFP_UUID;
+  static const bluetooth::Uuid HFP_UUID;
 
  private:
   const btsock_interface_t* socket_interface_;
