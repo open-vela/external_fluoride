@@ -51,7 +51,7 @@ class GetElementAttributesRequest : public VendorPacket {
   std::vector<Attribute> GetAttributesRequested() const;
 
   // Overloaded Functions
-  virtual bool IsValid() const override;
+  virtual bool IsValid() const;
   virtual std::string ToString() const override;
 
  protected:
