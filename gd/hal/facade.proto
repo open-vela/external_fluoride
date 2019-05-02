@@ -6,9 +6,7 @@ import "google/protobuf/empty.proto";
 import "facade/common.proto";
 
 service HciHalFacade {
-  rpc SendHciResetCommand(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc SetLoopbackMode(LoopbackModeSettings) returns (google.protobuf.Empty) {}
-  rpc SetInquiry(InquirySettings) returns (google.protobuf.Empty) {}
   rpc SendHciCommand(HciCommandPacket) returns (google.protobuf.Empty) {}
   rpc SendHciAcl(HciAclPacket) returns (google.protobuf.Empty) {}
   rpc SendHciSco(HciScoPacket) returns (google.protobuf.Empty) {}
@@ -20,15 +18,6 @@ service HciHalFacade {
 
 message LoopbackModeSettings {
   bool enable = 1;
-}
-
-message ScanModeSettings {
-  uint32 mode = 1;
-}
-
-message InquirySettings {
-  uint32 length = 1;
-  uint32 num_responses = 2;
 }
 
 message HciEventPacket {

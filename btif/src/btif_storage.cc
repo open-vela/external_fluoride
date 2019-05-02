@@ -889,8 +889,9 @@ static void remove_devices_with_sample_ltk() {
     tBTA_LE_KEY_VALUE key;
     memset(&key, 0, sizeof(key));
 
-    if (btif_storage_get_ble_bonding_key(&bd_addr, BTIF_DM_LE_KEY_PENC, (uint8_t*)&key, sizeof(tBTM_LE_PENC_KEYS)) ==
-        BT_STATUS_SUCCESS) {
+    if (btif_storage_get_ble_bonding_key(
+            &bd_addr, BTIF_DM_LE_KEY_PENC, (uint8_t*)&key,
+            sizeof(tBTM_LE_PENC_KEYS)) == BT_STATUS_SUCCESS) {
       if (is_sample_ltk(key.penc_key.ltk)) {
         bad_ltk.push_back(bd_addr);
       }
@@ -899,7 +900,8 @@ static void remove_devices_with_sample_ltk() {
 
   for (RawAddress address : bad_ltk) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(ERROR) << __func__ << ": removing bond to device using test TLK: " << address;
+    LOG(ERROR) << __func__
+               << ": removing bond to device using test TLK: " << address;
 
     btif_storage_remove_bonded_device(&address);
   }
@@ -1641,47 +1643,6 @@ void btif_storage_set_hearing_aid_white_list(const RawAddress& address,
 
   btif_config_set_int(addrstr, HEARING_AID_IS_WHITE_LISTED, add_to_whitelist);
   btif_config_save();
-}
-
-/** Get the hearing aid device properties. */
-bool btif_storage_get_hearing_aid_prop(
-    const RawAddress& address, uint8_t* capabilities, uint64_t* hi_sync_id,
-    uint16_t* render_delay, uint16_t* preparation_delay, uint16_t* codecs) {
-  std::string addrstr = address.ToString();
-
-  int value;
-  if (btif_config_get_int(addrstr, HEARING_AID_CAPABILITIES, &value)) {
-    *capabilities = value;
-  } else {
-    return false;
-  }
-
-  if (btif_config_get_int(addrstr, HEARING_AID_CODECS, &value)) {
-    *codecs = value;
-  } else {
-    return false;
-  }
-
-  if (btif_config_get_int(addrstr, HEARING_AID_RENDER_DELAY, &value)) {
-    *render_delay = value;
-  } else {
-    return false;
-  }
-
-  if (btif_config_get_int(addrstr, HEARING_AID_PREPARATION_DELAY, &value)) {
-    *preparation_delay = value;
-  } else {
-    return false;
-  }
-
-  uint64_t lvalue;
-  if (btif_config_get_uint64(addrstr, HEARING_AID_SYNC_ID, &lvalue)) {
-    *hi_sync_id = lvalue;
-  } else {
-    return false;
-  }
-
-  return true;
 }
 
 /*******************************************************************************

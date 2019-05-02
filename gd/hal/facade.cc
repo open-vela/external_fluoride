@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include "hal/facade.h"
+#include "facade.h"
 
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 
@@ -25,9 +24,11 @@
 #include "hal/facade.grpc.pb.h"
 #include "hal/hci_hal.h"
 #include "hci/hci_packets.h"
+#include "os/log.h"
 
 using ::grpc::ServerAsyncResponseWriter;
 using ::grpc::ServerAsyncWriter;
+using ::grpc::ServerCompletionQueue;
 using ::grpc::ServerContext;
 
 using ::bluetooth::facade::EventStreamRequest;
@@ -45,26 +46,9 @@ class HciHalFacadeService
     hal->registerIncomingPacketCallback(this);
   }
 
-  ::grpc::Status SendHciResetCommand(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
-                                     ::google::protobuf::Empty* response) override {
-    std::unique_lock<std::mutex> lock(mutex_);
-    can_send_hci_command_ = false;
-    auto packet = hci::ResetBuilder::Create();
-    std::shared_ptr<std::vector<uint8_t>> packet_bytes = std::make_shared<std::vector<uint8_t>>();
-    hci::BitInserter it(*packet_bytes);
-    packet->Serialize(it);
-    hal_->sendHciCommand(*packet_bytes);
-    while (!can_send_hci_command_) {
-      cv_.wait(lock);
-    }
-    return ::grpc::Status::OK;
-  }
-
   ::grpc::Status SetLoopbackMode(::grpc::ServerContext* context,
                                  const ::bluetooth::hal::LoopbackModeSettings* request,
                                  ::google::protobuf::Empty* response) override {
-    std::unique_lock<std::mutex> lock(mutex_);
-    can_send_hci_command_ = false;
     bool enable = request->enable();
     auto packet = hci::WriteLoopbackModeBuilder::Create(enable ? hci::LoopbackMode::ENABLE_LOCAL
                                                                : hci::LoopbackMode::NO_LOOPBACK);
@@ -72,37 +56,13 @@ class HciHalFacadeService
     hci::BitInserter it(*packet_bytes);
     packet->Serialize(it);
     hal_->sendHciCommand(*packet_bytes);
-    while (!can_send_hci_command_) {
-      cv_.wait(lock);
-    }
-    return ::grpc::Status::OK;
-  }
-
-  ::grpc::Status SetInquiry(::grpc::ServerContext* context, const ::bluetooth::hal::InquirySettings* request,
-                            ::google::protobuf::Empty* response) override {
-    std::unique_lock<std::mutex> lock(mutex_);
-    can_send_hci_command_ = false;
-    auto packet = hci::InquiryBuilder::Create(0x33 /* LAP=0x9e8b33 */, static_cast<uint8_t>(request->length()),
-                                              static_cast<uint8_t>(request->num_responses()));
-    std::shared_ptr<std::vector<uint8_t>> packet_bytes = std::make_shared<std::vector<uint8_t>>();
-    hci::BitInserter it(*packet_bytes);
-    packet->Serialize(it);
-    hal_->sendHciCommand(*packet_bytes);
-    while (!can_send_hci_command_) {
-      cv_.wait(lock);
-    }
     return ::grpc::Status::OK;
   }
 
   ::grpc::Status SendHciCommand(::grpc::ServerContext* context, const ::bluetooth::hal::HciCommandPacket* request,
                                 ::google::protobuf::Empty* response) override {
-    std::unique_lock<std::mutex> lock(mutex_);
-    can_send_hci_command_ = false;
     std::string req_string = request->payload();
     hal_->sendHciCommand(std::vector<uint8_t>(req_string.begin(), req_string.end()));
-    while (!can_send_hci_command_) {
-      cv_.wait(lock);
-    }
     return ::grpc::Status::OK;
   }
 
@@ -138,8 +98,6 @@ class HciHalFacadeService
   void hciEventReceived(bluetooth::hal::HciPacket event) override {
     std::string response_str = std::string(event.begin(), event.end());
     hci_event_stream_.OnIncomingEvent(event);
-    can_send_hci_command_ = true;
-    cv_.notify_one();
   }
 
   void aclDataReceived(bluetooth::hal::HciPacket data) override {
@@ -152,9 +110,6 @@ class HciHalFacadeService
 
  private:
   HciHal* hal_;
-  bool can_send_hci_command_ = true;
-  mutable std::mutex mutex_;
-  std::condition_variable cv_;
 
   class HciEventStreamCallback : public ::bluetooth::grpc::GrpcEventStreamCallback<HciEventPacket, HciPacket> {
    public:
@@ -194,7 +149,6 @@ void HciHalFacadeModule::Start() {
 
 void HciHalFacadeModule::Stop() {
   delete service_;
-  ::bluetooth::grpc::GrpcFacadeModule::Stop();
 }
 
 ::grpc::Service* HciHalFacadeModule::GetService() const {
