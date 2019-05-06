@@ -343,11 +343,7 @@ class HearingAidImpl : public HearingAid {
 
     HearingDevice* hearingDevice = hearingDevices.FindByAddress(address);
     if (!hearingDevice) {
-      /* When Hearing Aid is quickly disabled and enabled in settings, this case
-       * might happen */
-      LOG(WARNING) << "Closing connection to non hearing-aid device, address="
-                   << address;
-      BTA_GATTC_Close(conn_id);
+      DVLOG(2) << "Skipping unknown device, address=" << address;
       return;
     }
 
