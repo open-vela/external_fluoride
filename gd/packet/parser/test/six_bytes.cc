@@ -16,27 +16,20 @@
  *
  ******************************************************************************/
 
-#include "hci/include/btsnoop.h"
+#include "six_bytes.h"
 
-static void capture(const BT_HDR*, bool) { /* do nothing */
-}
+namespace bluetooth {
+namespace packet {
+namespace parser {
+namespace test {
 
-static void whitelist_l2c_channel(uint16_t, uint16_t,
-                                  uint16_t) { /* do nothing */
-}
+static_assert(sizeof(SixBytes) == 6, "SixBytes must be 6 bytes long!");
 
-static void whitelist_rfc_dlci(uint16_t, uint8_t) { /* do nothing */
-}
+SixBytes::SixBytes(const uint8_t (&six)[6]) {
+  std::copy(six, six + kLength, six_bytes);
+};
 
-static void add_rfc_l2c_channel(uint16_t, uint16_t, uint16_t) { /* do nothing */
-}
-
-static void clear_l2cap_whitelist(uint16_t, uint16_t,
-                                  uint16_t) { /* do nothing */
-}
-
-static const btsnoop_t fake_snoop = {capture, whitelist_l2c_channel,
-                                     whitelist_rfc_dlci, add_rfc_l2c_channel,
-                                     clear_l2cap_whitelist};
-
-const btsnoop_t* btsnoop_get_interface() { return &fake_snoop; }
+}  // namespace test
+}  // namespace parser
+}  // namespace packet
+}  // namespace bluetooth
