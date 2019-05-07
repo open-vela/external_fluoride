@@ -609,7 +609,7 @@ class HearingAidImpl : public HearingAid {
       return;
     }
 
-    const std::vector<gatt::Service>* services = BTA_GATTC_GetServices(conn_id);
+    const std::list<gatt::Service>* services = BTA_GATTC_GetServices(conn_id);
 
     const gatt::Service* service = nullptr;
     for (const gatt::Service& tmp : *services) {
@@ -1422,8 +1422,6 @@ class HearingAidImpl : public HearingAid {
 
     LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
               << ", playback_started=" << hearingDevice->playback_started;
-
-    hearingDevice->playback_started = false;
 
     if (hearingDevice->connecting_actively) {
       // cancel pending direct connect
