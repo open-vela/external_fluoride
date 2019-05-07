@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2016 The Android Open Source Project
+//  Copyright 2016 The Android Open Source Project
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
 
 #include "service/low_energy_scanner.h"
 
-#include <base/bind.h>
-#include <base/logging.h>
-
 #include "service/adapter.h"
 #include "service/logging_helpers.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hcidefs.h"
+
+#include <base/bind.h>
+#include <base/callback.h>
+#include <base/logging.h>
 
 using std::lock_guard;
 using std::mutex;
@@ -65,7 +66,7 @@ size_t GetScanRecordLength(std::vector<uint8_t> bytes) {
 // LowEnergyScanner implementation
 // ========================================================
 
-LowEnergyScanner::LowEnergyScanner(Adapter& adapter, const UUID& uuid,
+LowEnergyScanner::LowEnergyScanner(Adapter& adapter, const Uuid& uuid,
                                    int scanner_id)
     : adapter_(adapter),
       app_identifier_(uuid),
@@ -131,7 +132,7 @@ bool LowEnergyScanner::StopScan() {
   return true;
 }
 
-const UUID& LowEnergyScanner::GetAppIdentifier() const {
+const Uuid& LowEnergyScanner::GetAppIdentifier() const {
   return app_identifier_;
 }
 
@@ -170,13 +171,13 @@ LowEnergyScannerFactory::~LowEnergyScannerFactory() {
 }
 
 bool LowEnergyScannerFactory::RegisterInstance(
-    const UUID& uuid, const RegisterCallback& callback) {
-  VLOG(1) << __func__ << " - UUID: " << uuid.ToString();
+    const Uuid& uuid, const RegisterCallback& callback) {
+  VLOG(1) << __func__ << " - Uuid: " << uuid.ToString();
   lock_guard<mutex> lock(pending_calls_lock_);
 
   if (pending_calls_.find(uuid) != pending_calls_.end()) {
-    LOG(ERROR) << "Low-Energy scanner with given UUID already registered - "
-               << "UUID: " << uuid.ToString();
+    LOG(ERROR) << "Low-Energy scanner with given Uuid already registered - "
+               << "Uuid: " << uuid.ToString();
     return false;
   }
 
@@ -193,11 +194,11 @@ bool LowEnergyScannerFactory::RegisterInstance(
 }
 
 void LowEnergyScannerFactory::RegisterScannerCallback(
-    const RegisterCallback& callback, const UUID& app_uuid, uint8_t scanner_id,
+    const RegisterCallback& callback, const Uuid& app_uuid, uint8_t scanner_id,
     uint8_t status) {
-  UUID uuid(app_uuid);
+  Uuid uuid(app_uuid);
 
-  VLOG(1) << __func__ << " - UUID: " << uuid.ToString();
+  VLOG(1) << __func__ << " - Uuid: " << uuid.ToString();
   lock_guard<mutex> lock(pending_calls_lock_);
 
   auto iter = pending_calls_.find(uuid);
