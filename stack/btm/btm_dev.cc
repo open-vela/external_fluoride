@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -68,6 +68,8 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (!p_dev_rec) {
     p_dev_rec = btm_sec_allocate_dev_rec();
+    BTM_TRACE_API("%s: allocated p_dev_rec=%p, bd_addr=%s", __func__, p_dev_rec,
+                  bd_addr.ToString().c_str());
 
     p_dev_rec->bd_addr = bd_addr;
     p_dev_rec->hci_handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_BR_EDR);
@@ -147,6 +149,12 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
   return true;
 }
 
+void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec) {
+  memset(p_dev_rec->link_key, 0, LINK_KEY_LEN);
+  memset(&p_dev_rec->ble.keys, 0, sizeof(tBTM_SEC_BLE_KEYS));
+  list_remove(btm_cb.sec_dev_rec, p_dev_rec);
+}
+
 /** Free resources associated with the device associated with |bd_addr| address.
  *
  * *** WARNING ***
@@ -168,7 +176,10 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec != NULL) {
     RawAddress bda = p_dev_rec->bd_addr;
-    btm_sec_free_dev(p_dev_rec);
+
+    /* Clear out any saved BLE keys */
+    btm_sec_clear_ble_keys(p_dev_rec);
+    wipe_secrets_and_remove(p_dev_rec);
     /* Tell controller to get rid of the link key, if it has one stored */
     BTM_DeleteStoredLinkKey(&bda, NULL);
   }
@@ -225,9 +236,11 @@ char* BTM_SecReadDevName(const RawAddress& bd_addr) {
  ******************************************************************************/
 tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& bd_addr) {
   tBTM_INQ_INFO* p_inq_info;
-  BTM_TRACE_EVENT("btm_sec_alloc_dev");
 
   tBTM_SEC_DEV_REC* p_dev_rec = btm_sec_allocate_dev_rec();
+
+  BTM_TRACE_EVENT("%s: allocated p_dev_rec=%p, bd_addr=%s", __func__, p_dev_rec,
+                  bd_addr.ToString().c_str());
 
   /* Check with the BT manager if details about remote device are known */
   /* outgoing connection */
@@ -249,19 +262,6 @@ tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& bd_addr) {
   p_dev_rec->hci_handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_BR_EDR);
 
   return (p_dev_rec);
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_free_dev
- *
- * Description      Mark device record as not used
- *
- ******************************************************************************/
-void btm_sec_free_dev(tBTM_SEC_DEV_REC* p_dev_rec) {
-  /* Clear out any saved BLE keys */
-  btm_sec_clear_ble_keys(p_dev_rec);
-  list_remove(btm_cb.sec_dev_rec, p_dev_rec);
 }
 
 /*******************************************************************************
@@ -409,7 +409,9 @@ void btm_consolidate_dev(tBTM_SEC_DEV_REC* p_target_rec) {
       p_target_rec->bond_type = temp_rec.bond_type;
 
       /* remove the combined record */
-      list_remove(btm_cb.sec_dev_rec, p_dev_rec);
+      wipe_secrets_and_remove(p_dev_rec);
+      // p_dev_rec gets freed in list_remove, we should not  access it further
+      continue;
     }
 
     /* an RPA device entry is a duplicate of the target record */
@@ -419,7 +421,7 @@ void btm_consolidate_dev(tBTM_SEC_DEV_REC* p_target_rec) {
         p_target_rec->device_type |= p_dev_rec->device_type;
 
         /* remove the combined record */
-        list_remove(btm_cb.sec_dev_rec, p_dev_rec);
+        wipe_secrets_and_remove(p_dev_rec);
       }
     }
   }
@@ -508,7 +510,7 @@ tBTM_SEC_DEV_REC* btm_sec_allocate_dev_rec(void) {
 
   if (list_length(btm_cb.sec_dev_rec) > BTM_SEC_MAX_DEVICE_RECORDS) {
     p_dev_rec = btm_find_oldest_dev_rec();
-    list_remove(btm_cb.sec_dev_rec, p_dev_rec);
+    wipe_secrets_and_remove(p_dev_rec);
   }
 
   p_dev_rec =
