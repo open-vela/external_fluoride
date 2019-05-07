@@ -225,7 +225,7 @@ class HearingAidImpl : public HearingAid {
   uint16_t overwrite_min_ce_len;
 
  public:
-  virtual ~HearingAidImpl() = default;
+  ~HearingAidImpl() override = default;
 
   HearingAidImpl(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                  Closure initCb)
@@ -343,7 +343,11 @@ class HearingAidImpl : public HearingAid {
 
     HearingDevice* hearingDevice = hearingDevices.FindByAddress(address);
     if (!hearingDevice) {
-      DVLOG(2) << "Skipping unknown device, address=" << address;
+      /* When Hearing Aid is quickly disabled and enabled in settings, this case
+       * might happen */
+      LOG(WARNING) << "Closing connection to non hearing-aid device, address="
+                   << address;
+      BTA_GATTC_Close(conn_id);
       return;
     }
 
@@ -605,7 +609,7 @@ class HearingAidImpl : public HearingAid {
       return;
     }
 
-    const std::list<gatt::Service>* services = BTA_GATTC_GetServices(conn_id);
+    const std::vector<gatt::Service>* services = BTA_GATTC_GetServices(conn_id);
 
     const gatt::Service* service = nullptr;
     for (const gatt::Service& tmp : *services) {
@@ -1418,6 +1422,8 @@ class HearingAidImpl : public HearingAid {
 
     LOG(INFO) << "GAP_EVT_CONN_CLOSED: " << hearingDevice->address
               << ", playback_started=" << hearingDevice->playback_started;
+
+    hearingDevice->playback_started = false;
 
     if (hearingDevice->connecting_actively) {
       // cancel pending direct connect
