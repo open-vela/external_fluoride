@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -225,7 +225,7 @@ void rfc_release_multiplexer_channel(tRFC_MCB* p_mcb) {
 void rfc_timer_start(tRFC_MCB* p_mcb, uint16_t timeout) {
   RFCOMM_TRACE_EVENT("%s - timeout:%d seconds", __func__, timeout);
 
-  period_ms_t interval_ms = timeout * 1000;
+  uint64_t interval_ms = timeout * 1000;
   alarm_set_on_mloop(p_mcb->mcb_timer, interval_ms, rfcomm_mcb_timer_timeout,
                      p_mcb);
 }
@@ -253,7 +253,7 @@ void rfc_timer_stop(tRFC_MCB* p_mcb) {
 void rfc_port_timer_start(tPORT* p_port, uint16_t timeout) {
   RFCOMM_TRACE_EVENT("%s - timeout:%d seconds", __func__, timeout);
 
-  period_ms_t interval_ms = timeout * 1000;
+  uint64_t interval_ms = timeout * 1000;
   alarm_set_on_mloop(p_port->rfc.port_timer, interval_ms,
                      rfcomm_port_timer_timeout, p_port);
 }
@@ -285,7 +285,7 @@ void rfc_check_mcb_active(tRFC_MCB* p_mcb) {
   uint16_t i;
 
   for (i = 0; i < RFCOMM_MAX_DLCI; i++) {
-    if (p_mcb->port_inx[i] != 0) {
+    if (p_mcb->port_handles[i] != 0) {
       p_mcb->is_disc_initiator = false;
       return;
     }
@@ -353,7 +353,7 @@ void rfc_port_closed(tPORT* p_port) {
 
   /* If multiplexer channel was up mark it as down */
   if (p_mcb) {
-    p_mcb->port_inx[p_port->dlci] = 0;
+    p_mcb->port_handles[p_port->dlci] = 0;
 
     /* If there are no more ports opened on this MCB release it */
     rfc_check_mcb_active(p_mcb);
@@ -380,8 +380,7 @@ void rfc_inc_credit(tPORT* p_port, uint8_t credit) {
 
     RFCOMM_TRACE_EVENT("rfc_inc_credit:%d", p_port->credit_tx);
 
-    if (p_port->tx.peer_fc == true)
-      PORT_FlowInd(p_port->rfc.p_mcb, p_port->dlci, true);
+    if (p_port->tx.peer_fc) PORT_FlowInd(p_port->rfc.p_mcb, p_port->dlci, true);
   }
 }
 
@@ -426,7 +425,7 @@ void rfc_check_send_cmd(tRFC_MCB* p_mcb, BT_HDR* p_buf) {
   }
 
   /* handle queue if L2CAP not congested */
-  while (p_mcb->l2cap_congested == false) {
+  while (!p_mcb->l2cap_congested) {
     BT_HDR* p = (BT_HDR*)fixed_queue_try_dequeue(p_mcb->cmd_q);
     if (p == NULL) break;
     L2CA_DataWrite(p_mcb->lcid, p);
