@@ -1,6 +1,0 @@
-filegroup {
-    name: "BluetoothHciTestSources",
-    srcs: [
-        "acl_builder_test.cc",
-    ],
-}
