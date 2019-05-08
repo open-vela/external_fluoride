@@ -225,7 +225,7 @@ class HearingAidImpl : public HearingAid {
   uint16_t overwrite_min_ce_len;
 
  public:
-  ~HearingAidImpl() override = default;
+  virtual ~HearingAidImpl() = default;
 
   HearingAidImpl(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                  Closure initCb)
@@ -343,11 +343,7 @@ class HearingAidImpl : public HearingAid {
 
     HearingDevice* hearingDevice = hearingDevices.FindByAddress(address);
     if (!hearingDevice) {
-      /* When Hearing Aid is quickly disabled and enabled in settings, this case
-       * might happen */
-      LOG(WARNING) << "Closing connection to non hearing-aid device, address="
-                   << address;
-      BTA_GATTC_Close(conn_id);
+      DVLOG(2) << "Skipping unknown device, address=" << address;
       return;
     }
 
