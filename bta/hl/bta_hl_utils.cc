@@ -1026,14 +1026,15 @@ bool bta_hl_find_mcl_idx_using_handle(tBTA_HL_MCL_HANDLE mcl_handle,
  * Returns      bool true-found
  *
  ******************************************************************************/
-bool bta_hl_find_mcl_idx(uint8_t app_idx, const RawAddress& p_bd_addr,
+bool bta_hl_find_mcl_idx(uint8_t app_idx, BD_ADDR p_bd_addr,
                          uint8_t* p_mcl_idx) {
   bool found = false;
   uint8_t i;
 
   for (i = 0; i < BTA_HL_NUM_MCLS; i++) {
     if (bta_hl_cb.acb[app_idx].mcb[i].in_use &&
-        bta_hl_cb.acb[app_idx].mcb[i].bd_addr == p_bd_addr) {
+        (!memcmp(bta_hl_cb.acb[app_idx].mcb[i].bd_addr, p_bd_addr,
+                 BD_ADDR_LEN))) {
       found = true;
       *p_mcl_idx = i;
       break;
@@ -1154,7 +1155,8 @@ bool bta_hl_find_non_active_mdl_cfg(uint8_t app_idx, uint8_t start_mdl_cfg_idx,
     p_mdl = BTA_HL_GET_MDL_CFG_PTR(app_idx, i);
     for (j = 0; j < BTA_HL_NUM_MCLS; j++) {
       p_mcb = BTA_HL_GET_MCL_CB_PTR(app_idx, j);
-      if (p_mcb->in_use && p_mdl->peer_bd_addr == p_mcb->bd_addr) {
+      if (p_mcb->in_use &&
+          !memcmp(p_mdl->peer_bd_addr, p_mcb->bd_addr, BD_ADDR_LEN)) {
         for (k = 0; k < BTA_HL_NUM_MDLS_PER_MCL; k++) {
           p_dcb = BTA_HL_GET_MDL_CB_PTR(app_idx, j, k);
 
@@ -1282,7 +1284,8 @@ bool bta_hl_find_mdl_cfg_idx(uint8_t app_idx, uint8_t mcl_idx,
     if (p_mdl->active)
       APPL_TRACE_DEBUG("bta_hl_find_mdl_cfg_idx: mdl_id =%d, p_mdl->mdl_id=%d",
                        mdl_id, p_mdl->mdl_id);
-    if (p_mdl->active && p_mcb->bd_addr == p_mdl->peer_bd_addr &&
+    if (p_mdl->active &&
+        (!memcmp(p_mcb->bd_addr, p_mdl->peer_bd_addr, BD_ADDR_LEN)) &&
         (p_mdl->mdl_id == mdl_id)) {
       found = true;
       *p_mdl_cfg_idx = i;
@@ -1431,7 +1434,7 @@ void bta_hl_compact_mdl_cfg_time(uint8_t app_idx, uint8_t mdep_id) {
  *                        false does not exist
  *
  ******************************************************************************/
-bool bta_hl_is_mdl_exsit_in_mcl(uint8_t app_idx, const RawAddress& bd_addr,
+bool bta_hl_is_mdl_exsit_in_mcl(uint8_t app_idx, BD_ADDR bd_addr,
                                 tBTA_HL_MDL_ID mdl_id) {
   tBTA_HL_MDL_CFG* p_mdl;
   bool found = false;
@@ -1439,7 +1442,7 @@ bool bta_hl_is_mdl_exsit_in_mcl(uint8_t app_idx, const RawAddress& bd_addr,
 
   for (i = 0; i < BTA_HL_NUM_MDL_CFGS; i++) {
     p_mdl = BTA_HL_GET_MDL_CFG_PTR(app_idx, i);
-    if (p_mdl->active && p_mdl->peer_bd_addr == bd_addr) {
+    if (p_mdl->active && !memcmp(p_mdl->peer_bd_addr, bd_addr, BD_ADDR_LEN)) {
       if (mdl_id != BTA_HL_DELETE_ALL_MDL_IDS) {
         if (p_mdl->mdl_id == mdl_id) {
           found = true;
@@ -1465,7 +1468,7 @@ bool bta_hl_is_mdl_exsit_in_mcl(uint8_t app_idx, const RawAddress& bd_addr,
  *                        false Failed
  *
  ******************************************************************************/
-bool bta_hl_delete_mdl_cfg(uint8_t app_idx, const RawAddress& bd_addr,
+bool bta_hl_delete_mdl_cfg(uint8_t app_idx, BD_ADDR bd_addr,
                            tBTA_HL_MDL_ID mdl_id) {
   tBTA_HL_MDL_CFG* p_mdl;
   bool success = false;
@@ -1473,7 +1476,7 @@ bool bta_hl_delete_mdl_cfg(uint8_t app_idx, const RawAddress& bd_addr,
 
   for (i = 0; i < BTA_HL_NUM_MDL_CFGS; i++) {
     p_mdl = BTA_HL_GET_MDL_CFG_PTR(app_idx, i);
-    if (p_mdl->active && p_mdl->peer_bd_addr == bd_addr) {
+    if (p_mdl->active && !memcmp(p_mdl->peer_bd_addr, bd_addr, BD_ADDR_LEN)) {
       if (mdl_id != BTA_HL_DELETE_ALL_MDL_IDS) {
         if (p_mdl->mdl_id == mdl_id) {
           bta_hl_co_delete_mdl(p_mdl->local_mdep_id, i);
@@ -2193,7 +2196,7 @@ void bta_hl_save_mdl_cfg(uint8_t app_idx, uint8_t mcl_idx, uint8_t mdl_idx) {
     mdl_cfg.mtu = l2cap_cfg.mtu;
     mdl_cfg.fcs = l2cap_cfg.fcs;
 
-    mdl_cfg.peer_bd_addr = p_mcb->bd_addr;
+    bdcpy(mdl_cfg.peer_bd_addr, p_mcb->bd_addr);
     mdl_cfg.local_mdep_id = p_dcb->local_mdep_id;
     p_mdep_cfg = &p_acb->sup_feature.mdep[p_dcb->local_mdep_cfg_idx];
     mdl_cfg.local_mdep_role = p_mdep_cfg->mdep_cfg.mdep_role;
@@ -2419,8 +2422,7 @@ bool bta_hl_validate_chan_cfg(uint8_t app_idx, uint8_t mcl_idx,
  *                        false not congested
  *
  ******************************************************************************/
-bool bta_hl_is_cong_on(uint8_t app_id, const RawAddress& bd_addr,
-                       tBTA_HL_MDL_ID mdl_id)
+bool bta_hl_is_cong_on(uint8_t app_id, BD_ADDR bd_addr, tBTA_HL_MDL_ID mdl_id)
 
 {
   tBTA_HL_MDL_CB* p_dcb;
@@ -2721,13 +2723,12 @@ void bta_hl_build_rcv_data_ind(tBTA_HL* p_evt_data,
  ******************************************************************************/
 void bta_hl_build_cch_open_cfm(tBTA_HL* p_evt_data, uint8_t app_id,
                                tBTA_HL_APP_HANDLE app_handle,
-                               tBTA_HL_MCL_HANDLE mcl_handle,
-                               const RawAddress& bd_addr,
+                               tBTA_HL_MCL_HANDLE mcl_handle, BD_ADDR bd_addr,
                                tBTA_HL_STATUS status) {
   p_evt_data->cch_open_cfm.app_id = app_id;
   p_evt_data->cch_open_cfm.app_handle = app_handle;
   p_evt_data->cch_open_cfm.mcl_handle = mcl_handle;
-  p_evt_data->cch_open_cfm.bd_addr = bd_addr;
+  bdcpy(p_evt_data->cch_open_cfm.bd_addr, bd_addr);
   p_evt_data->cch_open_cfm.status = status;
   APPL_TRACE_DEBUG("bta_hl_build_cch_open_cfm: status=%d", status);
 }
@@ -2743,11 +2744,10 @@ void bta_hl_build_cch_open_cfm(tBTA_HL* p_evt_data, uint8_t app_id,
  ******************************************************************************/
 void bta_hl_build_cch_open_ind(tBTA_HL* p_evt_data,
                                tBTA_HL_APP_HANDLE app_handle,
-                               tBTA_HL_MCL_HANDLE mcl_handle,
-                               const RawAddress& bd_addr) {
+                               tBTA_HL_MCL_HANDLE mcl_handle, BD_ADDR bd_addr) {
   p_evt_data->cch_open_ind.app_handle = app_handle;
   p_evt_data->cch_open_ind.mcl_handle = mcl_handle;
-  p_evt_data->cch_open_ind.bd_addr = bd_addr;
+  bdcpy(p_evt_data->cch_open_ind.bd_addr, bd_addr);
 }
 
 /*******************************************************************************
@@ -2826,16 +2826,15 @@ void bta_hl_build_dch_open_cfm(tBTA_HL* p_evt_data,
  *
  ******************************************************************************/
 void bta_hl_build_sdp_query_cfm(tBTA_HL* p_evt_data, uint8_t app_id,
-                                tBTA_HL_APP_HANDLE app_handle,
-                                const RawAddress& bd_addr, tBTA_HL_SDP* p_sdp,
-                                tBTA_HL_STATUS status)
+                                tBTA_HL_APP_HANDLE app_handle, BD_ADDR bd_addr,
+                                tBTA_HL_SDP* p_sdp, tBTA_HL_STATUS status)
 
 {
   APPL_TRACE_DEBUG("bta_hl_build_sdp_query_cfm: app_id = %d, app_handle=%d",
                    app_id, app_handle);
   p_evt_data->sdp_query_cfm.app_id = app_id;
   p_evt_data->sdp_query_cfm.app_handle = app_handle;
-  p_evt_data->sdp_query_cfm.bd_addr = bd_addr;
+  bdcpy(p_evt_data->sdp_query_cfm.bd_addr, bd_addr);
   p_evt_data->sdp_query_cfm.p_sdp = p_sdp;
   p_evt_data->sdp_query_cfm.status = status;
 }
