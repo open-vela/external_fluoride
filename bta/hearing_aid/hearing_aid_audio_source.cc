@@ -367,8 +367,7 @@ bool hearing_aid_on_suspend_req() {
 }  // namespace
 
 void HearingAidAudioSource::Start(const CodecConfiguration& codecConfiguration,
-                                  HearingAidAudioReceiver* audioReceiver,
-                                  uint16_t remote_delay_ms) {
+                                  HearingAidAudioReceiver* audioReceiver) {
   localAudioReceiver = audioReceiver;
   VLOG(2) << "Hearing Aid UIPC Open";
 
@@ -380,7 +379,6 @@ void HearingAidAudioSource::Start(const CodecConfiguration& codecConfiguration,
 
   if (bluetooth::audio::hearing_aid::is_hal_2_0_enabled()) {
     bluetooth::audio::hearing_aid::start_session();
-    bluetooth::audio::hearing_aid::set_remote_delay(remote_delay_ms);
   }
 }
 
