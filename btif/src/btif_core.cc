@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2014 The Android Open Source Project
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2014 The Android Open Source Project
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@
 #include <base/at_exit.h>
 #include <base/bind.h>
 #include <base/run_loop.h>
-#include <base/threading/platform_thread.h>
 #include <base/threading/thread.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -43,10 +42,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "bdaddr.h"
 #include "bt_common.h"
 #include "bt_utils.h"
 #include "bta_api.h"
-#include "bta_closure_api.h"
 #include "bte.h"
 #include "btif_api.h"
 #include "btif_av.h"
@@ -67,9 +66,6 @@
 #include "osi/include/thread.h"
 #include "stack_manager.h"
 
-using base::PlatformThread;
-using bluetooth::Uuid;
-
 /*******************************************************************************
  *  Constants & Macros
  ******************************************************************************/
@@ -88,17 +84,16 @@ using bluetooth::Uuid;
  ******************************************************************************/
 
 /* These type definitions are used when passing data from the HAL to BTIF
- * context in the downstream path for the adapter and remote_device property
- * APIs
- */
+* context
+*  in the downstream path for the adapter and remote_device property APIs */
 
 typedef struct {
-  RawAddress bd_addr;
+  bt_bdaddr_t bd_addr;
   bt_property_type_t type;
 } btif_storage_read_t;
 
 typedef struct {
-  RawAddress bd_addr;
+  bt_bdaddr_t bd_addr;
   bt_property_t prop;
 } btif_storage_write_t;
 
@@ -121,11 +116,11 @@ typedef enum {
 static tBTA_SERVICE_MASK btif_enabled_services = 0;
 
 /*
- * This variable should be set to 1, if the Bluedroid+BTIF libraries are to
- * function in DUT mode.
- *
- * To set this, the btif_init_bluetooth needs to be called with argument as 1
- */
+* This variable should be set to 1, if the Bluedroid+BTIF libraries are to
+* function in DUT mode.
+*
+* To set this, the btif_init_bluetooth needs to be called with argument as 1
+*/
 static uint8_t btif_dut_mode = 0;
 
 static thread_t* bt_jni_workqueue_thread;
@@ -133,7 +128,6 @@ static const char* BT_JNI_WORKQUEUE_NAME = "bt_jni_workqueue";
 static uid_set_t* uid_set = NULL;
 base::MessageLoop* message_loop_ = NULL;
 base::RunLoop* jni_run_loop = NULL;
-static base::PlatformThreadId btif_thread_id_ = -1;
 
 /*******************************************************************************
  *  Static functions
@@ -225,20 +219,14 @@ bt_status_t btif_transfer_context(tBTIF_CBACK* p_cback, uint16_t event,
  **/
 bt_status_t do_in_jni_thread(const tracked_objects::Location& from_here,
                              const base::Closure& task) {
-  if (!message_loop_) {
+  if (!message_loop_ || !message_loop_->task_runner().get()) {
     BTIF_TRACE_WARNING("%s: Dropped message, message_loop not initialized yet!",
                        __func__);
     return BT_STATUS_FAIL;
   }
 
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      message_loop_->task_runner();
-  if (!task_runner.get()) {
-    BTIF_TRACE_WARNING("%s: task runner is dead", __func__);
-    return BT_STATUS_FAIL;
-  }
-
-  if (task_runner->PostTask(from_here, task)) return BT_STATUS_SUCCESS;
+  if (message_loop_->task_runner()->PostTask(from_here, task))
+    return BT_STATUS_SUCCESS;
 
   BTIF_TRACE_ERROR("%s: Post task to task runner failed!", __func__);
   return BT_STATUS_FAIL;
@@ -247,12 +235,6 @@ bt_status_t do_in_jni_thread(const tracked_objects::Location& from_here,
 bt_status_t do_in_jni_thread(const base::Closure& task) {
   return do_in_jni_thread(FROM_HERE, task);
 }
-
-bool is_on_jni_thread() {
-  return btif_thread_id_ == PlatformThread::CurrentId();
-}
-
-base::MessageLoop* get_jni_message_loop() { return message_loop_; }
 
 /*******************************************************************************
  *
@@ -332,9 +314,6 @@ void btif_thread_post(thread_fn func, void* context) {
 }
 
 void run_message_loop(UNUSED_ATTR void* context) {
-  LOG_INFO(LOG_TAG, "%s entered", __func__);
-  btif_thread_id_ = PlatformThread::CurrentId();
-
   // TODO(jpawlowski): exit_manager should be defined in main(), but there is no
   // main method.
   // It is therefore defined in bt_jni_workqueue_thread, and will be deleted
@@ -355,9 +334,6 @@ void run_message_loop(UNUSED_ATTR void* context) {
 
   delete jni_run_loop;
   jni_run_loop = NULL;
-
-  btif_thread_id_ = -1;
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
 }
 /*******************************************************************************
  *
@@ -369,8 +345,6 @@ void run_message_loop(UNUSED_ATTR void* context) {
  *
  ******************************************************************************/
 bt_status_t btif_init_bluetooth() {
-  LOG_INFO(LOG_TAG, "%s entered", __func__);
-
   bte_main_boot_entry();
 
   bt_jni_workqueue_thread = thread_new(BT_JNI_WORKQUEUE_NAME);
@@ -382,7 +356,6 @@ bt_status_t btif_init_bluetooth() {
 
   thread_post(bt_jni_workqueue_thread, run_message_loop, nullptr);
 
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
   return BT_STATUS_SUCCESS;
 
 error_exit:;
@@ -405,27 +378,30 @@ error_exit:;
  ******************************************************************************/
 
 void btif_enable_bluetooth_evt(tBTA_STATUS status) {
-  LOG_INFO(LOG_TAG, "%s entered: status %d", __func__, status);
+  BTIF_TRACE_DEBUG("%s: status %d", __func__, status);
 
   /* Fetch the local BD ADDR */
-  RawAddress local_bd_addr = *controller_get_interface()->get_address();
+  bt_bdaddr_t local_bd_addr;
+  const controller_t* controller = controller_get_interface();
+  bdaddr_copy(&local_bd_addr, controller->get_address());
 
-  std::string bdstr = local_bd_addr.ToString();
+  bdstr_t bdstr;
+  bdaddr_to_string(&local_bd_addr, bdstr, sizeof(bdstr));
 
   char val[PROPERTY_VALUE_MAX] = "";
   int val_size = 0;
   if ((btif_config_get_str("Adapter", "Address", val, &val_size) == 0) ||
-      strcmp(bdstr.c_str(), val) == 0) {
+      strcmp(bdstr, val) == 0) {
     // This address is not present in the config file, save it there.
     BTIF_TRACE_WARNING("%s: Saving the Adapter Address", __func__);
-    btif_config_set_str("Adapter", "Address", bdstr.c_str());
+    btif_config_set_str("Adapter", "Address", bdstr);
     btif_config_save();
 
     // fire HAL callback for property change
     bt_property_t prop;
     prop.type = BT_PROPERTY_BDADDR;
     prop.val = (void*)&local_bd_addr;
-    prop.len = sizeof(RawAddress);
+    prop.len = sizeof(bt_bdaddr_t);
     HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, BT_STATUS_SUCCESS, 1,
               &prop);
   }
@@ -460,8 +436,6 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status) {
 
     future_ready(stack_manager_get_hack_future(), FUTURE_FAIL);
   }
-
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
 }
 
 /*******************************************************************************
@@ -476,9 +450,9 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status) {
  *
  ******************************************************************************/
 bt_status_t btif_disable_bluetooth(void) {
-  LOG_INFO(LOG_TAG, "%s entered", __func__);
+  BTIF_TRACE_DEBUG("BTIF DISABLE BLUETOOTH");
 
-  do_in_bta_thread(FROM_HERE, base::Bind(&btm_ble_multi_adv_cleanup));
+  btm_ble_multi_adv_cleanup();
   // TODO(jpawlowski): this should do whole BTA_VendorCleanup(), but it would
   // kill the stack now.
 
@@ -487,8 +461,6 @@ bt_status_t btif_disable_bluetooth(void) {
   btif_sock_cleanup();
   btif_pan_cleanup();
   BTA_DisableBluetooth();
-
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
 
   return BT_STATUS_SUCCESS;
 }
@@ -506,14 +478,12 @@ bt_status_t btif_disable_bluetooth(void) {
  ******************************************************************************/
 
 void btif_disable_bluetooth_evt(void) {
-  LOG_INFO(LOG_TAG, "%s entered", __func__);
+  BTIF_TRACE_DEBUG("%s", __func__);
 
   bte_main_disable();
 
   /* callback to HAL */
   future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
-
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
 }
 
 /*******************************************************************************
@@ -527,9 +497,9 @@ void btif_disable_bluetooth_evt(void) {
  ******************************************************************************/
 
 bt_status_t btif_cleanup_bluetooth(void) {
-  LOG_INFO(LOG_TAG, "%s entered", __func__);
+  BTIF_TRACE_DEBUG("%s", __func__);
 
-  do_in_bta_thread(FROM_HERE, base::Bind(&BTA_VendorCleanup));
+  BTA_VendorCleanup();
 
   btif_dm_cleanup();
   btif_jni_disassociate();
@@ -547,7 +517,7 @@ bt_status_t btif_cleanup_bluetooth(void) {
 
   btif_dut_mode = 0;
 
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
+  BTIF_TRACE_DEBUG("%s done", __func__);
 
   return BT_STATUS_SUCCESS;
 }
@@ -623,15 +593,15 @@ static bt_status_t btif_in_get_adapter_properties(void) {
   bt_property_t properties[6];
   uint32_t num_props = 0;
 
-  RawAddress addr;
+  bt_bdaddr_t addr;
   bt_bdname_t name;
   bt_scan_mode_t mode;
   uint32_t disc_timeout;
-  RawAddress bonded_devices[BTM_SEC_MAX_DEVICE_RECORDS];
-  Uuid local_uuids[BT_MAX_NUM_UUIDS];
+  bt_bdaddr_t bonded_devices[BTM_SEC_MAX_DEVICE_RECORDS];
+  bt_uuid_t local_uuids[BT_MAX_NUM_UUIDS];
   bt_status_t status;
 
-  /* RawAddress */
+  /* BD_ADDR */
   BTIF_STORAGE_FILL_PROPERTY(&properties[num_props], BT_PROPERTY_BDADDR,
                              sizeof(addr), &addr);
   status = btif_storage_get_adapter_property(&properties[num_props]);
@@ -680,13 +650,13 @@ static bt_status_t btif_in_get_adapter_properties(void) {
   return BT_STATUS_SUCCESS;
 }
 
-static bt_status_t btif_in_get_remote_device_properties(RawAddress* bd_addr) {
+static bt_status_t btif_in_get_remote_device_properties(bt_bdaddr_t* bd_addr) {
   bt_property_t remote_properties[8];
   uint32_t num_props = 0;
 
   bt_bdname_t name, alias;
   uint32_t cod, devtype;
-  Uuid remote_uuids[BT_MAX_NUM_UUIDS];
+  bt_uuid_t remote_uuids[BT_MAX_NUM_UUIDS];
 
   memset(remote_properties, 0, sizeof(remote_properties));
   BTIF_STORAGE_FILL_PROPERTY(&remote_properties[num_props], BT_PROPERTY_BDNAME,
@@ -845,7 +815,7 @@ void btif_adapter_properties_evt(bt_status_t status, uint32_t num_props,
                                  bt_property_t* p_props) {
   HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, status, num_props, p_props);
 }
-void btif_remote_properties_evt(bt_status_t status, RawAddress* remote_addr,
+void btif_remote_properties_evt(bt_status_t status, bt_bdaddr_t* remote_addr,
                                 uint32_t num_props, bt_property_t* p_props) {
   HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, status, remote_addr,
             num_props, p_props);
@@ -870,7 +840,8 @@ static void btif_in_storage_request_copy_cb(uint16_t event, char* p_new_buf,
   switch (event) {
     case BTIF_CORE_STORAGE_REMOTE_WRITE:
     case BTIF_CORE_STORAGE_ADAPTER_WRITE: {
-      new_req->write_req.bd_addr = old_req->write_req.bd_addr;
+      bdcpy(new_req->write_req.bd_addr.address,
+            old_req->write_req.bd_addr.address);
       /* Copy the member variables one at a time */
       new_req->write_req.prop.type = old_req->write_req.prop.type;
       new_req->write_req.prop.len = old_req->write_req.prop.len;
@@ -920,10 +891,10 @@ bt_status_t btif_get_adapter_property(bt_property_type_t type) {
 
   /* Allow get_adapter_property only for BDADDR and BDNAME if BT is disabled */
   if (!btif_is_enabled() && (type != BT_PROPERTY_BDADDR) &&
-      (type != BT_PROPERTY_BDNAME) && (type != BT_PROPERTY_CLASS_OF_DEVICE))
+      (type != BT_PROPERTY_BDNAME))
     return BT_STATUS_NOT_READY;
 
-  req.read_req.bd_addr = RawAddress::kEmpty;
+  memset(&(req.read_req.bd_addr), 0, sizeof(bt_bdaddr_t));
   req.read_req.type = type;
 
   return btif_transfer_context(execute_storage_request,
@@ -1007,15 +978,6 @@ bt_status_t btif_set_adapter_property(const bt_property_t* property) {
          if required */
       storage_req_id = BTIF_CORE_STORAGE_ADAPTER_WRITE;
     } break;
-    case BT_PROPERTY_CLASS_OF_DEVICE: {
-      DEV_CLASS dev_class;
-      memcpy(dev_class, property->val, DEV_CLASS_LEN);
-
-      BTIF_TRACE_EVENT("set property dev_class : 0x%02x%02x%02x", dev_class[0],
-                       dev_class[1], dev_class[2]);
-
-      BTM_SetDeviceClass(dev_class);
-    } break;
     case BT_PROPERTY_BDADDR:
     case BT_PROPERTY_UUIDS:
     case BT_PROPERTY_ADAPTER_BONDED_DEVICES:
@@ -1034,7 +996,7 @@ bt_status_t btif_set_adapter_property(const bt_property_t* property) {
   if (storage_req_id != BTIF_CORE_STORAGE_NO_ACTION) {
     /* pass on to storage for updating local database */
 
-    req.write_req.bd_addr = RawAddress::kEmpty;
+    memset(&(req.write_req.bd_addr), 0, sizeof(bt_bdaddr_t));
     memcpy(&(req.write_req.prop), property, sizeof(bt_property_t));
 
     return btif_transfer_context(execute_storage_request, storage_req_id,
@@ -1055,13 +1017,13 @@ bt_status_t btif_set_adapter_property(const bt_property_t* property) {
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
+bt_status_t btif_get_remote_device_property(bt_bdaddr_t* remote_addr,
                                             bt_property_type_t type) {
   btif_storage_req_t req;
 
   if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
 
-  req.read_req.bd_addr = *remote_addr;
+  memcpy(&(req.read_req.bd_addr), remote_addr, sizeof(bt_bdaddr_t));
   req.read_req.type = type;
   return btif_transfer_context(execute_storage_remote_request,
                                BTIF_CORE_STORAGE_REMOTE_READ, (char*)&req,
@@ -1077,12 +1039,12 @@ bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr) {
+bt_status_t btif_get_remote_device_properties(bt_bdaddr_t* remote_addr) {
   btif_storage_req_t req;
 
   if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
 
-  req.read_req.bd_addr = *remote_addr;
+  memcpy(&(req.read_req.bd_addr), remote_addr, sizeof(bt_bdaddr_t));
   return btif_transfer_context(execute_storage_remote_request,
                                BTIF_CORE_STORAGE_REMOTE_READ_ALL, (char*)&req,
                                sizeof(btif_storage_req_t), NULL);
@@ -1099,13 +1061,13 @@ bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr) {
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
+bt_status_t btif_set_remote_device_property(bt_bdaddr_t* remote_addr,
                                             const bt_property_t* property) {
   btif_storage_req_t req;
 
   if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
 
-  req.write_req.bd_addr = *remote_addr;
+  memcpy(&(req.write_req.bd_addr), remote_addr, sizeof(bt_bdaddr_t));
   memcpy(&(req.write_req.prop), property, sizeof(bt_property_t));
 
   return btif_transfer_context(execute_storage_remote_request,
@@ -1124,8 +1086,8 @@ bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
-                                           const Uuid& uuid) {
+bt_status_t btif_get_remote_service_record(bt_bdaddr_t* remote_addr,
+                                           bt_uuid_t* uuid) {
   if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
 
   return btif_dm_get_remote_service_record(remote_addr, uuid);
