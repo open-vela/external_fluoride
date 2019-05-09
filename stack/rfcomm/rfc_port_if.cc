@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
  *
  *****************************************************************************/
 
-#include <string.h>
+#include <cstring>
 #include "bt_common.h"
 #include "bt_target.h"
 #include "bt_utils.h"
@@ -47,7 +47,7 @@ tRFC_CB rfc_cb;
  *
  ******************************************************************************/
 void RFCOMM_StartReq(tRFC_MCB* p_mcb) {
-  rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_START_REQ, NULL);
+  rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_START_REQ, nullptr);
 }
 
 /*******************************************************************************
@@ -82,12 +82,12 @@ void RFCOMM_DlcEstablishReq(tRFC_MCB* p_mcb, uint8_t dlci,
   }
 
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
 
-  rfc_port_sm_execute(p_port, RFC_EVENT_OPEN, NULL);
+  rfc_port_sm_execute(p_port, RFC_EVENT_OPEN, nullptr);
 }
 
 /*******************************************************************************
@@ -106,7 +106,7 @@ void RFCOMM_DlcEstablishRsp(tRFC_MCB* p_mcb, uint8_t dlci,
   }
 
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
@@ -115,7 +115,7 @@ void RFCOMM_DlcEstablishRsp(tRFC_MCB* p_mcb, uint8_t dlci,
 
 /*******************************************************************************
  *
- * Function         RFCOMM_ParNegReq
+ * Function         RFCOMM_ParameterNegotiationRequest
  *
  * Description      This function is called by the user app to start
  *                  DLC parameter negotiation.  Port emulation can send this
@@ -124,13 +124,14 @@ void RFCOMM_DlcEstablishRsp(tRFC_MCB* p_mcb, uint8_t dlci,
  *                  block.
  *
  ******************************************************************************/
-void RFCOMM_ParNegReq(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu) {
+void RFCOMM_ParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
+                                        uint16_t mtu) {
   uint8_t flow;
   uint8_t cl;
   uint8_t k;
 
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
@@ -166,14 +167,14 @@ void RFCOMM_ParNegReq(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu) {
 
 /*******************************************************************************
  *
- * Function         RFCOMM_ParNegRsp
+ * Function         RFCOMM_ParameterNegotiationResponse
  *
  * Description      This function is called by the user app to acknowledge
  *                  DLC parameter negotiation.
  *
  ******************************************************************************/
-void RFCOMM_ParNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl,
-                      uint8_t k) {
+void RFCOMM_ParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
+                                         uint16_t mtu, uint8_t cl, uint8_t k) {
   if (p_mcb->state != RFC_MX_STATE_CONNECTED) return;
 
   /* Send Parameter Negotiation Response UIH frame */
@@ -182,7 +183,7 @@ void RFCOMM_ParNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl,
 
 /*******************************************************************************
  *
- * Function         RFCOMM_PortNegReq
+ * Function         RFCOMM_PortParameterNegotiationRequest
  *
  * Description      This function is called by the user app to start
  *                  Remote Port parameter negotiation.  Port emulation can
@@ -191,14 +192,15 @@ void RFCOMM_ParNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl,
  *                  control block.
  *
  ******************************************************************************/
-void RFCOMM_PortNegReq(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_STATE* p_pars) {
+void RFCOMM_PortParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
+                                            tPORT_STATE* p_pars) {
   if (p_mcb->state != RFC_MX_STATE_CONNECTED) {
-    PORT_PortNegCnf(p_mcb, dlci, NULL, RFCOMM_ERROR);
+    PORT_PortNegCnf(p_mcb, dlci, nullptr, RFCOMM_ERROR);
     return;
   }
 
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
@@ -215,14 +217,15 @@ void RFCOMM_PortNegReq(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_STATE* p_pars) {
 
 /*******************************************************************************
  *
- * Function         RFCOMM_PortNegRsp
+ * Function         RFCOMM_PortParameterNegotiationResponse
  *
  * Description      This function is called by the user app to acknowledge
  *                  Port parameters negotiation.
  *
  ******************************************************************************/
-void RFCOMM_PortNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_STATE* p_pars,
-                       uint16_t param_mask) {
+void RFCOMM_PortParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
+                                             tPORT_STATE* p_pars,
+                                             uint16_t param_mask) {
   if (p_mcb->state != RFC_MX_STATE_CONNECTED) return;
 
   rfc_send_rpn(p_mcb, dlci, false, p_pars, param_mask);
@@ -238,7 +241,7 @@ void RFCOMM_PortNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_STATE* p_pars,
  ******************************************************************************/
 void RFCOMM_ControlReq(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* p_pars) {
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
@@ -264,9 +267,9 @@ void RFCOMM_ControlReq(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* p_pars) {
  *                  port can accept more data.
  *
  ******************************************************************************/
-void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t enable) {
+void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, bool enable) {
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
@@ -293,7 +296,7 @@ void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t enable) {
  ******************************************************************************/
 void RFCOMM_LineStatusReq(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t status) {
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (p_port == NULL) {
+  if (p_port == nullptr) {
     RFCOMM_TRACE_WARNING("%s Unable to find DLCI port dlci:%d", __func__, dlci);
     return;
   }
@@ -316,7 +319,8 @@ void RFCOMM_LineStatusReq(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t status) {
  *
  ******************************************************************************/
 void RFCOMM_DlcReleaseReq(tRFC_MCB* p_mcb, uint8_t dlci) {
-  rfc_port_sm_execute(port_find_mcb_dlci_port(p_mcb, dlci), RFC_EVENT_CLOSE, 0);
+  rfc_port_sm_execute(port_find_mcb_dlci_port(p_mcb, dlci), RFC_EVENT_CLOSE,
+                      nullptr);
 }
 
 /*******************************************************************************
