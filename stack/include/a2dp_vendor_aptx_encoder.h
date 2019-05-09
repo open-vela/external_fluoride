@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 The Android Open Source Project
+ * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #define A2DP_VENDOR_APTX_ENCODER_H
 
 #include "a2dp_codec_api.h"
+#include "osi/include/time.h"
 
 // Loads the A2DP aptX encoder.
 // Return true on success, otherwise false.
@@ -51,7 +52,7 @@ void a2dp_vendor_aptx_feeding_reset(void);
 void a2dp_vendor_aptx_feeding_flush(void);
 
 // Get the A2DP aptX encoder interval (in milliseconds).
-uint64_t a2dp_vendor_aptx_get_encoder_interval_ms(void);
+period_ms_t a2dp_vendor_aptx_get_encoder_interval_ms(void);
 
 // Prepare and send A2DP aptX encoded frames.
 // |timestamp_us| is the current timestamp (in microseconds).
