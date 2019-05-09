@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 //  limitations under the License.
 //
 
+#pragma once
+
 #include <mutex>
 #include <string>
 
@@ -24,7 +26,7 @@ namespace util {
 // A simple atomic container class for std::string.
 class AtomicString final {
  public:
-  AtomicString(const std::string& str);
+  explicit AtomicString(const std::string& str);
   ~AtomicString() = default;
 
   std::string Get() const;
