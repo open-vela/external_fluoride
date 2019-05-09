@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,9 +33,10 @@
 #include "hidd_api.h"
 #include "hidd_int.h"
 #include "hiddefs.h"
-#include "log/log.h"
 
+#if HID_DYNAMIC_MEMORY == FALSE
 tHID_DEV_CTB hd_cb;
+#endif
 
 /*******************************************************************************
  *
@@ -294,13 +295,7 @@ tHID_STATUS HID_DevAddRecord(uint32_t handle, char* p_name, char* p_description,
       uint8_t* p_buf;
       uint8_t seq_len = 4 + desc_len;
 
-      if (desc_len > HIDD_APP_DESCRIPTOR_LEN) {
-        HIDD_TRACE_ERROR("%s: descriptor length = %d, larger than max %d",
-                         __func__, desc_len, HIDD_APP_DESCRIPTOR_LEN);
-        return HID_ERR_NOT_REGISTERED;
-      };
-
-      p_buf = (uint8_t*)osi_malloc(HIDD_APP_DESCRIPTOR_LEN + 6);
+      p_buf = (uint8_t*)osi_malloc(2048);
 
       if (p_buf == NULL) {
         HIDD_TRACE_ERROR("%s: Buffer allocation failure for size = 2048 ",
@@ -320,10 +315,6 @@ tHID_STATUS HID_DevAddRecord(uint32_t handle, char* p_name, char* p_description,
       UINT8_TO_BE_STREAM(p, (TEXT_STR_DESC_TYPE << 3) | SIZE_IN_NEXT_BYTE);
       UINT8_TO_BE_STREAM(p, desc_len);
       ARRAY_TO_BE_STREAM(p, p_desc_data, (int)desc_len);
-
-      if (desc_len > HIDD_APP_DESCRIPTOR_LEN - 6) {
-        android_errorWriteLog(0x534e4554, "113572366");
-      }
 
       result &= SDP_AddAttribute(handle, ATTR_ID_HID_DESCRIPTOR_LIST,
                                  DATA_ELE_SEQ_DESC_TYPE, p - p_buf, p_buf);

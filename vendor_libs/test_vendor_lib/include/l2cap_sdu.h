@@ -1,25 +1,24 @@
-/*
- * Copyright 2017 The Android Open Source Project
+/******************************************************************************
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Copyright (C) 2017 Google, Inc.
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 #pragma once
 #include <cstdint>
 #include <iterator>
 #include <vector>
-
-#include "hci_packet.h"
 
 namespace test_vendor_lib {
 
@@ -58,16 +57,36 @@ namespace test_vendor_lib {
 // L2CAP packet will not include either of the control or FCS
 // bytes.
 //
-class L2capSdu : public HciPacket {
+class L2capSdu {
  public:
-  // Returns a unique_ptr to an L2capSdu object that is constructed with the
-  // assumption that the SDU packet is complete and correct.
-  static std::shared_ptr<L2capSdu> L2capSduConstructor(
-      std::vector<uint8_t> create_from);
+  // Returns a completed L2capSdu object.
+  L2capSdu(std::vector<uint8_t> create_from);
 
-  // Adds an FCS to create_from and returns a unique_ptr to an L2capSdu object.
-  static std::shared_ptr<L2capSdu> L2capSduBuilder(
-      std::vector<uint8_t> create_from);
+  static L2capSdu L2capSduBuilder(std::vector<uint8_t> create_from);
+
+  // TODO: Remove this when the move to L2capSdu* is done
+  L2capSdu& operator=(L2capSdu obj1) {
+    sdu_data_.clear();
+
+    sdu_data_ = obj1.sdu_data_;
+
+    return *this;
+  }
+
+  // Get a vector iterator that points to the first byte of the
+  // L2CAP payload within an SDU. The offset parameter will be the
+  // number of bytes that are in the SDU header. This should always
+  // be 6 bytes with the exception being the first SDU of a stream
+  // of SDU packets where the first SDU packet will have an extra
+  // two bytes and the offset should be 8 bytes.
+  std::vector<uint8_t>::const_iterator get_payload_begin(
+      const unsigned int offset) const;
+
+  // Get a vector iterator that points to the last bytes of the
+  // L2CAP payload within an SDU packet. There is no offset
+  // parameter for this function because there will always be two
+  // FCS bytes and nothing else at the end of each SDU.
+  std::vector<uint8_t>::const_iterator get_payload_end() const;
 
   // Get the FCS bytes from the end of the L2CAP payload of an SDU
   // packet.
@@ -100,16 +119,9 @@ class L2capSdu : public HciPacket {
   // Reasembly is 10b, false otherwise.
   static bool is_ending_sdu(const L2capSdu& sdu);
 
-  // HciPacket functions
-  size_t get_length();
-  uint8_t& get_at_index(size_t index);
-
  private:
   // This is the SDU packet in bytes.
   std::vector<uint8_t> sdu_data_;
-
-  // Returns a completed L2capSdu object.
-  L2capSdu(std::vector<uint8_t>&& create_from);
 
   // Table for precalculated lfsr values.
   static const uint16_t lfsr_table_[256];
