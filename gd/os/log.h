@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <stdlib.h>
-
 #ifndef LOG_TAG
 #define LOG_TAG "bt"
 #endif
