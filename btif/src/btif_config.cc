@@ -60,9 +60,7 @@ static const char* TIME_STRING_FORMAT = "%Y-%m-%d %H:%M:%S";
 
 constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
 
-static bool use_key_attestation() {
-  return getuid() == AID_BLUETOOTH && is_single_user_mode();
-}
+static bool use_key_attestation() { return getuid() == AID_BLUETOOTH; }
 
 #define BT_CONFIG_METRICS_SECTION "Metrics"
 #define BT_CONFIG_METRICS_SALT_256BIT "Salt256Bit"
