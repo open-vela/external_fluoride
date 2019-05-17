@@ -95,11 +95,12 @@ void ModuleRegistry::StopAll() {
   start_order_.clear();
 }
 
-os::Handler* ModuleRegistry::GetModuleHandler(const ModuleFactory* module) const {
-  auto started_instance = started_modules_.find(module);
-  if (started_instance != started_modules_.end()) {
-    return started_instance->second->GetHandler();
-  }
-  return nullptr;
+void ModuleRegistry::inject_test_module(const ModuleFactory* module, Module* instance, os::Thread* thread) {
+  instance->registry_ = this;
+  instance->handler_ = new Handler(thread);
+  start_order_.push_back(module);
+  started_modules_[module] = instance;
+  instance->Start();
 }
+
 }  // namespace bluetooth
