@@ -104,7 +104,6 @@ cc_library {
         "stack_manager.cc",
         "module.cc",
         ":BluetoothCommonSources",
-        ":BluetoothCryptoToolboxSources",
         ":BluetoothHalSources",
         ":BluetoothHciSources",
         ":BluetoothPacketSources",
@@ -233,7 +232,6 @@ cc_test {
     srcs: [
         "module_unittest.cc",
         ":BluetoothCommonTestSources",
-        ":BluetoothCryptoToolboxTestSources",
         ":BluetoothHciTestSources",
         ":BluetoothL2capTestSources",
         ":BluetoothPacketTestSources",
@@ -258,6 +256,7 @@ cc_test {
     ],
     host_supported: true,
     srcs: [
+        ":BluetoothCommonSources",
         ":BluetoothPacketSources",
         ":BluetoothPacketParserTestPacketTestSources",
     ],
