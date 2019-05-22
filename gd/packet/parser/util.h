@@ -66,10 +66,6 @@ inline uint64_t GetMaxValueForBits(int bits) {
 }
 
 inline std::string CamelCaseToUnderScore(std::string value) {
-  if (value[0] < 'A' || value[0] > 'Z') {
-    ERROR() << value << " doesn't look like CamelCase";
-  }
-
   // Use static to avoid compiling the regex more than once.
   static const std::regex camel_case_regex("[A-Z][a-z0-9]*");
 
@@ -86,10 +82,6 @@ inline std::string CamelCaseToUnderScore(std::string value) {
 }
 
 inline std::string UnderscoreToCamelCase(std::string value) {
-  if (value[0] < 'a' || value[0] > 'z') {
-    ERROR() << value << " invalid identifier";
-  }
-
   std::ostringstream camel_case;
 
   bool capitalize = true;
