@@ -3,7 +3,8 @@ cc_defaults {
     defaults: ["fluoride_defaults"],
     include_dirs: [
         "system/bt",
-        "system/bt/internal_include",
+        "system/bt/include",
+        "system/bt/osi/src/protos",
         "system/bt/utils/include",
         "system/bt/stack/include",
     ]
@@ -20,7 +21,7 @@ cc_test_library {
     host_supported: true,
     shared: {
         enabled: false
-    },
+    }
 }
 
 cc_test_library {
@@ -32,8 +33,21 @@ cc_test_library {
     host_supported: true,
     shared: {
         enabled: false
-    },
+    }
 }
+
+// Bluetooth Protobuf static library for target and host
+// ========================================================
+cc_library_static {
+    name: "libbt-protos",
+    defaults: ["fluoride_defaults"],
+    srcs: ["src/protos/bluetooth.proto"],
+    proto: {
+        export_proto_headers: true,
+    },
+    host_supported: true
+}
+
 
 // libosi static library for target
 // ========================================================
@@ -71,13 +85,16 @@ cc_library_static {
     shared_libs: [
         "liblog",
     ],
-    static_libs: ["libbt-protos-lite"],
+    static_libs: ["libbt-protos"],
     host_supported: true,
     // TODO(armansito): Setting _GNU_SOURCE isn't very platform-independent but
     // should be compatible for a Linux host OS. We should figure out what to do for
     // a non-Linux host OS.
     target: {
-        linux_glibc: {
+        darwin: {
+            enabled: false,
+        },
+        linux: {
             cflags: [
                 "-D_GNU_SOURCE",
                 "-DOS_GENERIC",
@@ -122,16 +139,20 @@ cc_test {
         "libcutils",
     ],
     static_libs: [
-        "libbt-protos-lite",
+        "libbt-protos",
         "libgmock",
         "libosi",
     ],
     target: {
-        linux_glibc: {
+        linux: {
             cflags: ["-DOS_GENERIC"],
+            host_ldlibs: [
+                "-lrt",
+                "-lpthread",
+            ],
         },
-    },
-    sanitize: {
-        cfi: false,
+        darwin: {
+            enabled: false,
+        }
     },
 }
