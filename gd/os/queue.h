@@ -78,11 +78,15 @@ class Queue : public IQueueEnqueue<T>, public IQueueDequeue<T> {
   std::unique_ptr<T> TryDequeue() override;
 
  private:
-  void EnqueueCallbackInternal(EnqueueCallback callback);
+  void EnqueueCallbackInternal();
   // An internal queue that holds at most |capacity| pieces of data
   std::queue<std::unique_ptr<T>> queue_;
   // A mutex that guards data in this queue
   std::mutex mutex_;
+  // Current dequeue callback
+  EnqueueCallback enqueue_callback_;
+  // Current enqueue callback
+  DequeueCallback dequeue_callback_;
 
   class QueueEndpoint {
    public:
