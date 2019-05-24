@@ -52,7 +52,7 @@ HiSyncId2 = 15001900                                                            
 
 class ConfigTest : public AllocationTestHarness {
  protected:
-  void SetUp() override {
+  virtual void SetUp() {
     AllocationTestHarness::SetUp();
     FILE* fp = fopen(CONFIG_FILE, "wt");
     fwrite(CONFIG_FILE_CONTENT, 1, sizeof(CONFIG_FILE_CONTENT), fp);
