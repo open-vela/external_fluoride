@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -55,7 +55,11 @@ enum GATTError {
   GATT_ERROR_OUT_OF_RANGE = 0xFF
 };
 
-enum Transport { TRANSPORT_AUTO = 0, TRANSPORT_BREDR = 1, TRANSPORT_LE = 2 };
+enum Transport {
+  TRANSPORT_AUTO = 0,
+  TRANSPORT_BREDR = 1,
+  TRANSPORT_LE = 2
+};
 
 // Android attribute permission values
 const uint16_t kAttributePermissionNone = 0x0;
@@ -93,11 +97,11 @@ const int kAdvertisingIntervalLowMs = 100;
 // the Max. Adv. Interval. (See http://b/24344075).
 const int kAdvertisingIntervalDeltaUnit = 10;
 
-// Legacy Advertising types (ADV_IND, ADV_SCAN_IND, etc.) that are exposed to
+// Advertising types (ADV_IND, ADV_SCAN_IND, etc.) that are exposed to
 // applications.
-const uint16_t kAdvertisingEventTypeLegacyConnectable = 0x0013;
-const uint16_t kAdvertisingEventTypeLegacyScannable = 0x0012;
-const uint16_t kAdvertisingEventTypeLegacyNonConnectable = 0x0010;
+const int kAdvertisingEventTypeConnectable = 0;
+const int kAdvertisingEventTypeScannable = 2;
+const int kAdvertisingEventTypeNonConnectable = 3;
 
 // Advertising channels. These should be kept the same as those defined in the
 // stack.
@@ -110,16 +114,12 @@ const int kAdvertisingChannelAll =
 // Various Extended Inquiry Response fields types that are used for advertising
 // data fields as defined in the Core Specification Supplement.
 const uint8_t kEIRTypeFlags = 0x01;
-const uint8_t kEIRTypeIncomplete16BitUuids = 0x02;
-const uint8_t kEIRTypeComplete16BitUuids = 0x03;
-const uint8_t kEIRTypeIncomplete32BitUuids = 0x04;
-const uint8_t kEIRTypeComplete32BitUuids = 0x05;
-const uint8_t kEIRTypeIncomplete128BitUuids = 0x06;
-const uint8_t kEIRTypeComplete128BitUuids = 0x07;
-const uint8_t kEIRTypeShortenedLocalName = 0x08;
-const uint8_t kEIRTypeCompleteLocalName = 0x09;
-const uint8_t kEIRTypeTxPower = 0x0A;
-const uint8_t kEIRTypeServiceData = 0x16;
+const uint8_t kEIRTypeIncomplete16BitUUIDs = 0x02;
+const uint8_t kEIRTypeComplete16BitUUIDs = 0x03;
+const uint8_t kEIRTypeIncomplete32BitUUIDs = 0x04;
+const uint8_t kEIRTypeComplete32BitUUIDs = 0x05;
+const uint8_t kEIRTypeIncomplete128BitUUIDs = 0x06;
+const uint8_t kEIRTypeComplete128BitUUIDs = 0x07;
 const uint8_t kEIRTypeManufacturerSpecificData = 0xFF;
 
 }  // namespace bluetooth
