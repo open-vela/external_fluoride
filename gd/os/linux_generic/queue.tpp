@@ -15,7 +15,8 @@
  */
 
 template <typename T>
-Queue<T>::Queue(size_t capacity) : enqueue_(capacity), dequeue_(0){};
+Queue<T>::Queue(size_t capacity)
+    : enqueue_(capacity), dequeue_(0){};
 
 template <typename T>
 Queue<T>::~Queue() {
@@ -48,8 +49,8 @@ void Queue<T>::RegisterDequeue(Handler* handler, DequeueCallback callback) {
   ASSERT(dequeue_.handler_ == nullptr);
   ASSERT(dequeue_.reactable_ == nullptr);
   dequeue_.handler_ = handler;
-  dequeue_.reactable_ =
-      dequeue_.handler_->reactor_->Register(dequeue_.reactive_semaphore_.GetFd(), [callback] { callback(); }, nullptr);
+  dequeue_.reactable_ = dequeue_.handler_->reactor_->Register(dequeue_.reactive_semaphore_.GetFd(),
+                                                                           [callback] { callback(); }, nullptr);
 }
 
 template <typename T>
@@ -81,10 +82,14 @@ std::unique_ptr<T> Queue<T>::TryDequeue() {
 
 template <typename T>
 void Queue<T>::EnqueueCallbackInternal(EnqueueCallback callback) {
-  std::unique_ptr<T> data = callback();
-  ASSERT(data != nullptr);
-  std::lock_guard<std::mutex> lock(mutex_);
   enqueue_.reactive_semaphore_.Decrease();
-  queue_.push(std::move(data));
+
+  {
+    std::unique_ptr<T> data = callback();
+    ASSERT(data != nullptr);
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.push(std::move(data));
+  }
+
   dequeue_.reactive_semaphore_.Increase();
 }
