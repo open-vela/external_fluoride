@@ -1748,12 +1748,6 @@ void l2cu_release_ccb (tL2C_CCB *p_ccb)
     {
         if (!p_lcb->ccb_queue.p_first_ccb)
         {
-            // Closing a security channel on LE device should not start connection
-            // timeout
-            if (p_lcb->transport == BT_TRANSPORT_LE &&
-                p_ccb->local_cid == L2CAP_SMP_CID)
-                return;
-
             l2cu_no_dynamic_ccbs (p_lcb);
         }
         else
@@ -3541,7 +3535,7 @@ static tL2C_CCB *l2cu_get_next_channel(tL2C_LCB *p_lcb)
 ** Returns          pointer to buffer or NULL
 **
 *******************************************************************************/
-BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb, UINT16 *fixed_cid)
+BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb)
 {
     tL2C_CCB    *p_ccb;
     BT_HDR      *p_buf;
@@ -3550,7 +3544,6 @@ BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb, UINT16 *fixed_cid)
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
     int         xx;
 
-    *fixed_cid = 0;
     for (xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++)
     {
         if ((p_ccb = p_lcb->p_fixed_ccbs[xx]) == NULL)
@@ -3590,11 +3583,9 @@ BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb, UINT16 *fixed_cid)
                     L2CAP_TRACE_ERROR("l2cu_get_buffer_to_send: No data to be sent");
                     return (NULL);
                 }
-                if (fixed_cid != NULL)
-                {
-                    *fixed_cid = p_ccb->local_cid;
-                    L2CAP_TRACE_DEBUG("l2cu_get_buffer_to_send: fixed_cid = %d", *fixed_cid);
-                }
+                /* send tx complete */
+                if (l2cb.fixed_reg[xx].pL2CA_FixedTxComplete_Cb)
+                    (*l2cb.fixed_reg[xx].pL2CA_FixedTxComplete_Cb)(p_ccb->local_cid, 1);
 
                 l2cu_check_channel_congestion (p_ccb);
                 l2cu_set_acl_hci_header (p_buf, p_ccb);
