@@ -38,8 +38,8 @@ int sample_rate = -1;
 int data_interval_ms = -1;
 int num_channels = 2;
 bluetooth::common::RepeatingTimer audio_timer;
-HearingAidAudioReceiver* localAudioReceiver = nullptr;
-std::unique_ptr<tUIPC_STATE> uipc_hearing_aid = nullptr;
+HearingAidAudioReceiver* localAudioReceiver;
+std::unique_ptr<tUIPC_STATE> uipc_hearing_aid;
 
 struct AudioHalStats {
   size_t media_read_total_underflow_bytes;
@@ -85,9 +85,7 @@ void send_audio_data() {
 
   std::vector<uint8_t> data(p_buf, p_buf + bytes_read);
 
-  if (localAudioReceiver != nullptr) {
-    localAudioReceiver->OnAudioDataReady(data);
-  }
+  localAudioReceiver->OnAudioDataReady(data);
 }
 
 void hearing_aid_send_ack(tHEARING_AID_CTRL_ACK status) {
@@ -307,7 +305,7 @@ void hearing_aid_ctrl_cb(tUIPC_CH_ID, tUIPC_EVENT event) {
 
 bool hearing_aid_on_resume_req(bool start_media_task) {
   // hearing_aid_recv_ctrl_data(HEARING_AID_CTRL_CMD_START)
-  if (localAudioReceiver != nullptr) {
+  if (localAudioReceiver) {
     // Call OnAudioResume and block till it returns.
     std::promise<void> do_resume_promise;
     std::future<void> do_resume_future = do_resume_promise.get_future();
@@ -344,7 +342,7 @@ bool hearing_aid_on_resume_req(bool start_media_task) {
 bool hearing_aid_on_suspend_req() {
   // hearing_aid_recv_ctrl_data(HEARING_AID_CTRL_CMD_SUSPEND): stop_media_task
   stop_audio_ticks();
-  if (localAudioReceiver != nullptr) {
+  if (localAudioReceiver) {
     // Call OnAudioSuspend and block till it returns.
     std::promise<void> do_suspend_promise;
     std::future<void> do_suspend_future = do_suspend_promise.get_future();
@@ -371,7 +369,8 @@ bool hearing_aid_on_suspend_req() {
 void HearingAidAudioSource::Start(const CodecConfiguration& codecConfiguration,
                                   HearingAidAudioReceiver* audioReceiver,
                                   uint16_t remote_delay_ms) {
-  LOG(INFO) << __func__ << ": Hearing Aid Source Open";
+  localAudioReceiver = audioReceiver;
+  VLOG(2) << "Hearing Aid UIPC Open";
 
   bit_rate = codecConfiguration.bit_rate;
   sample_rate = codecConfiguration.sample_rate;
@@ -383,13 +382,9 @@ void HearingAidAudioSource::Start(const CodecConfiguration& codecConfiguration,
     bluetooth::audio::hearing_aid::start_session();
     bluetooth::audio::hearing_aid::set_remote_delay(remote_delay_ms);
   }
-  localAudioReceiver = audioReceiver;
 }
 
 void HearingAidAudioSource::Stop() {
-  LOG(INFO) << __func__ << ": Hearing Aid Source Close";
-
-  localAudioReceiver = nullptr;
   if (bluetooth::audio::hearing_aid::is_hal_2_0_enabled()) {
     bluetooth::audio::hearing_aid::end_session();
   }
@@ -414,7 +409,6 @@ void HearingAidAudioSource::CleanUp() {
     bluetooth::audio::hearing_aid::cleanup();
   } else {
     UIPC_Close(*uipc_hearing_aid, UIPC_CH_ID_ALL);
-    uipc_hearing_aid = nullptr;
   }
 }
 
