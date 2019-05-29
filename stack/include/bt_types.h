@@ -21,7 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 
 #ifndef FALSE
 #define FALSE false
@@ -138,9 +137,6 @@
 /* opp events */
 #define BT_EVT_TO_OPP_SRVR_CMDS 0x3900
 #define BT_EVT_TO_OPP_CLNT_CMDS 0x3a00
-
-/* gap events */
-#define BT_EVT_TO_GAP_MSG 0x3b00
 
 /* for NFC                          */
 /************************************/
@@ -799,7 +795,6 @@ typedef uint8_t tBT_DEVICE_TYPE;
 #define TRACE_LAYER_TCS 0x000b0000
 #define TRACE_LAYER_OBEX 0x000c0000
 #define TRACE_LAYER_BTM 0x000d0000
-#define TRACE_LAYER_GAP 0x000e0000
 #define TRACE_LAYER_ICP 0x00110000
 #define TRACE_LAYER_HSP2 0x00120000
 #define TRACE_LAYER_SPP 0x00130000
@@ -1013,13 +1008,4 @@ static inline int bdcmpany(const BD_ADDR a) { return bdcmp(a, bd_addr_any); }
  *
  ******************************************************************************/
 static inline void bdsetany(BD_ADDR a) { bdcpy(a, bd_addr_any); }
-
-static inline bool is_sample_ltk(const BT_OCTET16 ltk) {
-  /* Sample LTK from BT Spec 5.1 | Vol 6, Part C 1
-   * 0x4C68384139F574D836BCF34E9DFB01BF */
-  const uint8_t SAMPLE_LTK[] = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
-                                0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
-  return memcmp(ltk, SAMPLE_LTK, BT_OCTET16_LEN) == 0;
-}
-
 #endif
