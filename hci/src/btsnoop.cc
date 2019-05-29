@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,15 +32,16 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include "bt_types.h"
+#include "common/time_util.h"
 #include "hci/include/btsnoop.h"
 #include "hci/include/btsnoop_mem.h"
 #include "hci_layer.h"
 #include "osi/include/log.h"
 #include "osi/include/properties.h"
-#include "osi/include/time.h"
 #include "stack_config.h"
 
 // The number of of packets per btsnoop file before we rotate to the next
@@ -128,7 +129,7 @@ static void capture(const BT_HDR* buffer, bool is_received) {
   uint8_t* p = const_cast<uint8_t*>(buffer->data + buffer->offset);
 
   std::lock_guard<std::mutex> lock(btsnoop_mutex);
-  uint64_t timestamp_us = time_gettimeofday_us();
+  uint64_t timestamp_us = bluetooth::common::time_gettimeofday_us();
   btsnoop_mem_capture(buffer, timestamp_us);
 
   if (logfile_fd == INVALID_FD) return;
@@ -199,7 +200,7 @@ static void open_next_snoop_file() {
   get_btsnoop_log_path(log_path);
   get_btsnoop_last_log_path(last_log_path, log_path);
 
-  if (!rename(log_path, last_log_path) && errno != ENOENT)
+  if (rename(log_path, last_log_path) != 0 && errno != ENOENT)
     LOG_ERROR(LOG_TAG, "%s unable to rename '%s' to '%s': %s", __func__,
               log_path, last_log_path, strerror(errno));
 
