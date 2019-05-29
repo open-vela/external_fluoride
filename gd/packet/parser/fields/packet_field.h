@@ -41,7 +41,6 @@ class PacketField : public Loggable {
     COUNT,
     BODY,
     PAYLOAD,
-    ARRAY,
     CUSTOM,
     CHECKSUM,
     CHECKSUM_START,
