@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,6 +19,12 @@
 #pragma once
 
 #include <stdint.h>
+
+// Mutex-related state init
+void mutex_init(void);
+
+// Mutex-related state cleanup
+void mutex_cleanup(void);
 
 // Lock the global mutex
 void mutex_global_lock(void);
