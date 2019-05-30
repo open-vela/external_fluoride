@@ -84,10 +84,7 @@ void Reactor::Run() {
   ASSERT(!previously_running);
 
   for (;;) {
-    {
-      std::unique_lock<std::mutex> lock(mutex_);
-      invalidation_list_.clear();
-    }
+    invalidation_list_.clear();
     epoll_event events[kEpollMaxEvents];
     int count;
     RUN_NO_INTR(count = epoll_wait(epoll_fd_, events, kEpollMaxEvents, -1));
@@ -126,7 +123,6 @@ void Reactor::Run() {
       }
       if (reactable_removed_) {
         delete reactable;
-        reactable_removed_ = false;
       }
     }
   }
@@ -137,7 +133,7 @@ void Reactor::Stop() {
     LOG_WARN("not running, will stop once it's started");
   }
   auto control = eventfd_write(control_fd_, 1);
-  ASSERT(control != -1);
+  ASSERT(control != -1)
 }
 
 Reactor::Reactable* Reactor::Register(int fd, Closure on_read_ready, Closure on_write_ready) {
@@ -155,7 +151,7 @@ Reactor::Reactable* Reactor::Register(int fd, Closure on_read_ready, Closure on_
   };
   int register_fd;
   RUN_NO_INTR(register_fd = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event));
-  ASSERT(register_fd != -1);
+  ASSERT(register_fd != -1)
   return reactable;
 }
 
@@ -165,7 +161,6 @@ void Reactor::Unregister(Reactor::Reactable* reactable) {
     std::lock_guard<std::mutex> lock(mutex_);
     invalidation_list_.push_back(reactable);
   }
-  bool delaying_delete_until_callback_finished = false;
   {
     int result;
     std::lock_guard<std::recursive_mutex> reactable_lock(reactable->lock_);
@@ -175,16 +170,14 @@ void Reactor::Unregister(Reactor::Reactable* reactable) {
     } else {
       ASSERT(result != -1);
     }
-
     // If we are unregistering during the callback event from this reactable, we delete it after the callback is executed.
     // reactable->is_executing_ is protected by reactable->lock_, so it's thread safe.
     if (reactable->is_executing_) {
       reactable_removed_ = true;
-      delaying_delete_until_callback_finished = true;
     }
   }
   // If we are unregistering outside of the callback event from this reactable, we delete it now
-  if (!delaying_delete_until_callback_finished) {
+  if (!reactable_removed_) {
     delete reactable;
   }
 }
