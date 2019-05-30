@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 Google Inc.
+ *  Copyright 2015 Google Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ typedef enum {
 } btif_debug_conn_state_t;
 
 // Report a connection state change
-void btif_debug_conn_state(const bt_bdaddr_t bda,
+void btif_debug_conn_state(const RawAddress& bda,
                            const btif_debug_conn_state_t state,
                            const tGATT_DISCONN_REASON disconnect_reason);
 
