@@ -39,9 +39,8 @@ uint8_t RegisterNotificationResponse::GetVolume() const {
 bool RegisterNotificationResponse::IsValid() const {
   if (!VendorPacket::IsValid()) return false;
   if (size() < kMinSize()) return false;
-  if (GetCType() != CType::INTERIM && GetCType() != CType::CHANGED && GetCType() != CType::REJECTED) {
+  if (GetCType() != CType::INTERIM && GetCType() != CType::CHANGED)
     return false;
-  }
 
   switch (GetEvent()) {
     case Event::VOLUME_CHANGED:
