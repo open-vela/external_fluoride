@@ -25,7 +25,6 @@ ModuleFactory::ModuleFactory(std::function<Module*()> ctor) : ctor_(ctor) {
 }
 
 Handler* Module::GetHandler() {
-  ASSERT_LOG(handler_ != nullptr, "Can't get handler when it's not started");
   return handler_;
 }
 
