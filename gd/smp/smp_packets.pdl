@@ -80,11 +80,13 @@ packet PairingResponse : Command (code = PAIRING_RESPONSE) {
 }
 
 packet PairingConfirm : Command (code = PAIRING_CONFIRM) {
-  confirm_value : 8[16],  // Initiating device sends Mconfirm, responding device sends Sconfirm
+//  confirm_value : 8[16],  // Initiating device sends Mconfirm, responding device sends Sconfirm
+  _payload_,
 }
 
 packet PairingRandom : Command (code = PAIRING_RANDOM) {
-  random_value : 8[16],  // Initiating device sends Mrand, responding device sends Srand
+//  random_value : 8[16],  // Initiating device sends Mrand, responding device sends Srand
+  _payload_,
 }
 
 enum PairingFailedReason : 8 {
@@ -109,7 +111,8 @@ packet PairingFailed : Command (code = PAIRING_FAILED) {
 }
 
 packet EncryptionInformation : Command (code = ENCRYPTION_INFORMATION) {
- long_term_key : 8[16],
+  // long_term_key : 8[16],
+  _payload_,
 }
 
 packet MasterIdentification : Command (code = MASTER_IDENTIFICATION) {
@@ -118,7 +121,8 @@ packet MasterIdentification : Command (code = MASTER_IDENTIFICATION) {
 }
 
 packet IdentityInformation : Command (code = IDENTITY_INFORMATION) {
-  identity_resolving_key : 8[16],
+//  identity_resolving_key : 8[16],
+  _payload_,
 }
 
 enum AddrType : 8 {
@@ -132,7 +136,8 @@ packet IdentityAddressInformation : Command (code = IDENTITY_ADDRESS_INFORMATION
 }
 
 packet SigningInformation : Command (code = SIGNING_INFORMATION) {
-  signature_key : 8[16],
+//  signature_key : 8[16],
+  _payload_,
 }
 
 packet SecurityRequest : Command (code = SECURITY_REQUEST) {
@@ -140,12 +145,14 @@ packet SecurityRequest : Command (code = SECURITY_REQUEST) {
 }
 
 packet PairingPublicKey : Command (code = PAIRING_PUBLIC_KEY) {
-  public_key_x : 8[32],
-  public_key_y : 8[32],
+//  public_key_x : 8[32],
+//  public_key_y : 8[32],
+  _payload_,
 }
 
 packet PairingDhKeyCheck : Command (code = PAIRING_DH_KEY_CHECK) {
-  dh_key_check : 8[16],
+//  dh_key_check : 8[16],
+  _payload_,
 }
 
 enum KeypressNotificationType : 8 {
