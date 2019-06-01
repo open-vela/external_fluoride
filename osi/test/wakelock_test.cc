@@ -45,7 +45,7 @@ static bt_os_callouts_t bt_wakelock_callouts = {
 
 class WakelockTest : public AllocationTestHarness {
  protected:
-  void SetUp() override {
+  virtual void SetUp() {
     AllocationTestHarness::SetUp();
 
 // TODO (jamuraa): maybe use base::CreateNewTempDirectory instead?
@@ -69,7 +69,7 @@ class WakelockTest : public AllocationTestHarness {
     creat(unlock_path_.c_str(), S_IRWXU);
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     is_wake_lock_acquired = false;
     wakelock_cleanup();
     wakelock_set_os_callouts(NULL);
