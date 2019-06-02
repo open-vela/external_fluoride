@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,6 +22,4 @@
 
 // Represents a page of device feature enabled/disabled bits returned
 // by the local controller. See the bluetooth spec for bit indexes.
-typedef struct {
-  uint8_t as_array[8];
-} bt_device_features_t;
+typedef struct { uint8_t as_array[8]; } bt_device_features_t;
