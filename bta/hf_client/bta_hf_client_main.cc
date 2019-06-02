@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2016 The Android Open Source Project
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
  *
  ******************************************************************************/
 
+#include <base/logging.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,12 +27,9 @@
 #include "bta_hf_client_api.h"
 #include "bta_hf_client_int.h"
 #include "bta_sys.h"
-#include "btcore/include/bdaddr.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
 #include "utl.h"
-
-extern fixed_queue_t* btu_bta_alarm_queue;
 
 static const char* bta_hf_client_evt_str(uint16_t event);
 static const char* bta_hf_client_state_str(uint8_t state);
@@ -331,6 +329,8 @@ void bta_hf_client_resume_open(tBTA_HF_CLIENT_CB* client_cb) {
     client_cb->state = BTA_HF_CLIENT_OPENING_ST;
     tBTA_HF_CLIENT_DATA msg;
     msg.hdr.layer_specific = client_cb->handle;
+    msg.api_open.bd_addr = client_cb->peer_addr;
+    msg.api_open.sec_mask = client_cb->cli_sec_mask;
     bta_hf_client_start_open(&msg);
   }
 }
@@ -365,7 +365,7 @@ static void bta_hf_client_collision_timer_cback(void* data) {
  ******************************************************************************/
 void bta_hf_client_collision_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
                                    uint8_t id, UNUSED_ATTR uint8_t app_id,
-                                   BD_ADDR peer_addr) {
+                                   const RawAddress& peer_addr) {
   tBTA_HF_CLIENT_CB* client_cb = bta_hf_client_find_cb_by_bda(peer_addr);
   if (client_cb != NULL && client_cb->state == BTA_HF_CLIENT_OPENING_ST) {
     if (id == BTA_ID_SYS) /* ACL collision */
@@ -383,18 +383,17 @@ void bta_hf_client_collision_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
     /* Cancel SDP if it had been started. */
     if (client_cb->p_disc_db) {
       (void)SDP_CancelServiceSearch(client_cb->p_disc_db);
-      bta_hf_client_free_db(NULL);
+      osi_free_and_reset((void**)&client_cb->p_disc_db);
     }
 
     /* reopen registered server */
     /* Collision may be detected before or after we close servers. */
-    // bta_hf_client_start_server();
+    bta_hf_client_start_server();
 
     /* Start timer to handle connection opening restart */
-    alarm_set_on_queue(client_cb->collision_timer,
+    alarm_set_on_mloop(client_cb->collision_timer,
                        BTA_HF_CLIENT_COLLISION_TIMER_MS,
-                       bta_hf_client_collision_timer_cback, (void*)client_cb,
-                       btu_bta_alarm_queue);
+                       bta_hf_client_collision_timer_cback, (void*)client_cb);
   }
 }
 
@@ -482,19 +481,19 @@ tBTA_HF_CLIENT_CB* bta_hf_client_find_cb_by_handle(uint16_t handle) {
  *
  * Description      Finds the control block by handle provided
  *
- *                  bda: BD_ADDR of the device to find the handle for.
+ *                  bda: address of the device to find the handle for.
  *                  Since there can only be one HF connection for a device
  *                  we should always find a unique block
  *
- * Returns          Control block corresponding to the BD_ADDR and NULL if
+ * Returns          Control block corresponding to the address and NULL if
  *                  none exists
  *
  ******************************************************************************/
-tBTA_HF_CLIENT_CB* bta_hf_client_find_cb_by_bda(const BD_ADDR peer_addr) {
+tBTA_HF_CLIENT_CB* bta_hf_client_find_cb_by_bda(const RawAddress& peer_addr) {
   for (int i = 0; i < HF_CLIENT_MAX_DEVICES; i++) {
     // Check if the associated index is allocated and that BD ADDR matches
     tBTA_HF_CLIENT_CB* client_cb = &bta_hf_client_cb_arr.cb[i];
-    if (client_cb->is_allocated && !bdcmp(peer_addr, client_cb->peer_addr)) {
+    if (client_cb->is_allocated && peer_addr == client_cb->peer_addr) {
       return client_cb;
     } else {
       APPL_TRACE_WARNING("%s: bdaddr mismatch for handle %d alloc %d", __func__,
@@ -580,7 +579,8 @@ tBTA_HF_CLIENT_CB* bta_hf_client_find_cb_by_sco_handle(uint16_t handle) {
  * Returns          true if the creation of p_handle succeeded, false otherwise
  *
  ******************************************************************************/
-bool bta_hf_client_allocate_handle(const BD_ADDR bd_addr, uint16_t* p_handle) {
+bool bta_hf_client_allocate_handle(const RawAddress& bd_addr,
+                                   uint16_t* p_handle) {
   tBTA_HF_CLIENT_CB* existing_cb = bta_hf_client_find_cb_by_bda(bd_addr);
   if (existing_cb != NULL) {
     BTIF_TRACE_ERROR("%s: cannot allocate handle since BDADDR already exists",
@@ -605,7 +605,7 @@ bool bta_hf_client_allocate_handle(const BD_ADDR bd_addr, uint16_t* p_handle) {
                      client_cb->handle);
 
     client_cb->is_allocated = true;
-    bdcpy(client_cb->peer_addr, bd_addr);
+    client_cb->peer_addr = bd_addr;
     bta_hf_client_at_init(client_cb);
     return true;
   }
@@ -744,44 +744,33 @@ void bta_hf_client_sm_execute(uint16_t event, tBTA_HF_CLIENT_DATA* p_data) {
 
   /* If the state has changed then notify the app of the corresponding change */
   if (in_state != client_cb->state) {
-    APPL_TRACE_DEBUG(
-        "%s: notifying state change to %d -> %d "
-        "device %02x:%02x:%02x:%02x:%02x:%02x",
-        __func__, in_state, client_cb->state, client_cb->peer_addr[0],
-        client_cb->peer_addr[1], client_cb->peer_addr[2],
-        client_cb->peer_addr[3], client_cb->peer_addr[4],
-        client_cb->peer_addr[5]);
+    VLOG(1) << __func__ << ": notifying state change to " << in_state << " -> "
+            << client_cb->state << " device " << client_cb->peer_addr;
     tBTA_HF_CLIENT evt;
     memset(&evt, 0, sizeof(evt));
-    bdcpy(evt.bd_addr, client_cb->peer_addr);
+    evt.bd_addr = client_cb->peer_addr;
     if (client_cb->state == BTA_HF_CLIENT_INIT_ST) {
       bta_hf_client_app_callback(BTA_HF_CLIENT_CLOSE_EVT, &evt);
+      APPL_TRACE_DEBUG("%s: marking CB handle %d to false", __func__, client_cb->handle);
+      client_cb->is_allocated = false;
     } else if (client_cb->state == BTA_HF_CLIENT_OPEN_ST) {
       evt.open.handle = client_cb->handle;
       bta_hf_client_app_callback(BTA_HF_CLIENT_OPEN_EVT, &evt);
     }
   }
 
-  /* if the next state is INIT then release the cb for future use */
-  if (client_cb->state == BTA_HF_CLIENT_INIT_ST) {
-    APPL_TRACE_DEBUG("%s: marking CB handle %d to false", __func__,
-                     client_cb->handle);
-    client_cb->is_allocated = false;
-  }
-
-  APPL_TRACE_EVENT(
-      "%s: device %02x:%02x:%02x:%02x:%02x:%02x "
-      "state change: [%s] -> [%s] after Event [%s]",
-      __func__, client_cb->peer_addr[0], client_cb->peer_addr[1],
-      client_cb->peer_addr[2], client_cb->peer_addr[3], client_cb->peer_addr[4],
-      client_cb->peer_addr[5], bta_hf_client_state_str(in_state),
-      bta_hf_client_state_str(client_cb->state),
-      bta_hf_client_evt_str(in_event));
+  VLOG(2) << __func__ << ": device " << client_cb->peer_addr
+          << "state change: [" << bta_hf_client_state_str(in_state) << "] -> ["
+          << bta_hf_client_state_str(client_cb->state) << "] after Event ["
+          << bta_hf_client_evt_str(in_event) << "]";
 }
 
 static void send_post_slc_cmd(tBTA_HF_CLIENT_CB* client_cb) {
   client_cb->at_cb.current_cmd = BTA_HF_CLIENT_AT_NONE;
 
+  tBTA_HF_CLIENT_DATA p_data;
+  p_data.hdr.layer_specific = client_cb->handle;
+  bta_hf_client_sco_listen(&p_data);
   bta_hf_client_send_at_bia(client_cb);
   bta_hf_client_send_at_ccwa(client_cb, true);
   bta_hf_client_send_at_cmee(client_cb, true);
@@ -938,11 +927,10 @@ void bta_hf_client_dump_statistics(int fd) {
 
     dprintf(fd, "  Control block #%d\n", i + 1);
 
+    uint8_t* a = client_cb->peer_addr.address;
     // Device name
-    dprintf(fd, "    Peer Device: %02x:%02x:%02x:%02x:%02x:%02x\n",
-            client_cb->peer_addr[0], client_cb->peer_addr[1],
-            client_cb->peer_addr[2], client_cb->peer_addr[3],
-            client_cb->peer_addr[4], client_cb->peer_addr[5]);
+    dprintf(fd, "    Peer Device: %02x:%02x:%02x:%02x:%02x:%02x\n", a[0], a[1],
+            a[2], a[3], a[4], a[5]);
 
     // State machine state
     dprintf(fd, "    State Machine State: %s\n",
