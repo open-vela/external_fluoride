@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2014 The Android Open Source Project
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@
  *
  *  Description:   Bluetooth MCE Interface
  *
- *******************************************************************************/
+ ******************************************************************************/
 
 #ifndef BTIF_MCE_H
 #define BTIF_MCE_H
 
 #include <hardware/bt_mce.h>
 
-btmce_interface_t *btif_mce_get_interface();
+btmce_interface_t* btif_mce_get_interface();
 
 #endif
