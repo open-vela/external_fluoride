@@ -1,20 +1,20 @@
-/*
- * Copyright 2016 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+//
+// Copyright 2016 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
-#include "model/setup/async_manager.h"
+#include "async_manager.h"
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <cstring>
@@ -48,7 +48,8 @@ class AsyncManagerSocketTest : public ::testing::Test {
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(kPort);
     int reuse_flag = 1;
-    EXPECT_FALSE(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse_flag, sizeof(reuse_flag)) < 0);
+    EXPECT_FALSE(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse_flag,
+                            sizeof(reuse_flag)) < 0);
     EXPECT_FALSE(bind(fd, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0);
 
     listen(fd, 1);
@@ -86,7 +87,8 @@ class AsyncManagerSocketTest : public ::testing::Test {
     async_manager_.WatchFdForNonBlockingReads(socket_fd_, [this](int fd) {
       int connection_fd = AcceptConnection(fd);
 
-      async_manager_.WatchFdForNonBlockingReads(connection_fd, [this](int fd) { ReadIncomingMessage(fd); });
+      async_manager_.WatchFdForNonBlockingReads(
+          connection_fd, [this](int fd) { ReadIncomingMessage(fd); });
     });
   }
 
@@ -110,7 +112,8 @@ class AsyncManagerSocketTest : public ::testing::Test {
     serv_addr.sin_addr.s_addr = *(reinterpret_cast<in_addr_t*>(server->h_addr));
     serv_addr.sin_port = htons(kPort);
 
-    int result = connect(socket_cli_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+    int result =
+        connect(socket_cli_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
     EXPECT_FALSE(result < 0);
 
     return socket_cli_fd;
