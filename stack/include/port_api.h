@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -309,7 +309,7 @@ extern int PORT_SetEventMask(uint16_t port_handle, uint32_t mask);
  *                  p_lcid     - OUT L2CAP's LCID
  *
  ******************************************************************************/
-extern int PORT_CheckConnection(uint16_t handle, RawAddress& bd_addr,
+extern int PORT_CheckConnection(uint16_t handle, RawAddress* bd_addr,
                                 uint16_t* p_lcid);
 
 /*******************************************************************************
@@ -323,7 +323,7 @@ extern int PORT_CheckConnection(uint16_t handle, RawAddress& bd_addr,
  *                  bd_addr    - bd_addr of the peer
  *
  ******************************************************************************/
-extern bool PORT_IsOpening(RawAddress& bd_addr);
+extern bool PORT_IsOpening(RawAddress* bd_addr);
 
 /*******************************************************************************
  *
