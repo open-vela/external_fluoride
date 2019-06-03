@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google Inc.
+ *  Copyright (C) 2015 Google Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "btcore/include/bdaddr.h"
 #include "btif/include/btif_debug_conn.h"
 #include "osi/include/time.h"
 
@@ -29,7 +30,7 @@
 typedef struct conn_event_t {
   uint64_t ts;
   btif_debug_conn_state_t state;
-  RawAddress bda;
+  bt_bdaddr_t bda;
   tGATT_DISCONN_REASON disconnect_reason;
 } conn_event_t;
 
@@ -63,7 +64,7 @@ static void next_event() {
   if (current_event == NUM_CONNECTION_EVENTS) current_event = 0;
 }
 
-void btif_debug_conn_state(const RawAddress& bda,
+void btif_debug_conn_state(const bt_bdaddr_t bda,
                            const btif_debug_conn_state_t state,
                            const tGATT_DISCONN_REASON disconnect_reason) {
   next_event();
@@ -72,7 +73,7 @@ void btif_debug_conn_state(const RawAddress& bda,
   evt->ts = time_gettimeofday_us();
   evt->state = state;
   evt->disconnect_reason = disconnect_reason;
-  evt->bda = bda;
+  memcpy(&evt->bda, &bda, sizeof(bt_bdaddr_t));
 }
 
 void btif_debug_conn_dump(int fd) {
@@ -80,6 +81,7 @@ void btif_debug_conn_dump(int fd) {
       current_event;  // Cache to avoid threading issues
   uint8_t dump_event = current_event_local;
   char ts_buffer[TEMP_BUFFER_SIZE] = {0};
+  char name_buffer[TEMP_BUFFER_SIZE] = {0};
 
   dprintf(fd, "\nConnection Events:\n");
   if (connection_events[dump_event].ts == 0) dprintf(fd, "  None\n");
@@ -87,7 +89,8 @@ void btif_debug_conn_dump(int fd) {
   while (connection_events[dump_event].ts) {
     conn_event_t* evt = &connection_events[dump_event];
     dprintf(fd, "  %s %s %s", format_ts(evt->ts, ts_buffer, sizeof(ts_buffer)),
-            format_state(evt->state), evt->bda.ToString().c_str());
+            format_state(evt->state),
+            bdaddr_to_string(&evt->bda, name_buffer, sizeof(name_buffer)));
     if (evt->state == BTIF_DEBUG_DISCONNECTED)
       dprintf(fd, " reason=%d", evt->disconnect_reason);
     dprintf(fd, "\n");
