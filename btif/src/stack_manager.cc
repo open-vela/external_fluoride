@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -177,10 +177,10 @@ static void event_shut_down_stack(UNUSED_ATTR void* context) {
                                                     // puts it in a restartable
                                                     // state
 
+  LOG_INFO(LOG_TAG, "%s finished", __func__);
   hack_future = future_new();
   btif_thread_post(event_signal_stack_down, NULL);
   future_await(hack_future);
-  LOG_INFO(LOG_TAG, "%s finished", __func__);
 }
 
 static void ensure_stack_is_not_running(void) {
@@ -194,6 +194,8 @@ static void ensure_stack_is_not_running(void) {
 
 // Synchronous function to clean up the stack
 static void event_clean_up_stack(void* context) {
+  future_t* local_hack_future;
+
   if (!stack_is_initialized) {
     LOG_INFO(LOG_TAG, "%s found the stack already in a clean state", __func__);
     goto cleanup;
@@ -202,6 +204,8 @@ static void event_clean_up_stack(void* context) {
   ensure_stack_is_not_running();
 
   LOG_INFO(LOG_TAG, "%s is cleaning up the stack", __func__);
+  local_hack_future = future_new();
+  hack_future = local_hack_future;
   stack_is_initialized = false;
 
   btif_cleanup_bluetooth();

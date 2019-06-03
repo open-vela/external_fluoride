@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 
 #include "gatt_int.h"
 
+extern fixed_queue_t* btu_general_alarm_queue;
 extern thread_t* bt_workqueue_thread;
 
 /******************************************************************************/
@@ -82,10 +83,6 @@ void btm_dev_init(void) {
 
   btm_cb.devcb.read_local_name_timer = alarm_new("btm.read_local_name_timer");
   btm_cb.devcb.read_rssi_timer = alarm_new("btm.read_rssi_timer");
-  btm_cb.devcb.read_failed_contact_counter_timer =
-      alarm_new("btm.read_failed_contact_counter_timer");
-  btm_cb.devcb.read_automatic_flush_timeout_timer =
-      alarm_new("btm.read_automatic_flush_timeout_timer");
   btm_cb.devcb.read_link_quality_timer =
       alarm_new("btm.read_link_quality_timer");
   btm_cb.devcb.read_inq_tx_power_timer =
@@ -117,6 +114,7 @@ void btm_dev_init(void) {
  ******************************************************************************/
 static void btm_db_reset(void) {
   tBTM_CMPL_CB* p_cb;
+  tBTM_STATUS status = BTM_DEV_RESET;
 
   btm_inq_db_reset();
 
@@ -131,33 +129,7 @@ static void btm_db_reset(void) {
     p_cb = btm_cb.devcb.p_rssi_cmpl_cb;
     btm_cb.devcb.p_rssi_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_RSSI_RESULT btm_rssi_result;
-      btm_rssi_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_rssi_result);
-    }
-  }
-
-  if (btm_cb.devcb.p_failed_contact_counter_cmpl_cb) {
-    p_cb = btm_cb.devcb.p_failed_contact_counter_cmpl_cb;
-    btm_cb.devcb.p_failed_contact_counter_cmpl_cb = NULL;
-
-    if (p_cb) {
-      tBTM_FAILED_CONTACT_COUNTER_RESULT btm_failed_contact_counter_result;
-      btm_failed_contact_counter_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_failed_contact_counter_result);
-    }
-  }
-
-  if (btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb) {
-    p_cb = btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb;
-    btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb = NULL;
-
-    if (p_cb) {
-      tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT btm_automatic_flush_timeout_result;
-      btm_automatic_flush_timeout_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_automatic_flush_timeout_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_RSSI_RESULTS*)&status);
   }
 }
 
@@ -474,9 +446,9 @@ tBTM_STATUS BTM_ReadLocalDeviceNameFromController(
   btm_cb.devcb.p_rln_cmpl_cb = p_rln_cmpl_cback;
 
   btsnd_hcic_read_name();
-  alarm_set_on_mloop(btm_cb.devcb.read_local_name_timer,
+  alarm_set_on_queue(btm_cb.devcb.read_local_name_timer,
                      BTM_DEV_NAME_REPLY_TIMEOUT_MS, btm_read_local_name_timeout,
-                     NULL);
+                     NULL, btu_general_alarm_queue);
 
   return BTM_CMD_STARTED;
 }
@@ -618,7 +590,7 @@ void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
  *
  ******************************************************************************/
 void btm_vsc_complete(uint8_t* p, uint16_t opcode, uint16_t evt_len,
-                      tBTM_VSC_CMPL_CB* p_vsc_cplt_cback) {
+                      tBTM_CMPL_CB* p_vsc_cplt_cback) {
   tBTM_VSC_CMPL vcs_cplt_params;
 
   /* If there was a callback address for vcs complete, call it */
@@ -658,7 +630,7 @@ tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb, bool is_register) {
       free_idx = i;
     } else if (btm_cb.devcb.p_vend_spec_cb[i] == p_cb) {
       /* Found callback in lookup table. If deregistering, clear the entry. */
-      if (!is_register) {
+      if (is_register == false) {
         btm_cb.devcb.p_vend_spec_cb[i] = NULL;
         BTM_TRACE_EVENT("BTM Deregister For VSEvents is successfully");
       }
@@ -796,26 +768,27 @@ tBTM_STATUS BTM_EnableTestMode(void) {
  *                                 the results
  *
  ******************************************************************************/
-tBTM_STATUS BTM_DeleteStoredLinkKey(const RawAddress* bd_addr,
-                                    tBTM_CMPL_CB* p_cb) {
+tBTM_STATUS BTM_DeleteStoredLinkKey(BD_ADDR bd_addr, tBTM_CMPL_CB* p_cb) {
+  BD_ADDR local_bd_addr;
+  bool delete_all_flag = false;
+
   /* Check if the previous command is completed */
   if (btm_cb.devcb.p_stored_link_key_cmpl_cb) return (BTM_BUSY);
 
-  bool delete_all_flag = !bd_addr;
+  if (!bd_addr) {
+    /* This is to delete all link keys */
+    delete_all_flag = true;
+
+    /* We don't care the BD address. Just pass a non zero pointer */
+    bd_addr = local_bd_addr;
+  }
 
   BTM_TRACE_EVENT("BTM: BTM_DeleteStoredLinkKey: delete_all_flag: %s",
                   delete_all_flag ? "true" : "false");
 
+  /* Send the HCI command */
   btm_cb.devcb.p_stored_link_key_cmpl_cb = p_cb;
-  if (!bd_addr) {
-    /* This is to delete all link keys */
-    /* We don't care the BD address. Just pass a non zero pointer */
-    RawAddress local_bd_addr = RawAddress::kEmpty;
-    btsnd_hcic_delete_stored_key(local_bd_addr, delete_all_flag);
-  } else {
-    btsnd_hcic_delete_stored_key(*bd_addr, delete_all_flag);
-  }
-
+  btsnd_hcic_delete_stored_key(bd_addr, delete_all_flag);
   return (BTM_SUCCESS);
 }
 
