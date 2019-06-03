@@ -25,13 +25,12 @@
 #include "connection_handler.h"
 
 using ::testing::_;
-using ::testing::DoAll;
-using ::testing::MockFunction;
-using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::SaveArgPointee;
 using ::testing::SetArgPointee;
+using ::testing::MockFunction;
+using ::testing::NiceMock;
 using ::testing::StrictMock;
 
 namespace bluetooth {
