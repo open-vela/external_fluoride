@@ -232,7 +232,7 @@ class HearingAidImpl : public HearingAid {
   uint16_t overwrite_min_ce_len;
 
  public:
-  virtual ~HearingAidImpl() = default;
+  ~HearingAidImpl() override = default;
 
   HearingAidImpl(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                  Closure initCb)
@@ -1141,6 +1141,7 @@ class HearingAidImpl : public HearingAid {
 
     if (left == nullptr && right == nullptr) {
       HearingAidAudioSource::Stop();
+      audio_running = false;
       encoder_state_release();
       current_volume = VOLUME_UNKNOWN;
       return;
