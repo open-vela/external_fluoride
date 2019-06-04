@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2001-2012 Broadcom Corporation
+ *  Copyright 2001-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -149,10 +149,10 @@ typedef struct {
   uint16_t bad_pkts_rcvd;
   uint8_t re_transmits;
   uint16_t handle;
-  tBT_UUID prv_src_uuid;
-  tBT_UUID prv_dst_uuid;
-  tBT_UUID src_uuid;
-  tBT_UUID dst_uuid;
+  bluetooth::Uuid prv_src_uuid;
+  bluetooth::Uuid prv_dst_uuid;
+  bluetooth::Uuid src_uuid;
+  bluetooth::Uuid dst_uuid;
 
 } tBNEP_CONN;
 
@@ -229,8 +229,7 @@ extern void bnep_sec_check_complete(const RawAddress* bd_addr,
 extern tBNEP_RESULT bnep_is_packet_allowed(tBNEP_CONN* p_bcb,
                                            const RawAddress& p_dest_addr,
                                            uint16_t protocol,
-                                           bool fw_ext_present,
-                                           uint8_t* p_data);
-extern uint32_t bnep_get_uuid32(tBT_UUID* src_uuid);
+                                           bool fw_ext_present, uint8_t* p_data,
+                                           uint16_t org_len);
 
 #endif
