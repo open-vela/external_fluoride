@@ -38,7 +38,7 @@ namespace packets {
 class RawBuilderTest : public ::testing::Test {
  public:
   RawBuilderTest() = default;
-  ~RawBuilderTest() override = default;
+  ~RawBuilderTest() = default;
 };
 
 TEST(RawBuilderTest, buildCountTest) {
