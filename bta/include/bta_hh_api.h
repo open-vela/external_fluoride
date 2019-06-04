@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -79,13 +79,8 @@ typedef uint16_t tBTA_HH_EVT;
 
 #if (BTA_HH_LE_INCLUDED == TRUE)
 /* GATT_MAX_PHY_CHANNEL can not exceed 14 for the design of BTA HH */
-#if GATT_MAX_PHY_CHANNEL > 14
-#define BTA_HH_LE_MAX_KNOWN 14
-#else
 #define BTA_HH_LE_MAX_KNOWN GATT_MAX_PHY_CHANNEL
-#endif
-
-#define BTA_HH_MAX_DEVICE (HID_HOST_MAX_DEVICES + BTA_HH_LE_MAX_KNOWN)
+#define BTA_HH_MAX_DEVICE (HID_HOST_MAX_DEVICES + GATT_MAX_PHY_CHANNEL)
 #else
 #define BTA_HH_MAX_DEVICE HID_HOST_MAX_DEVICES
 #endif
@@ -209,7 +204,7 @@ typedef struct {
 
 /* callback event data for BTA_HH_OPEN_EVT */
 typedef struct {
-  RawAddress bda;        /* HID device bd address    */
+  BD_ADDR bda;           /* HID device bd address    */
   tBTA_HH_STATUS status; /* operation status         */
   uint8_t handle;        /* device handle            */
 #if (BTA_HH_LE_INCLUDED == TRUE)
@@ -335,7 +330,7 @@ extern void BTA_HhDisable(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HhOpen(const RawAddress& dev_bda, tBTA_HH_PROTO_MODE mode,
+extern void BTA_HhOpen(BD_ADDR dev_bda, tBTA_HH_PROTO_MODE mode,
                        tBTA_SEC sec_mask);
 
 /*******************************************************************************
@@ -458,8 +453,7 @@ extern void BTA_HhGetIdle(uint8_t dev_handle);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HhSendData(uint8_t dev_handle, const RawAddress& dev_bda,
-                           BT_HDR* p_buf);
+extern void BTA_HhSendData(uint8_t dev_handle, BD_ADDR dev_bda, BT_HDR* p_buf);
 
 /*******************************************************************************
  *
@@ -483,7 +477,7 @@ extern void BTA_HhGetDscpInfo(uint8_t dev_handle);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HhAddDev(const RawAddress& bda, tBTA_HH_ATTR_MASK attr_mask,
+extern void BTA_HhAddDev(BD_ADDR bda, tBTA_HH_ATTR_MASK attr_mask,
                          uint8_t sub_class, uint8_t app_id,
                          tBTA_HH_DEV_DSCP_INFO dscp_info);
 /*******************************************************************************
@@ -515,7 +509,6 @@ extern void BTA_HhParseBootRpt(tBTA_HH_BOOT_RPT* p_data, uint8_t* p_report,
                                uint16_t report_len);
 
 /* test commands */
-extern void bta_hh_le_hid_read_rpt_clt_cfg(const RawAddress& bd_addr,
-                                           uint8_t rpt_id);
+extern void bta_hh_le_hid_read_rpt_clt_cfg(BD_ADDR bd_addr, uint8_t rpt_id);
 
 #endif /* BTA_HH_API_H */
