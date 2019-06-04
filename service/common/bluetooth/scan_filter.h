@@ -27,7 +27,7 @@ namespace bluetooth {
 class ScanFilter {
  public:
   ScanFilter() = default;
-  virtual ~ScanFilter() = default;
+  ~ScanFilter() = default;
 
   // Copy constructor and assignment operator.
   ScanFilter(const ScanFilter& other);
@@ -64,7 +64,7 @@ class ScanFilter {
   // Comparison operator.
   bool operator==(const ScanFilter& rhs) const;
 
- protected:
+ private:
   std::string device_name_;
   std::string device_address_;
 
