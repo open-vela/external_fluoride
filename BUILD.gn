@@ -1,5 +1,5 @@
 #
-#  Copyright (C) 2015 Google, Inc.
+#  Copyright 2015 Google, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -23,9 +23,8 @@
 # This pulls in main/BUILD.gn and all of its dependencies.
 group("bluetooth") {
   deps = [
-    "//main:bluetooth.default",
+    "//main:bluetooth",
     "//service:bluetoothtbd",
-    "//vendor_libs:vendor-libs",
   ]
 }
 
@@ -38,5 +37,12 @@ group("bluetooth_tests") {
     "//hci:net_test_hci",
     "//osi:net_test_osi",
     "//device:net_test_device",
+  ]
+}
+
+group("test_tools") {
+  testonly = true
+  deps = [
+    "//tools/mcap_tool:mcap_tool"
   ]
 }

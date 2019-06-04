@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@
 #include <unordered_map>
 
 #include <base/macros.h>
+#include <bluetooth/uuid.h>
 
 #include "service/bluetooth_instance.h"
-#include "service/common/bluetooth/uuid.h"
 #include "service/ipc/binder/remote_callback_map.h"
 
 namespace ipc {
@@ -44,7 +44,7 @@ class InterfaceWithInstancesBase
 
  protected:
   // The initial entry point for registering a instance. Invoke this from the
-  // registration API to add a instance/UUID pair to the pending list and set up
+  // registration API to add a instance/Uuid pair to the pending list and set up
   // the generic asynchronous callback handler and initiate the process with the
   // given |factory| instance. Returns false, if there were any errors that
   // could be synchronously reported.
@@ -69,22 +69,19 @@ class InterfaceWithInstancesBase
   // Returns the instance instance that is assigned to the given instance ID
   // |instance_id|. The returned pointer will contain NULL if an entry for the
   // given ID cannot be found.
-  std::shared_ptr<bluetooth::BluetoothInstance> GetInstance(
-      int instance_id);
+  std::shared_ptr<bluetooth::BluetoothInstance> GetInstance(int instance_id);
 
  private:
   // Base implementation of the register callback.
   void OnRegisterInstance(
-      bluetooth::BLEStatus status,
-      const bluetooth::UUID& uuid,
+      bluetooth::BLEStatus status, const bluetooth::Uuid& uuid,
       std::unique_ptr<bluetooth::BluetoothInstance> instance);
 
   // Called when the callback registration has completed. |instance| is owned by
   // the base class and should not be deleted by the implementation. If the
   // operation failed, nullptr will be passed for |instance|.
   virtual void OnRegisterInstanceImpl(
-      bluetooth::BLEStatus status,
-      android::sp<IInterface> callback,
+      bluetooth::BLEStatus status, android::sp<IInterface> callback,
       bluetooth::BluetoothInstance* instance) = 0;
 
   // RemoteCallbackMap<int, IBluetoothLowEnergyCallback>::Delegate override:
@@ -92,7 +89,7 @@ class InterfaceWithInstancesBase
 
   // Instances that are pending registration. Once their registration is
   // complete, the entry will be removed from this map.
-  RemoteCallbackMap<bluetooth::UUID, android::IInterface> pending_callbacks_;
+  RemoteCallbackMap<bluetooth::Uuid, android::IInterface> pending_callbacks_;
 
   // We keep two maps here: one from instance_id IDs to callback Binders and one
   // from instance_id IDs to the BluetoothInstance structures themselves.
