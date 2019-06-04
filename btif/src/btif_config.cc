@@ -40,7 +40,6 @@
 #include "btif_config_transcode.h"
 #include "btif_keystore.h"
 #include "btif_util.h"
-#include "common/address_obfuscator.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocator.h"
 #include "osi/include/compat.h"
@@ -60,14 +59,9 @@ static const char* TIME_STRING_FORMAT = "%Y-%m-%d %H:%M:%S";
 
 constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
 
-static bool use_key_attestation() {
-  return getuid() == AID_BLUETOOTH && is_single_user_mode();
-}
+static bool use_key_attestation() { return getuid() == AID_BLUETOOTH; }
 
-#define BT_CONFIG_METRICS_SECTION "Metrics"
-#define BT_CONFIG_METRICS_SALT_256BIT "Salt256Bit"
 using bluetooth::BtifKeystore;
-using bluetooth::common::AddressObfuscator;
 
 // TODO(armansito): Find a better way than searching by a hardcoded path.
 #if defined(OS_GENERIC)
@@ -82,7 +76,7 @@ static const char* CONFIG_BACKUP_CHECKSUM_PATH = "/data/misc/bluedroid/bt_config
 static const char* CONFIG_LEGACY_FILE_PATH =
     "/data/misc/bluedroid/bt_config.xml";
 #endif  // defined(OS_GENERIC)
-static const uint64_t CONFIG_SETTLE_PERIOD_MS = 3000;
+static const period_ms_t CONFIG_SETTLE_PERIOD_MS = 3000;
 
 static void timer_config_save_cb(void* data);
 static void btif_config_write(uint16_t event, char* p_param);
@@ -138,41 +132,7 @@ bool btif_get_address_type(const RawAddress& bda, int* p_addr_type) {
   return true;
 }
 
-/**
- * Read metrics salt from config file, if salt is invalid or does not exist,
- * generate new one and save it to config
- */
-static void read_or_set_metrics_salt() {
-  AddressObfuscator::Octet32 metrics_salt = {};
-  size_t metrics_salt_length = metrics_salt.size();
-  if (!btif_config_get_bin(BT_CONFIG_METRICS_SECTION,
-                           BT_CONFIG_METRICS_SALT_256BIT, metrics_salt.data(),
-                           &metrics_salt_length)) {
-    LOG(WARNING) << __func__ << ": Failed to read metrics salt from config";
-    // Invalidate salt
-    metrics_salt.fill(0);
-  }
-  if (metrics_salt_length != metrics_salt.size()) {
-    LOG(ERROR) << __func__ << ": Metrics salt length incorrect, "
-               << metrics_salt_length << " instead of " << metrics_salt.size();
-    // Invalidate salt
-    metrics_salt.fill(0);
-  }
-  if (!AddressObfuscator::IsSaltValid(metrics_salt)) {
-    LOG(INFO) << __func__ << ": Metrics salt is not invalid, creating new one";
-    if (RAND_bytes(metrics_salt.data(), metrics_salt.size()) != 1) {
-      LOG(FATAL) << __func__ << "Failed to generate salt for metrics";
-    }
-    if (!btif_config_set_bin(BT_CONFIG_METRICS_SECTION,
-                             BT_CONFIG_METRICS_SALT_256BIT, metrics_salt.data(),
-                             metrics_salt.size())) {
-      LOG(FATAL) << __func__ << "Failed to write metrics salt to config";
-    }
-  }
-  AddressObfuscator::GetInstance()->Initialize(metrics_salt);
-}
-
-static std::recursive_mutex config_lock;  // protects operations on |config|.
+static std::mutex config_lock;  // protects operations on |config|.
 static std::unique_ptr<config_t> config;
 static alarm_t* config_timer;
 
@@ -181,7 +141,7 @@ static BtifKeystore btif_keystore(new keystore::KeystoreClientImpl);
 // Module lifecycle functions
 
 static future_t* init(void) {
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
 
   if (is_factory_reset()) delete_config_files();
 
@@ -236,9 +196,6 @@ static future_t* init(void) {
     config_set_string(config.get(), INFO_SECTION, FILE_TIMESTAMP,
                       btif_config_time_created);
   }
-
-  // Read or set metrics 256 bit hashing salt
-  read_or_set_metrics_salt();
 
   // TODO(sharvil): use a non-wake alarm for this once we have
   // API support for it. There's no need to wake the system to
@@ -302,7 +259,7 @@ static future_t* clean_up(void) {
   alarm_free(config_timer);
   config_timer = NULL;
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   config.reset();
   return future_new_immediate(FUTURE_SUCCESS);
 }
@@ -317,14 +274,14 @@ bool btif_config_has_section(const char* section) {
   CHECK(config != NULL);
   CHECK(section != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   return config_has_section(*config, section);
 }
 
 bool btif_config_exist(const std::string& section, const std::string& key) {
   CHECK(config != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   return config_has_key(*config, section, key);
 }
 
@@ -333,7 +290,7 @@ bool btif_config_get_int(const std::string& section, const std::string& key,
   CHECK(config != NULL);
   CHECK(value != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   bool ret = config_has_key(*config, section, key);
   if (ret) *value = config_get_int(*config, section, key, *value);
 
@@ -344,7 +301,7 @@ bool btif_config_set_int(const std::string& section, const std::string& key,
                          int value) {
   CHECK(config != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   config_set_int(config.get(), section, key, value);
 
   return true;
@@ -355,7 +312,7 @@ bool btif_config_get_uint64(const std::string& section, const std::string& key,
   CHECK(config != NULL);
   CHECK(value != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   bool ret = config_has_key(*config, section, key);
   if (ret) *value = config_get_uint64(*config, section, key, *value);
 
@@ -366,7 +323,7 @@ bool btif_config_set_uint64(const std::string& section, const std::string& key,
                             uint64_t value) {
   CHECK(config != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   config_set_uint64(config.get(), section, key, value);
 
   return true;
@@ -379,7 +336,7 @@ bool btif_config_get_str(const std::string& section, const std::string& key,
   CHECK(size_bytes != NULL);
 
   {
-    std::unique_lock<std::recursive_mutex> lock(config_lock);
+    std::unique_lock<std::mutex> lock(config_lock);
     const std::string* stored_value =
         config_get_string(*config, section, key, NULL);
     if (!stored_value) return false;
@@ -394,7 +351,7 @@ bool btif_config_set_str(const std::string& section, const std::string& key,
                          const std::string& value) {
   CHECK(config != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   config_set_string(config.get(), section, key, value);
   return true;
 }
@@ -405,26 +362,16 @@ bool btif_config_get_bin(const std::string& section, const std::string& key,
   CHECK(value != NULL);
   CHECK(length != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   const std::string* value_str = config_get_string(*config, section, key, NULL);
 
-  if (!value_str) {
-    VLOG(1) << __func__ << ": cannot find string for section " << section
-            << ", key " << key;
-    return false;
-  }
+  if (!value_str) return false;
 
   size_t value_len = value_str->length();
-  if ((value_len % 2) != 0 || *length < (value_len / 2)) {
-    LOG(WARNING) << ": value size not divisible by 2, size is " << value_len;
-    return false;
-  }
+  if ((value_len % 2) != 0 || *length < (value_len / 2)) return false;
 
   for (size_t i = 0; i < value_len; ++i)
-    if (!isxdigit(value_str->c_str()[i])) {
-      LOG(WARNING) << ": value is not hex digit";
-      return false;
-    }
+    if (!isxdigit(value_str->c_str()[i])) return false;
 
   const char* ptr = value_str->c_str();
   for (*length = 0; *ptr; ptr += 2, *length += 1)
@@ -437,7 +384,7 @@ size_t btif_config_get_bin_length(const std::string& section,
                                   const std::string& key) {
   CHECK(config != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   const std::string* value_str = config_get_string(*config, section, key, NULL);
   if (!value_str) return 0;
 
@@ -453,12 +400,6 @@ bool btif_config_set_bin(const std::string& section, const std::string& key,
 
   if (length > 0) CHECK(value != NULL);
 
-  size_t max_value = ((size_t)-1);
-  if (((max_value - 1) / 2) < length) {
-    LOG(ERROR) << __func__ << ": length too long";
-    return false;
-  }
-
   char* str = (char*)osi_calloc(length * 2 + 1);
 
   for (size_t i = 0; i < length; ++i) {
@@ -467,7 +408,7 @@ bool btif_config_set_bin(const std::string& section, const std::string& key,
   }
 
   {
-    std::unique_lock<std::recursive_mutex> lock(config_lock);
+    std::unique_lock<std::mutex> lock(config_lock);
     config_set_string(config.get(), section, key, str);
   }
 
@@ -480,7 +421,7 @@ std::list<section_t>& btif_config_sections() { return config->sections; }
 bool btif_config_remove(const std::string& section, const std::string& key) {
   CHECK(config != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   return config_remove_key(config.get(), section, key);
 }
 
@@ -505,7 +446,7 @@ bool btif_config_clear(void) {
 
   alarm_cancel(config_timer);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
 
   config = config_new_empty();
 
@@ -533,7 +474,7 @@ static void btif_config_write(UNUSED_ATTR uint16_t event,
   CHECK(config != NULL);
   CHECK(config_timer != NULL);
 
-  std::unique_lock<std::recursive_mutex> lock(config_lock);
+  std::unique_lock<std::mutex> lock(config_lock);
   rename(CONFIG_FILE_PATH, CONFIG_BACKUP_PATH);
   rename(CONFIG_FILE_CHECKSUM_PATH, CONFIG_BACKUP_CHECKSUM_PATH);
   std::unique_ptr<config_t> config_paired = config_new_clone(*config);
@@ -654,7 +595,7 @@ static std::string hash_file(const char* filename) {
   uint8_t hash[SHA256_DIGEST_LENGTH];
   SHA256_CTX sha256;
   SHA256_Init(&sha256);
-  std::array<std::byte, kBufferSize> buffer;
+  std::array<unsigned char, kBufferSize> buffer;
   int bytes_read = 0;
   while ((bytes_read = fread(buffer.data(), 1, buffer.size(), fp))) {
     SHA256_Update(&sha256, buffer.data(), bytes_read);
