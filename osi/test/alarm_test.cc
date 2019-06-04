@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -347,8 +347,7 @@ TEST_F(AlarmTest, test_callback_ordering_on_mloop) {
 
   for (int i = 0; i < 100; i++) alarm_free(alarms[i]);
 
-  message_loop_->task_runner()->PostTask(FROM_HERE,
-                                         run_loop_->QuitWhenIdleClosure());
+  message_loop_->PostTask(FROM_HERE, run_loop_->QuitWhenIdleClosure());
   thread_free(message_loop_thread_);
   EXPECT_FALSE(WakeLockHeld());
 }
@@ -361,6 +360,20 @@ TEST_F(AlarmTest, test_callback_free_race) {
     alarm_t* alarm = alarm_new(alarm_name.c_str());
     alarm_set(alarm, 0, cb, NULL);
     alarm_free(alarm);
+  }
+  alarm_cleanup();
+}
+
+static void remove_cb(void* data) {
+  alarm_free((alarm_t*)data);
+  semaphore_post(semaphore);
+}
+
+TEST_F(AlarmTest, test_delete_during_callback) {
+  for (int i = 0; i < 1000; ++i) {
+    alarm_t* alarm = alarm_new("alarm_test.test_delete_during_callback");
+    alarm_set(alarm, 0, remove_cb, alarm);
+    semaphore_wait(semaphore);
   }
   alarm_cleanup();
 }
