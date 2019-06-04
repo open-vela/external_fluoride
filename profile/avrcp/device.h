@@ -23,22 +23,10 @@
 #include <base/bind.h>
 #include <base/cancelable_callback.h>
 
+#include "avrcp.h"
 #include "avrcp_internal.h"
-#include "hardware/avrcp/avrcp.h"
-#include "packet/avrcp/avrcp_browse_packet.h"
-#include "packet/avrcp/avrcp_packet.h"
-#include "packet/avrcp/capabilities_packet.h"
-#include "packet/avrcp/change_path.h"
-#include "packet/avrcp/get_element_attributes_packet.h"
-#include "packet/avrcp/get_folder_items.h"
-#include "packet/avrcp/get_item_attributes.h"
-#include "packet/avrcp/get_total_number_of_items.h"
-#include "packet/avrcp/play_item.h"
-#include "packet/avrcp/register_notification_packet.h"
-#include "packet/avrcp/set_addressed_player.h"
-#include "packet/avrcp/set_browsed_player.h"
-#include "packet/avrcp/vendor_packet.h"
-#include "profile/avrcp/media_id_map.h"
+#include "avrcp_packet.h"
+#include "media_id_map.h"
 #include "raw_address.h"
 
 namespace bluetooth {
@@ -81,11 +69,6 @@ class Device {
   bool Disconnect();
 
   /**
-   * Returns true if the current device is silenced.
-   */
-  bool IsInSilenceMode() const;
-
-  /**
    * Returns true if the current device is active.
    */
   bool IsActive() const;
@@ -100,12 +83,6 @@ class Device {
   void RegisterInterfaces(MediaInterface* interface,
                           A2dpInterface* a2dp_interface,
                           VolumeInterface* volume_interface);
-
-  /**
-   * Set the maximum size of a AVRCP Browsing Packet. This is done after the
-   * connection of the Browsing channel.
-   */
-  void SetBrowseMtu(uint16_t browse_mtu);
 
   /**
    * Notify the device that metadata, play_status, and/or queue have updated
