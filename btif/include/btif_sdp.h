@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
+ *  Copyright 2014 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@
  *
  *  Description:   Bluetooth SDP search Interface
  *
- *******************************************************************************/
+ ******************************************************************************/
 
 #ifndef BTIF_SDP_H
 #define BTIF_SDP_H
 
 #include <hardware/bt_sdp.h>
 
-btsdp_interface_t *btif_sdp_get_interface();
+btsdp_interface_t* btif_sdp_get_interface();
 
 #endif
