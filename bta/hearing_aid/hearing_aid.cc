@@ -1141,7 +1141,6 @@ class HearingAidImpl : public HearingAid {
 
     if (left == nullptr && right == nullptr) {
       HearingAidAudioSource::Stop();
-      audio_running = false;
       encoder_state_release();
       current_volume = VOLUME_UNKNOWN;
       return;
