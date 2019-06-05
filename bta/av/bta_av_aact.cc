@@ -965,7 +965,7 @@ void bta_av_free_sdb(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
  *
  ******************************************************************************/
 void bta_av_config_ind(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
-  tBTA_AV_CI_SETCONFIG setconfig{};
+  tBTA_AV_CI_SETCONFIG setconfig;
   tAVDT_SEP_INFO* p_info;
   const AvdtpSepConfig* p_evt_cfg = &p_data->str_msg.cfg;
   uint8_t psc_mask = (p_evt_cfg->psc_mask | p_scb->cfg.psc_mask);
@@ -1246,7 +1246,6 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     open.chnl = p_scb->chnl;
     open.hndl = p_scb->hndl;
     open.status = BTA_AV_SUCCESS;
-    open.starting = bta_av_chk_start(p_scb);
     open.edr = 0;
     p = BTM_ReadRemoteFeatures(p_scb->PeerAddress());
     if (p != NULL) {
@@ -1262,8 +1261,10 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     bta_ar_avdt_conn(BTA_ID_AV, open.bd_addr, p_scb->hdi);
 #endif
     if (p_scb->seps[p_scb->sep_idx].tsep == AVDT_TSEP_SRC) {
+      open.starting = false;
       open.sep = AVDT_TSEP_SNK;
     } else if (p_scb->seps[p_scb->sep_idx].tsep == AVDT_TSEP_SNK) {
+      open.starting = bta_av_chk_start(p_scb);
       open.sep = AVDT_TSEP_SRC;
     }
 
