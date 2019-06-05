@@ -32,9 +32,7 @@
 namespace bluetooth {
 namespace os {
 
-Alarm::Alarm(Thread* thread)
-  : thread_(thread),
-    fd_(timerfd_create(ALARM_CLOCK, 0)) {
+Alarm::Alarm(Thread* thread) : thread_(thread), fd_(timerfd_create(ALARM_CLOCK, 0)) {
   ASSERT_LOG(fd_ != -1, "cannot create timerfd: %s", strerror(errno));
 
   token_ = thread_->GetReactor()->Register(fd_, [this] { on_fire(); }, nullptr);
