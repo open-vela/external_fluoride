@@ -31,7 +31,9 @@
 namespace bluetooth {
 namespace os {
 
-Handler::Handler(Thread* thread) : thread_(thread), fd_(eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK)) {
+Handler::Handler(Thread* thread)
+  : thread_(thread),
+    fd_(eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK)) {
   ASSERT(fd_ != -1);
 
   reactable_ = thread_->GetReactor()->Register(fd_, [this] { this->handle_next_event(); }, nullptr);
