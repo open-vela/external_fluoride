@@ -83,25 +83,25 @@ class BluetoothHciCallbacks : public IBluetoothHciCallbacks {
     return packet;
   }
 
-  Return<void> initializationComplete(Status status) override {
+  Return<void> initializationComplete(Status status) {
     CHECK(status == Status::SUCCESS);
     initialization_complete();
     return Void();
   }
 
-  Return<void> hciEventReceived(const hidl_vec<uint8_t>& event) override {
+  Return<void> hciEventReceived(const hidl_vec<uint8_t>& event) {
     BT_HDR* packet = WrapPacketAndCopy(MSG_HC_TO_STACK_HCI_EVT, event);
     hci_event_received(FROM_HERE, packet);
     return Void();
   }
 
-  Return<void> aclDataReceived(const hidl_vec<uint8_t>& data) override {
+  Return<void> aclDataReceived(const hidl_vec<uint8_t>& data) {
     BT_HDR* packet = WrapPacketAndCopy(MSG_HC_TO_STACK_HCI_ACL, data);
     acl_event_received(packet);
     return Void();
   }
 
-  Return<void> scoDataReceived(const hidl_vec<uint8_t>& data) override {
+  Return<void> scoDataReceived(const hidl_vec<uint8_t>& data) {
     BT_HDR* packet = WrapPacketAndCopy(MSG_HC_TO_STACK_HCI_SCO, data);
     sco_data_received(packet);
     return Void();
