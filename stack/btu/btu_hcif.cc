@@ -1139,6 +1139,14 @@ static void read_encryption_key_size_complete_after_encryption_change(uint8_t st
     return;
   }
 
+  if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
+    /* If remote device stop the encryption before we call "Read Encryption Key
+     * Size", we might receive Insufficient Security, which means that link is
+     * no longer encrypted. */
+    LOG(INFO) << __func__ << ": encryption stopped on link: " << loghex(handle);
+    return;
+  }
+
   if (status != HCI_SUCCESS) {
     LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
     btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
@@ -2059,6 +2067,14 @@ static void btu_hcif_enhanced_flush_complete_evt(void) {
  **********************************************/
 
 static void read_encryption_key_size_complete_after_key_refresh(uint8_t status, uint16_t handle, uint8_t key_size) {
+  if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
+    /* If remote device stop the encryption before we call "Read Encryption Key
+     * Size", we might receive Insufficient Security, which means that link is
+     * no longer encrypted. */
+    LOG(INFO) << __func__ << ": encryption stopped on link: " << loghex(handle);
+    return;
+  }
+
   if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
     /* If remote device stop the encryption before we call "Read Encryption Key
      * Size", we might receive Insufficient Security, which means that link is
