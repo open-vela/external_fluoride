@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -32,29 +32,16 @@ class MockAdapter : public Adapter {
   MOCK_METHOD1(RemoveObserver, void(Observer*));
   MOCK_CONST_METHOD0(GetState, AdapterState());
   MOCK_CONST_METHOD0(IsEnabled, bool());
-  MOCK_METHOD0(Enable, bool());
+  MOCK_METHOD1(Enable, bool(bool));
   MOCK_METHOD0(Disable, bool());
   MOCK_CONST_METHOD0(GetName, std::string());
   MOCK_METHOD1(SetName, bool(const std::string&));
   MOCK_CONST_METHOD0(GetAddress, std::string());
-  MOCK_METHOD1(SetScanMode, bool(int));
-  MOCK_METHOD1(SetScanEnable, bool(bool));
-  MOCK_METHOD4(SspReply, bool(const std::string&, int, bool, int32_t));
-  MOCK_METHOD2(CreateBond,
-               bool(const std::string& device_address, int transport));
   MOCK_METHOD0(IsMultiAdvertisementSupported, bool());
   MOCK_METHOD1(IsDeviceConnected, bool(const std::string&));
   MOCK_METHOD0(GetTotalNumberOfTrackableAdvertisements, int());
   MOCK_METHOD0(IsOffloadedFilteringSupported, bool());
   MOCK_METHOD0(IsOffloadedScanBatchingSupported, bool());
-  MOCK_METHOD0(GetBondedDevices, bool());
-  MOCK_METHOD1(RemoveBond, bool(const std::string&));
-  MOCK_METHOD1(GetRemoteDeviceProperties,
-               bool(const std::string& device_address));
-  MOCK_CONST_METHOD0(GetA2dpSinkFactory, A2dpSinkFactory*());
-  MOCK_CONST_METHOD0(GetA2dpSourceFactory, A2dpSourceFactory*());
-  MOCK_CONST_METHOD0(GetAvrcpControlFactory, AvrcpControlFactory*());
-  MOCK_CONST_METHOD0(GetAvrcpTargetFactory, AvrcpTargetFactory*());
   MOCK_CONST_METHOD0(GetLowEnergyClientFactory, LowEnergyClientFactory*());
   MOCK_CONST_METHOD0(GetLeAdvertiserFactory, LowEnergyAdvertiserFactory*());
   MOCK_CONST_METHOD0(GetLeScannerFactory, LowEnergyScannerFactory*());
