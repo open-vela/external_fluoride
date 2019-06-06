@@ -46,6 +46,13 @@ class Handler {
   // Remove all pending events from the queue of this handler
   void Clear();
 
+  template <typename T>
+  friend class Queue;
+
+  friend class Alarm;
+
+  friend class RepeatingAlarm;
+
  private:
   std::queue<Closure> tasks_;
   Thread* thread_;
