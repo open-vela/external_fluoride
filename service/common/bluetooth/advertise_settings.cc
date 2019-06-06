@@ -14,7 +14,7 @@
 //  limitations under the License.
 //
 
-#include "bluetooth/advertise_settings.h"
+#include "service/common/bluetooth/advertise_settings.h"
 
 namespace bluetooth {
 
