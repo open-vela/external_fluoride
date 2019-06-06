@@ -627,19 +627,6 @@ void bta_ag_at_hsp_cback(tBTA_AG_SCB* p_scb, uint16_t command_id,
   (*bta_ag_cb.p_cback)(command_id, (tBTA_AG*)&val);
 }
 
-static void remove_spaces(char* str) {
-  char* dest_str = str;
-
-  while (*str) {
-    if (*str == ' ') {
-      str++;
-    } else {
-      *dest_str++ = *str++;
-    }
-  }
-  *dest_str = '\0';
-}
-
 /*******************************************************************************
  *
  * Function         bta_ag_find_empty_hf_ind)
@@ -869,7 +856,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
   val.hdr.app_id = p_scb->app_id;
   val.hdr.status = BTA_AG_SUCCESS;
   val.num = int_arg;
-  val.bd_addr = p_scb->peer_addr;
+  bdcpy(val.bd_addr, p_scb->peer_addr);
 
   if ((p_end - p_arg + 1) >= (long)sizeof(val.str)) {
     APPL_TRACE_ERROR("%s: p_arg is too long, send error and return", __func__);
@@ -908,16 +895,12 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
       ** Let application decide whether to send OK or ERROR*/
 
       /* if mem dial cmd, make sure string contains only digits */
-      if (val.str[0] == '>') {
-        /* Some car kits may add some unwanted space characters in the
-        ** input string. This workaround will trim the unwanted chars. */
-        remove_spaces(val.str + 1);
-
-        if (!utl_isintstr(val.str + 1)) {
+      if (p_arg[0] == '>') {
+        if (!utl_isintstr(p_arg + 1)) {
           event = 0;
           bta_ag_send_error(p_scb, BTA_AG_ERR_INV_CHAR_IN_DSTR);
         }
-      } else if (val.str[0] == 'V') /* ATDV : Dial VoIP Call */
+      } else if (p_arg[0] == 'V') /* ATDV : Dial VoIP Call */
       {
         /* We do not check string. Code will be added later if needed. */
         if (!((p_scb->peer_features & BTA_AG_PEER_FEAT_VOIP) &&
@@ -929,11 +912,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
       /* If dial cmd, make sure string contains only dial digits
       ** Dial digits are 0-9, A-C, *, #, + */
       else {
-        /* Some car kits may add some unwanted space characters in the
-        ** input string. This workaround will trim the unwanted chars. */
-        remove_spaces(val.str);
-
-        if (!utl_isdialstr(val.str)) {
+        if (!utl_isdialstr(p_arg)) {
           event = 0;
           bta_ag_send_error(p_scb, BTA_AG_ERR_INV_CHAR_IN_DSTR);
         }
