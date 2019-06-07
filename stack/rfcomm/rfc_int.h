@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -62,10 +62,7 @@ extern void RFCOMM_ParNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu,
 
 extern void RFCOMM_TestReq(uint8_t* p_data, uint16_t len);
 
-#define RFCOMM_FLOW_STATE_DISABLE 0
-#define RFCOMM_FLOW_STATE_ENABLE 1
-
-extern void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t state);
+extern void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, bool state);
 
 extern void RFCOMM_PortNegReq(tRFC_MCB* p_mcb, uint8_t dlci,
                               tPORT_STATE* p_pars);
@@ -295,7 +292,8 @@ extern void rfc_process_l2cap_congestion(tRFC_MCB* p_mcb, bool is_congested);
 /*
  * Functions provided by the rfc_utils.cc
 */
-tRFC_MCB* rfc_alloc_multiplexer_channel(BD_ADDR bd_addr, bool is_initiator);
+tRFC_MCB* rfc_alloc_multiplexer_channel(const RawAddress& bd_addr,
+                                        bool is_initiator);
 extern void rfc_release_multiplexer_channel(tRFC_MCB* p_rfc_mcb);
 extern void rfc_timer_start(tRFC_MCB* p_rfc_mcb, uint16_t timeout);
 extern void rfc_timer_stop(tRFC_MCB* p_rfc_mcb);
@@ -308,8 +306,9 @@ tRFC_MCB* rfc_find_lcid_mcb(uint16_t lcid);
 extern void rfc_save_lcid_mcb(tRFC_MCB* p_rfc_mcb, uint16_t lcid);
 extern void rfc_check_mcb_active(tRFC_MCB* p_mcb);
 extern void rfc_port_closed(tPORT* p_port);
-extern void rfc_sec_check_complete(BD_ADDR bd_addr, tBT_TRANSPORT transport,
-                                   void* p_ref_data, uint8_t res);
+extern void rfc_sec_check_complete(const RawAddress* bd_addr,
+                                   tBT_TRANSPORT transport, void* p_ref_data,
+                                   uint8_t res);
 extern void rfc_inc_credit(tPORT* p_port, uint8_t credit);
 extern void rfc_dec_credit(tPORT* p_port);
 extern void rfc_check_send_cmd(tRFC_MCB* p_mcb, BT_HDR* p_buf);
