@@ -28,19 +28,16 @@ class AlarmTest : public ::testing::Test {
  protected:
   void SetUp() override {
     thread_ = new Thread("test_thread", Thread::Priority::NORMAL);
-    handler_ = new Handler(thread_);
-    alarm_ = new Alarm(handler_);
+    alarm_ = new Alarm(thread_);
   }
 
   void TearDown() override {
     delete alarm_;
-    delete handler_;
     delete thread_;
   }
   Alarm* alarm_;
 
  private:
-  Handler* handler_;
   Thread* thread_;
 };
 
