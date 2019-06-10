@@ -71,6 +71,7 @@ class Reactor {
   int control_fd_;
   std::atomic<bool> is_running_;
   std::list<Reactable*> invalidation_list_;
+  bool reactable_removed_;
 };
 
 }  // namespace os
