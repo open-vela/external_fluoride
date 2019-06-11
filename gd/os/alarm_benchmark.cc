@@ -26,7 +26,6 @@
 
 using ::benchmark::State;
 using ::bluetooth::os::Alarm;
-using ::bluetooth::os::Handler;
 using ::bluetooth::os::RepeatingAlarm;
 using ::bluetooth::os::Thread;
 
@@ -35,9 +34,8 @@ class BM_ReactableAlarm : public ::benchmark::Fixture {
   void SetUp(State& st) override {
     ::benchmark::Fixture::SetUp(st);
     thread_ = std::make_unique<Thread>("timer_benchmark", Thread::Priority::REAL_TIME);
-    handler_ = std::make_unique<Handler>(thread_.get());
-    alarm_ = std::make_unique<Alarm>(handler_.get());
-    repeating_alarm_ = std::make_unique<RepeatingAlarm>(handler_.get());
+    alarm_ = std::make_unique<Alarm>(thread_.get());
+    repeating_alarm_ = std::make_unique<RepeatingAlarm>(thread_.get());
     map_.clear();
     scheduled_tasks_ = 0;
     task_length_ = 0;
@@ -49,7 +47,6 @@ class BM_ReactableAlarm : public ::benchmark::Fixture {
   void TearDown(State& st) override {
     alarm_ = nullptr;
     repeating_alarm_ = nullptr;
-    handler_ = nullptr;
     thread_->Stop();
     thread_ = nullptr;
     ::benchmark::Fixture::TearDown(st);
@@ -78,7 +75,6 @@ class BM_ReactableAlarm : public ::benchmark::Fixture {
   std::promise<void> promise_;
   std::chrono::time_point<std::chrono::steady_clock> start_time_;
   std::unique_ptr<Thread> thread_;
-  std::unique_ptr<Handler> handler_;
   std::unique_ptr<Alarm> alarm_;
   std::unique_ptr<RepeatingAlarm> repeating_alarm_;
 };
