@@ -382,7 +382,6 @@ void GATTS_StopService(uint16_t service_handle) {
   if (it == gatt_cb.srv_list_info->end()) {
     LOG(ERROR) << __func__ << ": service_handle=" << loghex(service_handle)
                << " is not in use";
-    return;
   }
 
   if (it->sdp_handle) {
