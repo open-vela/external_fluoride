@@ -21,7 +21,6 @@
 #include <mutex>
 #include <queue>
 
-#include "common/callback.h"
 #include "os/thread.h"
 #include "os/utils.h"
 
@@ -42,7 +41,7 @@ class Handler {
   DISALLOW_COPY_AND_ASSIGN(Handler);
 
   // Enqueue a closure to the queue of this handler
-  void Post(OnceClosure closure);
+  void Post(Closure closure);
 
   // Remove all pending events from the queue of this handler
   void Clear();
@@ -61,7 +60,7 @@ class Handler {
   inline bool was_cleared() const {
     return tasks_ == nullptr;
   };
-  std::queue<OnceClosure>* tasks_;
+  std::queue<Closure>* tasks_;
   Thread* thread_;
   int fd_;
   Reactor::Reactable* reactable_;
