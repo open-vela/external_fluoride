@@ -30,9 +30,7 @@ void Queue<T>::RegisterEnqueue(Handler* handler, EnqueueCallback callback) {
   ASSERT(enqueue_.reactable_ == nullptr);
   enqueue_.handler_ = handler;
   enqueue_.reactable_ = enqueue_.handler_->thread_->GetReactor()->Register(
-      enqueue_.reactive_semaphore_.GetFd(),
-      base::Bind(&Queue<T>::EnqueueCallbackInternal, base::Unretained(this), std::move(callback)),
-      base::Closure());
+      enqueue_.reactive_semaphore_.GetFd(), [this, callback] { EnqueueCallbackInternal(callback); }, nullptr);
 }
 
 template <typename T>
@@ -51,7 +49,7 @@ void Queue<T>::RegisterDequeue(Handler* handler, DequeueCallback callback) {
   ASSERT(dequeue_.reactable_ == nullptr);
   dequeue_.handler_ = handler;
   dequeue_.reactable_ = dequeue_.handler_->thread_->GetReactor()->Register(dequeue_.reactive_semaphore_.GetFd(),
-                                                                           callback, base::Closure());
+                                                                           [callback] { callback(); }, nullptr);
 }
 
 template <typename T>
@@ -83,7 +81,7 @@ std::unique_ptr<T> Queue<T>::TryDequeue() {
 
 template <typename T>
 void Queue<T>::EnqueueCallbackInternal(EnqueueCallback callback) {
-  std::unique_ptr<T> data = callback.Run();
+  std::unique_ptr<T> data = callback();
   ASSERT(data != nullptr);
   std::lock_guard<std::mutex> lock(mutex_);
   enqueue_.reactive_semaphore_.Decrease();

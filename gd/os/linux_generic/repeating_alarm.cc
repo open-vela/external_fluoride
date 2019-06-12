@@ -20,7 +20,6 @@
 #include <cstring>
 #include <unistd.h>
 
-#include "common/bind.h"
 #include "os/log.h"
 #include "os/utils.h"
 
@@ -36,8 +35,7 @@ namespace os {
 RepeatingAlarm::RepeatingAlarm(Handler* handler) : handler_(handler), fd_(timerfd_create(ALARM_CLOCK, 0)) {
   ASSERT(fd_ != -1);
 
-  token_ = handler_->thread_->GetReactor()->Register(
-      fd_, common::Bind(&RepeatingAlarm::on_fire, common::Unretained(this)), common::Closure());
+  token_ = handler_->thread_->GetReactor()->Register(fd_, [this] { on_fire(); }, nullptr);
 }
 
 RepeatingAlarm::~RepeatingAlarm() {
@@ -74,7 +72,7 @@ void RepeatingAlarm::on_fire() {
   uint64_t times_invoked;
   auto bytes_read = read(fd_, &times_invoked, sizeof(uint64_t));
   lock.unlock();
-  task.Run();
+  task();
   ASSERT(bytes_read == static_cast<ssize_t>(sizeof(uint64_t)));
 }
 

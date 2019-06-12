@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include "common/callback.h"
 #include "os/queue.h"
 
 namespace bluetooth {
@@ -29,8 +28,8 @@ class BidiQueueEnd
     : public ::bluetooth::os::IQueueEnqueue<TENQUEUE>,
       public ::bluetooth::os::IQueueDequeue<TDEQUEUE> {
  public:
-  using EnqueueCallback = Callback<std::unique_ptr<TENQUEUE>()>;
-  using DequeueCallback = Callback<void()>;
+  using EnqueueCallback = std::function<std::unique_ptr<TENQUEUE>()>;
+  using DequeueCallback = std::function<void()>;
 
   BidiQueueEnd(::bluetooth::os::IQueueEnqueue<TENQUEUE>* tx, ::bluetooth::os::IQueueDequeue<TDEQUEUE>* rx)
       : tx_(tx), rx_(rx) {

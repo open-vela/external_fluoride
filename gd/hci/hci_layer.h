@@ -20,7 +20,6 @@
 
 #include "common/address.h"
 #include "common/bidi_queue.h"
-#include "common/callback.h"
 #include "common/class_of_device.h"
 #include "hal/hci_hal.h"
 #include "hci/hci_packets.h"
@@ -37,12 +36,12 @@ class HciLayer : public Module {
   DISALLOW_COPY_AND_ASSIGN(HciLayer);
 
   virtual void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::OnceCallback<void(CommandStatusView)> on_status,
-                              common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler);
+                              std::function<void(CommandStatusView)> on_status,
+                              std::function<void(CommandCompleteView)> on_complete, os::Handler* handler);
 
   virtual common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* GetAclQueueEnd();
 
-  virtual void RegisterEventHandler(EventCode event_code, common::Callback<void(EventPacketView)> event_handler,
+  virtual void RegisterEventHandler(EventCode event_code, std::function<void(EventPacketView)> event_handler,
                                     os::Handler* handler);
 
   virtual void UnregisterEventHandler(EventCode event_code);
