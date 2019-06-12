@@ -21,9 +21,8 @@
 #include <map>
 #include <vector>
 
-#include "common/bind.h"
-#include "os/handler.h"
 #include "os/log.h"
+#include "os/handler.h"
 #include "os/thread.h"
 
 namespace bluetooth {
@@ -152,13 +151,11 @@ class TestModuleRegistry : public ModuleRegistry {
 
   bool SynchronizeModuleHandler(const ModuleFactory* module, std::chrono::milliseconds timeout) const {
     std::promise<void> promise;
-    auto future = promise.get_future();
     os::Handler* handler = GetTestModuleHandler(module);
-    handler->Post(common::BindOnce(&std::promise<void>::set_value, common::Unretained(&promise)));
-    return future.wait_for(timeout) == std::future_status::ready;
+    handler->Post([&promise] { promise.set_value(); });
+    return promise.get_future().wait_for(timeout) == std::future_status::ready;
   }
 
- private:
   os::Thread test_thread{"test_thread", os::Thread::Priority::NORMAL};
 };
 
