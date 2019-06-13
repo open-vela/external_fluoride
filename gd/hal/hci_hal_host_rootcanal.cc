@@ -96,11 +96,6 @@ class HciHalHostRootcanal : public HciHal {
     incoming_packet_callback_ = callback;
   }
 
-  void unregisterIncomingPacketCallback() override {
-    std::lock_guard<std::mutex> lock(mutex_);
-    incoming_packet_callback_ = nullptr;
-  }
-
   void sendHciCommand(HciPacket command) override {
     std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
@@ -195,10 +190,7 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void incoming_packet_received() {
-    if (incoming_packet_callback_ == nullptr) {
-      LOG_INFO("Dropping a packet");
-      return;
-    }
+    ASSERT(incoming_packet_callback_ != nullptr);
 
     uint8_t buf[kBufSize] = {};
 
