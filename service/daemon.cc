@@ -59,7 +59,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
   // ipc::IPCManager::Delegate implementation:
   void OnIPCHandlerStarted(ipc::IPCManager::Type /* type */) override {
     if (!settings_->EnableOnStart()) return;
-    adapter_->Enable();
+    adapter_->Enable(false /* start_restricted */);
   }
 
   void OnIPCHandlerStopped(ipc::IPCManager::Type /* type */) override {
