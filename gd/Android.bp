@@ -249,7 +249,6 @@ cc_test {
     },
     srcs: [
         "module_unittest.cc",
-        "stack_manager_unittest.cc",
         ":BluetoothCommonTestSources",
         ":BluetoothCryptoToolboxTestSources",
         ":BluetoothHciTestSources",
