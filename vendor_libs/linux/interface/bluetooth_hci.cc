@@ -39,6 +39,7 @@
 #define MGMT_EV_INDEX_ADDED 0x0004
 #define MGMT_EV_COMMAND_COMP 0x0001
 #define MGMT_EV_SIZE_MAX 1024
+#define MGMT_EV_POLL_TIMEOUT 3000 /* 3000ms */
 #define WRITE_NO_INTR(fn) \
   do {                  \
   } while ((fn) == -1 && errno == EINTR)
@@ -153,7 +154,7 @@ int BluetoothHci::waitHciDev(int hci_interface) {
   /* validate mentioned hci interface is present and registered with sock system */
   while (1) {
     int n;
-    WRITE_NO_INTR(n = poll(fds, 1, -1));
+    WRITE_NO_INTR(n = poll(fds, 1, MGMT_EV_POLL_TIMEOUT));
     if (n == -1) {
       ALOGE( "Poll error: %s", strerror(errno));
       ret = -1;
@@ -245,9 +246,9 @@ class BluetoothDeathRecipient : public hidl_death_recipient {
  public:
   BluetoothDeathRecipient(const sp<IBluetoothHci> hci) : mHci(hci) {}
 
-  void serviceDied(
+  virtual void serviceDied(
       uint64_t /*cookie*/,
-      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) override {
+      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) {
     ALOGE("BluetoothDeathRecipient::serviceDied - Bluetooth service died");
     has_died_ = true;
     mHci->close();
