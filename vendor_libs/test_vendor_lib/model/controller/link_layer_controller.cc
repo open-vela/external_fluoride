@@ -951,7 +951,7 @@ hci::Status LinkLayerController::RejectConnectionRequest(const Address& addr, ui
 }
 
 void LinkLayerController::RejectSlaveConnection(const Address& addr, uint8_t reason) {
-  CHECK(reason >= 0x0d && reason <= 0x0f);
+  CHECK(reason > 0x0f || reason < 0x0d);
   send_event_(EventPacketBuilder::CreateConnectionCompleteEvent(static_cast<hci::Status>(reason), 0xeff, addr,
                                                                 hci::LinkType::ACL, false)
                   ->ToVector());
