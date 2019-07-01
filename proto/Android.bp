@@ -16,3 +16,4 @@ cc_library_static {
     },
     srcs: ["bluetooth/metrics/bluetooth.proto"],
 }
+
