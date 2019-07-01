@@ -1,3 +1,4 @@
+
 // Bluetooth main HW module / shared library for target
 // ========================================================
 cc_library_shared {
