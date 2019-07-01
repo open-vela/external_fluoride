@@ -232,7 +232,7 @@ class HearingAidImpl : public HearingAid {
   uint16_t overwrite_min_ce_len;
 
  public:
-  ~HearingAidImpl() override = default;
+  virtual ~HearingAidImpl() = default;
 
   HearingAidImpl(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                  Closure initCb)
@@ -388,13 +388,6 @@ class HearingAidImpl : public HearingAid {
           UpdateBleConnParams(address);
     } else {
       hearingDevice->connection_update_status = AWAITING;
-    }
-
-    tACL_CONN* p_acl = btm_bda_to_acl(address, BT_TRANSPORT_LE);
-    if (p_acl != nullptr && controller_get_interface()->supports_ble_2m_phy() &&
-        HCI_LE_2M_PHY_SUPPORTED(p_acl->peer_le_features)) {
-      LOG(INFO) << address << " set preferred PHY to 2M";
-      BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
     }
 
     // Set data length
