@@ -81,9 +81,7 @@ HciSocketDevice::HciSocketDevice(int file_descriptor) : socket_file_descriptor_(
         std::shared_ptr<std::vector<uint8_t>> packet_copy = std::make_shared<std::vector<uint8_t>>(raw_command);
         HandleCommand(packet_copy);
       },
-      [](const std::vector<uint8_t>&) {
-        CHECK(false) << "Unexpected Event in HciSocketDevice!";
-      },
+      [](const std::vector<uint8_t>&) { CHECK(false) << "Unexpected Event in HciSocketDevice!"; },
       [this](const std::vector<uint8_t>& raw_acl) {
         LOG_INFO(LOG_TAG, "Rx ACL");
         std::shared_ptr<std::vector<uint8_t>> packet_copy = std::make_shared<std::vector<uint8_t>>(raw_acl);
@@ -93,10 +91,6 @@ HciSocketDevice::HciSocketDevice(int file_descriptor) : socket_file_descriptor_(
         LOG_INFO(LOG_TAG, "Rx SCO");
         std::shared_ptr<std::vector<uint8_t>> packet_copy = std::make_shared<std::vector<uint8_t>>(raw_sco);
         HandleSco(packet_copy);
-      },
-      [this]() {
-        LOG_INFO(LOG_TAG, "HCI socket device disconnected");
-        close_callback_();
       });
 
   RegisterEventChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) {
@@ -134,11 +128,6 @@ void HciSocketDevice::SendHci(hci::PacketType packet_type, const std::shared_ptr
   if (static_cast<size_t>(bytes_written) != packet->size()) {
     LOG_INFO(LOG_TAG, "bytes_written %d != packet->size", bytes_written);
   }
-}
-
-void HciSocketDevice::RegisterCloseCallback(
-    std::function<void()> close_callback) {
-  close_callback_ = close_callback;
 }
 
 }  // namespace test_vendor_lib
