@@ -46,9 +46,6 @@ class SimpleHalTest(GdBaseTestClass):
             )
         )
 
-        self.device_under_test.wait_channel_ready()
-        self.cert_device.wait_channel_ready()
-
         self.device_under_test.hal.SendHciResetCommand(empty_pb2.Empty())
         self.cert_device.hal.SendHciResetCommand(empty_pb2.Empty())
 
