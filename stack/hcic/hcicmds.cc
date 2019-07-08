@@ -142,7 +142,6 @@ void btsnd_hcic_disconnect(uint16_t handle, uint8_t reason) {
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-#if (BTM_SCO_INCLUDED == TRUE)
 void btsnd_hcic_add_SCO_conn(uint16_t handle, uint16_t packet_types) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
@@ -158,7 +157,6 @@ void btsnd_hcic_add_SCO_conn(uint16_t handle, uint16_t packet_types) {
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
-#endif /* BTM_SCO_INCLUDED */
 
 void btsnd_hcic_create_conn_cancel(const RawAddress& dest) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
@@ -207,7 +205,7 @@ void btsnd_hcic_reject_conn(const RawAddress& dest, uint8_t reason) {
 }
 
 void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
-                                   LINK_KEY link_key) {
+                                   const LinkKey& link_key) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -218,7 +216,7 @@ void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_LINK_KEY_REQ_REPLY);
 
   BDADDR_TO_STREAM(pp, bd_addr);
-  ARRAY16_TO_STREAM(pp, link_key);
+  ARRAY16_TO_STREAM(pp, link_key.data());
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
@@ -1196,8 +1194,8 @@ void btsnd_hcic_user_passkey_neg_reply(const RawAddress& bd_addr) {
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, uint8_t* p_c,
-                              uint8_t* p_r) {
+void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, const Octet16& c,
+                              const Octet16& r) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -1208,8 +1206,8 @@ void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, uint8_t* p_c,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_REM_OOB_REPLY);
 
   BDADDR_TO_STREAM(pp, bd_addr);
-  ARRAY16_TO_STREAM(pp, p_c);
-  ARRAY16_TO_STREAM(pp, p_r);
+  ARRAY16_TO_STREAM(pp, c.data());
+  ARRAY16_TO_STREAM(pp, r.data());
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
