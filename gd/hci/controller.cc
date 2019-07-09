@@ -121,7 +121,7 @@ Controller::~Controller() = default;
 
 void Controller::RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
                                                      Handler* handler) {
-  impl_->RegisterCompletedAclPacketsCallback(cb, handler);  // TODO hsz: why here?
+  impl_->RegisterCompletedAclPacketsCallback(cb, handler);
 }
 
 uint16_t Controller::GetControllerAclPacketLength() {
