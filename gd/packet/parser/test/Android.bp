@@ -15,8 +15,7 @@ genrule {
 filegroup {
     name: "BluetoothPacketParserTestPacketTestSources",
     srcs: [
-        "generated_packet_test.cc",
         "six_bytes.cc",
-        "variable.cc",
+        "generated_packet_test.cc",
     ],
 }
