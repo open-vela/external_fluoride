@@ -72,7 +72,3 @@ ParseLocation PacketField::GetLocation() const {
 std::string PacketField::GetName() const {
   return name_;
 }
-
-Size PacketField::GetBuilderSize() const {
-  return GetSize();
-}
