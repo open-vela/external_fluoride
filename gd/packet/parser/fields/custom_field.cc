@@ -32,25 +32,12 @@ Size CustomField::GetSize() const {
   return size_;
 }
 
-Size CustomField::GetBuilderSize() const {
-  if (size_ != -1) {
-    return size_;
-  } else {
-    std::string ret = "(" + GetName() + "_.size() * 8) ";
-    return ret;
-  }
-}
-
 std::string CustomField::GetType() const {
   return type_name_;
 }
 
 void CustomField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) const {
-  if (size_ != -1) {
-    s << GetType();
-  } else {
-    s << "std::vector<" << GetType() << ">";
-  }
+  s << GetType();
   s << " Get" << util::UnderscoreToCamelCase(GetName()) << "() const {";
 
   s << "auto it = ";
@@ -80,13 +67,7 @@ void CustomField::GenGetter(std::ostream& s, Size start_offset, Size end_offset)
   }
   s << ";";
 
-  if (size_ != -1) {
-    s << "return it.extract<" << GetType() << ">();";
-  } else {
-    s << "std::vector<" << GetType() << "> to_return;";
-    s << GetType() << "::Parse(to_return, it);";
-    s << "return to_return;";
-  }
+  s << "return it.extract<" << GetType() << ">();";
   s << "}\n";
 }
 
@@ -104,11 +85,7 @@ void CustomField::GenParameterValidator(std::ostream&) const {
 }
 
 void CustomField::GenInserter(std::ostream& s) const {
-  if (size_ != -1) {
-    s << "insert(" << GetName() << "_, i);";
-  } else {
-    s << GetType() << "::Serialize(" << GetName() << "_, i);";
-  }
+  s << "insert(" << GetName() << "_, i);";
 }
 
 void CustomField::GenValidator(std::ostream&) const {

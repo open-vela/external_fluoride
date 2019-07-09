@@ -20,33 +20,25 @@
 ArrayField::ArrayField(std::string name, int element_size, std::string size_modifier, ParseLocation loc)
     : PacketField(loc, name), element_size_(element_size), size_modifier_(size_modifier) {
   // Make sure the element_size is a multiple of 8.
-  if (element_size % 8 != 0) {
-    ERROR(this) << "Can only have arrays with elements that are byte aligned (" << element_size << ")";
-  }
+  if (element_size % 8 != 0) ERROR(this) << "Can only have arrays with elements that are byte aligned.";
 }
 
 ArrayField::ArrayField(std::string name, int element_size, int fixed_size, ParseLocation loc)
     : PacketField(loc, name), element_size_(element_size), fixed_size_(fixed_size) {
   // Make sure the element_size is a multiple of 8.
-  if (element_size % 8 != 0) {
-    ERROR(this) << "Can only have arrays with elements that are byte aligned (" << element_size << ")";
-  }
+  if (element_size % 8 != 0) ERROR(this) << "Can only have arrays with elements that are byte aligned.";
 }
 
 ArrayField::ArrayField(std::string name, TypeDef* type_def, std::string size_modifier, ParseLocation loc)
     : PacketField(loc, name), element_size_(type_def->size_), type_def_(type_def), size_modifier_(size_modifier) {
-  // If the element type is not variable sized, make sure that it is byte aligned.
-  if (type_def_->size_ != -1 && type_def_->size_ % 8 != 0) {
-    ERROR(this) << "Can only have arrays with elements that are byte aligned (" << type_def_->size_ << ")";
-  }
+  // If it is an enum array, make sure that the enum definition is byte aligned.
+  if (type_def_->size_ % 8 != 0) ERROR(this) << "Can only have arrays with elements that are byte aligned.";
 }
 
 ArrayField::ArrayField(std::string name, TypeDef* type_def, int fixed_size, ParseLocation loc)
     : PacketField(loc, name), element_size_(type_def->size_), type_def_(type_def), fixed_size_(fixed_size) {
-  // If the element type is not variable sized, make sure that it is byte aligned.
-  if (type_def_->size_ != -1 && type_def_->size_ % 8 != 0) {
-    ERROR(this) << "Can only have arrays with elements that are byte aligned (" << type_def_->size_ << ")";
-  }
+  // If it is an enum array, make sure that the enum definition is byte aligned.
+  if (type_def_->size_ % 8 != 0) ERROR(this) << "Can only have arrays with elements that are byte aligned.";
 }
 
 PacketField::Type ArrayField::GetFieldType() const {
@@ -77,28 +69,13 @@ Size ArrayField::GetSize() const {
   }
 
   if (IsCustomFieldArray()) {
-    if (type_def_->size_ != -1) {
-      return "(Get" + util::UnderscoreToCamelCase(size_field_->GetName()) + "() * " +
-             std::to_string(type_def_->size_ / 8) + ")";
-    } else {
-      return Size();
-    }
+    return "(Get" + util::UnderscoreToCamelCase(size_field_->GetName()) + "() * " +
+           std::to_string(type_def_->size_ / 8) + ")";
   }
 
   // size_field_ is of type COUNT and it is an enum array
   return "(Get" + util::UnderscoreToCamelCase(size_field_->GetName()) + "() * " + std::to_string(type_def_->size_ / 8) +
          ")";
-}
-
-Size ArrayField::GetBuilderSize() const {
-  if (element_size_ != -1) {
-    std::string ret = "(" + GetName() + "_.size() * " + std::to_string(element_size_) + ")";
-    return ret;
-  } else {
-    std::string ret = "[this](){ size_t length = 0; for (const auto& elem : " + GetName() +
-                      "_) { length += elem.size() * 8; } return length; }()";
-    return ret;
-  }
 }
 
 std::string ArrayField::GetType() const {
@@ -136,16 +113,10 @@ void ArrayField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) 
 
   // Add the element size so that we will extract as many elements as we can.
   s << GetType() << " ret;";
-  if (element_size_ != -1) {
-    std::string type = (type_def_ != nullptr) ? type_def_->name_ : util::GetTypeForSize(element_size_);
-    s << "while (it + sizeof(" << type << ") <= array_end) {";
-    s << "ret.push_back(it.extract<" << type << ">());";
-    s << "}";
-  } else {
-    s << "while (it < array_end) {";
-    s << "it = " << type_def_->name_ << "::Parse(ret, it);";
-    s << "}";
-  }
+  std::string type = (type_def_ != nullptr) ? type_def_->name_ : util::GetTypeForSize(element_size_);
+  s << "while (it + sizeof(" << type << ") <= array_end) {";
+  s << "ret.push_back(it.extract<" << type << ">());";
+  s << "}";
 
   s << "return ret;";
   s << "}\n";
@@ -181,7 +152,7 @@ void ArrayField::GenParameterValidator(std::ostream& s) const {
     return;
   }
 
-  s << "ASSERT(" << GetName() << "_.size() == " << fixed_size_ << ");";
+  s << "ASSERT(" << GetName() << ".size() == " << fixed_size_ << ");";
 }
 
 void ArrayField::GenInserter(std::ostream& s) const {
@@ -189,11 +160,7 @@ void ArrayField::GenInserter(std::ostream& s) const {
   if (IsEnumArray()) {
     s << "insert(static_cast<" << util::GetTypeForSize(type_def_->size_) << ">(val), i, " << type_def_->size_ << ");";
   } else if (IsCustomFieldArray()) {
-    if (type_def_->size_ == -1) {
-      s << type_def_->name_ << "::Serialize(val, i);";
-    } else {
-      s << "insert(val, i);";
-    }
+    s << "insert(val, i);";
   } else {
     s << "insert(val, i, " << element_size_ << ");";
   }
