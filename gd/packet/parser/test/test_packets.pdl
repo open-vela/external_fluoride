@@ -1,7 +1,6 @@
 little_endian_packets
 
 custom_field SixBytes : 48 "packet/parser/test/"
-custom_field Variable "packet/parser/test/"
 
 packet Parent {
   _fixed_ = 0x12 : 8,
@@ -126,25 +125,7 @@ packet CountArrayCustom {
   six_bytes_array : SixBytes[],
 }
 
-packet PacketWithFixedArraysOfBytes {
-  fixed_256bit_in_bytes : 8[32],
-  fixed_256bit_in_words : 32[8],
-}
-
-packet OneVariable {
-  one : Variable,
-}
-
-packet SizedArrayVariable {
-  _size_(variable_array) : 8,
-  variable_array : Variable[],
-}
-
-packet FixedArrayVariable {
-  variable_array : Variable[5],
-}
-
-packet CountArrayVariable {
-  _count_(variable_array) : 8,
-  variable_array : Variable[],
+packet PacketWithFixedArraysOFBytes {
+   fixed_256bit_in_bytes : 8[32],
+   fixed_256bit_in_words : 32[8],
 }
