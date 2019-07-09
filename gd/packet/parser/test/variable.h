@@ -16,27 +16,40 @@
  *
  ******************************************************************************/
 
-#include "hci/include/btsnoop.h"
+#pragma once
 
-static void capture(const BT_HDR*, bool) { /* do nothing */
-}
+#include <stdint.h>
+#include <optional>
+#include <string>
 
-static void whitelist_l2c_channel(uint16_t, uint16_t,
-                                  uint16_t) { /* do nothing */
-}
+#include "packet/bit_inserter.h"
+#include "packet/iterator.h"
 
-static void whitelist_rfc_dlci(uint16_t, uint8_t) { /* do nothing */
-}
+namespace bluetooth {
+namespace packet {
+namespace parser {
+namespace test {
 
-static void add_rfc_l2c_channel(uint16_t, uint16_t, uint16_t) { /* do nothing */
-}
+class Variable final {
+ public:
+  std::string data;
 
-static void clear_l2cap_whitelist(uint16_t, uint16_t,
-                                  uint16_t) { /* do nothing */
-}
+  Variable() = default;
+  Variable(const Variable&) = default;
+  Variable(const std::string& str);
 
-static const btsnoop_t fake_snoop = {capture, whitelist_l2c_channel,
-                                     whitelist_rfc_dlci, add_rfc_l2c_channel,
-                                     clear_l2cap_whitelist};
+  static void Serialize(const Variable& v, BitInserter& bi);
 
-const btsnoop_t* btsnoop_get_interface() { return &fake_snoop; }
+  static size_t Size(const Variable& v) {
+    return v.size();
+  }
+
+  size_t size() const;
+
+  static Iterator<true> Parse(std::vector<Variable>& vec, Iterator<true> it);
+};
+
+}  // namespace test
+}  // namespace parser
+}  // namespace packet
+}  // namespace bluetooth
