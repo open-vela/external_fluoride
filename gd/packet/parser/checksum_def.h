@@ -32,6 +32,10 @@ class ChecksumDef : public CustomFieldDef {
 
   virtual TypeDef::Type GetDefinitionType() const override;
 
+  virtual void GenInclude(std::ostream& s) const override;
+
+  virtual void GenUsing(std::ostream& s) const override;
+
   void GenChecksumCheck(std::ostream& s) const;
 
   const std::string include_;
