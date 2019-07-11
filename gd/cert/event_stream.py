@@ -24,44 +24,37 @@ from grpc import StatusCode
 
 class EventStream(object):
 
+  event_buffer = []
+
   def __init__(self, stream_stub_fn):
     self.stream_stub_fn = stream_stub_fn
-    self.event_buffer = []
-
-    self.subscribe_request = common_pb2.EventStreamRequest(
-        subscription_mode=common_pb2.SUBSCRIBE,
-        fetch_mode=common_pb2.NONE
-    )
-
-    self.unsubscribe_request = common_pb2.EventStreamRequest(
-        subscription_mode=common_pb2.UNSUBSCRIBE,
-        fetch_mode=common_pb2.NONE
-    )
-
-    self.fetch_all_current_request = common_pb2.EventStreamRequest(
-        subscription_mode=common_pb2.UNCHANGED,
-        fetch_mode=common_pb2.ALL_CURRENT
-    )
-
-    self.fetch_at_least_one_request = lambda expiration_time : common_pb2.EventStreamRequest(
-        subscription_mode=common_pb2.UNCHANGED,
-        fetch_mode=common_pb2.AT_LEAST_ONE,
-        timeout_ms = int((expiration_time - datetime.now()).total_seconds() * 1000)
-    )
 
   def clear_event_buffer(self):
     self.event_buffer.clear()
 
   def subscribe(self):
-    rpc = self.stream_stub_fn(self.subscribe_request)
-    return rpc.result()
+    return self.stream_stub_fn(
+        common_pb2.EventStreamRequest(
+          subscription_mode=common_pb2.SUBSCRIBE,
+          fetch_mode=common_pb2.NONE
+        )
+    )
 
   def unsubscribe(self):
-    rpc = self.stream_stub_fn(self.unsubscribe_request)
-    return rpc.result()
+    return self.stream_stub_fn(
+        common_pb2.EventStreamRequest(
+            subscription_mode=common_pb2.UNSUBSCRIBE,
+            fetch_mode=common_pb2.NONE
+        )
+    )
 
   def assert_none(self):
-    response = self.stream_stub_fn(self.fetch_all_current_request)
+    response = self.stream_stub_fn(
+        common_pb2.EventStreamRequest(
+            subscription_mode=common_pb2.NONE,
+            fetch_mode=common_pb2.ALL_CURRENT
+        )
+    )
 
     try:
       for event in response:
@@ -73,7 +66,12 @@ class EventStream(object):
       asserts.fail("event_buffer is not empty \n%s" % self.event_buffer)
 
   def assert_none_matching(self, match_fn):
-    response = self.stream_stub_fn(self.fetch_all_current_request)
+    response = self.stream_stub_fn(
+        common_pb2.EventStreamRequest(
+            subscription_mode=common_pb2.NONE,
+            fetch_mode=common_pb2.ALL_CURRENT
+        )
+    )
 
     try:
       for event in response:
@@ -97,7 +95,13 @@ class EventStream(object):
       if datetime.now() > expiration_time:
         asserts.fail("timeout of %s exceeded" % str(timeout))
 
-      response = self.stream_stub_fn(self.fetch_at_least_one_request(expiration_time))
+      response = self.stream_stub_fn(
+          common_pb2.EventStreamRequest(
+              subscription_mode=common_pb2.NONE,
+              fetch_mode=common_pb2.AT_LEAST_ONE,
+              timeout_ms = int((expiration_time - datetime.now()).total_seconds() * 1000)
+          )
+      )
 
       try:
         for event in response:
