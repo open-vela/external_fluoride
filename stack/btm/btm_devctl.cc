@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,26 +25,26 @@
 
 #include <base/logging.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "bt_types.h"
-#include "bt_utils.h"
 #include "btcore/include/module.h"
 #include "btm_int.h"
 #include "btu.h"
+#include "common/message_loop_thread.h"
 #include "device/include/controller.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
-#include "l2c_int.h"
 #include "osi/include/osi.h"
-#include "osi/include/thread.h"
+#include "stack/gatt/connection_manager.h"
+#include "stack/include/l2cap_controller_interface.h"
 
-#include "gatt_int.h"
+#include "main/shim/btm_api.h"
+#include "main/shim/controller.h"
+#include "main/shim/shim.h"
 
-extern fixed_queue_t* btu_general_alarm_queue;
-extern thread_t* bt_workqueue_thread;
+extern bluetooth::common::MessageLoopThread bt_startup_thread;
 
 /******************************************************************************/
 /*               L O C A L    D A T A    D E F I N I T I O N S                */
@@ -65,8 +65,8 @@ extern thread_t* bt_workqueue_thread;
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
 /******************************************************************************/
 
-static void btm_decode_ext_features_page(uint8_t page_number,
-                                         const BD_FEATURES p_features);
+static void decode_controller_support();
+static void BTM_BT_Quality_Report_VSE_CBack(uint8_t length, uint8_t* p_stream);
 
 /*******************************************************************************
  *
@@ -77,20 +77,23 @@ static void btm_decode_ext_features_page(uint8_t page_number,
  * Returns          void
  *
  ******************************************************************************/
-void btm_dev_init(void) {
+void btm_dev_init() {
   /* Initialize nonzero defaults */
   memset(btm_cb.cfg.bd_name, 0, sizeof(tBTM_LOC_BD_NAME));
 
   btm_cb.devcb.read_local_name_timer = alarm_new("btm.read_local_name_timer");
   btm_cb.devcb.read_rssi_timer = alarm_new("btm.read_rssi_timer");
+  btm_cb.devcb.read_failed_contact_counter_timer =
+      alarm_new("btm.read_failed_contact_counter_timer");
+  btm_cb.devcb.read_automatic_flush_timeout_timer =
+      alarm_new("btm.read_automatic_flush_timeout_timer");
   btm_cb.devcb.read_link_quality_timer =
       alarm_new("btm.read_link_quality_timer");
   btm_cb.devcb.read_inq_tx_power_timer =
       alarm_new("btm.read_inq_tx_power_timer");
-  btm_cb.devcb.qos_setup_timer = alarm_new("btm.qos_setup_timer");
   btm_cb.devcb.read_tx_power_timer = alarm_new("btm.read_tx_power_timer");
 
-  btm_cb.btm_acl_pkt_types_supported =
+  btm_cb.acl_cb_.btm_acl_pkt_types_supported =
       BTM_ACL_PKT_TYPES_MASK_DH1 + BTM_ACL_PKT_TYPES_MASK_DM1 +
       BTM_ACL_PKT_TYPES_MASK_DH3 + BTM_ACL_PKT_TYPES_MASK_DM3 +
       BTM_ACL_PKT_TYPES_MASK_DH5 + BTM_ACL_PKT_TYPES_MASK_DM5;
@@ -114,7 +117,6 @@ void btm_dev_init(void) {
  ******************************************************************************/
 static void btm_db_reset(void) {
   tBTM_CMPL_CB* p_cb;
-  tBTM_STATUS status = BTM_DEV_RESET;
 
   btm_inq_db_reset();
 
@@ -129,7 +131,33 @@ static void btm_db_reset(void) {
     p_cb = btm_cb.devcb.p_rssi_cmpl_cb;
     btm_cb.devcb.p_rssi_cmpl_cb = NULL;
 
-    if (p_cb) (*p_cb)((tBTM_RSSI_RESULTS*)&status);
+    if (p_cb) {
+      tBTM_RSSI_RESULT btm_rssi_result;
+      btm_rssi_result.status = BTM_DEV_RESET;
+      (*p_cb)(&btm_rssi_result);
+    }
+  }
+
+  if (btm_cb.devcb.p_failed_contact_counter_cmpl_cb) {
+    p_cb = btm_cb.devcb.p_failed_contact_counter_cmpl_cb;
+    btm_cb.devcb.p_failed_contact_counter_cmpl_cb = NULL;
+
+    if (p_cb) {
+      tBTM_FAILED_CONTACT_COUNTER_RESULT btm_failed_contact_counter_result;
+      btm_failed_contact_counter_result.status = BTM_DEV_RESET;
+      (*p_cb)(&btm_failed_contact_counter_result);
+    }
+  }
+
+  if (btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb) {
+    p_cb = btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb;
+    btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb = NULL;
+
+    if (p_cb) {
+      tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT btm_automatic_flush_timeout_result;
+      btm_automatic_flush_timeout_result.status = BTM_DEV_RESET;
+      (*p_cb)(&btm_automatic_flush_timeout_result);
+    }
   }
 }
 
@@ -160,12 +188,14 @@ static void reset_complete(void* result) {
   btm_cb.btm_inq_vars.page_scan_type = HCI_DEF_SCAN_TYPE;
 
   btm_cb.ble_ctr_cb.conn_state = BLE_CONN_IDLE;
-  btm_cb.ble_ctr_cb.bg_conn_type = BTM_BLE_CONN_NONE;
-  gatt_reset_bgdev_list();
+  connection_manager::reset(true);
 
   btm_pm_reset();
 
   l2c_link_processs_num_bufs(controller->get_acl_buffer_count_classic());
+
+  // setup the random number generator
+  std::srand(std::time(nullptr));
 
 #if (BLE_PRIVACY_SPT == TRUE)
   /* Set up the BLE privacy settings */
@@ -173,8 +203,8 @@ static void reset_complete(void* result) {
       controller->get_ble_resolving_list_max_size() > 0) {
     btm_ble_resolving_list_init(controller->get_ble_resolving_list_max_size());
     /* set the default random private address timeout */
-    btsnd_hcic_ble_set_rand_priv_addr_timeout(BTM_BLE_PRIVATE_ADDR_INT_MS /
-                                              1000);
+    btsnd_hcic_ble_set_rand_priv_addr_timeout(
+        btm_get_next_private_addrress_interval_ms() / 1000);
   }
 #endif
 
@@ -186,10 +216,7 @@ static void reset_complete(void* result) {
   BTM_SetPinType(btm_cb.cfg.pin_type, btm_cb.cfg.pin_code,
                  btm_cb.cfg.pin_code_len);
 
-  for (int i = 0; i <= controller->get_last_features_classic_index(); i++) {
-    btm_decode_ext_features_page(i,
-                                 controller->get_features_classic(i)->as_array);
-  }
+  decode_controller_support();
 
   btm_report_device_status(BTM_DEV_STATUS_UP);
 }
@@ -202,8 +229,13 @@ void BTM_DeviceReset(UNUSED_ATTR tBTM_CMPL_CB* p_cb) {
   /* Clear the callback, so application would not hang on reset */
   btm_db_reset();
 
-  module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
-                                     bt_workqueue_thread, reset_complete);
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    module_start_up_callbacked_wrapper(get_module(GD_CONTROLLER_MODULE),
+                                       &bt_startup_thread, reset_complete);
+  } else {
+    module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
+                                       &bt_startup_thread, reset_complete);
+  }
 }
 
 /*******************************************************************************
@@ -232,156 +264,128 @@ void btm_read_local_name_timeout(UNUSED_ATTR void* data) {
   if (p_cb) (*p_cb)((void*)NULL);
 }
 
-/*******************************************************************************
- *
- * Function         btm_decode_ext_features_page
- *
- * Description      This function is decodes a features page.
- *
- * Returns          void
- *
- ******************************************************************************/
-static void btm_decode_ext_features_page(uint8_t page_number,
-                                         const uint8_t* p_features) {
-  BTM_TRACE_DEBUG("btm_decode_ext_features_page page: %d", page_number);
-  switch (page_number) {
-    /* Extended (Legacy) Page 0 */
-    case 0:
+static void decode_controller_support() {
+  const controller_t* controller = controller_get_interface();
 
-      /* Create ACL supported packet types mask */
-      btm_cb.btm_acl_pkt_types_supported =
-          (BTM_ACL_PKT_TYPES_MASK_DH1 + BTM_ACL_PKT_TYPES_MASK_DM1);
+  /* Create ACL supported packet types mask */
+  btm_cb.acl_cb_.btm_acl_pkt_types_supported =
+      (BTM_ACL_PKT_TYPES_MASK_DH1 + BTM_ACL_PKT_TYPES_MASK_DM1);
 
-      if (HCI_3_SLOT_PACKETS_SUPPORTED(p_features))
-        btm_cb.btm_acl_pkt_types_supported |=
-            (BTM_ACL_PKT_TYPES_MASK_DH3 + BTM_ACL_PKT_TYPES_MASK_DM3);
+  if (controller->supports_3_slot_packets())
+    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
+        (BTM_ACL_PKT_TYPES_MASK_DH3 + BTM_ACL_PKT_TYPES_MASK_DM3);
 
-      if (HCI_5_SLOT_PACKETS_SUPPORTED(p_features))
-        btm_cb.btm_acl_pkt_types_supported |=
-            (BTM_ACL_PKT_TYPES_MASK_DH5 + BTM_ACL_PKT_TYPES_MASK_DM5);
+  if (controller->supports_5_slot_packets())
+    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
+        (BTM_ACL_PKT_TYPES_MASK_DH5 + BTM_ACL_PKT_TYPES_MASK_DM5);
 
-      /* Add in EDR related ACL types */
-      if (!HCI_EDR_ACL_2MPS_SUPPORTED(p_features)) {
-        btm_cb.btm_acl_pkt_types_supported |=
-            (BTM_ACL_PKT_TYPES_MASK_NO_2_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 +
-             BTM_ACL_PKT_TYPES_MASK_NO_2_DH5);
-      }
-
-      if (!HCI_EDR_ACL_3MPS_SUPPORTED(p_features)) {
-        btm_cb.btm_acl_pkt_types_supported |=
-            (BTM_ACL_PKT_TYPES_MASK_NO_3_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH3 +
-             BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
-      }
-
-      /* Check to see if 3 and 5 slot packets are available */
-      if (HCI_EDR_ACL_2MPS_SUPPORTED(p_features) ||
-          HCI_EDR_ACL_3MPS_SUPPORTED(p_features)) {
-        if (!HCI_3_SLOT_EDR_ACL_SUPPORTED(p_features))
-          btm_cb.btm_acl_pkt_types_supported |=
-              (BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 +
-               BTM_ACL_PKT_TYPES_MASK_NO_3_DH3);
-
-        if (!HCI_5_SLOT_EDR_ACL_SUPPORTED(p_features))
-          btm_cb.btm_acl_pkt_types_supported |=
-              (BTM_ACL_PKT_TYPES_MASK_NO_2_DH5 +
-               BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
-      }
-
-      BTM_TRACE_DEBUG("Local supported ACL packet types: 0x%04x",
-                      btm_cb.btm_acl_pkt_types_supported);
-
-      /* Create (e)SCO supported packet types mask */
-      btm_cb.btm_sco_pkt_types_supported = 0;
-#if (BTM_SCO_INCLUDED == TRUE)
-      btm_cb.sco_cb.esco_supported = false;
-#endif
-      if (HCI_SCO_LINK_SUPPORTED(p_features)) {
-        btm_cb.btm_sco_pkt_types_supported = ESCO_PKT_TYPES_MASK_HV1;
-
-        if (HCI_HV2_PACKETS_SUPPORTED(p_features))
-          btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV2;
-
-        if (HCI_HV3_PACKETS_SUPPORTED(p_features))
-          btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV3;
-      }
-
-      if (HCI_ESCO_EV3_SUPPORTED(p_features))
-        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV3;
-
-      if (HCI_ESCO_EV4_SUPPORTED(p_features))
-        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV4;
-
-      if (HCI_ESCO_EV5_SUPPORTED(p_features))
-        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV5;
-      if (btm_cb.btm_sco_pkt_types_supported & BTM_ESCO_LINK_ONLY_MASK) {
-        btm_cb.sco_cb.esco_supported = true;
-
-        /* Add in EDR related eSCO types */
-        if (HCI_EDR_ESCO_2MPS_SUPPORTED(p_features)) {
-          if (!HCI_3_SLOT_EDR_ESCO_SUPPORTED(p_features))
-            btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_2_EV5;
-        } else {
-          btm_cb.btm_sco_pkt_types_supported |=
-              (ESCO_PKT_TYPES_MASK_NO_2_EV3 + ESCO_PKT_TYPES_MASK_NO_2_EV5);
-        }
-
-        if (HCI_EDR_ESCO_3MPS_SUPPORTED(p_features)) {
-          if (!HCI_3_SLOT_EDR_ESCO_SUPPORTED(p_features))
-            btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_3_EV5;
-        } else {
-          btm_cb.btm_sco_pkt_types_supported |=
-              (ESCO_PKT_TYPES_MASK_NO_3_EV3 + ESCO_PKT_TYPES_MASK_NO_3_EV5);
-        }
-      }
-
-      BTM_TRACE_DEBUG("Local supported SCO packet types: 0x%04x",
-                      btm_cb.btm_sco_pkt_types_supported);
-
-      /* Create Default Policy Settings */
-      if (HCI_SWITCH_SUPPORTED(p_features))
-        btm_cb.btm_def_link_policy |= HCI_ENABLE_MASTER_SLAVE_SWITCH;
-      else
-        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_MASTER_SLAVE_SWITCH;
-
-      if (HCI_HOLD_MODE_SUPPORTED(p_features))
-        btm_cb.btm_def_link_policy |= HCI_ENABLE_HOLD_MODE;
-      else
-        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_HOLD_MODE;
-
-      if (HCI_SNIFF_MODE_SUPPORTED(p_features))
-        btm_cb.btm_def_link_policy |= HCI_ENABLE_SNIFF_MODE;
-      else
-        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_SNIFF_MODE;
-
-      if (HCI_PARK_MODE_SUPPORTED(p_features))
-        btm_cb.btm_def_link_policy |= HCI_ENABLE_PARK_MODE;
-      else
-        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_PARK_MODE;
-
-      btm_sec_dev_reset();
-
-      if (HCI_LMP_INQ_RSSI_SUPPORTED(p_features)) {
-        if (HCI_EXT_INQ_RSP_SUPPORTED(p_features))
-          BTM_SetInquiryMode(BTM_INQ_RESULT_EXTENDED);
-        else
-          BTM_SetInquiryMode(BTM_INQ_RESULT_WITH_RSSI);
-      }
-
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
-      if (HCI_NON_FLUSHABLE_PB_SUPPORTED(p_features))
-        l2cu_set_non_flushable_pbf(true);
-      else
-        l2cu_set_non_flushable_pbf(false);
-#endif
-      BTM_SetPageScanType(BTM_DEFAULT_SCAN_TYPE);
-      BTM_SetInquiryScanType(BTM_DEFAULT_SCAN_TYPE);
-
-      break;
-
-    default:
-      BTM_TRACE_WARNING("%s: feature page %d ignored", __func__, page_number);
-      break;
+  /* Add in EDR related ACL types */
+  if (!controller->supports_classic_2m_phy()) {
+    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
+        (BTM_ACL_PKT_TYPES_MASK_NO_2_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 +
+         BTM_ACL_PKT_TYPES_MASK_NO_2_DH5);
   }
+
+  if (!controller->supports_classic_3m_phy()) {
+    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
+        (BTM_ACL_PKT_TYPES_MASK_NO_3_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH3 +
+         BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
+  }
+
+  /* Check to see if 3 and 5 slot packets are available */
+  if (controller->supports_classic_2m_phy() ||
+      controller->supports_classic_3m_phy()) {
+    if (!controller->supports_3_slot_edr_packets())
+      btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
+          (BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH3);
+
+    if (!controller->supports_5_slot_edr_packets())
+      btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
+          (BTM_ACL_PKT_TYPES_MASK_NO_2_DH5 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
+  }
+
+  BTM_TRACE_DEBUG("Local supported ACL packet types: 0x%04x",
+                  btm_cb.acl_cb_.btm_acl_pkt_types_supported);
+
+  /* Create (e)SCO supported packet types mask */
+  btm_cb.btm_sco_pkt_types_supported = 0;
+  btm_cb.sco_cb.esco_supported = false;
+  if (controller->supports_sco()) {
+    btm_cb.btm_sco_pkt_types_supported = ESCO_PKT_TYPES_MASK_HV1;
+
+    if (controller->supports_hv2_packets())
+      btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV2;
+
+    if (controller->supports_hv3_packets())
+      btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV3;
+  }
+
+  if (controller->supports_ev3_packets())
+    btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV3;
+
+  if (controller->supports_ev4_packets())
+    btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV4;
+
+  if (controller->supports_ev5_packets())
+    btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV5;
+
+  if (btm_cb.btm_sco_pkt_types_supported & BTM_ESCO_LINK_ONLY_MASK) {
+    btm_cb.sco_cb.esco_supported = true;
+
+    /* Add in EDR related eSCO types */
+    if (controller->supports_esco_2m_phy()) {
+      if (!controller->supports_3_slot_edr_packets())
+        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_2_EV5;
+    } else {
+      btm_cb.btm_sco_pkt_types_supported |=
+          (ESCO_PKT_TYPES_MASK_NO_2_EV3 + ESCO_PKT_TYPES_MASK_NO_2_EV5);
+    }
+
+    if (controller->supports_esco_3m_phy()) {
+      if (!controller->supports_3_slot_edr_packets())
+        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_3_EV5;
+    } else {
+      btm_cb.btm_sco_pkt_types_supported |=
+          (ESCO_PKT_TYPES_MASK_NO_3_EV3 + ESCO_PKT_TYPES_MASK_NO_3_EV5);
+    }
+  }
+
+  BTM_TRACE_DEBUG("Local supported SCO packet types: 0x%04x",
+                  btm_cb.btm_sco_pkt_types_supported);
+
+  /* Create Default Policy Settings */
+  if (controller->supports_role_switch())
+    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_MASTER_SLAVE_SWITCH;
+  else
+    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_MASTER_SLAVE_SWITCH;
+
+  if (controller->supports_hold_mode())
+    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_HOLD_MODE;
+  else
+    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_HOLD_MODE;
+
+  if (controller->supports_sniff_mode())
+    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_SNIFF_MODE;
+  else
+    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_SNIFF_MODE;
+
+  if (controller->supports_park_mode())
+    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_PARK_MODE;
+  else
+    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_PARK_MODE;
+
+  btm_sec_dev_reset();
+
+  if (controller->supports_rssi_with_inquiry_results()) {
+    if (controller->supports_extended_inquiry_response())
+      BTM_SetInquiryMode(BTM_INQ_RESULT_EXTENDED);
+    else
+      BTM_SetInquiryMode(BTM_INQ_RESULT_WITH_RSSI);
+  }
+
+  l2cu_set_non_flushable_pbf(controller->supports_non_flushable_pb());
+  BTM_EnableInterlacedPageScan();
+  BTM_EnableInterlacedInquiryScan();
 }
 
 /*******************************************************************************
@@ -446,9 +450,9 @@ tBTM_STATUS BTM_ReadLocalDeviceNameFromController(
   btm_cb.devcb.p_rln_cmpl_cb = p_rln_cmpl_cback;
 
   btsnd_hcic_read_name();
-  alarm_set_on_queue(btm_cb.devcb.read_local_name_timer,
+  alarm_set_on_mloop(btm_cb.devcb.read_local_name_timer,
                      BTM_DEV_NAME_REPLY_TIMEOUT_MS, btm_read_local_name_timeout,
-                     NULL, btu_general_alarm_queue);
+                     NULL);
 
   return BTM_CMD_STARTED;
 }
@@ -519,23 +523,6 @@ uint8_t* BTM_ReadDeviceClass(void) {
 
 /*******************************************************************************
  *
- * Function         BTM_ReadLocalFeatures
- *
- * Description      This function is called to read the local features
- *
- * Returns          pointer to the local features string
- *
- ******************************************************************************/
-// TODO(zachoverflow): get rid of this function
-uint8_t* BTM_ReadLocalFeatures(void) {
-  // Discarding const modifier for now, until this function dies
-  return (uint8_t*)controller_get_interface()
-      ->get_features_classic(0)
-      ->as_array;
-}
-
-/*******************************************************************************
- *
  * Function         BTM_RegisterForDeviceStatusNotif
  *
  * Description      This function is called to register for device status
@@ -590,7 +577,7 @@ void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
  *
  ******************************************************************************/
 void btm_vsc_complete(uint8_t* p, uint16_t opcode, uint16_t evt_len,
-                      tBTM_CMPL_CB* p_vsc_cplt_cback) {
+                      tBTM_VSC_CMPL_CB* p_vsc_cplt_cback) {
   tBTM_VSC_CMPL vcs_cplt_params;
 
   /* If there was a callback address for vcs complete, call it */
@@ -630,7 +617,7 @@ tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb, bool is_register) {
       free_idx = i;
     } else if (btm_cb.devcb.p_vend_spec_cb[i] == p_cb) {
       /* Found callback in lookup table. If deregistering, clear the entry. */
-      if (is_register == false) {
+      if (!is_register) {
         btm_cb.devcb.p_vend_spec_cb[i] = NULL;
         BTM_TRACE_EVENT("BTM Deregister For VSEvents is successfully");
       }
@@ -768,27 +755,26 @@ tBTM_STATUS BTM_EnableTestMode(void) {
  *                                 the results
  *
  ******************************************************************************/
-tBTM_STATUS BTM_DeleteStoredLinkKey(BD_ADDR bd_addr, tBTM_CMPL_CB* p_cb) {
-  BD_ADDR local_bd_addr;
-  bool delete_all_flag = false;
-
+tBTM_STATUS BTM_DeleteStoredLinkKey(const RawAddress* bd_addr,
+                                    tBTM_CMPL_CB* p_cb) {
   /* Check if the previous command is completed */
   if (btm_cb.devcb.p_stored_link_key_cmpl_cb) return (BTM_BUSY);
 
-  if (!bd_addr) {
-    /* This is to delete all link keys */
-    delete_all_flag = true;
-
-    /* We don't care the BD address. Just pass a non zero pointer */
-    bd_addr = local_bd_addr;
-  }
+  bool delete_all_flag = !bd_addr;
 
   BTM_TRACE_EVENT("BTM: BTM_DeleteStoredLinkKey: delete_all_flag: %s",
                   delete_all_flag ? "true" : "false");
 
-  /* Send the HCI command */
   btm_cb.devcb.p_stored_link_key_cmpl_cb = p_cb;
-  btsnd_hcic_delete_stored_key(bd_addr, delete_all_flag);
+  if (!bd_addr) {
+    /* This is to delete all link keys */
+    /* We don't care the BD address. Just pass a non zero pointer */
+    RawAddress local_bd_addr = RawAddress::kEmpty;
+    btsnd_hcic_delete_stored_key(local_bd_addr, delete_all_flag);
+  } else {
+    btsnd_hcic_delete_stored_key(*bd_addr, delete_all_flag);
+  }
+
   return (BTM_SUCCESS);
 }
 
@@ -839,4 +825,72 @@ void btm_report_device_status(tBTM_DEV_STATUS status) {
 
   /* Call the call back to pass the device status to application */
   if (p_cb) (*p_cb)(status);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_BT_Quality_Report_VSE_CBack
+ *
+ * Description      Callback invoked on receiving of Vendor Specific Events.
+ *                  This function will call registered BQR report receiver if
+ *                  Bluetooth Quality Report sub-event is identified.
+ *
+ * Parameters:      length - Lengths of all of the parameters contained in the
+ *                    Vendor Specific Event.
+ *                  p_stream - A pointer to the quality report which is sent
+ *                    from the Bluetooth controller via Vendor Specific Event.
+ *
+ ******************************************************************************/
+static void BTM_BT_Quality_Report_VSE_CBack(uint8_t length, uint8_t* p_stream) {
+  if (length == 0) {
+    LOG(WARNING) << __func__ << ": Lengths of all of the parameters are zero.";
+    return;
+  }
+
+  uint8_t sub_event = 0;
+  STREAM_TO_UINT8(sub_event, p_stream);
+  length--;
+
+  if (sub_event == HCI_VSE_SUBCODE_BQR_SUB_EVT) {
+    if (btm_cb.p_bqr_report_receiver == nullptr) {
+      LOG(WARNING) << __func__ << ": No registered report receiver.";
+      return;
+    }
+
+    btm_cb.p_bqr_report_receiver(length, p_stream);
+  }
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_BT_Quality_Report_VSE_Register
+ *
+ * Description      Register/Deregister for Bluetooth Quality Report VSE sub
+ *                  event Callback.
+ *
+ * Parameters:      is_register - True/False to register/unregister for VSE.
+ *                  p_bqr_report_receiver - The receiver for receiving Bluetooth
+ *                    Quality Report VSE sub event.
+ *
+ ******************************************************************************/
+tBTM_STATUS BTM_BT_Quality_Report_VSE_Register(
+    bool is_register, tBTM_BT_QUALITY_REPORT_RECEIVER* p_bqr_report_receiver) {
+  tBTM_STATUS retval =
+      BTM_RegisterForVSEvents(BTM_BT_Quality_Report_VSE_CBack, is_register);
+
+  if (retval != BTM_SUCCESS) {
+    LOG(WARNING) << __func__ << ": Fail to (un)register VSEvents: " << retval
+                 << ", is_register: " << logbool(is_register);
+    return retval;
+  }
+
+  if (is_register) {
+    btm_cb.p_bqr_report_receiver = p_bqr_report_receiver;
+  } else {
+    btm_cb.p_bqr_report_receiver = nullptr;
+  }
+
+  LOG(INFO) << __func__ << ": Success to (un)register VSEvents."
+            << " is_register: " << logbool(is_register);
+  return retval;
 }

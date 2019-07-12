@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,22 +21,21 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "btcore/include/bdaddr.h"
 #include "btcore/include/property.h"
 #include "osi/include/osi.h"
 #include "test/suite/support/callbacks.h"
 #include "test/suite/support/hal.h"
 
-static const bt_uuid_t HFP_UUID = {{0x00, 0x00, 0x11, 0x1E, 0x00, 0x00, 0x10,
-                                    0x00, 0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B,
-                                    0x34, 0xFB}};
-static const bt_uuid_t HFP_AG_UUID = {{0x00, 0x00, 0x11, 0x1F, 0x00, 0x00, 0x10,
-                                       0x00, 0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B,
-                                       0x34, 0xFB}};
+static const Uuid HFP_UUID =
+    Uuid::From128BitBE({{0x00, 0x00, 0x11, 0x1E, 0x00, 0x00, 0x10, 0x00, 0x80,
+                         0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB}});
+static const Uuid HFP_AG_UUID =
+    Uuid::From128BitBE({{0x00, 0x00, 0x11, 0x1F, 0x00, 0x00, 0x10, 0x00, 0x80,
+                         0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB}});
 
 const bt_interface_t* bt_interface;
 
-bt_bdaddr_t bt_remote_bdaddr;
+RawAddress bt_remote_bdaddr;
 
 static int f_verbose;
 static bool discover = false;
