@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,8 +89,8 @@ void bta_pan_ci_rx_ready(uint16_t handle) {
  * Description      This function is called to enable or disable data flow on
  *                  the TX path.  The phone should call this function to
  *                  disable data flow when it is congested and cannot handle
- *                  any more data sent by bta_pan_co_tx_write() or
- *                  bta_pan_co_tx_writebuf().  This function is used when the
+ *                  any more data sent by bta_pan_co_tx_write().
+ *                  This function is used when the
  *                  TX data path is configured to use a push interface.
  *
  *
@@ -120,16 +120,16 @@ void bta_pan_ci_tx_flow(uint16_t handle, bool enable) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_pan_ci_rx_write(uint16_t handle, BD_ADDR dst, BD_ADDR src,
-                         uint16_t protocol, uint8_t* p_data, uint16_t len,
-                         bool ext) {
+void bta_pan_ci_rx_write(uint16_t handle, const RawAddress& dst,
+                         const RawAddress& src, uint16_t protocol,
+                         uint8_t* p_data, uint16_t len, bool ext) {
   BT_HDR* p_buf = (BT_HDR*)osi_malloc(PAN_BUF_SIZE);
 
   p_buf->offset = PAN_MINIMUM_OFFSET;
 
   /* copy all other params before the data */
-  bdcpy(((tBTA_PAN_DATA_PARAMS*)p_buf)->src, src);
-  bdcpy(((tBTA_PAN_DATA_PARAMS*)p_buf)->dst, dst);
+  ((tBTA_PAN_DATA_PARAMS*)p_buf)->src = src;
+  ((tBTA_PAN_DATA_PARAMS*)p_buf)->dst = dst;
   ((tBTA_PAN_DATA_PARAMS*)p_buf)->protocol = protocol;
   ((tBTA_PAN_DATA_PARAMS*)p_buf)->ext = ext;
   p_buf->len = len;
@@ -157,11 +157,12 @@ void bta_pan_ci_rx_write(uint16_t handle, BD_ADDR dst, BD_ADDR src,
  * Returns          void
  *
  ******************************************************************************/
-void bta_pan_ci_rx_writebuf(uint16_t handle, BD_ADDR dst, BD_ADDR src,
-                            uint16_t protocol, BT_HDR* p_buf, bool ext) {
+void bta_pan_ci_rx_writebuf(uint16_t handle, const RawAddress& dst,
+                            const RawAddress& src, uint16_t protocol,
+                            BT_HDR* p_buf, bool ext) {
   /* copy all other params before the data */
-  bdcpy(((tBTA_PAN_DATA_PARAMS*)p_buf)->src, src);
-  bdcpy(((tBTA_PAN_DATA_PARAMS*)p_buf)->dst, dst);
+  ((tBTA_PAN_DATA_PARAMS*)p_buf)->src = src;
+  ((tBTA_PAN_DATA_PARAMS*)p_buf)->dst = dst;
   ((tBTA_PAN_DATA_PARAMS*)p_buf)->protocol = protocol;
   ((tBTA_PAN_DATA_PARAMS*)p_buf)->ext = ext;
 
@@ -180,17 +181,17 @@ void bta_pan_ci_rx_writebuf(uint16_t handle, BD_ADDR dst, BD_ADDR src,
  * Returns          void
  *
  ******************************************************************************/
-BT_HDR* bta_pan_ci_readbuf(uint16_t handle, BD_ADDR src, BD_ADDR dst,
+BT_HDR* bta_pan_ci_readbuf(uint16_t handle, RawAddress& src, RawAddress& dst,
                            uint16_t* p_protocol, bool* p_ext, bool* p_forward) {
-  tBTA_PAN_SCB* p_scb;
+  tBTA_PAN_SCB* p_scb = bta_pan_scb_by_handle(handle);
   BT_HDR* p_buf;
 
-  p_scb = bta_pan_scb_by_handle(handle);
+  if (p_scb == NULL) return NULL;
 
   p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_scb->data_queue);
   if (p_buf != NULL) {
-    bdcpy(src, ((tBTA_PAN_DATA_PARAMS*)p_buf)->src);
-    bdcpy(dst, ((tBTA_PAN_DATA_PARAMS*)p_buf)->dst);
+    src = ((tBTA_PAN_DATA_PARAMS*)p_buf)->src;
+    dst = ((tBTA_PAN_DATA_PARAMS*)p_buf)->dst;
     *p_protocol = ((tBTA_PAN_DATA_PARAMS*)p_buf)->protocol;
     *p_ext = ((tBTA_PAN_DATA_PARAMS*)p_buf)->ext;
     *p_forward = ((tBTA_PAN_DATA_PARAMS*)p_buf)->forward;
@@ -238,12 +239,14 @@ void bta_pan_ci_rx_ready(UNUSED_ATTR uint16_t handle) {}
 void bta_pan_ci_tx_flow(UNUSED_ATTR uint16_t handle, UNUSED_ATTR bool enable) {}
 
 void bta_pan_ci_rx_writebuf(UNUSED_ATTR uint16_t handle,
-                            UNUSED_ATTR BD_ADDR src, UNUSED_ATTR BD_ADDR dst,
+                            UNUSED_ATTR const RawAddress& src,
+                            UNUSED_ATTR const RawAddress& dst,
                             UNUSED_ATTR uint16_t protocol,
                             UNUSED_ATTR BT_HDR* p_buf, UNUSED_ATTR bool ext) {}
 
-BT_HDR* bta_pan_ci_readbuf(UNUSED_ATTR uint16_t handle, UNUSED_ATTR BD_ADDR src,
-                           UNUSED_ATTR BD_ADDR dst,
+BT_HDR* bta_pan_ci_readbuf(UNUSED_ATTR uint16_t handle,
+                           UNUSED_ATTR RawAddress& src,
+                           UNUSED_ATTR RawAddress& dst,
                            UNUSED_ATTR uint16_t* p_protocol,
                            UNUSED_ATTR bool* p_ext,
                            UNUSED_ATTR bool* p_forward) {
