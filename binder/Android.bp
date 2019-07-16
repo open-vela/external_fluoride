@@ -54,7 +54,6 @@ cc_library_shared {
         ],
     },
     include_dirs: [
-        "libnativehelper/include/nativehelper",
         "system/bt/types",
     ],
     shared_libs: [
@@ -76,9 +75,6 @@ cc_library_shared {
         "-Wextra",
         "-Wno-unused-parameter",
     ],
-    sanitize: {
-        scs: true,
-    },
 }
 
 // AIDL interface between libbluetooth-binder and framework.jar
