@@ -56,8 +56,13 @@ inline uint64_t GetMaxValueForBits(int bits) {
     ERROR() << __func__ << ": Cannot use a type larger than 64 bits. (" << bits << ")\n";
   }
 
-  // Set all the bits to 1, then shift off extras.
-  return ~(static_cast<uint64_t>(0)) >> (64 - bits);
+  uint64_t max = 0;
+  for (int i = 0; i < bits; i++) {
+    max <<= 1;
+    max |= 1;
+  }
+
+  return max;
 }
 
 inline std::string CamelCaseToUnderScore(std::string value) {
