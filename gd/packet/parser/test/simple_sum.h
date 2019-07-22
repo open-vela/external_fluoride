@@ -25,16 +25,16 @@ namespace test {
 
 class SimpleSum {
  public:
-  void Initialize() {
-    sum = 0;
+  static void Initialize(SimpleSum& s) {
+    s.sum = 0;
   }
 
-  void AddByte(uint8_t byte) {
-    sum += byte;
+  static void AddByte(SimpleSum& s, uint8_t byte) {
+    s.sum += byte;
   }
 
-  uint16_t GetChecksum() const {
-    return sum;
+  static uint16_t GetChecksum(const SimpleSum& s) {
+    return s.sum;
   }
 
  private:

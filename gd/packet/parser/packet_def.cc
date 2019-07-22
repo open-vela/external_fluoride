@@ -172,10 +172,10 @@ void PacketDef::GenValidator(std::ostream& s) const {
         s << "auto checksum_view = GetBigEndianSubview(sum_index, end_sum_index);";
       }
       s << started_field->GetDataType() << " checksum;";
-      s << "checksum.Initialize();";
+      s << started_field->GetDataType() << "::Initialize(checksum);";
       s << "for (uint8_t byte : checksum_view) { ";
-      s << "checksum.AddByte(byte);}";
-      s << "if (checksum.GetChecksum() != (begin() + end_sum_index).extract<"
+      s << started_field->GetDataType() << "::AddByte(checksum, byte);}";
+      s << "if (" << started_field->GetDataType() << "::GetChecksum(checksum) != (begin() + end_sum_index).extract<"
         << util::GetTypeForSize(started_field->GetSize().bits()) << ">()) { return false; }";
 
       continue;
