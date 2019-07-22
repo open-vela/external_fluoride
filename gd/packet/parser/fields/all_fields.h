@@ -22,7 +22,6 @@
 #include "fields/checksum_start_field.h"
 #include "fields/count_field.h"
 #include "fields/custom_field.h"
-#include "fields/custom_field_fixed_size.h"
 #include "fields/enum_field.h"
 #include "fields/fixed_enum_field.h"
 #include "fields/fixed_scalar_field.h"
