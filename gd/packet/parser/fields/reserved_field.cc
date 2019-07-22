@@ -36,8 +36,6 @@ std::string ReservedField::GetDataType() const {
   return util::GetTypeForSize(size_);
 }
 
-void ReservedField::GenExtractor(std::ostream&, Size, Size) const {}
-
 void ReservedField::GenGetter(std::ostream&, Size, Size) const {
   // There is no Getter for a reserved field
 }
