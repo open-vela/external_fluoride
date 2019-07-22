@@ -33,8 +33,6 @@ class ChecksumStartField : public PacketField {
 
   virtual std::string GetDataType() const override;
 
-  virtual void GenExtractor(std::ostream& s, Size start_offset, Size end_offset) const override;
-
   virtual void GenGetter(std::ostream& s, Size start_offset, Size end_offset) const override;
 
   virtual bool GenBuilderParameter(std::ostream&) const override;

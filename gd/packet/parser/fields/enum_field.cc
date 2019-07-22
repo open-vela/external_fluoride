@@ -35,6 +35,11 @@ std::string EnumField::GetDataType() const {
   return enum_def_.name_;
 }
 
+bool EnumField::GenBuilderParameter(std::ostream& s) const {
+  s << GetDataType() << " " << GetName();
+  return true;
+}
+
 bool EnumField::HasParameterValidator() const {
   return false;
 }

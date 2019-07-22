@@ -33,6 +33,8 @@ class EnumField : public ScalarField {
 
   virtual std::string GetDataType() const override;
 
+  virtual bool GenBuilderParameter(std::ostream& s) const override;
+
   virtual bool HasParameterValidator() const override;
 
   virtual void GenParameterValidator(std::ostream&) const override;

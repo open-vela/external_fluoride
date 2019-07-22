@@ -109,7 +109,7 @@ void ParentDef::SetEndianness(bool is_little_endian) {
 
 // Get the size. You scan specify without_payload in order to exclude payload fields as children will be overriding it.
 Size ParentDef::GetSize(bool without_payload) const {
-  auto size = Size(0);
+  auto size = Size();
 
   for (const auto& field : fields_) {
     if (without_payload &&
@@ -163,7 +163,6 @@ Size ParentDef::GetOffsetForField(std::string field_name, bool from_end) const {
     if (field_name != "payload" && field_name != "body") {
       ERROR() << "Can't find a field offset for nonexistent field named: " << field_name;
     } else {
-      // TODO: Why is this a good idea?
       return Size();
     }
   }
@@ -237,7 +236,7 @@ FieldList ParentDef::GetParamList() const {
 void ParentDef::GenMembers(std::ostream& s) const {
   // Add the parameter list.
   for (int i = 0; i < fields_.size(); i++) {
-    if (fields_[i]->GenBuilderMember(s)) {
+    if (fields_[i]->GenBuilderParameter(s)) {
       s << "_;";
     }
   }
@@ -260,7 +259,13 @@ void ParentDef::GenSize(std::ostream& s) const {
   }
 
   for (const auto& field : header_fields) {
-    s << " + " << field->GetBuilderSize();
+    Size field_size = field->GetBuilderSize();
+    if (field_size.has_bits()) {
+      s << " + " << field_size.bits();
+    }
+    if (field_size.has_dynamic()) {
+      s << " + " << field_size.dynamic_string();
+    }
   }
   s << ";";
 
@@ -269,7 +274,13 @@ void ParentDef::GenSize(std::ostream& s) const {
   s << "size_t BitsOfFooter() const {";
   s << "return 0";
   for (const auto& field : footer_fields) {
-    s << " + " << field->GetBuilderSize();
+    Size field_size = field->GetBuilderSize();
+    if (field_size.has_bits()) {
+      s << " + " << field_size.bits();
+    }
+    if (field_size.has_dynamic()) {
+      s << " + " << field_size.dynamic_string();
+    }
   }
 
   if (parent_ != nullptr) {
@@ -361,10 +372,12 @@ void ParentDef::GenSerialize(std::ostream& s) const {
                      << ")";
       }
       s << "auto shared_checksum_ptr = std::make_shared<" << started_field->GetDataType() << ">();";
-      s << "shared_checksum_ptr->Initialize();";
+      s << started_field->GetDataType() << "::Initialize(*shared_checksum_ptr);";
       s << "i.RegisterObserver(packet::ByteObserver(";
-      s << "[shared_checksum_ptr](uint8_t byte){ shared_checksum_ptr->AddByte(byte);},";
-      s << "[shared_checksum_ptr](){ return static_cast<uint64_t>(shared_checksum_ptr->GetChecksum());}));";
+      s << "[shared_checksum_ptr](uint8_t byte){" << started_field->GetDataType()
+        << "::AddByte(*shared_checksum_ptr, byte);},";
+      s << "[shared_checksum_ptr](){ return static_cast<uint64_t>(" << started_field->GetDataType()
+        << "::GetChecksum(*shared_checksum_ptr));}));";
     } else if (field->GetFieldType() == CountField::kFieldType) {
       const auto& array_name = ((SizeField*)field)->GetSizedFieldName() + "_";
       s << "insert(" << array_name << ".size(), i, " << field->GetSize().bits() << ");";
