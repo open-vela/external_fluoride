@@ -19,20 +19,24 @@
 
 const std::string CustomField::kFieldType = "CustomField";
 
-CustomField::CustomField(std::string name, std::string type_name, ParseLocation loc)
-    : PacketField(name, loc), type_name_(type_name) {}
+CustomField::CustomField(std::string name, std::string type_name, int size, ParseLocation loc)
+    : PacketField(name, loc), type_name_(type_name), size_(size) {}
 
 const std::string& CustomField::GetFieldType() const {
   return CustomField::kFieldType;
 }
 
 Size CustomField::GetSize() const {
-  return Size();
+  return size_;
 }
 
 Size CustomField::GetBuilderSize() const {
-  std::string ret = "(" + GetName() + "_.size() * 8) ";
-  return ret;
+  if (size_ != -1) {
+    return size_;
+  } else {
+    std::string ret = "(" + GetName() + "_.size() * 8) ";
+    return ret;
+  }
 }
 
 std::string CustomField::GetDataType() const {
@@ -48,11 +52,42 @@ void CustomField::GenExtractor(std::ostream& s, Size start_offset, Size end_offs
 }
 
 void CustomField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) const {
-  s << "std::vector<" << GetDataType() << ">";
+  if (size_ != -1) {
+    s << GetDataType();
+  } else {
+    s << "std::vector<" << GetDataType() << ">";
+  }
   s << " Get" << util::UnderscoreToCamelCase(GetName()) << "() const {";
 
-  GenExtractor(s, start_offset, end_offset);
-  s << "return vec;";
+  s << "auto it = ";
+  if (!start_offset.empty()) {
+    // Default to start if available.
+    if (start_offset.bits() % 8 != 0) {
+      ERROR(this) << "Custom field must be byte aligned. start_offset.bits = " << start_offset.bits();
+    }
+    s << "begin() + (" << start_offset << ") / 8;";
+  } else if (size_ != -1) {
+    // If the size of the custom field is already known, we can determine it's offset based on end().
+    if (!end_offset.empty()) {
+      if (end_offset.bits() % 8) {
+        ERROR(this) << "Custom field must be byte aligned. end_offset.bits = " << end_offset.bits();
+      }
+
+      s << "end() - (" << size_ << " + " << end_offset << ") / 8;";
+    } else {
+      ERROR(this) << "Ambiguous offset for fixed size custom field.";
+    }
+  } else {
+    ERROR(this) << "Custom Field offset can not be determined from begin().";
+  }
+
+  if (size_ != -1) {
+    s << "return it.extract<" << GetDataType() << ">();";
+  } else {
+    s << "std::vector<" << GetDataType() << "> to_return;";
+    s << GetDataType() << "::Parse(to_return, it);";
+    s << "return to_return;";
+  }
   s << "}\n";
 }
 
@@ -70,7 +105,11 @@ void CustomField::GenParameterValidator(std::ostream&) const {
 }
 
 void CustomField::GenInserter(std::ostream& s) const {
-  s << GetName() << "_.Serialize(i);";
+  if (size_ != -1) {
+    s << "insert(" << GetName() << "_, i);";
+  } else {
+    s << GetName() << "_.Serialize(i);";
+  }
 }
 
 void CustomField::GenValidator(std::ostream&) const {
