@@ -21,6 +21,7 @@
 #include "gatt/database.h"
 
 #include <utility>
+#include <vector>
 
 namespace gatt {
 
