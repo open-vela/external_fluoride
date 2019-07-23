@@ -25,7 +25,11 @@
 
 class ArrayField : public PacketField {
  public:
+  ArrayField(std::string name, int element_size, std::string size_modifier, ParseLocation loc);
+
   ArrayField(std::string name, int element_size, int fixed_size, ParseLocation loc);
+
+  ArrayField(std::string name, TypeDef* type_def, std::string size_modifier, ParseLocation loc);
 
   ArrayField(std::string name, TypeDef* type_def, int fixed_size, ParseLocation loc);
 
@@ -59,6 +63,12 @@ class ArrayField : public PacketField {
 
   bool IsCustomFieldArray() const;
 
+  bool IsFixedSize() const;
+
+  void SetSizeField(const SizeField* size_field);
+
+  const std::string& GetSizeModifier() const;
+
   const std::string name_;
 
   const int element_size_{-1};  // in bits
@@ -66,4 +76,8 @@ class ArrayField : public PacketField {
 
   // Fixed size array or dynamic size, size is always in bytes, unless it is count.
   const int fixed_size_{-1};
+  const SizeField* size_field_{nullptr};
+
+  // Size modifier is only used when size_field_ is of type SIZE and is not used with COUNT.
+  std::string size_modifier_{""};
 };
