@@ -57,8 +57,6 @@ class VectorField : public PacketField {
 
   bool IsCustomFieldArray() const;
 
-  bool IsStructArray() const;
-
   void SetSizeField(const SizeField* size_field);
 
   const std::string& GetSizeModifier() const;

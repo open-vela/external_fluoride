@@ -59,8 +59,6 @@ class ArrayField : public PacketField {
 
   bool IsCustomFieldArray() const;
 
-  bool IsStructArray() const;
-
   const std::string name_;
 
   const int element_size_{-1};  // in bits
