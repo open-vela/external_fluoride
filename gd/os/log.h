@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <stdlib.h>
-
 #ifndef LOG_TAG
 #define LOG_TAG "bt"
 #endif
@@ -39,31 +37,26 @@
 /* syslog didn't work well here since we would be redefining LOG_DEBUG. */
 #include <stdio.h>
 
-#define LOGWRAPPER(fmt, args...) fprintf(stderr, "%s - %s: " fmt "\n", LOG_TAG, __PRETTY_FUNCTION__, ##args)
+#define LOGWRAPPER(fmt, args...) \
+  fprintf(stderr, "%s - %s: " fmt "\n", LOG_TAG, __PRETTY_FUNCTION__, ##args)
 
 #define LOG_VERBOSE(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_DEBUG(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_INFO(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_WARN(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_ERROR(...) LOGWRAPPER(__VA_ARGS__)
-#define LOG_ALWAYS_FATAL(...) \
-  do {                        \
-    LOGWRAPPER(__VA_ARGS__);  \
-    abort();                  \
-  } while (false)
 
 #endif /* defined(OS_ANDROID) */
 
-#define ASSERT(condition)                                                              \
-  do {                                                                                 \
-    if (!(condition)) {                                                                \
-      LOG_ALWAYS_FATAL("%s:%d assertion '" #condition "' failed", __FILE__, __LINE__); \
-    }                                                                                  \
-  } while (false)
+#define ASSERT(condition) \
+  if (!(condition)) { \
+    LOG_ERROR("%s:%d assertion '" #condition "' failed", __FILE__, __LINE__); \
+    abort(); \
+  }
 
-#define ASSERT_LOG(condition, fmt, args...)                                                           \
-  do {                                                                                                \
-    if (!(condition)) {                                                                               \
-      LOG_ALWAYS_FATAL("%s:%d assertion '" #condition "' failed - " fmt, __FILE__, __LINE__, ##args); \
-    }                                                                                                 \
-  } while (false)
+#define ASSERT_LOG(condition, fmt, args...) \
+  if (!(condition)) { \
+    LOG_ERROR("%s:%d assertion '" #condition "' failed - " fmt, __FILE__, __LINE__, ##args); \
+    abort(); \
+  }
+
