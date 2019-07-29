@@ -1,4 +1,3 @@
-
 // Bluetooth main HW module / shared library for target
 // ========================================================
 cc_library_shared {
@@ -40,13 +39,16 @@ cc_library_shared {
     shared_libs: [
         "android.hardware.bluetooth@1.0",
         "android.hardware.bluetooth.a2dp@1.0",
+        "android.hardware.bluetooth.audio@2.0",
         "libaudioclient",
         "libcutils",
         "libdl",
+        "libfmq",
         "libhidlbase",
         "libhidltransport",
         "libhwbinder",
         "liblog",
+        "libprocessgroup",
         "libprotobuf-cpp-lite",
         "libutils",
         "libtinyxml2",
@@ -58,7 +60,6 @@ cc_library_shared {
         "libkeystore_aidl",
         "libkeystore_binder",
         "libkeystore_parcelables",
-        "libstatslog",
     ],
     static_libs: [
         "libbt-sbc-decoder",
@@ -69,6 +70,7 @@ cc_library_shared {
     ],
     whole_static_libs: [
         "libbt-bta",
+        "libbt-common",
         "libbtdevice",
         "libbtif",
         "libbt-hci",

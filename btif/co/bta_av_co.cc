@@ -179,6 +179,14 @@ class BtaAvCo {
   void Init(const std::vector<btav_a2dp_codec_config_t>& codec_priorities);
 
   /**
+   * Checks whether a codec is supported.
+   *
+   * @param codec_index the index of the codec to check
+   * @return true if the codec is supported, otherwise false
+   */
+  bool IsSupportedCodec(btav_a2dp_codec_index_t codec_index);
+
+  /**
    * Get the current codec configuration for the active peer.
    *
    * @return the current codec configuration if found, otherwise nullptr
@@ -767,6 +775,14 @@ void BtaAvCo::Reset() {
     BtaAvCoPeer* p_peer = &peers_[i];
     p_peer->Reset(BTA_AV_CO_AUDIO_INDEX_TO_HANDLE(i));
   }
+}
+
+bool BtaAvCo::IsSupportedCodec(btav_a2dp_codec_index_t codec_index) {
+  // All peer state is initialized with the same local codec config,
+  // hence we check only the first peer.
+  A2dpCodecs* codecs = peers_[0].GetCodecs();
+  CHECK(codecs != nullptr);
+  return codecs->isSupportedCodec(codec_index);
 }
 
 A2dpCodecConfig* BtaAvCo::GetActivePeerCurrentCodec() {
@@ -1369,7 +1385,20 @@ void BtaAvCo::UpdateMtu(tBTA_AV_HNDL bta_av_handle,
         __func__, bta_av_handle, peer_address.ToString().c_str());
     return;
   }
+
+  if (p_peer->mtu == mtu) return;
+
   p_peer->mtu = mtu;
+  if (active_peer_ == p_peer) {
+    LOG(INFO) << __func__ << ": update the codec encoder with peer "
+              << peer_address << " bta_av_handle: " << loghex(bta_av_handle)
+              << ", new MTU: " << mtu;
+    // Send a request with NONE config values to update only the MTU.
+    SetCodecAudioConfig(
+        {.sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_NONE,
+         .bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_NONE,
+         .channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE});
+  }
 }
 
 bool BtaAvCo::SetActivePeer(const RawAddress& peer_address) {
@@ -1447,14 +1476,22 @@ bool BtaAvCo::SetCodecUserConfig(
   bool config_updated = false;
   bool success = true;
 
-  APPL_TRACE_DEBUG("%s: peer_address=%s codec_user_config=%s", __func__,
-                   peer_address.ToString().c_str(),
-                   codec_user_config.ToString().c_str());
+  VLOG(1) << __func__ << ": peer_address=" << peer_address.ToString()
+          << " codec_user_config=" << codec_user_config.ToString();
 
   BtaAvCoPeer* p_peer = FindPeer(peer_address);
   if (p_peer == nullptr) {
-    APPL_TRACE_ERROR("%s: cannot find peer %s to configure", __func__,
-                     peer_address.ToString().c_str());
+    LOG(ERROR) << __func__ << ": cannot find peer " << peer_address.ToString()
+               << " to configure";
+    success = false;
+    goto done;
+  }
+
+  // Don't call BTA_AvReconfig() prior to retrieving all peer's capabilities
+  if ((p_peer->num_rx_sinks != p_peer->num_sinks) &&
+      (p_peer->num_sup_sinks != BTA_AV_CO_NUM_ELEMENTS(p_peer->sinks))) {
+    LOG(WARNING) << __func__ << ": peer " << p_peer->addr.ToString()
+                 << " : not all peer's capabilities have been retrieved";
     success = false;
     goto done;
   }
@@ -1467,10 +1504,9 @@ bool BtaAvCo::SetCodecUserConfig(
     p_sink = p_peer->p_sink;
   }
   if (p_sink == nullptr) {
-    APPL_TRACE_ERROR(
-        "%s: peer %s : cannot find peer SEP to configure for codec type %d",
-        __func__, p_peer->addr.ToString().c_str(),
-        codec_user_config.codec_type);
+    LOG(ERROR) << __func__ << ": peer " << p_peer->addr.ToString()
+               << " : cannot find peer SEP to configure for codec type "
+               << codec_user_config.codec_type;
     success = false;
     goto done;
   }
@@ -1493,24 +1529,15 @@ bool BtaAvCo::SetCodecUserConfig(
 
     p_sink = SelectSourceCodec(p_peer);
     if (p_sink == nullptr) {
-      APPL_TRACE_ERROR("%s: peer %s : cannot set up codec for the peer SINK",
-                       __func__, p_peer->addr.ToString().c_str());
-      success = false;
-      goto done;
-    }
-    // Don't call BTA_AvReconfig() prior to retrieving all peer's capabilities
-    if ((p_peer->num_rx_sinks != p_peer->num_sinks) &&
-        (p_peer->num_sup_sinks != BTA_AV_CO_NUM_ELEMENTS(p_peer->sinks))) {
-      APPL_TRACE_WARNING(
-          "%s: peer %s : not all peer's capabilities have been retrieved",
-          __func__, p_peer->addr.ToString().c_str());
+      LOG(ERROR) << __func__ << ": peer " << p_peer->addr.ToString()
+                 << " : cannot set up codec for the peer SINK";
       success = false;
       goto done;
     }
 
     p_peer->acceptor = false;
-    APPL_TRACE_DEBUG("%s: call BTA_AvReconfig(0x%x)", __func__,
-                     p_peer->BtaAvHandle());
+    VLOG(1) << __func__ << ": call BTA_AvReconfig("
+            << loghex(p_peer->BtaAvHandle()) << ")";
     BTA_AvReconfig(p_peer->BtaAvHandle(), true, p_sink->sep_info_idx,
                    p_peer->codec_config, num_protect, bta_av_co_cp_scmst);
   }
@@ -1534,21 +1561,29 @@ bool BtaAvCo::SetCodecAudioConfig(
   bool restart_output = false;
   bool config_updated = false;
 
-  APPL_TRACE_DEBUG("%s: codec_audio_config: %s", __func__,
-                   codec_audio_config.ToString().c_str());
+  VLOG(1) << __func__
+          << ": codec_audio_config: " << codec_audio_config.ToString();
 
   // Find the peer that is currently open
   BtaAvCoPeer* p_peer = active_peer_;
   if (p_peer == nullptr) {
-    APPL_TRACE_ERROR("%s: no active peer to configure", __func__);
+    LOG(ERROR) << __func__ << ": no active peer to configure";
+    return false;
+  }
+
+  // Don't call BTA_AvReconfig() prior to retrieving all peer's capabilities
+  if ((p_peer->num_rx_sinks != p_peer->num_sinks) &&
+      (p_peer->num_sup_sinks != BTA_AV_CO_NUM_ELEMENTS(p_peer->sinks))) {
+    LOG(WARNING) << __func__ << ": peer " << p_peer->addr.ToString()
+                 << " : not all peer's capabilities have been retrieved";
     return false;
   }
 
   // Use the current sink codec
   const BtaAvCoSep* p_sink = p_peer->p_sink;
   if (p_sink == nullptr) {
-    APPL_TRACE_ERROR("%s: peer %s : cannot find peer SEP to configure",
-                     __func__, p_peer->addr.ToString().c_str());
+    LOG(ERROR) << __func__ << ": peer " << p_peer->addr.ToString()
+               << " : cannot find peer SEP to configure";
     return false;
   }
 
@@ -1569,19 +1604,11 @@ bool BtaAvCo::SetCodecAudioConfig(
     SaveNewCodecConfig(p_peer, result_codec_config, p_sink->num_protect,
                        p_sink->protect_info);
 
-    // Don't call BTA_AvReconfig() prior to retrieving all peer's capabilities
-    if ((p_peer->num_rx_sinks != p_peer->num_sinks) &&
-        (p_peer->num_sup_sinks != BTA_AV_CO_NUM_ELEMENTS(p_peer->sinks))) {
-      APPL_TRACE_WARNING(
-          "%s: peer %s : not all peer's capabilities have been retrieved",
-          __func__, p_peer->addr.ToString().c_str());
-    } else {
-      p_peer->acceptor = false;
-      APPL_TRACE_DEBUG("%s: call BTA_AvReconfig(0x%x)", __func__,
-                       p_peer->BtaAvHandle());
-      BTA_AvReconfig(p_peer->BtaAvHandle(), true, p_sink->sep_info_idx,
-                     p_peer->codec_config, num_protect, bta_av_co_cp_scmst);
-    }
+    p_peer->acceptor = false;
+    VLOG(1) << __func__ << ": call BTA_AvReconfig("
+            << loghex(p_peer->BtaAvHandle()) << ")";
+    BTA_AvReconfig(p_peer->BtaAvHandle(), true, p_sink->sep_info_idx,
+                   p_peer->codec_config, num_protect, bta_av_co_cp_scmst);
   }
 
   if (config_updated) {
@@ -1626,16 +1653,32 @@ bool BtaAvCo::ReportSinkCodecState(BtaAvCoPeer* p_peer) {
   // Nothing to do (for now)
   return true;
 }
+
 void BtaAvCo::DebugDump(int fd) {
   std::lock_guard<std::recursive_mutex> lock(codec_lock_);
 
-  dprintf(fd, "\nA2DP Codecs and Peers State:\n");
+  //
+  // Active peer codec-specific stats
+  //
+  if (active_peer_ != nullptr) {
+    A2dpCodecs* a2dp_codecs = active_peer_->GetCodecs();
+    if (a2dp_codecs != nullptr) {
+      a2dp_codecs->debug_codec_dump(fd);
+    }
+  }
+
+  if (appl_trace_level < BT_TRACE_LEVEL_DEBUG) return;
+
+  dprintf(fd, "\nA2DP Peers State:\n");
   dprintf(fd, "  Active peer: %s\n",
           (active_peer_ != nullptr) ? active_peer_->addr.ToString().c_str()
                                     : "null");
 
   for (size_t i = 0; i < BTA_AV_CO_NUM_ELEMENTS(peers_); i++) {
     const BtaAvCoPeer& peer = peers_[i];
+    if (peer.addr.IsEmpty()) {
+      continue;
+    }
     dprintf(fd, "  Peer: %s\n", peer.addr.ToString().c_str());
     dprintf(fd, "    Number of sinks: %u\n", peer.num_sinks);
     dprintf(fd, "    Number of sources: %u\n", peer.num_sources);
@@ -1651,16 +1694,6 @@ void BtaAvCo::DebugDump(int fd) {
     dprintf(fd, "    MTU: %u\n", peer.mtu);
     dprintf(fd, "    UUID to connect: 0x%x\n", peer.uuid_to_connect);
     dprintf(fd, "    BTA AV handle: %u\n", peer.BtaAvHandle());
-  }
-
-  //
-  // Active peer codec-specific stats
-  //
-  if (active_peer_ != nullptr) {
-    A2dpCodecs* a2dp_codecs = active_peer_->GetCodecs();
-    if (a2dp_codecs != nullptr) {
-      a2dp_codecs->debug_codec_dump(fd);
-    }
   }
 }
 
@@ -2018,6 +2051,10 @@ bool BtaAvCo::SetCodecOtaConfig(BtaAvCoPeer* p_peer,
 void bta_av_co_init(
     const std::vector<btav_a2dp_codec_config_t>& codec_priorities) {
   bta_av_co_cb.Init(codec_priorities);
+}
+
+bool bta_av_co_is_supported_codec(btav_a2dp_codec_index_t codec_index) {
+  return bta_av_co_cb.IsSupportedCodec(codec_index);
 }
 
 A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
