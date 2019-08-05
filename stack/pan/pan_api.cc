@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
  *****************************************************************************/
 
 #include "pan_api.h"
-#include <base/logging.h>
 #include <string.h>
 #include "bnep_api.h"
 #include "bt_common.h"
@@ -36,8 +35,6 @@
 #include "pan_int.h"
 #include "sdp_api.h"
 #include "sdpdefs.h"
-
-using bluetooth::Uuid;
 
 /*******************************************************************************
  *
@@ -172,7 +169,7 @@ tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
     bta_sys_add_uuid(UUID_SERVCLASS_NAP);
   }
   /* If the NAP role is already active and now being cleared delete the record
-   */
+     */
   else if (pan_cb.role & PAN_ROLE_NAP_SERVER) {
     if (pan_cb.pan_nap_sdp_handle != 0) {
       SDP_DeleteRecord(pan_cb.pan_nap_sdp_handle);
@@ -224,7 +221,7 @@ tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
     bta_sys_add_uuid(UUID_SERVCLASS_PANU);
   }
   /* If the PANU role is already active and now being cleared delete the record
-   */
+     */
   else if (pan_cb.role & PAN_ROLE_CLIENT) {
     if (pan_cb.pan_user_sdp_handle != 0) {
       SDP_DeleteRecord(pan_cb.pan_user_sdp_handle);
@@ -266,8 +263,11 @@ tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
  *                                     allowed at that point of time
  *
  ******************************************************************************/
-tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
-                        uint8_t dst_role, uint16_t* handle) {
+tPAN_RESULT PAN_Connect(BD_ADDR rem_bda, uint8_t src_role, uint8_t dst_role,
+                        uint16_t* handle) {
+  tPAN_CONN* pcb;
+  tBNEP_RESULT result;
+  tBT_UUID src_uuid, dst_uuid;
   uint32_t mx_chan_id;
 
   /*
@@ -293,9 +293,8 @@ tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
   }
 
   /* Check if connection exists for this remote device */
-  tPAN_CONN* pcb = pan_get_pcb_by_addr(rem_bda);
+  pcb = pan_get_pcb_by_addr(rem_bda);
 
-  uint16_t src_uuid, dst_uuid;
   /* If we are PANU for this role validate destination role */
   if (src_role == PAN_ROLE_CLIENT) {
     if ((pan_cb.num_conns > 1) || (pan_cb.num_conns && (!pcb))) {
@@ -310,15 +309,15 @@ tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
       return PAN_INVALID_SRC_ROLE;
     }
 
-    src_uuid = UUID_SERVCLASS_PANU;
+    src_uuid.uu.uuid16 = UUID_SERVCLASS_PANU;
     if (dst_role == PAN_ROLE_CLIENT) {
-      dst_uuid = UUID_SERVCLASS_PANU;
+      dst_uuid.uu.uuid16 = UUID_SERVCLASS_PANU;
     } else if (dst_role == PAN_ROLE_GN_SERVER) {
-      dst_uuid = UUID_SERVCLASS_GN;
+      dst_uuid.uu.uuid16 = UUID_SERVCLASS_GN;
     } else {
-      dst_uuid = UUID_SERVCLASS_NAP;
+      dst_uuid.uu.uuid16 = UUID_SERVCLASS_NAP;
     }
-    mx_chan_id = dst_uuid;
+    mx_chan_id = dst_uuid.uu.uuid16;
   }
   /* If destination is PANU role validate source role */
   else if (dst_role == PAN_ROLE_CLIENT) {
@@ -327,13 +326,13 @@ tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
       return PAN_INVALID_SRC_ROLE;
     }
 
-    dst_uuid = UUID_SERVCLASS_PANU;
+    dst_uuid.uu.uuid16 = UUID_SERVCLASS_PANU;
     if (src_role == PAN_ROLE_GN_SERVER) {
-      src_uuid = UUID_SERVCLASS_GN;
+      src_uuid.uu.uuid16 = UUID_SERVCLASS_GN;
     } else {
-      src_uuid = UUID_SERVCLASS_NAP;
+      src_uuid.uu.uuid16 = UUID_SERVCLASS_NAP;
     }
-    mx_chan_id = src_uuid;
+    mx_chan_id = src_uuid.uu.uuid16;
   }
   /* The role combination is not valid */
   else {
@@ -351,7 +350,8 @@ tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
   }
   BTM_SetOutService(rem_bda, BTM_SEC_SERVICE_BNEP_PANU, mx_chan_id);
 
-  VLOG(0) << __func__ << " for BD Addr: " << rem_bda;
+  PAN_TRACE_API("PAN_Connect() for BD Addr %x.%x.%x.%x.%x.%x", rem_bda[0],
+                rem_bda[1], rem_bda[2], rem_bda[3], rem_bda[4], rem_bda[5]);
   if (pcb->con_state == PAN_STATE_IDLE) {
     pan_cb.num_conns++;
   } else if (pcb->con_state == PAN_STATE_CONNECTED) {
@@ -364,14 +364,16 @@ tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
   pcb->prv_src_uuid = pcb->src_uuid;
   pcb->prv_dst_uuid = pcb->dst_uuid;
 
-  pcb->src_uuid = src_uuid;
-  pcb->dst_uuid = dst_uuid;
+  pcb->src_uuid = src_uuid.uu.uuid16;
+  pcb->dst_uuid = dst_uuid.uu.uuid16;
 
-  tBNEP_RESULT ret = BNEP_Connect(rem_bda, Uuid::From16Bit(src_uuid),
-                                  Uuid::From16Bit(dst_uuid), &(pcb->handle));
-  if (ret != BNEP_SUCCESS) {
+  src_uuid.len = 2;
+  dst_uuid.len = 2;
+
+  result = BNEP_Connect(rem_bda, &src_uuid, &dst_uuid, &(pcb->handle));
+  if (result != BNEP_SUCCESS) {
     pan_release_pcb(pcb);
-    return ret;
+    return result;
   }
 
   PAN_TRACE_DEBUG("PAN_Connect() current active role set to %d", src_role);
@@ -445,9 +447,9 @@ tPAN_RESULT PAN_Disconnect(uint16_t handle) {
  *                                           there is an error in sending data
  *
  ******************************************************************************/
-tPAN_RESULT PAN_Write(uint16_t handle, const RawAddress& dst,
-                      const RawAddress& src, uint16_t protocol, uint8_t* p_data,
-                      uint16_t len, bool ext) {
+tPAN_RESULT PAN_Write(uint16_t handle, BD_ADDR dst, BD_ADDR src,
+                      uint16_t protocol, uint8_t* p_data, uint16_t len,
+                      bool ext) {
   if (pan_cb.role == PAN_ROLE_INACTIVE || !pan_cb.num_conns) {
     PAN_TRACE_ERROR("%s PAN is not active, data write failed.", __func__);
     return PAN_FAILURE;
@@ -457,11 +459,11 @@ tPAN_RESULT PAN_Write(uint16_t handle, const RawAddress& dst,
   // a copy of the packet for each connection. We can save one extra copy
   // by fast-pathing here and calling BNEP_Write instead of placing the packet
   // in a BT_HDR buffer, calling BNEP_Write, and then freeing the buffer.
-  if (dst.address[0] & 0x01) {
+  if (dst[0] & 0x01) {
     int i;
     for (i = 0; i < MAX_PAN_CONNS; ++i) {
       if (pan_cb.pcb[i].con_state == PAN_STATE_CONNECTED)
-        BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, &src, ext);
+        BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, src, ext);
     }
     return PAN_SUCCESS;
   }
@@ -498,9 +500,8 @@ tPAN_RESULT PAN_Write(uint16_t handle, const RawAddress& dst,
  *                                           there is an error in sending data
  *
  ******************************************************************************/
-tPAN_RESULT PAN_WriteBuf(uint16_t handle, const RawAddress& dst,
-                         const RawAddress& src, uint16_t protocol,
-                         BT_HDR* p_buf, bool ext) {
+tPAN_RESULT PAN_WriteBuf(uint16_t handle, BD_ADDR dst, BD_ADDR src,
+                         uint16_t protocol, BT_HDR* p_buf, bool ext) {
   tPAN_CONN* pcb;
   uint16_t i;
   tBNEP_RESULT result;
@@ -512,11 +513,11 @@ tPAN_RESULT PAN_WriteBuf(uint16_t handle, const RawAddress& dst,
   }
 
   /* Check if it is broadcast or multicast packet */
-  if (dst.address[0] & 0x01) {
+  if (dst[0] & 0x01) {
     uint8_t* data = (uint8_t*)p_buf + sizeof(BT_HDR) + p_buf->offset;
     for (i = 0; i < MAX_PAN_CONNS; ++i) {
       if (pan_cb.pcb[i].con_state == PAN_STATE_CONNECTED)
-        BNEP_Write(pan_cb.pcb[i].handle, dst, data, p_buf->len, protocol, &src,
+        BNEP_Write(pan_cb.pcb[i].handle, dst, data, p_buf->len, protocol, src,
                    ext);
     }
     osi_free(p_buf);
@@ -539,7 +540,7 @@ tPAN_RESULT PAN_WriteBuf(uint16_t handle, const RawAddress& dst,
     }
 
     result =
-        BNEP_WriteBuf(pan_cb.pcb[i].handle, dst, p_buf, protocol, &src, ext);
+        BNEP_WriteBuf(pan_cb.pcb[i].handle, dst, p_buf, protocol, src, ext);
     if (result == BNEP_IGNORE_CMD) {
       PAN_TRACE_DEBUG("PAN ignored data write for PANU connection");
       return result;
@@ -566,7 +567,7 @@ tPAN_RESULT PAN_WriteBuf(uint16_t handle, const RawAddress& dst,
     return PAN_FAILURE;
   }
 
-  result = BNEP_WriteBuf(pcb->handle, dst, p_buf, protocol, &src, ext);
+  result = BNEP_WriteBuf(pcb->handle, dst, p_buf, protocol, src, ext);
   if (result == BNEP_IGNORE_CMD) {
     PAN_TRACE_DEBUG("PAN ignored data buf write to PANU");
     return result;
