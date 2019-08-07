@@ -69,21 +69,22 @@ std::string ArrayField::GetDataType() const {
 void ArrayField::GenExtractor(std::ostream& s, Size start_offset, Size end_offset) const {
   GenBounds(s, start_offset, end_offset, GetSize());
 
-  s << "auto it = begin_it + field_begin;";
+  s << " auto subview = GetLittleEndianSubview(field_begin, field_end); ";
+  s << "auto it = subview.begin();";
 
   // Add the element size so that we will extract as many elements as we can.
-  s << GetDataType() << " value;";
+  s << GetDataType() << " ret;";
   if (element_size_ != -1) {
     std::string type = (type_def_ != nullptr) ? type_def_->name_ : util::GetTypeForSize(element_size_);
-    s << GetDataType() << "::iterator ret_it = value.begin();";
-    s << "while (it + sizeof(" << type << ") <= begin_it + field_end) {";
+    s << GetDataType() << "::iterator ret_it = ret.begin();";
+    s << "while (it + sizeof(" << type << ") <= subview.end()) {";
     s << "*ret_it = it.extract<" << type << ">();";
     s << "ret_it++;";
     s << "}";
   } else {
     s << "std::size_t ret_idx = 0;";
-    s << "while (it < begin_it + field_end) {";
-    s << "it = " << type_def_->name_ << "::ParseArray(value, &ret_idx, it);";
+    s << "while (it < subview.end()) {";
+    s << "it = " << type_def_->name_ << "::ParseArray(ret, &ret_idx, it);";
     s << "ret_idx++;";
     s << "}";
   }
@@ -93,12 +94,10 @@ void ArrayField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) 
   s << GetDataType();
   s << " Get" << util::UnderscoreToCamelCase(GetName()) << "() {";
   s << "ASSERT(was_validated_);";
-  s << "size_t end_index = size();";
-  s << "auto begin_it = begin();";
 
   GenExtractor(s, start_offset, end_offset);
 
-  s << "return value;";
+  s << "return ret;";
   s << "}\n";
 }
 
