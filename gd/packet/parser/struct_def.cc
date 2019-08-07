@@ -40,14 +40,11 @@ TypeDef::Type StructDef::GetDefinitionType() const {
 
 void StructDef::GenParse(std::ostream& s) const {
   if (is_little_endian_) {
-    s << "static Iterator<kLittleEndian> Parse(std::vector<" << name_ << ">& vec, Iterator<kLittleEndian> struct_it) {";
+    s << "static Iterator<kLittleEndian> Parse(std::vector<" << name_ << ">& vec, Iterator<kLittleEndian> it) {";
   } else {
-    s << "static Iterator<!kLittleEndian> Parse(std::vector<" << name_
-      << ">& vec, Iterator<!kLittleEndian> struct_it) {";
+    s << "static Iterator<!kLittleEndian> Parse(std::vector<" << name_ << ">& vec, Iterator<!kLittleEndian> it) {";
   }
-  s << "auto begin_it = struct_it;";
-  s << "size_t end_index = struct_it.NumBytesRemaining();";
-  s << "if (end_index < " << GetSize().bytes() << ") { return struct_it + struct_it.NumBytesRemaining();}";
+  s << "auto begin_it = it;";
   s << name_ << " one;";
   if (parent_ != nullptr) {
     s << "begin_it += one." << parent_->name_ << "::BitsOfHeader() / 8;";
@@ -57,7 +54,6 @@ void StructDef::GenParse(std::ostream& s) const {
     Size next_field_offset = field->GetSize() + field_offset.bits();
     if (field->GetFieldType() != ReservedField::kFieldType && field->GetFieldType() != BodyField::kFieldType &&
         field->GetFieldType() != FixedScalarField::kFieldType && field->GetFieldType() != SizeField::kFieldType &&
-        field->GetFieldType() != ChecksumStartField::kFieldType && field->GetFieldType() != ChecksumField::kFieldType &&
         field->GetFieldType() != CountField::kFieldType) {
       s << "{";
       field->GenExtractor(s, field_offset, next_field_offset);
@@ -67,7 +63,7 @@ void StructDef::GenParse(std::ostream& s) const {
     field_offset = next_field_offset;
   }
   s << "vec.push_back(one);";
-  s << "return struct_it + " << field_offset.bytes() << ";";
+  s << "return it + " << field_offset.bytes() << ";";
   s << "}";
 }
 
