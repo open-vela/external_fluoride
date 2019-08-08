@@ -79,15 +79,3 @@ inline std::ostream& operator<<(std::ostream& os, const Address& a) {
 
 }  // namespace common
 }  // namespace bluetooth
-
-namespace std {
-template <>
-struct hash<bluetooth::common::Address> {
-  std::size_t operator()(const bluetooth::common::Address& val) const {
-    static_assert(sizeof(uint64_t) >= bluetooth::common::Address::kLength);
-    uint64_t int_addr = 0;
-    memcpy(reinterpret_cast<uint8_t*>(&int_addr), val.address, bluetooth::common::Address::kLength);
-    return std::hash<uint64_t>{}(int_addr);
-  }
-};
-}  // namespace std
