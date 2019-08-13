@@ -17,6 +17,7 @@
 #pragma once
 
 #include <atomic>
+
 #include <base/files/file_path.h>
 #include <base/files/scoped_file.h>
 #include <base/macros.h>
