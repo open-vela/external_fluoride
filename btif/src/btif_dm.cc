@@ -508,6 +508,11 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
   auto tmp = bd_addr;
   HAL_CBACK(bt_hal_cbacks, bond_state_changed_cb, status, &tmp, state);
 
+  int dev_type;
+  if (!btif_get_device_type(bd_addr, &dev_type)) {
+    dev_type = BT_DEVICE_TYPE_BREDR;
+  }
+
   if (state == BT_BOND_STATE_BONDING ||
       (state == BT_BOND_STATE_BONDED && pairing_cb.sdp_attempts > 0)) {
     // Save state for the device is bonding or SDP.
@@ -1444,7 +1449,8 @@ static void btif_dm_search_services_evt(uint16_t event, char* p_param) {
                  bd_addr.ToString().c_str());
         pairing_cb.sdp_attempts = 0;
 
-        // Both SDP and bonding are done, clear pairing control block
+        // Both SDP and bonding are done, clear pairing control block in case
+        // it is not already cleared
         pairing_cb = {};
 
         // Send one empty UUID to Java to unblock pairing intent when SDP failed
@@ -2877,7 +2883,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       btif_storage_remove_bonded_device(&bdaddr);
       state = BT_BOND_STATE_NONE;
     } else {
-      btif_dm_save_ble_bonding_keys();
+      btif_dm_save_ble_bonding_keys(bdaddr);
       btif_dm_get_remote_services_by_transport(&bd_addr, GATT_TRANSPORT_LE);
     }
   } else {
@@ -2958,10 +2964,8 @@ void btif_dm_get_ble_local_keys(tBTA_DM_BLE_LOCAL_KEY_MASK* p_key_mask,
   BTIF_TRACE_DEBUG("%s  *p_key_mask=0x%02x", __func__, *p_key_mask);
 }
 
-void btif_dm_save_ble_bonding_keys(void) {
+void btif_dm_save_ble_bonding_keys(RawAddress& bd_addr) {
   BTIF_TRACE_DEBUG("%s", __func__);
-
-  RawAddress bd_addr = pairing_cb.bd_addr;
 
   if (pairing_cb.ble.is_penc_key_rcvd) {
     btif_storage_add_ble_bonding_key(
