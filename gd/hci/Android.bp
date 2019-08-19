@@ -1,0 +1,34 @@
+filegroup {
+    name: "BluetoothHciSources",
+    srcs: [
+        "acl_manager.cc",
+        "classic_security_manager.cc",
+        "controller.cc",
+        "hci_layer.cc",
+    ],
+}
+
+filegroup {
+    name: "BluetoothHciTestSources",
+    srcs: [
+        "acl_builder_test.cc",
+        "acl_manager_test.cc",
+        "classic_security_manager_test.cc",
+        "controller_test.cc",
+        "hci_layer_test.cc",
+    ],
+}
+
+filegroup {
+    name: "BluetoothFacade_hci_layer",
+    srcs: [
+        "facade.cc",
+    ],
+}
+
+filegroup {
+    name: "BluetoothCertSource_hci_layer",
+    srcs: [
+        "cert/cert.cc",
+    ],
+}
