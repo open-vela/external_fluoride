@@ -160,7 +160,12 @@ Size ParentDef::GetSize(bool without_payload) const {
 Size ParentDef::GetOffsetForField(std::string field_name, bool from_end) const {
   // Check first if the field exists.
   if (fields_.GetField(field_name) == nullptr) {
-    ERROR() << "Can't find a field offset for nonexistent field named: " << field_name << " in " << name_;
+    if (field_name != "payload" && field_name != "body") {
+      ERROR() << "Can't find a field offset for nonexistent field named: " << field_name;
+    } else {
+      // TODO: Why is this a good idea?
+      return Size();
+    }
   }
 
   // We have to use a generic lambda to conditionally change iteration direction
@@ -191,18 +196,16 @@ Size ParentDef::GetOffsetForField(std::string field_name, bool from_end) const {
 
   // We need the offset until a payload or body field.
   if (parent_ != nullptr) {
-    if (parent_->fields_.HasPayload()) {
-      auto parent_payload_offset = parent_->GetOffsetForField("payload", from_end);
-      if (parent_payload_offset.empty()) {
-        ERROR() << "Empty offset for payload in " << parent_->name_ << " finding the offset for field: " << field_name;
-      }
+    auto parent_payload_offset = parent_->GetOffsetForField("payload", from_end);
+    if (!parent_payload_offset.empty()) {
       size += parent_payload_offset;
     } else {
-      auto parent_body_offset = parent_->GetOffsetForField("body", from_end);
-      if (parent_body_offset.empty()) {
-        ERROR() << "Empty offset for body in " << parent_->name_ << " finding the offset for field: " << field_name;
+      parent_payload_offset = parent_->GetOffsetForField("body", from_end);
+      if (!parent_payload_offset.empty()) {
+        size += parent_payload_offset;
+      } else {
+        return Size();
       }
-      size += parent_body_offset;
     }
   }
 
