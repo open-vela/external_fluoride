@@ -22,12 +22,10 @@
 #include "hci/acl_manager.h"
 #include "hci/hci_packets.h"
 #include "l2cap/internal/classic_fixed_channel_service_manager_impl.h"
-#include "l2cap/internal/classic_link_manager.h"
+#include "l2cap/l2cap_layer.h"
 #include "module.h"
 #include "os/handler.h"
 #include "os/log.h"
-
-#include "l2cap/l2cap_layer.h"
 
 namespace bluetooth {
 namespace l2cap {
@@ -38,9 +36,11 @@ struct L2capLayer::impl {
   impl(os::Handler* handler, hci::AclManager* acl_manager) : handler_(handler), acl_manager_(acl_manager) {}
   os::Handler* handler_;
   hci::AclManager* acl_manager_;
-  internal::ClassicFixedChannelServiceManagerImpl classic_fixed_channel_service_manager_impl_{handler_};
-  internal::ClassicLinkManager classic_link_manager_{handler_, acl_manager_,
-                                                     &classic_fixed_channel_service_manager_impl_};
+  internal::ClassicFixedChannelServiceManagerImpl fixed_channel_service_manager_{handler_};
+
+  std::unique_ptr<ClassicFixedChannelManager> GetClassicFixedChannelManager() {
+    return std::make_unique<ClassicFixedChannelManager>(&fixed_channel_service_manager_, handler_);
+  }
 };
 
 void L2capLayer::ListDependencies(ModuleList* list) {
@@ -48,16 +48,15 @@ void L2capLayer::ListDependencies(ModuleList* list) {
 }
 
 void L2capLayer::Start() {
-  pimpl_ = std::make_unique<impl>(GetHandler(), GetDependency<hci::AclManager>());
+  impl_ = std::make_unique<impl>(GetHandler(), GetDependency<hci::AclManager>());
 }
 
 void L2capLayer::Stop() {
-  pimpl_.reset();
+  impl_.reset();
 }
 
 std::unique_ptr<ClassicFixedChannelManager> L2capLayer::GetClassicFixedChannelManager() {
-  return std::unique_ptr<ClassicFixedChannelManager>(new ClassicFixedChannelManager(
-      &pimpl_->classic_fixed_channel_service_manager_impl_, &pimpl_->classic_link_manager_, pimpl_->handler_));
+  return impl_->GetClassicFixedChannelManager();
 }
 
 }  // namespace l2cap
