@@ -76,7 +76,6 @@ class TestHciLayer : public HciLayer {
   }
 
   std::unique_ptr<CommandQueueEntry> GetLastCommand() {
-    EXPECT_FALSE(command_queue_.empty());
     auto last = std::move(command_queue_.front());
     command_queue_.pop();
     return last;
@@ -176,7 +175,7 @@ TEST_F(ClassicSecurityManagerTest, send_link_key_request_reply) {
   common::LinkKey link_key;
   common::LinkKey::FromString("4c68384139f574d836bcf34e9dfb01bf\0", link_key);
   classic_security_manager_->LinkKeyRequestReply(remote, link_key);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -186,7 +185,7 @@ TEST_F(ClassicSecurityManagerTest, send_link_key_request_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_link_key_request_negative_reply) {
   classic_security_manager_->LinkKeyRequestNegativeReply(remote);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -196,7 +195,7 @@ TEST_F(ClassicSecurityManagerTest, send_link_key_request_negative_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_pin_code_request_reply) {
   classic_security_manager_->PinCodeRequestReply(remote, 6, "123456");
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -206,7 +205,7 @@ TEST_F(ClassicSecurityManagerTest, send_pin_code_request_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_pin_code_request_negative_reply) {
   classic_security_manager_->PinCodeRequestNegativeReply(remote);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -219,7 +218,7 @@ TEST_F(ClassicSecurityManagerTest, send_io_capability_request_reply) {
   OobDataPresent oob_present = (OobDataPresent)0x00;
   AuthenticationRequirements authentication_requirements = (AuthenticationRequirements)0x00;
   classic_security_manager_->IoCapabilityRequestReply(remote, io_capability, oob_present, authentication_requirements);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -230,7 +229,7 @@ TEST_F(ClassicSecurityManagerTest, send_io_capability_request_reply) {
 TEST_F(ClassicSecurityManagerTest, send_io_capability_request_negative_reply) {
   ErrorCode reason = (ErrorCode)0x01;
   classic_security_manager_->IoCapabilityRequestNegativeReply(remote, reason);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -240,7 +239,7 @@ TEST_F(ClassicSecurityManagerTest, send_io_capability_request_negative_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_user_confirmation_request_reply) {
   classic_security_manager_->UserConfirmationRequestReply(remote);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -250,7 +249,7 @@ TEST_F(ClassicSecurityManagerTest, send_user_confirmation_request_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_user_confirmation_request_negative_reply) {
   classic_security_manager_->UserConfirmationRequestNegativeReply(remote);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -260,7 +259,7 @@ TEST_F(ClassicSecurityManagerTest, send_user_confirmation_request_negative_reply
 
 TEST_F(ClassicSecurityManagerTest, send_user_passkey_request_reply) {
   classic_security_manager_->UserPasskeyRequestReply(remote, 999999);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -270,7 +269,7 @@ TEST_F(ClassicSecurityManagerTest, send_user_passkey_request_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_user_passkey_request_negative_reply) {
   classic_security_manager_->UserPasskeyRequestNegativeReply(remote);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -286,7 +285,7 @@ TEST_F(ClassicSecurityManagerTest, send_remote_oob_data_request_reply) {
     r[i] = (uint8_t)i + 16;
   }
   classic_security_manager_->RemoteOobDataRequestReply(remote, c, r);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -296,7 +295,7 @@ TEST_F(ClassicSecurityManagerTest, send_remote_oob_data_request_reply) {
 
 TEST_F(ClassicSecurityManagerTest, send_remote_oob_data_request_negative_reply) {
   classic_security_manager_->RemoteOobDataRequestNegativeReply(remote);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -307,7 +306,7 @@ TEST_F(ClassicSecurityManagerTest, send_remote_oob_data_request_negative_reply) 
 TEST_F(ClassicSecurityManagerTest, send_read_stored_link_key) {
   ReadStoredLinkKeyReadAllFlag read_all_flag = (ReadStoredLinkKeyReadAllFlag)0x01;
   classic_security_manager_->ReadStoredLinkKey(remote, read_all_flag);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -318,7 +317,7 @@ TEST_F(ClassicSecurityManagerTest, send_read_stored_link_key) {
 TEST_F(ClassicSecurityManagerTest, send_delete_stored_link_key) {
   DeleteStoredLinkKeyDeleteAllFlag delete_all_flag = (DeleteStoredLinkKeyDeleteAllFlag)0x01;
   classic_security_manager_->DeleteStoredLinkKey(remote, delete_all_flag);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -328,7 +327,7 @@ TEST_F(ClassicSecurityManagerTest, send_delete_stored_link_key) {
 
 TEST_F(ClassicSecurityManagerTest, send_refresh_encryption_key) {
   classic_security_manager_->RefreshEncryptionKey(0x01);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -338,7 +337,7 @@ TEST_F(ClassicSecurityManagerTest, send_refresh_encryption_key) {
 
 TEST_F(ClassicSecurityManagerTest, send_read_simple_pairing_mode) {
   classic_security_manager_->ReadSimplePairingMode();
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -349,7 +348,7 @@ TEST_F(ClassicSecurityManagerTest, send_read_simple_pairing_mode) {
 TEST_F(ClassicSecurityManagerTest, send_write_simple_pairing_mode) {
   Enable simple_pairing_mode = (Enable)0x01;
   classic_security_manager_->WriteSimplePairingMode(simple_pairing_mode);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -359,7 +358,7 @@ TEST_F(ClassicSecurityManagerTest, send_write_simple_pairing_mode) {
 
 TEST_F(ClassicSecurityManagerTest, send_read_local_oob_data) {
   classic_security_manager_->ReadLocalOobData();
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(CommandCompleteBuilder::Create(0x01, OpCode::READ_LOCAL_OOB_DATA, std::move(payload)));
@@ -369,7 +368,7 @@ TEST_F(ClassicSecurityManagerTest, send_read_local_oob_data) {
 TEST_F(ClassicSecurityManagerTest, send_keypress_notification) {
   KeypressNotificationType notification_type = (KeypressNotificationType)0x01;
   classic_security_manager_->SendKeypressNotification(remote, notification_type);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -379,7 +378,7 @@ TEST_F(ClassicSecurityManagerTest, send_keypress_notification) {
 
 TEST_F(ClassicSecurityManagerTest, send_read_local_oob_extended_data) {
   classic_security_manager_->ReadLocalOobExtendedData();
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
@@ -389,7 +388,7 @@ TEST_F(ClassicSecurityManagerTest, send_read_local_oob_extended_data) {
 
 TEST_F(ClassicSecurityManagerTest, send_read_encryption_key_size) {
   classic_security_manager_->ReadEncryptionKeySize(0x01);
-  EXPECT_TRUE(fake_registry_.SynchronizeModuleHandler(&ClassicSecurityManager::Factory, std::chrono::milliseconds(20)));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
 
   auto payload = std::make_unique<RawBuilder>();
   test_hci_layer_->IncomingEvent(
