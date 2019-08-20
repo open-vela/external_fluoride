@@ -39,15 +39,10 @@ struct ClassicSecurityManager::impl {
     hci_layer_ = classic_security_manager_.GetDependency<HciLayer>();
     handler_ = classic_security_manager_.GetHandler();
     hci_layer_->RegisterEventHandler(EventCode::IO_CAPABILITY_REQUEST,
-                                     Bind(&impl::on_request_event, common::Unretained(this)), handler_);
+                                     Bind(&impl::on_io_capbility_request, common::Unretained(this)), handler_);
+
     hci_layer_->RegisterEventHandler(EventCode::AUTHENTICATION_COMPLETE,
                                      Bind(&impl::on_authentication_complete, common::Unretained(this)), handler_);
-    hci_layer_->RegisterEventHandler(EventCode::LINK_KEY_REQUEST,
-                                     Bind(&impl::on_request_event, common::Unretained(this)), handler_);
-    hci_layer_->RegisterEventHandler(EventCode::PIN_CODE_REQUEST,
-                                     Bind(&impl::on_request_event, common::Unretained(this)), handler_);
-    hci_layer_->RegisterEventHandler(EventCode::ENCRYPTION_KEY_REFRESH_COMPLETE,
-                                     Bind(&impl::on_complete_event, common::Unretained(this)), handler_);
   }
 
   void Stop() {
@@ -179,8 +174,9 @@ struct ClassicSecurityManager::impl {
 
   void refresh_encryption_key(uint16_t connection_handle) {
     std::unique_ptr<RefreshEncryptionKeyBuilder> packet = RefreshEncryptionKeyBuilder::Create(connection_handle);
-    hci_layer_->EnqueueCommand(std::move(packet), common::BindOnce([](CommandStatusView status) { /* TODO: check? */ }),
-                               handler_);
+    // TODO wait for CommandStatusView
+    hci_layer_->EnqueueCommand(std::move(packet),
+                               common::BindOnce(&impl::on_command_complete, common::Unretained(this)), handler_);
   }
 
   void read_simple_pairing_mode() {
@@ -229,20 +225,13 @@ struct ClassicSecurityManager::impl {
   }
 
   // TODO remove
-  void on_request_event(EventPacketView packet) {
-    EventCode event_code = packet.GetEventCode();
-    LOG_DEBUG("receive request %d", (uint8_t)event_code);
-  }
-
-  // TODO remove
-  void on_complete_event(EventPacketView packet) {
-    EventCode event_code = packet.GetEventCode();
-    LOG_DEBUG("receive complete event %d", (uint8_t)event_code);
+  void on_io_capbility_request(EventPacketView packet) {
+    LOG_DEBUG("CYDBG on_io_capbility_request");
   }
 
   // TODO remove
   void on_authentication_complete(EventPacketView packet) {
-    LOG_DEBUG("on_authentication_complete");
+    LOG_DEBUG("CYDBG on_authentication_complete");
   }
 
   void on_command_complete(CommandCompleteView status) {
