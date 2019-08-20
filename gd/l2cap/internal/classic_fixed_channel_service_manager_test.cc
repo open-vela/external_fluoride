@@ -33,10 +33,10 @@ namespace internal {
 
 class L2capServiceManagerTest : public ::testing::Test {
  public:
-  ~L2capServiceManagerTest() override = default;
+  ~L2capServiceManagerTest() = default;
 
   void OnServiceRegistered(bool expect_success, ClassicFixedChannelManager::RegistrationResult result,
-                           std::unique_ptr<ClassicFixedChannelService> user_service) {
+                           ClassicFixedChannelService user_service) {
     EXPECT_EQ(result == ClassicFixedChannelManager::RegistrationResult::SUCCESS, expect_success);
     service_registered_ = expect_success;
   }
@@ -70,13 +70,13 @@ class L2capServiceManagerTest : public ::testing::Test {
 };
 
 TEST_F(L2capServiceManagerTest, register_and_unregister_classic_fixed_channel) {
-  ClassicFixedChannelServiceImpl::PendingRegistration pending_registration{
-      .user_handler_ = user_handler_,
-      .on_registration_complete_callback_ =
-          common::BindOnce(&L2capServiceManagerTest::OnServiceRegistered, common::Unretained(this), true)};
+  ClassicFixedChannelServiceImpl::Builder builder;
+  builder.SetUserHandler(user_handler_);
+  builder.SetOnRegister(
+      common::BindOnce(&L2capServiceManagerTest::OnServiceRegistered, common::Unretained(this), true));
   Cid cid = kSmpBrCid;
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
-  manager_->Register(cid, std::move(pending_registration));
+  manager_->Register(cid, std::move(builder));
   EXPECT_TRUE(manager_->IsServiceRegistered(cid));
   sync_user_handler();
   EXPECT_TRUE(service_registered_);
@@ -85,13 +85,13 @@ TEST_F(L2capServiceManagerTest, register_and_unregister_classic_fixed_channel) {
 }
 
 TEST_F(L2capServiceManagerTest, register_classic_fixed_channel_bad_cid) {
-  ClassicFixedChannelServiceImpl::PendingRegistration pending_registration{
-      .user_handler_ = user_handler_,
-      .on_registration_complete_callback_ =
-          common::BindOnce(&L2capServiceManagerTest::OnServiceRegistered, common::Unretained(this), false)};
+  ClassicFixedChannelServiceImpl::Builder builder;
+  builder.SetUserHandler(user_handler_);
+  builder.SetOnRegister(
+      common::BindOnce(&L2capServiceManagerTest::OnServiceRegistered, common::Unretained(this), false));
   Cid cid = 0x1000;
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
-  manager_->Register(cid, std::move(pending_registration));
+  manager_->Register(cid, std::move(builder));
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
   sync_user_handler();
   EXPECT_FALSE(service_registered_);
