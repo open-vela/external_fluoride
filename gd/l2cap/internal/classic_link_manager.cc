@@ -18,7 +18,7 @@
 
 #include "hci/acl_manager.h"
 #include "l2cap/internal/classic_link.h"
-#include "l2cap/internal/scheduler_fifo.h"
+#include "l2cap/internal/scheduler.h"
 #include "l2cap/l2cap_layer.h"
 #include "os/handler.h"
 #include "os/log.h"
@@ -94,8 +94,7 @@ void ClassicLinkManager::OnConnectSuccess(std::unique_ptr<hci::AclConnection> ac
   common::Address address = acl_connection->GetAddress();
   ASSERT_LOG(GetLink(address) == nullptr, "%s is connected twice without disconnection",
              acl_connection->GetAddress().ToString().c_str());
-  auto* link_queue_up_end = acl_connection->GetAclQueueEnd();
-  links_.try_emplace(address, handler_, std::move(acl_connection), std::make_unique<Fifo>(link_queue_up_end, handler_));
+  links_.try_emplace(address, handler_, std::move(acl_connection), std::make_unique<Scheduler>());
   auto* link = GetLink(address);
   // Allocate and distribute channels for all registered fixed channel services
   auto fixed_channel_services = service_manager_->GetRegisteredServices();
@@ -130,10 +129,6 @@ void ClassicLinkManager::OnConnectFail(common::Address device, hci::ErrorCode re
   }
   // Remove entry in pending link list
   pending_links_.erase(pending_link);
-}
-
-void ClassicLinkManager::OnDisconnect(common::Address device, hci::ErrorCode status) {
-  links_.erase(device);
 }
 
 }  // namespace internal
