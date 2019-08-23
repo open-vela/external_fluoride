@@ -40,8 +40,6 @@ class PayloadField : public PacketField {
 
   virtual bool GenBuilderParameter(std::ostream& s) const override;
 
-  virtual void GenBuilderParameterFromView(std::ostream& s) const override;
-
   virtual bool HasParameterValidator() const override;
 
   virtual void GenParameterValidator(std::ostream&) const override;
