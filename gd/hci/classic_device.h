@@ -15,28 +15,21 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+#pragma once
 
-#include "hci/include/btsnoop.h"
+#include "hci/device.h"
 
-static void capture(const BT_HDR*, bool) { /* do nothing */
-}
+namespace bluetooth::hci {
 
-static void whitelist_l2c_channel(uint16_t, uint16_t,
-                                  uint16_t) { /* do nothing */
-}
+/**
+ * A device representing a CLASSIC device.
+ *
+ * <p>This can be a CLASSIC only or a piece of a DUAL MODE device.
+ */
+class ClassicDevice : public Device {
+ protected:
+  friend class DeviceDatabase;
+  explicit ClassicDevice(Address address) : Device(address, DeviceType::CLASSIC) {}
+};
 
-static void whitelist_rfc_dlci(uint16_t, uint8_t) { /* do nothing */
-}
-
-static void add_rfc_l2c_channel(uint16_t, uint16_t, uint16_t) { /* do nothing */
-}
-
-static void clear_l2cap_whitelist(uint16_t, uint16_t,
-                                  uint16_t) { /* do nothing */
-}
-
-static const btsnoop_t fake_snoop = {capture, whitelist_l2c_channel,
-                                     whitelist_rfc_dlci, add_rfc_l2c_channel,
-                                     clear_l2cap_whitelist};
-
-const btsnoop_t* btsnoop_get_interface() { return &fake_snoop; }
+}  // namespace bluetooth::hci
