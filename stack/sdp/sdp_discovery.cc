@@ -217,12 +217,6 @@ void sdp_disc_server_rsp(tCONN_CB* p_ccb, BT_HDR* p_msg) {
   p = (uint8_t*)(p_msg + 1) + p_msg->offset;
   uint8_t* p_end = p + p_msg->len;
 
-  if (p_msg->len < 1) {
-    android_errorWriteLog(0x534e4554, "79883568");
-    sdp_disconnect(p_ccb, SDP_GENERIC_ERROR);
-    return;
-  }
-
   BE_STREAM_TO_UINT8(rsp_pdu, p);
 
   p_msg->len--;
@@ -334,13 +328,11 @@ static void process_service_search_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
  * Description      copy the raw data
  *
  *
- * Returns          bool
- *                          true if successful
- *                          false if not copied
+ * Returns          void
  *
  ******************************************************************************/
 #if (SDP_RAW_DATA_INCLUDED == TRUE)
-static bool sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
+static void sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
   unsigned int cpy_len, rem_len;
   uint32_t list_len;
   uint8_t* p;
@@ -360,11 +352,11 @@ static bool sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
       p = sdpu_get_len_from_type(p, p_end, type, &list_len);
       if (p == NULL || (p + list_len) > p_end) {
         SDP_TRACE_WARNING("%s: bad length", __func__);
-        return false;
+        return;
       }
       if ((int)cpy_len < (p - old_p)) {
         SDP_TRACE_WARNING("%s: no bytes left for data", __func__);
-        return false;
+        return;
       }
       cpy_len -= (p - old_p);
     }
@@ -376,10 +368,14 @@ static bool sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
       SDP_TRACE_WARNING("rem_len :%d less than cpy_len:%d", rem_len, cpy_len);
       cpy_len = rem_len;
     }
+    SDP_TRACE_WARNING(
+        "%s: list_len:%d cpy_len:%d p:%p p_ccb:%p p_db:%p raw_size:%d "
+        "raw_used:%d raw_data:%p",
+        __func__, list_len, cpy_len, p, p_ccb, p_ccb->p_db,
+        p_ccb->p_db->raw_size, p_ccb->p_db->raw_used, p_ccb->p_db->raw_data);
     memcpy(&p_ccb->p_db->raw_data[p_ccb->p_db->raw_used], p, cpy_len);
     p_ccb->p_db->raw_used += cpy_len;
   }
-  return true;
 }
 #endif
 
@@ -401,12 +397,6 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
 
   /* If p_reply is NULL, we were called after the records handles were read */
   if (p_reply) {
-    if (p_reply + 4 /* transaction ID and length */ + sizeof(list_byte_count) >
-        p_reply_end) {
-      sdp_disconnect(p_ccb, SDP_INVALID_PDU_SIZE);
-      return;
-    }
-
     /* Skip transaction ID and length */
     p_reply += 4;
 
@@ -433,11 +423,7 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     } else {
 #if (SDP_RAW_DATA_INCLUDED == TRUE)
       SDP_TRACE_WARNING("process_service_attr_rsp");
-      if (!sdp_copy_raw_data(p_ccb, false)) {
-        SDP_TRACE_ERROR("sdp_copy_raw_data failed");
-        sdp_disconnect(p_ccb, SDP_ILLEGAL_PARAMETER);
-      }
-
+      sdp_copy_raw_data(p_ccb, false);
 #endif
 
       /* Save the response in the database. Stop on any error */
@@ -639,10 +625,7 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
 
 #if (SDP_RAW_DATA_INCLUDED == TRUE)
   SDP_TRACE_WARNING("process_service_search_attr_rsp");
-  if (!sdp_copy_raw_data(p_ccb, true)) {
-    SDP_TRACE_ERROR("sdp_copy_raw_data failed");
-    sdp_disconnect(p_ccb, SDP_ILLEGAL_PARAMETER);
-  }
+  sdp_copy_raw_data(p_ccb, true);
 #endif
 
   p = &p_ccb->rsp_list[0];
@@ -657,7 +640,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   p = sdpu_get_len_from_type(p, p + p_ccb->list_len, type, &seq_len);
   if (p == NULL || (p + seq_len) > (p + p_ccb->list_len)) {
     SDP_TRACE_WARNING("%s: bad length", __func__);
-    sdp_disconnect(p_ccb, SDP_ILLEGAL_PARAMETER);
     return;
   }
   p_end = &p_ccb->rsp_list[p_ccb->list_len];
