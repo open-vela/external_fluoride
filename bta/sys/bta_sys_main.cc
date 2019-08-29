@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2012 Broadcom Corporation
+ *  Copyright (C) 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,18 +24,16 @@
 
 #define LOG_TAG "bt_bta_sys_main"
 
-#include <base/bind.h>
 #include <base/logging.h>
-#include <base/threading/thread.h>
 #include <pthread.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bta_api.h"
+#include "bta_closure_int.h"
 #include "bta_sys.h"
 #include "bta_sys_int.h"
 #include "btm_api.h"
-#include "btu.h"
 #include "osi/include/alarm.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/log.h"
@@ -43,19 +41,23 @@
 #include "osi/include/thread.h"
 #include "utl.h"
 
-#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
+#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == true)
 #include "bta_ar_api.h"
 #endif
 
 /* system manager control block definition */
 tBTA_SYS_CB bta_sys_cb;
 
+fixed_queue_t* btu_bta_alarm_queue;
 extern thread_t* bt_workqueue_thread;
 
 /* trace level */
 /* TODO Hard-coded trace levels -  Needs to be configurable */
 uint8_t appl_trace_level = BT_TRACE_LEVEL_WARNING;  // APPL_INITIAL_TRACE_LEVEL;
 uint8_t btif_trace_level = BT_TRACE_LEVEL_WARNING;
+
+// Communication queue between btu_task and bta.
+extern fixed_queue_t* btu_bta_msg_queue;
 
 static const tBTA_SYS_REG bta_sys_hw_reg = {bta_sys_sm_execute, NULL};
 
@@ -159,12 +161,8 @@ const uint8_t bta_sys_hw_stopping[][BTA_SYS_NUM_COLS] = {
 typedef const uint8_t (*tBTA_SYS_ST_TBL)[BTA_SYS_NUM_COLS];
 
 /* state table */
-const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {
-    bta_sys_hw_off,      /* BTA_SYS_HW_OFF */
-    bta_sys_hw_starting, /* BTA_SYS_HW_STARTING */
-    bta_sys_hw_on,       /* BTA_SYS_HW_ON */
-    bta_sys_hw_stopping  /* BTA_SYS_HW_STOPPING */
-};
+const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {bta_sys_hw_off, bta_sys_hw_starting,
+                                          bta_sys_hw_on, bta_sys_hw_stopping};
 
 /*******************************************************************************
  *
@@ -179,20 +177,29 @@ const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {
 void bta_sys_init(void) {
   memset(&bta_sys_cb, 0, sizeof(tBTA_SYS_CB));
 
+  btu_bta_alarm_queue = fixed_queue_new(SIZE_MAX);
+
+  alarm_register_processing_queue(btu_bta_alarm_queue, bt_workqueue_thread);
+
   appl_trace_level = APPL_INITIAL_TRACE_LEVEL;
 
   /* register BTA SYS message handler */
   bta_sys_register(BTA_ID_SYS, &bta_sys_hw_reg);
 
   /* register for BTM notifications */
-  BTM_RegisterForDeviceStatusNotif(&bta_sys_hw_btm_cback);
+  BTM_RegisterForDeviceStatusNotif((tBTM_DEV_STATUS_CB*)&bta_sys_hw_btm_cback);
 
-#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
+#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == true)
   bta_ar_init();
 #endif
+
+  bta_closure_init(bta_sys_register, bta_sys_sendmsg);
 }
 
 void bta_sys_free(void) {
+  alarm_unregister_processing_queue(btu_bta_alarm_queue);
+  fixed_queue_free(btu_bta_alarm_queue, NULL);
+  btu_bta_alarm_queue = NULL;
 }
 
 /*******************************************************************************
@@ -522,85 +529,16 @@ bool bta_sys_is_register(uint8_t id) { return bta_sys_cb.is_reg[id]; }
  *                  optimize sending of messages to BTA.  It is called by BTA
  *                  API functions and call-in functions.
  *
- *                  TODO (apanicke): Add location object as parameter for easier
- *                  future debugging when doing alarm refactor
- *
  *
  * Returns          void
  *
  ******************************************************************************/
 void bta_sys_sendmsg(void* p_msg) {
-  base::MessageLoop* bta_message_loop = get_message_loop();
-
-  if (!bta_message_loop || !bta_message_loop->task_runner().get()) {
-    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
-    return;
-  }
-
-  bta_message_loop->task_runner()->PostTask(
-      FROM_HERE, base::Bind(&bta_sys_event, static_cast<BT_HDR*>(p_msg)));
-}
-
-/*******************************************************************************
- *
- * Function         do_in_bta_thread
- *
- * Description      Post a closure to be ran in the bta thread
- *
- * Returns          BT_STATUS_SUCCESS on success
- *
- ******************************************************************************/
-bt_status_t do_in_bta_thread(const tracked_objects::Location& from_here,
-                             const base::Closure& task) {
-  base::MessageLoop* bta_message_loop = get_message_loop();
-  if (!bta_message_loop) {
-    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
-    return BT_STATUS_FAIL;
-  }
-
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      bta_message_loop->task_runner();
-  if (!task_runner.get()) {
-    APPL_TRACE_ERROR("%s: task runner is dead", __func__);
-    return BT_STATUS_FAIL;
-  }
-
-  if (!task_runner->PostTask(from_here, task)) {
-    APPL_TRACE_ERROR("%s: Post task to task runner failed!", __func__);
-    return BT_STATUS_FAIL;
-  }
-  return BT_STATUS_SUCCESS;
-}
-
-/*******************************************************************************
- *
- * Function         do_in_bta_thread_once
- *
- * Description      Post a closure to be ran in the bta thread once
- *
- * Returns          BT_STATUS_SUCCESS on success
- *
- ******************************************************************************/
-bt_status_t do_in_bta_thread_once(const tracked_objects::Location& from_here,
-                                  base::OnceClosure task) {
-  base::MessageLoop* bta_message_loop = get_message_loop();
-  if (!bta_message_loop) {
-    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
-    return BT_STATUS_FAIL;
-  }
-
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      bta_message_loop->task_runner();
-  if (!task_runner.get()) {
-    APPL_TRACE_ERROR("%s: task runner is dead", __func__);
-    return BT_STATUS_FAIL;
-  }
-
-  if (!task_runner->PostTask(from_here, std::move(task))) {
-    APPL_TRACE_ERROR("%s: Post task to task runner failed!", __func__);
-    return BT_STATUS_FAIL;
-  }
-  return BT_STATUS_SUCCESS;
+  // There is a race condition that occurs if the stack is shut down while
+  // there is a procedure in progress that can schedule a task via this
+  // message queue. This causes |btu_bta_msg_queue| to get cleaned up before
+  // it gets used here; hence we check for NULL before using it.
+  if (btu_bta_msg_queue) fixed_queue_enqueue(btu_bta_msg_queue, p_msg);
 }
 
 /*******************************************************************************
@@ -619,8 +557,8 @@ void bta_sys_start_timer(alarm_t* alarm, period_ms_t interval, uint16_t event,
 
   p_buf->event = event;
   p_buf->layer_specific = layer_specific;
-
-  alarm_set_on_mloop(alarm, interval, bta_sys_sendmsg, p_buf);
+  alarm_set_on_queue(alarm, interval, bta_sys_sendmsg, p_buf,
+                     btu_bta_alarm_queue);
 }
 
 /*******************************************************************************
@@ -640,7 +578,7 @@ void bta_sys_disable(tBTA_SYS_HW_MODULE module) {
 
   switch (module) {
     case BTA_SYS_HW_BLUETOOTH:
-      bta_id = BTA_ID_DM_SEARCH;
+      bta_id = BTA_ID_DM;
       bta_id_max = BTA_ID_BLUETOOTH_MAX;
       break;
     default:
@@ -650,7 +588,7 @@ void bta_sys_disable(tBTA_SYS_HW_MODULE module) {
 
   for (; bta_id <= bta_id_max; bta_id++) {
     if (bta_sys_cb.reg[bta_id] != NULL) {
-      if (bta_sys_cb.is_reg[bta_id] &&
+      if (bta_sys_cb.is_reg[bta_id] == true &&
           bta_sys_cb.reg[bta_id]->disable != NULL) {
         (*bta_sys_cb.reg[bta_id]->disable)();
       }

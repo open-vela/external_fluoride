@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,9 +31,7 @@
 #include <base/callback.h>
 #include <base/location.h>
 #include <base/logging.h>
-#include <base/threading/thread.h>
 #include <log/log.h>
-#include <statslog.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +50,9 @@
 #include "osi/include/osi.h"
 
 using tracked_objects::Location;
+
+// TODO(zachoverflow): remove this horrible hack
+extern fixed_queue_t* btu_hci_msg_queue;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
@@ -127,18 +128,6 @@ static void btu_ble_rc_param_req_evt(uint8_t* p);
 #if (BLE_PRIVACY_SPT == TRUE)
 static void btu_ble_proc_enhanced_conn_cmpl(uint8_t* p, uint16_t evt_len);
 #endif
-
-static void do_in_hci_thread(const tracked_objects::Location& from_here,
-                             const base::Closure& task) {
-  base::MessageLoop* hci_message_loop = get_message_loop();
-  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
-    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
-              __func__, from_here.ToString().c_str());
-    return;
-  }
-
-  hci_message_loop->task_runner()->PostTask(from_here, task);
-}
 
 /*******************************************************************************
  *
@@ -345,7 +334,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
           btu_ble_data_length_change_evt(p, hci_evt_len);
           break;
 
-        case HCI_BLE_PHY_UPDATE_COMPLETE_EVT:
+        case HCI_LE_PHY_UPDATE_COMPLETE_EVT:
           btm_ble_process_phy_update_pkt(ble_evt_len, p);
           break;
 
@@ -415,48 +404,58 @@ void cmd_with_cb_data_cleanup(cmd_with_cb_data* cb_wrapper) {
   cb_wrapper->posted_from.~Location();
 }
 
-static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event,
-                                                          void* context) {
+static void btu_hcif_command_complete_evt_with_cb_on_task(BT_HDR* event) {
+  command_complete_hack_t* hack = (command_complete_hack_t*)&event->data[0];
+
   command_opcode_t opcode;
   uint8_t* stream =
-      event->data + event->offset +
+      hack->response->data + hack->response->offset +
       3;  // 2 to skip the event headers, 1 to skip the command credits
   STREAM_TO_UINT16(opcode, stream);
 
-  cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)context;
+  cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)hack->context;
   HCI_TRACE_DEBUG("command complete for: %s",
                   cb_wrapper->posted_from.ToString().c_str());
-  cb_wrapper->cb.Run(stream, event->len - 5);
+  cb_wrapper->cb.Run(stream, hack->response->len - 5);
   cmd_with_cb_data_cleanup(cb_wrapper);
   osi_free(cb_wrapper);
 
+  osi_free(hack->response);
   osi_free(event);
 }
 
 static void btu_hcif_command_complete_evt_with_cb(BT_HDR* response,
                                                   void* context) {
-  do_in_hci_thread(FROM_HERE,
-                   base::Bind(btu_hcif_command_complete_evt_with_cb_on_task,
-                              response, context));
+  BT_HDR* event = static_cast<BT_HDR*>(
+      osi_calloc(sizeof(BT_HDR) + sizeof(command_complete_hack_t)));
+  command_complete_hack_t* hack = (command_complete_hack_t*)&event->data[0];
+
+  hack->callback = btu_hcif_command_complete_evt_with_cb_on_task;
+  hack->response = response;
+  hack->context = context;
+  event->event = BTU_POST_TO_TASK_NO_GOOD_HORRIBLE_HACK;
+
+  fixed_queue_enqueue(btu_hci_msg_queue, event);
 }
 
-static void btu_hcif_command_status_evt_with_cb_on_task(uint8_t status,
-                                                        BT_HDR* event,
-                                                        void* context) {
+static void btu_hcif_command_status_evt_with_cb_on_task(BT_HDR* event) {
+  command_status_hack_t* hack = (command_status_hack_t*)&event->data[0];
+
   command_opcode_t opcode;
-  uint8_t* stream = event->data + event->offset;
+  uint8_t* stream = hack->command->data + hack->command->offset;
   STREAM_TO_UINT16(opcode, stream);
 
-  CHECK(status != 0);
+  CHECK(hack->status != 0);
 
   // report command status error
-  cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)context;
+  cmd_with_cb_data* cb_wrapper = (cmd_with_cb_data*)hack->context;
   HCI_TRACE_DEBUG("command status for: %s",
                   cb_wrapper->posted_from.ToString().c_str());
-  cb_wrapper->cb.Run(&status, sizeof(uint16_t));
+  cb_wrapper->cb.Run(&hack->status, sizeof(uint16_t));
   cmd_with_cb_data_cleanup(cb_wrapper);
   osi_free(cb_wrapper);
 
+  osi_free(hack->command);
   osi_free(event);
 }
 
@@ -468,9 +467,18 @@ static void btu_hcif_command_status_evt_with_cb(uint8_t status, BT_HDR* command,
     return;
   }
 
-  do_in_hci_thread(
-      FROM_HERE, base::Bind(btu_hcif_command_status_evt_with_cb_on_task, status,
-                            command, context));
+  BT_HDR* event = static_cast<BT_HDR*>(
+      osi_calloc(sizeof(BT_HDR) + sizeof(command_status_hack_t)));
+  command_status_hack_t* hack = (command_status_hack_t*)&event->data[0];
+
+  hack->callback = btu_hcif_command_status_evt_with_cb_on_task;
+  hack->status = status;
+  hack->command = command;
+  hack->context = context;
+
+  event->event = BTU_POST_TO_TASK_NO_GOOD_HORRIBLE_HACK;
+
+  fixed_queue_enqueue(btu_hci_msg_queue, event);
 }
 
 /* This function is called to send commands to the Host Controller. |cb| is
@@ -575,7 +583,7 @@ static void btu_hcif_extended_inquiry_result_evt(uint8_t* p) {
 static void btu_hcif_connection_comp_evt(uint8_t* p) {
   uint8_t status;
   uint16_t handle;
-  RawAddress bda;
+  BD_ADDR bda;
   uint8_t link_type;
   uint8_t enc_mode;
 #if (BTM_SCO_INCLUDED == TRUE)
@@ -590,13 +598,6 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
 
   handle = HCID_GET_HANDLE(handle);
 
-  if (status != HCI_SUCCESS) {
-    HCI_TRACE_DEBUG(
-        "%s: Connection failed: status=%d, handle=%d, link_type=%d, "
-        "enc_mode=%d",
-        __func__, status, handle, link_type, enc_mode);
-  }
-
   if (link_type == HCI_LINK_TYPE_ACL) {
     btm_sec_connected(bda, handle, status, enc_mode);
 
@@ -606,8 +607,8 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
   else {
     memset(&esco_data, 0, sizeof(tBTM_ESCO_DATA));
     /* esco_data.link_type = HCI_LINK_TYPE_SCO; already zero */
-    esco_data.bd_addr = bda;
-    btm_sco_connected(status, &bda, handle, &esco_data);
+    memcpy(esco_data.bd_addr, bda, BD_ADDR_LEN);
+    btm_sco_connected(status, bda, handle, &esco_data);
   }
 #endif /* BTM_SCO_INCLUDED */
 }
@@ -622,7 +623,7 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
  *
  ******************************************************************************/
 static void btu_hcif_connection_request_evt(uint8_t* p) {
-  RawAddress bda;
+  BD_ADDR bda;
   DEV_CLASS dc;
   uint8_t link_type;
 
@@ -660,13 +661,6 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
   STREAM_TO_UINT8(reason, p);
 
   handle = HCID_GET_HANDLE(handle);
-
-  if ((reason != HCI_ERR_CONN_CAUSE_LOCAL_HOST) &&
-      (reason != HCI_ERR_PEER_USER)) {
-    /* Uncommon disconnection reasons */
-    HCI_TRACE_DEBUG("%s: Got Disconn Complete Event: reason=%d, handle=%d",
-                    __func__, reason, handle);
-  }
 
 #if (BTM_SCO_INCLUDED == TRUE)
   /* If L2CAP doesn't know about it, send it to SCO */
@@ -709,49 +703,43 @@ static void btu_hcif_authentication_comp_evt(uint8_t* p) {
  ******************************************************************************/
 static void btu_hcif_rmt_name_request_comp_evt(uint8_t* p, uint16_t evt_len) {
   uint8_t status;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
 
   STREAM_TO_UINT8(status, p);
   STREAM_TO_BDADDR(bd_addr, p);
 
   evt_len -= (1 + BD_ADDR_LEN);
 
-  btm_process_remote_name(&bd_addr, p, evt_len, status);
+  btm_process_remote_name(bd_addr, p, evt_len, status);
 
-  btm_sec_rmt_name_request_complete(&bd_addr, p, status);
+  btm_sec_rmt_name_request_complete(bd_addr, p, status);
 }
 
 constexpr uint8_t MIN_KEY_SIZE = 7;
 
 static void read_encryption_key_size_complete_after_encryption_change(
     uint8_t status, uint16_t handle, uint8_t key_size) {
-  int ret = android::util::stats_write(
-      android::util::BLUETOOTH_CLASSIC_PAIRING_EVENT_REPORTED, "", handle,
-      HCI_READ_ENCR_KEY_SIZE, HCI_COMMAND_COMPLETE_EVT, status, 0, key_size);
-  if (ret < 0) {
-    LOG(WARNING) << __func__ << ": failed to log encryption key size "
-                 << std::to_string(key_size);
-  }
-
   if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
     /* If remote device stop the encryption before we call "Read Encryption Key
      * Size", we might receive Insufficient Security, which means that link is
      * no longer encrypted. */
-    LOG(INFO) << __func__ << ": encryption stopped on link: " << loghex(handle);
+    HCI_TRACE_WARNING("%s encryption stopped on link: 0x%02x", __func__,
+                      handle);
     return;
   }
 
   if (status != HCI_SUCCESS) {
-    LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
+    HCI_TRACE_WARNING("%s: disconnecting, status: 0x%02x", __func__, status);
     btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
     return;
   }
 
   if (key_size < MIN_KEY_SIZE) {
     android_errorWriteLog(0x534e4554, "124301137");
-    LOG(ERROR) << __func__
-               << " encryption key too short, disconnecting. handle: "
-               << loghex(handle) << " key_size: " << +key_size;
+    HCI_TRACE_ERROR(
+        "%s encryption key too short, disconnecting. handle: 0x%02x, key_size: "
+        "%d",
+        __func__, handle, key_size);
 
     btsnd_hcic_disconnect(handle, HCI_ERR_HOST_REJECT_SECURITY);
     return;
@@ -879,7 +867,7 @@ static void btu_hcif_esco_connection_comp_evt(uint8_t* p) {
 #if (BTM_SCO_INCLUDED == TRUE)
   tBTM_ESCO_DATA data;
   uint16_t handle;
-  RawAddress bda;
+  BD_ADDR bda;
   uint8_t status;
 
   STREAM_TO_UINT8(status, p);
@@ -893,8 +881,8 @@ static void btu_hcif_esco_connection_comp_evt(uint8_t* p) {
   STREAM_TO_UINT16(data.tx_pkt_len, p);
   STREAM_TO_UINT8(data.air_mode, p);
 
-  data.bd_addr = bda;
-  btm_sco_connected(status, &bda, handle, &data);
+  memcpy(data.bd_addr, bda, BD_ADDR_LEN);
+  btm_sco_connected(status, bda, handle, &data);
 #endif
 }
 
@@ -966,14 +954,6 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       btm_read_rssi_complete(p);
       break;
 
-    case HCI_READ_FAILED_CONTACT_COUNTER:
-      btm_read_failed_contact_counter_complete(p);
-      break;
-
-    case HCI_READ_AUTOMATIC_FLUSH_TIMEOUT:
-      btm_read_automatic_flush_timeout_complete(p);
-      break;
-
     case HCI_READ_TRANSMIT_POWER_LEVEL:
       btm_read_tx_power_complete(p, false);
       break;
@@ -1017,13 +997,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     case HCI_BLE_CREATE_LL_CONN:
-    case HCI_LE_EXTENDED_CREATE_CONNECTION:
-      // No command complete event for those commands according to spec
-      LOG(ERROR) << "No command complete expected, but received!";
-      break;
-
-    case HCI_BLE_CREATE_CONN_CANCEL:
-      btm_ble_create_conn_cancel_complete(p);
+      btm_ble_create_ll_conn_complete(*p);
       break;
 
     case HCI_BLE_TRANSMITTER_TEST:
@@ -1056,7 +1030,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
 #endif
     default:
       if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
-        btm_vsc_complete(p, opcode, evt_len, (tBTM_VSC_CMPL_CB*)p_cplt_cback);
+        btm_vsc_complete(p, opcode, evt_len, (tBTM_CMPL_CB*)p_cplt_cback);
       break;
   }
 }
@@ -1070,26 +1044,37 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_command_complete_evt_on_task(BT_HDR* event,
-                                                  void* context) {
+static void btu_hcif_command_complete_evt_on_task(BT_HDR* event) {
+  command_complete_hack_t* hack = (command_complete_hack_t*)&event->data[0];
+
   command_opcode_t opcode;
   uint8_t* stream =
-      event->data + event->offset +
+      hack->response->data + hack->response->offset +
       3;  // 2 to skip the event headers, 1 to skip the command credits
   STREAM_TO_UINT16(opcode, stream);
 
   btu_hcif_hdl_command_complete(
       opcode, stream,
-      event->len -
+      hack->response->len -
           5,  // 3 for the command complete headers, 2 for the event headers
-      context);
+      hack->context);
 
+  osi_free(hack->response);
   osi_free(event);
 }
 
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
-  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_complete_evt_on_task,
-                                         response, context));
+  BT_HDR* event = static_cast<BT_HDR*>(
+      osi_calloc(sizeof(BT_HDR) + sizeof(command_complete_hack_t)));
+  command_complete_hack_t* hack = (command_complete_hack_t*)&event->data[0];
+
+  hack->callback = btu_hcif_command_complete_evt_on_task;
+  hack->response = response;
+  hack->context = context;
+
+  event->event = BTU_POST_TO_TASK_NO_GOOD_HORRIBLE_HACK;
+
+  fixed_queue_enqueue(btu_hci_msg_queue, event);
 }
 
 /*******************************************************************************
@@ -1104,7 +1089,7 @@ static void btu_hcif_command_complete_evt(BT_HDR* response, void* context) {
 static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
                                         uint8_t* p_cmd,
                                         void* p_vsc_status_cback) {
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint16_t handle;
 #if (BTM_SCO_INCLUDED == TRUE)
   tBTM_ESCO_DATA esco_data;
@@ -1158,10 +1143,10 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
             if (p_cmd != NULL) {
               p_cmd++;
               STREAM_TO_BDADDR(bd_addr, p_cmd);
-              btm_acl_role_changed(status, &bd_addr, BTM_ROLE_UNDEFINED);
+              btm_acl_role_changed(status, bd_addr, BTM_ROLE_UNDEFINED);
             } else
               btm_acl_role_changed(status, NULL, BTM_ROLE_UNDEFINED);
-            l2c_link_role_changed(nullptr, BTM_ROLE_UNDEFINED,
+            l2c_link_role_changed(NULL, BTM_ROLE_UNDEFINED,
                                   HCI_ERR_COMMAND_DISALLOWED);
             break;
 
@@ -1198,7 +1183,6 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
             break;
 
           case HCI_BLE_CREATE_LL_CONN:
-          case HCI_LE_EXTENDED_CREATE_CONNECTION:
             btm_ble_create_ll_conn_complete(status);
             break;
 
@@ -1230,14 +1214,14 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
           default:
             if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
               btm_vsc_complete(&status, opcode, 1,
-                               (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+                               (tBTM_CMPL_CB*)p_vsc_status_cback);
             break;
         }
 
       } else {
         if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
           btm_vsc_complete(&status, opcode, 1,
-                           (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
+                           (tBTM_CMPL_CB*)p_vsc_status_cback);
       }
   }
 }
@@ -1251,20 +1235,33 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_command_status_evt_on_task(uint8_t status, BT_HDR* event,
-                                                void* context) {
+static void btu_hcif_command_status_evt_on_task(BT_HDR* event) {
+  command_status_hack_t* hack = (command_status_hack_t*)&event->data[0];
+
   command_opcode_t opcode;
-  uint8_t* stream = event->data + event->offset;
+  uint8_t* stream = hack->command->data + hack->command->offset;
   STREAM_TO_UINT16(opcode, stream);
 
-  btu_hcif_hdl_command_status(opcode, status, stream, context);
+  btu_hcif_hdl_command_status(opcode, hack->status, stream, hack->context);
+
+  osi_free(hack->command);
   osi_free(event);
 }
 
 static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
                                         void* context) {
-  do_in_hci_thread(FROM_HERE, base::Bind(btu_hcif_command_status_evt_on_task,
-                                         status, command, context));
+  BT_HDR* event = static_cast<BT_HDR*>(
+      osi_calloc(sizeof(BT_HDR) + sizeof(command_status_hack_t)));
+  command_status_hack_t* hack = (command_status_hack_t*)&event->data[0];
+
+  hack->callback = btu_hcif_command_status_evt_on_task;
+  hack->status = status;
+  hack->command = command;
+  hack->context = context;
+
+  event->event = BTU_POST_TO_TASK_NO_GOOD_HORRIBLE_HACK;
+
+  fixed_queue_enqueue(btu_hci_msg_queue, event);
 }
 
 /*******************************************************************************
@@ -1308,16 +1305,15 @@ static void btu_hcif_flush_occured_evt(void) {}
  ******************************************************************************/
 static void btu_hcif_role_change_evt(uint8_t* p) {
   uint8_t status;
-  RawAddress bda;
+  BD_ADDR bda;
   uint8_t role;
 
   STREAM_TO_UINT8(status, p);
   STREAM_TO_BDADDR(bda, p);
   STREAM_TO_UINT8(role, p);
 
-  btm_blacklist_role_change_device(bda, status);
-  l2c_link_role_changed(&bda, role, status);
-  btm_acl_role_changed(status, &bda, role);
+  l2c_link_role_changed(bda, role, status);
+  btm_acl_role_changed(status, bda, role);
 }
 
 /*******************************************************************************
@@ -1392,7 +1388,7 @@ static void btu_hcif_ssr_evt(uint8_t* p, uint16_t evt_len) {
  *
  ******************************************************************************/
 static void btu_hcif_pin_code_request_evt(uint8_t* p) {
-  RawAddress bda;
+  BD_ADDR bda;
 
   STREAM_TO_BDADDR(bda, p);
 
@@ -1413,7 +1409,7 @@ static void btu_hcif_pin_code_request_evt(uint8_t* p) {
  *
  ******************************************************************************/
 static void btu_hcif_link_key_request_evt(uint8_t* p) {
-  RawAddress bda;
+  BD_ADDR bda;
 
   STREAM_TO_BDADDR(bda, p);
   btm_sec_link_key_request(bda);
@@ -1429,7 +1425,7 @@ static void btu_hcif_link_key_request_evt(uint8_t* p) {
  *
  ******************************************************************************/
 static void btu_hcif_link_key_notification_evt(uint8_t* p) {
-  RawAddress bda;
+  BD_ADDR bda;
   LINK_KEY key;
   uint8_t key_type;
 
@@ -1580,9 +1576,7 @@ static void btu_hcif_host_support_evt(uint8_t* p) {
  *
  ******************************************************************************/
 static void btu_hcif_io_cap_request_evt(uint8_t* p) {
-  RawAddress bda;
-  STREAM_TO_BDADDR(bda, p);
-  btm_io_capabilities_req(bda);
+  btm_io_capabilities_req(p);
 }
 
 /*******************************************************************************
@@ -1694,33 +1688,27 @@ static void btu_hcif_enhanced_flush_complete_evt(void) {
 
 static void read_encryption_key_size_complete_after_key_refresh(
     uint8_t status, uint16_t handle, uint8_t key_size) {
-  int ret = android::util::stats_write(
-      android::util::BLUETOOTH_CLASSIC_PAIRING_EVENT_REPORTED, "", handle,
-      HCI_READ_ENCR_KEY_SIZE, HCI_COMMAND_COMPLETE_EVT, status, 0, key_size);
-  if (ret < 0) {
-    LOG(WARNING) << __func__ << ": failed to log encryption key size "
-                 << std::to_string(key_size);
-  }
-
   if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
     /* If remote device stop the encryption before we call "Read Encryption Key
      * Size", we might receive Insufficient Security, which means that link is
      * no longer encrypted. */
-    LOG(INFO) << __func__ << ": encryption stopped on link: " << loghex(handle);
+    HCI_TRACE_WARNING("%s encryption stopped on link: 0x%02x", __func__,
+                      handle);
     return;
   }
 
   if (status != HCI_SUCCESS) {
-    LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
+    HCI_TRACE_WARNING("%s: disconnecting, status: 0x%02x", __func__, status);
     btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
     return;
   }
 
   if (key_size < MIN_KEY_SIZE) {
     android_errorWriteLog(0x534e4554, "124301137");
-    LOG(ERROR) << __func__
-               << " encryption key too short, disconnecting. handle: "
-               << loghex(handle) << " key_size: " << +key_size;
+    HCI_TRACE_ERROR(
+        "%s encryption key too short, disconnecting. handle: 0x%02x, key_size: "
+        "%d",
+        __func__, handle, key_size);
 
     btsnd_hcic_disconnect(handle, HCI_ERR_HOST_REJECT_SECURITY);
     return;
