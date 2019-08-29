@@ -241,9 +241,6 @@ class DualModeController : public Device {
   // 7.3.56
   void HciWriteExtendedInquiryResponse(packets::PacketView<true> args);
 
-  // 7.3.57
-  void HciRefreshEncryptionKey(packets::PacketView<true> args);
-
   // 7.3.59
   void HciWriteSimplePairingMode(packets::PacketView<true> args);
 
@@ -264,9 +261,6 @@ class DualModeController : public Device {
 
   // 7.4.2
   void HciReadLocalSupportedCommands(packets::PacketView<true> args);
-
-  // 7.4.3
-  void HciReadLocalSupportedFeatures(packets::PacketView<true> args);
 
   // 7.4.4
   void HciReadLocalExtendedFeatures(packets::PacketView<true> args);
