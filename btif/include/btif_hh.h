@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include <stdint.h>
 #include "bta_hh_api.h"
 #include "btu.h"
-#include "osi/include/fixed_queue.h"
 
 /*******************************************************************************
  *  Constants & Macros
@@ -68,8 +67,6 @@ typedef struct {
   pthread_t hh_poll_thread_id;
   uint8_t hh_keep_polling;
   alarm_t* vup_timer;
-  fixed_queue_t* get_rpt_id_queue;
-  uint8_t get_rpt_snt;
   bool local_vup;  // Indicated locally initiated VUP
 } btif_hh_device_t;
 
@@ -91,7 +88,6 @@ typedef struct {
   btif_hh_added_device_t added_devices[BTIF_HH_MAX_ADDED_DEV];
   btif_hh_device_t* p_curr_dev;
   bool service_dereg_active;
-  RawAddress pending_conn_address;
 } btif_hh_cb_t;
 
 /*******************************************************************************
@@ -109,9 +105,6 @@ extern void btif_hh_disconnect(RawAddress* bd_addr);
 extern void btif_hh_setreport(btif_hh_device_t* p_dev,
                               bthh_report_type_t r_type, uint16_t size,
                               uint8_t* report);
-extern void btif_hh_getreport(btif_hh_device_t* p_dev,
-                              bthh_report_type_t r_type, uint8_t reportId,
-                              uint16_t bufferSize);
 extern void btif_hh_service_registration(bool enable);
 
 #endif

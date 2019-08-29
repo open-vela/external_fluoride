@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1218,7 +1218,7 @@ extern uint8_t BTM_GetNumScoLinks(void);
  * Returns          true if registered OK, else false
  *
  ******************************************************************************/
-extern bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info);
+extern bool BTM_SecRegister(tBTM_APPL_INFO* p_cb_info);
 
 /*******************************************************************************
  *
@@ -1407,7 +1407,7 @@ extern uint8_t BTM_SecClrService(uint8_t service_id);
  ******************************************************************************/
 extern bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
                              BD_NAME bd_name, uint8_t* features,
-                             uint32_t trusted_mask[], LinkKey* link_key,
+                             uint32_t trusted_mask[], LINK_KEY link_key,
                              uint8_t key_type, tBTM_IO_CAP io_cap,
                              uint8_t pin_length);
 
@@ -1446,7 +1446,7 @@ extern void BTM_SecClearSecurityFlags(const RawAddress& bd_addr);
  *
  ******************************************************************************/
 extern tBTM_STATUS BTM_SecGetDeviceLinkKey(const RawAddress& bd_addr,
-                                           LinkKey* link_key);
+                                           LINK_KEY link_key);
 
 /*******************************************************************************
  *
@@ -1662,7 +1662,7 @@ extern void BTM_ReadLocalOobData(void);
  *
  ******************************************************************************/
 extern void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
-                                   const Octet16& c, const Octet16& r);
+                                   BT_OCTET16 c, BT_OCTET16 r);
 
 /*******************************************************************************
  *
@@ -1683,8 +1683,7 @@ extern void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
  *
  ******************************************************************************/
 extern uint16_t BTM_BuildOobData(uint8_t* p_data, uint16_t max_len,
-                                 const Octet16& c, const Octet16& r,
-                                 uint8_t name_len);
+                                 BT_OCTET16 c, BT_OCTET16 r, uint8_t name_len);
 
 /*******************************************************************************
  *
@@ -1777,7 +1776,7 @@ extern tBTM_STATUS BTM_PmRegister(uint8_t mask, uint8_t* p_pm_id,
  *
  ******************************************************************************/
 extern tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
-                                    const tBTM_PM_PWR_MD* p_mode);
+                                    tBTM_PM_PWR_MD* p_mode);
 
 /*******************************************************************************
  *
@@ -1881,7 +1880,7 @@ extern tBTM_STATUS BTM_WriteEIR(BT_HDR* p_buff);
  *                  false - if not found
  *
  ******************************************************************************/
-extern bool BTM_HasEirService(const uint32_t* p_eir_uuid, uint16_t uuid16);
+extern bool BTM_HasEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
 
 /*******************************************************************************
  *
@@ -1958,8 +1957,7 @@ extern uint8_t BTM_GetEirSupportedServices(uint32_t* p_eir_uuid, uint8_t** p,
  *
  * Parameters       p_eir - EIR
  *                  eirl_len - EIR len
- *                  uuid_size - Uuid::kNumBytes16, Uuid::kNumBytes32,
- *                              Uuid::kNumBytes128
+ *                  uuid_size - LEN_UUID_16, LEN_UUID_32, LEN_UUID_128
  *                  p_num_uuid - return number of UUID in found list
  *                  p_uuid_list - return UUID 16-bit list
  *                  max_num_uuid - maximum number of UUID to be returned
