@@ -1167,6 +1167,7 @@ void bta_av_setconfig_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     } else {
       /* we do not know the peer device and it is using non-SBC codec
        * we need to know all the SEPs on SNK */
+      if (p_scb->uuid_int == 0) p_scb->uuid_int = p_scb->open_api.uuid;
       bta_av_discover_req(p_scb, NULL);
       return;
     }
@@ -1246,7 +1247,6 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     open.chnl = p_scb->chnl;
     open.hndl = p_scb->hndl;
     open.status = BTA_AV_SUCCESS;
-    open.starting = bta_av_chk_start(p_scb);
     open.edr = 0;
     p = BTM_ReadRemoteFeatures(p_scb->PeerAddress());
     if (p != NULL) {
@@ -1262,8 +1262,10 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     bta_ar_avdt_conn(BTA_ID_AV, open.bd_addr, p_scb->hdi);
 #endif
     if (p_scb->seps[p_scb->sep_idx].tsep == AVDT_TSEP_SRC) {
+      open.starting = false;
       open.sep = AVDT_TSEP_SNK;
     } else if (p_scb->seps[p_scb->sep_idx].tsep == AVDT_TSEP_SNK) {
+      open.starting = bta_av_chk_start(p_scb);
       open.sep = AVDT_TSEP_SRC;
     }
 
