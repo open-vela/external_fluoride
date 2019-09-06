@@ -51,15 +51,15 @@ void StructField::GenExtractor(std::ostream& s, Size start_offset, Size end_offs
   }
   s << " auto subview = GetLittleEndianSubview(field_begin, field_end); ";
   s << "auto it = subview.begin();";
-  s << "std::unique_ptr<" << GetDataType() << "> one = std::make_unique<" << GetDataType() << ">();";
-  s << GetDataType() << "::Parse(one.get(), it);";
+  s << "std::vector<" << GetDataType() << "> vec;";
+  s << GetDataType() << "::Parse(vec, it);";
 }
 
 void StructField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) const {
   if (size_ != -1) {
     s << GetDataType() << " Get" << util::UnderscoreToCamelCase(GetName()) << "() const {";
   } else {
-    s << "std::unique_ptr<" << GetDataType() << "> Get" << util::UnderscoreToCamelCase(GetName()) << "() const {";
+    s << "std::vector<" << GetDataType() << "> Get" << util::UnderscoreToCamelCase(GetName()) << "() const {";
   }
   s << "ASSERT(was_validated_);";
   s << "size_t end_index = size();";
@@ -67,9 +67,9 @@ void StructField::GenGetter(std::ostream& s, Size start_offset, Size end_offset)
   GenExtractor(s, start_offset, end_offset);
 
   if (size_ != -1) {
-    s << "return *one;";
+    s << "return vec[0];";
   } else {
-    s << "return one;";
+    s << "return vec;";
   }
   s << "}\n";
 }
