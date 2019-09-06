@@ -62,9 +62,9 @@ class AclConnectionHandler {
 
  private:
   std::unordered_map<uint16_t, AclConnection> acl_connections_;
-  bool classic_connection_pending_{false};
+  bool classic_connection_pending_;
   Address pending_connection_address_;
-  bool le_connection_pending_{false};
+  bool le_connection_pending_;
   Address pending_le_connection_address_;
   uint8_t pending_le_connection_address_type_;
   uint16_t GetUnusedHandle();
