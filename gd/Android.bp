@@ -96,7 +96,9 @@ cc_library {
             ],
             shared_libs: [
                 "android.hardware.bluetooth@1.0",
+                "libhwbinder",
                 "libhidlbase",
+                "libhidltransport",
                 "libutils",
             ],
         },
@@ -154,7 +156,9 @@ cc_binary {
         android: {
             shared_libs: [
                 "android.hardware.bluetooth@1.0",
+                "libhwbinder",
                 "libhidlbase",
+                "libhidltransport",
                 "libutils",
             ],
         },
@@ -198,7 +202,9 @@ cc_binary {
         android: {
             shared_libs: [
                 "android.hardware.bluetooth@1.0",
+                "libhwbinder",
                 "libhidlbase",
+                "libhidltransport",
                 "libutils",
             ],
         },
@@ -233,7 +239,9 @@ cc_test {
             ],
             shared_libs: [
                 "android.hardware.bluetooth@1.0",
+                "libhwbinder",
                 "libhidlbase",
+                "libhidltransport",
                 "libutils",
             ],
         },
