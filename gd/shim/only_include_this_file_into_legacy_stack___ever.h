@@ -24,5 +24,4 @@
  * Only common data structures should be used to pass data between the stacks.
  *
  */
-#include "gd/shim/icontroller.h"
 #include "gd/shim/istack.h"
