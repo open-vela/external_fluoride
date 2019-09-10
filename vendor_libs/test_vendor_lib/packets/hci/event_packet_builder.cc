@@ -205,19 +205,6 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   return evt_ptr;
 }
 
-// Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section 7.4.3
-std::unique_ptr<EventPacketBuilder>
-EventPacketBuilder::CreateCommandCompleteReadLocalSupportedFeatures(
-    hci::Status status, uint64_t supported_features) {
-  std::unique_ptr<EventPacketBuilder> evt_ptr =
-      EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(
-          OpCode::READ_LOCAL_SUPPORTED_FEATURES, status);
-
-  CHECK(evt_ptr->AddPayloadOctets8(supported_features));
-
-  return evt_ptr;
-}
-
 // Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section 7.4.4
 std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteReadLocalExtendedFeatures(
     hci::Status status, uint8_t page_number, uint8_t maximum_page_number, uint64_t extended_lmp_features) {
@@ -425,7 +412,6 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateLoopbackCommandEve
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::LOOPBACK_COMMAND));
   CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(opcode)));
-  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(payload.size())));
   for (const auto& payload_byte : payload)  // Fill the packet.
     evt_ptr->AddPayloadOctets1(payload_byte);
   return evt_ptr;
@@ -486,18 +472,6 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateExtendedInquiryRes
   evt_ptr->AddPayloadOctets1(0x00);  // End marker
   while (evt_ptr->AddPayloadOctets1(0x00))
     ;  // Fill packet
-  return evt_ptr;
-}
-
-// Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section 7.7.38
-std::unique_ptr<EventPacketBuilder>
-EventPacketBuilder::CreateEncryptionKeyRefreshCompleteEvent(hci::Status status,
-                                                            uint16_t handle) {
-  std::unique_ptr<EventPacketBuilder> evt_ptr =
-      std::unique_ptr<EventPacketBuilder>(
-          new EventPacketBuilder(EventCode::ENCRYPTION_KEY_REFRESH_COMPLETE));
-  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  CHECK(evt_ptr->AddPayloadOctets2(handle));
   return evt_ptr;
 }
 
