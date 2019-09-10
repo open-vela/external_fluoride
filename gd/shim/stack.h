@@ -17,7 +17,6 @@
 
 #include <memory>
 
-#include "shim/icontroller.h"
 #include "shim/istack.h"
 
 /**
@@ -33,8 +32,6 @@ class Stack : public IStack {
 
   void Start() override;  // IStack
   void Stop() override;   // IStack
-
-  IController* GetController() override;  // IStack
 
  private:
   struct impl;
