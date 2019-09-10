@@ -60,7 +60,7 @@
  ******************************************************************************/
 bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
                       BD_NAME bd_name, uint8_t* features,
-                      uint32_t trusted_mask[], LinkKey* p_link_key,
+                      uint32_t trusted_mask[], LINK_KEY link_key,
                       uint8_t key_type, tBTM_IO_CAP io_cap,
                       uint8_t pin_length) {
   BTM_TRACE_API("%s: link key type:%x", __func__, key_type);
@@ -120,10 +120,10 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
 
   BTM_SEC_COPY_TRUSTED_DEVICE(trusted_mask, p_dev_rec->trusted_mask);
 
-  if (p_link_key) {
+  if (link_key) {
     VLOG(2) << __func__ << ": BDA: " << bd_addr;
     p_dev_rec->sec_flags |= BTM_SEC_LINK_KEY_KNOWN;
-    p_dev_rec->link_key = *p_link_key;
+    memcpy(p_dev_rec->link_key, link_key, LINK_KEY_LEN);
     p_dev_rec->link_key_type = key_type;
     p_dev_rec->pin_code_length = pin_length;
 
@@ -150,7 +150,7 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
 }
 
 void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec) {
-  p_dev_rec->link_key.fill(0);
+  memset(p_dev_rec->link_key, 0, LINK_KEY_LEN);
   memset(&p_dev_rec->ble.keys, 0, sizeof(tBTM_SEC_BLE_KEYS));
   list_remove(btm_cb.sec_dev_rec, p_dev_rec);
 }
@@ -281,8 +281,10 @@ bool btm_dev_support_switch(const RawAddress& bd_addr) {
   uint8_t xx;
   bool feature_empty = true;
 
+#if (BTM_SCO_INCLUDED == TRUE)
   /* Role switch is not allowed if a SCO is up */
   if (btm_is_sco_active_by_bdaddr(bd_addr)) return (false);
+#endif
   p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec &&
       controller_get_interface()->supports_master_slave_role_switch()) {
