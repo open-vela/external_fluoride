@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include "gatt/gatt_test.h"
 #include "adapter/bluetooth_test.h"
+#include "btcore/include/bdaddr.h"
 
 namespace bttest {
 
@@ -33,7 +34,7 @@ void GattTest::SetUp() {
   status_ = 0;
 
   BluetoothTest::SetUp();
-  ASSERT_EQ(bt_interface()->enable(), BT_STATUS_SUCCESS);
+  ASSERT_EQ(bt_interface()->enable(false), BT_STATUS_SUCCESS);
   semaphore_wait(adapter_state_changed_callback_sem_);
   EXPECT_TRUE(GetState() == BT_STATE_ON);
 
@@ -91,22 +92,22 @@ const btgatt_server_interface_t* GattTest::gatt_server_interface() {
 
 void GattTest::RegisterClientCallback(
     bluetooth::hal::BluetoothGattInterface* /* unused */, int status,
-    int clientIf, const bluetooth::Uuid& app_uuid) {
+    int clientIf, const bt_uuid_t& app_uuid) {
   status_ = status;
   client_interface_id_ = clientIf;
   semaphore_post(register_client_callback_sem_);
 }
 
 void GattTest::ScanResultCallback(
-    bluetooth::hal::BluetoothGattInterface* /* unused */, const RawAddress& bda,
-    int rssi, std::vector<uint8_t> adv_data) {
+    bluetooth::hal::BluetoothGattInterface* /* unused */,
+    const bt_bdaddr_t& bda, int rssi, std::vector<uint8_t> adv_data) {
   semaphore_post(scan_result_callback_sem_);
 }
 
 // GATT server callbacks
 void GattTest::RegisterServerCallback(
     bluetooth::hal::BluetoothGattInterface* /* unused */, int status,
-    int server_if, const bluetooth::Uuid& uuid) {
+    int server_if, const bt_uuid_t& uuid) {
   status_ = status;
   server_interface_id_ = server_if;
   semaphore_post(register_server_callback_sem_);
