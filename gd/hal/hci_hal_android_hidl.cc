@@ -113,7 +113,6 @@ class InternalHciCallbacks : public IBluetoothHciCallbacks {
 }  // namespace
 
 const std::string SnoopLogger::DefaultFilePath = "/data/misc/bluetooth/logs/btsnoop_hci.log";
-const bool SnoopLogger::AlwaysFlush = false;
 
 class HciHalHidl : public HciHal {
  public:

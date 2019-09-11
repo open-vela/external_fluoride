@@ -87,7 +87,6 @@ namespace bluetooth {
 namespace hal {
 
 const std::string SnoopLogger::DefaultFilePath = "/tmp/btsnoop_hci.log";
-const bool SnoopLogger::AlwaysFlush = true;
 
 class HciHalHostRootcanal : public HciHal {
  public:
