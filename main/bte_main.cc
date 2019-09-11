@@ -53,7 +53,6 @@
 #include "osi/include/future.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "shim/shim.h"
 #include "stack_config.h"
 
 /*******************************************************************************
@@ -156,13 +155,8 @@ void bte_main_cleanup() {
 void bte_main_enable() {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO(LOG_TAG, "%s Gd shim module enabled", __func__);
-    module_start_up(get_module(GD_SHIM_MODULE));
-  } else {
-    module_start_up(get_module(BTSNOOP_MODULE));
-    module_start_up(get_module(HCI_MODULE));
-  }
+  module_start_up(get_module(BTSNOOP_MODULE));
+  module_start_up(get_module(HCI_MODULE));
 
   BTU_StartUp();
 }
@@ -180,13 +174,8 @@ void bte_main_enable() {
 void bte_main_disable(void) {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO(LOG_TAG, "%s Gd shim module enabled", __func__);
-    module_shut_down(get_module(GD_SHIM_MODULE));
-  } else {
-    module_shut_down(get_module(HCI_MODULE));
-    module_shut_down(get_module(BTSNOOP_MODULE));
-  }
+  module_shut_down(get_module(HCI_MODULE));
+  module_shut_down(get_module(BTSNOOP_MODULE));
 
   BTU_ShutDown();
 }
