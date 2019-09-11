@@ -65,9 +65,7 @@ class ClassicLink {
   // ClassicFixedChannel methods
 
   virtual std::shared_ptr<ClassicFixedChannelImpl> AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
-    auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
-    scheduler_->AttachChannel(cid, channel->GetQueueDownEnd());
-    return channel;
+    return fixed_channel_allocator_.AllocateChannel(cid, security_policy);
   }
 
   virtual bool IsFixedChannelAllocated(Cid cid) {
