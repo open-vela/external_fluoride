@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,7 +39,9 @@
 #define HANDLE_MASK 0x0FFF
 #define START_PACKET_BOUNDARY 2
 #define CONTINUATION_PACKET_BOUNDARY 1
-#define L2CAP_HEADER_SIZE 4
+#define L2CAP_HEADER_PDU_LEN_SIZE 2
+#define L2CAP_HEADER_CID_SIZE 2
+#define L2CAP_HEADER_SIZE (L2CAP_HEADER_PDU_LEN_SIZE + L2CAP_HEADER_CID_SIZE)
 
 // Our interface and callbacks
 
@@ -121,12 +123,10 @@ static void reassemble_and_dispatch(UNUSED_ATTR BT_HDR* packet) {
   if ((packet->event & MSG_EVT_MASK) == MSG_HC_TO_STACK_HCI_ACL) {
     uint8_t* stream = packet->data;
     uint16_t handle;
-    uint16_t l2cap_length;
     uint16_t acl_length;
 
     STREAM_TO_UINT16(handle, stream);
     STREAM_TO_UINT16(acl_length, stream);
-    STREAM_TO_UINT16(l2cap_length, stream);
 
     CHECK(acl_length == packet->len - HCI_ACL_PREAMBLE_SIZE);
 
@@ -134,6 +134,13 @@ static void reassemble_and_dispatch(UNUSED_ATTR BT_HDR* packet) {
     handle = handle & HANDLE_MASK;
 
     if (boundary_flag == START_PACKET_BOUNDARY) {
+      if (acl_length < 2) {
+        LOG_WARN(LOG_TAG, "%s invalid acl_length %d", __func__, acl_length);
+        buffer_allocator->free(packet);
+        return;
+      }
+      uint16_t l2cap_length;
+      STREAM_TO_UINT16(l2cap_length, stream);
       auto map_iter = partial_packets.find(handle);
       if (map_iter != partial_packets.end()) {
         LOG_WARN(LOG_TAG,
@@ -146,9 +153,9 @@ static void reassemble_and_dispatch(UNUSED_ATTR BT_HDR* packet) {
         buffer_allocator->free(hdl);
       }
 
-      if (acl_length < L2CAP_HEADER_SIZE) {
+      if (acl_length < L2CAP_HEADER_PDU_LEN_SIZE) {
         LOG_WARN(LOG_TAG, "%s L2CAP packet too small (%d < %d). Dropping it.",
-                 __func__, packet->len, L2CAP_HEADER_SIZE);
+                 __func__, packet->len, L2CAP_HEADER_PDU_LEN_SIZE);
         buffer_allocator->free(packet);
         return;
       }
