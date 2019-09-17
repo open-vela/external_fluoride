@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 //  limitations under the License.
 //
 
-#include "service/common/android/bluetooth/scan_result.h"
+#include "android/bluetooth/scan_result.h"
 
 #include <base/logging.h>
 #include <binder/Parcel.h>
