@@ -60,7 +60,11 @@ void DualModeController::Initialize(const std::vector<std::string>& args) {
   if (args.size() < 2) return;
 
   Address addr;
-  if (Address::FromString(args[1], addr)) properties_.SetAddress(addr);
+  if (Address::FromString(args[1], addr)) {
+    properties_.SetAddress(addr);
+  } else {
+    LOG_FATAL(LOG_TAG, "Invalid address: %s", args[1].c_str());
+  }
 };
 
 std::string DualModeController::GetTypeString() const {
@@ -74,28 +78,6 @@ void DualModeController::IncomingPacket(packets::LinkLayerPacketView incoming) {
 void DualModeController::TimerTick() {
   link_layer_controller_.TimerTick();
 }
-
-void DualModeController::SendLinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> to_send,
-                                             Phy::Type phy_type) {
-  for (auto phy_pair : phy_layers_) {
-    auto phy_list = std::get<1>(phy_pair);
-    if (phy_type != std::get<0>(phy_pair)) {
-      continue;
-    }
-    for (auto phy : phy_list) {
-      phy->Send(to_send);
-    }
-  }
-}
-
-/*
-void DualModeController::AddConnectionAction(const TaskCallback& task,
-                                             uint16_t handle) {
-  for (size_t i = 0; i < connections_.size(); i++)
-    if (connections_[i]->GetHandle() == handle)
-connections_[i]->AddAction(task);
-}
-*/
 
 void DualModeController::SendCommandCompleteSuccess(OpCode command_opcode) const {
   send_event_(packets::EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(command_opcode, hci::Status::SUCCESS)
@@ -146,6 +128,8 @@ DualModeController::DualModeController(const std::string& properties_filename, u
   SET_HANDLER(OpCode::READ_LOCAL_VERSION_INFORMATION, HciReadLocalVersionInformation);
   SET_HANDLER(OpCode::READ_BD_ADDR, HciReadBdAddr);
   SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_COMMANDS, HciReadLocalSupportedCommands);
+  SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_FEATURES,
+              HciReadLocalSupportedFeatures);
   SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_CODECS, HciReadLocalSupportedCodecs);
   SET_HANDLER(OpCode::READ_LOCAL_EXTENDED_FEATURES, HciReadLocalExtendedFeatures);
   SET_HANDLER(OpCode::READ_REMOTE_EXTENDED_FEATURES, HciReadRemoteExtendedFeatures);
@@ -174,6 +158,7 @@ DualModeController::DualModeController(const std::string& properties_filename, u
   SET_HANDLER(OpCode::WRITE_LOCAL_NAME, HciWriteLocalName);
   SET_HANDLER(OpCode::READ_LOCAL_NAME, HciReadLocalName);
   SET_HANDLER(OpCode::WRITE_EXTENDED_INQUIRY_RESPONSE, HciWriteExtendedInquiryResponse);
+  SET_HANDLER(OpCode::REFRESH_ENCRYPTION_KEY, HciRefreshEncryptionKey);
   SET_HANDLER(OpCode::WRITE_VOICE_SETTING, HciWriteVoiceSetting);
   SET_HANDLER(OpCode::WRITE_CURRENT_IAC_LAP, HciWriteCurrentIacLap);
   SET_HANDLER(OpCode::WRITE_INQUIRY_SCAN_ACTIVITY, HciWriteInquiryScanActivity);
@@ -191,8 +176,10 @@ DualModeController::DualModeController(const std::string& properties_filename, u
   SET_HANDLER(OpCode::LE_READ_BUFFER_SIZE, HciLeReadBufferSize);
   SET_HANDLER(OpCode::LE_READ_LOCAL_SUPPORTED_FEATURES, HciLeReadLocalSupportedFeatures);
   SET_HANDLER(OpCode::LE_SET_RANDOM_ADDRESS, HciLeSetRandomAddress);
-  SET_HANDLER(OpCode::LE_SET_ADVERTISING_DATA, HciLeSetAdvertisingData);
   SET_HANDLER(OpCode::LE_SET_ADVERTISING_PARAMETERS, HciLeSetAdvertisingParameters);
+  SET_HANDLER(OpCode::LE_SET_ADVERTISING_DATA, HciLeSetAdvertisingData);
+  SET_HANDLER(OpCode::LE_SET_SCAN_RESPONSE_DATA, HciLeSetScanResponseData);
+  SET_HANDLER(OpCode::LE_SET_ADVERTISING_ENABLE, HciLeSetAdvertisingEnable);
   SET_HANDLER(OpCode::LE_SET_SCAN_PARAMETERS, HciLeSetScanParameters);
   SET_HANDLER(OpCode::LE_SET_SCAN_ENABLE, HciLeSetScanEnable);
   SET_HANDLER(OpCode::LE_CREATE_CONNECTION, HciLeCreateConnection);
@@ -280,7 +267,8 @@ void DualModeController::HandleCommand(std::shared_ptr<std::vector<uint8_t>> pac
     active_hci_commands_[opcode](command_packet.GetPayload());
   } else {
     SendCommandCompleteUnknownOpCodeEvent(opcode);
-    LOG_INFO(LOG_TAG, "Command opcode: 0x%04X, OGF: 0x%04X, OCF: 0x%04X", opcode, opcode & 0xFC00, opcode & 0x03FF);
+    LOG_INFO(LOG_TAG, "Command opcode: 0x%04X, OGF: 0x%04X, OCF: 0x%04X", opcode, (opcode & 0xFC00) >> 10,
+             opcode & 0x03FF);
   }
 }
 
@@ -305,6 +293,9 @@ void DualModeController::RegisterScoChannel(
 void DualModeController::HciReset(packets::PacketView<true> args) {
   CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   link_layer_controller_.Reset();
+  if (loopback_mode_ == hci::LoopbackMode::LOCAL) {
+    loopback_mode_ = hci::LoopbackMode::NO;
+  }
 
   SendCommandCompleteSuccess(OpCode::RESET);
 }
@@ -356,6 +347,15 @@ void DualModeController::HciReadLocalSupportedCommands(packets::PacketView<true>
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadLocalSupportedCommands(hci::Status::SUCCESS,
                                                                                    properties_.GetSupportedCommands());
+  send_event_(command_complete->ToVector());
+}
+
+void DualModeController::HciReadLocalSupportedFeatures(
+    packets::PacketView<true> args) {
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
+  std::shared_ptr<packets::EventPacketBuilder> command_complete = packets::
+      EventPacketBuilder::CreateCommandCompleteReadLocalSupportedFeatures(
+          hci::Status::SUCCESS, properties_.GetSupportedFeatures());
   send_event_(command_complete->ToVector());
 }
 
@@ -646,6 +646,20 @@ void DualModeController::HciWriteExtendedInquiryResponse(packets::PacketView<tru
   SendCommandCompleteSuccess(OpCode::WRITE_EXTENDED_INQUIRY_RESPONSE);
 }
 
+void DualModeController::HciRefreshEncryptionKey(
+    packets::PacketView<true> args) {
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
+  auto args_itr = args.begin();
+  uint16_t handle = args_itr.extract<uint16_t>();
+  SendCommandStatusSuccess(OpCode::REFRESH_ENCRYPTION_KEY);
+  // TODO: Support this in the link layer
+  hci::Status status = hci::Status::SUCCESS;
+  send_event_(
+      packets::EventPacketBuilder::CreateEncryptionKeyRefreshCompleteEvent(
+          status, handle)
+          ->ToVector());
+}
+
 void DualModeController::HciWriteVoiceSetting(packets::PacketView<true> args) {
   CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_VOICE_SETTING);
@@ -784,13 +798,34 @@ void DualModeController::HciLeSetRandomAddress(packets::PacketView<true> args) {
 
 void DualModeController::HciLeSetAdvertisingParameters(packets::PacketView<true> args) {
   CHECK(args.size() == 15) << __func__ << " size=" << args.size();
+  auto args_itr = args.begin();
+  properties_.SetLeAdvertisingParameters(
+      args_itr.extract<uint16_t>() /* AdverisingIntervalMin */,
+      args_itr.extract<uint16_t>() /* AdverisingIntervalMax */, args_itr.extract<uint8_t>() /* AdverisingType */,
+      args_itr.extract<uint8_t>() /* OwnAddressType */, args_itr.extract<uint8_t>() /* PeerAddressType */,
+      args_itr.extract<Address>() /* PeerAddress */, args_itr.extract<uint8_t>() /* AdvertisingChannelMap */,
+      args_itr.extract<uint8_t>() /* AdvertisingFilterPolicy */
+  );
 
   SendCommandCompleteSuccess(OpCode::LE_SET_ADVERTISING_PARAMETERS);
 }
 
 void DualModeController::HciLeSetAdvertisingData(packets::PacketView<true> args) {
-  CHECK(args.size() > 0);
+  CHECK(args.size() == 32) << __func__ << " size=" << args.size();
+  properties_.SetLeAdvertisement(std::vector<uint8_t>(args.begin() + 1, args.end()));
   SendCommandCompleteSuccess(OpCode::LE_SET_ADVERTISING_DATA);
+}
+
+void DualModeController::HciLeSetScanResponseData(packets::PacketView<true> args) {
+  CHECK(args.size() == 32) << __func__ << " size=" << args.size();
+  properties_.SetLeScanResponse(std::vector<uint8_t>(args.begin() + 1, args.end()));
+  SendCommandCompleteSuccess(OpCode::LE_SET_SCAN_RESPONSE_DATA);
+}
+
+void DualModeController::HciLeSetAdvertisingEnable(packets::PacketView<true> args) {
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
+  hci::Status status = link_layer_controller_.SetLeAdvertisingEnable(args.begin().extract<uint8_t>());
+  SendCommandCompleteOnlyStatus(OpCode::LE_SET_ADVERTISING_ENABLE, status);
 }
 
 void DualModeController::HciLeSetScanParameters(packets::PacketView<true> args) {
