@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -78,7 +78,9 @@ static const int BT_HCI_RT_PRIORITY = 1;
 
 // Abort if there is no response to an HCI command.
 static const uint32_t COMMAND_PENDING_TIMEOUT_MS = 2000;
-static const uint32_t COMMAND_TIMEOUT_RESTART_US = 5000000;
+static const uint32_t COMMAND_PENDING_MUTEX_ACQUIRE_TIMEOUT_MS = 500;
+static const uint32_t COMMAND_TIMEOUT_RESTART_MS = 5000;
+static const int HCI_UNKNOWN_COMMAND_TIMED_OUT = 0x00ffffff;
 
 // Our interface
 static bool interface_created;
@@ -105,7 +107,8 @@ static std::queue<base::Closure> command_queue;
 // Inbound-related
 static alarm_t* command_response_timer;
 static list_t* commands_pending_response;
-static std::recursive_mutex commands_pending_response_mutex;
+static std::recursive_timed_mutex commands_pending_response_mutex;
+static alarm_t* hci_timeout_abort_timer;
 
 // The hand-off point for data going to a higher layer, set by the higher layer
 static base::Callback<void(const tracked_objects::Location&, BT_HDR*)>
@@ -254,7 +257,8 @@ static future_t* hci_module_shut_down() {
 
   // Free the timers
   {
-    std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+    std::lock_guard<std::recursive_timed_mutex> lock(
+        commands_pending_response_mutex);
     alarm_free(command_response_timer);
     command_response_timer = NULL;
     alarm_free(startup_timer);
@@ -276,7 +280,8 @@ static future_t* hci_module_shut_down() {
   hci_close();
 
   {
-    std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+    std::lock_guard<std::recursive_timed_mutex> lock(
+        commands_pending_response_mutex);
     list_free(commands_pending_response);
     commands_pending_response = NULL;
   }
@@ -285,6 +290,17 @@ static future_t* hci_module_shut_down() {
 
   thread_free(thread);
   thread = NULL;
+
+  // Clean up abort timer, if it exists.
+  if (hci_timeout_abort_timer != NULL) {
+    alarm_free(hci_timeout_abort_timer);
+    hci_timeout_abort_timer = NULL;
+  }
+
+  if (hci_firmware_log_fd != INVALID_FD) {
+    hci_close_firmware_log_file(hci_firmware_log_fd);
+    hci_firmware_log_fd = INVALID_FD;
+  }
 
   return NULL;
 }
@@ -359,7 +375,8 @@ static void transmit_downward(uint16_t type, void* data) {
 
 static void event_finish_startup(UNUSED_ATTR void* context) {
   LOG_INFO(LOG_TAG, "%s", __func__);
-  std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+  std::lock_guard<std::recursive_timed_mutex> lock(
+      commands_pending_response_mutex);
   alarm_cancel(startup_timer);
   future_ready(startup_future, FUTURE_SUCCESS);
   startup_future = NULL;
@@ -368,9 +385,18 @@ static void event_finish_startup(UNUSED_ATTR void* context) {
 static void startup_timer_expired(UNUSED_ATTR void* context) {
   LOG_ERROR(LOG_TAG, "%s", __func__);
 
-  std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+  std::unique_lock<std::recursive_timed_mutex> lock(
+      commands_pending_response_mutex, std::defer_lock);
+  if (!lock.try_lock_for(std::chrono::milliseconds(
+          COMMAND_PENDING_MUTEX_ACQUIRE_TIMEOUT_MS))) {
+    LOG_ERROR(LOG_TAG, "%s: Cannot obtain the mutex", __func__);
+    // We cannot recover if the startup timer expired and we are deadlock,
+    // hence abort.
+    abort();
+  }
   future_ready(startup_future, FUTURE_FAIL);
   startup_future = NULL;
+  lock.unlock();
 }
 
 // Command/packet transmitting functions
@@ -394,11 +420,13 @@ static void enqueue_command(waiting_command_t* wait_entry) {
 }
 
 static void event_command_ready(waiting_command_t* wait_entry) {
-  /// Move it to the list of commands awaiting response
-  std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
-  wait_entry->timestamp = std::chrono::steady_clock::now();
-  list_append(commands_pending_response, wait_entry);
-
+  {
+    /// Move it to the list of commands awaiting response
+    std::lock_guard<std::recursive_timed_mutex> lock(
+        commands_pending_response_mutex);
+    wait_entry->timestamp = std::chrono::steady_clock::now();
+    list_append(commands_pending_response, wait_entry);
+  }
   // Send it off
   packet_fragmenter->fragment_and_dispatch(wait_entry->command);
 
@@ -426,11 +454,17 @@ static void event_packet_ready(void* pkt) {
 static void transmit_fragment(BT_HDR* packet, bool send_transmit_finished) {
   btsnoop->capture(packet, false);
 
+  // HCI command packets are freed on a different thread when the matching
+  // event is received. Check packet->event before sending to avoid a race.
+  bool free_after_transmit =
+      (packet->event & MSG_EVT_MASK) != MSG_STACK_TO_HC_HCI_CMD &&
+      send_transmit_finished;
+
   hci_transmit(packet);
 
-  uint16_t event = packet->event & MSG_EVT_MASK;
-  if (event != MSG_STACK_TO_HC_HCI_CMD && send_transmit_finished)
+  if (free_after_transmit) {
     buffer_allocator->free(packet);
+  }
 }
 
 static void fragmenter_transmit_finished(BT_HDR* packet,
@@ -446,10 +480,17 @@ static void fragmenter_transmit_finished(BT_HDR* packet,
   }
 }
 
-// Print debugging information and quit. Don't dereference original_wait_entry.
-static void command_timed_out(void* original_wait_entry) {
-  std::unique_lock<std::recursive_mutex> lock(commands_pending_response_mutex);
+// Abort.  The chip has had time to write any debugging information.
+static void hci_timeout_abort(void* unused_data) {
+  LOG_ERROR(LOG_TAG, "%s restarting the Bluetooth process.", __func__);
+  hci_close_firmware_log_file(hci_firmware_log_fd);
 
+  // We shouldn't try to recover the stack from this command timeout.
+  // If it's caused by a software bug, fix it. If it's a hardware bug, fix it.
+  abort();
+}
+
+static void command_timed_out_log_info(void* original_wait_entry) {
   LOG_ERROR(LOG_TAG, "%s: %d commands pending response", __func__,
             get_num_waiting_commands());
 
@@ -479,7 +520,26 @@ static void command_timed_out(void* original_wait_entry) {
 
     LOG_EVENT_INT(BT_HCI_TIMEOUT_TAG_NUM, wait_entry->opcode);
   }
-  lock.unlock();
+}
+
+// Print debugging information and quit. Don't dereference original_wait_entry.
+static void command_timed_out(void* original_wait_entry) {
+  LOG_ERROR(LOG_TAG, "%s", __func__);
+  std::unique_lock<std::recursive_timed_mutex> lock(
+      commands_pending_response_mutex, std::defer_lock);
+  if (!lock.try_lock_for(std::chrono::milliseconds(
+          COMMAND_PENDING_MUTEX_ACQUIRE_TIMEOUT_MS))) {
+    LOG_ERROR(LOG_TAG, "%s: Cannot obtain the mutex", __func__);
+    LOG_EVENT_INT(BT_HCI_TIMEOUT_TAG_NUM, HCI_UNKNOWN_COMMAND_TIMED_OUT);
+  } else {
+    command_timed_out_log_info(original_wait_entry);
+    lock.unlock();
+  }
+
+  // Don't request a firmware dump for multiple hci timeouts
+  if (hci_timeout_abort_timer != NULL || hci_firmware_log_fd != INVALID_FD) {
+    return;
+  }
 
   LOG_ERROR(LOG_TAG, "%s: requesting a firmware dump.", __func__);
 
@@ -502,14 +562,15 @@ static void command_timed_out(void* original_wait_entry) {
   transmit_fragment(bt_hdr, true);
 
   osi_free(bt_hdr);
+  LOG_ERROR(LOG_TAG, "%s: Setting a timer to restart.", __func__);
 
-  LOG_ERROR(LOG_TAG, "%s restarting the Bluetooth process.", __func__);
-  usleep(COMMAND_TIMEOUT_RESTART_US);
-  hci_close_firmware_log_file(hci_firmware_log_fd);
-
-  // We shouldn't try to recover the stack from this command timeout.
-  // If it's caused by a software bug, fix it. If it's a hardware bug, fix it.
-  abort();
+  hci_timeout_abort_timer = alarm_new("hci.hci_timeout_aborter");
+  if (!hci_timeout_abort_timer) {
+    LOG_ERROR(LOG_TAG, "%s unable to create an abort timer.", __func__);
+    abort();
+  }
+  alarm_set(hci_timeout_abort_timer, COMMAND_TIMEOUT_RESTART_MS,
+            hci_timeout_abort, nullptr);
 }
 
 // Event/packet receiving functions
@@ -640,7 +701,8 @@ static void dispatch_reassembled(BT_HDR* packet) {
 // Misc internal functions
 
 static waiting_command_t* get_waiting_command(command_opcode_t opcode) {
-  std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+  std::lock_guard<std::recursive_timed_mutex> lock(
+      commands_pending_response_mutex);
 
   for (const list_node_t* node = list_begin(commands_pending_response);
        node != list_end(commands_pending_response); node = list_next(node)) {
@@ -658,12 +720,14 @@ static waiting_command_t* get_waiting_command(command_opcode_t opcode) {
 }
 
 static int get_num_waiting_commands() {
-  std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+  std::lock_guard<std::recursive_timed_mutex> lock(
+      commands_pending_response_mutex);
   return list_length(commands_pending_response);
 }
 
 static void update_command_response_timer(void) {
-  std::lock_guard<std::recursive_mutex> lock(commands_pending_response_mutex);
+  std::lock_guard<std::recursive_timed_mutex> lock(
+      commands_pending_response_mutex);
 
   if (command_response_timer == NULL) return;
   if (list_is_empty(commands_pending_response)) {
