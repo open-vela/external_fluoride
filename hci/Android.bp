@@ -4,6 +4,8 @@ cc_defaults {
     shared_libs: [
         "android.hardware.bluetooth@1.0",
         "libhidlbase",
+        "libhidltransport",
+        "libhwbinder",
     ],
 }
 
@@ -29,7 +31,7 @@ cc_library_static {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/internal_include",
+        "system/bt/include",
         "system/bt/btcore/include",
         "system/bt/stack/include",
         "system/bt/utils/include",
@@ -49,7 +51,7 @@ cc_test {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/internal_include",
+        "system/bt/include",
         "system/bt/btcore/include",
         "system/bt/osi/test",
         "system/bt/stack/include",
@@ -71,6 +73,6 @@ cc_test {
         "libosi-AllocationTestHarness",
         "libcutils",
         "libbtcore",
-        "libbt-protos-lite",
+        "libbt-protos",
     ],
 }
