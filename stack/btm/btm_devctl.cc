@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,19 +34,16 @@
 #include "btcore/include/module.h"
 #include "btm_int.h"
 #include "btu.h"
-#include "common/message_loop_thread.h"
 #include "device/include/controller.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
 #include "osi/include/osi.h"
-#include "stack/gatt/connection_manager.h"
+#include "osi/include/thread.h"
 
 #include "gatt_int.h"
-#include "main/shim/controller.h"
-#include "main/shim/shim.h"
 
-extern bluetooth::common::MessageLoopThread bt_startup_thread;
+extern thread_t* bt_workqueue_thread;
 
 /******************************************************************************/
 /*               L O C A L    D A T A    D E F I N I T I O N S                */
@@ -69,7 +66,6 @@ extern bluetooth::common::MessageLoopThread bt_startup_thread;
 
 static void btm_decode_ext_features_page(uint8_t page_number,
                                          const BD_FEATURES p_features);
-static void BTM_BT_Quality_Report_VSE_CBack(uint8_t length, uint8_t* p_stream);
 
 /*******************************************************************************
  *
@@ -80,7 +76,7 @@ static void BTM_BT_Quality_Report_VSE_CBack(uint8_t length, uint8_t* p_stream);
  * Returns          void
  *
  ******************************************************************************/
-void btm_dev_init() {
+void btm_dev_init(void) {
   /* Initialize nonzero defaults */
   memset(btm_cb.cfg.bd_name, 0, sizeof(tBTM_LOC_BD_NAME));
 
@@ -121,6 +117,7 @@ void btm_dev_init() {
  ******************************************************************************/
 static void btm_db_reset(void) {
   tBTM_CMPL_CB* p_cb;
+  tBTM_STATUS status = BTM_DEV_RESET;
 
   btm_inq_db_reset();
 
@@ -135,33 +132,21 @@ static void btm_db_reset(void) {
     p_cb = btm_cb.devcb.p_rssi_cmpl_cb;
     btm_cb.devcb.p_rssi_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_RSSI_RESULT btm_rssi_result;
-      btm_rssi_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_rssi_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_RSSI_RESULT*)&status);
   }
 
   if (btm_cb.devcb.p_failed_contact_counter_cmpl_cb) {
     p_cb = btm_cb.devcb.p_failed_contact_counter_cmpl_cb;
     btm_cb.devcb.p_failed_contact_counter_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_FAILED_CONTACT_COUNTER_RESULT btm_failed_contact_counter_result;
-      btm_failed_contact_counter_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_failed_contact_counter_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_FAILED_CONTACT_COUNTER_RESULT*)&status);
   }
 
   if (btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb) {
     p_cb = btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb;
     btm_cb.devcb.p_automatic_flush_timeout_cmpl_cb = NULL;
 
-    if (p_cb) {
-      tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT btm_automatic_flush_timeout_result;
-      btm_automatic_flush_timeout_result.status = BTM_DEV_RESET;
-      (*p_cb)(&btm_automatic_flush_timeout_result);
-    }
+    if (p_cb) (*p_cb)((tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT*)&status);
   }
 }
 
@@ -192,7 +177,8 @@ static void reset_complete(void* result) {
   btm_cb.btm_inq_vars.page_scan_type = HCI_DEF_SCAN_TYPE;
 
   btm_cb.ble_ctr_cb.conn_state = BLE_CONN_IDLE;
-  connection_manager::reset(true);
+  btm_cb.ble_ctr_cb.bg_conn_type = BTM_BLE_CONN_NONE;
+  gatt_reset_bgdev_list();
 
   btm_pm_reset();
 
@@ -233,13 +219,8 @@ void BTM_DeviceReset(UNUSED_ATTR tBTM_CMPL_CB* p_cb) {
   /* Clear the callback, so application would not hang on reset */
   btm_db_reset();
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    module_start_up_callbacked_wrapper(get_module(GD_CONTROLLER_MODULE),
-                                       &bt_startup_thread, reset_complete);
-  } else {
-    module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
-                                       &bt_startup_thread, reset_complete);
-  }
+  module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
+                                     bt_workqueue_thread, reset_complete);
 }
 
 /*******************************************************************************
@@ -279,7 +260,6 @@ void btm_read_local_name_timeout(UNUSED_ATTR void* data) {
  ******************************************************************************/
 static void btm_decode_ext_features_page(uint8_t page_number,
                                          const uint8_t* p_features) {
-  CHECK(p_features != nullptr);
   BTM_TRACE_DEBUG("btm_decode_ext_features_page page: %d", page_number);
   switch (page_number) {
     /* Extended (Legacy) Page 0 */
@@ -329,7 +309,9 @@ static void btm_decode_ext_features_page(uint8_t page_number,
 
       /* Create (e)SCO supported packet types mask */
       btm_cb.btm_sco_pkt_types_supported = 0;
+#if (BTM_SCO_INCLUDED == TRUE)
       btm_cb.sco_cb.esco_supported = false;
+#endif
       if (HCI_SCO_LINK_SUPPORTED(p_features)) {
         btm_cb.btm_sco_pkt_types_supported = ESCO_PKT_TYPES_MASK_HV1;
 
@@ -625,7 +607,7 @@ void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
  *
  ******************************************************************************/
 void btm_vsc_complete(uint8_t* p, uint16_t opcode, uint16_t evt_len,
-                      tBTM_VSC_CMPL_CB* p_vsc_cplt_cback) {
+                      tBTM_CMPL_CB* p_vsc_cplt_cback) {
   tBTM_VSC_CMPL vcs_cplt_params;
 
   /* If there was a callback address for vcs complete, call it */
@@ -665,7 +647,7 @@ tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb, bool is_register) {
       free_idx = i;
     } else if (btm_cb.devcb.p_vend_spec_cb[i] == p_cb) {
       /* Found callback in lookup table. If deregistering, clear the entry. */
-      if (!is_register) {
+      if (is_register == false) {
         btm_cb.devcb.p_vend_spec_cb[i] = NULL;
         BTM_TRACE_EVENT("BTM Deregister For VSEvents is successfully");
       }
@@ -873,75 +855,4 @@ void btm_report_device_status(tBTM_DEV_STATUS status) {
 
   /* Call the call back to pass the device status to application */
   if (p_cb) (*p_cb)(status);
-}
-
-/*******************************************************************************
- *
- * Function         BTM_BT_Quality_Report_VSE_CBack
- *
- * Description      Callback invoked on receiving of Vendor Specific Events.
- *                  This function will call registered BQR report receiver if
- *                  Bluetooth Quality Report sub-event is identified.
- *
- * Parameters:      length - Lengths of all of the parameters contained in the
- *                    Vendor Specific Event.
- *                  p_stream - A pointer to the quality report which is sent
- *                    from the Bluetooth controller via Vendor Specific Event.
- *
- ******************************************************************************/
-static void BTM_BT_Quality_Report_VSE_CBack(uint8_t length, uint8_t* p_stream) {
-  if (length == 0) {
-    LOG(WARNING) << __func__ << ": Lengths of all of the parameters are zero.";
-    return;
-  }
-
-  uint8_t sub_event = 0;
-  STREAM_TO_UINT8(sub_event, p_stream);
-  length--;
-
-  if (sub_event == HCI_VSE_SUBCODE_BQR_SUB_EVT) {
-    LOG(INFO) << __func__
-              << ": BQR sub event, report length: " << std::to_string(length);
-
-    if (btm_cb.p_bqr_report_receiver == nullptr) {
-      LOG(WARNING) << __func__ << ": No registered report receiver.";
-      return;
-    }
-
-    btm_cb.p_bqr_report_receiver(length, p_stream);
-  }
-}
-
-/*******************************************************************************
- *
- * Function         BTM_BT_Quality_Report_VSE_Register
- *
- * Description      Register/Deregister for Bluetooth Quality Report VSE sub
- *                  event Callback.
- *
- * Parameters:      is_register - True/False to register/unregister for VSE.
- *                  p_bqr_report_receiver - The receiver for receiving Bluetooth
- *                    Quality Report VSE sub event.
- *
- ******************************************************************************/
-tBTM_STATUS BTM_BT_Quality_Report_VSE_Register(
-    bool is_register, tBTM_BT_QUALITY_REPORT_RECEIVER* p_bqr_report_receiver) {
-  tBTM_STATUS retval =
-      BTM_RegisterForVSEvents(BTM_BT_Quality_Report_VSE_CBack, is_register);
-
-  if (retval != BTM_SUCCESS) {
-    LOG(WARNING) << __func__ << ": Fail to (un)register VSEvents: " << retval
-                 << ", is_register: " << logbool(is_register);
-    return retval;
-  }
-
-  if (is_register) {
-    btm_cb.p_bqr_report_receiver = p_bqr_report_receiver;
-  } else {
-    btm_cb.p_bqr_report_receiver = nullptr;
-  }
-
-  LOG(INFO) << __func__ << ": Success to (un)register VSEvents."
-            << " is_register: " << logbool(is_register);
-  return retval;
 }
