@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2006-2013 Broadcom Corporation
+ *  Copyright 2006-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,8 +28,6 @@
 /*****************************************************************************
  *  Global data
  ****************************************************************************/
-
-#if (AVRC_METADATA_INCLUDED == TRUE)
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 
@@ -897,4 +895,3 @@ tAVRC_STS AVRC_ParsResponse(tAVRC_MSG* p_msg, tAVRC_RESPONSE* p_result,
   }
   return status;
 }
-#endif /* (AVRC_METADATA_INCLUDED == TRUE) */

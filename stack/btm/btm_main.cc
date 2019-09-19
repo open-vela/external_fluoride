@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -73,4 +73,32 @@ void btm_init(void) {
   btm_cb.sec_dev_rec = list_new(osi_free);
 
   btm_dev_init(); /* Device Manager Structures & HCI_Reset */
+}
+
+/** This function is called to free dynamic memory and system resource allocated by btm_init */
+void btm_free(void) {
+  fixed_queue_free(btm_cb.page_queue, NULL);
+  btm_cb.page_queue = NULL;
+
+  fixed_queue_free(btm_cb.sec_pending_q, NULL);
+  btm_cb.sec_pending_q = NULL;
+
+  list_node_t* end = list_end(btm_cb.sec_dev_rec);
+  list_node_t* node = list_begin(btm_cb.sec_dev_rec);
+  while (node != end) {
+    tBTM_SEC_DEV_REC* p_dev_rec = static_cast<tBTM_SEC_DEV_REC*>(list_node(node));
+
+    // we do list_remove in, must grab next before removing
+    node = list_next(node);
+    wipe_secrets_and_remove(p_dev_rec);
+  }
+
+  list_free(btm_cb.sec_dev_rec);
+  btm_cb.sec_dev_rec = NULL;
+
+  alarm_free(btm_cb.sec_collision_timer);
+  btm_cb.sec_collision_timer = NULL;
+
+  alarm_free(btm_cb.pairing_timer);
+  btm_cb.pairing_timer = NULL;
 }
