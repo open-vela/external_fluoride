@@ -33,7 +33,3 @@ future_t* bluetooth::shim::StopGabeldorscheStack() {
 bluetooth::shim::IController* bluetooth::shim::GetController() {
   return GetGabeldorscheStack()->GetController();
 }
-
-bluetooth::shim::IHciLayer* bluetooth::shim::GetHciLayer() {
-  return GetGabeldorscheStack()->GetHciLayer();
-}

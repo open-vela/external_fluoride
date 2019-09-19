@@ -25,5 +25,4 @@
  *
  */
 #include "gd/shim/icontroller.h"
-#include "gd/shim/ihci_layer.h"
 #include "gd/shim/istack.h"
