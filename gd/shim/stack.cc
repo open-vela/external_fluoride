@@ -24,7 +24,6 @@
 #include "os/log.h"
 #include "os/thread.h"
 #include "shim/controller.h"
-#include "shim/hci_layer.h"
 #include "stack_manager.h"
 
 using ::bluetooth::os::Thread;
@@ -43,7 +42,6 @@ struct bluetooth::shim::Stack::impl {
     modules.add<::bluetooth::hci::ClassicSecurityManager>();
     modules.add<::bluetooth::l2cap::L2capLayer>();
     modules.add<::bluetooth::shim::Controller>();
-    modules.add<::bluetooth::shim::HciLayer>();
 
     stack_thread_ = new Thread("gd_stack_thread", Thread::Priority::NORMAL);
     stack_manager_.StartUp(&modules, stack_thread_);
@@ -69,10 +67,6 @@ struct bluetooth::shim::Stack::impl {
     return stack_manager_.GetInstance<bluetooth::shim::Controller>();
   }
 
-  IHciLayer* GetHciLayer() {
-    return stack_manager_.GetInstance<bluetooth::shim::HciLayer>();
-  }
-
  private:
   os::Thread* stack_thread_ = nullptr;
   bool is_running_ = false;
@@ -94,10 +88,6 @@ void bluetooth::shim::Stack::Stop() {
 
 bluetooth::shim::IController* bluetooth::shim::Stack::GetController() {
   return pimpl_->GetController();
-}
-
-bluetooth::shim::IHciLayer* bluetooth::shim::Stack::GetHciLayer() {
-  return pimpl_->GetHciLayer();
 }
 
 bluetooth::shim::IStack* bluetooth::shim::GetGabeldorscheStack() {
