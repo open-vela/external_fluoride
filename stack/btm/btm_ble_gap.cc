@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2008-2014 Broadcom Corporation
+ *  Copyright (C) 2008-2014 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -58,10 +58,7 @@
 
 #define BTM_EXT_BLE_RMT_NAME_TIMEOUT_MS (30 * 1000)
 #define MIN_ADV_LENGTH 2
-#define BTM_VSC_CHIP_CAPABILITY_RSP_LEN 9
-#define BTM_VSC_CHIP_CAPABILITY_RSP_LEN_L_RELEASE \
-  BTM_VSC_CHIP_CAPABILITY_RSP_LEN
-#define BTM_VSC_CHIP_CAPABILITY_RSP_LEN_M_RELEASE 15
+#define BTM_VSC_CHIP_CAPABILITY_RSP_LEN_L_RELEASE 9
 
 namespace {
 
@@ -438,7 +435,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
                              ? BTM_BLE_SCAN_MODE_ACTI
                              : p_inq->scan_type;
 /* assume observe always not using white list */
-#if (defined BLE_PRIVACY_SPT && BLE_PRIVACY_SPT == TRUE)
+#if (defined BLE_PRIVACY_SPT && BLE_PRIVACY_SPT == true)
       /* enable resolving list */
       btm_ble_enable_resolving_list_for_platform(BTM_BLE_RL_SCAN);
 #endif
@@ -455,7 +452,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
       btm_cb.ble_ctr_cb.scan_activity |= BTM_LE_OBSERVE_ACTIVE;
       if (duration != 0) {
         /* start observer timer */
-        uint64_t duration_ms = duration * 1000;
+        period_ms_t duration_ms = duration * 1000;
         alarm_set_on_mloop(btm_cb.ble_ctr_cb.observer_timer, duration_ms,
                            btm_ble_observer_timer_timeout, NULL);
       }
@@ -475,7 +472,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
  *
  * Function         btm_vsc_brcm_features_complete
  *
- * Description      Command Complete callback for HCI_BLE_VENDOR_CAP
+ * Description      Command Complete callback for HCI_BLE_VENDOR_CAP_OCF
  *
  * Returns          void
  *
@@ -488,40 +485,37 @@ static void btm_ble_vendor_capability_vsc_cmpl_cback(
   BTM_TRACE_DEBUG("%s", __func__);
 
   /* Check status of command complete event */
-  CHECK(p_vcs_cplt_params->opcode == HCI_BLE_VENDOR_CAP);
-  CHECK(p_vcs_cplt_params->param_len > 0);
-
-  p = p_vcs_cplt_params->p_param_buf;
-  STREAM_TO_UINT8(status, p);
-
-  if (status != HCI_SUCCESS) {
-    BTM_TRACE_DEBUG("%s: Status = 0x%02x (0 is success)", __func__, status);
-    return;
-  }
-  CHECK(p_vcs_cplt_params->param_len >= BTM_VSC_CHIP_CAPABILITY_RSP_LEN);
-  STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.adv_inst_max, p);
-  STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.rpa_offloading, p);
-  STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.tot_scan_results_strg, p);
-  STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.max_irk_list_sz, p);
-  STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.filter_support, p);
-  STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.max_filter, p);
-  STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.energy_support, p);
-
-  if (p_vcs_cplt_params->param_len >
-      BTM_VSC_CHIP_CAPABILITY_RSP_LEN_L_RELEASE) {
-    STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.version_supported, p);
-  } else {
-    btm_cb.cmn_ble_vsc_cb.version_supported = BTM_VSC_CHIP_CAPABILITY_L_VERSION;
+  if ((p_vcs_cplt_params->opcode == HCI_BLE_VENDOR_CAP_OCF) &&
+      (p_vcs_cplt_params->param_len > 0)) {
+    p = p_vcs_cplt_params->p_param_buf;
+    STREAM_TO_UINT8(status, p);
   }
 
-  if (btm_cb.cmn_ble_vsc_cb.version_supported >=
-      BTM_VSC_CHIP_CAPABILITY_M_VERSION) {
-    CHECK(p_vcs_cplt_params->param_len >= BTM_VSC_CHIP_CAPABILITY_RSP_LEN_M_RELEASE);
-    STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.total_trackable_advertisers, p);
-    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.extended_scan_support, p);
-    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.debug_logging_supported, p);
+  if (status == HCI_SUCCESS) {
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.adv_inst_max, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.rpa_offloading, p);
+    STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.tot_scan_results_strg, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.max_irk_list_sz, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.filter_support, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.max_filter, p);
+    STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.energy_support, p);
+
+    if (p_vcs_cplt_params->param_len >
+        BTM_VSC_CHIP_CAPABILITY_RSP_LEN_L_RELEASE) {
+      STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.version_supported, p);
+    } else {
+      btm_cb.cmn_ble_vsc_cb.version_supported =
+          BTM_VSC_CHIP_CAPABILITY_L_VERSION;
+    }
+
+    if (btm_cb.cmn_ble_vsc_cb.version_supported >=
+        BTM_VSC_CHIP_CAPABILITY_M_VERSION) {
+      STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.total_trackable_advertisers, p);
+      STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.extended_scan_support, p);
+      STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.debug_logging_supported, p);
+    }
+    btm_cb.cmn_ble_vsc_cb.values_read = true;
   }
-  btm_cb.cmn_ble_vsc_cb.values_read = true;
 
   BTM_TRACE_DEBUG(
       "%s: stat=%d, irk=%d, ADV ins:%d, rpa=%d, ener=%d, ext_scan=%d", __func__,
@@ -582,12 +576,12 @@ extern void BTM_BleGetVendorCapabilities(tBTM_BLE_VSC_CB* p_cmn_vsc_cb) {
 #if (BLE_VND_INCLUDED == TRUE)
 extern void BTM_BleReadControllerFeatures(
     tBTM_BLE_CTRL_FEATURES_CBACK* p_vsc_cback) {
-  if (btm_cb.cmn_ble_vsc_cb.values_read) return;
+  if (true == btm_cb.cmn_ble_vsc_cb.values_read) return;
 
   BTM_TRACE_DEBUG("BTM_BleReadControllerFeatures");
 
   p_ctrl_le_feature_rd_cmpl_cback = p_vsc_cback;
-  BTM_VendorSpecificCommand(HCI_BLE_VENDOR_CAP, 0, NULL,
+  BTM_VendorSpecificCommand(HCI_BLE_VENDOR_CAP_OCF, 0, NULL,
                             btm_ble_vendor_capability_vsc_cmpl_cback);
 }
 #else
@@ -636,8 +630,7 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
   /* if LE is not supported, return error */
   if (!controller_get_interface()->supports_ble()) return false;
 
-  tGAP_BLE_ATTR_VALUE gap_ble_attr_value;
-  gap_ble_attr_value.addr_resolution = 0;
+  uint8_t addr_resolution = 0;
   if (!privacy_mode) /* if privacy disabled, always use public address */
   {
     p_cb->addr_mgnt_cb.own_addr_type = BLE_ADDR_PUBLIC;
@@ -652,7 +645,7 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
     /* 4.2 controller only allow privacy 1.2 or mixed mode, resolvable private
      * address in controller */
     if (controller_get_interface()->supports_ble_privacy()) {
-      gap_ble_attr_value.addr_resolution = 1;
+      addr_resolution = 1;
       /* check vendor specific capability */
       p_cb->privacy_mode =
           btm_cb.ble_ctr_cb.mixed_mode ? BTM_PRIVACY_MIXED : BTM_PRIVACY_1_2;
@@ -660,7 +653,8 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
       p_cb->privacy_mode = BTM_PRIVACY_1_1;
   }
 
-  GAP_BleAttrDBUpdate(GATT_UUID_GAP_CENTRAL_ADDR_RESOL, &gap_ble_attr_value);
+  GAP_BleAttrDBUpdate(GATT_UUID_GAP_CENTRAL_ADDR_RESOL,
+                      (tGAP_BLE_ATTR_VALUE*)&addr_resolution);
 
   return true;
 #else
@@ -699,6 +693,58 @@ bool BTM_BleLocalPrivacyEnabled(void) {
 #else
   return false;
 #endif
+}
+
+/**
+ * Set BLE connectable mode to auto connect
+ */
+void BTM_BleStartAutoConn() {
+  BTM_TRACE_EVENT("%s", __func__);
+  if (!controller_get_interface()->supports_ble()) return;
+
+  if (btm_cb.ble_ctr_cb.bg_conn_type != BTM_BLE_CONN_AUTO) {
+    btm_ble_start_auto_conn(true);
+    btm_cb.ble_ctr_cb.bg_conn_type = BTM_BLE_CONN_AUTO;
+  }
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_BleClearBgConnDev
+ *
+ * Description      This function is called to clear the whitelist,
+ *                  end any pending whitelist connections,
+ *                  and reset the local bg device list.
+ *
+ * Parameters       void
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_BleClearBgConnDev(void) {
+  btm_ble_start_auto_conn(false);
+  btm_ble_clear_white_list();
+  gatt_reset_bgdev_list();
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_BleUpdateBgConnDev
+ *
+ * Description      This function is called to add or remove a device into/from
+ *                  background connection procedure. The background connection
+ *                  procedure is decided by the background connection type, it
+ *                  can be auto connection, or selective connection.
+ *
+ * Parameters       add_remove: true to add; false to remove.
+ *                  remote_bda: device address to add/remove.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+bool BTM_BleUpdateBgConnDev(bool add_remove, const RawAddress& remote_bda) {
+  BTM_TRACE_EVENT("%s() add=%d", __func__, add_remove);
+  return btm_update_dev_to_white_list(add_remove, remote_bda);
 }
 
 /*******************************************************************************
@@ -774,8 +820,8 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
         if ((p_dev_rec = btm_find_or_alloc_dev(p_cb->direct_bda.bda)) != NULL &&
             p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT) {
           btm_ble_enable_resolving_list(BTM_BLE_RL_ADV);
-          p_peer_addr_ptr = p_dev_rec->ble.identity_addr;
-          *p_peer_addr_type = p_dev_rec->ble.identity_addr_type;
+          p_peer_addr_ptr = p_dev_rec->ble.static_addr;
+          *p_peer_addr_type = p_dev_rec->ble.static_addr_type;
           *p_own_addr_type = BLE_ADDR_RANDOM_ID;
           return evt_type;
         }
@@ -805,8 +851,8 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
        * peer */
       tBTM_SEC_DEV_REC* p_dev_rec =
           static_cast<tBTM_SEC_DEV_REC*>(list_node(n));
-      p_peer_addr_ptr = p_dev_rec->ble.identity_addr;
-      *p_peer_addr_type = p_dev_rec->ble.identity_addr_type;
+      p_peer_addr_ptr = p_dev_rec->ble.static_addr;
+      *p_peer_addr_type = p_dev_rec->ble.static_addr_type;
 
       *p_own_addr_type = BLE_ADDR_RANDOM_ID;
     } else {
@@ -825,6 +871,64 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
   /* if no privacy,do not set any peer address,*/
   /* local address type go by global privacy setting */
   return evt_type;
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_BleSetAdvParams
+ *
+ * Description      This function is called to set advertising parameters.
+ *
+ * Parameters       adv_int_min: minimum advertising interval
+ *                  adv_int_max: maximum advertising interval
+ *                  p_dir_bda: connectable direct initiator's LE device address
+ *                  chnl_map: advertising channel map.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+tBTM_STATUS BTM_BleSetAdvParams(uint16_t adv_int_min, uint16_t adv_int_max,
+                                const RawAddress& p_dir_bda,
+                                tBTM_BLE_ADV_CHNL_MAP chnl_map) {
+  tBTM_LE_RANDOM_CB* p_addr_cb = &btm_cb.ble_ctr_cb.addr_mgnt_cb;
+  tBTM_BLE_INQ_CB* p_cb = &btm_cb.ble_ctr_cb.inq_var;
+  tBTM_STATUS status = BTM_SUCCESS;
+  RawAddress address = RawAddress::kEmpty;
+  tBLE_ADDR_TYPE init_addr_type = BLE_ADDR_PUBLIC;
+  tBLE_ADDR_TYPE own_addr_type = p_addr_cb->own_addr_type;
+  uint8_t adv_mode = p_cb->adv_mode;
+
+  BTM_TRACE_EVENT("BTM_BleSetAdvParams");
+
+  if (!controller_get_interface()->supports_ble()) return BTM_ILLEGAL_VALUE;
+
+  if (!BTM_BLE_ISVALID_PARAM(adv_int_min, BTM_BLE_ADV_INT_MIN,
+                             BTM_BLE_ADV_INT_MAX) ||
+      !BTM_BLE_ISVALID_PARAM(adv_int_max, BTM_BLE_ADV_INT_MIN,
+                             BTM_BLE_ADV_INT_MAX)) {
+    return BTM_ILLEGAL_VALUE;
+  }
+
+  p_cb->adv_interval_min = adv_int_min;
+  p_cb->adv_interval_max = adv_int_max;
+  p_cb->adv_chnl_map = chnl_map;
+  p_cb->direct_bda.bda = p_dir_bda;
+
+  BTM_TRACE_EVENT("update params for an active adv");
+
+  btm_ble_stop_adv();
+
+  p_cb->evt_type = btm_set_conn_mode_adv_init_addr(
+      p_cb, address, &init_addr_type, &own_addr_type);
+
+  /* update adv params */
+  btsnd_hcic_ble_write_adv_params(
+      p_cb->adv_interval_min, p_cb->adv_interval_max, p_cb->evt_type,
+      own_addr_type, init_addr_type, address, p_cb->adv_chnl_map, p_cb->afp);
+
+  if (adv_mode == BTM_BLE_ADV_ENABLE) btm_ble_start_adv();
+
+  return status;
 }
 
 /**
@@ -1310,7 +1414,7 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t mode, uint8_t duration) {
 
     if (duration != 0) {
       /* start inquiry timer */
-      uint64_t duration_ms = duration * 1000;
+      period_ms_t duration_ms = duration * 1000;
       alarm_set_on_mloop(p_ble_cb->inq_var.inquiry_timer, duration_ms,
                          btm_ble_inquiry_timer_timeout, NULL);
     }
@@ -1478,7 +1582,7 @@ uint8_t btm_ble_is_discoverable(const RawAddress& bda,
   if (!adv_data.empty()) {
     const uint8_t* p_flag = AdvertiseDataParser::GetFieldByType(
         adv_data, BTM_BLE_AD_TYPE_FLAG, &data_len);
-    if (p_flag != NULL && data_len != 0) {
+    if (p_flag != NULL) {
       flag = *p_flag;
 
       if ((btm_cb.btm_inq_vars.inq_active & BTM_BLE_GENERAL_INQUIRY) &&
@@ -1664,7 +1768,7 @@ void btm_ble_update_inq_result(tINQ_DB_ENT* p_i, uint8_t addr_type,
   if (!data.empty()) {
     const uint8_t* p_flag =
         AdvertiseDataParser::GetFieldByType(data, BTM_BLE_AD_TYPE_FLAG, &len);
-    if (p_flag != NULL && len != 0) p_cur->flag = *p_flag;
+    if (p_flag != NULL) p_cur->flag = *p_flag;
   }
 
   if (!data.empty()) {
@@ -1737,10 +1841,10 @@ void btm_clear_all_pending_le_entry(void) {
   }
 }
 
-void btm_ble_process_adv_addr(RawAddress& bda, uint8_t* addr_type) {
+void btm_ble_process_adv_addr(RawAddress& bda, uint8_t addr_type) {
 #if (BLE_PRIVACY_SPT == TRUE)
   /* map address to security record */
-  bool match = btm_identity_addr_to_random_pseudo(&bda, addr_type, false);
+  bool match = btm_identity_addr_to_random_pseudo(&bda, &addr_type, false);
 
   VLOG(1) << __func__ << ": bda=" << bda;
   /* always do RRA resolution on host */
@@ -1805,20 +1909,13 @@ void btm_ble_process_ext_adv_pkt(uint8_t data_len, uint8_t* data) {
 
     uint8_t* pkt_data = p;
     p += pkt_data_len; /* Advance to the the next packet*/
-    if (p > data + data_len) {
-      LOG(ERROR) << "Invalid pkt_data_len: " << +pkt_data_len;
-      return;
-    }
 
     if (rssi >= 21 && rssi <= 126) {
-      BTM_TRACE_ERROR("%s: bad rssi value in advertising report: %d", __func__,
-                      rssi);
+      BTM_TRACE_ERROR("%s: bad rssi value in advertising report: ", __func__,
+                      pkt_data_len, rssi);
     }
 
-    if (addr_type != BLE_ADDR_ANONYMOUS) {
-      btm_ble_process_adv_addr(bda, &addr_type);
-    }
-
+    btm_ble_process_adv_addr(bda, addr_type);
     btm_ble_process_adv_pkt_cont(event_type, addr_type, bda, primary_phy,
                                  secondary_phy, advertising_sid, tx_power, rssi,
                                  periodic_adv_int, pkt_data_len, pkt_data);
@@ -1857,10 +1954,6 @@ void btm_ble_process_adv_pkt(uint8_t data_len, uint8_t* data) {
 
     uint8_t* pkt_data = p;
     p += pkt_data_len; /* Advance to the the rssi byte */
-    if (p > data + data_len - sizeof(rssi)) {
-      LOG(ERROR) << "Invalid pkt_data_len: " << +pkt_data_len;
-      return;
-    }
 
     STREAM_TO_INT8(rssi, p);
 
@@ -1869,7 +1962,7 @@ void btm_ble_process_adv_pkt(uint8_t data_len, uint8_t* data) {
                       pkt_data_len, rssi);
     }
 
-    btm_ble_process_adv_addr(bda, &addr_type);
+    btm_ble_process_adv_addr(bda, addr_type);
 
     uint16_t event_type;
     if (legacy_evt_type == 0x00) {  // ADV_IND;
@@ -1920,8 +2013,7 @@ static void btm_ble_process_adv_pkt_cont(
   bool is_start =
       ble_evt_type_is_legacy(evt_type) && is_scannable && !is_scan_resp;
 
-  if (ble_evt_type_is_legacy(evt_type))
-    AdvertiseDataParser::RemoveTrailingZeros(tmp);
+  if (is_start) AdvertiseDataParser::RemoveTrailingZeros(tmp);
 
   // We might have send scan request to this device before, but didn't get the
   // response. In such case make sure data is put at start, not appended to
@@ -2048,7 +2140,17 @@ void btm_ble_process_phy_update_pkt(uint8_t len, uint8_t* data) {
   STREAM_TO_UINT8(tx_phy, p);
   STREAM_TO_UINT8(rx_phy, p);
 
-  gatt_notify_phy_updated(status, handle, tx_phy, rx_phy);
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
+  if (!p_dev_rec) {
+    BTM_TRACE_WARNING("%s: No Device Found!", __func__);
+    return;
+  }
+
+  tGATT_TCB* p_tcb =
+      gatt_find_tcb_by_addr(p_dev_rec->ble.pseudo_addr, BT_TRANSPORT_LE);
+  if (p_tcb == NULL) return;
+
+  gatt_notify_phy_updated(p_tcb, tx_phy, rx_phy, status);
 }
 
 /*******************************************************************************
@@ -2155,7 +2257,8 @@ static void btm_ble_stop_observe(void) {
 
   if (!BTM_BLE_IS_SCAN_ACTIVE(p_ble_cb->scan_activity)) btm_ble_stop_scan();
 
-  if (p_obs_cb) (p_obs_cb)(&btm_cb.btm_inq_vars.inq_cmpl_info);
+  if (p_obs_cb)
+    (p_obs_cb)((tBTM_INQUIRY_CMPL*)&btm_cb.btm_inq_vars.inq_cmpl_info);
 }
 /*******************************************************************************
  *
@@ -2461,7 +2564,7 @@ void btm_ble_update_link_topology_mask(uint8_t link_role, bool increase) {
  ******************************************************************************/
 void btm_ble_update_mode_operation(uint8_t link_role, const RawAddress* bd_addr,
                                    uint8_t status) {
-  if (status == HCI_ERR_ADVERTISING_TIMEOUT) {
+  if (status == HCI_ERR_DIRECTED_ADVERTISING_TIMEOUT) {
     btm_cb.ble_ctr_cb.inq_var.adv_mode = BTM_BLE_ADV_DISABLE;
     /* make device fall back into undirected adv mode by default */
     btm_cb.ble_ctr_cb.inq_var.directed_conn = BTM_BLE_CONNECT_EVT;
@@ -2476,7 +2579,7 @@ void btm_ble_update_mode_operation(uint8_t link_role, const RawAddress* bd_addr,
 
   /* in case of disconnected, we must cancel bgconn and restart
      in order to add back device to white list in order to reconnect */
-  if (bd_addr) btm_ble_bgconn_cancel_if_disconnected(*bd_addr);
+  btm_ble_bgconn_cancel_if_disconnected(*bd_addr);
 
   /* when no connection is attempted, and controller is not rejecting last
      request
@@ -2485,7 +2588,8 @@ void btm_ble_update_mode_operation(uint8_t link_role, const RawAddress* bd_addr,
      now in order */
   if (btm_ble_get_conn_st() == BLE_CONN_IDLE &&
       status != HCI_ERR_HOST_REJECT_RESOURCES &&
-      status != HCI_ERR_MAX_NUM_OF_CONNECTIONS) {
+      status != HCI_ERR_MAX_NUM_OF_CONNECTIONS &&
+      !btm_send_pending_direct_conn()) {
     btm_ble_resume_bg_conn();
   }
 }
@@ -2512,6 +2616,7 @@ void btm_ble_init(void) {
 
   p_cb->observer_timer = alarm_new("btm_ble.observer_timer");
   p_cb->cur_states = 0;
+  p_cb->conn_pending_q = fixed_queue_new(SIZE_MAX);
 
   p_cb->inq_var.adv_mode = BTM_BLE_ADV_DISABLE;
   p_cb->inq_var.scan_type = BTM_BLE_SCAN_MODE_NONE;

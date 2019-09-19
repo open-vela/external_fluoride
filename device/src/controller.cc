@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,20 +27,11 @@
 #include "btcore/include/module.h"
 #include "btcore/include/version.h"
 #include "hcimsgs.h"
-#include "main/shim/controller.h"
-#include "main/shim/shim.h"
 #include "osi/include/future.h"
 #include "stack/include/btm_ble_api.h"
 
-const bt_event_mask_t BLE_EVENT_MASK = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-#if (BLE_PRIVACY_SPT == TRUE)
-                                         0x1E,
-#else
-                                         /* Disable "LE Enhanced Connection
-                                            Complete" when privacy is off */
-                                         0x1C,
-#endif
-                                         0x7f}};
+const bt_event_mask_t BLE_EVENT_MASK = {
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x1E, 0x7f}};
 
 const bt_event_mask_t CLASSIC_EVENT_MASK = {HCI_DUMO_EVENT_MASK_EXT};
 
@@ -74,11 +65,6 @@ static uint8_t ble_resolving_list_max_size;
 static uint8_t ble_supported_states[BLE_SUPPORTED_STATES_SIZE];
 static bt_device_features_t features_ble;
 static uint16_t ble_suggested_default_data_length;
-static uint16_t ble_supported_max_tx_octets;
-static uint16_t ble_supported_max_tx_time;
-static uint16_t ble_supported_max_rx_octets;
-static uint16_t ble_supported_max_rx_time;
-
 static uint16_t ble_maxium_advertising_data_length;
 static uint8_t ble_number_of_supported_advertising_sets;
 static uint8_t local_supported_codecs[MAX_LOCAL_SUPPORTED_CODECS_SIZE];
@@ -226,12 +212,6 @@ static future_t* start_up(void) {
     }
 
     if (HCI_LE_DATA_LEN_EXT_SUPPORTED(features_ble.as_array)) {
-      response =
-          AWAIT_COMMAND(packet_factory->make_ble_read_maximum_data_length());
-      packet_parser->parse_ble_read_maximum_data_length_response(
-          response, &ble_supported_max_tx_octets, &ble_supported_max_tx_time,
-          &ble_supported_max_rx_octets, &ble_supported_max_rx_time);
-
       response = AWAIT_COMMAND(
           packet_factory->make_ble_read_suggested_default_data_length());
       packet_parser->parse_ble_read_suggested_default_data_length_response(
@@ -472,12 +452,6 @@ static uint16_t get_ble_suggested_default_data_length(void) {
   return ble_suggested_default_data_length;
 }
 
-static uint16_t get_ble_maximum_tx_data_length(void) {
-  CHECK(readable);
-  CHECK(ble_supported);
-  return ble_supported_max_tx_octets;
-}
-
 static uint16_t get_ble_maxium_advertising_data_length(void) {
   CHECK(readable);
   CHECK(ble_supported);
@@ -570,7 +544,6 @@ static const controller_t interface = {
     get_acl_packet_size_classic,
     get_acl_packet_size_ble,
     get_ble_suggested_default_data_length,
-    get_ble_maximum_tx_data_length,
     get_ble_maxium_advertising_data_length,
     get_ble_number_of_supported_advertising_sets,
 
@@ -584,7 +557,7 @@ static const controller_t interface = {
     get_local_supported_codecs,
     get_le_all_initiating_phys};
 
-const controller_t* bluetooth::legacy::controller_get_interface() {
+const controller_t* controller_get_interface() {
   static bool loaded = false;
   if (!loaded) {
     loaded = true;
@@ -595,14 +568,6 @@ const controller_t* bluetooth::legacy::controller_get_interface() {
   }
 
   return &interface;
-}
-
-const controller_t* controller_get_interface() {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::controller_get_interface();
-  } else {
-    return bluetooth::legacy::controller_get_interface();
-  }
 }
 
 const controller_t* controller_get_test_interface(
