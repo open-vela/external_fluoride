@@ -61,6 +61,8 @@ class ClassicSecurityManager : public Module {
   void ReadLocalOobExtendedData();
   void ReadEncryptionKeySize(uint16_t connection_handle);
 
+  void AuthenticationRequested(uint16_t connection_handle);  // TODO remove
+
   static const ModuleFactory Factory;
 
  protected:
