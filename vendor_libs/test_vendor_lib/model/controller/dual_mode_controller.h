@@ -64,6 +64,9 @@ class DualModeController : public Device {
 
   virtual void TimerTick() override;
 
+  // Send packets to remote devices
+  void SendLinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> to_send, Phy::Type phy_type);
+
   // Route commands and data from the stack.
   void HandleAcl(std::shared_ptr<std::vector<uint8_t>> acl_packet);
   void HandleCommand(std::shared_ptr<std::vector<uint8_t>> command_packet);
@@ -238,9 +241,6 @@ class DualModeController : public Device {
   // 7.3.56
   void HciWriteExtendedInquiryResponse(packets::PacketView<true> args);
 
-  // 7.3.57
-  void HciRefreshEncryptionKey(packets::PacketView<true> args);
-
   // 7.3.59
   void HciWriteSimplePairingMode(packets::PacketView<true> args);
 
@@ -261,9 +261,6 @@ class DualModeController : public Device {
 
   // 7.4.2
   void HciReadLocalSupportedCommands(packets::PacketView<true> args);
-
-  // 7.4.3
-  void HciReadLocalSupportedFeatures(packets::PacketView<true> args);
 
   // 7.4.4
   void HciReadLocalExtendedFeatures(packets::PacketView<true> args);
@@ -303,12 +300,6 @@ class DualModeController : public Device {
 
   // 7.8.7
   void HciLeSetAdvertisingData(packets::PacketView<true> args);
-
-  // 7.8.8
-  void HciLeSetScanResponseData(packets::PacketView<true> args);
-
-  // 7.8.9
-  void HciLeSetAdvertisingEnable(packets::PacketView<true> args);
 
   // 7.8.10
   void HciLeSetScanParameters(packets::PacketView<true> args);
