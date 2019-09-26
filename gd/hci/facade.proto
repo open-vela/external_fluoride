@@ -9,7 +9,6 @@ service AclManagerFacade {
   rpc SetPageScanMode(PageScanMode) returns (google.protobuf.Empty) {}
   rpc Connect(facade.BluetoothAddress) returns (google.protobuf.Empty) {}
   rpc Disconnect(facade.BluetoothAddress) returns (google.protobuf.Empty) {}
-  rpc AuthenticationRequested(facade.BluetoothAddress) returns (google.protobuf.Empty) {}
   rpc FetchConnectionComplete(facade.EventStreamRequest) returns (stream ConnectionEvent) {}
   rpc FetchDisconnection(facade.EventStreamRequest) returns (stream DisconnectionEvent) {}
   rpc FetchConnectionFailed(facade.EventStreamRequest) returns (stream ConnectionFailedEvent) {}
@@ -17,7 +16,6 @@ service AclManagerFacade {
   rpc FetchAclData(facade.EventStreamRequest) returns (stream AclData) {}
   rpc TestInternalHciCommands(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc TestInternalHciLeCommands(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  rpc TestClassicConnectionManagementCommands(facade.BluetoothAddress) returns (google.protobuf.Empty) {}
 }
 
 message PageScanMode {
@@ -83,6 +81,8 @@ service ClassicSecurityManagerFacade {
   rpc ReadEncryptionKeySize(ReadEncryptionKeySizeMessage) returns (google.protobuf.Empty) {}
 
   rpc FetchCommandCompleteEvent(facade.EventStreamRequest) returns (stream CommandCompleteEvent) {}
+
+  rpc AuthenticationRequested(AuthenticationRequestedMessage) returns (google.protobuf.Empty) {}
 }
 
 
@@ -154,5 +154,9 @@ message SendKeypressNotificationMessage {
 }
 
 message ReadEncryptionKeySizeMessage {
+  uint32 connection_handle = 1;
+}
+
+message AuthenticationRequestedMessage {
   uint32 connection_handle = 1;
 }

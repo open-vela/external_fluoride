@@ -122,7 +122,7 @@ cc_library {
 }
 
 cc_binary {
-    name: "bluetooth_stack_with_facade",
+    name: "stack_with_facade",
     defaults: [
         "gd_defaults",
     ],
@@ -310,12 +310,10 @@ genrule {
     srcs: [
         "hci/hci_packets.pdl",
         "l2cap/l2cap_packets.pdl",
-        "smp/smp_packets.pdl",
     ],
     out: [
         "hci/hci_packets.h",
         "l2cap/l2cap_packets.h",
-        "smp/smp_packets.h",
     ],
 }
 

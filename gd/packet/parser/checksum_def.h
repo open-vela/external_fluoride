@@ -18,8 +18,9 @@
 
 #include <iostream>
 
+#include "checksum_type_checker.h"
 #include "custom_field_def.h"
-#include "fields/packet_field.h"
+#include "fields/checksum_field.h"
 #include "parse_location.h"
 #include "type_def.h"
 
