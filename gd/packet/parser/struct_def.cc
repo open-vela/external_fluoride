@@ -19,18 +19,18 @@
 #include "fields/all_fields.h"
 #include "util.h"
 
-StructDef::StructDef(std::string name, FieldList fields) : StructDef(name, fields, nullptr) {}
-StructDef::StructDef(std::string name, FieldList fields, StructDef* parent)
-    : ParentDef(name, fields, parent), total_size_(GetSize(true)) {}
+StructDef::StructDef(std::string name, FieldList fields) : ParentDef(name, fields, nullptr){};
+StructDef::StructDef(std::string name, FieldList fields, StructDef* parent) : ParentDef(name, fields, parent){};
 
 PacketField* StructDef::GetNewField(const std::string& name, ParseLocation loc) const {
-  if (fields_.HasBody() || total_size_.has_dynamic()) {
+  Size total_size = GetSize(false);
+  if (fields_.HasBody()) {
     ERROR(new StructField(name, name_, -1, loc)) << "Variable size structs are not supported";
-    fprintf(stderr, "total_size_ of %s(%s) = %s\n", name_.c_str(), name.c_str(), total_size_.ToString().c_str());
+    fprintf(stderr, "total_size of %s(%s) = %s\n", name_.c_str(), name.c_str(), total_size.ToString().c_str());
     abort();
     return new StructField(name, name_, -1, loc);
   } else {
-    return new StructField(name, name_, total_size_.bits(), loc);
+    return new StructField(name, name_, total_size.bits(), loc);
   }
 }
 
@@ -44,7 +44,7 @@ void StructDef::GenParse(std::ostream& s) const {
     iterator = "Iterator<!kLittleEndian>";
   }
   s << "static " << iterator << " Parse(" << name_ << "* to_return, " << iterator << " struct_it) {";
-  s << "auto to_bound = struct_it;";
+  s << "auto begin_it = struct_it;";
   s << "size_t end_index = struct_it.NumBytesRemaining();";
   s << "if (end_index < " << GetSize().bytes() << ") { return struct_it.Subrange(0,0);}";
   Size field_offset = Size(0);
@@ -55,9 +55,8 @@ void StructDef::GenParse(std::ostream& s) const {
         field->GetFieldType() != ChecksumStartField::kFieldType && field->GetFieldType() != ChecksumField::kFieldType &&
         field->GetFieldType() != CountField::kFieldType) {
       s << "{";
-      int num_leading_bits = field->GenBounds(s, field_offset, next_field_offset);
-      s << "auto " << field->GetName() << "_ptr = &to_return->" << field->GetName() << "_;";
-      field->GenExtractor(s, num_leading_bits);
+      field->GenExtractor(s, field_offset, next_field_offset);
+      s << "to_return->" << field->GetName() << "_ = value;";
       s << "}";
     }
     field_offset = next_field_offset;
@@ -81,6 +80,11 @@ void StructDef::GenDefinition(std::ostream& s) const {
   s << " public:";
 
   GenConstructor(s);
+
+  std::set<std::string> fixed_types = {
+      FixedScalarField::kFieldType,
+      FixedEnumField::kFieldType,
+  };
 
   s << " public:\n";
   s << "  virtual ~" << name_ << "() override = default;\n";

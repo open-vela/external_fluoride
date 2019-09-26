@@ -19,6 +19,7 @@
 #include <iostream>
 
 #include "fields/packet_field.h"
+#include "fields/reserved_field.h"
 
 class TypeDef {
  public:

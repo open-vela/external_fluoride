@@ -15,8 +15,7 @@
  */
 
 #include "checksum_def.h"
-#include "checksum_type_checker.h"
-#include "fields/checksum_field.h"
+
 #include "util.h"
 
 ChecksumDef::ChecksumDef(std::string name, std::string include, int size) : CustomFieldDef(name, include, size) {}
