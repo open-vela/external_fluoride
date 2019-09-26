@@ -27,7 +27,7 @@ constexpr Cid kInvalidCid = 0;
 constexpr Cid kFirstFixedChannel = 1;
 constexpr Cid kLastFixedChannel = 63;
 constexpr Cid kFirstDynamicChannel = kLastFixedChannel + 1;
-constexpr Cid kLastDynamicChannel = (uint16_t)(0xffff);
+constexpr Cid kLastDynamicChannel = (uint16_t)(0xffff + 1);
 
 constexpr Cid kClassicSignallingCid = 1;
 constexpr Cid kConnectionlessCid = 2;
