@@ -30,11 +30,11 @@
 #include <base/bind_helpers.h>
 #include <base/callback.h>
 #include "bt_common.h"
+#include "bta_closure_api.h"
 #include "bta_gatt_api.h"
 #include "bta_gattc_int.h"
 #include "bta_sys.h"
 #include "device/include/controller.h"
-#include "stack/include/btu.h"
 
 using bluetooth::Uuid;
 
@@ -62,7 +62,7 @@ void BTA_GATTC_Disable(void) {
     return;
   }
 
-  do_in_main_thread(FROM_HERE, base::Bind(&bta_gattc_disable));
+  do_in_bta_thread(FROM_HERE, base::Bind(&bta_gattc_disable));
   bta_sys_deregister(BTA_ID_GATTC);
 }
 
@@ -76,9 +76,8 @@ void BTA_GATTC_AppRegister(tBTA_GATTC_CBACK* p_client_cb,
   if (!bta_sys_is_register(BTA_ID_GATTC))
     bta_sys_register(BTA_ID_GATTC, &bta_gattc_reg);
 
-  do_in_main_thread(
-      FROM_HERE, base::Bind(&bta_gattc_register, Uuid::GetRandom(), p_client_cb,
-                            std::move(cb)));
+  do_in_bta_thread(FROM_HERE, base::Bind(&bta_gattc_register, Uuid::GetRandom(),
+                                         p_client_cb, std::move(cb)));
 }
 
 static void app_deregister_impl(tGATT_IF client_if) {
@@ -97,7 +96,7 @@ static void app_deregister_impl(tGATT_IF client_if) {
  *
  ******************************************************************************/
 void BTA_GATTC_AppDeregister(tGATT_IF client_if) {
-  do_in_main_thread(FROM_HERE, base::Bind(&app_deregister_impl, client_if));
+  do_in_bta_thread(FROM_HERE, base::Bind(&app_deregister_impl, client_if));
 }
 
 /*******************************************************************************
@@ -247,14 +246,15 @@ void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, Uuid* p_srvc_uuid) {
   bta_sys_sendmsg(p_buf);
 }
 
-void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, const Uuid& srvc_uuid) {
-  do_in_main_thread(
-      FROM_HERE,
-      base::Bind(
-          base::IgnoreResult<tGATT_STATUS (*)(uint16_t, tGATT_DISC_TYPE,
-                                              uint16_t, uint16_t, const Uuid&)>(
-              &GATTC_Discover),
-          conn_id, GATT_DISC_SRVC_BY_UUID, 0x0001, 0xFFFF, srvc_uuid));
+void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id,
+                                     const Uuid& p_srvc_uuid) {
+  tGATT_DISC_PARAM* param = new tGATT_DISC_PARAM;
+  param->s_handle = 0x0001;
+  param->e_handle = 0xFFFF;
+  param->service = p_srvc_uuid;
+  do_in_bta_thread(FROM_HERE,
+                   base::Bind(base::IgnoreResult(&GATTC_Discover), conn_id,
+                              GATT_DISC_SRVC_BY_UUID, base::Owned(param)));
 }
 
 /*******************************************************************************
@@ -266,10 +266,10 @@ void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, const Uuid& srvc_uuid) {
  *
  * Parameters       conn_id: connection ID which identify the server.
  *
- * Returns          returns list of gatt::Service or NULL.
+ * Returns          returns list of tBTA_GATTC_SERVICE or NULL.
  *
  ******************************************************************************/
-const std::list<gatt::Service>* BTA_GATTC_GetServices(uint16_t conn_id) {
+const std::vector<tBTA_GATTC_SERVICE>* BTA_GATTC_GetServices(uint16_t conn_id) {
   return bta_gattc_get_services(conn_id);
 }
 
@@ -283,11 +283,11 @@ const std::list<gatt::Service>* BTA_GATTC_GetServices(uint16_t conn_id) {
  * Parameters       conn_id - connection ID which identify the server.
  *                  handle - characteristic handle
  *
- * Returns          returns pointer to gatt::Characteristic or NULL.
+ * Returns          returns pointer to tBTA_GATTC_CHARACTERISTIC or NULL.
  *
  ******************************************************************************/
-const gatt::Characteristic* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
-                                                        uint16_t handle) {
+const tBTA_GATTC_CHARACTERISTIC* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
+                                                             uint16_t handle) {
   return bta_gattc_get_characteristic(conn_id, handle);
 }
 
@@ -301,25 +301,25 @@ const gatt::Characteristic* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
  * Parameters       conn_id - connection ID which identify the server.
  *                  handle - descriptor handle
  *
- * Returns          returns pointer to gatt::Descriptor or NULL.
+ * Returns          returns pointer to tBTA_GATTC_DESCRIPTOR or NULL.
  *
  ******************************************************************************/
-const gatt::Descriptor* BTA_GATTC_GetDescriptor(uint16_t conn_id,
-                                                uint16_t handle) {
+const tBTA_GATTC_DESCRIPTOR* BTA_GATTC_GetDescriptor(uint16_t conn_id,
+                                                     uint16_t handle) {
   return bta_gattc_get_descriptor(conn_id, handle);
 }
 
 /* Return characteristic that owns descriptor with handle equal to |handle|, or
  * NULL */
-const gatt::Characteristic* BTA_GATTC_GetOwningCharacteristic(uint16_t conn_id,
-                                                              uint16_t handle) {
+const tBTA_GATTC_CHARACTERISTIC* BTA_GATTC_GetOwningCharacteristic(
+    uint16_t conn_id, uint16_t handle) {
   return bta_gattc_get_owning_characteristic(conn_id, handle);
 }
 
 /* Return service that owns descriptor or characteristic with handle equal to
  * |handle|, or NULL */
-const gatt::Service* BTA_GATTC_GetOwningService(uint16_t conn_id,
-                                                uint16_t handle) {
+const tBTA_GATTC_SERVICE* BTA_GATTC_GetOwningService(uint16_t conn_id,
+                                                     uint16_t handle) {
   return bta_gattc_get_service_for_handle(conn_id, handle);
 }
 
@@ -639,7 +639,7 @@ tGATT_STATUS BTA_GATTC_RegisterForNotifications(tGATT_IF client_if,
   uint8_t i;
 
   if (!handle) {
-    LOG(ERROR) << __func__ << ": registration failed, handle is 0";
+    LOG(ERROR) << "deregistration failed, handle is 0";
     return status;
   }
 
@@ -735,6 +735,6 @@ tGATT_STATUS BTA_GATTC_DeregisterForNotifications(tGATT_IF client_if,
  *
  ******************************************************************************/
 void BTA_GATTC_Refresh(const RawAddress& remote_bda) {
-  do_in_main_thread(FROM_HERE,
-                    base::Bind(&bta_gattc_process_api_refresh, remote_bda));
+  do_in_bta_thread(FROM_HERE,
+                   base::Bind(&bta_gattc_process_api_refresh, remote_bda));
 }
