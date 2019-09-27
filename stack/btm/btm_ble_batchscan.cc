@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Broadcom Corporation
+ *  Copyright 2014 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ void btm_ble_batchscan_filter_track_adv_vse_cback(uint8_t len, uint8_t* p) {
       STREAM_TO_UINT8(adv_data.filt_index, p);
       STREAM_TO_UINT8(adv_data.advertiser_state, p);
       STREAM_TO_UINT8(adv_data.advertiser_info_present, p);
-      STREAM_TO_BDADDR(adv_data.bd_addr.address, p);
+      STREAM_TO_BDADDR(adv_data.bd_addr, p);
       STREAM_TO_UINT8(adv_data.addr_type, p);
 
       /* Extract the adv info details */
@@ -112,7 +112,7 @@ void btm_ble_batchscan_filter_track_adv_vse_cback(uint8_t len, uint8_t* p) {
       /* Based on L-release version */
       STREAM_TO_UINT8(adv_data.filt_index, p);
       STREAM_TO_UINT8(adv_data.addr_type, p);
-      STREAM_TO_BDADDR(adv_data.bd_addr.address, p);
+      STREAM_TO_BDADDR(adv_data.bd_addr, p);
       STREAM_TO_UINT8(adv_data.advertiser_state, p);
     }
 
@@ -121,7 +121,7 @@ void btm_ble_batchscan_filter_track_adv_vse_cback(uint8_t len, uint8_t* p) {
                     adv_data.advertiser_state);
 
     // Make sure the device is known
-    BTM_SecAddBleDevice(adv_data.bd_addr.address, NULL, BT_DEVICE_TYPE_BLE,
+    BTM_SecAddBleDevice(adv_data.bd_addr, NULL, BT_DEVICE_TYPE_BLE,
                         adv_data.addr_type);
 
     ble_advtrack_cb.p_track_cback(&adv_data);
@@ -496,8 +496,8 @@ void BTM_BleReadScanReports(tBTM_BLE_BATCH_SCAN_MODE scan_mode,
 
   /* Check only for modes, as scan reports can be called after disabling batch
    * scan */
-  if (read_scan_mode < 0 || (scan_mode != BTM_BLE_BATCH_SCAN_MODE_PASS &&
-                             scan_mode != BTM_BLE_BATCH_SCAN_MODE_ACTI)) {
+  if (scan_mode != BTM_BLE_BATCH_SCAN_MODE_PASS &&
+      scan_mode != BTM_BLE_BATCH_SCAN_MODE_ACTI) {
     BTM_TRACE_ERROR("Illegal read scan params: %d, %d, %d", read_scan_mode,
                     scan_mode, ble_batchscan_cb.cur_state);
     cb.Run(BTM_ILLEGAL_VALUE, 0, 0, {});
