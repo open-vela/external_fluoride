@@ -39,10 +39,6 @@
 
 using bluetooth::Uuid;
 
-#ifndef SDP_DEBUG_RAW
-#define SDP_DEBUG_RAW false
-#endif
-
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
 /******************************************************************************/
@@ -168,11 +164,6 @@ static void sdp_snd_service_search_req(tCONN_CB* p_ccb, uint8_t cont_len,
   /* Set the length of the SDP data in the buffer */
   p_cmd->len = (uint16_t)(p - p_start);
 
-#if (SDP_DEBUG_RAW == TRUE)
-  SDP_TRACE_WARNING("sdp_snd_service_search_req cont_len :%d disc_state:%d",
-                    cont_len, p_ccb->disc_state);
-#endif
-
   L2CA_DataWrite(p_ccb->connection_id, p_cmd);
 
   /* Start inactivity timer */
@@ -219,16 +210,18 @@ void sdp_disc_server_rsp(tCONN_CB* p_ccb, BT_HDR* p_msg) {
   uint8_t *p, rsp_pdu;
   bool invalid_pdu = true;
 
-#if (SDP_DEBUG_RAW == TRUE)
-  SDP_TRACE_WARNING("sdp_disc_server_rsp disc_state:%d", p_ccb->disc_state);
-#endif
-
   /* stop inactivity timer when we receive a response */
   alarm_cancel(p_ccb->sdp_conn_timer);
 
   /* Got a reply!! Check what we got back */
   p = (uint8_t*)(p_msg + 1) + p_msg->offset;
   uint8_t* p_end = p + p_msg->len;
+
+  if (p_msg->len < 1) {
+    android_errorWriteLog(0x534e4554, "79883568");
+    sdp_disconnect(p_ccb, SDP_GENERIC_ERROR);
+    return;
+  }
 
   BE_STREAM_TO_UINT8(rsp_pdu, p);
 
@@ -354,17 +347,6 @@ static bool sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
   uint8_t* p_end;
   uint8_t type;
 
-#if (SDP_DEBUG_RAW == TRUE)
-  uint8_t num_array[SDP_MAX_LIST_BYTE_COUNT];
-  uint32_t i;
-
-  for (i = 0; i < p_ccb->list_len; i++) {
-    snprintf((char*)&num_array[i * 2], sizeof(num_array) - i * 2, "%02X",
-             (uint8_t)(p_ccb->rsp_list[i]));
-  }
-  SDP_TRACE_WARNING("result :%s", num_array);
-#endif
-
   if (p_ccb->p_db->raw_data) {
     cpy_len = p_ccb->p_db->raw_size - p_ccb->p_db->raw_used;
     list_len = p_ccb->list_len;
@@ -394,11 +376,6 @@ static bool sdp_copy_raw_data(tCONN_CB* p_ccb, bool offset) {
       SDP_TRACE_WARNING("rem_len :%d less than cpy_len:%d", rem_len, cpy_len);
       cpy_len = rem_len;
     }
-    SDP_TRACE_WARNING(
-        "%s: list_len:%d cpy_len:%d p:%p p_ccb:%p p_db:%p raw_size:%d "
-        "raw_used:%d raw_data:%p",
-        __func__, list_len, cpy_len, p, p_ccb, p_ccb->p_db,
-        p_ccb->p_db->raw_size, p_ccb->p_db->raw_used, p_ccb->p_db->raw_data);
     memcpy(&p_ccb->p_db->raw_data[p_ccb->p_db->raw_used], p, cpy_len);
     p_ccb->p_db->raw_used += cpy_len;
   }
@@ -422,23 +399,18 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   uint16_t param_len, list_byte_count;
   bool cont_request_needed = false;
 
-#if (SDP_DEBUG_RAW == TRUE)
-  SDP_TRACE_WARNING("process_service_attr_rsp raw inc:%d",
-                    SDP_RAW_DATA_INCLUDED);
-#endif
   /* If p_reply is NULL, we were called after the records handles were read */
   if (p_reply) {
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("ID & len: 0x%02x-%02x-%02x-%02x", p_reply[0], p_reply[1],
-                      p_reply[2], p_reply[3]);
-#endif
+    if (p_reply + 4 /* transaction ID and length */ + sizeof(list_byte_count) >
+        p_reply_end) {
+      sdp_disconnect(p_ccb, SDP_INVALID_PDU_SIZE);
+      return;
+    }
+
     /* Skip transaction ID and length */
     p_reply += 4;
 
     BE_STREAM_TO_UINT16(list_byte_count, p_reply);
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("list_byte_count:%d", list_byte_count);
-#endif
 
     /* Copy the response to the scratchpad. First, a safety check on the length
      */
@@ -447,21 +419,11 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
       return;
     }
 
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("list_len: %d, list_byte_count: %d", p_ccb->list_len,
-                      list_byte_count);
-#endif
     if (p_ccb->rsp_list == NULL)
       p_ccb->rsp_list = (uint8_t*)osi_malloc(SDP_MAX_LIST_BYTE_COUNT);
     memcpy(&p_ccb->rsp_list[p_ccb->list_len], p_reply, list_byte_count);
     p_ccb->list_len += list_byte_count;
     p_reply += list_byte_count;
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("list_len: %d(attr_rsp)", p_ccb->list_len);
-
-    /* Check if we need to request a continuation */
-    SDP_TRACE_WARNING("*p_reply:%d(%d)", *p_reply, SDP_MAX_CONTINUATION_LEN);
-#endif
     if (*p_reply) {
       if (*p_reply > SDP_MAX_CONTINUATION_LEN) {
         sdp_disconnect(p_ccb, SDP_INVALID_CONT_STATE);
@@ -542,6 +504,7 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
                        sdp_conn_timer_timeout, p_ccb);
   } else {
+    sdpu_log_attribute_metrics(p_ccb->device_address, p_ccb->p_db);
     sdp_disconnect(p_ccb, SDP_SUCCESS);
     return;
   }
@@ -565,9 +528,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   uint16_t param_len, lists_byte_count = 0;
   bool cont_request_needed = false;
 
-#if (SDP_DEBUG_RAW == TRUE)
-  SDP_TRACE_WARNING("process_service_search_attr_rsp");
-#endif
   /* If p_reply is NULL, we were called for the initial read */
   if (p_reply) {
     if (p_reply + 4 /* transaction ID and length */ + sizeof(lists_byte_count) >
@@ -577,17 +537,10 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
       return;
     }
 
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("ID & len: 0x%02x-%02x-%02x-%02x", p_reply[0], p_reply[1],
-                      p_reply[2], p_reply[3]);
-#endif
     /* Skip transaction ID and length */
     p_reply += 4;
 
     BE_STREAM_TO_UINT16(lists_byte_count, p_reply);
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("lists_byte_count:%d", lists_byte_count);
-#endif
 
     /* Copy the response to the scratchpad. First, a safety check on the length
      */
@@ -595,11 +548,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
       sdp_disconnect(p_ccb, SDP_INVALID_PDU_SIZE);
       return;
     }
-
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("list_len: %d, list_byte_count: %d", p_ccb->list_len,
-                      lists_byte_count);
-#endif
 
     if (p_reply + lists_byte_count + 1 /* continuation */ > p_reply_end) {
       android_errorWriteLog(0x534e4554, "79884292");
@@ -612,12 +560,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     memcpy(&p_ccb->rsp_list[p_ccb->list_len], p_reply, lists_byte_count);
     p_ccb->list_len += lists_byte_count;
     p_reply += lists_byte_count;
-#if (SDP_DEBUG_RAW == TRUE)
-    SDP_TRACE_WARNING("list_len: %d(search_attr_rsp)", p_ccb->list_len);
-
-    /* Check if we need to request a continuation */
-    SDP_TRACE_WARNING("*p_reply:%d(%d)", *p_reply, SDP_MAX_CONTINUATION_LEN);
-#endif
     if (*p_reply) {
       if (*p_reply > SDP_MAX_CONTINUATION_LEN) {
         sdp_disconnect(p_ccb, SDP_INVALID_CONT_STATE);
@@ -628,9 +570,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     }
   }
 
-#if (SDP_DEBUG_RAW == TRUE)
-  SDP_TRACE_WARNING("cont_request_needed:%d", cont_request_needed);
-#endif
   /* If continuation request (or first time request) */
   if ((cont_request_needed) || (!p_reply)) {
     BT_HDR* p_msg = (BT_HDR*)osi_malloc(SDP_DATA_BUF_SIZE);
@@ -718,7 +657,6 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   p = sdpu_get_len_from_type(p, p + p_ccb->list_len, type, &seq_len);
   if (p == NULL || (p + seq_len) > (p + p_ccb->list_len)) {
     SDP_TRACE_WARNING("%s: bad length", __func__);
-    sdp_disconnect(p_ccb, SDP_ILLEGAL_PARAMETER);
     return;
   }
   p_end = &p_ccb->rsp_list[p_ccb->list_len];
@@ -737,6 +675,7 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   }
 
   /* Since we got everything we need, disconnect the call */
+  sdpu_log_attribute_metrics(p_ccb->device_address, p_ccb->p_db);
   sdp_disconnect(p_ccb, SDP_SUCCESS);
 }
 
@@ -927,7 +866,7 @@ static uint8_t* add_attr(uint8_t* p, uint8_t* p_end, tSDP_DISCOVERY_DB* p_db,
           break;
         }
       }
-    /* Case falls through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
     case TWO_COMP_INT_DESC_TYPE:
       switch (attr_len) {
