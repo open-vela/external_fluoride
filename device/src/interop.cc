@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,20 +38,21 @@ static const char* interop_feature_string_(const interop_feature_t feature);
 static void interop_free_entry_(void* data);
 static void interop_lazy_init_(void);
 static bool interop_match_fixed_(const interop_feature_t feature,
-                                 const RawAddress* addr);
+                                 const bt_bdaddr_t* addr);
 static bool interop_match_dynamic_(const interop_feature_t feature,
-                                   const RawAddress* addr);
+                                   const bt_bdaddr_t* addr);
 
 // Interface functions
 
 bool interop_match_addr(const interop_feature_t feature,
-                        const RawAddress* addr) {
+                        const bt_bdaddr_t* addr) {
   CHECK(addr);
 
   if (interop_match_fixed_(feature, addr) ||
       interop_match_dynamic_(feature, addr)) {
+    char bdstr[20] = {0};
     LOG_WARN(LOG_TAG, "%s() Device %s is a match for interop workaround %s.",
-             __func__, addr->ToString().c_str(),
+             __func__, bdaddr_to_string(addr, bdstr, sizeof(bdstr)),
              interop_feature_string_(feature));
     return true;
   }
@@ -76,11 +77,11 @@ bool interop_match_name(const interop_feature_t feature, const char* name) {
   return false;
 }
 
-void interop_database_add(uint16_t feature, const RawAddress* addr,
+void interop_database_add(const uint16_t feature, const bt_bdaddr_t* addr,
                           size_t length) {
   CHECK(addr);
   CHECK(length > 0);
-  CHECK(length < RawAddress::kLength);
+  CHECK(length < sizeof(bt_bdaddr_t));
 
   interop_addr_entry_t* entry = static_cast<interop_addr_entry_t*>(
       osi_calloc(sizeof(interop_addr_entry_t)));
@@ -145,7 +146,7 @@ static void interop_lazy_init_(void) {
 }
 
 static bool interop_match_dynamic_(const interop_feature_t feature,
-                                   const RawAddress* addr) {
+                                   const bt_bdaddr_t* addr) {
   if (interop_list == NULL || list_length(interop_list) == 0) return false;
 
   const list_node_t* node = list_begin(interop_list);
@@ -164,7 +165,7 @@ static bool interop_match_dynamic_(const interop_feature_t feature,
 }
 
 static bool interop_match_fixed_(const interop_feature_t feature,
-                                 const RawAddress* addr) {
+                                 const bt_bdaddr_t* addr) {
   CHECK(addr);
 
   const size_t db_size =

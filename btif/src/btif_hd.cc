@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,15 +25,14 @@
  *
  *
  ***********************************************************************************/
-#define LOG_TAG "BTIF_HD"
-
 #include <errno.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_hd.h>
-#include <log/log.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define LOG_TAG "BTIF_HD"
 
 #include "bta_api.h"
 #include "bta_hd_api.h"
@@ -54,8 +53,8 @@
 #define COD_HID_COMBO 0x05C0
 #define COD_HID_MAJOR 0x0500
 
-extern bool bta_dm_check_if_only_hd_connected(const RawAddress& peer_addr);
-extern bool check_cod_hid(const RawAddress* remote_bdaddr);
+extern bool bta_dm_check_if_only_hd_connected(BD_ADDR peer_addr);
+extern bool check_cod_hid(const bt_bdaddr_t* remote_bdaddr);
 extern void btif_hh_service_registration(bool enable);
 
 /* HD request events */
@@ -124,8 +123,8 @@ static void btif_hd_free_buf() {
  * Returns          void
  *
  ******************************************************************************/
-void btif_hd_remove_device(RawAddress bd_addr) {
-  BTA_HdRemoveDevice(bd_addr);
+void btif_hd_remove_device(bt_bdaddr_t bd_addr) {
+  BTA_HdRemoveDevice((uint8_t*)&bd_addr);
   btif_storage_remove_hidd(&bd_addr);
 }
 
@@ -177,7 +176,7 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
       break;
 
     case BTA_HD_REGISTER_APP_EVT: {
-      RawAddress* addr = (RawAddress*)&p_data->reg_status.bda;
+      bt_bdaddr_t* addr = (bt_bdaddr_t*)&p_data->reg_status.bda;
 
       if (!p_data->reg_status.in_use) {
         addr = NULL;
@@ -200,7 +199,7 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
       break;
 
     case BTA_HD_OPEN_EVT: {
-      RawAddress* addr = (RawAddress*)&p_data->conn.bda;
+      bt_bdaddr_t* addr = (bt_bdaddr_t*)&p_data->conn.bda;
       BTIF_TRACE_WARNING(
           "BTA_HD_OPEN_EVT, address (%02x:%02x:%02x:%02x:%02x:%02x)",
           addr->address[0], addr->address[1], addr->address[2],
@@ -213,22 +212,22 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
         BTA_HdDisconnect();
         break;
       }
-      btif_storage_set_hidd((RawAddress*)&p_data->conn.bda);
+      btif_storage_set_hidd((bt_bdaddr_t*)&p_data->conn.bda);
 
       HAL_CBACK(bt_hd_callbacks, connection_state_cb,
-                (RawAddress*)&p_data->conn.bda, BTHD_CONN_STATE_CONNECTED);
+                (bt_bdaddr_t*)&p_data->conn.bda, BTHD_CONN_STATE_CONNECTED);
     } break;
 
     case BTA_HD_CLOSE_EVT:
       if (btif_hd_cb.forced_disc) {
-        RawAddress* addr = (RawAddress*)&p_data->conn.bda;
+        bt_bdaddr_t* addr = (bt_bdaddr_t*)&p_data->conn.bda;
         BTIF_TRACE_WARNING("remote device was forcefully disconnected");
         btif_hd_remove_device(*addr);
         btif_hd_cb.forced_disc = FALSE;
         break;
       }
       HAL_CBACK(bt_hd_callbacks, connection_state_cb,
-                (RawAddress*)&p_data->conn.bda, BTHD_CONN_STATE_DISCONNECTED);
+                (bt_bdaddr_t*)&p_data->conn.bda, BTHD_CONN_STATE_DISCONNECTED);
       break;
 
     case BTA_HD_GET_REPORT_EVT:
@@ -253,13 +252,13 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
 
     case BTA_HD_VC_UNPLUG_EVT:
       HAL_CBACK(bt_hd_callbacks, connection_state_cb,
-                (RawAddress*)&p_data->conn.bda, BTHD_CONN_STATE_DISCONNECTED);
+                (bt_bdaddr_t*)&p_data->conn.bda, BTHD_CONN_STATE_DISCONNECTED);
       if (bta_dm_check_if_only_hd_connected(p_data->conn.bda)) {
         BTIF_TRACE_DEBUG("%s: Removing bonding as only HID profile connected",
                          __func__);
-        BTA_DmRemoveDevice(p_data->conn.bda);
+        BTA_DmRemoveDevice((uint8_t*)&p_data->conn.bda);
       } else {
-        RawAddress* bd_addr = (RawAddress*)&p_data->conn.bda;
+        bt_bdaddr_t* bd_addr = (bt_bdaddr_t*)&p_data->conn.bda;
         BTIF_TRACE_DEBUG(
             "%s: Only removing HID data as some other profiles "
             "connected",
@@ -271,7 +270,7 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
 
     case BTA_HD_CONN_STATE_EVT:
       HAL_CBACK(bt_hd_callbacks, connection_state_cb,
-                (RawAddress*)&p_data->conn.bda,
+                (bt_bdaddr_t*)&p_data->conn.bda,
                 (bthd_connection_state_t)p_data->conn.status);
       break;
 
@@ -400,18 +399,13 @@ static bt_status_t register_app(bthd_app_param_t* p_app_param,
     return BT_STATUS_BUSY;
   }
 
-  if (strlen(p_app_param->name) >= BTIF_HD_APP_NAME_LEN ||
-      strlen(p_app_param->description) >= BTIF_HD_APP_DESCRIPTION_LEN ||
-      strlen(p_app_param->provider) >= BTIF_HD_APP_PROVIDER_LEN) {
-    android_errorWriteLog(0x534e4554, "113037220");
-  }
-  app_info.p_name = (char*)osi_calloc(BTIF_HD_APP_NAME_LEN);
-  strlcpy(app_info.p_name, p_app_param->name, BTIF_HD_APP_NAME_LEN);
-  app_info.p_description = (char*)osi_calloc(BTIF_HD_APP_DESCRIPTION_LEN);
-  strlcpy(app_info.p_description, p_app_param->description,
-          BTIF_HD_APP_DESCRIPTION_LEN);
-  app_info.p_provider = (char*)osi_calloc(BTIF_HD_APP_PROVIDER_LEN);
-  strlcpy(app_info.p_provider, p_app_param->provider, BTIF_HD_APP_PROVIDER_LEN);
+  app_info.p_name = (char*)osi_malloc(BTIF_HD_APP_NAME_LEN);
+  memcpy(app_info.p_name, p_app_param->name, BTIF_HD_APP_NAME_LEN);
+  app_info.p_description = (char*)osi_malloc(BTIF_HD_APP_DESCRIPTION_LEN);
+  memcpy(app_info.p_description, p_app_param->description,
+         BTIF_HD_APP_DESCRIPTION_LEN);
+  app_info.p_provider = (char*)osi_malloc(BTIF_HD_APP_PROVIDER_LEN);
+  memcpy(app_info.p_provider, p_app_param->provider, BTIF_HD_APP_PROVIDER_LEN);
   app_info.subclass = p_app_param->subclass;
   app_info.descriptor.dl_len = p_app_param->desc_list_len;
   app_info.descriptor.dsc_list =
@@ -483,7 +477,7 @@ static bt_status_t unregister_app(void) {
  * Returns          bt_status_t
  *
  ******************************************************************************/
-static bt_status_t connect(RawAddress* bd_addr) {
+static bt_status_t connect(bt_bdaddr_t* bd_addr) {
   BTIF_TRACE_API("%s", __func__);
 
   if (!btif_hd_cb.app_registered) {
@@ -497,7 +491,7 @@ static bt_status_t connect(RawAddress* bd_addr) {
     return BT_STATUS_NOT_READY;
   }
 
-  BTA_HdConnect(*bd_addr);
+  BTA_HdConnect(bd_addr->address);
 
   return BT_STATUS_SUCCESS;
 }

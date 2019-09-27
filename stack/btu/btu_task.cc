@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,10 +38,11 @@
 #include "stack/include/btu.h"
 #include "stack/l2cap/l2c_int.h"
 
-static const int THREAD_RT_PRIORITY = 1;
-
 /* Define BTU storage area */
 uint8_t btu_trace_level = HCI_INITIAL_TRACE_LEVEL;
+
+// General timer queue.
+extern fixed_queue_t* btu_general_alarm_queue;
 
 extern thread_t* bt_workqueue_thread;
 
@@ -124,13 +125,9 @@ void btu_task_start_up(UNUSED_ATTR void* context) {
   module_init(get_module(BTE_LOGMSG_MODULE));
 
   message_loop_thread_ = thread_new("btu message loop");
-  if (!message_loop_thread_) {
-    LOG(FATAL) << __func__ << " unable to create btu message loop thread.";
-  }
-
-  thread_set_rt_priority(message_loop_thread_, THREAD_RT_PRIORITY);
   thread_post(message_loop_thread_, btu_message_loop_run, nullptr);
 
+  alarm_register_processing_queue(btu_general_alarm_queue, bt_workqueue_thread);
 }
 
 void btu_task_shut_down(UNUSED_ATTR void* context) {
@@ -138,6 +135,8 @@ void btu_task_shut_down(UNUSED_ATTR void* context) {
   if (run_loop_ && message_loop_) {
     message_loop_->task_runner()->PostTask(FROM_HERE, run_loop_->QuitClosure());
   }
+
+  alarm_unregister_processing_queue(btu_general_alarm_queue);
 
   module_clean_up(get_module(BTE_LOGMSG_MODULE));
 

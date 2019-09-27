@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 #include "rfcdefs.h"
 
 #include <string.h>
+
+extern fixed_queue_t* btu_general_alarm_queue;
 
 /*******************************************************************************
  *
@@ -127,14 +129,15 @@ bool rfc_check_fcs(uint16_t len, uint8_t* p, uint8_t received_fcs) {
  * Function         rfc_alloc_multiplexer_channel
  *
  * Description      This function returns existing or new control block for
- *                  the address.
+ *                  the BD_ADDR.
  *
  ******************************************************************************/
-tRFC_MCB* rfc_alloc_multiplexer_channel(const RawAddress& bd_addr,
-                                        bool is_initiator) {
+tRFC_MCB* rfc_alloc_multiplexer_channel(BD_ADDR bd_addr, bool is_initiator) {
   int i, j;
   tRFC_MCB* p_mcb = NULL;
-  VLOG(1) << __func__ << ": bd_addr:" << bd_addr;
+  RFCOMM_TRACE_DEBUG(
+      "rfc_alloc_multiplexer_channel: bd_addr:%02x:%02x:%02x:%02x:%02x:%02x",
+      bd_addr[0], bd_addr[1], bd_addr[2], bd_addr[3], bd_addr[4], bd_addr[5]);
   RFCOMM_TRACE_DEBUG("rfc_alloc_multiplexer_channel:is_initiator:%d",
                      is_initiator);
 
@@ -142,11 +145,14 @@ tRFC_MCB* rfc_alloc_multiplexer_channel(const RawAddress& bd_addr,
     RFCOMM_TRACE_DEBUG(
         "rfc_alloc_multiplexer_channel rfc_cb.port.rfc_mcb[%d].state:%d", i,
         rfc_cb.port.rfc_mcb[i].state);
-    VLOG(1) << "(rfc_cb.port.rfc_mcb[i].bd_addr:"
-            << rfc_cb.port.rfc_mcb[i].bd_addr;
+    RFCOMM_TRACE_DEBUG(
+        "(rfc_cb.port.rfc_mcb[i].bd_addr:%02x:%02x:%02x:%02x:%02x:%02x",
+        rfc_cb.port.rfc_mcb[i].bd_addr[0], rfc_cb.port.rfc_mcb[i].bd_addr[1],
+        rfc_cb.port.rfc_mcb[i].bd_addr[2], rfc_cb.port.rfc_mcb[i].bd_addr[3],
+        rfc_cb.port.rfc_mcb[i].bd_addr[4], rfc_cb.port.rfc_mcb[i].bd_addr[5]);
 
     if ((rfc_cb.port.rfc_mcb[i].state != RFC_MX_STATE_IDLE) &&
-        rfc_cb.port.rfc_mcb[i].bd_addr == bd_addr) {
+        (!memcmp(rfc_cb.port.rfc_mcb[i].bd_addr, bd_addr, BD_ADDR_LEN))) {
       /* Multiplexer channel found do not change anything */
       /* If there was an inactivity timer running stop it now */
       if (rfc_cb.port.rfc_mcb[i].state == RFC_MX_STATE_CONNECTED)
@@ -169,7 +175,7 @@ tRFC_MCB* rfc_alloc_multiplexer_channel(const RawAddress& bd_addr,
       alarm_free(p_mcb->mcb_timer);
       fixed_queue_free(p_mcb->cmd_q, NULL);
       memset(p_mcb, 0, sizeof(tRFC_MCB));
-      p_mcb->bd_addr = bd_addr;
+      memcpy(p_mcb->bd_addr, bd_addr, BD_ADDR_LEN);
       RFCOMM_TRACE_DEBUG(
           "rfc_alloc_multiplexer_channel:is_initiator:%d, create new p_mcb:%p, "
           "index:%d",
@@ -226,8 +232,8 @@ void rfc_timer_start(tRFC_MCB* p_mcb, uint16_t timeout) {
   RFCOMM_TRACE_EVENT("%s - timeout:%d seconds", __func__, timeout);
 
   period_ms_t interval_ms = timeout * 1000;
-  alarm_set_on_mloop(p_mcb->mcb_timer, interval_ms, rfcomm_mcb_timer_timeout,
-                     p_mcb);
+  alarm_set_on_queue(p_mcb->mcb_timer, interval_ms, rfcomm_mcb_timer_timeout,
+                     p_mcb, btu_general_alarm_queue);
 }
 
 /*******************************************************************************
@@ -254,8 +260,9 @@ void rfc_port_timer_start(tPORT* p_port, uint16_t timeout) {
   RFCOMM_TRACE_EVENT("%s - timeout:%d seconds", __func__, timeout);
 
   period_ms_t interval_ms = timeout * 1000;
-  alarm_set_on_mloop(p_port->rfc.port_timer, interval_ms,
-                     rfcomm_port_timer_timeout, p_port);
+  alarm_set_on_queue(p_port->rfc.port_timer, interval_ms,
+                     rfcomm_port_timer_timeout, p_port,
+                     btu_general_alarm_queue);
 }
 
 /*******************************************************************************
@@ -321,7 +328,7 @@ void rfcomm_mcb_timer_timeout(void* data) {
  * Returns          void
  *
  ******************************************************************************/
-void rfc_sec_check_complete(UNUSED_ATTR const RawAddress* bd_addr,
+void rfc_sec_check_complete(UNUSED_ATTR BD_ADDR bd_addr,
                             UNUSED_ATTR tBT_TRANSPORT transport,
                             void* p_ref_data, uint8_t res) {
   tPORT* p_port = (tPORT*)p_ref_data;
@@ -348,7 +355,11 @@ void rfc_sec_check_complete(UNUSED_ATTR const RawAddress* bd_addr,
  ******************************************************************************/
 void rfc_port_closed(tPORT* p_port) {
   tRFC_MCB* p_mcb = p_port->rfc.p_mcb;
+
+  RFCOMM_TRACE_DEBUG("rfc_port_closed");
+
   rfc_port_timer_stop(p_port);
+
   p_port->rfc.state = RFC_STATE_CLOSED;
 
   /* If multiplexer channel was up mark it as down */
@@ -380,7 +391,8 @@ void rfc_inc_credit(tPORT* p_port, uint8_t credit) {
 
     RFCOMM_TRACE_EVENT("rfc_inc_credit:%d", p_port->credit_tx);
 
-    if (p_port->tx.peer_fc) PORT_FlowInd(p_port->rfc.p_mcb, p_port->dlci, true);
+    if (p_port->tx.peer_fc == true)
+      PORT_FlowInd(p_port->rfc.p_mcb, p_port->dlci, true);
   }
 }
 
@@ -425,7 +437,7 @@ void rfc_check_send_cmd(tRFC_MCB* p_mcb, BT_HDR* p_buf) {
   }
 
   /* handle queue if L2CAP not congested */
-  while (!p_mcb->l2cap_congested) {
+  while (p_mcb->l2cap_congested == false) {
     BT_HDR* p = (BT_HDR*)fixed_queue_try_dequeue(p_mcb->cmd_q);
     if (p == NULL) break;
     L2CA_DataWrite(p_mcb->lcid, p);

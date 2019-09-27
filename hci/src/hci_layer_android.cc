@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2017 Google, Inc.
+ *  Copyright (C) 2017 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,14 +20,12 @@
 
 #include "hci_layer.h"
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include <base/location.h>
 #include <base/logging.h>
 #include "buffer_allocator.h"
 #include "osi/include/log.h"
+#include "sys/stat.h"
+#include "sys/types.h"
 
 #include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
 #include <android/hardware/bluetooth/1.0/IBluetoothHciCallbacks.h>

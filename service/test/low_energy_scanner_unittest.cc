@@ -1,5 +1,5 @@
 //
-//  Copyright 2016 The Android Open Source Project
+//  Copyright (C) 2016 The Android Open Source Project
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -67,12 +67,18 @@ class MockScannerHandler : public BleScannerInterface {
 
   MOCK_METHOD2(BatchscanReadReports, void(int client_if, int scan_mode));
 
-  MOCK_METHOD7(StartSync, void(uint8_t, RawAddress, uint16_t, uint16_t,
+  MOCK_METHOD7(StartSync, void(uint8_t, bt_bdaddr_t, uint16_t, uint16_t,
                                StartSyncCb, SyncReportCb, SyncLostCb));
   MOCK_METHOD1(StopSync, void(uint16_t));
 
-  void ScanFilterAdd(int filter_index, std::vector<ApcfCommand> filters,
-                     FilterConfigCallback cb){};
+  void ScanFilterAddRemove(int action, int filt_type, int filt_index,
+                           int company_id, int company_id_mask,
+                           const bt_uuid_t* p_uuid,
+                           const bt_uuid_t* p_uuid_mask,
+                           const bt_bdaddr_t* bd_addr, char addr_type,
+                           std::vector<uint8_t> data,
+                           std::vector<uint8_t> p_mask,
+                           FilterConfigCallback cb){};
 
   void ScanFilterParamSetup(
       uint8_t client_if, uint8_t action, uint8_t filt_index,
@@ -158,8 +164,8 @@ class LowEnergyScannerPostRegisterTest : public LowEnergyScannerTest {
   void RegisterTestScanner(
       const std::function<void(std::unique_ptr<LowEnergyScanner> scanner)>
           callback) {
-    Uuid uuid = Uuid::GetRandom();
-    auto api_callback = [&](BLEStatus status, const Uuid& in_uuid,
+    UUID uuid = UUID::GetRandom();
+    auto api_callback = [&](BLEStatus status, const UUID& in_uuid,
                             std::unique_ptr<BluetoothInstance> in_scanner) {
       CHECK(in_uuid == uuid);
       CHECK(in_scanner.get());
@@ -198,11 +204,11 @@ TEST_F(LowEnergyScannerTest, RegisterInstance) {
   // These will be asynchronously populated with a result when the callback
   // executes.
   BLEStatus status = BLE_STATUS_SUCCESS;
-  Uuid cb_uuid;
+  UUID cb_uuid;
   std::unique_ptr<LowEnergyScanner> scanner;
   int callback_count = 0;
 
-  auto callback = [&](BLEStatus in_status, const Uuid& uuid,
+  auto callback = [&](BLEStatus in_status, const UUID& uuid,
                       std::unique_ptr<BluetoothInstance> in_scanner) {
     status = in_status;
     cb_uuid = uuid;
@@ -211,20 +217,20 @@ TEST_F(LowEnergyScannerTest, RegisterInstance) {
     callback_count++;
   };
 
-  Uuid uuid0 = Uuid::GetRandom();
+  UUID uuid0 = UUID::GetRandom();
 
   // HAL returns success.
   EXPECT_TRUE(ble_factory_->RegisterInstance(uuid0, callback));
   EXPECT_EQ(0, callback_count);
 
-  // Calling twice with the same Uuid should fail with no additional call into
+  // Calling twice with the same UUID should fail with no additional call into
   // the stack.
   EXPECT_FALSE(ble_factory_->RegisterInstance(uuid0, callback));
 
   ::testing::Mock::VerifyAndClearExpectations(mock_handler_.get());
 
-  // Call with a different Uuid while one is pending.
-  Uuid uuid1 = Uuid::GetRandom();
+  // Call with a different UUID while one is pending.
+  UUID uuid1 = UUID::GetRandom();
   BleScannerInterface::RegisterCallback reg_scanner_cb2;
   EXPECT_CALL(*mock_handler_, RegisterScanner(_))
       .Times(1)
@@ -301,7 +307,7 @@ TEST_F(LowEnergyScannerPostRegisterTest, ScanRecord) {
        0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
        0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01,
        0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00});
-  const RawAddress kTestAddress = {{0x01, 0x02, 0x03, 0x0A, 0x0B, 0x0C}};
+  const bt_bdaddr_t kTestAddress = {{0x01, 0x02, 0x03, 0x0A, 0x0B, 0x0C}};
   const char kTestAddressStr[] = "01:02:03:0A:0B:0C";
   const int kTestRssi = 64;
 

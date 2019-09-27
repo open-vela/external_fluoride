@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,8 +31,6 @@
 #include "gatt_api.h"
 #include "gatt_int.h"
 #include "osi/include/osi.h"
-
-using base::StringPrintf;
 
 /*******************************************************************************
  *
@@ -100,8 +98,8 @@ void gatt_verify_signature(tGATT_TCB& tcb, BT_HDR* p_buf) {
   uint32_t counter;
 
   if (p_buf->len < GATT_AUTH_SIGN_LEN + 4) {
-    LOG(ERROR) << StringPrintf("%s: Data length %u less than expected %u",
-                               __func__, p_buf->len, GATT_AUTH_SIGN_LEN + 4);
+    GATT_TRACE_ERROR("%s: Data length %u less than expected %u", __func__,
+                     p_buf->len, GATT_AUTH_SIGN_LEN + 4);
     return;
   }
   cmd_len = p_buf->len - GATT_AUTH_SIGN_LEN + 4;
@@ -110,7 +108,7 @@ void gatt_verify_signature(tGATT_TCB& tcb, BT_HDR* p_buf) {
 
   if (!BTM_BleVerifySignature(tcb.peer_bda, p_orig, cmd_len, counter, p)) {
     /* if this is a bad signature, assume from attacker, ignore it  */
-    LOG(ERROR) << StringPrintf("Signature Verification Failed, data ignored");
+    GATT_TRACE_ERROR("Signature Verification Failed, data ignored");
     return;
   }
 
@@ -150,21 +148,19 @@ void gatt_sec_check_complete(bool sec_check_ok, tGATT_CLCB* p_clcb,
  * Returns
  *
  ******************************************************************************/
-void gatt_enc_cmpl_cback(const RawAddress* bd_addr, tBT_TRANSPORT transport,
+void gatt_enc_cmpl_cback(BD_ADDR bd_addr, tBT_TRANSPORT transport,
                          UNUSED_ATTR void* p_ref_data, tBTM_STATUS result) {
-  VLOG(1) << StringPrintf("gatt_enc_cmpl_cback");
-  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(*bd_addr, transport);
+  GATT_TRACE_DEBUG("gatt_enc_cmpl_cback");
+  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bd_addr, transport);
   if (!p_tcb) {
-    LOG(ERROR) << StringPrintf("%s: enc callback for unknown bd_addr",
-                               __func__);
+    GATT_TRACE_ERROR("%s: enc callback for unknown bd_addr", __func__);
     return;
   }
 
   if (gatt_get_sec_act(p_tcb) == GATT_SEC_ENC_PENDING) return;
 
   if (p_tcb->pending_enc_clcb.empty()) {
-    LOG(ERROR) << StringPrintf("%s: no operation waiting for encrypting",
-                               __func__);
+    GATT_TRACE_ERROR("%s: no operation waiting for encrypting", __func__);
     return;
   }
 
@@ -175,7 +171,7 @@ void gatt_enc_cmpl_cback(const RawAddress* bd_addr, tBT_TRANSPORT transport,
   if (result == BTM_SUCCESS) {
     if (gatt_get_sec_act(p_tcb) == GATT_SEC_ENCRYPT_MITM) {
       uint8_t sec_flag = 0;
-      BTM_GetSecurityFlagsByTransport(*bd_addr, &sec_flag, transport);
+      BTM_GetSecurityFlagsByTransport(bd_addr, &sec_flag, transport);
 
       if (sec_flag & BTM_SEC_FLAG_LKEY_AUTHED) {
         status = true;
@@ -205,11 +201,10 @@ void gatt_enc_cmpl_cback(const RawAddress* bd_addr, tBT_TRANSPORT transport,
  * Returns
  *
  ******************************************************************************/
-void gatt_notify_enc_cmpl(const RawAddress& bd_addr) {
+void gatt_notify_enc_cmpl(BD_ADDR bd_addr) {
   tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bd_addr, BT_TRANSPORT_LE);
   if (!p_tcb) {
-    VLOG(1) << StringPrintf(
-        "notify GATT for encryption completion of unknown device");
+    GATT_TRACE_DEBUG("notify GATT for encryption completion of unknown device");
     return;
   }
 
@@ -361,8 +356,7 @@ tGATT_STATUS gatt_get_link_encrypt_status(tGATT_TCB& tcb) {
       encrypt_status = GATT_ENCRYPED_MITM;
   }
 
-  VLOG(1) << StringPrintf("gatt_get_link_encrypt_status status=0x%x",
-                          encrypt_status);
+  GATT_TRACE_DEBUG("gatt_get_link_encrypt_status status=0x%x", encrypt_status);
   return encrypt_status;
 }
 
@@ -396,44 +390,51 @@ static bool gatt_convert_sec_action(tGATT_SEC_ACTION gatt_sec_act,
 
   return status;
 }
-
-/** check link security */
-void gatt_security_check_start(tGATT_CLCB* p_clcb) {
+/*******************************************************************************
+ *
+ * Function         gatt_check_enc_req
+ *
+ * Description      check link security.
+ *
+ * Returns          true if encrypted, otherwise false.
+ *
+ ******************************************************************************/
+bool gatt_security_check_start(tGATT_CLCB* p_clcb) {
   tGATT_TCB* p_tcb = p_clcb->p_tcb;
+  tGATT_SEC_ACTION gatt_sec_act;
+  tBTM_BLE_SEC_ACT btm_ble_sec_act;
+  bool status = true;
+  tBTM_STATUS btm_status;
   tGATT_SEC_ACTION sec_act_old = gatt_get_sec_act(p_tcb);
 
-  tGATT_SEC_ACTION gatt_sec_act = gatt_determine_sec_act(p_clcb);
+  gatt_sec_act = gatt_determine_sec_act(p_clcb);
 
   if (sec_act_old == GATT_SEC_NONE) gatt_set_sec_act(p_tcb, gatt_sec_act);
 
   switch (gatt_sec_act) {
     case GATT_SEC_SIGN_DATA:
-      VLOG(1) << StringPrintf("%s: Do data signing", __func__);
+      GATT_TRACE_DEBUG("gatt_security_check_start: Do data signing");
       gatt_sign_data(p_clcb);
       break;
     case GATT_SEC_ENCRYPT:
     case GATT_SEC_ENCRYPT_NO_MITM:
     case GATT_SEC_ENCRYPT_MITM:
       if (sec_act_old < GATT_SEC_ENCRYPT) {
-        VLOG(1) << StringPrintf("%s: Encrypt now or key upgreade first",
-                                __func__);
-        tBTM_BLE_SEC_ACT btm_ble_sec_act;
+        GATT_TRACE_DEBUG(
+            "gatt_security_check_start: Encrypt now or key upgreade first");
         gatt_convert_sec_action(gatt_sec_act, &btm_ble_sec_act);
-        tBTM_STATUS btm_status =
+        btm_status =
             BTM_SetEncryption(p_tcb->peer_bda, p_tcb->transport,
                               gatt_enc_cmpl_cback, NULL, btm_ble_sec_act);
         if ((btm_status != BTM_SUCCESS) && (btm_status != BTM_CMD_STARTED)) {
-          LOG(ERROR) << StringPrintf(
-              "%s BTM_SetEncryption failed btm_status=%d", __func__,
+          GATT_TRACE_ERROR(
+              "gatt_security_check_start BTM_SetEncryption failed "
+              "btm_status=%d",
               btm_status);
-          gatt_set_sec_act(p_tcb, GATT_SEC_NONE);
-          gatt_set_ch_state(p_tcb, GATT_CH_OPEN);
-
-          gatt_end_operation(p_clcb, GATT_INSUF_ENCRYPTION, NULL);
-          return;
+          status = false;
         }
       }
-      p_tcb->pending_enc_clcb.push(p_clcb);
+      if (status) p_tcb->pending_enc_clcb.push(p_clcb);
       break;
     case GATT_SEC_ENC_PENDING:
       p_tcb->pending_enc_clcb.push(p_clcb);
@@ -443,4 +444,11 @@ void gatt_security_check_start(tGATT_CLCB* p_clcb) {
       gatt_sec_check_complete(true, p_clcb, gatt_sec_act);
       break;
   }
+
+  if (status == false) {
+    gatt_set_sec_act(p_tcb, GATT_SEC_NONE);
+    gatt_set_ch_state(p_tcb, GATT_CH_OPEN);
+  }
+
+  return status;
 }

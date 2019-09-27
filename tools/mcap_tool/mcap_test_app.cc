@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Android Open Source Project
+ * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,14 +52,19 @@ static const char* dump_mcap_events(const uint8_t event) {
 }
 
 static void print_mcap_event(const tMCA_DISCONNECT_IND* mcap_disconnect_ind) {
+  bdstr_t bd_addr_str;
   printf("%s: peer_bd_addr=%s,l2cap_disconnect_reason=0x%04x\n", __func__,
-         mcap_disconnect_ind->bd_addr.ToString().c_str(),
+         bdaddr_to_string((bt_bdaddr_t*)mcap_disconnect_ind->bd_addr,
+                          bd_addr_str, sizeof(bd_addr_str)),
          mcap_disconnect_ind->reason);
 }
 
 static void print_mcap_event(const tMCA_CONNECT_IND* mcap_connect_ind) {
+  bdstr_t bd_addr_str;
   printf("%s: peer_bd_addr=%s, peer_mtu=%d \n", __func__,
-         mcap_connect_ind->bd_addr.ToString().c_str(), mcap_connect_ind->mtu);
+         bdaddr_to_string((bt_bdaddr_t*)mcap_connect_ind->bd_addr, bd_addr_str,
+                          sizeof(bd_addr_str)),
+         mcap_connect_ind->mtu);
 }
 
 static void print_mcap_event(const tMCA_RSP_EVT* mcap_rsp) {
@@ -132,7 +137,7 @@ void McapTestApp::Deregister() {
 
 bool McapTestApp::Registered() { return _mcap_handle > 0; }
 
-bool McapTestApp::ConnectMcl(const RawAddress& bd_addr, uint16_t ctrl_psm,
+bool McapTestApp::ConnectMcl(const bt_bdaddr_t& bd_addr, uint16_t ctrl_psm,
                              uint16_t sec_mask) {
   if (!Registered()) {
     LOG(ERROR) << "Application not registered";
@@ -164,9 +169,9 @@ bool McapTestApp::CreateMdep(uint8_t type, uint8_t max_mdl,
 
 uint8_t McapTestApp::GetHandle() { return _mcap_handle; }
 
-McapMcl* McapTestApp::FindMclByPeerAddress(const RawAddress& bd_addr) {
+McapMcl* McapTestApp::FindMclByPeerAddress(const bt_bdaddr_t& bd_addr) {
   for (McapMcl& mcl : _mcl_list) {
-    if (mcl.GetPeerAddress() == bd_addr) {
+    if (bdaddr_equals(&mcl.GetPeerAddress(), &bd_addr)) {
       return &mcl;
     }
   }
@@ -426,7 +431,7 @@ void McapTestApp::ControlCallback(tMCA_HANDLE handle, tMCA_CL mcl,
       // Called when MCA_ConnectReq succeeded
       print_mcap_event(&p_data->connect_ind);
       LOG(INFO) << "Received MCL handle " << (int)mcl;
-      RawAddress bd_addr = p_data->connect_ind.bd_addr;
+      bt_bdaddr_t bd_addr = *((bt_bdaddr_t*)p_data->connect_ind.bd_addr);
       mcap_mcl = FindMclByPeerAddress(bd_addr);
       if (!mcap_mcl) {
         LOG(INFO) << "Creating new MCL for ID " << (int)mcl;
@@ -445,14 +450,20 @@ void McapTestApp::ControlCallback(tMCA_HANDLE handle, tMCA_CL mcl,
     case MCA_DISCONNECT_IND_EVT: {
       // Called when MCA_ConnectReq failed or MCA_DisconnectReq succeeded
       print_mcap_event(&p_data->disconnect_ind);
-      RawAddress bd_addr = p_data->disconnect_ind.bd_addr;
+      bt_bdaddr_t bd_addr = *((bt_bdaddr_t*)p_data->disconnect_ind.bd_addr);
       mcap_mcl = FindMclByPeerAddress(bd_addr);
       if (!mcap_mcl) {
-        LOG(ERROR) << "No MCL for BD addr " << bd_addr;
+        bdstr_t bd_addr_str;
+        LOG(ERROR) << "No MCL for BD addr "
+                   << bdaddr_to_string(&bd_addr, bd_addr_str,
+                                       sizeof(bd_addr_str));
         break;
       }
       if (!mcap_mcl->IsConnected()) {
-        LOG(WARNING) << "MCL for " << bd_addr << " is already disconnected";
+        bdstr_t bd_addr_str;
+        LOG(WARNING) << "MCL for " << bdaddr_to_string(&bd_addr, bd_addr_str,
+                                                       sizeof(bd_addr_str))
+                     << " is already disconnected";
       }
       mcap_mcl->SetHandle(0);
       mcap_mcl->SetMtu(0);
