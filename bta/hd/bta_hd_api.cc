@@ -218,14 +218,14 @@ extern void BTA_HdVirtualCableUnplug(void) {
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdConnect(const RawAddress& addr) {
+extern void BTA_HdConnect(BD_ADDR addr) {
   APPL_TRACE_API("%s", __func__);
 
   tBTA_HD_DEVICE_CTRL* p_buf =
       (tBTA_HD_DEVICE_CTRL*)osi_malloc(sizeof(tBTA_HD_DEVICE_CTRL));
   p_buf->hdr.event = BTA_HD_API_CONNECT_EVT;
 
-  p_buf->addr = addr;
+  memcpy(p_buf->addr, addr, sizeof(BD_ADDR));
 
   bta_sys_sendmsg(p_buf);
 }
@@ -256,13 +256,13 @@ extern void BTA_HdDisconnect(void) {
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdAddDevice(const RawAddress& addr) {
+extern void BTA_HdAddDevice(BD_ADDR addr) {
   APPL_TRACE_API("%s", __func__);
   tBTA_HD_DEVICE_CTRL* p_buf =
       (tBTA_HD_DEVICE_CTRL*)osi_malloc(sizeof(tBTA_HD_DEVICE_CTRL));
   p_buf->hdr.event = BTA_HD_API_ADD_DEVICE_EVT;
 
-  p_buf->addr = addr;
+  memcpy(p_buf->addr, addr, sizeof(BD_ADDR));
 
   bta_sys_sendmsg(p_buf);
 }
@@ -276,13 +276,13 @@ extern void BTA_HdAddDevice(const RawAddress& addr) {
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdRemoveDevice(const RawAddress& addr) {
+extern void BTA_HdRemoveDevice(BD_ADDR addr) {
   APPL_TRACE_API("%s", __func__);
   tBTA_HD_DEVICE_CTRL* p_buf =
       (tBTA_HD_DEVICE_CTRL*)osi_malloc(sizeof(tBTA_HD_DEVICE_CTRL));
   p_buf->hdr.event = BTA_HD_API_REMOVE_DEVICE_EVT;
 
-  p_buf->addr = addr;
+  memcpy(p_buf->addr, addr, sizeof(BD_ADDR));
 
   bta_sys_sendmsg(p_buf);
 }

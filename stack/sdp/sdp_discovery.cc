@@ -51,14 +51,15 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
 static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
                                             uint8_t* p_reply_end);
 static uint8_t* save_attr_seq(tCONN_CB* p_ccb, uint8_t* p, uint8_t* p_msg_end);
-static tSDP_DISC_REC* add_record(tSDP_DISCOVERY_DB* p_db,
-                                 const RawAddress& p_bda);
+static tSDP_DISC_REC* add_record(tSDP_DISCOVERY_DB* p_db, BD_ADDR p_bda);
 static uint8_t* add_attr(uint8_t* p, uint8_t* p_end, tSDP_DISCOVERY_DB* p_db,
                          tSDP_DISC_REC* p_rec, uint16_t attr_id,
                          tSDP_DISC_ATTR* p_parent_attr, uint8_t nest_level);
 
 /* Safety check in case we go crazy */
 #define MAX_NEST_LEVELS 5
+
+extern fixed_queue_t* btu_general_alarm_queue;
 
 /*******************************************************************************
  *
@@ -85,18 +86,15 @@ static uint8_t* sdpu_build_uuid_seq(uint8_t* p_out, uint16_t num_uuids,
 
   /* Now, loop through and put in all the UUID(s) */
   for (xx = 0; xx < num_uuids; xx++, p_uuid_list++) {
-    if (p_uuid_list->len == LEN_UUID_16) {
+    if (p_uuid_list->len == 2) {
       UINT8_TO_BE_STREAM(p_out, (UUID_DESC_TYPE << 3) | SIZE_TWO_BYTES);
       UINT16_TO_BE_STREAM(p_out, p_uuid_list->uu.uuid16);
-    } else if (p_uuid_list->len == LEN_UUID_32) {
+    } else if (p_uuid_list->len == 4) {
       UINT8_TO_BE_STREAM(p_out, (UUID_DESC_TYPE << 3) | SIZE_FOUR_BYTES);
       UINT32_TO_BE_STREAM(p_out, p_uuid_list->uu.uuid32);
-    } else if (p_uuid_list->len == LEN_UUID_128) {
+    } else {
       UINT8_TO_BE_STREAM(p_out, (UUID_DESC_TYPE << 3) | SIZE_SIXTEEN_BYTES);
       ARRAY_TO_BE_STREAM(p_out, p_uuid_list->uu.uuid128, p_uuid_list->len);
-    } else {
-      SDP_TRACE_ERROR("SDP: Passed UUID has invalid length %x",
-                      p_uuid_list->len);
     }
   }
 
@@ -173,8 +171,8 @@ static void sdp_snd_service_search_req(tCONN_CB* p_ccb, uint8_t cont_len,
   L2CA_DataWrite(p_ccb->connection_id, p_cmd);
 
   /* Start inactivity timer */
-  alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                     sdp_conn_timer_timeout, p_ccb);
+  alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                     sdp_conn_timer_timeout, p_ccb, btu_general_alarm_queue);
 }
 
 /*******************************************************************************
@@ -536,8 +534,8 @@ static void process_service_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     L2CA_DataWrite(p_ccb->connection_id, p_msg);
 
     /* Start inactivity timer */
-    alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                       sdp_conn_timer_timeout, p_ccb);
+    alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                       sdp_conn_timer_timeout, p_ccb, btu_general_alarm_queue);
   } else {
     sdp_disconnect(p_ccb, SDP_SUCCESS);
     return;
@@ -685,8 +683,8 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
     L2CA_DataWrite(p_ccb->connection_id, p_msg);
 
     /* Start inactivity timer */
-    alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                       sdp_conn_timer_timeout, p_ccb);
+    alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                       sdp_conn_timer_timeout, p_ccb, btu_general_alarm_queue);
 
     return;
   }
@@ -810,7 +808,7 @@ static uint8_t* save_attr_seq(tCONN_CB* p_ccb, uint8_t* p, uint8_t* p_msg_end) {
  * Returns          pointer to next byte in data stream
  *
  ******************************************************************************/
-tSDP_DISC_REC* add_record(tSDP_DISCOVERY_DB* p_db, const RawAddress& p_bda) {
+tSDP_DISC_REC* add_record(tSDP_DISCOVERY_DB* p_db, BD_ADDR p_bda) {
   tSDP_DISC_REC* p_rec;
 
   /* See if there is enough space in the database */
@@ -823,7 +821,7 @@ tSDP_DISC_REC* add_record(tSDP_DISCOVERY_DB* p_db, const RawAddress& p_bda) {
   p_rec->p_first_attr = NULL;
   p_rec->p_next_rec = NULL;
 
-  p_rec->remote_bd_addr = p_bda;
+  memcpy(p_rec->remote_bd_addr, p_bda, BD_ADDR_LEN);
 
   /* Add the record to the end of chain */
   if (!p_db->p_first_rec)

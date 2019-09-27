@@ -44,8 +44,8 @@
 #include "sdpdefs.h"
 #include "utl.h"
 
-static void bta_gattc_cache_write(const RawAddress& server_bda,
-                                  uint16_t num_attr, tBTA_GATTC_NV_ATTR* attr);
+static void bta_gattc_cache_write(BD_ADDR server_bda, uint16_t num_attr,
+                                  tBTA_GATTC_NV_ATTR* attr);
 static void bta_gattc_char_dscpt_disc_cmpl(uint16_t conn_id,
                                            tBTA_GATTC_SERV* p_srvc_cb);
 static tBTA_GATT_STATUS bta_gattc_sdp_service_disc(
@@ -64,10 +64,9 @@ tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_characteristic_srcb(
 #define GATT_CACHE_VERSION 2
 
 static void bta_gattc_generate_cache_file_name(char* buffer, size_t buffer_len,
-                                               const RawAddress& bda) {
+                                               BD_ADDR bda) {
   snprintf(buffer, buffer_len, "%s%02x%02x%02x%02x%02x%02x", GATT_CACHE_PREFIX,
-           bda.address[0], bda.address[1], bda.address[2], bda.address[3],
-           bda.address[4], bda.address[5]);
+           bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
 }
 
 /*****************************************************************************
@@ -1086,10 +1085,6 @@ void bta_gattc_fill_gatt_db_el(btgatt_db_element_t* p_attr,
   p_attr->end_handle = e_handle;
   p_attr->id = id;
   p_attr->properties = prop;
-
-  // Permissions are not discoverable using the attribute protocol.
-  // Core 5.0, Part F, 3.2.5 Attribute Permissions
-  p_attr->permissions = 0;
   bta_to_btif_uuid(&p_attr->uuid, &uuid);
 }
 
@@ -1463,11 +1458,6 @@ bool bta_gattc_cache_load(tBTA_GATTC_CLCB* p_clcb) {
     goto done;
   }
 
-  if (num_attr > 0xFFFF) {
-    APPL_TRACE_ERROR("%s: more than 0xFFFF GATT attributes: %s", __func__, fname);
-    goto done;
-  }
-
   attr = (tBTA_GATTC_NV_ATTR*)osi_malloc(sizeof(tBTA_GATTC_NV_ATTR) * num_attr);
 
   if (fread(attr, sizeof(tBTA_GATTC_NV_ATTR), num_attr, fd) != num_attr) {
@@ -1498,8 +1488,8 @@ done:
  * Returns
  *
  ******************************************************************************/
-static void bta_gattc_cache_write(const RawAddress& server_bda,
-                                  uint16_t num_attr, tBTA_GATTC_NV_ATTR* attr) {
+static void bta_gattc_cache_write(BD_ADDR server_bda, uint16_t num_attr,
+                                  tBTA_GATTC_NV_ATTR* attr) {
   char fname[255] = {0};
   bta_gattc_generate_cache_file_name(fname, sizeof(fname), server_bda);
 
@@ -1546,7 +1536,7 @@ static void bta_gattc_cache_write(const RawAddress& server_bda,
  * Returns          void.
  *
  ******************************************************************************/
-void bta_gattc_cache_reset(const RawAddress& server_bda) {
+void bta_gattc_cache_reset(BD_ADDR server_bda) {
   BTIF_TRACE_DEBUG("%s", __func__);
   char fname[255] = {0};
   bta_gattc_generate_cache_file_name(fname, sizeof(fname), server_bda);

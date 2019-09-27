@@ -19,6 +19,8 @@
 #include "adapter/bluetooth_test.h"
 #include "rfcomm/rfcomm_test.h"
 
+#include "btcore/include/bdaddr.h"
+
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -49,7 +51,7 @@ TEST_F(RFCommTest, RfcommConnectPairedDevice) {
   EXPECT_TRUE(len == sizeof(signal))
       << "Connection signal not read from RFCOMM socket. Bytes read: " << len;
 
-  EXPECT_TRUE(signal.bd_addr == bt_remote_bdaddr_)
+  EXPECT_TRUE(!memcmp(&signal.bd_addr, &bt_remote_bdaddr_, sizeof(bt_bdaddr_t)))
       << "Connected to a different bdaddr than expected.";
   EXPECT_TRUE(channel == signal.channel)
       << "Inconsistent channels returned: " << channel << " and "
@@ -99,7 +101,8 @@ TEST_F(RFCommTest, RfcommRepeatedConnectPairedDevice) {
       signal_fail++;
     }
 
-    EXPECT_TRUE(signal.bd_addr == bt_remote_bdaddr_)
+    EXPECT_TRUE(
+        !memcmp(&signal.bd_addr, &bt_remote_bdaddr_, sizeof(bt_bdaddr_t)))
         << "Connected to a different bdaddr than expected.";
     EXPECT_TRUE(channel == signal.channel)
         << "Inconsistent channels returned: " << channel << " and "

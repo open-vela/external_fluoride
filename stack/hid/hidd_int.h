@@ -34,7 +34,7 @@ enum { HIDD_DEV_NO_CONN, HIDD_DEV_CONNECTED };
 
 typedef struct device_ctb {
   bool in_use;
-  RawAddress addr;
+  BD_ADDR addr;
 
   uint8_t state;
 
