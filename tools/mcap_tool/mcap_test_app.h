@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Android Open Source Project
+ * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 
 #include <base/logging.h>
 
+#include "bdaddr.h"
 #include "mca_api.h"
 
 #include "mcap_test_mcl.h"
@@ -70,7 +71,7 @@ class McapTestApp {
    * @param sec_mask Security mask
    * @return True on success
    */
-  bool ConnectMcl(const RawAddress& bd_addr, uint16_t ctrl_psm,
+  bool ConnectMcl(const bt_bdaddr_t& bd_addr, uint16_t ctrl_psm,
                   uint16_t sec_mask);
   /**
    * Create MCAP Data End Point
@@ -83,7 +84,7 @@ class McapTestApp {
                   tMCA_DATA_CBACK* data_callback);
   // Simple methods that are self-explanatory
   uint8_t GetHandle();
-  McapMcl* FindMclByPeerAddress(const RawAddress& bd_addr);
+  McapMcl* FindMclByPeerAddress(const bt_bdaddr_t& bd_addr);
   McapMcl* FindMclByHandle(tMCA_CL mcl_handle);
   McapMdep* FindMdepByHandle(tMCA_DEP mdep_handle);
   void RemoveMclByHandle(tMCA_CL mcl_handle);
