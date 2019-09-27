@@ -17,7 +17,6 @@
 
 #include <base/logging.h>
 
-#include "bdaddr.h"
 #include "mca_api.h"
 #include "mca_defs.h"
 #include "mcap_test_mcl.h"
@@ -25,7 +24,7 @@
 namespace SYSTEM_BT_TOOLS_MCAP_TOOL {
 
 McapMcl::McapMcl(btmcap_test_interface_t* mcap_test_interface,
-                 tMCA_HANDLE mcap_handle, const bt_bdaddr_t& peer_bd_addr)
+                 tMCA_HANDLE mcap_handle, const RawAddress& peer_bd_addr)
     : _mdl_list() {
   _mcap_handle = mcap_handle;
   _mcap_test_interface = mcap_test_interface;
@@ -35,7 +34,7 @@ McapMcl::McapMcl(btmcap_test_interface_t* mcap_test_interface,
 
 bool McapMcl::Connect(uint16_t ctrl_psm, uint16_t sec_mask) {
   tMCA_RESULT ret = _mcap_test_interface->connect_mcl(
-      _mcap_handle, _peer_bd_addr.address, ctrl_psm, sec_mask);
+      _mcap_handle, _peer_bd_addr, ctrl_psm, sec_mask);
   LOG_IF(INFO, ret != MCA_SUCCESS) << "ret=" << (int)ret;
   return ret == MCA_SUCCESS;
 }
@@ -134,7 +133,7 @@ bool McapMcl::DeleteMdl(uint16_t mdl_id) {
   return ret == MCA_SUCCESS;
 }
 
-bt_bdaddr_t& McapMcl::GetPeerAddress() { return _peer_bd_addr; }
+RawAddress& McapMcl::GetPeerAddress() { return _peer_bd_addr; }
 
 void McapMcl::SetHandle(tMCA_CL handle) { _mcl_handle = handle; }
 
