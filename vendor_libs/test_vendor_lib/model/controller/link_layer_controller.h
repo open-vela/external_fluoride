@@ -79,10 +79,6 @@ class LinkLayerController {
 
   void TimerTick();
 
-  AsyncTaskId ScheduleTask(std::chrono::milliseconds delay_ms, const TaskCallback& task);
-
-  void CancelScheduledTask(AsyncTaskId task);
-
   // Set the callbacks for sending packets to the HCI.
   void RegisterEventChannel(const std::function<void(std::shared_ptr<std::vector<uint8_t>>)>& send_event);
 
@@ -108,22 +104,11 @@ class LinkLayerController {
   void PageScan();
   void Connections();
 
-  void LeAdvertising();
-
-  void HandleLeConnection(Address addr, uint8_t addr_type, uint8_t own_addr_type, uint8_t role,
-                          uint16_t connection_interval, uint16_t connection_latency, uint16_t supervision_timeout);
-
   void LeWhiteListClear();
   void LeWhiteListAddDevice(Address addr, uint8_t addr_type);
   void LeWhiteListRemoveDevice(Address addr, uint8_t addr_type);
   bool LeWhiteListContainsDevice(Address addr, uint8_t addr_type);
   bool LeWhiteListFull();
-
-  hci::Status SetLeAdvertisingEnable(uint8_t le_advertising_enable) {
-    le_advertising_enable_ = le_advertising_enable;
-    // TODO: Check properties and return errors
-    return hci::Status::SUCCESS;
-  }
 
   void SetLeScanEnable(uint8_t le_scan_enable) {
     le_scan_enable_ = le_scan_enable;
@@ -191,26 +176,11 @@ class LinkLayerController {
   void SetPageScanEnable(bool enable);
 
   hci::Status ChangeConnectionPacketType(uint16_t handle, uint16_t types);
-  hci::Status ChangeConnectionLinkKey(uint16_t handle);
-  hci::Status HoldMode(uint16_t handle, uint16_t hold_mode_max_interval,
-                       uint16_t hold_mode_min_interval);
-  hci::Status SniffMode(uint16_t handle, uint16_t sniff_max_interval,
-                        uint16_t sniff_min_interval, uint16_t sniff_attempt,
-                        uint16_t sniff_timeout);
-  hci::Status ExitSniffMode(uint16_t handle);
-  hci::Status QosSetup(uint16_t handle, uint8_t service_type,
-                       uint32_t token_rate, uint32_t peak_bandwidth,
-                       uint32_t latency, uint32_t delay_variation);
   hci::Status WriteLinkPolicySettings(uint16_t handle, uint16_t settings);
-  hci::Status FlowSpecification(uint16_t handle, uint8_t flow_direction,
-                                uint8_t service_type, uint32_t token_rate,
-                                uint32_t token_bucket_size,
-                                uint32_t peak_bandwidth,
-                                uint32_t access_latency);
   hci::Status WriteLinkSupervisionTimeout(uint16_t handle, uint16_t timeout);
 
  protected:
-  void SendLeLinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> packet);
+  void SendLELinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> packet);
   void SendLinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> packet);
   void IncomingAclPacket(packets::LinkLayerPacketView packet);
   void IncomingAclAckPacket(packets::LinkLayerPacketView packet);
@@ -225,18 +195,15 @@ class LinkLayerController {
   void IncomingIoCapabilityResponsePacket(packets::LinkLayerPacketView packet);
   void IncomingIoCapabilityNegativeResponsePacket(packets::LinkLayerPacketView packet);
   void IncomingLeAdvertisementPacket(packets::LinkLayerPacketView packet);
-  void IncomingLeConnectPacket(packets::LinkLayerPacketView packet);
-  void IncomingLeConnectCompletePacket(packets::LinkLayerPacketView packet);
   void IncomingLeScanPacket(packets::LinkLayerPacketView packet);
   void IncomingLeScanResponsePacket(packets::LinkLayerPacketView packet);
   void IncomingPagePacket(packets::LinkLayerPacketView packet);
-  void IncomingPageRejectPacket(packets::LinkLayerPacketView packet);
   void IncomingPageResponsePacket(packets::LinkLayerPacketView packet);
   void IncomingResponsePacket(packets::LinkLayerPacketView packet);
 
  private:
   const DeviceProperties& properties_;
-  AclConnectionHandler connections_;
+  AclConnectionHandler classic_connections_;
   // Add timestamps?
   std::vector<std::shared_ptr<packets::LinkLayerPacketBuilder>> commands_awaiting_responses_;
 
@@ -264,10 +231,7 @@ class LinkLayerController {
 
   std::vector<std::tuple<Address, uint8_t>> le_white_list_;
 
-  uint8_t le_advertising_enable_{false};
-  std::chrono::steady_clock::time_point last_le_advertisement_;
-
-  uint8_t le_scan_enable_{false};
+  uint8_t le_scan_enable_;
   uint8_t le_scan_type_;
   uint16_t le_scan_interval_;
   uint16_t le_scan_window_;
@@ -275,7 +239,7 @@ class LinkLayerController {
   uint8_t le_scan_filter_duplicates_;
   uint8_t le_address_type_;
 
-  bool le_connect_{false};
+  bool le_connect_;
   uint16_t le_connection_interval_min_;
   uint16_t le_connection_interval_max_;
   uint16_t le_connection_latency_;
