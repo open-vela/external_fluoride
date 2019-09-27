@@ -29,7 +29,6 @@
 #include "btif_profile_queue.h"
 
 #include <base/bind.h>
-#include <base/callback.h>
 #include <base/logging.h>
 #include <base/strings/stringprintf.h>
 #include <string.h>
@@ -211,6 +210,7 @@ void btif_queue_release() {
   LOG_INFO(LOG_TAG, "%s", __func__);
   if (do_in_jni_thread(FROM_HERE, base::Bind(&queue_int_release)) !=
       BT_STATUS_SUCCESS) {
-    LOG(FATAL) << __func__ << ": Failed to schedule on JNI thread";
+    // Scheduling failed - the thread to schedule on is probably dead
+    queue_int_release();
   }
 }

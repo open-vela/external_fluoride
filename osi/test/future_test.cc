@@ -20,11 +20,9 @@
 
 #include "AllocationTestHarness.h"
 
-#include "common/message_loop_thread.h"
 #include "osi/include/future.h"
 #include "osi/include/osi.h"
-
-using bluetooth::common::MessageLoopThread;
+#include "osi/include/thread.h"
 
 static const char* pass_back_data0 = "fancy a sandwich? it's a fancy sandwich";
 static const char* pass_back_data1 =
@@ -40,13 +38,12 @@ TEST_F(FutureTest, test_future_non_immediate) {
   future_t* future = future_new();
   ASSERT_TRUE(future != NULL);
 
-  MessageLoopThread worker_thread("worker_thread");
-  worker_thread.StartUp();
-  worker_thread.DoInThread(FROM_HERE, base::Bind(post_to_future, future));
+  thread_t* worker_thread = thread_new("worker thread");
+  thread_post(worker_thread, post_to_future, future);
 
   EXPECT_EQ(pass_back_data0, future_await(future));
 
-  worker_thread.ShutDown();
+  thread_free(worker_thread);
 }
 
 TEST_F(FutureTest, test_future_immediate) {

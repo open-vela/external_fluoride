@@ -23,6 +23,7 @@
 #include "osi/include/osi.h"
 #include "srvc_eng_int.h"
 
+#include "srvc_battery_int.h"
 #include "srvc_dis_int.h"
 
 using base::StringPrintf;
@@ -212,6 +213,12 @@ uint8_t srvc_eng_process_read_req(uint8_t clcb_idx, tGATT_READ_REQ* p_data,
   if (dis_valid_handle_range(p_data->handle))
     act = dis_read_attr_value(clcb_idx, p_data->handle, &p_rsp->attr_value,
                               p_data->is_long, p_status);
+
+  else if (battery_valid_handle_range(p_data->handle))
+    act =
+        battery_s_read_attr_value(clcb_idx, p_data->handle, &p_rsp->attr_value,
+                                  p_data->is_long, p_status);
+
   else
     *p_status = status;
   return act;
@@ -226,6 +233,8 @@ uint8_t srvc_eng_process_write_req(uint8_t clcb_idx, tGATT_WRITE_REQ* p_data,
 
   if (dis_valid_handle_range(p_data->handle)) {
     act = dis_write_attr_value(p_data, p_status);
+  } else if (battery_valid_handle_range(p_data->handle)) {
+    act = battery_s_write_attr_value(clcb_idx, p_data, p_status);
   } else
     *p_status = GATT_NOT_FOUND;
 

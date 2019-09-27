@@ -21,7 +21,6 @@
 #define BTIF_A2DP_SOURCE_H
 
 #include <stdbool.h>
-#include <future>
 
 #include "bta_av_api.h"
 
@@ -38,8 +37,7 @@ bool btif_a2dp_source_startup(void);
 // Start the A2DP Source session.
 // This function should be called by the BTIF state machine after
 // btif_a2dp_source_startup() to start the streaming session for |peer_address|.
-bool btif_a2dp_source_start_session(const RawAddress& peer_address,
-                                    std::promise<void> peer_ready_promise);
+bool btif_a2dp_source_start_session(const RawAddress& peer_address);
 
 // Restart the A2DP Source session.
 // This function should be called by the BTIF state machine after
@@ -49,8 +47,7 @@ bool btif_a2dp_source_start_session(const RawAddress& peer_address,
 // |new_peer_address| is the peer address of the new session. This address
 // cannot be empty.
 bool btif_a2dp_source_restart_session(const RawAddress& old_peer_address,
-                                      const RawAddress& new_peer_address,
-                                      std::promise<void> peer_ready_promise);
+                                      const RawAddress& new_peer_address);
 
 // End the A2DP Source session.
 // This function should be called by the BTIF state machine to end the
