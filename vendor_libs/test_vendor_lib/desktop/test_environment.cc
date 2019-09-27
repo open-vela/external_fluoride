@@ -24,8 +24,6 @@
 #include <string.h>
 #include <utils/Log.h>
 
-#include "hci_internals.h"
-
 namespace android {
 namespace bluetooth {
 namespace root_canal {
@@ -143,6 +141,10 @@ int TestEnvironment::ConnectToRemoteServer(const std::string& server, int port) 
 
 void TestEnvironment::SetUpTestChannel() {
   int socket_fd = test_channel_transport_.SetUp(test_port_);
+  test_channel_.AddPhy({"BR_EDR"});
+  test_channel_.AddPhy({"LOW_ENERGY"});
+  test_channel_.SetTimerPeriod({"10"});
+  test_channel_.StartTimer({});
 
   test_channel_.RegisterSendResponse(
       [](const std::string& response) { ALOGI("No test channel: %s", response.c_str()); });
