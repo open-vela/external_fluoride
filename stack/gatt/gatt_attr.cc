@@ -31,8 +31,6 @@
 #include "gatt_int.h"
 #include "osi/include/osi.h"
 
-using base::StringPrintf;
-
 #define GATTP_MAX_NUM_INC_SVR 0
 #define GATTP_MAX_CHAR_NUM 2
 #define GATTP_MAX_ATTR_NUM (GATTP_MAX_CHAR_NUM * 2 + GATTP_MAX_NUM_INC_SVR + 1)
@@ -46,9 +44,9 @@ using base::StringPrintf;
 
 static void gatt_request_cback(uint16_t conn_id, uint32_t trans_id,
                                uint8_t op_code, tGATTS_DATA* p_data);
-static void gatt_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
-                               const RawAddress& bda, uint16_t conn_id,
-                               bool connected, tGATT_DISCONN_REASON reason,
+static void gatt_connect_cback(UNUSED_ATTR tGATT_IF gatt_if, BD_ADDR bda,
+                               uint16_t conn_id, bool connected,
+                               tGATT_DISCONN_REASON reason,
                                tBT_TRANSPORT transport);
 static void gatt_disc_res_cback(uint16_t conn_id, tGATT_DISC_TYPE disc_type,
                                 tGATT_DISC_RES* p_data);
@@ -80,7 +78,7 @@ static tGATT_CBACK gatt_profile_cback = {gatt_connect_cback,
  * Returns          Connection ID
  *
  ******************************************************************************/
-uint16_t gatt_profile_find_conn_id_by_bd_addr(const RawAddress& remote_bda) {
+uint16_t gatt_profile_find_conn_id_by_bd_addr(BD_ADDR remote_bda) {
   uint16_t conn_id = GATT_INVALID_CONN_ID;
   GATT_GetConnIdIfConnected(gatt_cb.gatt_if, remote_bda, &conn_id,
                             BT_TRANSPORT_LE);
@@ -118,14 +116,14 @@ static tGATT_PROFILE_CLCB* gatt_profile_find_clcb_by_conn_id(uint16_t conn_id) {
  *
  ******************************************************************************/
 static tGATT_PROFILE_CLCB* gatt_profile_find_clcb_by_bd_addr(
-    const RawAddress& bda, tBT_TRANSPORT transport) {
+    BD_ADDR bda, tBT_TRANSPORT transport) {
   uint8_t i_clcb;
   tGATT_PROFILE_CLCB* p_clcb = NULL;
 
   for (i_clcb = 0, p_clcb = gatt_cb.profile_clcb; i_clcb < GATT_MAX_APPS;
        i_clcb++, p_clcb++) {
     if (p_clcb->in_use && p_clcb->transport == transport && p_clcb->connected &&
-        p_clcb->bda == bda)
+        !memcmp(p_clcb->bda, bda, BD_ADDR_LEN))
       return p_clcb;
   }
 
@@ -143,8 +141,7 @@ static tGATT_PROFILE_CLCB* gatt_profile_find_clcb_by_bd_addr(
  *                  block.
  *
  ******************************************************************************/
-tGATT_PROFILE_CLCB* gatt_profile_clcb_alloc(uint16_t conn_id,
-                                            const RawAddress& bda,
+tGATT_PROFILE_CLCB* gatt_profile_clcb_alloc(uint16_t conn_id, BD_ADDR bda,
                                             tBT_TRANSPORT tranport) {
   uint8_t i_clcb = 0;
   tGATT_PROFILE_CLCB* p_clcb = NULL;
@@ -156,7 +153,7 @@ tGATT_PROFILE_CLCB* gatt_profile_clcb_alloc(uint16_t conn_id,
       p_clcb->conn_id = conn_id;
       p_clcb->connected = true;
       p_clcb->transport = tranport;
-      p_clcb->bda = bda;
+      memcpy(p_clcb->bda, bda, BD_ADDR_LEN);
       break;
     }
   }
@@ -210,17 +207,16 @@ static void gatt_request_cback(uint16_t conn_id, uint32_t trans_id,
     case GATTS_REQ_TYPE_WRITE_EXEC:
     case GATT_CMD_WRITE:
       ignore = true;
-      VLOG(1) << StringPrintf("Ignore GATT_REQ_EXEC_WRITE/WRITE_CMD");
+      GATT_TRACE_EVENT("Ignore GATT_REQ_EXEC_WRITE/WRITE_CMD");
       break;
 
     case GATTS_REQ_TYPE_MTU:
-      VLOG(1) << StringPrintf("Get MTU exchange new mtu size: %d", p_data->mtu);
+      GATT_TRACE_EVENT("Get MTU exchange new mtu size: %d", p_data->mtu);
       ignore = true;
       break;
 
     default:
-      VLOG(1) << StringPrintf("Unknown/unexpected LE GAP ATT request: 0x%02x",
-                              type);
+      GATT_TRACE_EVENT("Unknown/unexpected LE GAP ATT request: 0x%02x", type);
       break;
   }
 
@@ -236,13 +232,14 @@ static void gatt_request_cback(uint16_t conn_id, uint32_t trans_id,
  * Returns          void
  *
  ******************************************************************************/
-static void gatt_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
-                               const RawAddress& bda, uint16_t conn_id,
-                               bool connected, tGATT_DISCONN_REASON reason,
+static void gatt_connect_cback(UNUSED_ATTR tGATT_IF gatt_if, BD_ADDR bda,
+                               uint16_t conn_id, bool connected,
+                               tGATT_DISCONN_REASON reason,
                                tBT_TRANSPORT transport) {
-  VLOG(1) << __func__ << ": from " << bda
-          << StringPrintf(" connected:%d conn_id=%d reason = 0x%04x", connected,
-                          conn_id, reason);
+  GATT_TRACE_EVENT("%s: from %08x%04x connected:%d conn_id=%d reason = 0x%04x",
+                   __func__,
+                   (bda[0] << 24) + (bda[1] << 16) + (bda[2] << 8) + bda[3],
+                   (bda[4] << 8) + bda[5], connected, conn_id, reason);
 
   tGATT_PROFILE_CLCB* p_clcb =
       gatt_profile_find_clcb_by_bd_addr(bda, transport);
@@ -298,8 +295,7 @@ void gatt_profile_db_init(void) {
   service_handle = service[0].attribute_handle;
   gatt_cb.handle_of_h_r = service[1].attribute_handle;
 
-  LOG(ERROR) << StringPrintf("gatt_profile_db_init:  gatt_if=%d",
-                             gatt_cb.gatt_if);
+  GATT_TRACE_ERROR("gatt_profile_db_init:  gatt_if=%d", gatt_cb.gatt_if);
 }
 
 /*******************************************************************************
@@ -357,8 +353,8 @@ static void gatt_disc_cmpl_cback(uint16_t conn_id, tGATT_DISC_TYPE disc_type,
     p_clcb->ccc_stage++;
     gatt_cl_start_config_ccc(p_clcb);
   } else {
-    LOG(ERROR) << StringPrintf(
-        "%s() - Unable to register for service changed indication", __func__);
+    GATT_TRACE_ERROR("%s() - Unable to register for service changed indication",
+                     __func__);
   }
 }
 
@@ -389,7 +385,7 @@ static void gatt_cl_start_config_ccc(tGATT_PROFILE_CLCB* p_clcb) {
   tGATT_DISC_PARAM srvc_disc_param;
   tGATT_VALUE ccc_value;
 
-  VLOG(1) << StringPrintf("%s() - stage: %d", __func__, p_clcb->ccc_stage);
+  GATT_TRACE_DEBUG("%s() - stage: %d", __func__, p_clcb->ccc_stage);
 
   memset(&srvc_disc_param, 0, sizeof(tGATT_DISC_PARAM));
   memset(&ccc_value, 0, sizeof(tGATT_VALUE));
@@ -435,7 +431,7 @@ static void gatt_cl_start_config_ccc(tGATT_PROFILE_CLCB* p_clcb) {
  * Returns          none
  *
  ******************************************************************************/
-void GATT_ConfigServiceChangeCCC(const RawAddress& remote_bda, bool enable,
+void GATT_ConfigServiceChangeCCC(BD_ADDR remote_bda, bool enable,
                                  tBT_TRANSPORT transport) {
   tGATT_PROFILE_CLCB* p_clcb =
       gatt_profile_find_clcb_by_bd_addr(remote_bda, transport);
