@@ -4310,15 +4310,12 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
       }
     }
 
-    /* p_auth_complete_callback might have freed the p_dev_rec, ensure it exists
-     * before accessing */
-    p_dev_rec = btm_find_dev(bda);
-    if (!p_dev_rec) {
-      /* Don't callback when device security record was removed */
+    if (!addr_matched) {
+      /* Don't callback unless this Connection-Complete-failure event has the
+       * same mac address as the bonding device */
       VLOG(1) << __func__
-              << ": device security record associated with this bda has been "
-                 "removed! bda="
-              << bda << ", do not callback!";
+              << ": Different mac addresses: pairing_bda=" << btm_cb.pairing_bda
+              << ", bda=" << bda << ", do not callback";
       return;
     }
 
@@ -4560,8 +4557,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
