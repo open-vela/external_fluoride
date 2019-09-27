@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 Google, Inc.
+ *  Copyright (C) 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,34 +16,13 @@
  *
  ******************************************************************************/
 
-#pragma once
+#ifndef BTIF_HF_H
+#define BTIF_HF_H
 
-#include <hardware/bluetooth_headset_interface.h>
+#include <stdbool.h>
 
-namespace bluetooth {
-namespace headset {
+// Check whether there is a Hands-Free call in progress.
+// Returns true if no call is in progress.
+bool btif_hf_is_call_idle(void);
 
-/**
- * Get an instance of the headset interface from the loaded shared library
- *
- * @return an instance of the headset interface
- */
-Interface* GetInterface();
-
-/**
- * Check whether there is a Hands-Free call in progress.
- *
- * @return true if no call is in progress.
- */
-bool IsCallIdle();
-
-/**
- * Start up or shutdown the service
- *
- * @param b_enable true to enable, false to disable
- * @return BT_STATUS_SUCCESS on success, BT_STATUS_FAIL otherwise
- */
-bt_status_t ExecuteService(bool b_enable);
-
-}  // namespace headset
-}  // namespace bluetooth
+#endif /* BTIF_HF_H */
