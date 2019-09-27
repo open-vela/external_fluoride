@@ -38,7 +38,7 @@ namespace packets {
 class EventBuilderTest : public ::testing::Test {
  public:
   EventBuilderTest() = default;
-  ~EventBuilderTest() override = default;
+  ~EventBuilderTest() = default;
 };
 
 TEST(EventBuilderTest, buildLeAdvertisementSmallTest) {
