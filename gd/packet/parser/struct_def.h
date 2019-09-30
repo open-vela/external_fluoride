@@ -34,11 +34,7 @@ class StructDef : public ParentDef {
 
   TypeDef::Type GetDefinitionType() const;
 
-  void GenSpecialize(std::ostream& s) const;
-
   void GenParse(std::ostream& s) const;
-
-  void GenParseFunctionPrototype(std::ostream& s) const;
 
   void GenDefinition(std::ostream& s) const;
 
