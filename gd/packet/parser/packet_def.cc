@@ -365,11 +365,7 @@ void PacketDef::GenBuilderCreate(std::ostream& s) const {
   });
   // Add the parameters.
   for (int i = 0; i < params.size(); i++) {
-    if (params[i]->BuilderParameterMustBeMoved()) {
-      s << "std::move(" << params[i]->GetName() << ")";
-    } else {
-      s << params[i]->GetName();
-    }
+    s << params[i]->GetName();
     if (i != params.size() - 1) {
       s << ", ";
     }
@@ -472,11 +468,7 @@ void PacketDef::GenBuilderConstructor(std::ostream& s) const {
   }
   for (int i = 0; i < saved_params.size(); i++) {
     const auto& saved_param_name = saved_params[i]->GetName();
-    if (saved_params[i]->BuilderParameterMustBeMoved()) {
-      s << saved_param_name << "_(std::move(" << saved_param_name << "))";
-    } else {
-      s << saved_param_name << "_(" << saved_param_name << ")";
-    }
+    s << saved_param_name << "_(" << saved_param_name << ")";
     if (i != saved_params.size() - 1) {
       s << ",";
     }

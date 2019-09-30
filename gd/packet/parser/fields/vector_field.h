@@ -43,8 +43,6 @@ class VectorField : public PacketField {
 
   virtual bool GenBuilderParameter(std::ostream& s) const override;
 
-  virtual bool BuilderParameterMustBeMoved() const override;
-
   virtual bool GenBuilderMember(std::ostream& s) const override;
 
   virtual bool HasParameterValidator() const override;
@@ -65,7 +63,7 @@ class VectorField : public PacketField {
 
   const Size element_size_{};
 
-  // Size is always in bytes, unless it is a count.
+  // Fixed size array or dynamic size, size is always in bytes, unless it is count.
   const SizeField* size_field_{nullptr};
 
   // Size modifier is only used when size_field_ is of type SIZE and is not used with COUNT.
