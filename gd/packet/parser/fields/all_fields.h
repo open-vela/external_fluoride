@@ -32,5 +32,4 @@
 #include "fields/scalar_field.h"
 #include "fields/size_field.h"
 #include "fields/struct_field.h"
-#include "fields/variable_length_struct_field.h"
 #include "fields/vector_field.h"
