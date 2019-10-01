@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2004-2012 Broadcom Corporation
+ *  Copyright (C) 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 
 #include <string.h>
 
-#include <log/log.h>
+#include <cutils/log.h>
 
 #include "bt_common.h"
 #include "bta_api.h"
@@ -171,25 +171,31 @@ static void bta_pan_data_flow_cb(uint16_t handle, tPAN_RESULT result) {
 static void bta_pan_data_buf_ind_cback(uint16_t handle, const RawAddress& src,
                                        const RawAddress& dst, uint16_t protocol,
                                        BT_HDR* p_buf, bool ext, bool forward) {
-  tBTA_PAN_SCB* p_scb = bta_pan_scb_by_handle(handle);
+  tBTA_PAN_SCB* p_scb;
+  BT_HDR* p_new_buf;
+
+  p_scb = bta_pan_scb_by_handle(handle);
   if (p_scb == NULL) {
     return;
   }
 
-  if (sizeof(BT_HDR) + sizeof(tBTA_PAN_DATA_PARAMS) + p_buf->len >
-      PAN_BUF_SIZE) {
-    android_errorWriteLog(0x534e4554, "63146237");
-    APPL_TRACE_ERROR("%s: received buffer length too large: %d", __func__,
-                     p_buf->len);
-    return;
+  if (sizeof(tBTA_PAN_DATA_PARAMS) > p_buf->offset) {
+    /* offset smaller than data structure in front of actual data */
+    if (sizeof(BT_HDR) + sizeof(tBTA_PAN_DATA_PARAMS) + p_buf->len >
+        PAN_BUF_SIZE) {
+      android_errorWriteLog(0x534e4554, "63146237");
+      APPL_TRACE_ERROR("%s: received buffer length too large: %d", __func__,
+                       p_buf->len);
+      return;
+    }
+    p_new_buf = (BT_HDR*)osi_malloc(PAN_BUF_SIZE);
+    memcpy((uint8_t*)(p_new_buf + 1) + sizeof(tBTA_PAN_DATA_PARAMS),
+           (uint8_t*)(p_buf + 1) + p_buf->offset, p_buf->len);
+    p_new_buf->len = p_buf->len;
+    p_new_buf->offset = sizeof(tBTA_PAN_DATA_PARAMS);
+  } else {
+    p_new_buf = p_buf;
   }
-
-  BT_HDR* p_new_buf = (BT_HDR*)osi_malloc(PAN_BUF_SIZE);
-  memcpy((uint8_t*)(p_new_buf + 1) + sizeof(tBTA_PAN_DATA_PARAMS),
-         (uint8_t*)(p_buf + 1) + p_buf->offset, p_buf->len);
-  p_new_buf->len = p_buf->len;
-  p_new_buf->offset = sizeof(tBTA_PAN_DATA_PARAMS);
-
   /* copy params into the space before the data */
   ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->src = src;
   ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->dst = dst;
@@ -262,7 +268,7 @@ static bool bta_pan_has_multiple_connections(uint8_t app_id) {
 
   for (uint8_t index = 0; index < BTA_PAN_NUM_CONN; index++) {
     p_scb = &bta_pan_cb.scb[index];
-    if (p_scb->in_use && app_id == p_scb->app_id) {
+    if (p_scb->in_use == true && app_id == p_scb->app_id) {
       /* save temp bd_addr */
       bd_addr = p_scb->bd_addr;
       found = true;
@@ -271,14 +277,14 @@ static bool bta_pan_has_multiple_connections(uint8_t app_id) {
   }
 
   /* If cannot find a match then there is no connection at all */
-  if (!found) return false;
+  if (found == false) return false;
 
   /* Find whether there is another connection with different device other than
      PANU.
       Could be same service or different service */
   for (uint8_t index = 0; index < BTA_PAN_NUM_CONN; index++) {
     p_scb = &bta_pan_cb.scb[index];
-    if (p_scb->in_use && p_scb->app_id != bta_pan_cb.app_id[0] &&
+    if (p_scb->in_use == true && p_scb->app_id != bta_pan_cb.app_id[0] &&
         bd_addr != p_scb->bd_addr) {
       return true;
     }
@@ -577,7 +583,7 @@ void bta_pan_rx_path(tBTA_PAN_SCB* p_scb, UNUSED_ATTR tBTA_PAN_DATA* p_data) {
   /* if data path configured for rx pull */
   if ((bta_pan_cb.flow_mask & BTA_PAN_RX_MASK) == BTA_PAN_RX_PULL) {
     /* if we can accept data */
-    if (p_scb->pan_flow_enable) {
+    if (p_scb->pan_flow_enable == true) {
       /* call application callout function for rx path */
       bta_pan_co_rx_path(p_scb->handle, p_scb->app_id);
     }
@@ -612,7 +618,7 @@ void bta_pan_tx_path(tBTA_PAN_SCB* p_scb, UNUSED_ATTR tBTA_PAN_DATA* p_data) {
   /* if configured for zero copy push */
   else if ((bta_pan_cb.flow_mask & BTA_PAN_TX_MASK) == BTA_PAN_TX_PUSH_BUF) {
     /* if app can accept data */
-    if (p_scb->app_flow_enable) {
+    if (p_scb->app_flow_enable == true) {
       BT_HDR* p_buf;
 
       /* read data from the queue */

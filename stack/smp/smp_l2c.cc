@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,12 +22,10 @@
  *
  ******************************************************************************/
 
-#include <cutils/log.h>
 #include "bt_target.h"
 
 #include <string.h>
 #include "btm_ble_api.h"
-#include "common/metrics.h"
 #include "l2c_api.h"
 
 #include "smp_int.h"
@@ -96,9 +94,7 @@ static void smp_connect_callback(uint16_t channel, const RawAddress& bd_addr,
   tSMP_CB* p_cb = &smp_cb;
   tSMP_INT_DATA int_data;
 
-  SMP_TRACE_EVENT("%s: SMDBG l2c: bd_addr=%s, p_cb->pairing_bda=%s", __func__,
-                  bd_addr.ToString().c_str(),
-                  p_cb->pairing_bda.ToString().c_str());
+  SMP_TRACE_EVENT("SMDBG l2c %s", __func__);
 
   if (transport == BT_TRANSPORT_BR_EDR || bd_addr.IsEmpty()) return;
 
@@ -142,18 +138,9 @@ static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
   tSMP_CB* p_cb = &smp_cb;
   uint8_t* p = (uint8_t*)(p_buf + 1) + p_buf->offset;
   uint8_t cmd;
-
-  if (p_buf->len < 1) {
-    android_errorWriteLog(0x534e4554, "111215315");
-    SMP_TRACE_WARNING("%s: smp packet length %d too short: must be at least 1",
-                      __func__, p_buf->len);
-    osi_free(p_buf);
-    return;
-  }
+  SMP_TRACE_EVENT("SMDBG l2c %s", __func__);
 
   STREAM_TO_UINT8(cmd, p);
-
-  SMP_TRACE_EVENT("%s: SMDBG l2c, cmd=0x%x", __func__, cmd);
 
   /* sanity check */
   if ((SMP_OPCODE_MAX < cmd) || (SMP_OPCODE_MIN > cmd)) {
@@ -182,9 +169,6 @@ static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
     alarm_set_on_mloop(p_cb->smp_rsp_timer_ent, SMP_WAIT_FOR_RSP_TIMEOUT_MS,
                        smp_rsp_timeout, NULL);
 
-    smp_log_metrics(p_cb->pairing_bda, false /* incoming */,
-                    p_buf->data + p_buf->offset, p_buf->len);
-
     if (cmd == SMP_OPCODE_CONFIRM) {
       SMP_TRACE_DEBUG(
           "in %s cmd = 0x%02x, peer_auth_req = 0x%02x,"
@@ -199,9 +183,7 @@ static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
 
     p_cb->rcvd_cmd_code = cmd;
     p_cb->rcvd_cmd_len = (uint8_t)p_buf->len;
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.p_data = p;
-    smp_sm_event(p_cb, cmd, &smp_int_data);
+    smp_sm_event(p_cb, cmd, p);
   }
 
   osi_free(p_buf);
@@ -222,14 +204,12 @@ static void smp_tx_complete_callback(uint16_t cid, uint16_t num_pkt) {
   else
     SMP_TRACE_ERROR("Unexpected %s: num_pkt = %d", __func__, num_pkt);
 
+  uint8_t reason = SMP_SUCCESS;
   if (p_cb->total_tx_unacked == 0 && p_cb->wait_for_authorization_complete) {
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.status = SMP_SUCCESS;
-    if (cid == L2CAP_SMP_CID) {
-      smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-    } else {
-      smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
-    }
+    if (cid == L2CAP_SMP_CID)
+      smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &reason);
+    else
+      smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &reason);
   }
 }
 
@@ -256,11 +236,10 @@ static void smp_br_connect_callback(uint16_t channel, const RawAddress& bd_addr,
     return;
   }
 
-  VLOG(1) << __func__ << " for pairing BDA: " << bd_addr
-          << ", pairing_bda:" << p_cb->pairing_bda
-          << " Event: " << ((connected) ? "connected" : "disconnected");
-
   if (bd_addr != p_cb->pairing_bda) return;
+
+  VLOG(1) << __func__ << " for pairing BDA: " << bd_addr
+          << " Event: " << ((connected) ? "connected" : "disconnected");
 
   if (connected) {
     if (!p_cb->connect_initialized) {
@@ -295,14 +274,6 @@ static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
   uint8_t cmd;
   SMP_TRACE_EVENT("SMDBG l2c %s", __func__);
 
-  if (p_buf->len < 1) {
-    android_errorWriteLog(0x534e4554, "111215315");
-    SMP_TRACE_WARNING("%s: smp packet length %d too short: must be at least 1",
-                      __func__, p_buf->len);
-    osi_free(p_buf);
-    return;
-  }
-
   STREAM_TO_UINT8(cmd, p);
 
   /* sanity check */
@@ -331,14 +302,9 @@ static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
     alarm_set_on_mloop(p_cb->smp_rsp_timer_ent, SMP_WAIT_FOR_RSP_TIMEOUT_MS,
                        smp_rsp_timeout, NULL);
 
-    smp_log_metrics(p_cb->pairing_bda, false /* incoming */,
-                    p_buf->data + p_buf->offset, p_buf->len);
-
     p_cb->rcvd_cmd_code = cmd;
     p_cb->rcvd_cmd_len = (uint8_t)p_buf->len;
-    tSMP_INT_DATA smp_int_data;
-    smp_int_data.p_data = p;
-    smp_br_state_machine_event(p_cb, cmd, &smp_int_data);
+    smp_br_state_machine_event(p_cb, cmd, p);
   }
 
   osi_free(p_buf);

@@ -3,7 +3,6 @@
 cc_library_static {
     name: "libbtdevice",
     defaults: ["fluoride_defaults"],
-    host_supported: true,
     local_include_dirs: [
         "include",
     ],
@@ -11,7 +10,7 @@ cc_library_static {
         "system/bt",
         "system/bt/btcore/include",
         "system/bt/hci/include",
-        "system/bt/internal_include",
+        "system/bt/include",
         "system/bt/stack/include",
     ],
     srcs: [
