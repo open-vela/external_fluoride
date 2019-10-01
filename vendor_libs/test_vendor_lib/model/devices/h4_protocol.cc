@@ -16,12 +16,13 @@
 
 #include "h4_protocol.h"
 
+#define LOG_TAG "hci-h4_protocol"
+
 #include <errno.h>
 #include <fcntl.h>
+#include <log/log.h>
 #include <sys/uio.h>
 #include <unistd.h>
-
-#include "os/log.h"
 
 namespace test_vendor_lib {
 namespace hci {
@@ -30,7 +31,7 @@ H4Protocol::H4Protocol(int fd, PacketReadCallback command_cb, PacketReadCallback
                        PacketReadCallback sco_cb)
     : uart_fd_(fd), command_cb_(command_cb), event_cb_(event_cb), acl_cb_(acl_cb), sco_cb_(sco_cb),
       hci_packetizer_([this]() {
-        LOG_INFO("in lambda");
+        ALOGI("in lambda");
         this->OnPacketReady();
       }) {}
 
@@ -42,16 +43,16 @@ size_t H4Protocol::Send(uint8_t type, const uint8_t* data, size_t length) {
   } while (-1 == ret && EAGAIN == errno);
 
   if (ret == -1) {
-    LOG_ERROR("%s error writing to UART (%s)", __func__, strerror(errno));
+    ALOGE("%s error writing to UART (%s)", __func__, strerror(errno));
   } else if (ret < static_cast<ssize_t>(length + 1)) {
-    LOG_ERROR("%s: %d / %d bytes written - something went wrong...", __func__, static_cast<int>(ret),
-              static_cast<int>(length + 1));
+    ALOGE("%s: %d / %d bytes written - something went wrong...", __func__, static_cast<int>(ret),
+          static_cast<int>(length + 1));
   }
   return ret;
 }
 
 void H4Protocol::OnPacketReady() {
-  LOG_ERROR("%s: before switch", __func__);
+  ALOGE("%s: before switch", __func__);
   switch (hci_packet_type_) {
     case hci::PacketType::COMMAND:
       command_cb_(hci_packetizer_.GetPacket());
@@ -78,7 +79,7 @@ void H4Protocol::OnDataReady(int fd) {
     ssize_t bytes_read = TEMP_FAILURE_RETRY(read(fd, buffer, 1));
     if (bytes_read != 1) {
       if (bytes_read == 0) {
-        LOG_INFO("%s: Nothing ready, will retry!", __func__);
+        ALOGI("%s: Nothing ready, will retry!", __func__);
         return;
       } else if (bytes_read < 0) {
         if (errno == EAGAIN) {

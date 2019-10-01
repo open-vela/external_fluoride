@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "sniffer"
+
 #include "sniffer.h"
 
+#include "osi/include/log.h"
+
 #include "model/setup/device_boutique.h"
-#include "os/log.h"
 
 using std::vector;
 
 namespace test_vendor_lib {
 
-bool Sniffer::registered_ = DeviceBoutique::Register("sniffer", &Sniffer::Create);
+bool Sniffer::registered_ = DeviceBoutique::Register(LOG_TAG, &Sniffer::Create);
 
 Sniffer::Sniffer() {}
 
@@ -39,7 +42,7 @@ void Sniffer::Initialize(const vector<std::string>& args) {
 
 void Sniffer::TimerTick() {}
 
-void Sniffer::IncomingPacket(model::packets::LinkLayerPacketView packet) {
+void Sniffer::IncomingPacket(packets::LinkLayerPacketView packet) {
   Address source = packet.GetSourceAddress();
   Address dest = packet.GetDestinationAddress();
   bool match_source = device_to_sniff_ == source;
@@ -47,10 +50,8 @@ void Sniffer::IncomingPacket(model::packets::LinkLayerPacketView packet) {
   if (!match_source && !match_dest) {
     return;
   }
-  LOG_INFO("%s %s -> %s (Type %s)",
-           (match_source ? (match_dest ? "<->" : "<--") : "-->"),
-           source.ToString().c_str(), dest.ToString().c_str(),
-           model::packets::PacketTypeText(packet.GetType()).c_str());
+  LOG_INFO(LOG_TAG, "%s %s -> %s (Type %d)", (match_source ? (match_dest ? "<->" : "<--") : "-->"),
+           source.ToString().c_str(), dest.ToString().c_str(), static_cast<int>(packet.GetType()));
 }
 
 }  // namespace test_vendor_lib
