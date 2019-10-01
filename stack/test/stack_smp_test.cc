@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright 2016 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "bt_trace.h"
 #include "hcidefs.h"
 #include "stack/include/smp_api.h"
+#include "stack/smp/p_256_ecc_pp.h"
 #include "stack/smp/smp_int.h"
 
 /*
@@ -80,70 +81,58 @@ void LogMsg(uint32_t trace_set_mask, const char* fmt_str, ...) {
   va_end(args);
 }
 
-extern void smp_gen_p1_4_confirm(tSMP_CB* p_cb,
-                                 tBLE_ADDR_TYPE remote_bd_addr_type,
-                                 BT_OCTET16 p1);
+extern Octet16 smp_gen_p1_4_confirm(tSMP_CB* p_cb,
+                                    tBLE_ADDR_TYPE remote_bd_addr_type);
 
-extern void smp_gen_p2_4_confirm(tSMP_CB* p_cb, const RawAddress& remote_bda,
-                                 BT_OCTET16 p2);
+extern Octet16 smp_gen_p2_4_confirm(tSMP_CB* p_cb,
+                                    const RawAddress& remote_bda);
 
-extern tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, BT_OCTET16 rand,
-                                         tSMP_ENC* output);
+extern tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, const Octet16& rand,
+                                         Octet16* output);
 
 namespace testing {
 
-void dump_uint128(BT_OCTET16 a, char* buffer) {
-  for (unsigned int i = 0; i < sizeof(BT_OCTET16); ++i) {
+void dump_uint128(const Octet16& a, char* buffer) {
+  for (unsigned int i = 0; i < OCTET16_LEN; ++i) {
     snprintf(buffer, 3, "%02x", a[i]);
     buffer += 2;
   }
   *buffer = '\0';
 }
 
-void dump_uint128_reverse(BT_OCTET16 a, char* buffer) {
-  for (int i = (int)(sizeof(BT_OCTET16) - 1); i >= 0; --i) {
+void dump_uint128_reverse(const Octet16& a, char* buffer) {
+  for (int i = (int)(OCTET16_LEN - 1); i >= 0; --i) {
     snprintf(buffer, 3, "%02x", a[i]);
     buffer += 2;
   }
   *buffer = '\0';
 }
 
-void print_uint128(BT_OCTET16 a) {
-  for (unsigned int i = 0; i < sizeof(BT_OCTET16); ++i) {
+void print_uint128(const Octet16& a) {
+  for (unsigned int i = 0; i < OCTET16_LEN; ++i) {
     printf("%02x", a[i]);
   }
   printf("\n");
 }
 
-void parse_uint128(const char* input, BT_OCTET16 output) {
-  memset(output, 0, sizeof(BT_OCTET16));
-  for (unsigned int count = 0; count < sizeof(BT_OCTET16); count++) {
+Octet16 parse_uint128(const char* input) {
+  Octet16 output{0};
+  for (unsigned int count = 0; count < OCTET16_LEN; count++) {
     sscanf(input, "%2hhx", &output[count]);
     input += 2;
   }
-}
-
-void reverse_array_inplace(BT_OCTET16 a) {
-  uint8_t tmp;
-  uint8_t* a_end = a + sizeof(BT_OCTET16) - 1;
-  while (a_end > a) {
-    tmp = *a_end;
-    *a_end = *a;
-    *a = tmp;
-    ++a;
-    --a_end;
-  }
+  return output;
 }
 
 class SmpCalculateConfirmTest : public Test {
  protected:
   tSMP_CB p_cb_;
   // Set random to 0x5783D52156AD6F0E6388274EC6702EE0
-  BT_OCTET16 rand_ = {0x57, 0x83, 0xD5, 0x21, 0x56, 0xAD, 0x6F, 0x0E,
-                      0x63, 0x88, 0x27, 0x4E, 0xC6, 0x70, 0x2E, 0xE0};
+  Octet16 rand_{0x57, 0x83, 0xD5, 0x21, 0x56, 0xAD, 0x6F, 0x0E,
+                0x63, 0x88, 0x27, 0x4E, 0xC6, 0x70, 0x2E, 0xE0};
 
   void SetUp() {
-    memset(p_cb_.tk, 0, sizeof(p_cb_.tk));
+    p_cb_.tk = {0};
     // Set pairing request packet to 0x070710000001(01)
     p_cb_.local_io_capability = 0x01;
     p_cb_.loc_oob_flag = 0x00;
@@ -160,7 +149,7 @@ class SmpCalculateConfirmTest : public Test {
     p_cb_.peer_r_key = 0x05;
     // Set role to master
     p_cb_.role = HCI_ROLE_MASTER;
-    reverse_array_inplace(rand_);
+    std::reverse(rand_.begin(), rand_.end());
   }
   void TearDown() {}
 
@@ -169,59 +158,137 @@ class SmpCalculateConfirmTest : public Test {
 
 // Test smp_gen_p2_4_confirm function implementation
 TEST_F(SmpCalculateConfirmTest, test_smp_gen_p2_4_confirm_as_master) {
-  BT_OCTET16 p2;
   RawAddress remote_bda;
   tBLE_ADDR_TYPE remote_bd_addr_type = 0;
   BTM_ReadRemoteConnectionAddr(p_cb_.pairing_bda, remote_bda,
                                &remote_bd_addr_type);
   BTM_ReadConnectionAddr(p_cb_.pairing_bda, p_cb_.local_bda, &p_cb_.addr_type);
-  smp_gen_p2_4_confirm(&p_cb_, remote_bda, p2);
+  Octet16 p2 = smp_gen_p2_4_confirm(&p_cb_, remote_bda);
   // Correct p2 is 0x00000000a1a2a3a4a5a6b1b2b3b4b5b6
   const char expected_p2_str[] = "00000000a1a2a3a4a5a6b1b2b3b4b5b6";
-  char p2_str[2 * sizeof(BT_OCTET16) + 1];
+  char p2_str[2 * OCTET16_LEN + 1];
   dump_uint128_reverse(p2, p2_str);
   ASSERT_THAT(p2_str, StrEq(expected_p2_str));
 }
 
-// Test smp_gen_p1_4_confirm and SMP_Encrypt function implementation
-TEST_F(SmpCalculateConfirmTest, test_SMP_Encrypt_as_master) {
-  BT_OCTET16 p1;
+// Test smp_gen_p1_4_confirm and aes_128 function implementation
+TEST_F(SmpCalculateConfirmTest, test_aes_128_as_master) {
   RawAddress remote_bda;
   tBLE_ADDR_TYPE remote_bd_addr_type = 0;
   BTM_ReadRemoteConnectionAddr(p_cb_.pairing_bda, remote_bda,
                                &remote_bd_addr_type);
   BTM_ReadConnectionAddr(p_cb_.pairing_bda, p_cb_.local_bda, &p_cb_.addr_type);
-  smp_gen_p1_4_confirm(&p_cb_, remote_bd_addr_type, p1);
+  Octet16 p1 = smp_gen_p1_4_confirm(&p_cb_, remote_bd_addr_type);
   // Correct p1 is 0x05000800000302070710000001010001
   const char expected_p1_str[] = "05000800000302070710000001010001";
-  char p1_str[2 * sizeof(BT_OCTET16) + 1];
+  char p1_str[2 * OCTET16_LEN + 1];
   dump_uint128_reverse(p1, p1_str);
   ASSERT_THAT(p1_str, StrEq(expected_p1_str));
-  smp_xor_128(p1, rand_);
+  smp_xor_128(&p1, rand_);
   // Correct p1 xor r is 0x5283dd2156ae6d096498274ec7712ee1
   const char expected_p1_xor_r_str[] = "5283dd2156ae6d096498274ec7712ee1";
-  char p1_xor_r_str[2 * sizeof(BT_OCTET16) + 1];
+  char p1_xor_r_str[2 * OCTET16_LEN + 1];
   dump_uint128_reverse(p1, p1_xor_r_str);
   ASSERT_THAT(p1_xor_r_str, StrEq(expected_p1_xor_r_str));
-  tSMP_ENC output;
-  memset(&output, 0, sizeof(tSMP_ENC));
-  ASSERT_TRUE(
-      SMP_Encrypt(p_cb_.tk, BT_OCTET16_LEN, p1, BT_OCTET16_LEN, &output));
+  Octet16 output = crypto_toolbox::aes_128(p_cb_.tk, p1.data(), OCTET16_LEN);
   const char expected_p1_prime_str[] = "02c7aa2a9857ac866ff91232df0e3c95";
-  char p1_prime_str[2 * sizeof(BT_OCTET16) + 1];
-  dump_uint128_reverse(output.param_buf, p1_prime_str);
+  char p1_prime_str[2 * OCTET16_LEN + 1];
+  dump_uint128_reverse(output, p1_prime_str);
   ASSERT_THAT(p1_prime_str, StrEq(expected_p1_prime_str));
 }
 
 // Test smp_calculate_comfirm function implementation
 TEST_F(SmpCalculateConfirmTest, test_smp_calculate_comfirm_as_master) {
-  tSMP_ENC output;
+  Octet16 output;
   tSMP_STATUS status = smp_calculate_comfirm(&p_cb_, rand_, &output);
   EXPECT_EQ(status, SMP_SUCCESS);
   // Correct MConfirm is 0x1e1e3fef878988ead2a74dc5bef13b86
   const char expected_confirm_str[] = "1e1e3fef878988ead2a74dc5bef13b86";
-  char confirm_str[2 * sizeof(BT_OCTET16) + 1];
-  dump_uint128_reverse(output.param_buf, confirm_str);
+  char confirm_str[2 * OCTET16_LEN + 1];
+  dump_uint128_reverse(output, confirm_str);
   ASSERT_THAT(confirm_str, StrEq(expected_confirm_str));
+}
+
+// Test ECC point validation
+TEST(SmpEccValidationTest, test_valid_points) {
+  Point p;
+
+  // Test data from Bluetooth Core Specification
+  // Version 5.0 | Vol 2, Part G | 7.1.2
+
+  // Sample 1
+  p.x[7] = 0x20b003d2;
+  p.x[6] = 0xf297be2c;
+  p.x[5] = 0x5e2c83a7;
+  p.x[4] = 0xe9f9a5b9;
+  p.x[3] = 0xeff49111;
+  p.x[2] = 0xacf4fddb;
+  p.x[1] = 0xcc030148;
+  p.x[0] = 0x0e359de6;
+
+  p.y[7] = 0xdc809c49;
+  p.y[6] = 0x652aeb6d;
+  p.y[5] = 0x63329abf;
+  p.y[4] = 0x5a52155c;
+  p.y[3] = 0x766345c2;
+  p.y[2] = 0x8fed3024;
+  p.y[1] = 0x741c8ed0;
+  p.y[0] = 0x1589d28b;
+
+  EXPECT_TRUE(ECC_ValidatePoint(p));
+
+  // Sample 2
+  p.x[7] = 0x2c31a47b;
+  p.x[6] = 0x5779809e;
+  p.x[5] = 0xf44cb5ea;
+  p.x[4] = 0xaf5c3e43;
+  p.x[3] = 0xd5f8faad;
+  p.x[2] = 0x4a8794cb;
+  p.x[1] = 0x987e9b03;
+  p.x[0] = 0x745c78dd;
+
+  p.y[7] = 0x91951218;
+  p.y[6] = 0x3898dfbe;
+  p.y[5] = 0xcd52e240;
+  p.y[4] = 0x8e43871f;
+  p.y[3] = 0xd0211091;
+  p.y[2] = 0x17bd3ed4;
+  p.y[1] = 0xeaf84377;
+  p.y[0] = 0x43715d4f;
+
+  EXPECT_TRUE(ECC_ValidatePoint(p));
+}
+
+TEST(SmpEccValidationTest, test_invalid_points) {
+  Point p;
+  multiprecision_init(p.x, 8);
+  multiprecision_init(p.y, 8);
+
+  EXPECT_FALSE(ECC_ValidatePoint(p));
+
+  // Sample 1
+  p.x[7] = 0x20b003d2;
+  p.x[6] = 0xf297be2c;
+  p.x[5] = 0x5e2c83a7;
+  p.x[4] = 0xe9f9a5b9;
+  p.x[3] = 0xeff49111;
+  p.x[2] = 0xacf4fddb;
+  p.x[1] = 0xcc030148;
+  p.x[0] = 0x0e359de6;
+
+  EXPECT_FALSE(ECC_ValidatePoint(p));
+
+  p.y[7] = 0xdc809c49;
+  p.y[6] = 0x652aeb6d;
+  p.y[5] = 0x63329abf;
+  p.y[4] = 0x5a52155c;
+  p.y[3] = 0x766345c2;
+  p.y[2] = 0x8fed3024;
+  p.y[1] = 0x741c8ed0;
+  p.y[0] = 0x1589d28b;
+
+  p.y[0]--;
+
+  EXPECT_FALSE(ECC_ValidatePoint(p));
 }
 }  // namespace testing

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 Google, Inc.
+ *  Copyright 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,7 +89,11 @@ typedef enum {
   // Disable role switch for headsets/car-kits.
   // Some car kits allow role switch but when the Phone initiates role switch,
   // the Remote device will go into bad state that will lead to LMP time out.
-  INTEROP_DISABLE_ROLE_SWITCH
+  INTEROP_DISABLE_ROLE_SWITCH,
+
+  // Set a very low initial sniff subrating for HID devices that do not
+  // set their own sniff interval.
+  INTEROP_HID_HOST_LIMIT_SNIFF_INTERVAL,
 } interop_feature_t;
 
 // Check if a given |addr| matches a known interoperability workaround as
@@ -113,7 +117,7 @@ bool interop_match_name(const interop_feature_t feature, const char* name);
 // |length| must be greater than 0 and less than RawAddress::kLength.
 // As |interop_feature_t| is not exposed in the public API, feature must be a
 // valid integer representing an option in the enum.
-void interop_database_add(const uint16_t feature, const RawAddress* addr,
+void interop_database_add(uint16_t feature, const RawAddress* addr,
                           size_t length);
 
 // Clear the dynamic portion of the interoperability workaround database.
