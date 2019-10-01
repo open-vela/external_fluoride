@@ -28,8 +28,6 @@
 #include "packets/link_layer/link_layer_packet_view.h"
 #include "types/address.h"
 
-#include "stack/include/btm_ble_api.h"
-
 namespace test_vendor_lib {
 
 // Represent a Bluetooth Device
@@ -71,7 +69,9 @@ class Device {
 
   void RegisterPhyLayer(std::shared_ptr<PhyLayer> phy);
 
-  void UnregisterPhyLayer(std::shared_ptr<PhyLayer> phy);
+  void UnregisterPhyLayers();
+
+  void UnregisterPhyLayer(Phy::Type phy_type, uint32_t factory_id);
 
   virtual void IncomingPacket(packets::LinkLayerPacketView){};
 
