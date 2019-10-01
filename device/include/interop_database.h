@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -137,12 +137,6 @@ static const interop_addr_entry_t interop_addr_database[] = {
 
     // Jeep Uconnect
     {{{0x00, 0x54, 0xaf, 0, 0, 0}}, 3, INTEROP_DISABLE_ROLE_SWITCH},
-
-    // deepblue2 - cannot change smoothly the volume: b/37834035
-    {{{0x0c, 0xa6, 0x94, 0, 0, 0}}, 3, INTEROP_DISABLE_ABSOLUTE_VOLUME},
-
-    // AirPods 2 - unacceptably loud volume
-    {{{0x94, 0x16, 0x25, 0, 0, 0}}, 3, INTEROP_DISABLE_ABSOLUTE_VOLUME},
 };
 
 typedef struct {
@@ -169,8 +163,4 @@ static const interop_name_entry_t interop_name_database[] = {
 
     // Kenwood KMM-BT518HD - no audio when A2DP codec sample rate is changed
     {"KMM-BT51*HD", 11, INTEROP_DISABLE_AVDTP_RECONFIGURE},
-
-    // Nintendo Switch Pro Controller - does not set sniff interval dynamically.
-    // Requires custom HID report command to change mode.
-    {"Pro Controller", 14, INTEROP_HID_HOST_LIMIT_SNIFF_INTERVAL},
 };
