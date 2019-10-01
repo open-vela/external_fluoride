@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "l2cap/internal/classic_fixed_channel_allocator.h"
+#include "l2cap/internal/classic_dynamic_channel_allocator.h"
 #include "l2cap/internal/classic_link_mock.h"
 #include "l2cap/internal/parameter_provider_mock.h"
 
@@ -31,7 +31,7 @@ using ::testing::Return;
 
 const hci::Address device{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}};
 
-class L2capClassicFixedChannelAllocatorTest : public ::testing::Test {
+class L2capClassicDynamicChannelAllocatorTest : public ::testing::Test {
  protected:
   void SetUp() override {
     thread_ = new os::Thread("test_thread", os::Thread::Priority::NORMAL);
@@ -39,7 +39,7 @@ class L2capClassicFixedChannelAllocatorTest : public ::testing::Test {
     mock_parameter_provider_ = new MockParameterProvider();
     mock_classic_link_ = new MockClassicLink(handler_, mock_parameter_provider_);
     EXPECT_CALL(*mock_classic_link_, GetDevice()).WillRepeatedly(Return(device));
-    channel_allocator_ = std::make_unique<ClassicFixedChannelAllocator>(mock_classic_link_, handler_);
+    channel_allocator_ = std::make_unique<ClassicDynamicChannelAllocator>(mock_classic_link_, handler_);
   }
 
   void TearDown() override {
@@ -55,21 +55,22 @@ class L2capClassicFixedChannelAllocatorTest : public ::testing::Test {
   os::Handler* handler_{nullptr};
   MockParameterProvider* mock_parameter_provider_{nullptr};
   MockClassicLink* mock_classic_link_{nullptr};
-  std::unique_ptr<ClassicFixedChannelAllocator> channel_allocator_;
+  std::unique_ptr<ClassicDynamicChannelAllocator> channel_allocator_;
 };
 
-TEST_F(L2capClassicFixedChannelAllocatorTest, precondition) {
-  Cid cid = kFirstFixedChannel;
-  EXPECT_FALSE(channel_allocator_->IsChannelAllocated(cid));
+TEST_F(L2capClassicDynamicChannelAllocatorTest, precondition) {
+  Psm psm = 0x03;
+  EXPECT_FALSE(channel_allocator_->IsChannelAllocated(psm));
 }
 
-TEST_F(L2capClassicFixedChannelAllocatorTest, allocate_and_free_channel) {
-  Cid cid = kFirstFixedChannel;
-  auto channel = channel_allocator_->AllocateChannel(cid, {});
-  EXPECT_TRUE(channel_allocator_->IsChannelAllocated(cid));
-  EXPECT_EQ(channel, channel_allocator_->FindChannel(cid));
-  ASSERT_NO_FATAL_FAILURE(channel_allocator_->FreeChannel(cid));
-  EXPECT_FALSE(channel_allocator_->IsChannelAllocated(cid));
+TEST_F(L2capClassicDynamicChannelAllocatorTest, allocate_and_free_channel) {
+  Psm psm = 0x03;
+  Cid remote_cid = kFirstDynamicChannel;
+  auto channel = channel_allocator_->AllocateChannel(psm, remote_cid, {});
+  EXPECT_TRUE(channel_allocator_->IsChannelAllocated(psm));
+  EXPECT_EQ(channel, channel_allocator_->FindChannel(psm));
+  ASSERT_NO_FATAL_FAILURE(channel_allocator_->FreeChannel(psm));
+  EXPECT_FALSE(channel_allocator_->IsChannelAllocated(psm));
 }
 
 }  // namespace internal
