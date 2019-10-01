@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2012 Broadcom Corporation
+ *  Copyright 2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@
 
 #define A2DP_RT_PRIORITY 1
 #ifndef OS_GENERIC
-#include <cutils/sched_policy.h>
+#include <processgroup/sched_policy.h>
 #endif
 
 #include "bt_types.h"
