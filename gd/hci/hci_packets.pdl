@@ -1411,11 +1411,7 @@ packet WriteConnectionAcceptTimeout : ConnectionManagementCommand (op_code = WRI
 }
 
 packet ReadPageTimeout : DiscoveryCommand (op_code = READ_PAGE_TIMEOUT) {
-}
-
-packet ReadPageTimeoutComplete : CommandComplete (command_op_code = READ_PAGE_TIMEOUT) {
-  status : ErrorCode,
-  page_timeout : 16,
+  _payload_,  // placeholder (unimplemented)
 }
 
 packet WritePageTimeout : DiscoveryCommand (op_code = WRITE_PAGE_TIMEOUT) {
