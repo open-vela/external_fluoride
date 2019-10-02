@@ -28,7 +28,7 @@
 
 #include <string.h>
 
-#include <log/log.h>
+#include <cutils/log.h>
 
 #include "bt_common.h"
 #include "bta_api.h"

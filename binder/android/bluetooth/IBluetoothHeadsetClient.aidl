@@ -59,7 +59,6 @@ interface IBluetoothHeadsetClient {
     boolean disconnectAudio(in BluetoothDevice device);
     void setAudioRouteAllowed(in BluetoothDevice device, boolean allowed);
     boolean getAudioRouteAllowed(in BluetoothDevice device);
-    boolean sendVendorAtCommand(in BluetoothDevice device, int vendorId, String atCommand);
 
     Bundle getCurrentAgFeatures(in BluetoothDevice device);
 }
