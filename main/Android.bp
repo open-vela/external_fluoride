@@ -1,19 +1,30 @@
-
 // Bluetooth main HW module / shared library for target
 // ========================================================
+filegroup {
+    name: "LibBluetoothSources",
+    srcs: [
+        "bte_conf.cc",
+        "bte_init.cc",
+        "bte_init_cpp_logging.cc",
+        "bte_logmsg.cc",
+        "bte_main.cc",
+        "shim/controller.cc",
+        "shim/entry.cc",
+        "shim/hci_layer.cc",
+        "shim/l2c_api.cc",
+        "shim/l2cap.cc",
+        "shim/shim.cc",
+        "stack_config.cc",
+    ]
+}
+
 cc_library_shared {
     name: "libbluetooth",
     defaults: ["fluoride_defaults"],
     header_libs: ["libbluetooth_headers"],
     export_header_lib_headers: ["libbluetooth_headers"],
     srcs: [
-        // platform specific
-        "bte_conf.cc",
-        "bte_init.cc",
-        "bte_init_cpp_logging.cc",
-        "bte_logmsg.cc",
-        "bte_main.cc",
-        "stack_config.cc",
+        ":LibBluetoothSources",
     ],
     include_dirs: [
         "system/bt",
@@ -48,8 +59,6 @@ cc_library_shared {
         "libdl",
         "libfmq",
         "libhidlbase",
-        "libhidltransport",
-        "libhwbinder",
         "liblog",
         "libprocessgroup",
         "libprotobuf-cpp-lite",
@@ -70,6 +79,7 @@ cc_library_shared {
         "libFraunhoferAAC",
         "libg722codec",
         "libudrv-uipc",
+        "libbluetooth_gd", // Gabeldorsche
     ],
     whole_static_libs: [
         "libbt-bta",
@@ -108,12 +118,8 @@ cc_library_static {
     defaults: ["fluoride_defaults"],
 
     srcs: [
-        "bte_conf.cc",
-        "bte_init.cc",
-        "bte_init_cpp_logging.cc",
-        "bte_logmsg.cc",
-        "bte_main.cc",
-        "stack_config.cc",
+        ":LibBluetoothSources",
+        "shim/entry_for_test.cc",
     ],
     include_dirs: [
         "system/bt",
