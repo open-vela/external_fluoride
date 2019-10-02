@@ -26,7 +26,7 @@ namespace l2cap {
 
 namespace internal {
 class ClassicFixedChannelServiceManagerImpl;
-}  // namespace internal
+}
 
 class ClassicFixedChannelService {
  public:

@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 #include "l2cap/cid.h"
+#include "l2cap/internal/classic_fixed_channel_allocator.h"
 #include "l2cap/internal/classic_fixed_channel_impl.h"
 #include "l2cap/internal/classic_link.h"
 #include "l2cap/security_policy.h"
