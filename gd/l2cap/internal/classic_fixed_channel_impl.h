@@ -19,6 +19,7 @@
 #include "common/bidi_queue.h"
 #include "l2cap/cid.h"
 #include "l2cap/classic_fixed_channel.h"
+#include "l2cap/internal/classic_fixed_channel_allocator.h"
 #include "os/handler.h"
 #include "os/log.h"
 
