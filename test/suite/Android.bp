@@ -38,7 +38,7 @@ cc_test {
         "rfcomm/rfcomm_test.cc",
         "rfcomm/rfcomm_unittest.cc",
     ],
-    header_libs: [ "libhardware_headers" ],
+    header_libs: ["libhardware_headers"],
     shared_libs: [
         "liblog",
         "libcutils",
@@ -51,23 +51,5 @@ cc_test {
     ],
     whole_static_libs: [
         "libbluetoothtbd_hal",
-    ],
-}
-
-// Bluetooth test suite for target
-// ========================================================
-cc_test {
-    name: "net_test_performance",
-    defaults: ["fluoride_defaults"],
-    include_dirs: ["system/bt"],
-    srcs: [
-        "core/thread_performance_test.cc",
-    ],
-    shared_libs: [
-        "liblog",
-    ],
-    static_libs: [
-        "libgmock",
-        "libosi",
     ],
 }
