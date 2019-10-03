@@ -65,25 +65,11 @@ Size ArrayField::GetBuilderSize() const {
   }
 }
 
-Size ArrayField::GetStructSize() const {
-  if (!element_size_.empty() && !element_size_.has_dynamic()) {
-    return GetSize();
-  } else if (element_field_->BuilderParameterMustBeMoved()) {
-    std::string ret = "[this](){ size_t length = 0; for (const auto& elem : to_fill->" + GetName() +
-                      "_) { length += elem->size() * 8; } return length; }()";
-    return ret;
-  } else {
-    std::string ret = "[this](){ size_t length = 0; for (const auto& elem : to_fill->" + GetName() +
-                      "_) { length += elem.size() * 8; } return length; }()";
-    return ret;
-  }
-}
-
 std::string ArrayField::GetDataType() const {
   return "std::array<" + element_field_->GetDataType() + "," + std::to_string(array_size_) + ">";
 }
 
-void ArrayField::GenExtractor(std::ostream& s, int num_leading_bits, bool for_struct) const {
+void ArrayField::GenExtractor(std::ostream& s, int num_leading_bits) const {
   s << GetDataType() << "::iterator ret_it = " << GetName() << "_ptr->begin();";
   s << "auto " << element_field_->GetName() << "_it = " << GetName() << "_it;";
   if (!element_size_.empty() && !element_size_.has_dynamic()) {
@@ -98,7 +84,7 @@ void ArrayField::GenExtractor(std::ostream& s, int num_leading_bits, bool for_st
   } else {
     s << element_field_->GetDataType() << "* " << element_field_->GetName() << "_ptr = ret_it;";
   }
-  element_field_->GenExtractor(s, num_leading_bits, for_struct);
+  element_field_->GenExtractor(s, num_leading_bits);
   if (element_field_->BuilderParameterMustBeMoved()) {
     s << "*ret_it = std::move(" << element_field_->GetName() << "_ptr);";
   }
@@ -113,10 +99,10 @@ void ArrayField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) 
   s << "size_t end_index = size();";
   s << "auto to_bound = begin();";
 
-  int num_leading_bits = GenBounds(s, start_offset, end_offset, GetSize());
+  int num_leading_bits = GenBounds(s, start_offset, end_offset);
   s << GetDataType() << " " << GetName() << "_value;";
   s << GetDataType() << "* " << GetName() << "_ptr = &" << GetName() << "_value;";
-  GenExtractor(s, num_leading_bits, false);
+  GenExtractor(s, num_leading_bits);
 
   s << "return " << GetName() << "_value;";
   s << "}\n";
