@@ -1482,12 +1482,7 @@ packet ReadInquiryScanActivity : DiscoveryCommand (op_code = READ_INQUIRY_SCAN_A
 }
 
 packet WriteInquiryScanActivity : DiscoveryCommand (op_code = WRITE_INQUIRY_SCAN_ACTIVITY) {
-  inquiry_scan_interval : 16, // Range: 0x0012 to 0x1000; only even values are valid * 0x625 ms
-  inquiry_scan_window : 16, // Range: 0x0011 to 0x1000
-}
-
-packet WriteInquiryScanActivityComplete : CommandComplete (command_op_code = WRITE_INQUIRY_SCAN_ACTIVITY) {
-  status : ErrorCode,
+  _payload_,  // placeholder (unimplemented)
 }
 
 enum AuthenticationEnable : 8 {
@@ -1658,17 +1653,7 @@ packet WriteLinkSupervisionTimeoutComplete : CommandComplete (command_op_code = 
 }
 
 packet ReadNumberOfSupportedIac : DiscoveryCommand (op_code = READ_NUMBER_OF_SUPPORTED_IAC) {
-}
-
-packet ReadNumberOfSupportedIacComplete : CommandComplete (command_op_code = READ_NUMBER_OF_SUPPORTED_IAC) {
-  status : ErrorCode,
-  num_support_iac : 8,
-}
-
-struct Lap { // Lower Address Part
-  lap : 6,
-  _reserved_ : 2,
-  _fixed_ = 0x9e8b : 16,
+  _payload_,  // placeholder (unimplemented)
 }
 
 packet ReadCurrentIacLap : DiscoveryCommand (op_code = READ_CURRENT_IAC_LAP) {
@@ -1676,12 +1661,7 @@ packet ReadCurrentIacLap : DiscoveryCommand (op_code = READ_CURRENT_IAC_LAP) {
 }
 
 packet WriteCurrentIacLap : DiscoveryCommand (op_code = WRITE_CURRENT_IAC_LAP) {
-  _count_(laps_to_write) : 8,
-  laps_to_write : Lap[],
-}
-
-packet WriteCurrentIacLapComplete : CommandComplete (command_op_code = WRITE_CURRENT_IAC_LAP) {
-  status : ErrorCode,
+  _payload_,  // placeholder (unimplemented)
 }
 
 packet SetAfhHostChannelClassification : CommandPacket (op_code = SET_AFH_HOST_CHANNEL_CLASSIFICATION) {
