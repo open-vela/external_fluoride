@@ -31,9 +31,9 @@ namespace bluetooth {
 namespace l2cap {
 namespace internal {
 
-class L2capFixedServiceManagerTest : public ::testing::Test {
+class L2capServiceManagerTest : public ::testing::Test {
  public:
-  ~L2capFixedServiceManagerTest() override = default;
+  ~L2capServiceManagerTest() override = default;
 
   void OnServiceRegistered(bool expect_success, ClassicFixedChannelManager::RegistrationResult result,
                            std::unique_ptr<ClassicFixedChannelService> user_service) {
@@ -69,11 +69,11 @@ class L2capFixedServiceManagerTest : public ::testing::Test {
   bool service_registered_ = false;
 };
 
-TEST_F(L2capFixedServiceManagerTest, register_and_unregister_classic_fixed_channel) {
+TEST_F(L2capServiceManagerTest, register_and_unregister_classic_fixed_channel) {
   ClassicFixedChannelServiceImpl::PendingRegistration pending_registration{
       .user_handler_ = user_handler_,
       .on_registration_complete_callback_ =
-          common::BindOnce(&L2capFixedServiceManagerTest::OnServiceRegistered, common::Unretained(this), true)};
+          common::BindOnce(&L2capServiceManagerTest::OnServiceRegistered, common::Unretained(this), true)};
   Cid cid = kSmpBrCid;
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
   manager_->Register(cid, std::move(pending_registration));
@@ -84,11 +84,11 @@ TEST_F(L2capFixedServiceManagerTest, register_and_unregister_classic_fixed_chann
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
 }
 
-TEST_F(L2capFixedServiceManagerTest, register_classic_fixed_channel_bad_cid) {
+TEST_F(L2capServiceManagerTest, register_classic_fixed_channel_bad_cid) {
   ClassicFixedChannelServiceImpl::PendingRegistration pending_registration{
       .user_handler_ = user_handler_,
       .on_registration_complete_callback_ =
-          common::BindOnce(&L2capFixedServiceManagerTest::OnServiceRegistered, common::Unretained(this), false)};
+          common::BindOnce(&L2capServiceManagerTest::OnServiceRegistered, common::Unretained(this), false)};
   Cid cid = 0x1000;
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
   manager_->Register(cid, std::move(pending_registration));
