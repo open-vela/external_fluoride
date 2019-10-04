@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "hci/address.h"
+#include "common/address.h"
 #include "packet/bit_inserter.h"
 #include "packet/packet_builder.h"
 
@@ -30,7 +30,6 @@ class RawBuilder : public PacketBuilder<true> {
  public:
   RawBuilder() = default;
   RawBuilder(size_t max_bytes);
-  RawBuilder(std::vector<uint8_t> vec);
   virtual ~RawBuilder() = default;
 
   virtual size_t size() const override;
@@ -39,7 +38,7 @@ class RawBuilder : public PacketBuilder<true> {
 
   // Add |address| to the payload.  Return true if:
   // - the new size of the payload is still <= |max_bytes_|
-  bool AddAddress(const hci::Address& address);
+  bool AddAddress(const common::Address& address);
 
   // Return true if |num_bytes| can be added to the payload.
   bool CanAddOctets(size_t num_bytes) const;
