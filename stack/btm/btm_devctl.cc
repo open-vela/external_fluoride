@@ -43,9 +43,6 @@
 #include "stack/gatt/connection_manager.h"
 
 #include "gatt_int.h"
-#include "main/shim/btm_api.h"
-#include "main/shim/controller.h"
-#include "main/shim/shim.h"
 
 extern bluetooth::common::MessageLoopThread bt_startup_thread;
 
@@ -234,13 +231,8 @@ void BTM_DeviceReset(UNUSED_ATTR tBTM_CMPL_CB* p_cb) {
   /* Clear the callback, so application would not hang on reset */
   btm_db_reset();
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    module_start_up_callbacked_wrapper(get_module(GD_CONTROLLER_MODULE),
-                                       &bt_startup_thread, reset_complete);
-  } else {
-    module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
-                                       &bt_startup_thread, reset_complete);
-  }
+  module_start_up_callbacked_wrapper(get_module(CONTROLLER_MODULE),
+                                     &bt_startup_thread, reset_complete);
 }
 
 /*******************************************************************************
@@ -280,7 +272,6 @@ void btm_read_local_name_timeout(UNUSED_ATTR void* data) {
  ******************************************************************************/
 static void btm_decode_ext_features_page(uint8_t page_number,
                                          const uint8_t* p_features) {
-  CHECK(p_features != nullptr);
   BTM_TRACE_DEBUG("btm_decode_ext_features_page page: %d", page_number);
   switch (page_number) {
     /* Extended (Legacy) Page 0 */

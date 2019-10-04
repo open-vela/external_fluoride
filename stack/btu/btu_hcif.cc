@@ -57,7 +57,6 @@
 using base::Location;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
-extern void btm_process_inq_results2(uint8_t* p, uint8_t inq_res_mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
 extern void smp_cancel_start_encryption_attempt();
 
@@ -70,7 +69,7 @@ static void btu_hcif_inquiry_rssi_result_evt(uint8_t* p, uint8_t hci_evt_len);
 static void btu_hcif_extended_inquiry_result_evt(uint8_t* p,
                                                  uint8_t hci_evt_len);
 
-static void btu_hcif_connection_comp_evt(uint8_t* p, uint8_t evt_len);
+static void btu_hcif_connection_comp_evt(uint8_t* p);
 static void btu_hcif_connection_request_evt(uint8_t* p);
 static void btu_hcif_disconnection_comp_evt(uint8_t* p);
 static void btu_hcif_authentication_comp_evt(uint8_t* p);
@@ -87,7 +86,7 @@ static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
 static void btu_hcif_hardware_error_evt(uint8_t* p);
 static void btu_hcif_flush_occured_evt(void);
 static void btu_hcif_role_change_evt(uint8_t* p);
-static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p, uint8_t evt_len);
+static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p);
 static void btu_hcif_mode_change_evt(uint8_t* p);
 static void btu_hcif_pin_code_request_evt(uint8_t* p);
 static void btu_hcif_link_key_request_evt(uint8_t* p);
@@ -274,7 +273,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_extended_inquiry_result_evt(p, hci_evt_len);
       break;
     case HCI_CONNECTION_COMP_EVT:
-      btu_hcif_connection_comp_evt(p, hci_evt_len);
+      btu_hcif_connection_comp_evt(p);
       break;
     case HCI_CONNECTION_REQUEST_EVT:
       btu_hcif_connection_request_evt(p);
@@ -328,7 +327,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_role_change_evt(p);
       break;
     case HCI_NUM_COMPL_DATA_PKTS_EVT:
-      btu_hcif_num_compl_data_pkts_evt(p, hci_evt_len);
+      btu_hcif_num_compl_data_pkts_evt(p);
       break;
     case HCI_MODE_CHANGE_EVT:
       btu_hcif_mode_change_evt(p);
@@ -993,19 +992,13 @@ static void btu_hcif_extended_inquiry_result_evt(uint8_t* p,
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_connection_comp_evt(uint8_t* p, uint8_t evt_len) {
+static void btu_hcif_connection_comp_evt(uint8_t* p) {
   uint8_t status;
   uint16_t handle;
   RawAddress bda;
   uint8_t link_type;
   uint8_t enc_mode;
   tBTM_ESCO_DATA esco_data;
-
-  if (evt_len < 11) {
-    android_errorWriteLog(0x534e4554, "141619686");
-    HCI_TRACE_WARNING("%s: malformed event of size %hhd", __func__, evt_len);
-    return;
-  }
 
   STREAM_TO_UINT8(status, p);
   STREAM_TO_UINT16(handle, p);
@@ -1708,9 +1701,9 @@ static void btu_hcif_role_change_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p, uint8_t evt_len) {
+static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p) {
   /* Process for L2CAP and SCO */
-  l2c_link_process_num_completed_pkts(p, evt_len);
+  l2c_link_process_num_completed_pkts(p);
 
   /* Send on to SCO */
   /*?? No SCO for now */
