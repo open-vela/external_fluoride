@@ -422,11 +422,7 @@ void PacketDef::GenBuilderConstructor(std::ostream& s) const {
       s << ", ";
     }
   }
-  if (params.size() > 0 || parent_constraints_.size() > 0) {
-    s << ") :";
-  } else {
-    s << ")";
-  }
+  s << ") :";
 
   // Get the list of parent params to call the parent constructor with.
   FieldList parent_params;
