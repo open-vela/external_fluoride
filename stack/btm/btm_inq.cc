@@ -43,6 +43,8 @@
 #include "btu.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
+#include "main/shim/btm_api.h"
+#include "main/shim/shim.h"
 
 using bluetooth::Uuid;
 
@@ -143,6 +145,10 @@ static const uint8_t* btm_eir_get_uuid_list(uint8_t* p_eir, size_t eir_len,
  ******************************************************************************/
 tBTM_STATUS BTM_SetDiscoverability(uint16_t inq_mode, uint16_t window,
                                    uint16_t interval) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_SetDiscoverability(inq_mode, window, interval);
+  }
+
   uint8_t scan_mode = 0;
   uint16_t service_class;
   uint8_t* p_cod;
@@ -253,6 +259,10 @@ tBTM_STATUS BTM_SetDiscoverability(uint16_t inq_mode, uint16_t window,
  *
  ******************************************************************************/
 tBTM_STATUS BTM_SetInquiryScanType(uint16_t scan_type) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_SetInquiryScanType(scan_type);
+  }
+
   BTM_TRACE_API("BTM_SetInquiryScanType");
   if (scan_type != BTM_SCAN_TYPE_STANDARD &&
       scan_type != BTM_SCAN_TYPE_INTERLACED)
@@ -286,6 +296,10 @@ tBTM_STATUS BTM_SetInquiryScanType(uint16_t scan_type) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_SetPageScanType(uint16_t scan_type) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_SetPageScanType(scan_type);
+  }
+
   BTM_TRACE_API("BTM_SetPageScanType");
   if (scan_type != BTM_SCAN_TYPE_STANDARD &&
       scan_type != BTM_SCAN_TYPE_INTERLACED)
@@ -322,6 +336,10 @@ tBTM_STATUS BTM_SetPageScanType(uint16_t scan_type) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_SetInquiryMode(uint8_t mode) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_SetInquiryMode(mode);
+  }
+
   const controller_t* controller = controller_get_interface();
   BTM_TRACE_API("BTM_SetInquiryMode");
   if (mode == BTM_INQ_RESULT_STANDARD) {
@@ -357,6 +375,10 @@ tBTM_STATUS BTM_SetInquiryMode(uint8_t mode) {
  *
  ******************************************************************************/
 uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_ReadDiscoverability(p_window, p_interval);
+  }
+
   BTM_TRACE_API("BTM_ReadDiscoverability");
   if (p_window) *p_window = btm_cb.btm_inq_vars.inq_scan_window;
 
@@ -406,6 +428,11 @@ uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval) {
 tBTM_STATUS BTM_SetPeriodicInquiryMode(tBTM_INQ_PARMS* p_inqparms,
                                        uint16_t max_delay, uint16_t min_delay,
                                        tBTM_INQ_RESULTS_CB* p_results_cb) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_SetPeriodicInquiryMode(p_inqparms, max_delay,
+                                                       min_delay, p_results_cb);
+  }
+
   tBTM_STATUS status;
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
@@ -493,6 +520,10 @@ tBTM_STATUS BTM_SetPeriodicInquiryMode(tBTM_INQ_PARMS* p_inqparms,
  *
  ******************************************************************************/
 tBTM_STATUS BTM_CancelPeriodicInquiry(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_CancelPeriodicInquiry();
+  }
+
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
   tBTM_STATUS status = BTM_SUCCESS;
   BTM_TRACE_API("BTM_CancelPeriodicInquiry called");
@@ -535,6 +566,10 @@ tBTM_STATUS BTM_CancelPeriodicInquiry(void) {
  ******************************************************************************/
 tBTM_STATUS BTM_SetConnectability(uint16_t page_mode, uint16_t window,
                                   uint16_t interval) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_SetConnectability(page_mode, window, interval);
+  }
+
   uint8_t scan_mode = 0;
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
@@ -609,6 +644,10 @@ tBTM_STATUS BTM_SetConnectability(uint16_t page_mode, uint16_t window,
  *
  ******************************************************************************/
 uint16_t BTM_ReadConnectability(uint16_t* p_window, uint16_t* p_interval) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_ReadConnectability(p_window, p_interval);
+  }
+
   BTM_TRACE_API("BTM_ReadConnectability");
   if (p_window) *p_window = btm_cb.btm_inq_vars.page_scan_window;
 
@@ -631,6 +670,10 @@ uint16_t BTM_ReadConnectability(uint16_t* p_window, uint16_t* p_interval) {
  *
  ******************************************************************************/
 uint16_t BTM_IsInquiryActive(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_IsInquiryActive();
+  }
+
   BTM_TRACE_API("BTM_IsInquiryActive");
 
   return (btm_cb.btm_inq_vars.inq_active);
@@ -648,6 +691,10 @@ uint16_t BTM_IsInquiryActive(void) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_CancelInquiry(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_CancelInquiry();
+  }
+
   tBTM_STATUS status = BTM_SUCCESS;
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
   BTM_TRACE_API("BTM_CancelInquiry called");
@@ -732,6 +779,11 @@ tBTM_STATUS BTM_CancelInquiry(void) {
 tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
                              tBTM_INQ_RESULTS_CB* p_results_cb,
                              tBTM_CMPL_CB* p_cmpl_cb) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_StartInquiry(p_inqparms, p_results_cb,
+                                             p_cmpl_cb);
+  }
+
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
   BTM_TRACE_API("BTM_StartInquiry: mode: %d, dur: %d, rsps: %d, flt: %d",
@@ -879,6 +931,11 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
 tBTM_STATUS BTM_ReadRemoteDeviceName(const RawAddress& remote_bda,
                                      tBTM_CMPL_CB* p_cb,
                                      tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_ReadRemoteDeviceName(remote_bda, p_cb,
+                                                     transport);
+  }
+
   VLOG(1) << __func__ << ": bd addr " << remote_bda;
   /* Use LE transport when LE is the only available option */
   if (transport == BT_TRANSPORT_LE) {
@@ -908,6 +965,10 @@ tBTM_STATUS BTM_ReadRemoteDeviceName(const RawAddress& remote_bda,
  *
  ******************************************************************************/
 tBTM_STATUS BTM_CancelRemoteDeviceName(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_CancelRemoteDeviceName();
+  }
+
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
   BTM_TRACE_API("BTM_CancelRemoteDeviceName()");
@@ -939,6 +1000,10 @@ tBTM_STATUS BTM_CancelRemoteDeviceName(void) {
  *
  ******************************************************************************/
 tBTM_INQ_INFO* BTM_InqDbRead(const RawAddress& p_bda) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_InqDbRead(p_bda);
+  }
+
   VLOG(1) << __func__ << ": bd addr " << p_bda;
 
   tINQ_DB_ENT* p_ent = btm_inq_db_find(p_bda);
@@ -961,6 +1026,10 @@ tBTM_INQ_INFO* BTM_InqDbRead(const RawAddress& p_bda) {
  *
  ******************************************************************************/
 tBTM_INQ_INFO* BTM_InqDbFirst(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_InqDbFirst();
+  }
+
   uint16_t xx;
   tINQ_DB_ENT* p_ent = btm_cb.btm_inq_vars.inq_db;
 
@@ -984,6 +1053,10 @@ tBTM_INQ_INFO* BTM_InqDbFirst(void) {
  *
  ******************************************************************************/
 tBTM_INQ_INFO* BTM_InqDbNext(tBTM_INQ_INFO* p_cur) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_InqDbNext(p_cur);
+  }
+
   tINQ_DB_ENT* p_ent;
   uint16_t inx;
 
@@ -1017,6 +1090,10 @@ tBTM_INQ_INFO* BTM_InqDbNext(tBTM_INQ_INFO* p_cur) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_ClearInqDb(const RawAddress* p_bda) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_ClearInqDb(p_bda);
+  }
+
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
   /* If an inquiry or remote name is in progress return busy */
@@ -1040,6 +1117,10 @@ tBTM_STATUS BTM_ClearInqDb(const RawAddress* p_bda) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_ReadInquiryRspTxPower(tBTM_CMPL_CB* p_cb) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_ReadInquiryRspTxPower(p_cb);
+  }
+
   if (btm_cb.devcb.p_inq_tx_power_cmpl_cb) return (BTM_BUSY);
 
   btm_cb.devcb.p_inq_tx_power_cmpl_cb = p_cb;
@@ -2182,6 +2263,10 @@ void btm_read_inq_tx_power_complete(uint8_t* p) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_WriteEIR(BT_HDR* p_buff) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_WriteEIR(p_buff);
+  }
+
   if (controller_get_interface()->supports_extended_inquiry_response()) {
     BTM_TRACE_API("Write Extended Inquiry Response to controller");
     btsnd_hcic_write_ext_inquiry_response(p_buff, BTM_EIR_DEFAULT_FEC_REQUIRED);
@@ -2229,6 +2314,10 @@ static uint8_t btm_convert_uuid_to_eir_service(uint16_t uuid16) {
  *
  ******************************************************************************/
 bool BTM_HasEirService(const uint32_t* p_eir_uuid, uint16_t uuid16) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_HasEirService(p_eir_uuid, uuid16);
+  }
+
   uint8_t service_id;
 
   service_id = btm_convert_uuid_to_eir_service(uuid16);
@@ -2255,6 +2344,10 @@ bool BTM_HasEirService(const uint32_t* p_eir_uuid, uint16_t uuid16) {
  ******************************************************************************/
 tBTM_EIR_SEARCH_RESULT BTM_HasInquiryEirService(tBTM_INQ_RESULTS* p_results,
                                                 uint16_t uuid16) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_HasInquiryEirService(p_results, uuid16);
+  }
+
   if (BTM_HasEirService(p_results->eir_uuid, uuid16)) {
     return BTM_EIR_FOUND;
   } else if (p_results->eir_complete_list) {
@@ -2277,6 +2370,10 @@ tBTM_EIR_SEARCH_RESULT BTM_HasInquiryEirService(tBTM_INQ_RESULTS* p_results,
  *
  ******************************************************************************/
 void BTM_AddEirService(uint32_t* p_eir_uuid, uint16_t uuid16) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_AddEirService(p_eir_uuid, uuid16);
+  }
+
   uint8_t service_id;
 
   service_id = btm_convert_uuid_to_eir_service(uuid16);
@@ -2298,6 +2395,10 @@ void BTM_AddEirService(uint32_t* p_eir_uuid, uint16_t uuid16) {
  *
  ******************************************************************************/
 void BTM_RemoveEirService(uint32_t* p_eir_uuid, uint16_t uuid16) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_RemoveEirService(p_eir_uuid, uuid16);
+  }
+
   uint8_t service_id;
 
   service_id = btm_convert_uuid_to_eir_service(uuid16);
@@ -2324,6 +2425,11 @@ void BTM_RemoveEirService(uint32_t* p_eir_uuid, uint16_t uuid16) {
 uint8_t BTM_GetEirSupportedServices(uint32_t* p_eir_uuid, uint8_t** p,
                                     uint8_t max_num_uuid16,
                                     uint8_t* p_num_uuid16) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_GetEirSupportedServices(
+        p_eir_uuid, p, max_num_uuid16, p_num_uuid16);
+  }
+
   uint8_t service_index;
 
   *p_num_uuid16 = 0;
@@ -2370,6 +2476,11 @@ uint8_t BTM_GetEirSupportedServices(uint32_t* p_eir_uuid, uint8_t** p,
 uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len, uint8_t uuid_size,
                            uint8_t* p_num_uuid, uint8_t* p_uuid_list,
                            uint8_t max_num_uuid) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_GetEirUuidList(
+        p_eir, eir_len, uuid_size, p_num_uuid, p_uuid_list, max_num_uuid);
+  }
+
   const uint8_t* p_uuid_data;
   uint8_t type;
   uint8_t yy, xx;
