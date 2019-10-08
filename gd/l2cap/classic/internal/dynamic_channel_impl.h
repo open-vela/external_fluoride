@@ -57,14 +57,6 @@ class DynamicChannelImpl {
     return cid_;
   }
 
-  virtual Cid GetRemoteCid() const {
-    return remote_cid_;
-  }
-
-  virtual Psm GetPsm() const {
-    return psm_;
-  }
-
  private:
   const Psm psm_;
   const Cid cid_;
