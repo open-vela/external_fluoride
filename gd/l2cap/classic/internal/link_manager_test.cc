@@ -21,7 +21,6 @@
 
 #include "common/bind.h"
 #include "common/testing/bind_test_util.h"
-#include "dynamic_channel_service_manager_impl_mock.h"
 #include "hci/acl_manager_mock.h"
 #include "hci/address.h"
 #include "l2cap/cid.h"
@@ -46,7 +45,6 @@ using l2cap::internal::testing::MockParameterProvider;
 using ::testing::_;  // Matcher to any value
 using ::testing::ByMove;
 using ::testing::DoAll;
-using testing::MockDynamicChannelServiceManagerImpl;
 using testing::MockFixedChannelServiceImpl;
 using testing::MockFixedChannelServiceManagerImpl;
 using ::testing::Return;
@@ -87,7 +85,6 @@ class L2capClassicLinkManagerTest : public ::testing::Test {
 
 TEST_F(L2capClassicLinkManagerTest, connect_fixed_channel_service_without_acl) {
   MockFixedChannelServiceManagerImpl mock_classic_fixed_channel_service_manager;
-  MockDynamicChannelServiceManagerImpl mock_classic_dynamic_channel_service_manager;
   MockAclManager mock_acl_manager;
   hci::Address device{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}};
   auto user_handler = std::make_unique<os::Handler>(thread_);
@@ -98,7 +95,7 @@ TEST_F(L2capClassicLinkManagerTest, connect_fixed_channel_service_without_acl) {
   EXPECT_CALL(mock_acl_manager, RegisterCallbacks(_, _))
       .WillOnce(DoAll(SaveArg<0>(&hci_connection_callbacks), SaveArg<1>(&hci_callback_handler)));
   LinkManager classic_link_manager(l2cap_handler_, &mock_acl_manager, &mock_classic_fixed_channel_service_manager,
-                                   &mock_classic_dynamic_channel_service_manager, mock_parameter_provider_);
+                                   mock_parameter_provider_);
   EXPECT_EQ(hci_connection_callbacks, &classic_link_manager);
   EXPECT_EQ(hci_callback_handler, l2cap_handler_);
 
@@ -177,7 +174,7 @@ TEST_F(L2capClassicLinkManagerTest, connect_fixed_channel_service_without_acl_wi
   EXPECT_CALL(mock_acl_manager, RegisterCallbacks(_, _))
       .WillOnce(DoAll(SaveArg<0>(&hci_connection_callbacks), SaveArg<1>(&hci_callback_handler)));
   LinkManager classic_link_manager(l2cap_handler_, &mock_acl_manager, &mock_classic_fixed_channel_service_manager,
-                                   nullptr, mock_parameter_provider_);
+                                   mock_parameter_provider_);
   EXPECT_EQ(hci_connection_callbacks, &classic_link_manager);
   EXPECT_EQ(hci_callback_handler, l2cap_handler_);
 
@@ -211,7 +208,7 @@ TEST_F(L2capClassicLinkManagerTest, connect_fixed_channel_service_without_acl_wi
   EXPECT_CALL(mock_acl_manager, RegisterCallbacks(_, _))
       .WillOnce(DoAll(SaveArg<0>(&hci_connection_callbacks), SaveArg<1>(&hci_callback_handler)));
   LinkManager classic_link_manager(l2cap_handler_, &mock_acl_manager, &mock_classic_fixed_channel_service_manager,
-                                   nullptr, mock_parameter_provider_);
+                                   mock_parameter_provider_);
   EXPECT_EQ(hci_connection_callbacks, &classic_link_manager);
   EXPECT_EQ(hci_callback_handler, l2cap_handler_);
 
@@ -257,7 +254,7 @@ TEST_F(L2capClassicLinkManagerTest, not_acquiring_channels_should_disconnect_acl
   EXPECT_CALL(mock_acl_manager, RegisterCallbacks(_, _))
       .WillOnce(DoAll(SaveArg<0>(&hci_connection_callbacks), SaveArg<1>(&hci_callback_handler)));
   LinkManager classic_link_manager(l2cap_handler_, &mock_acl_manager, &mock_classic_fixed_channel_service_manager,
-                                   nullptr, mock_parameter_provider_);
+                                   mock_parameter_provider_);
   EXPECT_EQ(hci_connection_callbacks, &classic_link_manager);
   EXPECT_EQ(hci_callback_handler, l2cap_handler_);
 
@@ -327,7 +324,7 @@ TEST_F(L2capClassicLinkManagerTest, acquiring_channels_should_not_disconnect_acl
   EXPECT_CALL(mock_acl_manager, RegisterCallbacks(_, _))
       .WillOnce(DoAll(SaveArg<0>(&hci_connection_callbacks), SaveArg<1>(&hci_callback_handler)));
   LinkManager classic_link_manager(l2cap_handler_, &mock_acl_manager, &mock_classic_fixed_channel_service_manager,
-                                   nullptr, mock_parameter_provider_);
+                                   mock_parameter_provider_);
   EXPECT_EQ(hci_connection_callbacks, &classic_link_manager);
   EXPECT_EQ(hci_callback_handler, l2cap_handler_);
 
@@ -399,7 +396,7 @@ TEST_F(L2capClassicLinkManagerTest, acquiring_and_releasing_channels_should_even
   EXPECT_CALL(mock_acl_manager, RegisterCallbacks(_, _))
       .WillOnce(DoAll(SaveArg<0>(&hci_connection_callbacks), SaveArg<1>(&hci_callback_handler)));
   LinkManager classic_link_manager(l2cap_handler_, &mock_acl_manager, &mock_classic_fixed_channel_service_manager,
-                                   nullptr, mock_parameter_provider_);
+                                   mock_parameter_provider_);
   EXPECT_EQ(hci_connection_callbacks, &classic_link_manager);
   EXPECT_EQ(hci_callback_handler, l2cap_handler_);
 

@@ -704,15 +704,10 @@ packet CommandStatus : EventPacket (event_code = COMMAND_STATUS){
 packet NoCommandComplete : CommandComplete (command_op_code = NONE){
 }
 
-struct Lap { // Lower Address Part
-  lap : 6,
-  _reserved_ : 2,
-  _fixed_ = 0x9e8b : 16,
-}
-
   // LINK_CONTROL
 packet Inquiry : DiscoveryCommand (op_code = INQUIRY) {
-  lap : Lap,
+  lap0 : 8, // 0x00 - 0x3F
+  _fixed_ = 0x9E8B : 16, // LAP upper bits are _fixed_
   inquiry_length : 8, // 0x1 - 0x30 (times 1.28s)
   num_responses : 8, // 0x00 unlimited
 }
@@ -1490,12 +1485,7 @@ packet WritePageScanActivityComplete : CommandComplete (command_op_code = WRITE_
 }
 
 packet ReadInquiryScanActivity : DiscoveryCommand (op_code = READ_INQUIRY_SCAN_ACTIVITY) {
-}
-
-packet ReadInquiryScanActivityComplete : CommandComplete (command_op_code = READ_INQUIRY_SCAN_ACTIVITY) {
-  status : ErrorCode,
-  inquiry_scan_interval : 16, // Range: 0x0012 to 0x1000; only even values are valid * 0x625 ms
-  inquiry_scan_window : 16, // Range: 0x0011 to 0x1000
+  _payload_,  // placeholder (unimplemented)
 }
 
 packet WriteInquiryScanActivity : DiscoveryCommand (op_code = WRITE_INQUIRY_SCAN_ACTIVITY) {
@@ -1682,13 +1672,14 @@ packet ReadNumberOfSupportedIacComplete : CommandComplete (command_op_code = REA
   num_support_iac : 8,
 }
 
-packet ReadCurrentIacLap : DiscoveryCommand (op_code = READ_CURRENT_IAC_LAP) {
+struct Lap { // Lower Address Part
+  lap : 6,
+  _reserved_ : 2,
+  _fixed_ = 0x9e8b : 16,
 }
 
-packet ReadCurrentIacLapComplete : CommandComplete (command_op_code = READ_CURRENT_IAC_LAP) {
-  status : ErrorCode,
-  _count_(laps_to_read) : 8,
-  laps_to_read : Lap[],
+packet ReadCurrentIacLap : DiscoveryCommand (op_code = READ_CURRENT_IAC_LAP) {
+  _payload_,  // placeholder (unimplemented)
 }
 
 packet WriteCurrentIacLap : DiscoveryCommand (op_code = WRITE_CURRENT_IAC_LAP) {
