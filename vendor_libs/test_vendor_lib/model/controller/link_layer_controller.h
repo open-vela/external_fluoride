@@ -19,12 +19,14 @@
 #include "acl_connection_handler.h"
 #include "include/hci.h"
 #include "include/inquiry.h"
+#include "include/link.h"
 #include "include/phy.h"
 #include "model/devices/device_properties.h"
 #include "model/setup/async_manager.h"
 #include "packets/hci/acl_packet_view.h"
 #include "packets/hci/sco_packet_view.h"
-#include "packets/link_layer_packets.h"
+#include "packets/link_layer/link_layer_packet_builder.h"
+#include "packets/link_layer/link_layer_packet_view.h"
 #include "security_manager.h"
 #include "types/address.h"
 
@@ -32,8 +34,6 @@ namespace test_vendor_lib {
 
 class LinkLayerController {
  public:
-  static constexpr size_t kIrk_size = 16;
-
   LinkLayerController(const DeviceProperties& properties) : properties_(properties) {}
   hci::Status SendCommandToRemoteByAddress(hci::OpCode opcode, packets::PacketView<true> args, const Address& remote,
                                            bool use_public_address);
@@ -75,13 +75,9 @@ class LinkLayerController {
   void DisconnectCleanup(uint16_t handle, uint8_t reason);
 
  public:
-  void IncomingPacket(model::packets::LinkLayerPacketView incoming);
+  void IncomingPacket(packets::LinkLayerPacketView incoming);
 
   void TimerTick();
-
-  AsyncTaskId ScheduleTask(std::chrono::milliseconds delay_ms, const TaskCallback& task);
-
-  void CancelScheduledTask(AsyncTaskId task);
 
   // Set the callbacks for sending packets to the HCI.
   void RegisterEventChannel(const std::function<void(std::shared_ptr<std::vector<uint8_t>>)>& send_event);
@@ -91,9 +87,7 @@ class LinkLayerController {
   void RegisterScoChannel(const std::function<void(std::shared_ptr<std::vector<uint8_t>>)>& send_sco);
 
   void RegisterRemoteChannel(
-      const std::function<void(
-          std::shared_ptr<model::packets::LinkLayerPacketBuilder>, Phy::Type)>&
-          send_to_remote);
+      const std::function<void(std::shared_ptr<packets::LinkLayerPacketBuilder>, Phy::Type)>& send_to_remote);
 
   // Set the callbacks for scheduling tasks.
   void RegisterTaskScheduler(
@@ -110,30 +104,11 @@ class LinkLayerController {
   void PageScan();
   void Connections();
 
-  void LeAdvertising();
-
-  void HandleLeConnection(Address addr, uint8_t addr_type, uint8_t own_addr_type, uint8_t role,
-                          uint16_t connection_interval, uint16_t connection_latency, uint16_t supervision_timeout);
-
   void LeWhiteListClear();
   void LeWhiteListAddDevice(Address addr, uint8_t addr_type);
   void LeWhiteListRemoveDevice(Address addr, uint8_t addr_type);
   bool LeWhiteListContainsDevice(Address addr, uint8_t addr_type);
   bool LeWhiteListFull();
-  void LeResolvingListClear();
-  void LeResolvingListAddDevice(Address addr, uint8_t addr_type,
-                                std::array<uint8_t, kIrk_size> peerIrk,
-                                std::array<uint8_t, kIrk_size> localIrk);
-  void LeResolvingListRemoveDevice(Address addr, uint8_t addr_type);
-  bool LeResolvingListContainsDevice(Address addr, uint8_t addr_type);
-  bool LeResolvingListFull();
-  void LeSetPrivacyMode(uint8_t address_type, Address addr, uint8_t mode);
-
-  hci::Status SetLeAdvertisingEnable(uint8_t le_advertising_enable) {
-    le_advertising_enable_ = le_advertising_enable;
-    // TODO: Check properties and return errors
-    return hci::Status::SUCCESS;
-  }
 
   void SetLeScanEnable(uint8_t le_scan_enable) {
     le_scan_enable_ = le_scan_enable;
@@ -201,61 +176,36 @@ class LinkLayerController {
   void SetPageScanEnable(bool enable);
 
   hci::Status ChangeConnectionPacketType(uint16_t handle, uint16_t types);
-  hci::Status ChangeConnectionLinkKey(uint16_t handle);
-  hci::Status MasterLinkKey(uint8_t key_flag);
-  hci::Status HoldMode(uint16_t handle, uint16_t hold_mode_max_interval, uint16_t hold_mode_min_interval);
-  hci::Status SniffMode(uint16_t handle, uint16_t sniff_max_interval, uint16_t sniff_min_interval,
-                        uint16_t sniff_attempt, uint16_t sniff_timeout);
-  hci::Status ExitSniffMode(uint16_t handle);
-  hci::Status QosSetup(uint16_t handle, uint8_t service_type, uint32_t token_rate, uint32_t peak_bandwidth,
-                       uint32_t latency, uint32_t delay_variation);
-  hci::Status SwitchRole(Address bd_addr, uint8_t role);
   hci::Status WriteLinkPolicySettings(uint16_t handle, uint16_t settings);
-  hci::Status FlowSpecification(uint16_t handle, uint8_t flow_direction, uint8_t service_type, uint32_t token_rate,
-                                uint32_t token_bucket_size, uint32_t peak_bandwidth, uint32_t access_latency);
   hci::Status WriteLinkSupervisionTimeout(uint16_t handle, uint16_t timeout);
 
  protected:
-  void SendLeLinkLayerPacket(
-      std::unique_ptr<model::packets::LinkLayerPacketBuilder> packet);
-  void SendLinkLayerPacket(
-      std::unique_ptr<model::packets::LinkLayerPacketBuilder> packet);
-  void IncomingAclPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingAclAckPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingCommandPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingCreateConnectionPacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingDisconnectPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingEncryptConnection(model::packets::LinkLayerPacketView packet);
-  void IncomingEncryptConnectionResponse(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingInquiryPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingInquiryResponsePacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingIoCapabilityRequestPacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingIoCapabilityResponsePacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingIoCapabilityNegativeResponsePacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingLeAdvertisementPacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingLeConnectPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingLeConnectCompletePacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingLeScanPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingLeScanResponsePacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPagePacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPageRejectPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPageResponsePacket(model::packets::LinkLayerPacketView packet);
-  void IncomingResponsePacket(model::packets::LinkLayerPacketView packet);
+  void SendLELinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> packet);
+  void SendLinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> packet);
+  void IncomingAclPacket(packets::LinkLayerPacketView packet);
+  void IncomingAclAckPacket(packets::LinkLayerPacketView packet);
+  void IncomingCommandPacket(packets::LinkLayerPacketView packet);
+  void IncomingCreateConnectionPacket(packets::LinkLayerPacketView packet);
+  void IncomingDisconnectPacket(packets::LinkLayerPacketView packet);
+  void IncomingEncryptConnection(packets::LinkLayerPacketView packet);
+  void IncomingEncryptConnectionResponse(packets::LinkLayerPacketView packet);
+  void IncomingInquiryPacket(packets::LinkLayerPacketView packet);
+  void IncomingInquiryResponsePacket(packets::LinkLayerPacketView packet);
+  void IncomingIoCapabilityRequestPacket(packets::LinkLayerPacketView packet);
+  void IncomingIoCapabilityResponsePacket(packets::LinkLayerPacketView packet);
+  void IncomingIoCapabilityNegativeResponsePacket(packets::LinkLayerPacketView packet);
+  void IncomingLeAdvertisementPacket(packets::LinkLayerPacketView packet);
+  void IncomingLeScanPacket(packets::LinkLayerPacketView packet);
+  void IncomingLeScanResponsePacket(packets::LinkLayerPacketView packet);
+  void IncomingPagePacket(packets::LinkLayerPacketView packet);
+  void IncomingPageResponsePacket(packets::LinkLayerPacketView packet);
+  void IncomingResponsePacket(packets::LinkLayerPacketView packet);
 
  private:
   const DeviceProperties& properties_;
-  AclConnectionHandler connections_;
+  AclConnectionHandler classic_connections_;
   // Add timestamps?
-  std::vector<std::shared_ptr<model::packets::LinkLayerPacketBuilder>>
-      commands_awaiting_responses_;
+  std::vector<std::shared_ptr<packets::LinkLayerPacketBuilder>> commands_awaiting_responses_;
 
   // Timing related state
   std::vector<AsyncTaskId> controller_events_;
@@ -274,22 +224,14 @@ class LinkLayerController {
   std::function<void(std::shared_ptr<std::vector<uint8_t>>)> send_sco_;
 
   // Callback to send packets to remote devices.
-  std::function<void(std::shared_ptr<model::packets::LinkLayerPacketBuilder>,
-                     Phy::Type phy_type)>
-      send_to_remote_;
+  std::function<void(std::shared_ptr<packets::LinkLayerPacketBuilder>, Phy::Type phy_type)> send_to_remote_;
 
   // LE state
   std::vector<uint8_t> le_event_mask_;
 
   std::vector<std::tuple<Address, uint8_t>> le_white_list_;
-  std::vector<std::tuple<Address, uint8_t, std::array<uint8_t, kIrk_size>,
-                         std::array<uint8_t, kIrk_size>>>
-      le_resolving_list_;
 
-  uint8_t le_advertising_enable_{false};
-  std::chrono::steady_clock::time_point last_le_advertisement_;
-
-  uint8_t le_scan_enable_{false};
+  uint8_t le_scan_enable_;
   uint8_t le_scan_type_;
   uint16_t le_scan_interval_;
   uint16_t le_scan_window_;
@@ -297,7 +239,7 @@ class LinkLayerController {
   uint8_t le_scan_filter_duplicates_;
   uint8_t le_address_type_;
 
-  bool le_connect_{false};
+  bool le_connect_;
   uint16_t le_connection_interval_min_;
   uint16_t le_connection_interval_max_;
   uint16_t le_connection_latency_;
@@ -313,7 +255,7 @@ class LinkLayerController {
 
   SecurityManager security_manager_{10};
   std::chrono::steady_clock::time_point last_inquiry_;
-  model::packets::InquiryType inquiry_mode_;
+  Inquiry::InquiryType inquiry_mode_;
   Inquiry::InquiryState inquiry_state_;
   uint64_t inquiry_lap_;
   uint8_t inquiry_max_responses_;

@@ -245,9 +245,9 @@ class BluetoothDeathRecipient : public hidl_death_recipient {
  public:
   BluetoothDeathRecipient(const sp<IBluetoothHci> hci) : mHci(hci) {}
 
-  void serviceDied(
+  virtual void serviceDied(
       uint64_t /*cookie*/,
-      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) override {
+      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) {
     ALOGE("BluetoothDeathRecipient::serviceDied - Bluetooth service died");
     has_died_ = true;
     mHci->close();
