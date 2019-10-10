@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 The Android Open Source Project
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2016 The Android Open Source Project
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ typedef struct {
 
 extern btif_hd_cb_t btif_hd_cb;
 
-extern void btif_hd_remove_device(bt_bdaddr_t bd_addr);
+extern void btif_hd_remove_device(RawAddress bd_addr);
 extern void btif_hd_service_registration();
 
 #endif
