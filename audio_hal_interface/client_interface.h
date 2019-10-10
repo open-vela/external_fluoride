@@ -158,9 +158,8 @@ class BluetoothAudioClientInterface {
 
   static constexpr PcmParameters kInvalidPcmConfiguration = {
       .sampleRate = SampleRate::RATE_UNKNOWN,
-      .channelMode = ChannelMode::UNKNOWN,
       .bitsPerSample = BitsPerSample::BITS_UNKNOWN,
-  };
+      .channelMode = ChannelMode::UNKNOWN};
 
  private:
   // Helper function to connect to an IBluetoothAudioProvider
