@@ -119,9 +119,6 @@ typedef uint8_t tBTA_HF_CLIENT_AT_RESULT_TYPE;
                                      */
 #define BTA_HF_CLIENT_BINP_EVT 20 /* binp number event */
 #define BTA_HF_CLIENT_RING_INDICATION 21 /* HF Client ring indication */
-
-#define BTA_HF_CLIENT_UNKNOWN_EVT 22 /* Unknown or vendor specific Event */
-
 #define BTA_HF_CLIENT_DISABLE_EVT 30     /* HF Client disabled */
 
 typedef uint8_t tBTA_HF_CLIENT_EVT;
@@ -162,7 +159,6 @@ typedef uint8_t tBTA_HF_CLIENT_IND_TYPE;
 #define BTA_HF_CLIENT_AT_CMD_BINP 13
 #define BTA_HF_CLIENT_AT_CMD_BLDN 14
 #define BTA_HF_CLIENT_AT_CMD_NREC 15
-#define BTA_HF_CLIENT_AT_CMD_VENDOR_SPECIFIC_CMD 16
 
 typedef uint8_t tBTA_HF_CLIENT_AT_CMD_TYPE;
 
@@ -238,13 +234,6 @@ typedef struct {
   uint16_t value;
 } tBTA_HF_CLIENT_VAL;
 
-/* data associated with BTA_HF_CLIENT_UNKNOWN_EVT event */
-#define BTA_HF_CLIENT_UNKOWN_EVENT_LEN 32
-typedef struct {
-  RawAddress bd_addr;
-  char event_string[BTA_HF_CLIENT_UNKOWN_EVENT_LEN + 1];
-} tBTA_HF_CLIENT_UNKNOWN;
-
 /* union of data associated with AG callback */
 typedef union {
   // Common BD ADDR field for all tyepdefs
@@ -259,7 +248,6 @@ typedef union {
   tBTA_HF_CLIENT_AT_RESULT result;
   tBTA_HF_CLIENT_CLCC clcc;
   tBTA_HF_CLIENT_CNUM cnum;
-  tBTA_HF_CLIENT_UNKNOWN unknown;
 } tBTA_HF_CLIENT;
 
 typedef uint32_t tBTA_HF_CLIENT_FEAT;
