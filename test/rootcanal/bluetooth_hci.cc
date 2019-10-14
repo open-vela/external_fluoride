@@ -51,7 +51,9 @@ class BluetoothDeathRecipient : public hidl_death_recipient {
  public:
   BluetoothDeathRecipient(const sp<IBluetoothHci> hci) : mHci(hci) {}
 
-  virtual void serviceDied(uint64_t /* cookie */, const wp<::android::hidl::base::V1_0::IBase>& /* who */) {
+  void serviceDied(
+      uint64_t /* cookie */,
+      const wp<::android::hidl::base::V1_0::IBase>& /* who */) override {
     ALOGE("BluetoothDeathRecipient::serviceDied - Bluetooth service died");
     has_died_ = true;
     mHci->close();
@@ -79,42 +81,63 @@ Return<void> BluetoothHci::initialize(const sp<IBluetoothHciCallbacks>& cb) {
   }
 
   death_recipient_->setHasDied(false);
-  cb->linkToDeath(death_recipient_, 0);
+  auto link_ret = cb->linkToDeath(death_recipient_, 0);
+  CHECK(link_ret.isOk()) << "Error calling linkToDeath.";
 
-  test_channel_transport_.RegisterCommandHandler([this](const std::string& name, const std::vector<std::string>& args) {
-    async_manager_.ExecAsync(std::chrono::milliseconds(0),
-                             [this, name, args]() { test_channel_.HandleCommand(name, args); });
-  });
+  test_channel_transport_.RegisterCommandHandler(
+      [this](const std::string& name, const std::vector<std::string>& args) {
+        async_manager_.ExecAsync(
+            std::chrono::milliseconds(0),
+            [this, name, args]() { test_channel_.HandleCommand(name, args); });
+      });
 
   controller_ = std::make_shared<DualModeController>();
 
   controller_->Initialize({"dmc", "3C:5A:B4:01:02:03"});
 
-  controller_->RegisterEventChannel([cb](std::shared_ptr<std::vector<uint8_t>> packet) {
-    hidl_vec<uint8_t> hci_event(packet->begin(), packet->end());
-    cb->hciEventReceived(hci_event);
-  });
+  controller_->RegisterEventChannel(
+      [this, cb](std::shared_ptr<std::vector<uint8_t>> packet) {
+        hidl_vec<uint8_t> hci_event(packet->begin(), packet->end());
+        auto ret = cb->hciEventReceived(hci_event);
+        if (!ret.isOk()) {
+          CHECK(death_recipient_->getHasDied())
+              << "Error sending event callback, but no death notification.";
+        }
+      });
 
-  controller_->RegisterAclChannel([cb](std::shared_ptr<std::vector<uint8_t>> packet) {
-    hidl_vec<uint8_t> acl_packet(packet->begin(), packet->end());
-    cb->aclDataReceived(acl_packet);
-  });
+  controller_->RegisterAclChannel(
+      [this, cb](std::shared_ptr<std::vector<uint8_t>> packet) {
+        hidl_vec<uint8_t> acl_packet(packet->begin(), packet->end());
+        auto ret = cb->aclDataReceived(acl_packet);
+        if (!ret.isOk()) {
+          CHECK(death_recipient_->getHasDied())
+              << "Error sending acl callback, but no death notification.";
+        }
+      });
 
-  controller_->RegisterScoChannel([cb](std::shared_ptr<std::vector<uint8_t>> packet) {
-    hidl_vec<uint8_t> sco_packet(packet->begin(), packet->end());
-    cb->aclDataReceived(sco_packet);
-  });
+  controller_->RegisterScoChannel(
+      [this, cb](std::shared_ptr<std::vector<uint8_t>> packet) {
+        hidl_vec<uint8_t> sco_packet(packet->begin(), packet->end());
+        auto ret = cb->aclDataReceived(sco_packet);
+        if (!ret.isOk()) {
+          CHECK(death_recipient_->getHasDied())
+              << "Error sending sco callback, but no death notification.";
+        }
+      });
 
-  controller_->RegisterTaskScheduler([this](std::chrono::milliseconds delay, const TaskCallback& task) {
-    return async_manager_.ExecAsync(delay, task);
-  });
+  controller_->RegisterTaskScheduler(
+      [this](std::chrono::milliseconds delay, const TaskCallback& task) {
+        return async_manager_.ExecAsync(delay, task);
+      });
 
   controller_->RegisterPeriodicTaskScheduler(
-      [this](std::chrono::milliseconds delay, std::chrono::milliseconds period, const TaskCallback& task) {
+      [this](std::chrono::milliseconds delay, std::chrono::milliseconds period,
+             const TaskCallback& task) {
         return async_manager_.ExecAsyncPeriodically(delay, period, task);
       });
 
-  controller_->RegisterTaskCancel([this](AsyncTaskId task) { async_manager_.CancelAsyncTask(task); });
+  controller_->RegisterTaskCancel(
+      [this](AsyncTaskId task) { async_manager_.CancelAsyncTask(task); });
 
   test_model_.Reset();
   // Add the controller as a device in the model.
@@ -139,19 +162,27 @@ Return<void> BluetoothHci::initialize(const sp<IBluetoothHciCallbacks>& cb) {
   // This should be configurable in the future.
   ALOGI("Adding Beacons so the scan list is not empty.");
   test_channel_.Add({"beacon", "be:ac:10:00:00:01", "1000"});
-  test_channel_.AddDeviceToPhy({"1", "0"});
+  test_channel_.AddDeviceToPhy({"2", "1"});
   test_channel_.Add({"beacon", "be:ac:10:00:00:02", "1000"});
-  test_channel_.AddDeviceToPhy({"2", "0"});
-  test_channel_.SetTimerPeriod({"1000"});
+  test_channel_.AddDeviceToPhy({"3", "1"});
 
-  unlink_cb_ = [cb](sp<BluetoothDeathRecipient>& death_recipient) {
+  unlink_cb_ = [this, cb](sp<BluetoothDeathRecipient>& death_recipient) {
     if (death_recipient->getHasDied())
       ALOGI("Skipping unlink call, service died.");
-    else
-      cb->unlinkToDeath(death_recipient);
+    else {
+      auto ret = cb->unlinkToDeath(death_recipient);
+      if (!ret.isOk()) {
+        CHECK(death_recipient_->getHasDied())
+            << "Error calling unlink, but no death notification.";
+      }
+    }
   };
 
-  cb->initializationComplete(Status::SUCCESS);
+  auto init_ret = cb->initializationComplete(Status::SUCCESS);
+  if (!init_ret.isOk()) {
+    CHECK(death_recipient_->getHasDied())
+        << "Error sending init callback, but no death notification.";
+  }
   return Void();
 }
 
