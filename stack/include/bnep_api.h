@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2001-2012 Broadcom Corporation
+ *  Copyright 2001-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ typedef uint8_t tBNEP_RESULT;
  *                  All values are used to indicate the reason for failure
  *              Flag to indicate if it is just a role change
 */
-typedef void(tBNEP_CONN_STATE_CB)(uint16_t handle, BD_ADDR rem_bda,
+typedef void(tBNEP_CONN_STATE_CB)(uint16_t handle, const RawAddress& rem_bda,
                                   tBNEP_RESULT result, bool is_role_change);
 
 /* Connection indication callback prototype. Parameters are
@@ -90,8 +90,9 @@ typedef void(tBNEP_CONN_STATE_CB)(uint16_t handle, BD_ADDR rem_bda,
  *              When BNEP calls this function profile should
  *              use BNEP_ConnectResp call to accept or reject the request
 */
-typedef void(tBNEP_CONNECT_IND_CB)(uint16_t handle, BD_ADDR bd_addr,
-                                   tBT_UUID* remote_uuid, tBT_UUID* local_uuid,
+typedef void(tBNEP_CONNECT_IND_CB)(uint16_t handle, const RawAddress& bd_addr,
+                                   const bluetooth::Uuid& remote_uuid,
+                                   const bluetooth::Uuid& local_uuid,
                                    bool is_role_change);
 
 /* Data buffer received indication callback prototype. Parameters are
@@ -103,9 +104,9 @@ typedef void(tBNEP_CONNECT_IND_CB)(uint16_t handle, BD_ADDR bd_addr,
  *              Flag to indicate whether extension headers to be forwarded are
  *                present
  */
-typedef void(tBNEP_DATA_BUF_CB)(uint16_t handle, uint8_t* src, uint8_t* dst,
-                                uint16_t protocol, BT_HDR* p_buf,
-                                bool fw_ext_present);
+typedef void(tBNEP_DATA_BUF_CB)(uint16_t handle, const RawAddress& src,
+                                const RawAddress& dst, uint16_t protocol,
+                                BT_HDR* p_buf, bool fw_ext_present);
 
 /* Data received indication callback prototype. Parameters are
  *              Handle to the connection
@@ -117,9 +118,10 @@ typedef void(tBNEP_DATA_BUF_CB)(uint16_t handle, uint8_t* src, uint8_t* dst,
  *              Flag to indicate whether extension headers to be forwarded are
  *                present
  */
-typedef void(tBNEP_DATA_IND_CB)(uint16_t handle, uint8_t* src, uint8_t* dst,
-                                uint16_t protocol, uint8_t* p_data,
-                                uint16_t len, bool fw_ext_present);
+typedef void(tBNEP_DATA_IND_CB)(uint16_t handle, const RawAddress& src,
+                                const RawAddress& dst, uint16_t protocol,
+                                uint8_t* p_data, uint16_t len,
+                                bool fw_ext_present);
 
 /* Flow control callback for TX data. Parameters are
  *              Handle to the connection
@@ -181,7 +183,7 @@ typedef struct {
   uint8_t con_status;
 
   uint16_t l2cap_cid;
-  BD_ADDR rem_bda;
+  RawAddress rem_bda;
   uint16_t rem_mtu_size;
   uint16_t xmit_q_depth;
 
@@ -189,8 +191,8 @@ typedef struct {
   uint16_t sent_mcast_filters;
   uint16_t rcvd_num_filters;
   uint16_t rcvd_mcast_filters;
-  tBT_UUID src_uuid;
-  tBT_UUID dst_uuid;
+  bluetooth::Uuid src_uuid;
+  bluetooth::Uuid dst_uuid;
 
 } tBNEP_STATUS;
 
@@ -244,8 +246,10 @@ extern void BNEP_Deregister(void);
  *                  BNEP_NO_RESOURCES           if no resources
  *
  ******************************************************************************/
-extern tBNEP_RESULT BNEP_Connect(BD_ADDR p_rem_bda, tBT_UUID* src_uuid,
-                                 tBT_UUID* dst_uuid, uint16_t* p_handle);
+extern tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda,
+                                 const bluetooth::Uuid& src_uuid,
+                                 const bluetooth::Uuid& dst_uuid,
+                                 uint16_t* p_handle);
 
 /*******************************************************************************
  *
@@ -301,9 +305,11 @@ extern tBNEP_RESULT BNEP_Disconnect(uint16_t handle);
  *                  BNEP_SUCCESS            - If written successfully
  *
  ******************************************************************************/
-extern tBNEP_RESULT BNEP_WriteBuf(uint16_t handle, uint8_t* p_dest_addr,
-                                  BT_HDR* p_buf, uint16_t protocol,
-                                  uint8_t* p_src_addr, bool fw_ext_present);
+extern tBNEP_RESULT BNEP_WriteBuf(uint16_t handle,
+                                  const RawAddress& p_dest_addr, BT_HDR* p_buf,
+                                  uint16_t protocol,
+                                  const RawAddress* p_src_addr,
+                                  bool fw_ext_present);
 
 /*******************************************************************************
  *
@@ -329,9 +335,10 @@ extern tBNEP_RESULT BNEP_WriteBuf(uint16_t handle, uint8_t* p_dest_addr,
  *                  BNEP_SUCCESS            - If written successfully
  *
  ******************************************************************************/
-extern tBNEP_RESULT BNEP_Write(uint16_t handle, uint8_t* p_dest_addr,
+extern tBNEP_RESULT BNEP_Write(uint16_t handle, const RawAddress& p_dest_addr,
                                uint8_t* p_data, uint16_t len, uint16_t protocol,
-                               uint8_t* p_src_addr, bool fw_ext_present);
+                               const RawAddress* p_src_addr,
+                               bool fw_ext_present);
 
 /*******************************************************************************
  *
