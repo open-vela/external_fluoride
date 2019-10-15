@@ -27,11 +27,20 @@
 #include "btcore/include/module.h"
 #include "btcore/include/version.h"
 #include "hcimsgs.h"
+#include "main/shim/controller.h"
+#include "main/shim/shim.h"
 #include "osi/include/future.h"
 #include "stack/include/btm_ble_api.h"
 
-const bt_event_mask_t BLE_EVENT_MASK = {
-    {0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x1E, 0x7f}};
+const bt_event_mask_t BLE_EVENT_MASK = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+#if (BLE_PRIVACY_SPT == TRUE)
+                                         0x1E,
+#else
+                                         /* Disable "LE Enhanced Connection
+                                            Complete" when privacy is off */
+                                         0x1C,
+#endif
+                                         0x7f}};
 
 const bt_event_mask_t CLASSIC_EVENT_MASK = {HCI_DUMO_EVENT_MASK_EXT};
 
@@ -575,7 +584,7 @@ static const controller_t interface = {
     get_local_supported_codecs,
     get_le_all_initiating_phys};
 
-const controller_t* controller_get_interface() {
+const controller_t* bluetooth::legacy::controller_get_interface() {
   static bool loaded = false;
   if (!loaded) {
     loaded = true;
@@ -586,6 +595,14 @@ const controller_t* controller_get_interface() {
   }
 
   return &interface;
+}
+
+const controller_t* controller_get_interface() {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::controller_get_interface();
+  } else {
+    return bluetooth::legacy::controller_get_interface();
+  }
 }
 
 const controller_t* controller_get_test_interface(
