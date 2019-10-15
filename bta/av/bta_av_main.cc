@@ -1108,10 +1108,8 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
                   "%s: peer %s BTM_SwitchRole(BTM_ROLE_MASTER) error: %d",
                   __func__, p_scb->PeerAddress().ToString().c_str(), status);
       }
-      if (status != BTM_DEV_BLACKLISTED) {
-        is_ok = false;
-        p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
-      }
+      is_ok = false;
+      p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
     }
   }
 
