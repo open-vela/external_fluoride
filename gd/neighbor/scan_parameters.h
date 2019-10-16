@@ -15,37 +15,27 @@
  */
 #pragma once
 
-#include <memory>
-
-#include "module.h"
+#include <cstdint>
 
 namespace bluetooth {
 namespace neighbor {
 
-class DiscoverabilityModule : public bluetooth::Module {
- public:
-  void StartGeneralDiscoverability();
-  void StartLimitedDiscoverability();
-  void StopDiscoverability();
+static constexpr double kTimeTickMs = 0.625;
 
-  bool IsGeneralDiscoverabilityEnabled() const;
-  bool IsLimitedDiscoverabilityEnabled() const;
+using ScanInterval = uint16_t;  // Range 0x0012 to 0x1000; only even values valid  11.25 to 2560ms
+using ScanWindow = uint16_t;    // Range 0x0011 to 0x1000;  10.625ms to 2560ms
 
-  static const ModuleFactory Factory;
+inline double ScanIntervalTimeMs(ScanInterval interval) {
+  return kTimeTickMs * interval;
+}
 
-  DiscoverabilityModule();
-  ~DiscoverabilityModule();
+inline double ScanWindowTimeMs(ScanWindow window) {
+  return kTimeTickMs * window;
+}
 
- protected:
-  void ListDependencies(ModuleList* list) override;
-  void Start() override;
-  void Stop() override;
-
- private:
-  struct impl;
-  std::unique_ptr<impl> pimpl_;
-
-  DISALLOW_COPY_AND_ASSIGN(DiscoverabilityModule);
+using ScanParameters = struct {
+  ScanInterval interval;
+  ScanWindow window;
 };
 
 }  // namespace neighbor
