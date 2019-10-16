@@ -281,8 +281,7 @@ struct AclManager::impl {
     if (acl_connections_.size() == 1 && packet_to_send_ == nullptr) {
       start_round_robin();
     }
-    std::unique_ptr<AclConnection> connection_proxy(
-        new AclConnection(&acl_manager_, handle, address, peer_address_type));
+    std::unique_ptr<AclConnection> connection_proxy(new AclConnection(&acl_manager_, handle, address));
     le_client_handler_->Post(common::BindOnce(&LeConnectionCallbacks::OnLeConnectSuccess,
                                               common::Unretained(le_client_callbacks_), std::move(connection_proxy)));
   }
@@ -307,8 +306,7 @@ struct AclManager::impl {
     if (acl_connections_.size() == 1 && packet_to_send_ == nullptr) {
       start_round_robin();
     }
-    std::unique_ptr<AclConnection> connection_proxy(
-        new AclConnection(&acl_manager_, handle, address, peer_address_type));
+    std::unique_ptr<AclConnection> connection_proxy(new AclConnection(&acl_manager_, handle, address));
     le_client_handler_->Post(common::BindOnce(&LeConnectionCallbacks::OnLeConnectSuccess,
                                               common::Unretained(le_client_callbacks_), std::move(connection_proxy)));
   }
