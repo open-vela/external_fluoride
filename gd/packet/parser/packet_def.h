@@ -43,8 +43,6 @@ class PacketDef : public ParentDef {
 
   void GenTestDefine(std::ostream& s) const;
 
-  void GenFuzzTestDefine(std::ostream& s) const;
-
   FieldList GetParametersToValidate() const;
 
   void GenBuilderCreate(std::ostream& s) const;
