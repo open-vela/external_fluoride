@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include "os/log.h"
-
 #include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
 
 #include <hidl/MQDescriptor.h>

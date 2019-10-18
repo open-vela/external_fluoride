@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "base/json/json_value_converter.h"
-#include "os/log.h"
 #include "types/address.h"
 #include "types/class_of_device.h"
 
@@ -56,7 +55,7 @@ class DeviceProperties {
   }
 
   uint64_t GetExtendedFeatures(uint8_t page_number) const {
-    ASSERT(page_number < extended_features_.size());
+    CHECK(page_number < extended_features_.size());
     return extended_features_[page_number];
   }
 

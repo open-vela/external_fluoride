@@ -47,7 +47,6 @@ cc_binary {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
         "system/bt/hci/include",
         "system/bt/internal_include",
         "system/bt/stack/include",
@@ -87,7 +86,6 @@ cc_library_shared {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
         "system/bt/hci/include",
         "system/bt/internal_include",
         "system/bt/stack/include",

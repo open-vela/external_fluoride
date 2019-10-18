@@ -30,7 +30,7 @@ class PageResponseView : public PacketView<true> {
   virtual ~PageResponseView() = default;
 
   static PageResponseView GetPageResponse(const LinkLayerPacketView& view) {
-    ASSERT(view.GetType() == Link::PacketType::PAGE_RESPONSE);
+    CHECK(view.GetType() == Link::PacketType::PAGE_RESPONSE);
     return PageResponseView(view.GetPayload());
   }
 

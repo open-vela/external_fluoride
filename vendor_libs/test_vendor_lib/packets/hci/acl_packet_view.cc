@@ -16,7 +16,7 @@
 
 #include "packets/hci/acl_packet_view.h"
 
-#include "os/log.h"
+#include <base/logging.h>
 
 using std::vector;
 using test_vendor_lib::acl::BroadcastFlagsType;
@@ -51,9 +51,8 @@ BroadcastFlagsType AclPacketView::GetBroadcastFlags() const {
 
 PacketView<true> AclPacketView::GetPayload() const {
   uint16_t payload_size = (begin() + sizeof(uint16_t)).extract<uint16_t>();
-  ASSERT_LOG(static_cast<uint16_t>(size() - 2 * sizeof(uint16_t)) == payload_size,
-             "Malformed ACL packet payload_size %d + 4 != %d", static_cast<int>(payload_size),
-             static_cast<int>(size()));
+  CHECK(static_cast<uint16_t>(size() - 2 * sizeof(uint16_t)) == payload_size)
+      << "Malformed ACL packet payload_size " << payload_size << " + 4 != " << size();
   return SubViewLittleEndian(2 * sizeof(uint16_t), size());
 }
 

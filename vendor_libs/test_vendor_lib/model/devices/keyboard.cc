@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "keyboard"
+
 #include "keyboard.h"
 
 #include "model/setup/device_boutique.h"
@@ -21,7 +23,7 @@
 using std::vector;
 
 namespace test_vendor_lib {
-bool Keyboard::registered_ = DeviceBoutique::Register("keyboard", &Keyboard::Create);
+bool Keyboard::registered_ = DeviceBoutique::Register(LOG_TAG, &Keyboard::Create);
 
 Keyboard::Keyboard() {
   properties_.SetLeAdvertisementType(0x00 /* CONNECTABLE */);

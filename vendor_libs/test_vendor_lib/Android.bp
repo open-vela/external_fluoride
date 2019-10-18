@@ -49,7 +49,6 @@ cc_library_static {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
     ],
     shared_libs: [
         "libbase",
@@ -84,7 +83,6 @@ cc_test_host {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
     ],
     shared_libs: [
         "liblog",
@@ -118,7 +116,6 @@ cc_test_host {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
     ],
     shared_libs: [
         "liblog",
