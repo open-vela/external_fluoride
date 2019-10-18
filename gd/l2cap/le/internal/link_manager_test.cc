@@ -120,7 +120,6 @@ TEST_F(L2capLeLinkManagerTest, connect_fixed_channel_service_without_acl) {
   hci::AclConnection::Queue link_queue{10};
   EXPECT_CALL(*acl_connection, GetAclQueueEnd()).WillRepeatedly((Return(link_queue.GetUpEnd())));
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
-  EXPECT_CALL(*acl_connection, GetAddressType()).WillRepeatedly(Return(address_type));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
   EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
     channel_1 = std::move(channel);
@@ -162,7 +161,7 @@ TEST_F(L2capLeLinkManagerTest, connect_fixed_channel_service_without_acl) {
 
   user_handler->Clear();
 
-  le_link_manager.OnDisconnect(device, address_type, hci::ErrorCode::SUCCESS);
+  le_link_manager.OnDisconnect(device, hci::ErrorCode::SUCCESS);
 }
 
 TEST_F(L2capLeLinkManagerTest, connect_fixed_channel_service_without_acl_with_no_service) {
@@ -284,7 +283,6 @@ TEST_F(L2capLeLinkManagerTest, not_acquiring_channels_should_disconnect_acl_afte
   hci::AclConnection::Queue link_queue{10};
   EXPECT_CALL(*acl_connection, GetAclQueueEnd()).WillRepeatedly((Return(link_queue.GetUpEnd())));
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
-  EXPECT_CALL(*acl_connection, GetAddressType()).WillRepeatedly(Return(address_type));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
   EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
     channel_1 = std::move(channel);
@@ -310,7 +308,7 @@ TEST_F(L2capLeLinkManagerTest, not_acquiring_channels_should_disconnect_acl_afte
   std::this_thread::sleep_for(kTestIdleDisconnectTimeoutShort * 1.2);
 
   // Step 5: Link disconnect will trigger all callbacks
-  le_link_manager.OnDisconnect(device, address_type, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+  le_link_manager.OnDisconnect(device, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
   SyncHandler(user_handler.get());
   EXPECT_EQ(hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST, status_1);
   EXPECT_EQ(hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST, status_2);
@@ -357,7 +355,6 @@ TEST_F(L2capLeLinkManagerTest, acquiring_channels_should_not_disconnect_acl_afte
   hci::AclConnection::Queue link_queue{10};
   EXPECT_CALL(*acl_connection, GetAclQueueEnd()).WillRepeatedly((Return(link_queue.GetUpEnd())));
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
-  EXPECT_CALL(*acl_connection, GetAddressType()).WillRepeatedly(Return(address_type));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
   EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
     channel_1 = std::move(channel);
@@ -385,7 +382,7 @@ TEST_F(L2capLeLinkManagerTest, acquiring_channels_should_not_disconnect_acl_afte
   std::this_thread::sleep_for(kTestIdleDisconnectTimeoutShort * 2);
 
   // Step 5: Link disconnect will trigger all callbacks
-  le_link_manager.OnDisconnect(device, address_type, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+  le_link_manager.OnDisconnect(device, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
   SyncHandler(user_handler.get());
   EXPECT_EQ(hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST, status_1);
   EXPECT_EQ(hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST, status_2);
@@ -432,7 +429,6 @@ TEST_F(L2capLeLinkManagerTest, acquiring_and_releasing_channels_should_eventuall
   hci::AclConnection::Queue link_queue{10};
   EXPECT_CALL(*acl_connection, GetAclQueueEnd()).WillRepeatedly((Return(link_queue.GetUpEnd())));
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
-  EXPECT_CALL(*acl_connection, GetAddressType()).WillRepeatedly(Return(address_type));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
   EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
     channel_1 = std::move(channel);
@@ -465,7 +461,7 @@ TEST_F(L2capLeLinkManagerTest, acquiring_and_releasing_channels_should_eventuall
   std::this_thread::sleep_for(kTestIdleDisconnectTimeoutShort * 1.2);
 
   // Step 6: Link disconnect will trigger all callbacks
-  le_link_manager.OnDisconnect(device, address_type, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+  le_link_manager.OnDisconnect(device, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
   SyncHandler(user_handler.get());
   EXPECT_EQ(hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST, status_1);
   EXPECT_EQ(hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST, status_2);

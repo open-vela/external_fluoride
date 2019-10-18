@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "dual_mode_controller"
+
 #include "dual_mode_controller.h"
 
 #include <memory>
 
 #include <base/files/file_util.h>
 #include <base/json/json_reader.h>
+#include <base/logging.h>
 #include <base/values.h>
 
-#include "os/log.h"
+#include "osi/include/log.h"
+#include "osi/include/osi.h"
 
 #include "hci.h"
 #include "packets/hci/acl_packet_view.h"
@@ -59,7 +63,7 @@ void DualModeController::Initialize(const std::vector<std::string>& args) {
   if (Address::FromString(args[1], addr)) {
     properties_.SetAddress(addr);
   } else {
-    LOG_ALWAYS_FATAL("Invalid address: %s", args[1].c_str());
+    LOG_FATAL(LOG_TAG, "Invalid address: %s", args[1].c_str());
   }
 };
 
@@ -107,7 +111,7 @@ DualModeController::DualModeController(const std::string& properties_filename, u
   loopback_mode_ = hci::LoopbackMode::NO;
 
   Address public_address;
-  ASSERT(Address::FromString("3C:5A:B4:04:05:06", public_address));
+  CHECK(Address::FromString("3C:5A:B4:04:05:06", public_address));
   properties_.SetAddress(public_address);
 
   link_layer_controller_.RegisterRemoteChannel(
@@ -124,7 +128,8 @@ DualModeController::DualModeController(const std::string& properties_filename, u
   SET_HANDLER(OpCode::READ_LOCAL_VERSION_INFORMATION, HciReadLocalVersionInformation);
   SET_HANDLER(OpCode::READ_BD_ADDR, HciReadBdAddr);
   SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_COMMANDS, HciReadLocalSupportedCommands);
-  SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_FEATURES, HciReadLocalSupportedFeatures);
+  SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_FEATURES,
+              HciReadLocalSupportedFeatures);
   SET_HANDLER(OpCode::READ_LOCAL_SUPPORTED_CODECS, HciReadLocalSupportedCodecs);
   SET_HANDLER(OpCode::READ_LOCAL_EXTENDED_FEATURES, HciReadLocalExtendedFeatures);
   SET_HANDLER(OpCode::READ_REMOTE_EXTENDED_FEATURES, HciReadRemoteExtendedFeatures);
@@ -211,7 +216,7 @@ DualModeController::DualModeController(const std::string& properties_filename, u
 }
 
 void DualModeController::HciSniffSubrating(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 8, "%s size=%zu", __func__, args.size());
+  CHECK(args.size() == 8) << __func__ << " size=" << args.size();
 
   uint16_t handle = args.begin().extract<uint16_t>();
 
@@ -270,7 +275,8 @@ void DualModeController::HandleCommand(std::shared_ptr<std::vector<uint8_t>> pac
     active_hci_commands_[opcode](command_packet.GetPayload());
   } else {
     SendCommandCompleteUnknownOpCodeEvent(opcode);
-    LOG_INFO("Command opcode: 0x%04X, OGF: 0x%04X, OCF: 0x%04X", opcode, (opcode & 0xFC00) >> 10, opcode & 0x03FF);
+    LOG_INFO(LOG_TAG, "Command opcode: 0x%04X, OGF: 0x%04X, OCF: 0x%04X", opcode, (opcode & 0xFC00) >> 10,
+             opcode & 0x03FF);
   }
 }
 
@@ -293,7 +299,7 @@ void DualModeController::RegisterScoChannel(
 }
 
 void DualModeController::HciReset(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   link_layer_controller_.Reset();
   if (loopback_mode_ == hci::LoopbackMode::LOCAL) {
     loopback_mode_ = hci::LoopbackMode::NO;
@@ -303,7 +309,7 @@ void DualModeController::HciReset(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciReadBufferSize(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadBufferSize(
           hci::Status::SUCCESS, properties_.GetAclDataPacketSize(), properties_.GetSynchronousDataPacketSize(),
@@ -313,12 +319,12 @@ void DualModeController::HciReadBufferSize(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciHostBufferSize(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::HOST_BUFFER_SIZE);
 }
 
 void DualModeController::HciReadLocalVersionInformation(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadLocalVersionInformation(
           hci::Status::SUCCESS, properties_.GetVersion(), properties_.GetRevision(), properties_.GetLmpPalVersion(),
@@ -327,7 +333,7 @@ void DualModeController::HciReadLocalVersionInformation(packets::PacketView<true
 }
 
 void DualModeController::HciReadRemoteVersionInformation(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
 
   uint16_t handle = args.begin().extract<uint16_t>();
 
@@ -338,30 +344,31 @@ void DualModeController::HciReadRemoteVersionInformation(packets::PacketView<tru
 }
 
 void DualModeController::HciReadBdAddr(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadBdAddr(hci::Status::SUCCESS, properties_.GetAddress());
   send_event_(command_complete->ToVector());
 }
 
 void DualModeController::HciReadLocalSupportedCommands(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadLocalSupportedCommands(hci::Status::SUCCESS,
                                                                                    properties_.GetSupportedCommands());
   send_event_(command_complete->ToVector());
 }
 
-void DualModeController::HciReadLocalSupportedFeatures(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
-  std::shared_ptr<packets::EventPacketBuilder> command_complete =
-      packets::EventPacketBuilder::CreateCommandCompleteReadLocalSupportedFeatures(hci::Status::SUCCESS,
-                                                                                   properties_.GetSupportedFeatures());
+void DualModeController::HciReadLocalSupportedFeatures(
+    packets::PacketView<true> args) {
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
+  std::shared_ptr<packets::EventPacketBuilder> command_complete = packets::
+      EventPacketBuilder::CreateCommandCompleteReadLocalSupportedFeatures(
+          hci::Status::SUCCESS, properties_.GetSupportedFeatures());
   send_event_(command_complete->ToVector());
 }
 
 void DualModeController::HciReadLocalSupportedCodecs(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadLocalSupportedCodecs(
           hci::Status::SUCCESS, properties_.GetSupportedCodecs(), properties_.GetVendorSpecificCodecs());
@@ -369,7 +376,7 @@ void DualModeController::HciReadLocalSupportedCodecs(packets::PacketView<true> a
 }
 
 void DualModeController::HciReadLocalExtendedFeatures(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   uint8_t page_number = args.begin().extract<uint8_t>();
   send_event_(packets::EventPacketBuilder::CreateCommandCompleteReadLocalExtendedFeatures(
                   hci::Status::SUCCESS, page_number, properties_.GetExtendedFeaturesMaximumPageNumber(),
@@ -378,7 +385,7 @@ void DualModeController::HciReadLocalExtendedFeatures(packets::PacketView<true> 
 }
 
 void DualModeController::HciReadRemoteExtendedFeatures(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 3, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 3) << __func__ << " size=" << args.size();
 
   uint16_t handle = args.begin().extract<uint16_t>();
 
@@ -389,7 +396,7 @@ void DualModeController::HciReadRemoteExtendedFeatures(packets::PacketView<true>
 }
 
 void DualModeController::HciSwitchRole(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
 
   Address address = args.begin().extract<Address>();
   uint8_t role = args.begin().extract<uint8_t>();
@@ -400,7 +407,7 @@ void DualModeController::HciSwitchRole(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciReadRemoteSupportedFeatures(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
 
   uint16_t handle = args.begin().extract<uint16_t>();
 
@@ -411,7 +418,7 @@ void DualModeController::HciReadRemoteSupportedFeatures(packets::PacketView<true
 }
 
 void DualModeController::HciReadClockOffset(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
 
   uint16_t handle = args.begin().extract<uint16_t>();
 
@@ -421,7 +428,7 @@ void DualModeController::HciReadClockOffset(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciIoCapabilityRequestReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 9, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 9) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   Address peer = args_itr.extract<Address>();
@@ -436,7 +443,7 @@ void DualModeController::HciIoCapabilityRequestReply(packets::PacketView<true> a
 }
 
 void DualModeController::HciUserConfirmationRequestReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
 
   Address peer = args.begin().extract<Address>();
 
@@ -446,7 +453,7 @@ void DualModeController::HciUserConfirmationRequestReply(packets::PacketView<tru
 }
 
 void DualModeController::HciUserConfirmationRequestNegativeReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
 
   Address peer = args.begin().extract<Address>();
 
@@ -456,7 +463,7 @@ void DualModeController::HciUserConfirmationRequestNegativeReply(packets::Packet
 }
 
 void DualModeController::HciUserPasskeyRequestReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 10, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 10) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   Address peer = args_itr.extract<Address>();
@@ -468,7 +475,7 @@ void DualModeController::HciUserPasskeyRequestReply(packets::PacketView<true> ar
 }
 
 void DualModeController::HciUserPasskeyRequestNegativeReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
 
   Address peer = args.begin().extract<Address>();
 
@@ -478,7 +485,7 @@ void DualModeController::HciUserPasskeyRequestNegativeReply(packets::PacketView<
 }
 
 void DualModeController::HciRemoteOobDataRequestReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 38, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 38) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   Address peer = args_itr.extract<Address>();
@@ -496,7 +503,7 @@ void DualModeController::HciRemoteOobDataRequestReply(packets::PacketView<true> 
 }
 
 void DualModeController::HciRemoteOobDataRequestNegativeReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
 
   Address peer = args.begin().extract<Address>();
 
@@ -506,7 +513,7 @@ void DualModeController::HciRemoteOobDataRequestNegativeReply(packets::PacketVie
 }
 
 void DualModeController::HciIoCapabilityRequestNegativeReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   Address peer = args_itr.extract<Address>();
@@ -518,14 +525,14 @@ void DualModeController::HciIoCapabilityRequestNegativeReply(packets::PacketView
 }
 
 void DualModeController::HciWriteSimplePairingMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
-  ASSERT(args[0] == 1 || args[0] == 0);
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
+  CHECK(args[0] == 1 || args[0] == 0);
   link_layer_controller_.WriteSimplePairingMode(args[0] == 1);
   SendCommandCompleteSuccess(OpCode::WRITE_SIMPLE_PAIRING_MODE);
 }
 
 void DualModeController::HciChangeConnectionPacketType(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 4, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 4) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   uint16_t packet_type = args_itr.extract<uint16_t>();
@@ -536,33 +543,33 @@ void DualModeController::HciChangeConnectionPacketType(packets::PacketView<true>
 }
 
 void DualModeController::HciWriteLeHostSupport(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_LE_HOST_SUPPORT);
 }
 
 void DualModeController::HciSetEventMask(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 8, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 8) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::SET_EVENT_MASK);
 }
 
 void DualModeController::HciWriteInquiryMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   link_layer_controller_.SetInquiryMode(args[0]);
   SendCommandCompleteSuccess(OpCode::WRITE_INQUIRY_MODE);
 }
 
 void DualModeController::HciWritePageScanType(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_PAGE_SCAN_TYPE);
 }
 
 void DualModeController::HciWriteInquiryScanType(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_INQUIRY_SCAN_TYPE);
 }
 
 void DualModeController::HciAuthenticationRequested(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   uint16_t handle = args.begin().extract<uint16_t>();
   hci::Status status = link_layer_controller_.AuthenticationRequested(handle);
 
@@ -570,7 +577,7 @@ void DualModeController::HciAuthenticationRequested(packets::PacketView<true> ar
 }
 
 void DualModeController::HciSetConnectionEncryption(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 3, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 3) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   uint8_t encryption_enable = args_itr.extract<uint8_t>();
@@ -579,8 +586,9 @@ void DualModeController::HciSetConnectionEncryption(packets::PacketView<true> ar
   SendCommandStatus(status, OpCode::SET_CONNECTION_ENCRYPTION);
 }
 
-void DualModeController::HciChangeConnectionLinkKey(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+void DualModeController::HciChangeConnectionLinkKey(
+    packets::PacketView<true> args) {
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
 
@@ -590,7 +598,7 @@ void DualModeController::HciChangeConnectionLinkKey(packets::PacketView<true> ar
 }
 
 void DualModeController::HciMasterLinkKey(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint8_t key_flag = args_itr.extract<uint8_t>();
 
@@ -600,13 +608,13 @@ void DualModeController::HciMasterLinkKey(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciWriteAuthenticationEnable(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   properties_.SetAuthenticationEnable(args[0]);
   SendCommandCompleteSuccess(OpCode::WRITE_AUTHENTICATION_ENABLE);
 }
 
 void DualModeController::HciReadAuthenticationEnable(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadAuthenticationEnable(hci::Status::SUCCESS,
                                                                                  properties_.GetAuthenticationEnable());
@@ -614,30 +622,31 @@ void DualModeController::HciReadAuthenticationEnable(packets::PacketView<true> a
 }
 
 void DualModeController::HciWriteClassOfDevice(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 3, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 3) << __func__ << " size=" << args.size();
   properties_.SetClassOfDevice(args[0], args[1], args[2]);
   SendCommandCompleteSuccess(OpCode::WRITE_CLASS_OF_DEVICE);
 }
 
 void DualModeController::HciWritePageTimeout(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_PAGE_TIMEOUT);
 }
 
 void DualModeController::HciHoldMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   uint16_t hold_mode_max_interval = args_itr.extract<uint16_t>();
   uint16_t hold_mode_min_interval = args_itr.extract<uint16_t>();
 
-  hci::Status status = link_layer_controller_.HoldMode(handle, hold_mode_max_interval, hold_mode_min_interval);
+  hci::Status status = link_layer_controller_.HoldMode(
+      handle, hold_mode_max_interval, hold_mode_min_interval);
 
   SendCommandStatus(status, OpCode::HOLD_MODE);
 }
 
 void DualModeController::HciSniffMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 10, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 10) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   uint16_t sniff_max_interval = args_itr.extract<uint16_t>();
@@ -645,14 +654,15 @@ void DualModeController::HciSniffMode(packets::PacketView<true> args) {
   uint16_t sniff_attempt = args_itr.extract<uint16_t>();
   uint16_t sniff_timeout = args_itr.extract<uint16_t>();
 
-  hci::Status status =
-      link_layer_controller_.SniffMode(handle, sniff_max_interval, sniff_min_interval, sniff_attempt, sniff_timeout);
+  hci::Status status = link_layer_controller_.SniffMode(
+      handle, sniff_max_interval, sniff_min_interval, sniff_attempt,
+      sniff_timeout);
 
   SendCommandStatus(status, OpCode::SNIFF_MODE);
 }
 
 void DualModeController::HciExitSniffMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
 
@@ -662,7 +672,7 @@ void DualModeController::HciExitSniffMode(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciQosSetup(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 20, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 20) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   args_itr.extract<uint8_t>();  // unused
@@ -673,18 +683,19 @@ void DualModeController::HciQosSetup(packets::PacketView<true> args) {
   uint32_t delay_variation = args_itr.extract<uint32_t>();
 
   hci::Status status =
-      link_layer_controller_.QosSetup(handle, service_type, token_rate, peak_bandwidth, latency, delay_variation);
+      link_layer_controller_.QosSetup(handle, service_type, token_rate,
+                                      peak_bandwidth, latency, delay_variation);
 
   SendCommandStatus(status, OpCode::QOS_SETUP);
 }
 
 void DualModeController::HciWriteDefaultLinkPolicySettings(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_DEFAULT_LINK_POLICY_SETTINGS);
 }
 
 void DualModeController::HciFlowSpecification(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 21, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 21) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   args_itr.extract<uint8_t>();  // unused
@@ -695,14 +706,15 @@ void DualModeController::HciFlowSpecification(packets::PacketView<true> args) {
   uint32_t peak_bandwidth = args_itr.extract<uint32_t>();
   uint32_t access_latency = args_itr.extract<uint32_t>();
 
-  hci::Status status = link_layer_controller_.FlowSpecification(handle, flow_direction, service_type, token_rate,
-                                                                token_bucket_size, peak_bandwidth, access_latency);
+  hci::Status status = link_layer_controller_.FlowSpecification(
+      handle, flow_direction, service_type, token_rate, token_bucket_size,
+      peak_bandwidth, access_latency);
 
   SendCommandStatus(status, OpCode::FLOW_SPECIFICATION);
 }
 
 void DualModeController::HciWriteLinkPolicySettings(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 4, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 4) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
@@ -714,7 +726,7 @@ void DualModeController::HciWriteLinkPolicySettings(packets::PacketView<true> ar
 }
 
 void DualModeController::HciWriteLinkSupervisionTimeout(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 4, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 4) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
@@ -727,71 +739,75 @@ void DualModeController::HciWriteLinkSupervisionTimeout(packets::PacketView<true
 }
 
 void DualModeController::HciReadLocalName(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteReadLocalName(hci::Status::SUCCESS, properties_.GetName());
   send_event_(command_complete->ToVector());
 }
 
 void DualModeController::HciWriteLocalName(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 248, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 248) << __func__ << " size=" << args.size();
   std::vector<uint8_t> clipped(args.begin(), args.begin() + LastNonZero(args) + 1);
   properties_.SetName(clipped);
   SendCommandCompleteSuccess(OpCode::WRITE_LOCAL_NAME);
 }
 
 void DualModeController::HciWriteExtendedInquiryResponse(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 241, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 241) << __func__ << " size=" << args.size();
   // Strip FEC byte and trailing zeros
   std::vector<uint8_t> clipped(args.begin() + 1, args.begin() + LastNonZero(args) + 1);
   properties_.SetExtendedInquiryData(clipped);
-  LOG_WARN("Write EIR Inquiry - Size = %d (%d)", static_cast<int>(properties_.GetExtendedInquiryData().size()),
+  LOG_WARN(LOG_TAG, "Write EIR Inquiry - Size = %d (%d)", static_cast<int>(properties_.GetExtendedInquiryData().size()),
            static_cast<int>(clipped.size()));
   SendCommandCompleteSuccess(OpCode::WRITE_EXTENDED_INQUIRY_RESPONSE);
 }
 
-void DualModeController::HciRefreshEncryptionKey(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+void DualModeController::HciRefreshEncryptionKey(
+    packets::PacketView<true> args) {
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
   SendCommandStatusSuccess(OpCode::REFRESH_ENCRYPTION_KEY);
   // TODO: Support this in the link layer
   hci::Status status = hci::Status::SUCCESS;
-  send_event_(packets::EventPacketBuilder::CreateEncryptionKeyRefreshCompleteEvent(status, handle)->ToVector());
+  send_event_(
+      packets::EventPacketBuilder::CreateEncryptionKeyRefreshCompleteEvent(
+          status, handle)
+          ->ToVector());
 }
 
 void DualModeController::HciWriteVoiceSetting(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_VOICE_SETTING);
 }
 
 void DualModeController::HciWriteCurrentIacLap(packets::PacketView<true> args) {
-  ASSERT(args.size() > 0);
-  ASSERT(args.size() == 1 + (3 * args[0]));  // count + 3-byte IACs
+  CHECK(args.size() > 0);
+  CHECK(args.size() == 1 + (3 * args[0]));  // count + 3-byte IACs
 
   SendCommandCompleteSuccess(OpCode::WRITE_CURRENT_IAC_LAP);
 }
 
 void DualModeController::HciWriteInquiryScanActivity(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 4, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 4) << __func__ << " size=" << args.size();
   SendCommandCompleteSuccess(OpCode::WRITE_INQUIRY_SCAN_ACTIVITY);
 }
 
 void DualModeController::HciWriteScanEnable(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   link_layer_controller_.SetInquiryScanEnable(args[0] & 0x1);
   link_layer_controller_.SetPageScanEnable(args[0] & 0x2);
   SendCommandCompleteSuccess(OpCode::WRITE_SCAN_ENABLE);
 }
 
 void DualModeController::HciSetEventFilter(packets::PacketView<true> args) {
-  ASSERT(args.size() > 0);
+  CHECK(args.size() > 0);
   SendCommandCompleteSuccess(OpCode::SET_EVENT_FILTER);
 }
 
 void DualModeController::HciInquiry(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 5, "%s  size=%zu", __func__, args.size());
-  link_layer_controller_.SetInquiryLAP(args[0] | (args[1], 8) | (args[2], 16));
+  CHECK(args.size() == 5) << __func__ << " size=" << args.size();
+  link_layer_controller_.SetInquiryLAP(args[0] | (args[1] << 8) | (args[2] << 16));
   link_layer_controller_.SetInquiryMaxResponses(args[4]);
   link_layer_controller_.StartInquiry(std::chrono::milliseconds(args[3] * 1280));
 
@@ -799,13 +815,13 @@ void DualModeController::HciInquiry(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciInquiryCancel(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   link_layer_controller_.InquiryCancel();
   SendCommandCompleteSuccess(OpCode::INQUIRY_CANCEL);
 }
 
 void DualModeController::HciAcceptConnectionRequest(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
   Address addr = args.begin().extract<Address>();
   bool try_role_switch = args[6] == 0;
   hci::Status status = link_layer_controller_.AcceptConnectionRequest(addr, try_role_switch);
@@ -813,7 +829,7 @@ void DualModeController::HciAcceptConnectionRequest(packets::PacketView<true> ar
 }
 
 void DualModeController::HciRejectConnectionRequest(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   Address addr = args_itr.extract<Address>();
   uint8_t reason = args_itr.extract<uint8_t>();
@@ -822,7 +838,7 @@ void DualModeController::HciRejectConnectionRequest(packets::PacketView<true> ar
 }
 
 void DualModeController::HciLinkKeyRequestReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 22, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 22) << __func__ << " size=" << args.size();
   Address addr = args.begin().extract<Address>();
   packets::PacketView<true> key = args.SubViewLittleEndian(6, 22);
   hci::Status status = link_layer_controller_.LinkKeyRequestReply(addr, key);
@@ -830,14 +846,14 @@ void DualModeController::HciLinkKeyRequestReply(packets::PacketView<true> args) 
 }
 
 void DualModeController::HciLinkKeyRequestNegativeReply(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
   Address addr = args.begin().extract<Address>();
   hci::Status status = link_layer_controller_.LinkKeyRequestNegativeReply(addr);
   send_event_(packets::EventPacketBuilder::CreateCommandCompleteLinkKeyRequestNegativeReply(status, addr)->ToVector());
 }
 
 void DualModeController::HciDeleteStoredLinkKey(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
 
   uint16_t deleted_keys = 0;
 
@@ -855,7 +871,7 @@ void DualModeController::HciDeleteStoredLinkKey(packets::PacketView<true> args) 
 }
 
 void DualModeController::HciRemoteNameRequest(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 10, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 10) << __func__ << " size=" << args.size();
 
   Address remote_addr = args.begin().extract<Address>();
 
@@ -866,7 +882,7 @@ void DualModeController::HciRemoteNameRequest(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeSetEventMask(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 8, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 8) << __func__ << " size=" << args.size();
   /*
     uint64_t mask = args.begin().extract<uint64_t>();
     link_layer_controller_.SetLeEventMask(mask);
@@ -875,7 +891,7 @@ void DualModeController::HciLeSetEventMask(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeReadBufferSize(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteLeReadBufferSize(
           hci::Status::SUCCESS, properties_.GetLeDataPacketLength(), properties_.GetTotalNumLeDataPackets());
@@ -883,7 +899,7 @@ void DualModeController::HciLeReadBufferSize(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeReadLocalSupportedFeatures(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteLeReadLocalSupportedFeatures(
           hci::Status::SUCCESS, properties_.GetLeSupportedFeatures());
@@ -891,13 +907,13 @@ void DualModeController::HciLeReadLocalSupportedFeatures(packets::PacketView<tru
 }
 
 void DualModeController::HciLeSetRandomAddress(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 6, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 6) << __func__ << " size=" << args.size();
   properties_.SetLeAddress(args.begin().extract<Address>());
   SendCommandCompleteSuccess(OpCode::LE_SET_RANDOM_ADDRESS);
 }
 
 void DualModeController::HciLeSetAdvertisingParameters(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 15, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 15) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   properties_.SetLeAdvertisingParameters(
       args_itr.extract<uint16_t>() /* AdverisingIntervalMin */,
@@ -911,43 +927,43 @@ void DualModeController::HciLeSetAdvertisingParameters(packets::PacketView<true>
 }
 
 void DualModeController::HciLeSetAdvertisingData(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 32, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 32) << __func__ << " size=" << args.size();
   properties_.SetLeAdvertisement(std::vector<uint8_t>(args.begin() + 1, args.end()));
   SendCommandCompleteSuccess(OpCode::LE_SET_ADVERTISING_DATA);
 }
 
 void DualModeController::HciLeSetScanResponseData(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 32, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 32) << __func__ << " size=" << args.size();
   properties_.SetLeScanResponse(std::vector<uint8_t>(args.begin() + 1, args.end()));
   SendCommandCompleteSuccess(OpCode::LE_SET_SCAN_RESPONSE_DATA);
 }
 
 void DualModeController::HciLeSetAdvertisingEnable(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   hci::Status status = link_layer_controller_.SetLeAdvertisingEnable(args.begin().extract<uint8_t>());
   SendCommandCompleteOnlyStatus(OpCode::LE_SET_ADVERTISING_ENABLE, status);
 }
 
 void DualModeController::HciLeSetScanParameters(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
   link_layer_controller_.SetLeScanType(args[0]);
-  link_layer_controller_.SetLeScanInterval(args[1] | (args[2], 8));
-  link_layer_controller_.SetLeScanWindow(args[3] | (args[4], 8));
+  link_layer_controller_.SetLeScanInterval(args[1] | (args[2] << 8));
+  link_layer_controller_.SetLeScanWindow(args[3] | (args[4] << 8));
   link_layer_controller_.SetLeAddressType(args[5]);
   link_layer_controller_.SetLeScanFilterPolicy(args[6]);
   SendCommandCompleteSuccess(OpCode::LE_SET_SCAN_PARAMETERS);
 }
 
 void DualModeController::HciLeSetScanEnable(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
-  LOG_INFO("SetScanEnable: %d %d", args[0], args[1]);
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
+  LOG_INFO(LOG_TAG, "SetScanEnable: %d %d", args[0], args[1]);
   link_layer_controller_.SetLeScanEnable(args[0]);
   link_layer_controller_.SetLeFilterDuplicates(args[1]);
   SendCommandCompleteSuccess(OpCode::LE_SET_SCAN_ENABLE);
 }
 
 void DualModeController::HciLeCreateConnection(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 25, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 25) << __func__ << " size=" << args.size();
   auto args_itr = args.begin();
   link_layer_controller_.SetLeScanInterval(args_itr.extract<uint16_t>());
   link_layer_controller_.SetLeScanWindow(args_itr.extract<uint16_t>());
@@ -974,7 +990,7 @@ void DualModeController::HciLeCreateConnection(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeConnectionUpdate(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 14, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 14) << __func__ << " size=" << args.size();
 
   SendCommandStatus(hci::Status::CONNECTION_REJECTED_UNACCEPTABLE_BD_ADDR, OpCode::LE_CONNECTION_UPDATE);
 
@@ -984,7 +1000,7 @@ void DualModeController::HciLeConnectionUpdate(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciCreateConnection(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 13, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 13) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   Address address = args_itr.extract<Address>();
@@ -1000,7 +1016,7 @@ void DualModeController::HciCreateConnection(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciDisconnect(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 3, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 3) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
@@ -1012,7 +1028,7 @@ void DualModeController::HciDisconnect(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeConnectionCancel(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   link_layer_controller_.SetLeConnect(false);
   SendCommandStatusSuccess(OpCode::LE_CREATE_CONNECTION_CANCEL);
   /* For testing Jakub's patch:  Figure out a neat way to call this without
@@ -1024,7 +1040,7 @@ void DualModeController::HciLeConnectionCancel(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeReadWhiteListSize(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteLeReadWhiteListSize(hci::Status::SUCCESS,
                                                                             properties_.GetLeWhiteListSize());
@@ -1032,13 +1048,13 @@ void DualModeController::HciLeReadWhiteListSize(packets::PacketView<true> args) 
 }
 
 void DualModeController::HciLeClearWhiteList(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   link_layer_controller_.LeWhiteListClear();
   SendCommandCompleteSuccess(OpCode::LE_CLEAR_WHITE_LIST);
 }
 
 void DualModeController::HciLeAddDeviceToWhiteList(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
 
   if (link_layer_controller_.LeWhiteListFull()) {
     SendCommandCompleteOnlyStatus(OpCode::LE_ADD_DEVICE_TO_WHITE_LIST, hci::Status::MEMORY_CAPACITY_EXCEEDED);
@@ -1052,7 +1068,7 @@ void DualModeController::HciLeAddDeviceToWhiteList(packets::PacketView<true> arg
 }
 
 void DualModeController::HciLeRemoveDeviceFromWhiteList(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 7, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 7) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   uint8_t addr_type = args_itr.extract<uint8_t>();
@@ -1072,7 +1088,7 @@ void DualModeController::HciLeReadRemoteUsedFeaturesRsp(uint16_t handle,
 */
 
 void DualModeController::HciLeReadRemoteFeatures(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 2, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 2) << __func__ << " size=" << args.size();
 
   uint16_t handle = args.begin().extract<uint16_t>();
 
@@ -1083,7 +1099,7 @@ void DualModeController::HciLeReadRemoteFeatures(packets::PacketView<true> args)
 }
 
 void DualModeController::HciLeRand(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   uint64_t random_val = 0;
   for (size_t rand_bytes = 0; rand_bytes < sizeof(uint64_t); rand_bytes += sizeof(RAND_MAX)) {
     random_val = (random_val << (8 * sizeof(RAND_MAX))) | random();
@@ -1094,7 +1110,7 @@ void DualModeController::HciLeRand(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeReadSupportedStates(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   std::shared_ptr<packets::EventPacketBuilder> command_complete =
       packets::EventPacketBuilder::CreateCommandCompleteLeReadSupportedStates(hci::Status::SUCCESS,
                                                                               properties_.GetLeSupportedStates());
@@ -1102,7 +1118,7 @@ void DualModeController::HciLeReadSupportedStates(packets::PacketView<true> args
 }
 
 void DualModeController::HciLeVendorCap(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   vector<uint8_t> caps = properties_.GetLeVendorCap();
   if (caps.size() == 0) {
     SendCommandCompleteOnlyStatus(OpCode::LE_GET_VENDOR_CAPABILITIES, hci::Status::UNKNOWN_COMMAND);
@@ -1116,27 +1132,27 @@ void DualModeController::HciLeVendorCap(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciLeVendorMultiAdv(packets::PacketView<true> args) {
-  ASSERT(args.size() > 0);
+  CHECK(args.size() > 0);
   SendCommandCompleteOnlyStatus(OpCode::LE_MULTI_ADVT, hci::Status::UNKNOWN_COMMAND);
 }
 
 void DualModeController::HciLeAdvertisingFilter(packets::PacketView<true> args) {
-  ASSERT(args.size() > 0);
+  CHECK(args.size() > 0);
   SendCommandCompleteOnlyStatus(OpCode::LE_ADV_FILTER, hci::Status::UNKNOWN_COMMAND);
 }
 
 void DualModeController::HciLeEnergyInfo(packets::PacketView<true> args) {
-  ASSERT(args.size() > 0);
+  CHECK(args.size() > 0);
   SendCommandCompleteOnlyStatus(OpCode::LE_ENERGY_INFO, hci::Status::UNKNOWN_COMMAND);
 }
 
 void DualModeController::HciLeExtendedScanParams(packets::PacketView<true> args) {
-  ASSERT(args.size() > 0);
+  CHECK(args.size() > 0);
   SendCommandCompleteOnlyStatus(OpCode::LE_EXTENDED_SCAN_PARAMS, hci::Status::UNKNOWN_COMMAND);
 }
 
 void DualModeController::HciLeStartEncryption(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 28, "%s  size=%zu", __func__, args.size());
+  CHECK(args.size() == 28) << __func__ << " size=" << args.size();
 
   auto args_itr = args.begin();
   uint16_t handle = args_itr.extract<uint16_t>();
@@ -1204,13 +1220,13 @@ void DualModeController::HciLeStartEncryption(packets::PacketView<true> args) {
 }
 
 void DualModeController::HciReadLoopbackMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 0, "%s size=%zu", __func__, args.size());
+  CHECK(args.size() == 0) << __func__ << " size=" << args.size();
   send_event_(packets::EventPacketBuilder::CreateCommandCompleteReadLoopbackMode(hci::Status::SUCCESS, loopback_mode_)
                   ->ToVector());
 }
 
 void DualModeController::HciWriteLoopbackMode(packets::PacketView<true> args) {
-  ASSERT_LOG(args.size() == 1, "%s size=%zu", __func__, args.size());
+  CHECK(args.size() == 1) << __func__ << " size=" << args.size();
   loopback_mode_ = static_cast<hci::LoopbackMode>(args[0]);
   // ACL channel
   uint16_t acl_handle = 0x123;

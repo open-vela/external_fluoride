@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "beacon_swarm"
+
 #include "beacon_swarm.h"
 
 #include "model/setup/device_boutique.h"
@@ -21,7 +23,7 @@
 using std::vector;
 
 namespace test_vendor_lib {
-bool BeaconSwarm::registered_ = DeviceBoutique::Register("beacon_swarm", &BeaconSwarm::Create);
+bool BeaconSwarm::registered_ = DeviceBoutique::Register(LOG_TAG, &BeaconSwarm::Create);
 
 BeaconSwarm::BeaconSwarm() {
   advertising_interval_ms_ = std::chrono::milliseconds(1280);

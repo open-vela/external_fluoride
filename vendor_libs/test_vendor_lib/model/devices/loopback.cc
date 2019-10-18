@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "loopback"
+
 #include "loopback.h"
 
 #include "le_advertisement.h"
 #include "model/setup/device_boutique.h"
-#include "os/log.h"
+#include "osi/include/log.h"
 
 using std::vector;
 
 namespace test_vendor_lib {
 
-bool Loopback::registered_ = DeviceBoutique::Register("loopback", &Loopback::Create);
+bool Loopback::registered_ = DeviceBoutique::Register(LOG_TAG, &Loopback::Create);
 
 Loopback::Loopback() {
   advertising_interval_ms_ = std::chrono::milliseconds(1280);
@@ -67,9 +69,9 @@ void Loopback::Initialize(const vector<std::string>& args) {
 void Loopback::TimerTick() {}
 
 void Loopback::IncomingPacket(packets::LinkLayerPacketView packet) {
-  LOG_INFO("Got a packet of type %d", static_cast<int>(packet.GetType()));
+  LOG_INFO(LOG_TAG, "Got a packet of type %d", static_cast<int>(packet.GetType()));
   if (packet.GetDestinationAddress() == properties_.GetLeAddress() && packet.GetType() == Link::PacketType::LE_SCAN) {
-    LOG_INFO("Got a scan");
+    LOG_INFO(LOG_TAG, "Got a scan");
     std::unique_ptr<packets::LeAdvertisementBuilder> scan_response = packets::LeAdvertisementBuilder::Create(
         LeAdvertisement::AddressType::PUBLIC, LeAdvertisement::AdvertisementType::SCAN_RESPONSE,
         properties_.GetLeScanResponse());
@@ -77,7 +79,7 @@ void Loopback::IncomingPacket(packets::LinkLayerPacketView packet) {
         std::move(scan_response), properties_.GetLeAddress(), packet.GetSourceAddress());
     std::vector<std::shared_ptr<PhyLayer>> le_phys = phy_layers_[Phy::Type::LOW_ENERGY];
     for (auto phy : le_phys) {
-      LOG_INFO("Sending a Scan Response on a Phy");
+      LOG_INFO(LOG_TAG, "Sending a Scan Response on a Phy");
       phy->Send(to_send);
     }
   }
