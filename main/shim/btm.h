@@ -18,21 +18,13 @@
 
 #include <cstdint>
 #include <unordered_map>
-#include <vector>
 
-#include "stack/include/btm_api_types.h"
+#include "stack/include/l2c_api.h"
 
 /* Discoverable modes */
 static constexpr int kDiscoverableModeOff = 0;
 static constexpr int kLimitedDiscoverableMode = 1;
 static constexpr int kGeneralDiscoverableMode = 2;
-
-/* Inquiry modes */
-// NOTE: The inquiry general/limited are reversed from the discoverability
-// constants
-static constexpr int kInquiryModeOff = 0;
-static constexpr int kGeneralInquiryMode = 1;
-static constexpr int kLimitedInquiryMode = 2;
 
 /* Connectable modes */
 static constexpr int kConnectibleModeOff = 0;
@@ -54,10 +46,10 @@ static constexpr int kFilterOnAddress = 2;
 
 using DiscoverabilityState = struct {
   int mode;
-  uint16_t interval;
   uint16_t window;
+  uint16_t interval;
 };
-using ConnectabilityState = DiscoverabilityState;
+using ConnectibilityState = DiscoverabilityState;
 
 namespace bluetooth {
 namespace shim {
@@ -66,68 +58,56 @@ class Btm {
  public:
   Btm();
 
-  // Callbacks
-  void OnInquiryResult(std::vector<const uint8_t> result);
-  void OnInquiryResultWithRssi(std::vector<const uint8_t> result);
-  void OnExtendedInquiryResult(std::vector<const uint8_t> result);
-  void OnInquiryComplete(uint16_t status);
+  void SetLeDiscoverabilityOff();
+  void SetLeLimitedDiscoverability();
+  void SetLeGeneralDiscoverability();
 
-  // Inquiry API
-  bool SetInquiryFilter(uint8_t mode, uint8_t type, tBTM_INQ_FILT_COND data);
-  void SetFilterInquiryOnAddress();
-  void SetFilterInquiryOnDevice();
-  void ClearInquiryFilter();
+  void SetClassicDiscoverabilityOff();
+  void SetClassicLimitedDiscoverability(uint16_t window, uint16_t interval);
+  void SetClassicGeneralDiscoverability(uint16_t window, uint16_t interval);
 
-  bool SetStandardInquiryResultMode();
-  bool SetInquiryWithRssiResultMode();
-  bool SetExtendedInquiryResultMode();
-
-  void SetInterlacedInquiryScan();
-  void SetStandardInquiryScan();
   bool IsInterlacedScanSupported() const;
 
-  bool StartInquiry(uint8_t mode, uint8_t duration, uint8_t max_responses);
-  void CancelInquiry();
+  bool SetInterlacedInquiryScan();
+  bool SetStandardInquiryScan();
+
+  bool SetInterlacedPageScan();
+  bool SetStandardPageScan();
+
+  bool SetStandardInquiryMode();
+  bool SetInquiryModeWithRssi();
+  bool SetExtendedInquiryMode();
+
   bool IsInquiryActive() const;
-  bool IsGeneralInquiryActive() const;
-  bool IsLimitedInquiryActive() const;
+  bool CancelPeriodicInquiry();
+  bool ClearInquiryFilter();
+  bool SetFilterInquiryOnDevice();
+  bool SetFilterInquiryOnAddress();
 
-  bool StartPeriodicInquiry(uint8_t mode, uint8_t duration,
-                            uint8_t max_responses, uint16_t max_delay,
-                            uint16_t min_delay,
-                            tBTM_INQ_RESULTS_CB* p_results_cb);
-  void CancelPeriodicInquiry();
-
-  void SetClassicGeneralDiscoverability(uint16_t window, uint16_t interval);
-  void SetClassicLimitedDiscoverability(uint16_t window, uint16_t interval);
-  void SetClassicDiscoverabilityOff();
   DiscoverabilityState GetClassicDiscoverabilityState() const;
-
-  void SetLeGeneralDiscoverability();
-  void SetLeLimitedDiscoverability();
-  void SetLeDiscoverabilityOff();
   DiscoverabilityState GetLeDiscoverabilityState() const;
 
-  void SetClassicConnectibleOn();
-  void SetClassicConnectibleOff();
-  ConnectabilityState GetClassicConnectabilityState() const;
-  void SetInterlacedPageScan();
-  void SetStandardPageScan();
+  ConnectibilityState GetClassicConnectibilityState() const;
+  ConnectibilityState GetLeConnectibilityState() const;
 
-  void SetLeConnectibleOn();
-  void SetLeConnectibleOff();
-  ConnectabilityState GetLeConnectabilityState() const;
+  bool SetClassicConnectibleOff();
+  bool SetClassicConnectibleOn();
+  bool SetLeConnectibleOff();
+  bool SetLeConnectibleOn();
+
+  bool StartInquiry();
 
  private:
-  //  DiscoverabilityState classic_;
-  //  DiscoverabilityState le_;
+  DiscoverabilityState classic_;
+  DiscoverabilityState le_;
 
-  //  ConnectabilityState classic_connectibility_state_;
-  //  ConnectabilityState le_connectibility_state_;
+  ConnectibilityState classic_connectibility_state_;
+  ConnectibilityState le_connectibility_state_;
 
-  //  bool DoSetEventFilter();
-  //  void DoSetDiscoverability();
-  //  bool DoSetInquiryMode();
+  bool DoSetEventFilter();
+  bool DoSetConnectible();
+  void DoSetDiscoverability();
+  bool DoSetInquiryMode();
 };
 
 }  // namespace shim
