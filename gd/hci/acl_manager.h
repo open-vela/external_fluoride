@@ -21,7 +21,6 @@
 #include "common/bidi_queue.h"
 #include "common/callback.h"
 #include "hci/address.h"
-#include "hci/address_with_type.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
 #include "module.h"
@@ -83,8 +82,7 @@ class ConnectionManagementCallbacks {
 
 class AclConnection {
  public:
-  AclConnection()
-      : manager_(nullptr), handle_(0), address_(Address::kEmpty), address_type_(AddressType::PUBLIC_DEVICE_ADDRESS){};
+  AclConnection() : manager_(nullptr), handle_(0), address_(Address::kEmpty){};
   virtual ~AclConnection() = default;
 
   virtual Address GetAddress() const {
@@ -167,10 +165,9 @@ class LeConnectionCallbacks {
  public:
   virtual ~LeConnectionCallbacks() = default;
   // Invoked when controller sends Connection Complete event with Success error code
-  // AddressWithType is always equal to the object used in AclManager#CreateLeConnection
-  virtual void OnLeConnectSuccess(AddressWithType, std::unique_ptr<AclConnection> /* , initiated_by_local ? */) = 0;
+  virtual void OnLeConnectSuccess(std::unique_ptr<AclConnection> /* , initiated_by_local ? */) = 0;
   // Invoked when controller sends Connection Complete event with non-Success error code
-  virtual void OnLeConnectFail(AddressWithType, ErrorCode reason) = 0;
+  virtual void OnLeConnectFail(Address, AddressType, ErrorCode reason) = 0;
 };
 
 class AclManagerCallbacks {
@@ -208,7 +205,7 @@ class AclManager : public Module {
   virtual void CreateConnection(Address address);
 
   // Generates OnLeConnectSuccess if connected, or OnLeConnectFail otherwise
-  virtual void CreateLeConnection(AddressWithType address_with_type);
+  virtual void CreateLeConnection(Address address, AddressType address_type);
 
   // Generates OnConnectFail with error code "terminated by local host 0x16" if cancelled, or OnConnectSuccess if not
   // successfully cancelled and already connected
