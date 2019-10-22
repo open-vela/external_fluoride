@@ -18,12 +18,8 @@
 
 #include <memory>
 
-#include "shim/iconnectability.h"
 #include "shim/icontroller.h"
-#include "shim/idiscoverability.h"
 #include "shim/ihci_layer.h"
-#include "shim/iinquiry.h"
-#include "shim/ipage.h"
 #include "shim/istack.h"
 
 /**
@@ -41,11 +37,7 @@ class Stack : public IStack {
   void Stop() override;   // IStack
 
   IController* GetController() override;  // IStack
-  IConnectability* GetConnectability() override;  // IStack
   IHciLayer* GetHciLayer() override;      // IStack
-  IDiscoverability* GetDiscoverability() override;  // IStack
-  IInquiry* GetInquiry() override;                  // IStack
-  IPage* GetPage() override;                        // IStack
 
  private:
   struct impl;
