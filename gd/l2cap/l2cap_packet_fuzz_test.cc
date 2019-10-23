@@ -17,6 +17,8 @@
 #define PACKET_FUZZ_TESTING
 #include "l2cap/l2cap_packets.h"
 
+#include <gtest/gtest.h>
+#include <forward_list>
 #include <memory>
 
 #include "os/log.h"
@@ -30,24 +32,24 @@ using std::vector;
 namespace bluetooth {
 namespace l2cap {
 
-std::vector<void (*)(const uint8_t*, size_t)> l2cap_packet_fuzz_tests;
+DEFINE_ExtendedInformationStartFrameReflectionFuzzTest;
 
-DEFINE_AND_REGISTER_ExtendedInformationStartFrameReflectionFuzzTest(l2cap_packet_fuzz_tests);
+DEFINE_StandardInformationFrameWithFcsReflectionFuzzTest;
 
-DEFINE_AND_REGISTER_StandardInformationFrameWithFcsReflectionFuzzTest(l2cap_packet_fuzz_tests);
+DEFINE_StandardSupervisoryFrameWithFcsReflectionFuzzTest;
 
-DEFINE_AND_REGISTER_StandardSupervisoryFrameWithFcsReflectionFuzzTest(l2cap_packet_fuzz_tests);
+DEFINE_GroupFrameReflectionFuzzTest;
 
-DEFINE_AND_REGISTER_GroupFrameReflectionFuzzTest(l2cap_packet_fuzz_tests);
-
-DEFINE_AND_REGISTER_ConfigurationRequestReflectionFuzzTest(l2cap_packet_fuzz_tests);
+DEFINE_ConfigurationRequestReflectionFuzzTest;
 
 }  // namespace l2cap
 }  // namespace bluetooth
 
 void RunL2capPacketFuzzTest(const uint8_t* data, size_t size) {
   if (data == nullptr) return;
-  for (auto test_function : bluetooth::l2cap::l2cap_packet_fuzz_tests) {
-    test_function(data, size);
-  }
+  bluetooth::l2cap::RunExtendedInformationStartFrameReflectionFuzzTest(data, size);
+  bluetooth::l2cap::RunStandardInformationFrameWithFcsReflectionFuzzTest(data, size);
+  bluetooth::l2cap::RunStandardSupervisoryFrameWithFcsReflectionFuzzTest(data, size);
+  bluetooth::l2cap::RunGroupFrameReflectionFuzzTest(data, size);
+  bluetooth::l2cap::RunConfigurationRequestReflectionFuzzTest(data, size);
 }
