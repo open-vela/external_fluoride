@@ -18,7 +18,6 @@
 
 #include <cstdint>
 #include <queue>
-#include <vector>
 
 #include "l2cap/cid.h"
 #include "l2cap/classic/internal/dynamic_channel_allocator.h"
@@ -45,7 +44,6 @@ struct PendingCommand {
   Cid source_cid_;
   Cid destination_cid_;
   InformationRequestInfoType info_type_;
-  std::vector<std::unique_ptr<ConfigurationOption>> config_;
 };
 
 class Link;
@@ -63,7 +61,7 @@ class ClassicSignallingManager {
 
   void SendConnectionRequest(Psm psm, Cid local_cid);
 
-  void SendConfigurationRequest(Cid remote_cid, std::vector<std::unique_ptr<ConfigurationOption>> config);
+  void SendConfigurationRequest();
 
   void SendDisconnectionRequest(Cid local_cid, Cid remote_cid);
 
