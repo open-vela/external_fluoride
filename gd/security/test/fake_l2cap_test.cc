@@ -122,9 +122,6 @@ TEST_F(FakeL2capTest, test_bidi_queue_example) {
   EXPECT_TRUE(other_end_packet != nullptr);
 
   bidi_queue.GetDownEnd()->UnregisterDequeue();
-  handler_->Clear();
-  delete handler_;
-  delete thread_;
 }
 
 }  // namespace security
