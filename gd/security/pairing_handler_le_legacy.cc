@@ -130,10 +130,9 @@ StkOrFailure PairingHandlerLe::DoLegacyStage2(const InitialInformations& i, cons
     // LOG(INFO) << +(IAmMaster(i)) << " i.i.remote_connection_address.address = " << i.remote_connection_address;
     // LOG(INFO) << +(IAmMaster(i)) << " i.my_connection_address_type = " << +i.my_connection_address_type;
     // LOG(INFO) << +(IAmMaster(i)) << " i.i.my_connection_address.address = " << i.my_connection_address;
-    Octet16 mconfirm = crypto_toolbox::c1(
-        tk, mrand, preq.data(), pres.data(), (uint8_t)i.my_connection_address.GetAddressType(),
-        i.my_connection_address.GetAddress().address, (uint8_t)i.remote_connection_address.GetAddressType(),
-        i.remote_connection_address.GetAddress().address);
+    Octet16 mconfirm = crypto_toolbox::c1(tk, mrand, preq.data(), pres.data(), i.my_connection_address_type,
+                                          i.my_connection_address.address, i.remote_connection_address_type,
+                                          i.remote_connection_address.address);
 
     LOG_INFO("Master sends Mconfirm");
     SendL2capPacket(i, PairingConfirmBuilder::Create(mconfirm));
@@ -163,10 +162,9 @@ StkOrFailure PairingHandlerLe::DoLegacyStage2(const InitialInformations& i, cons
     // LOG(INFO) << +(IAmMaster(i)) << " i.i.my_connection_address.address = " << i.my_connection_address;
     // LOG(INFO) << +(IAmMaster(i)) << " i.remote_connection_address_type = " << +i.remote_connection_address_type;
     // LOG(INFO) << +(IAmMaster(i)) << " i.i.remote_connection_address.address = " << i.remote_connection_address;
-    Octet16 sconfirm_generated = crypto_toolbox::c1(
-        tk, srand, preq.data(), pres.data(), (uint8_t)i.my_connection_address.GetAddressType(),
-        i.my_connection_address.GetAddress().address, (uint8_t)i.remote_connection_address.GetAddressType(),
-        i.remote_connection_address.GetAddress().address);
+    Octet16 sconfirm_generated = crypto_toolbox::c1(tk, srand, preq.data(), pres.data(), i.my_connection_address_type,
+                                                    i.my_connection_address.address, i.remote_connection_address_type,
+                                                    i.remote_connection_address.address);
 
     if (sconfirm != sconfirm_generated) {
       LOG_INFO("sconfirm does not match generated value");
@@ -180,10 +178,9 @@ StkOrFailure PairingHandlerLe::DoLegacyStage2(const InitialInformations& i, cons
     std::vector<uint8_t> preq(pairing_request.begin(), pairing_request.end());
     std::vector<uint8_t> pres(pairing_response.begin(), pairing_response.end());
 
-    Octet16 sconfirm = crypto_toolbox::c1(
-        tk, srand, preq.data(), pres.data(), (uint8_t)i.remote_connection_address.GetAddressType(),
-        i.remote_connection_address.GetAddress().address, (uint8_t)i.my_connection_address.GetAddressType(),
-        i.my_connection_address.GetAddress().address);
+    Octet16 sconfirm = crypto_toolbox::c1(tk, srand, preq.data(), pres.data(), i.remote_connection_address_type,
+                                          i.remote_connection_address.address, i.my_connection_address_type,
+                                          i.my_connection_address.address);
 
     LOG_INFO("Slave waits for the Mconfirm");
     auto mconfirm_pkt = WaitPairingConfirm();
@@ -211,9 +208,8 @@ StkOrFailure PairingHandlerLe::DoLegacyStage2(const InitialInformations& i, cons
     // LOG(INFO) << +(IAmMaster(i)) << " i.remote_connection_address_type = " << +i.remote_connection_address_type;
     // LOG(INFO) << +(IAmMaster(i)) << " i.i.remote_connection_address.address = " << i.remote_connection_address;
     Octet16 mconfirm_generated = crypto_toolbox::c1(
-        tk, mrand, preq.data(), pres.data(), (uint8_t)i.remote_connection_address.GetAddressType(),
-        i.remote_connection_address.GetAddress().address, (uint8_t)i.my_connection_address.GetAddressType(),
-        i.my_connection_address.GetAddress().address);
+        tk, mrand, preq.data(), pres.data(), i.remote_connection_address_type, i.remote_connection_address.address,
+        i.my_connection_address_type, i.my_connection_address.address);
 
     if (mconfirm != mconfirm_generated) {
       LOG_INFO("mconfirm does not match generated value");
