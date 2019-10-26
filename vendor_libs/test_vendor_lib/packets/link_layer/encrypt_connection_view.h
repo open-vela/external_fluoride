@@ -30,8 +30,8 @@ class EncryptConnectionView : public PacketView<true> {
   virtual ~EncryptConnectionView() = default;
 
   static EncryptConnectionView GetEncryptConnection(const LinkLayerPacketView& view) {
-    ASSERT(view.GetType() == Link::PacketType::ENCRYPT_CONNECTION ||
-           view.GetType() == Link::PacketType::ENCRYPT_CONNECTION_RESPONSE);
+    CHECK(view.GetType() == Link::PacketType::ENCRYPT_CONNECTION ||
+          view.GetType() == Link::PacketType::ENCRYPT_CONNECTION_RESPONSE);
     return EncryptConnectionView(view.GetPayload());
   }
 

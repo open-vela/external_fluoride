@@ -97,7 +97,6 @@ enum {
   BTA_HF_CLIENT_AT_CNUM,
   BTA_HF_CLIENT_AT_NREC,
   BTA_HF_CLIENT_AT_BINP,
-  BTA_HF_CLIENT_AT_VENDOR_SPECIFIC,
 };
 
 /*****************************************************************************
