@@ -15,8 +15,7 @@
  */
 
 #include "link_layer_packet_view.h"
-
-#include "os/log.h"
+#include "base/logging.h"
 
 namespace test_vendor_lib {
 constexpr size_t Link::kSizeBytes;
@@ -26,7 +25,7 @@ namespace packets {
 LinkLayerPacketView::LinkLayerPacketView(std::shared_ptr<std::vector<uint8_t>> raw) : PacketView<true>(raw) {}
 
 LinkLayerPacketView LinkLayerPacketView::Create(std::shared_ptr<std::vector<uint8_t>> raw) {
-  ASSERT(raw->size() >= Link::kSizeBytes + Link::kTypeBytes + 2 * Address::kLength);
+  CHECK(raw->size() >= Link::kSizeBytes + Link::kTypeBytes + 2 * Address::kLength);
   return LinkLayerPacketView(raw);
 }
 
