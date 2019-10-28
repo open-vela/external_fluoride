@@ -174,9 +174,7 @@ Size ParentDef::GetOffsetForField(std::string field_name, bool from_end) const {
       if (field->GetSize().empty()) {
         return Size();
       }
-      if (field->GetFieldType() != PaddingField::kFieldType || !from_end) {
-        size += field->GetSize();
-      }
+      size += field->GetSize();
     }
     return size;
   };
