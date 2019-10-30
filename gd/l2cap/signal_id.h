@@ -48,7 +48,6 @@ struct SignalId {
 };
 
 constexpr SignalId kInvalidSignalId{0};
-constexpr SignalId kInitialSignalId{1};
 
 inline bool operator==(const SignalId& lhs, const SignalId& rhs) {
   return lhs.value_ == rhs.value_;
