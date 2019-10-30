@@ -12,7 +12,6 @@ filegroup {
 filegroup {
     name: "BluetoothNeighborTestSources",
     srcs: [
-            "inquiry_test.cc",
     ],
 }
 
