@@ -31,14 +31,11 @@ class ByteInserter : public std::back_insert_iterator<std::vector<uint8_t>> {
   ByteInserter(std::vector<uint8_t>& vector);
   virtual ~ByteInserter();
 
-  virtual void insert_byte(uint8_t byte);
+  void insert_byte(uint8_t byte);
 
-  void RegisterObserver(const ByteObserver& observer);
+  void RegisterObserver(ByteObserver observer);
 
   ByteObserver UnregisterObserver();
-
- protected:
-  void on_byte(uint8_t);
 
  private:
   std::vector<ByteObserver> registered_observers_;
