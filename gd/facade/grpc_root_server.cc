@@ -86,7 +86,6 @@ class RootFacadeService : public ::bluetooth::facade::RootFacade::Service {
 
     stack_manager_.GetInstance<GrpcModule>()->StopServer();
     grpc_loop_thread_->join();
-    delete grpc_loop_thread_;
 
     stack_manager_.ShutDown();
     delete stack_thread_;
