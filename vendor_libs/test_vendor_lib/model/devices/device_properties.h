@@ -69,8 +69,6 @@ class DeviceProperties {
     return sco_data_packet_size_;
   }
 
-  uint8_t GetEncryptionKeySize() const { return encryption_key_size_; }
-
   uint16_t GetTotalNumAclDataPackets() const {
     return num_acl_data_packets_;
   }
@@ -312,7 +310,6 @@ class DeviceProperties {
   Address address_;
   uint8_t page_scan_repetition_mode_;
   uint16_t clock_offset_;
-  uint8_t encryption_key_size_;
 
   // Low Energy
   uint16_t le_data_packet_length_;
