@@ -267,7 +267,6 @@ class TestHciLayer : public hci::HciLayer {
     auto future = promise_sync_complete_->get_future();
     func();
     future.wait();
-    delete promise_sync_complete_;
     promise_sync_complete_ = nullptr;
   }
 
@@ -309,7 +308,6 @@ class InquiryTest : public ::testing::Test {
     auto future = promise_result_complete_->get_future();
     func();
     future.wait();
-    delete promise_result_complete_;
     promise_result_complete_ = nullptr;
   }
 
