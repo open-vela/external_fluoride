@@ -29,19 +29,24 @@ BitInserter::~BitInserter() {
 
 void BitInserter::insert_bits(uint8_t byte, size_t num_bits) {
   size_t total_bits = num_bits + num_saved_bits_;
-  uint16_t new_value = static_cast<uint8_t>(saved_bits_) | (static_cast<uint16_t>(byte) << num_saved_bits_);
+  uint16_t new_value = saved_bits_ | (static_cast<uint16_t>(byte) << num_saved_bits_);
   if (total_bits >= 8) {
-    ByteInserter::insert_byte(static_cast<uint8_t>(new_value));
+    uint8_t new_byte = static_cast<uint8_t>(new_value);
+    ByteInserter::insert_byte(new_byte);
     total_bits -= 8;
     new_value = new_value >> 8;
   }
   num_saved_bits_ = total_bits;
-  uint8_t mask = static_cast<uint8_t>(0xff) >> (8 - num_saved_bits_);
+  uint8_t mask = 0xff >> (8 - num_saved_bits_);
   saved_bits_ = static_cast<uint8_t>(new_value) & mask;
 }
 
 void BitInserter::insert_byte(uint8_t byte) {
   insert_bits(byte, 8);
+}
+
+bool BitInserter::IsByteAligned() {
+  return num_saved_bits_ == 0;
 }
 
 }  // namespace packet
