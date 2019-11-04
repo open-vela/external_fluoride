@@ -747,7 +747,7 @@ static bt_status_t send_at_cmd(const RawAddress* bd_addr, int cmd, int val1,
 }
 
 static const bthf_client_interface_t bthfClientInterface = {
-    .size = sizeof(bthf_client_interface_t),
+    sizeof(bthf_client_interface_t),
     .init = init,
     .connect = connect,
     .disconnect = disconnect,
