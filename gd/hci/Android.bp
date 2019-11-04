@@ -2,7 +2,6 @@ filegroup {
     name: "BluetoothHciSources",
     srcs: [
         "acl_manager.cc",
-        "acl_fragmenter.cc",
         "address.cc",
         "classic_security_manager.cc",
         "class_of_device.cc",
