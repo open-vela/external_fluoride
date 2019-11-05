@@ -52,6 +52,7 @@ struct bluetooth::shim::Stack::impl {
     ModuleList modules;
     modules.add<::bluetooth::hal::HciHal>();
     modules.add<::bluetooth::hci::AclManager>();
+    modules.add<::bluetooth::hci::ClassicSecurityManager>();
     modules.add<::bluetooth::l2cap::classic::L2capClassicModule>();
     modules.add<::bluetooth::l2cap::le::L2capLeModule>();
     modules.add<::bluetooth::neighbor::ConnectabilityModule>();
