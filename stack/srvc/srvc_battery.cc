@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2013 Broadcom Corporation
+ *  Copyright 1999-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 #include "bt_target.h"
 #include "bt_utils.h"
-#include "btcore/include/uuid.h"
 #include "gatt_api.h"
 #include "gatt_int.h"
 #include "osi/include/osi.h"
@@ -74,7 +73,7 @@ uint8_t battery_s_write_attr_value(uint8_t clcb_idx, tGATT_WRITE_REQ* p_value,
   for (i = 0; i < BA_MAX_INT_NUM; i++, p_inst++) {
     /* read battery level */
     if (handle == p_inst->clt_cfg_hdl) {
-      memcpy(cfg.remote_bda, srvc_eng_cb.clcb[clcb_idx].bda, BD_ADDR_LEN);
+      cfg.remote_bda = srvc_eng_cb.clcb[clcb_idx].bda;
       STREAM_TO_UINT16(cfg.clt_cfg, p);
 
       if (p_inst->p_cback) {
@@ -177,7 +176,7 @@ uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info) {
   tBA_INST* p_inst;
 
   if (battery_cb.inst_id == BA_MAX_INT_NUM) {
-    GATT_TRACE_ERROR("MAX battery service has been reached");
+    LOG(ERROR) << "MAX battery service has been reached";
     return 0;
   }
 
@@ -185,13 +184,13 @@ uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info) {
 
   btgatt_db_element_t service[BA_MAX_ATTR_NUM] = {};
 
-  bt_uuid_t service_uuid;
-  uuid_128_from_16(&service_uuid, UUID_SERVCLASS_BATTERY);
+  bluetooth::Uuid service_uuid =
+      bluetooth::Uuid::From16Bit(UUID_SERVCLASS_BATTERY);
   service[0].type = /* p_reg_info->is_pri */ BTGATT_DB_PRIMARY_SERVICE;
   service[0].uuid = service_uuid;
 
-  bt_uuid_t char_uuid;
-  uuid_128_from_16(&char_uuid, GATT_UUID_BATTERY_LEVEL);
+  bluetooth::Uuid char_uuid =
+      bluetooth::Uuid::From16Bit(GATT_UUID_BATTERY_LEVEL);
   service[1].type = BTGATT_DB_CHARACTERISTIC;
   service[1].uuid = char_uuid;
   service[1].properties = GATT_CHAR_PROP_BIT_READ;
@@ -200,8 +199,8 @@ uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info) {
 
   int i = 2;
   if (p_reg_info->ba_level_descr & BA_LEVEL_NOTIFY) {
-    bt_uuid_t desc_uuid;
-    uuid_128_from_16(&desc_uuid, GATT_UUID_CHAR_CLIENT_CONFIG);
+    bluetooth::Uuid desc_uuid =
+        bluetooth::Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG);
 
     service[i].type = BTGATT_DB_DESCRIPTOR;
     service[i].uuid = desc_uuid;
@@ -211,8 +210,8 @@ uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info) {
 
   /* need presentation format descriptor? */
   if (p_reg_info->ba_level_descr & BA_LEVEL_PRE_FMT) {
-    bt_uuid_t desc_uuid;
-    uuid_128_from_16(&desc_uuid, GATT_UUID_CHAR_PRESENT_FORMAT);
+    bluetooth::Uuid desc_uuid =
+        bluetooth::Uuid::From16Bit(GATT_UUID_CHAR_PRESENT_FORMAT);
 
     service[i].type = BTGATT_DB_DESCRIPTOR;
     service[i].uuid = desc_uuid;
@@ -222,8 +221,8 @@ uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info) {
 
   /* need presentation format descriptor? */
   if (p_reg_info->ba_level_descr & BA_LEVEL_RPT_REF) {
-    bt_uuid_t desc_uuid;
-    uuid_128_from_16(&desc_uuid, GATT_UUID_RPT_REF_DESCR);
+    bluetooth::Uuid desc_uuid =
+        bluetooth::Uuid::From16Bit(GATT_UUID_RPT_REF_DESCR);
 
     service[i].type = BTGATT_DB_DESCRIPTOR;
     service[i].uuid = desc_uuid;
@@ -235,7 +234,7 @@ uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info) {
 
   if (status != GATT_SUCCESS) {
     battery_cb.inst_id--;
-    GATT_TRACE_ERROR("%s: Failed to add battery servuce!", __func__);
+    LOG(ERROR) << __func__ << " Failed to add battery servuce!";
   }
 
   battery_cb.inst_id++;
@@ -334,7 +333,8 @@ void Battery_Rsp(uint8_t app_id, tGATT_STATUS st, uint8_t event,
  * Description      Send battery level notification
  *
  ******************************************************************************/
-void Battery_Notify(uint8_t app_id, BD_ADDR remote_bda, uint8_t battery_level) {
+void Battery_Notify(uint8_t app_id, const RawAddress& remote_bda,
+                    uint8_t battery_level) {
   tBA_INST* p_inst = &battery_cb.battery_inst[0];
   uint8_t i = 0;
 
@@ -356,7 +356,7 @@ void Battery_Notify(uint8_t app_id, BD_ADDR remote_bda, uint8_t battery_level) {
  * Returns          void
  *
  ******************************************************************************/
-bool Battery_ReadBatteryLevel(UNUSED_ATTR BD_ADDR peer_bda) {
+bool Battery_ReadBatteryLevel(const RawAddress&) {
   /* to be implemented */
   return true;
 }

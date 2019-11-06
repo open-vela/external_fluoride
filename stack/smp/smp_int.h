@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -221,6 +221,7 @@ typedef struct {
 typedef union {
   uint8_t* p_data; /* uint8_t type data pointer */
   tSMP_KEY key;
+  uint8_t status;
   uint16_t reason;
   uint32_t passkey;
   tSMP_OOB_DATA_TYPE req_oob_type;
@@ -248,7 +249,7 @@ typedef union {
 #define SMP_ECNCRPYT_STATUS HCI_SUCCESS
 
 typedef struct {
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
   BT_HDR* p_copy;
 } tSMP_REQ_Q_ENTRY;
 
@@ -257,12 +258,12 @@ typedef struct {
   tSMP_CALLBACK* p_callback;
   alarm_t* smp_rsp_timer_ent;
   uint8_t trace_level;
-  BD_ADDR pairing_bda;
+  RawAddress pairing_bda;
   tSMP_STATE state;
   bool derive_lk;
   bool id_addr_rcvd;
   tBLE_ADDR_TYPE id_addr_type;
-  BD_ADDR id_addr;
+  RawAddress id_addr;
   bool smp_over_br;
   tSMP_BR_STATE br_state; /* if SMP over BR/ERD has priority over SMP */
   uint8_t failure;
@@ -321,7 +322,7 @@ typedef struct {
   uint16_t ediv;
   BT_OCTET8 enc_rand;
   uint8_t addr_type;
-  BD_ADDR local_bda;
+  RawAddress local_bda;
   bool is_pair_cancel;
   bool discard_sec_req;
   uint8_t rcvd_cmd_code;
@@ -341,7 +342,8 @@ extern tSMP_CB smp_cb;
 extern void smp_init(void);
 
 /* smp main */
-extern void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event, void* p_data);
+extern void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event,
+                         tSMP_INT_DATA* p_data);
 
 extern void smp_proc_sec_request(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_set_fail_nc(bool enable);
@@ -366,14 +368,12 @@ extern void smp_f5_calc_chk(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* a1,
 extern void smp_f6_calc_chk(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
                             uint8_t* iocap, uint8_t* a1, uint8_t* a2,
                             uint8_t* mac);
-/* smp_main */
-extern void smp_sm_event(tSMP_CB* p_cb, tSMP_EVENT event, void* p_data);
 extern tSMP_STATE smp_get_state(void);
 extern void smp_set_state(tSMP_STATE state);
 
 /* smp_br_main */
 extern void smp_br_state_machine_event(tSMP_CB* p_cb, tSMP_BR_EVENT event,
-                                       void* p_data);
+                                       tSMP_INT_DATA* p_data);
 extern tSMP_BR_STATE smp_get_br_state(void);
 extern void smp_set_br_state(tSMP_BR_STATE state);
 
@@ -464,7 +464,7 @@ extern void smp_br_pairing_complete(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 
 /* smp_l2c */
 extern void smp_l2cap_if_init(void);
-extern void smp_data_ind(BD_ADDR bd_addr, BT_HDR* p_buf);
+extern void smp_data_ind(const RawAddress& bd_addr, BT_HDR* p_buf);
 
 /* smp_util.cc */
 extern bool smp_send_cmd(uint8_t cmd_code, tSMP_CB* p_cb);
@@ -479,7 +479,7 @@ extern void smp_xor_128(BT_OCTET16 a, BT_OCTET16 b);
 extern bool smp_encrypt_data(uint8_t* key, uint8_t key_len, uint8_t* plain_text,
                              uint8_t pt_len, tSMP_ENC* p_out);
 extern bool smp_command_has_invalid_parameters(tSMP_CB* p_cb);
-extern void smp_reject_unexpected_pairing_command(BD_ADDR bd_addr);
+extern void smp_reject_unexpected_pairing_command(const RawAddress& bd_addr);
 extern tSMP_ASSO_MODEL smp_select_association_model(tSMP_CB* p_cb);
 extern void smp_reverse_array(uint8_t* arr, uint8_t len);
 extern uint8_t smp_calculate_random_input(uint8_t* random, uint8_t round);

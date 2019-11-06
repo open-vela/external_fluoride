@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2014 The Android Open Source Project
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ typedef struct {
 /* data type for BTA_MCE_API_GET_REMOTE_MAS_INSTANCES_EVT */
 typedef struct {
   BT_HDR hdr;
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
 } tBTA_MCE_API_GET_REMOTE_MAS_INSTANCES;
 
 /* union of all data types */
@@ -63,7 +63,7 @@ typedef union {
 /* MCE control block */
 typedef struct {
   uint8_t sdp_active; /* see BTA_MCE_SDP_ACT_* */
-  BD_ADDR remote_addr;
+  RawAddress remote_addr;
   tBTA_MCE_DM_CBACK* p_dm_cback;
 } tBTA_MCE_CB;
 
