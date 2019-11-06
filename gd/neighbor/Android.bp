@@ -1,0 +1,18 @@
+filegroup {
+    name: "BluetoothNeighborSources",
+    srcs: [
+            "connectability.cc",
+            "discoverability.cc",
+            "inquiry.cc",
+            "page.cc",
+            "scan.cc",
+    ],
+}
+
+filegroup {
+    name: "BluetoothNeighborTestSources",
+    srcs: [
+            "inquiry_test.cc",
+    ],
+}
+
