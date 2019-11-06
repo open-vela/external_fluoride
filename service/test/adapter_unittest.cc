@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "service/adapter.h"
+#include "service/common/bluetooth/util/address_helper.h"
 #include "service/hal/fake_bluetooth_gatt_interface.h"
 #include "service/hal/fake_bluetooth_interface.h"
 
@@ -124,12 +125,12 @@ TEST_F(AdapterTest, Enable) {
   EXPECT_EQ(bluetooth::ADAPTER_STATE_OFF, adapter_->GetState());
 
   // Enable fails at HAL level
-  EXPECT_FALSE(adapter_->Enable());
+  EXPECT_FALSE(adapter_->Enable(false));
   EXPECT_EQ(bluetooth::ADAPTER_STATE_OFF, adapter_->GetState());
 
   // Enable success
   fake_hal_manager_->enable_succeed = true;
-  EXPECT_TRUE(adapter_->Enable());
+  EXPECT_TRUE(adapter_->Enable(false));
 
   // Should have received a state update.
   EXPECT_EQ(bluetooth::ADAPTER_STATE_OFF, observer.prev_state());
@@ -137,7 +138,7 @@ TEST_F(AdapterTest, Enable) {
 
   // Enable fails because not disabled
   EXPECT_EQ(bluetooth::ADAPTER_STATE_TURNING_ON, adapter_->GetState());
-  EXPECT_FALSE(adapter_->Enable());
+  EXPECT_FALSE(adapter_->Enable(false));
 
   // Adapter state updates properly
   fake_hal_iface_->NotifyAdapterStateChanged(BT_STATE_ON);
@@ -148,7 +149,7 @@ TEST_F(AdapterTest, Enable) {
   EXPECT_EQ(bluetooth::ADAPTER_STATE_ON, observer.cur_state());
 
   // Enable fails because already enabled
-  EXPECT_FALSE(adapter_->Enable());
+  EXPECT_FALSE(adapter_->Enable(false));
 }
 
 TEST_F(AdapterTest, Disable) {
@@ -226,7 +227,7 @@ TEST_F(AdapterTest, SetName) {
 TEST_F(AdapterTest, GetAddress) {
   EXPECT_EQ(bluetooth::Adapter::kDefaultAddress, adapter_->GetAddress());
 
-  const RawAddress kTestAdapterInput = {{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}};
+  const bt_bdaddr_t kTestAdapterInput = {{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}};
   const char kTestAdapterAddressOutput[] = "12:34:56:78:9A:BC";
 
   fake_hal_iface_->NotifyAdapterAddressPropertyChanged(&kTestAdapterInput);
@@ -254,8 +255,8 @@ TEST_F(AdapterTest, IsDeviceConnected) {
 
   EXPECT_FALSE(adapter_->IsDeviceConnected(kDeviceAddr));
 
-  RawAddress hal_addr;
-  ASSERT_TRUE(RawAddress::FromString(kDeviceAddr, hal_addr));
+  bt_bdaddr_t hal_addr;
+  ASSERT_TRUE(util::BdAddrFromString(kDeviceAddr, &hal_addr));
 
   // status != BT_STATUS_SUCCESS should be ignored
   fake_hal_iface_->NotifyAclStateChangedCallback(BT_STATUS_FAIL, hal_addr,
