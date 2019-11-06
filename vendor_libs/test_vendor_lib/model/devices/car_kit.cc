@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "car_kit"
+
 #include "car_kit.h"
 
+#include "osi/include/log.h"
+
 #include "model/setup/device_boutique.h"
-#include "os/log.h"
 
 using std::vector;
 
 namespace test_vendor_lib {
 
-bool CarKit::registered_ = DeviceBoutique::Register("car_kit", &CarKit::Create);
+bool CarKit::registered_ = DeviceBoutique::Register(LOG_TAG, &CarKit::Create);
 
 CarKit::CarKit() : Device(kCarKitPropertiesFile) {
   advertising_interval_ms_ = std::chrono::milliseconds(0);
@@ -79,7 +82,7 @@ void CarKit::Initialize(const vector<std::string>& args) {
 
   Address addr;
   if (Address::FromString(args[1], addr)) properties_.SetAddress(addr);
-  LOG_INFO("%s SetAddress %s", ToString().c_str(), addr.ToString().c_str());
+  LOG_INFO(LOG_TAG, "%s SetAddress %s", ToString().c_str(), addr.ToString().c_str());
 
   if (args.size() < 3) return;
 
@@ -91,7 +94,7 @@ void CarKit::TimerTick() {
 }
 
 void CarKit::IncomingPacket(packets::LinkLayerPacketView packet) {
-  LOG_WARN("Incoming Packet");
+  LOG_WARN(LOG_TAG, "Incoming Packet");
   link_layer_controller_.IncomingPacket(packet);
 }
 
