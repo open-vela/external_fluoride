@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -16,18 +16,16 @@
 
 #include "bluetooth/scan_filter.h"
 
-#include <raw_address.h>
-
 namespace bluetooth {
 
 ScanFilter::ScanFilter(const ScanFilter& other) {
   device_name_ = other.device_name_;
   device_address_ = other.device_address_;
 
-  if (other.service_uuid_) service_uuid_.reset(new Uuid(*other.service_uuid_));
+  if (other.service_uuid_) service_uuid_.reset(new UUID(*other.service_uuid_));
 
   if (other.service_uuid_mask_)
-    service_uuid_mask_.reset(new Uuid(*other.service_uuid_mask_));
+    service_uuid_mask_.reset(new UUID(*other.service_uuid_mask_));
 }
 
 ScanFilter& ScanFilter::operator=(const ScanFilter& other) {
@@ -35,12 +33,12 @@ ScanFilter& ScanFilter::operator=(const ScanFilter& other) {
   device_address_ = other.device_address_;
 
   if (other.service_uuid_)
-    service_uuid_.reset(new Uuid(*other.service_uuid_));
+    service_uuid_.reset(new UUID(*other.service_uuid_));
   else
     service_uuid_ = nullptr;
 
   if (other.service_uuid_mask_)
-    service_uuid_mask_.reset(new Uuid(*other.service_uuid_mask_));
+    service_uuid_mask_.reset(new UUID(*other.service_uuid_mask_));
   else
     service_uuid_mask_ = nullptr;
 
@@ -54,15 +52,15 @@ bool ScanFilter::SetDeviceAddress(const std::string& device_address) {
   return true;
 }
 
-void ScanFilter::SetServiceUuid(const Uuid& service_uuid) {
-  service_uuid_.reset(new Uuid(service_uuid));
+void ScanFilter::SetServiceUuid(const UUID& service_uuid) {
+  service_uuid_.reset(new UUID(service_uuid));
   service_uuid_mask_.reset();
 }
 
-void ScanFilter::SetServiceUuidWithMask(const Uuid& service_uuid,
-                                        const Uuid& mask) {
-  service_uuid_.reset(new Uuid(service_uuid));
-  service_uuid_mask_.reset(new Uuid(mask));
+void ScanFilter::SetServiceUuidWithMask(const UUID& service_uuid,
+                                        const UUID& mask) {
+  service_uuid_.reset(new UUID(service_uuid));
+  service_uuid_mask_.reset(new UUID(mask));
 }
 
 bool ScanFilter::operator==(const ScanFilter& rhs) const {

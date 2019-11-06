@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ void mca_ccb_snd_req(tMCA_CCB* p_ccb, tMCA_CCB_EVT* p_data) {
       p_msg->hdr.layer_specific = true; /* mark this message as sent */
       p_pkt->len = p - p_start;
       L2CA_DataWrite(p_ccb->lcid, p_pkt);
-      uint64_t interval_ms = p_ccb->p_rcb->reg.rsp_tout * 1000;
+      period_ms_t interval_ms = p_ccb->p_rcb->reg.rsp_tout * 1000;
       alarm_set_on_mloop(p_ccb->mca_ccb_timer, interval_ms,
                          mca_ccb_timer_timeout, p_ccb);
     }

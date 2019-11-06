@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ reactor_t* reactor_new(void) {
   ret->epoll_fd = INVALID_FD;
   ret->event_fd = INVALID_FD;
 
-  ret->epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+  ret->epoll_fd = epoll_create(MAX_EVENTS);
   if (ret->epoll_fd == INVALID_FD) {
     LOG_ERROR(LOG_TAG, "%s unable to create epoll instance: %s", __func__,
               strerror(errno));

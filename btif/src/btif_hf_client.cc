@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -109,18 +109,6 @@ static bthf_client_callbacks_t* bt_hf_client_callbacks = NULL;
 
 char btif_hf_client_version[PROPERTY_VALUE_MAX];
 
-static const char* dump_hf_client_conn_state(uint16_t event) {
-  switch (event) {
-    CASE_RETURN_STR(BTHF_CLIENT_CONNECTION_STATE_DISCONNECTED)
-    CASE_RETURN_STR(BTHF_CLIENT_CONNECTION_STATE_CONNECTING)
-    CASE_RETURN_STR(BTHF_CLIENT_CONNECTION_STATE_CONNECTED)
-    CASE_RETURN_STR(BTHF_CLIENT_CONNECTION_STATE_SLC_CONNECTED)
-    CASE_RETURN_STR(BTHF_CLIENT_CONNECTION_STATE_DISCONNECTING)
-    default:
-      return "UNKNOWN MSG ID";
-  }
-}
-
 #define CHECK_BTHF_CLIENT_INIT()                                        \
   do {                                                                  \
     if (bt_hf_client_callbacks == NULL) {                               \
@@ -138,7 +126,7 @@ static const char* dump_hf_client_conn_state(uint16_t event) {
       return BT_STATUS_NOT_READY;                                            \
     } else if ((cb)->state != BTHF_CLIENT_CONNECTION_STATE_SLC_CONNECTED) {  \
       BTIF_TRACE_WARNING("BTHF CLIENT: %s: SLC connection not up. state=%s", \
-                         __func__, dump_hf_client_conn_state((cb)->state));  \
+                         __func__, dump_hf_conn_state((cb)->state));         \
       return BT_STATUS_NOT_READY;                                            \
     } else {                                                                 \
       BTIF_TRACE_EVENT("BTHF CLIENT: %s", __func__);                         \
@@ -174,7 +162,7 @@ static void btif_in_hf_client_generic_evt(uint16_t event, char* p_param) {
   switch (event) {
     case BTIF_HF_CLIENT_CB_AUDIO_CONNECTING: {
       HAL_CBACK(bt_hf_client_callbacks, audio_state_cb, &cb->peer_bda,
-                (bthf_client_audio_state_t)BTHF_CLIENT_AUDIO_STATE_CONNECTING);
+                (bthf_client_audio_state_t)BTHF_AUDIO_STATE_CONNECTING);
     } break;
     default: {
       BTIF_TRACE_WARNING("%s: : Unknown event 0x%x", __func__, event);
@@ -747,7 +735,7 @@ static bt_status_t send_at_cmd(const RawAddress* bd_addr, int cmd, int val1,
 }
 
 static const bthf_client_interface_t bthfClientInterface = {
-    .size = sizeof(bthf_client_interface_t),
+    sizeof(bthf_client_interface_t),
     .init = init,
     .connect = connect,
     .disconnect = disconnect,
@@ -949,7 +937,7 @@ static void btif_hf_client_upstreams_evt(uint16_t event, char* p_param) {
                 (bthf_client_call_state_t)p_data->clcc.status,
                 p_data->clcc.mpty ? BTHF_CLIENT_CALL_MPTY_TYPE_MULTI
                                   : BTHF_CLIENT_CALL_MPTY_TYPE_SINGLE,
-                p_data->clcc.number_present ? p_data->clcc.number : "");
+                p_data->clcc.number_present ? p_data->clcc.number : NULL);
       break;
 
     case BTA_HF_CLIENT_CNUM_EVT:
@@ -998,10 +986,6 @@ static void btif_hf_client_upstreams_evt(uint16_t event, char* p_param) {
       break;
     case BTA_HF_CLIENT_RING_INDICATION:
       HAL_CBACK(bt_hf_client_callbacks, ring_indication_cb, &cb->peer_bda);
-      break;
-    case BTA_HF_CLIENT_UNKNOWN_EVT:
-      HAL_CBACK(bt_hf_client_callbacks, unknown_event_cb, &cb->peer_bda,
-                p_data->unknown.event_string);
       break;
     default:
       BTIF_TRACE_WARNING("%s: Unhandled event: %d", __func__, event);
