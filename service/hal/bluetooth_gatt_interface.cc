@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -58,20 +58,17 @@ GetClientObservers();
 base::ObserverList<BluetoothGattInterface::ServerObserver>*
 GetServerObservers();
 
-#define FOR_EACH_SCANNER_OBSERVER(func)           \
-  for (auto& observer : *GetScannerObservers()) { \
-    observer.func;                                \
-  }
+#define FOR_EACH_SCANNER_OBSERVER(func)                      \
+  FOR_EACH_OBSERVER(BluetoothGattInterface::ScannerObserver, \
+                    *GetScannerObservers(), func)
 
-#define FOR_EACH_CLIENT_OBSERVER(func)           \
-  for (auto& observer : *GetClientObservers()) { \
-    observer.func;                               \
-  }
+#define FOR_EACH_CLIENT_OBSERVER(func)                      \
+  FOR_EACH_OBSERVER(BluetoothGattInterface::ClientObserver, \
+                    *GetClientObservers(), func)
 
-#define FOR_EACH_SERVER_OBSERVER(func)           \
-  for (auto& observer : *GetServerObservers()) { \
-    observer.func;                               \
-  }
+#define FOR_EACH_SERVER_OBSERVER(func)                      \
+  FOR_EACH_OBSERVER(BluetoothGattInterface::ServerObserver, \
+                    *GetServerObservers(), func)
 
 #define VERIFY_INTERFACE_OR_RETURN()                                   \
   do {                                                                 \
@@ -82,7 +79,7 @@ GetServerObservers();
   } while (0)
 
 void RegisterClientCallback(int status, int client_if,
-                            const bluetooth::Uuid& app_uuid) {
+                            const bt_uuid_t& app_uuid) {
   shared_lock<shared_mutex_impl> lock(g_instance_lock);
   VLOG(2) << __func__ << " - status: " << status << " client_if: " << client_if;
   VERIFY_INTERFACE_OR_RETURN();
@@ -148,7 +145,7 @@ void RegisterForNotificationCallback(int conn_id, int registered, int status,
   LOG(INFO) << __func__ << " - conn_id: " << conn_id << " - status: " << status
             << " - registered: " << registered << " - handle: " << handle;
   FOR_EACH_CLIENT_OBSERVER(RegisterForNotificationCallback(
-      g_interface, conn_id, registered, status, handle));
+      g_interface, conn_id, status, registered, handle));
 }
 
 void NotifyCallback(int conn_id, const btgatt_notify_params_t& p_data) {
@@ -225,7 +222,7 @@ void ServicesAddedCallback(int conn_id, const btgatt_db_element_t& added,
 }
 
 void RegisterServerCallback(int status, int server_if,
-                            const bluetooth::Uuid& app_uuid) {
+                            const bt_uuid_t& app_uuid) {
   shared_lock<shared_mutex_impl> lock(g_instance_lock);
   VLOG(2) << __func__ << " - status: " << status << " server_if: " << server_if;
   VERIFY_INTERFACE_OR_RETURN();
@@ -570,7 +567,7 @@ void BluetoothGattInterface::ScannerObserver::ScanResultCallback(
 
 void BluetoothGattInterface::ClientObserver::RegisterClientCallback(
     BluetoothGattInterface* /* gatt_iface */, int /* status */,
-    int /* client_if */, const bluetooth::Uuid& /* app_uuid */) {
+    int /* client_if */, const bt_uuid_t& /* app_uuid */) {
   // Do nothing.
 }
 
@@ -594,7 +591,7 @@ void BluetoothGattInterface::ClientObserver::SearchCompleteCallback(
 
 void BluetoothGattInterface::ClientObserver::RegisterForNotificationCallback(
     BluetoothGattInterface* /* gatt_iface */, int /* conn_id */,
-    int /* registered */, int /* status */, uint16_t /* handle */) {
+    int /* status */, int /* registered */, uint16_t /* handle */) {
   // Do nothing
 }
 
@@ -642,7 +639,7 @@ void BluetoothGattInterface::ClientObserver::ServicesAddedCallback(
 
 void BluetoothGattInterface::ServerObserver::RegisterServerCallback(
     BluetoothGattInterface* /* gatt_iface */, int /* status */,
-    int /* server_if */, const bluetooth::Uuid& /* app_uuid */) {
+    int /* server_if */, const bt_uuid_t& /* app_uuid */) {
   // Do nothing.
 }
 
