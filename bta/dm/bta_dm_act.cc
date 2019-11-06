@@ -50,7 +50,6 @@
 #include "stack/gatt/connection_manager.h"
 #include "stack/include/gatt_api.h"
 #include "utl.h"
-#include "device/include/interop.h"
 
 #if (GAP_INCLUDED == TRUE)
 #include "gap_api.h"
@@ -1946,12 +1945,10 @@ static void bta_dm_discover_device(const RawAddress& remote_bd_addr) {
     APPL_TRACE_DEBUG("%s appl_knows_rem_name %d", __func__,
                      bta_dm_search_cb.p_btm_inq_info->appl_knows_rem_name);
   }
-  if (((bta_dm_search_cb.p_btm_inq_info) &&
-       (bta_dm_search_cb.p_btm_inq_info->results.device_type ==
-        BT_DEVICE_TYPE_BLE) &&
-       (bta_dm_search_cb.state == BTA_DM_SEARCH_ACTIVE)) ||
-      (transport == BT_TRANSPORT_LE &&
-       interop_match_addr(INTEROP_DISABLE_NAME_REQUEST, &bta_dm_search_cb.peer_bdaddr))) {
+  if ((bta_dm_search_cb.p_btm_inq_info) &&
+      (bta_dm_search_cb.p_btm_inq_info->results.device_type ==
+       BT_DEVICE_TYPE_BLE) &&
+      (bta_dm_search_cb.state == BTA_DM_SEARCH_ACTIVE)) {
     /* Do not perform RNR for LE devices at inquiry complete*/
     bta_dm_search_cb.name_discover_done = true;
   }
@@ -2507,7 +2504,7 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
       sec_event.cfm_req.loc_io_caps = p_data->cfm_req.loc_io_caps;
       sec_event.cfm_req.rmt_io_caps = p_data->cfm_req.rmt_io_caps;
 
-      [[fallthrough]];
+    /* continue to next case */
     /* Passkey entry mode, mobile device with output capability is very
         unlikely to receive key request, so skip this event */
     /*case BTM_SP_KEY_REQ_EVT: */
@@ -2769,9 +2766,6 @@ static void bta_dm_acl_change(bool is_new, const RawAddress& bd_addr,
         if (BTM_SecDeleteDevice(
                 bta_dm_cb.device_list.peer_device[i].peer_bdaddr))
           issue_unpair_cb = true;
-
-        /* remove all cached GATT information */
-        BTA_GATTC_Refresh(bd_addr);
 
         APPL_TRACE_DEBUG("%s: Unpairing: issue unpair CB = %d ", __func__,
                          issue_unpair_cb);

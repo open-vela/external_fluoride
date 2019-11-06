@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "base/json/json_value_converter.h"
-#include "os/log.h"
 #include "types/address.h"
 #include "types/class_of_device.h"
 
@@ -56,7 +55,7 @@ class DeviceProperties {
   }
 
   uint64_t GetExtendedFeatures(uint8_t page_number) const {
-    ASSERT(page_number < extended_features_.size());
+    CHECK(page_number < extended_features_.size());
     return extended_features_[page_number];
   }
 
@@ -68,8 +67,6 @@ class DeviceProperties {
   uint8_t GetSynchronousDataPacketSize() const {
     return sco_data_packet_size_;
   }
-
-  uint8_t GetEncryptionKeySize() const { return encryption_key_size_; }
 
   uint16_t GetTotalNumAclDataPackets() const {
     return num_acl_data_packets_;
@@ -193,47 +190,6 @@ class DeviceProperties {
     return le_advertisement_type_;
   }
 
-  uint16_t GetLeAdvertisingIntervalMin() const {
-    return le_advertising_interval_min_;
-  }
-
-  uint16_t GetLeAdvertisingIntervalMax() const {
-    return le_advertising_interval_max_;
-  }
-
-  uint8_t GetLeAdvertisingOwnAddressType() const {
-    return le_advertising_own_address_type_;
-  }
-
-  uint8_t GetLeAdvertisingPeerAddressType() const {
-    return le_advertising_peer_address_type_;
-  }
-
-  Address GetLeAdvertisingPeerAddress() const {
-    return le_advertising_peer_address_;
-  }
-
-  uint8_t GetLeAdvertisingChannelMap() const {
-    return le_advertising_channel_map_;
-  }
-
-  uint8_t GetLeAdvertisingFilterPolicy() const {
-    return le_advertising_filter_policy_;
-  }
-
-  void SetLeAdvertisingParameters(uint16_t interval_min, uint16_t interval_max, uint8_t ad_type,
-                                  uint8_t own_address_type, uint8_t peer_address_type, Address peer_address,
-                                  uint8_t channel_map, uint8_t filter_policy) {
-    le_advertisement_type_ = ad_type;
-    le_advertising_interval_min_ = interval_min;
-    le_advertising_interval_max_ = interval_max;
-    le_advertising_own_address_type_ = own_address_type;
-    le_advertising_peer_address_type_ = peer_address_type;
-    le_advertising_peer_address_ = peer_address;
-    le_advertising_channel_map_ = channel_map;
-    le_advertising_filter_policy_ = filter_policy;
-  }
-
   void SetLeAdvertisementType(uint8_t ad_type) {
     le_advertisement_type_ = ad_type;
   }
@@ -282,9 +238,6 @@ class DeviceProperties {
     return le_supported_states_;
   }
 
-  // Specification Version 4.2, Volume 2, Part E, Section 7.8.41
-  uint8_t GetLeResolvingListSize() const { return le_resolving_list_size_; }
-
   // Vendor-specific commands
   const std::vector<uint8_t>& GetLeVendorCap() const {
     return le_vendor_cap_;
@@ -315,26 +268,16 @@ class DeviceProperties {
   Address address_;
   uint8_t page_scan_repetition_mode_;
   uint16_t clock_offset_;
-  uint8_t encryption_key_size_;
 
   // Low Energy
   uint16_t le_data_packet_length_;
   uint8_t num_le_data_packets_;
   uint8_t le_white_list_size_;
-  uint8_t le_resolving_list_size_;
   uint64_t le_supported_features_{0x075b3fd8fe8ffeff};
   uint64_t le_supported_states_;
   std::vector<uint8_t> le_vendor_cap_;
   Address le_address_;
   uint8_t le_address_type_;
-
-  uint16_t le_advertising_interval_min_;
-  uint16_t le_advertising_interval_max_;
-  uint8_t le_advertising_own_address_type_;
-  uint8_t le_advertising_peer_address_type_;
-  Address le_advertising_peer_address_;
-  uint8_t le_advertising_channel_map_;
-  uint8_t le_advertising_filter_policy_;
   uint8_t le_advertisement_type_;
   std::vector<uint8_t> le_advertisement_;
   std::vector<uint8_t> le_scan_response_;

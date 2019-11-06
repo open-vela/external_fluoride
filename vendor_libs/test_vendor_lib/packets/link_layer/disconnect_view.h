@@ -30,7 +30,7 @@ class DisconnectView : public PacketView<true> {
   virtual ~DisconnectView() = default;
 
   static DisconnectView GetDisconnect(const LinkLayerPacketView& view) {
-    ASSERT(view.GetType() == Link::PacketType::DISCONNECT);
+    CHECK(view.GetType() == Link::PacketType::DISCONNECT);
     return DisconnectView(view.GetPayload());
   }
 

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "keyboard"
+
 #include "keyboard.h"
 
 #include "model/setup/device_boutique.h"
@@ -21,12 +23,12 @@
 using std::vector;
 
 namespace test_vendor_lib {
-bool Keyboard::registered_ = DeviceBoutique::Register("keyboard", &Keyboard::Create);
+bool Keyboard::registered_ = DeviceBoutique::Register(LOG_TAG, &Keyboard::Create);
 
 Keyboard::Keyboard() {
-  properties_.SetLeAdvertisementType(0x00 /* CONNECTABLE */);
+  properties_.SetLeAdvertisementType(BTM_BLE_CONNECT_EVT);
   properties_.SetLeAdvertisement({0x11,  // Length
-                                  0x09 /* TYPE_NAME_CMPL */,
+                                  BTM_BLE_AD_TYPE_NAME_CMPL,
                                   'g',
                                   'D',
                                   'e',
@@ -52,11 +54,11 @@ Keyboard::Keyboard() {
                                   0x12,
                                   0x18,
                                   0x02,  // Length
-                                  0x01 /* TYPE_FLAGS */,
-                                  0x04 /* BREDR_NOT_SPT */ | 0x02 /* GEN_DISC_FLAG */});
+                                  BTM_BLE_AD_TYPE_FLAG,
+                                  BTM_BLE_BREDR_NOT_SPT | BTM_BLE_GEN_DISC_FLAG});
 
   properties_.SetLeScanResponse({0x04,  // Length
-                                 0x08 /* TYPE_NAME_SHORT */, 'k', 'e', 'y'});
+                                 BTM_BLE_AD_TYPE_NAME_SHORT, 'k', 'e', 'y'});
 }
 
 std::string Keyboard::GetTypeString() const {
