@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "device.h"
+#include "stack/include/btm_ble_api.h"
 
 namespace test_vendor_lib {
 

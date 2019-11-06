@@ -17,6 +17,8 @@
 #include "link_layer_packet_builder.h"
 #include "link_layer_packet_view.h"
 
+#include "base/logging.h"
+
 using std::vector;
 
 namespace test_vendor_lib {
@@ -102,19 +104,6 @@ std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapLeAdvertisem
       new LinkLayerPacketBuilder(Link::PacketType::LE_ADVERTISEMENT, std::move(advertisement), source));
 }
 
-std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapLeConnect(std::unique_ptr<LeConnectBuilder> connect,
-                                                                              const Address& source,
-                                                                              const Address& dest) {
-  return std::shared_ptr<LinkLayerPacketBuilder>(
-      new LinkLayerPacketBuilder(Link::PacketType::LE_CONNECT, std::move(connect), source, dest));
-}
-
-std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapLeConnectComplete(
-    std::unique_ptr<LeConnectCompleteBuilder> connect_complete, const Address& source, const Address& dest) {
-  return std::shared_ptr<LinkLayerPacketBuilder>(
-      new LinkLayerPacketBuilder(Link::PacketType::LE_CONNECT_COMPLETE, std::move(connect_complete), source, dest));
-}
-
 std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapLeScan(const Address& source, const Address& dest) {
   return std::shared_ptr<LinkLayerPacketBuilder>(new LinkLayerPacketBuilder(Link::PacketType::LE_SCAN, source, dest));
 }
@@ -129,12 +118,6 @@ std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapPage(std::un
                                                                          const Address& source, const Address& dest) {
   return std::shared_ptr<LinkLayerPacketBuilder>(
       new LinkLayerPacketBuilder(Link::PacketType::PAGE, std::move(page), source, dest));
-}
-
-std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapPageReject(
-    std::unique_ptr<PageRejectBuilder> page_reject, const Address& source, const Address& dest) {
-  return std::shared_ptr<LinkLayerPacketBuilder>(
-      new LinkLayerPacketBuilder(Link::PacketType::PAGE_REJECT, std::move(page_reject), source, dest));
 }
 
 std::shared_ptr<LinkLayerPacketBuilder> LinkLayerPacketBuilder::WrapPageResponse(
