@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <memory>
 
+#include "base/logging.h"
+
 #include "packets/packet_builder.h"
 #include "packets/packet_view.h"
 
