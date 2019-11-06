@@ -67,7 +67,7 @@ static void bta_mce_search_cback(uint16_t result, void* user_data) {
   if (bta_mce_cb.p_dm_cback == NULL) return;
 
   evt_data.status = BTA_MCE_FAILURE;
-  evt_data.remote_addr = bta_mce_cb.remote_addr;
+  bdcpy(evt_data.remote_addr, bta_mce_cb.remote_addr);
   evt_data.num_mas = 0;
 
   if (result == SDP_SUCCESS || result == SDP_DB_FULL) {
@@ -111,9 +111,8 @@ static void bta_mce_search_cback(uint16_t result, void* user_data) {
     evt_data.status = BTA_MCE_SUCCESS;
   }
 
-  tBTA_MCE bta_mce;
-  bta_mce.mas_disc_comp = evt_data;
-  bta_mce_cb.p_dm_cback(BTA_MCE_MAS_DISCOVERY_COMP_EVT, &bta_mce, user_data);
+  bta_mce_cb.p_dm_cback(BTA_MCE_MAS_DISCOVERY_COMP_EVT, (tBTA_MCE*)&evt_data,
+                        user_data);
 }
 
 /*******************************************************************************
@@ -128,9 +127,7 @@ static void bta_mce_search_cback(uint16_t result, void* user_data) {
 void bta_mce_enable(tBTA_MCE_MSG* p_data) {
   tBTA_MCE_STATUS status = BTA_MCE_SUCCESS;
   bta_mce_cb.p_dm_cback = p_data->enable.p_cback;
-  tBTA_MCE bta_mce;
-  bta_mce.status = status;
-  bta_mce_cb.p_dm_cback(BTA_MCE_ENABLE_EVT, &bta_mce, NULL);
+  bta_mce_cb.p_dm_cback(BTA_MCE_ENABLE_EVT, (tBTA_MCE*)&status, NULL);
 }
 
 /*******************************************************************************
@@ -154,17 +151,15 @@ void bta_mce_get_remote_mas_instances(tBTA_MCE_MSG* p_data) {
   if (bta_mce_cb.sdp_active != BTA_MCE_SDP_ACT_NONE) {
     /* SDP is still in progress */
     status = BTA_MCE_BUSY;
-    if (bta_mce_cb.p_dm_cback) {
-      tBTA_MCE bta_mce;
-      bta_mce.status = status;
-      bta_mce_cb.p_dm_cback(BTA_MCE_MAS_DISCOVERY_COMP_EVT, &bta_mce, NULL);
-    }
+    if (bta_mce_cb.p_dm_cback)
+      bta_mce_cb.p_dm_cback(BTA_MCE_MAS_DISCOVERY_COMP_EVT, (tBTA_MCE*)&status,
+                            NULL);
 
     return;
   }
 
   bta_mce_cb.sdp_active = BTA_MCE_SDP_ACT_YES;
-  bta_mce_cb.remote_addr = p_data->get_rmt_mas.bd_addr;
+  bdcpy(bta_mce_cb.remote_addr, p_data->get_rmt_mas.bd_addr);
 
   SDP_InitDiscoveryDb(p_bta_mce_cfg->p_sdp_db, p_bta_mce_cfg->sdp_db_size, 1,
                       (tBT_UUID*)&bta_mce_mas_uuid, 0, NULL);
@@ -175,11 +170,9 @@ void bta_mce_get_remote_mas_instances(tBTA_MCE_MSG* p_data) {
     bta_mce_cb.sdp_active = BTA_MCE_SDP_ACT_NONE;
 
     /* failed to start SDP. report the failure right away */
-    if (bta_mce_cb.p_dm_cback) {
-      tBTA_MCE bta_mce;
-      bta_mce.status = status;
-      bta_mce_cb.p_dm_cback(BTA_MCE_MAS_DISCOVERY_COMP_EVT, &bta_mce, NULL);
-    }
+    if (bta_mce_cb.p_dm_cback)
+      bta_mce_cb.p_dm_cback(BTA_MCE_MAS_DISCOVERY_COMP_EVT, (tBTA_MCE*)&status,
+                            NULL);
   }
   /*
   else report the result when the cback is called
