@@ -14,31 +14,27 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "beacon"
-
 #include "beacon.h"
 
-#include "le_advertisement.h"
 #include "model/setup/device_boutique.h"
-#include "osi/include/log.h"
 
 using std::vector;
 
 namespace test_vendor_lib {
 
-bool Beacon::registered_ = DeviceBoutique::Register(LOG_TAG, &Beacon::Create);
+bool Beacon::registered_ = DeviceBoutique::Register("beacon", &Beacon::Create);
 
 Beacon::Beacon() {
   advertising_interval_ms_ = std::chrono::milliseconds(1280);
-  properties_.SetLeAdvertisementType(BTM_BLE_NON_CONNECT_EVT);
+  properties_.SetLeAdvertisementType(0x03 /* NON_CONNECT */);
   properties_.SetLeAdvertisement({0x0F,  // Length
-                                  BTM_BLE_AD_TYPE_NAME_CMPL, 'g', 'D', 'e', 'v', 'i', 'c', 'e', '-', 'b', 'e', 'a', 'c',
+                                  0x09 /* TYPE_NAME_CMPL */, 'g', 'D', 'e', 'v', 'i', 'c', 'e', '-', 'b', 'e', 'a', 'c',
                                   'o', 'n',
                                   0x02,  // Length
-                                  BTM_BLE_AD_TYPE_FLAG, BTM_BLE_BREDR_NOT_SPT | BTM_BLE_GEN_DISC_FLAG});
+                                  0x01 /* TYPE_FLAG */, 0x4 /* BREDR_NOT_SPT */ | 0x2 /* GEN_DISC_FLAG */});
 
   properties_.SetLeScanResponse({0x05,  // Length
-                                 BTM_BLE_AD_TYPE_NAME_SHORT, 'b', 'e', 'a', 'c'});
+                                 0x08 /* TYPE_NAME_SHORT */, 'b', 'e', 'a', 'c'});
 }
 
 std::string Beacon::GetTypeString() const {
