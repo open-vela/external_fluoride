@@ -18,6 +18,8 @@
 
 #include <cstdint>
 
+#include <log/log.h>
+
 #include "include/link.h"
 #include "packets/link_layer/link_layer_packet_view.h"
 #include "packets/packet_view.h"
@@ -31,8 +33,7 @@ class LeAdvertisementView : public PacketView<true>, public LeAdvertisement {
   virtual ~LeAdvertisementView() = default;
 
   static LeAdvertisementView GetLeAdvertisementView(const LinkLayerPacketView& view) {
-    ASSERT(view.GetType() == Link::PacketType::LE_ADVERTISEMENT ||
-           view.GetType() == Link::PacketType::LE_SCAN_RESPONSE);
+    CHECK(view.GetType() == Link::PacketType::LE_ADVERTISEMENT || view.GetType() == Link::PacketType::LE_SCAN_RESPONSE);
     return LeAdvertisementView(view.GetPayload());
   }
 

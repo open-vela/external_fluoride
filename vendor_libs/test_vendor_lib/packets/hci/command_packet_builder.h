@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <base/logging.h>
 #include <cstdint>
 #include <memory>
 #include <vector>

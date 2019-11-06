@@ -64,6 +64,9 @@ class DualModeController : public Device {
 
   virtual void TimerTick() override;
 
+  // Send packets to remote devices
+  void SendLinkLayerPacket(std::shared_ptr<packets::LinkLayerPacketBuilder> to_send, Phy::Type phy_type);
+
   // Route commands and data from the stack.
   void HandleAcl(std::shared_ptr<std::vector<uint8_t>> acl_packet);
   void HandleCommand(std::shared_ptr<std::vector<uint8_t>> command_packet);
@@ -124,17 +127,8 @@ class DualModeController : public Device {
   // 7.1.16
   void HciSetConnectionEncryption(packets::PacketView<true> args);
 
-  // 7.1.17
-  void HciChangeConnectionLinkKey(packets::PacketView<true> args);
-
-  // 7.1.18
-  void HciMasterLinkKey(packets::PacketView<true> args);
-
   // 7.1.19
   void HciRemoteNameRequest(packets::PacketView<true> args);
-
-  // 7.2.8
-  void HciSwitchRole(packets::PacketView<true> args);
 
   // 7.1.21
   void HciReadRemoteSupportedFeatures(packets::PacketView<true> args);
@@ -175,26 +169,11 @@ class DualModeController : public Device {
   // Link Policy Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.2
 
-  // 7.2.1
-  void HciHoldMode(packets::PacketView<true> args);
-
-  // 7.2.2
-  void HciSniffMode(packets::PacketView<true> args);
-
-  // 7.2.3
-  void HciExitSniffMode(packets::PacketView<true> args);
-
-  // 7.2.6
-  void HciQosSetup(packets::PacketView<true> args);
-
   // 7.2.10
   void HciWriteLinkPolicySettings(packets::PacketView<true> args);
 
   // 7.2.12
   void HciWriteDefaultLinkPolicySettings(packets::PacketView<true> args);
-
-  // 7.2.13
-  void HciFlowSpecification(packets::PacketView<true> args);
 
   // 7.2.14
   void HciSniffSubrating(packets::PacketView<true> args);
@@ -262,17 +241,11 @@ class DualModeController : public Device {
   // 7.3.56
   void HciWriteExtendedInquiryResponse(packets::PacketView<true> args);
 
-  // 7.3.57
-  void HciRefreshEncryptionKey(packets::PacketView<true> args);
-
   // 7.3.59
   void HciWriteSimplePairingMode(packets::PacketView<true> args);
 
   // 7.3.79
   void HciWriteLeHostSupport(packets::PacketView<true> args);
-
-  // 7.3.92
-  void HciWriteSecureConnectionHostSupport(packets::PacketView<true> args);
 
   // Informational Parameters Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.4
@@ -289,9 +262,6 @@ class DualModeController : public Device {
   // 7.4.2
   void HciReadLocalSupportedCommands(packets::PacketView<true> args);
 
-  // 7.4.3
-  void HciReadLocalSupportedFeatures(packets::PacketView<true> args);
-
   // 7.4.4
   void HciReadLocalExtendedFeatures(packets::PacketView<true> args);
 
@@ -300,9 +270,6 @@ class DualModeController : public Device {
 
   // Status Parameters Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.5
-
-  // 7.5.7
-  void HciReadEncryptionKeySize(packets::PacketView<true> args);
 
   // Test Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.7
@@ -333,12 +300,6 @@ class DualModeController : public Device {
 
   // 7.8.7
   void HciLeSetAdvertisingData(packets::PacketView<true> args);
-
-  // 7.8.8
-  void HciLeSetScanResponseData(packets::PacketView<true> args);
-
-  // 7.8.9
-  void HciLeSetAdvertisingEnable(packets::PacketView<true> args);
 
   // 7.8.10
   void HciLeSetScanParameters(packets::PacketView<true> args);
@@ -378,18 +339,6 @@ class DualModeController : public Device {
 
   // 7.8.27
   void HciLeReadSupportedStates(packets::PacketView<true> args);
-
-  // 7.8.38
-  void HciLeAddDeviceToResolvingList(packets::PacketView<true> args);
-
-  // 7.8.39
-  void HciLeRemoveDeviceFromResolvingList(packets::PacketView<true> args);
-
-  // 7.8.40
-  void HciLeClearResolvingList(packets::PacketView<true> args);
-
-  // 7.8.77
-  void HciLeSetPrivacyMode(packets::PacketView<true> args);
 
   // Vendor-specific Commands
 
