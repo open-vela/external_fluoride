@@ -11,7 +11,6 @@ filegroup {
         "device_database.cc",
         "hci_layer.cc",
         "le_advertising_manager.cc",
-        "le_scanning_manager.cc",
     ],
 }
 
@@ -30,7 +29,6 @@ filegroup {
         "dual_device_test.cc",
         "hci_layer_test.cc",
         "hci_packets_test.cc",
-        "le_scanning_manager_test.cc",
     ],
 }
 
