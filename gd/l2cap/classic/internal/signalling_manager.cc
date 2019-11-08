@@ -234,7 +234,7 @@ void ClassicSignallingManager::OnDisconnectionRequest(SignalId signal_id, Cid ci
     LOG_WARN("Disconnect request for an unknown channel");
     return;
   }
-  auto builder = DisconnectionResponseBuilder::Create(signal_id.Value(), cid, remote_cid);
+  auto builder = DisconnectionResponseBuilder::Create(signal_id.Value(), remote_cid, cid);
   enqueue_buffer_->Enqueue(std::move(builder), handler_);
   channel->OnClosed(hci::ErrorCode::SUCCESS);
   link_->FreeDynamicChannel(cid);
@@ -441,8 +441,6 @@ void ClassicSignallingManager::on_incoming_packet() {
     }
     default:
       LOG_WARN("Unhandled event 0x%x", static_cast<int>(code));
-      auto builder = CommandRejectNotUnderstoodBuilder::Create(control_packet_view.GetIdentifier());
-      enqueue_buffer_->Enqueue(std::move(builder), handler_);
       return;
   }
 }
