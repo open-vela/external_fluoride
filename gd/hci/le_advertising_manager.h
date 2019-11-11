@@ -59,7 +59,7 @@ using AdvertiserId = int32_t;
 
 class LeAdvertisingManager : public bluetooth::Module {
  public:
-  static constexpr AdvertiserId kInvalidId = -1;
+  static const AdvertiserId kInvalidId;
   LeAdvertisingManager();
 
   size_t GetNumberOfAdvertisingInstances() const;
