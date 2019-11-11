@@ -39,7 +39,7 @@ void SecurityManagerChannel::OnHciEventReceived(EventPacketView packet) {
   ASSERT_LOG(listener_ != nullptr, "No listener set!");
   std::shared_ptr<Device> device = nullptr;
   auto event = EventPacketView::Create(std::move(packet));
-  ASSERT_LOG(event.IsValid(), "Received invalid packet");
+  ASSERT_LOG(event.IsValid(), "Received invalid packet: %hhx", event.GetEventCode());
   const hci::EventCode code = event.GetEventCode();
   switch (code) {
     case hci::EventCode::CHANGE_CONNECTION_LINK_KEY_COMPLETE:
@@ -81,10 +81,10 @@ void SecurityManagerChannel::OnHciEventReceived(EventPacketView packet) {
       listener_->OnRemoteOobDataRequest(device, hci::RemoteOobDataRequestView::Create(std::move(event)));
       break;
     case hci::EventCode::USER_PASSKEY_NOTIFICATION:
-      listener_->OnUserPasskeyNotification(device, hci::UserPasskeyNotificationView::Create(std::move(event)));
+      //      listener_->OnUserPasskeyNotification(device, <packet>);
       break;
     case hci::EventCode::KEYPRESS_NOTIFICATION:
-      listener_->OnKeypressNotification(device, hci::KeypressNotificationView::Create(std::move(event)));
+      //      listener_->OnSendKeypressNotification(device, <packet>);
       break;
     default:
       ASSERT_LOG(false, "Invalid packet received: %hhx", code);
