@@ -51,9 +51,9 @@ class EndianBuilder : public PacketBuilder<little_endian> {
  public:
   EndianBuilder(uint8_t byte, uint16_t two_bytes, uint32_t four_bytes, uint64_t eight_bytes)
       : byte_(byte), two_bytes_(two_bytes), four_bytes_(four_bytes), eight_bytes_(eight_bytes) {}
-  ~EndianBuilder() override = default;
+  ~EndianBuilder() = default;
 
-  size_t size() const override {
+  virtual size_t size() const override {
     return sizeof(signature_) + sizeof(byte_) + sizeof(two_bytes_) + sizeof(four_bytes_) + sizeof(eight_bytes_);
   }
 
@@ -65,7 +65,7 @@ class EndianBuilder : public PacketBuilder<little_endian> {
     return packet;
   }
 
-  void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     PacketBuilder<little_endian>::insert(signature_, it);
     PacketBuilder<little_endian>::insert(byte_, it);
     PacketBuilder<little_endian>::insert(two_bytes_, it);
@@ -84,7 +84,7 @@ class EndianBuilder : public PacketBuilder<little_endian> {
 class PacketBuilderEndianTest : public ::testing::Test {
  public:
   PacketBuilderEndianTest() = default;
-  ~PacketBuilderEndianTest() override = default;
+  ~PacketBuilderEndianTest() = default;
 };
 
 TEST(PacketBuilderEndianTest, insertTest) {
@@ -101,9 +101,9 @@ class VectorBuilder : public PacketBuilder<true> {
       vect.push_back(static_cast<T>(element));
     }
   }
-  ~VectorBuilder() override = default;
+  ~VectorBuilder() = default;
 
-  size_t size() const override {
+  virtual size_t size() const override {
     return vect_.size() * sizeof(T);
   }
 
@@ -115,7 +115,7 @@ class VectorBuilder : public PacketBuilder<true> {
     return packet;
   }
 
-  void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     PacketBuilder<true>::insert_vector(vect_, it);
   }
 
@@ -131,9 +131,9 @@ class InsertElementsBuilder : public PacketBuilder<true> {
       vect.push_back(static_cast<T>(element));
     }
   }
-  ~InsertElementsBuilder() override = default;
+  virtual ~InsertElementsBuilder() = default;
 
-  size_t size() const override {
+  virtual size_t size() const override {
     return vect_.size() * sizeof(T);
   }
 
@@ -145,7 +145,7 @@ class InsertElementsBuilder : public PacketBuilder<true> {
     return packet;
   }
 
-  void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     for (T elem : vect_) {
       PacketBuilder<true>::insert(elem, it);
     }
@@ -164,14 +164,14 @@ template <typename T>
 class VectorBuilderTest : public ::testing::Test {
  public:
   VectorBuilderTest() = default;
-  ~VectorBuilderTest() override = default;
+  ~VectorBuilderTest() = default;
 
-  void SetUp() override {
+  void SetUp() {
     packet_1_ = std::shared_ptr<VectorBuilder<T>>(new VectorBuilder<T>(vector_data));
     packet_2_ = std::shared_ptr<InsertElementsBuilder<T>>(new InsertElementsBuilder<T>(vector_data));
   }
 
-  void TearDown() override {
+  void TearDown() {
     packet_1_.reset();
     packet_2_.reset();
   }
@@ -189,9 +189,9 @@ TYPED_TEST(VectorBuilderTest, insertVectorTest) {
 
 class NestedBuilder : public PacketBuilder<true> {
  public:
-  ~NestedBuilder() override = default;
+  ~NestedBuilder() = default;
 
-  size_t size() const override {
+  virtual size_t size() const override {
     size_t payload_size = (payload_ ? payload_->size() : 0);
     return 1 + payload_size;
   }
@@ -212,7 +212,7 @@ class NestedBuilder : public PacketBuilder<true> {
     return packet;
   }
 
-  void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
+  virtual void Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const override {
     PacketBuilder<true>::insert(level_, it);
     if (payload_) {
       payload_->Serialize(it);
