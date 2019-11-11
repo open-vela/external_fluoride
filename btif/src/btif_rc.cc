@@ -2535,9 +2535,9 @@ static bt_status_t set_volume(uint8_t volume) {
     BTIF_TRACE_DEBUG("%s: Peer supports absolute volume. newVolume: %d",
                      __func__, volume);
 
-    tAVRC_COMMAND avrc_cmd = {.volume = {.pdu = AVRC_PDU_SET_ABSOLUTE_VOLUME,
+    tAVRC_COMMAND avrc_cmd = {.volume = {.opcode = AVRC_OP_VENDOR,
+                                         .pdu = AVRC_PDU_SET_ABSOLUTE_VOLUME,
                                          .status = AVRC_STS_NO_ERROR,
-                                         .opcode = AVRC_OP_VENDOR,
                                          .volume = volume}};
 
     BT_HDR* p_msg = NULL;
@@ -3336,8 +3336,6 @@ static void handle_app_attr_response(tBTA_AV_META_MSG* pmeta_msg,
     rc_ctrl_procedure_complete(p_dev);
     return;
   }
-  p_dev->rc_app_settings.num_attrs = 0;
-  p_dev->rc_app_settings.num_ext_attrs = 0;
 
   for (xx = 0; xx < p_rsp->num_attr; xx++) {
     uint8_t st_index;
@@ -3811,10 +3809,6 @@ static void handle_get_playstatus_response(tBTA_AV_META_MSG* pmeta_msg,
   if (p_rsp->status == AVRC_STS_NO_ERROR) {
     do_in_jni_thread(
         FROM_HERE,
-        base::Bind(bt_rc_ctrl_callbacks->play_status_changed_cb, p_dev->rc_addr,
-                   (btrc_play_status_t)p_rsp->play_status));
-    do_in_jni_thread(
-        FROM_HERE,
         base::Bind(bt_rc_ctrl_callbacks->play_position_changed_cb,
                    p_dev->rc_addr, p_rsp->song_len, p_rsp->song_pos));
   } else {
@@ -3913,12 +3907,6 @@ static void handle_get_folder_items_response(tBTA_AV_META_MSG* pmeta_msg,
                    /* We want to make the ownership explicit in native */
                    btrc_items, item_count));
 
-    if (item_count > 0) {
-      if (btrc_items[0].item_type == AVRC_ITEM_PLAYER &&
-          (p_dev->rc_features & BTA_AV_FEAT_APP_SETTING)) {
-        list_player_app_setting_attrib_cmd(p_dev);
-      }
-    }
     /* Release the memory block for items and attributes allocated here.
      * Since the executor for do_in_jni_thread is a Single Thread Task Runner it
      * is okay to queue up the cleanup of btrc_items */

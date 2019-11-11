@@ -16,8 +16,8 @@
 
 #include "packets/hci/event_packet_builder.h"
 
+#include <base/logging.h>
 #include "hci.h"
-#include "os/log.h"
 #include "packets/hci/le_meta_event_builder.h"
 
 using std::vector;
@@ -38,7 +38,7 @@ EventPacketBuilder::EventPacketBuilder(EventCode event_code, std::unique_ptr<Raw
 std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateInquiryCompleteEvent(hci::Status status) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::INQUIRY_COMPLETE));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
 
   return evt_ptr;
 }
@@ -49,9 +49,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteEve
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::COMMAND_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
-  ASSERT(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
-  ASSERT(evt_ptr->AddPayloadOctets(event_return_parameters));
+  CHECK(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
+  CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
+  CHECK(evt_ptr->AddPayloadOctets(event_return_parameters));
 
   return evt_ptr;
 }
@@ -61,9 +61,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteOnl
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::COMMAND_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
-  ASSERT(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
+  CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
 
   return evt_ptr;
 }
@@ -73,10 +73,10 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteSta
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::COMMAND_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
-  ASSERT(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
+  CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadAddress(address));
 
   return evt_ptr;
 }
@@ -86,9 +86,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteUnk
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::COMMAND_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
-  ASSERT(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(Status::UNKNOWN_COMMAND)));
+  CHECK(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
+  CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(Status::UNKNOWN_COMMAND)));
 
   return evt_ptr;
 }
@@ -99,9 +99,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandStatusEvent
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::COMMAND_STATUS));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
-  ASSERT(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets1(1));  // num_hci_command_packets
+  CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(command_opcode)));
 
   return evt_ptr;
 }
@@ -119,11 +119,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateNumberOfCompletedP
 }
 
 void EventPacketBuilder::AddCompletedPackets(uint16_t handle, uint16_t num_completed_packets) {
-  ASSERT(event_code_ == EventCode::NUMBER_OF_COMPLETED_PACKETS);
+  CHECK(event_code_ == EventCode::NUMBER_OF_COMPLETED_PACKETS);
 
   std::unique_ptr<RawBuilder> handle_pair = std::make_unique<RawBuilder>();
-  ASSERT(handle_pair->AddOctets2(handle));
-  ASSERT(handle_pair->AddOctets2(num_completed_packets));
+  CHECK(handle_pair->AddOctets2(handle));
+  CHECK(handle_pair->AddOctets2(num_completed_packets));
   AddBuilder(std::move(handle_pair));
 }
 
@@ -133,7 +133,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteDel
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::DELETE_STORED_LINK_KEY, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets2(num_keys_deleted));
+  CHECK(evt_ptr->AddPayloadOctets2(num_keys_deleted));
 
   return evt_ptr;
 }
@@ -148,9 +148,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   if (len > 247) {
     len = 247;
   }
-  ASSERT(evt_ptr->AddPayloadOctets(len, local_name));
-  ASSERT(evt_ptr->AddPayloadOctets1(0));  // Null terminated
-  for (size_t i = 0; i < 248 - len - 1; i++) ASSERT(evt_ptr->AddPayloadOctets1(0xFF));
+  CHECK(evt_ptr->AddPayloadOctets(len, local_name));
+  CHECK(evt_ptr->AddPayloadOctets1(0));  // Null terminated
+  for (size_t i = 0; i < 248 - len - 1; i++) CHECK(evt_ptr->AddPayloadOctets1(0xFF));
 
   return evt_ptr;
 }
@@ -160,7 +160,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
     hci::Status status, uint8_t enable) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOCAL_NAME, status);
-  ASSERT(evt_ptr->AddPayloadOctets1(enable));
+  CHECK(evt_ptr->AddPayloadOctets1(enable));
   return evt_ptr;
 }
 
@@ -171,11 +171,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOCAL_VERSION_INFORMATION, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets1(hci_version));
-  ASSERT(evt_ptr->AddPayloadOctets2(hci_revision));
-  ASSERT(evt_ptr->AddPayloadOctets1(lmp_pal_version));
-  ASSERT(evt_ptr->AddPayloadOctets2(manufacturer_name));
-  ASSERT(evt_ptr->AddPayloadOctets2(lmp_pal_subversion));
+  CHECK(evt_ptr->AddPayloadOctets1(hci_version));
+  CHECK(evt_ptr->AddPayloadOctets2(hci_revision));
+  CHECK(evt_ptr->AddPayloadOctets1(lmp_pal_version));
+  CHECK(evt_ptr->AddPayloadOctets2(manufacturer_name));
+  CHECK(evt_ptr->AddPayloadOctets2(lmp_pal_subversion));
 
   return evt_ptr;
 }
@@ -186,11 +186,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateReadRemoteVersionI
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::READ_REMOTE_VERSION_INFORMATION_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(connection_handle));
-  ASSERT(evt_ptr->AddPayloadOctets1(lmp_pal_version));
-  ASSERT(evt_ptr->AddPayloadOctets2(manufacturer_name));
-  ASSERT(evt_ptr->AddPayloadOctets2(lmp_pal_subversion));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets2(connection_handle));
+  CHECK(evt_ptr->AddPayloadOctets1(lmp_pal_version));
+  CHECK(evt_ptr->AddPayloadOctets2(manufacturer_name));
+  CHECK(evt_ptr->AddPayloadOctets2(lmp_pal_subversion));
 
   return evt_ptr;
 }
@@ -200,18 +200,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOCAL_SUPPORTED_COMMANDS, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets(64, supported_commands));
-
-  return evt_ptr;
-}
-
-// Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section 7.4.3
-std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteReadLocalSupportedFeatures(
-    hci::Status status, uint64_t supported_features) {
-  std::unique_ptr<EventPacketBuilder> evt_ptr =
-      EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOCAL_SUPPORTED_FEATURES, status);
-
-  ASSERT(evt_ptr->AddPayloadOctets8(supported_features));
+  CHECK(evt_ptr->AddPayloadOctets(64, supported_commands));
 
   return evt_ptr;
 }
@@ -222,9 +211,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOCAL_EXTENDED_FEATURES, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets1(page_number));
-  ASSERT(evt_ptr->AddPayloadOctets1(maximum_page_number));
-  ASSERT(evt_ptr->AddPayloadOctets8(extended_lmp_features));
+  CHECK(evt_ptr->AddPayloadOctets1(page_number));
+  CHECK(evt_ptr->AddPayloadOctets1(maximum_page_number));
+  CHECK(evt_ptr->AddPayloadOctets8(extended_lmp_features));
 
   return evt_ptr;
 }
@@ -235,11 +224,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateReadRemoteExtended
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::READ_REMOTE_EXTENDED_FEATURES_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets1(page_number));
-  ASSERT(evt_ptr->AddPayloadOctets1(maximum_page_number));
-  ASSERT(evt_ptr->AddPayloadOctets8(extended_lmp_features));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets1(page_number));
+  CHECK(evt_ptr->AddPayloadOctets1(maximum_page_number));
+  CHECK(evt_ptr->AddPayloadOctets8(extended_lmp_features));
 
   return evt_ptr;
 }
@@ -251,10 +240,10 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_BUFFER_SIZE, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets2(hc_acl_data_packet_length));
-  ASSERT(evt_ptr->AddPayloadOctets1(hc_synchronous_data_packet_length));
-  ASSERT(evt_ptr->AddPayloadOctets2(hc_total_num_acl_data_packets));
-  ASSERT(evt_ptr->AddPayloadOctets2(hc_total_synchronous_data_packets));
+  CHECK(evt_ptr->AddPayloadOctets2(hc_acl_data_packet_length));
+  CHECK(evt_ptr->AddPayloadOctets1(hc_synchronous_data_packet_length));
+  CHECK(evt_ptr->AddPayloadOctets2(hc_total_num_acl_data_packets));
+  CHECK(evt_ptr->AddPayloadOctets2(hc_total_synchronous_data_packets));
 
   return evt_ptr;
 }
@@ -265,7 +254,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_BD_ADDR, status);
 
-  ASSERT(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadAddress(address));
 
   return evt_ptr;
 }
@@ -276,25 +265,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOCAL_SUPPORTED_CODECS, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets1(supported_codecs.size()));
-  ASSERT(evt_ptr->AddPayloadOctets(supported_codecs));
-  ASSERT(evt_ptr->AddPayloadOctets1(vendor_specific_codecs.size()));
+  CHECK(evt_ptr->AddPayloadOctets1(supported_codecs.size()));
+  CHECK(evt_ptr->AddPayloadOctets(supported_codecs));
+  CHECK(evt_ptr->AddPayloadOctets1(vendor_specific_codecs.size()));
   for (size_t i = 0; i < vendor_specific_codecs.size(); i++)
-    ASSERT(evt_ptr->AddPayloadOctets4(vendor_specific_codecs[i]));
-
-  return evt_ptr;
-}
-
-// Bluetooth Core Specification Version 5.1, Volume 2, Part E, Section 7.5.7
-std::unique_ptr<EventPacketBuilder>
-EventPacketBuilder::CreateCommandCompleteReadEncryptionKeySize(
-    hci::Status status, uint16_t handle, uint8_t key_size) {
-  std::unique_ptr<EventPacketBuilder> evt_ptr =
-      EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(
-          OpCode::READ_ENCRYPTION_KEY_SIZE, status);
-
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets1(key_size));
+    CHECK(evt_ptr->AddPayloadOctets4(vendor_specific_codecs[i]));
 
   return evt_ptr;
 }
@@ -304,7 +279,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteRea
                                                                                               hci::LoopbackMode mode) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::READ_LOOPBACK_MODE, status);
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(mode)));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(mode)));
 
   return evt_ptr;
 }
@@ -319,20 +294,20 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateInquiryResultEvent
 
 bool EventPacketBuilder::AddInquiryResult(const Address& address, uint8_t page_scan_repetition_mode,
                                           ClassOfDevice class_of_device, uint16_t clock_offset) {
-  ASSERT(event_code_ == EventCode::INQUIRY_RESULT);
+  CHECK(event_code_ == EventCode::INQUIRY_RESULT);
 
   if (!CanAddPayloadOctets(14)) return false;
 
   std::unique_ptr<RawBuilder> result = std::make_unique<RawBuilder>();
 
-  ASSERT(result->AddAddress(address));
-  ASSERT(result->AddOctets1(page_scan_repetition_mode));
-  ASSERT(result->AddOctets2(0));  // Reserved
-  ASSERT(result->AddOctets1(class_of_device.cod[0]));
-  ASSERT(result->AddOctets1(class_of_device.cod[1]));
-  ASSERT(result->AddOctets1(class_of_device.cod[2]));
-  ASSERT(!(clock_offset & 0x8000));
-  ASSERT(result->AddOctets2(clock_offset));
+  CHECK(result->AddAddress(address));
+  CHECK(result->AddOctets1(page_scan_repetition_mode));
+  CHECK(result->AddOctets2(0));  // Reserved
+  CHECK(result->AddOctets1(class_of_device.cod[0]));
+  CHECK(result->AddOctets1(class_of_device.cod[1]));
+  CHECK(result->AddOctets1(class_of_device.cod[2]));
+  CHECK(!(clock_offset & 0x8000));
+  CHECK(result->AddOctets2(clock_offset));
   AddBuilder(std::move(result));
   return true;
 }
@@ -343,12 +318,12 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateConnectionComplete
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::CONNECTION_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT((handle & 0xf000) == 0);  // Handles are 12-bit values.
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadAddress(address));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(link_type)));
-  ASSERT(evt_ptr->AddPayloadOctets1(encryption_enabled ? 1 : 0));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK((handle & 0xf000) == 0);  // Handles are 12-bit values.
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(link_type)));
+  CHECK(evt_ptr->AddPayloadOctets1(encryption_enabled ? 1 : 0));
 
   return evt_ptr;
 }
@@ -360,11 +335,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateConnectionRequestE
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::CONNECTION_REQUEST));
 
-  ASSERT(evt_ptr->AddPayloadAddress(address));
-  ASSERT(evt_ptr->AddPayloadOctets1(class_of_device.cod[0]));
-  ASSERT(evt_ptr->AddPayloadOctets1(class_of_device.cod[1]));
-  ASSERT(evt_ptr->AddPayloadOctets1(class_of_device.cod[2]));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(link_type)));
+  CHECK(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadOctets1(class_of_device.cod[0]));
+  CHECK(evt_ptr->AddPayloadOctets1(class_of_device.cod[1]));
+  CHECK(evt_ptr->AddPayloadOctets1(class_of_device.cod[2]));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(link_type)));
 
   return evt_ptr;
 }
@@ -376,10 +351,10 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateDisconnectionCompl
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::DISCONNECTION_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT((handle & 0xf000) == 0);  // Handles are 12-bit values.
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets1(reason));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK((handle & 0xf000) == 0);  // Handles are 12-bit values.
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets1(reason));
 
   return evt_ptr;
 }
@@ -389,9 +364,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateAuthenticationComp
                                                                                           uint16_t handle) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::AUTHENTICATION_COMPLETE));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT((handle & 0xf000) == 0);  // Handles are 12-bit values.
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK((handle & 0xf000) == 0);  // Handles are 12-bit values.
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
   return evt_ptr;
 }
 
@@ -401,11 +376,11 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateRemoteNameRequestC
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::REMOTE_NAME_REQUEST_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadAddress(address));
-  for (size_t i = 0; i < remote_name.length(); i++) ASSERT(evt_ptr->AddPayloadOctets1(remote_name[i]));
-  ASSERT(evt_ptr->AddPayloadOctets1(0));  // Null terminated
-  for (size_t i = 0; i < 248 - remote_name.length() - 1; i++) ASSERT(evt_ptr->AddPayloadOctets1(0xFF));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadAddress(address));
+  for (size_t i = 0; i < remote_name.length(); i++) CHECK(evt_ptr->AddPayloadOctets1(remote_name[i]));
+  CHECK(evt_ptr->AddPayloadOctets1(0));  // Null terminated
+  for (size_t i = 0; i < 248 - remote_name.length() - 1; i++) CHECK(evt_ptr->AddPayloadOctets1(0xFF));
 
   return evt_ptr;
 }
@@ -414,7 +389,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateRemoteNameRequestC
 std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateLinkKeyRequestEvent(const Address& remote) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::LINK_KEY_REQUEST));
-  ASSERT(evt_ptr->AddPayloadAddress(remote));
+  CHECK(evt_ptr->AddPayloadAddress(remote));
   return evt_ptr;
 }
 
@@ -424,10 +399,10 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateLinkKeyNotificatio
                                                                                        uint8_t key_type) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::LINK_KEY_NOTIFICATION));
-  ASSERT(evt_ptr->AddPayloadAddress(remote));
-  ASSERT(key.size() == 16);
-  ASSERT(evt_ptr->AddPayloadOctets(key));
-  ASSERT(evt_ptr->AddPayloadOctets1(key_type));
+  CHECK(evt_ptr->AddPayloadAddress(remote));
+  CHECK(key.size() == 16);
+  CHECK(evt_ptr->AddPayloadOctets(key));
+  CHECK(evt_ptr->AddPayloadOctets1(key_type));
   return evt_ptr;
 }
 
@@ -436,8 +411,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateLoopbackCommandEve
                                                                                    PacketView<true> payload) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::LOOPBACK_COMMAND));
-  ASSERT(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(opcode)));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(payload.size())));
+  CHECK(evt_ptr->AddPayloadOctets2(static_cast<uint16_t>(opcode)));
   for (const auto& payload_byte : payload)  // Fill the packet.
     evt_ptr->AddPayloadOctets1(payload_byte);
   return evt_ptr;
@@ -448,9 +422,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateReadClockOffsetEve
                                                                                    uint16_t offset) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::READ_CLOCK_OFFSET_COMPLETE));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets2(offset));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets2(offset));
   return evt_ptr;
 }
 
@@ -459,10 +433,10 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateConnectionPacketTy
                                                                                                uint16_t handle,
                                                                                                uint16_t packet_type) {
   std::unique_ptr<EventPacketBuilder> evt_ptr =
-      std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::CONNECTION_PACKET_TYPE_CHANGED));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets2(packet_type));
+      std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::CONNECTION_PACKET_TYPE_CHANGE));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets2(packet_type));
   return evt_ptr;
 }
 
@@ -472,7 +446,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateSniffSubratingEven
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::SNIFF_SUBRATING, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
   return evt_ptr;
 }
 
@@ -483,31 +457,21 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateExtendedInquiryRes
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::EXTENDED_INQUIRY_RESULT));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(1));  // Always contains a single response
+  CHECK(evt_ptr->AddPayloadOctets1(1));  // Always contains a single response
 
-  ASSERT(evt_ptr->AddPayloadAddress(address));
-  ASSERT(evt_ptr->AddPayloadOctets1(page_scan_repetition_mode));
-  ASSERT(evt_ptr->AddPayloadOctets1(0));  // Reserved
-  ASSERT(evt_ptr->AddPayloadOctets1(class_of_device.cod[0]));
-  ASSERT(evt_ptr->AddPayloadOctets1(class_of_device.cod[1]));
-  ASSERT(evt_ptr->AddPayloadOctets1(class_of_device.cod[2]));
-  ASSERT(!(clock_offset & 0x8000));
-  ASSERT(evt_ptr->AddPayloadOctets2(clock_offset));
-  ASSERT(evt_ptr->AddPayloadOctets1(rssi));
-  ASSERT(evt_ptr->AddPayloadOctets(extended_inquiry_response));
+  CHECK(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadOctets1(page_scan_repetition_mode));
+  CHECK(evt_ptr->AddPayloadOctets1(0));  // Reserved
+  CHECK(evt_ptr->AddPayloadOctets1(class_of_device.cod[0]));
+  CHECK(evt_ptr->AddPayloadOctets1(class_of_device.cod[1]));
+  CHECK(evt_ptr->AddPayloadOctets1(class_of_device.cod[2]));
+  CHECK(!(clock_offset & 0x8000));
+  CHECK(evt_ptr->AddPayloadOctets2(clock_offset));
+  CHECK(evt_ptr->AddPayloadOctets1(rssi));
+  CHECK(evt_ptr->AddPayloadOctets(extended_inquiry_response));
   evt_ptr->AddPayloadOctets1(0x00);  // End marker
   while (evt_ptr->AddPayloadOctets1(0x00))
     ;  // Fill packet
-  return evt_ptr;
-}
-
-// Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section 7.7.38
-std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateEncryptionKeyRefreshCompleteEvent(hci::Status status,
-                                                                                                uint16_t handle) {
-  std::unique_ptr<EventPacketBuilder> evt_ptr =
-      std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::ENCRYPTION_KEY_REFRESH_COMPLETE));
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
   return evt_ptr;
 }
 
@@ -516,7 +480,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateIoCapabilityReques
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::IO_CAPABILITY_REQUEST));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
   return evt_ptr;
 }  // namespace packets
 
@@ -526,10 +490,10 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateIoCapabilityRespon
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::IO_CAPABILITY_RESPONSE));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
-  ASSERT(evt_ptr->AddPayloadOctets1(io_capability));
-  ASSERT(evt_ptr->AddPayloadOctets1(oob_data_present));
-  ASSERT(evt_ptr->AddPayloadOctets1(authentication_requirements));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadOctets1(io_capability));
+  CHECK(evt_ptr->AddPayloadOctets1(oob_data_present));
+  CHECK(evt_ptr->AddPayloadOctets1(authentication_requirements));
   return evt_ptr;
 }  // namespace test_vendor_lib
 
@@ -539,8 +503,8 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateUserConfirmationRe
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::USER_CONFIRMATION_REQUEST));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
-  ASSERT(evt_ptr->AddPayloadOctets4(numeric_value));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadOctets4(numeric_value));
   return evt_ptr;
 }
 
@@ -549,7 +513,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateUserPasskeyRequest
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::USER_PASSKEY_REQUEST));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
   return evt_ptr;
 }
 
@@ -558,7 +522,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateRemoteOobDataReque
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::REMOTE_OOB_DATA_REQUEST));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
   return evt_ptr;
 }
 
@@ -568,8 +532,8 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateSimplePairingCompl
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::SIMPLE_PAIRING_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
   return evt_ptr;
 }
 
@@ -579,8 +543,8 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateUserPasskeyNotific
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::USER_PASSKEY_NOTIFICATION));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
-  ASSERT(evt_ptr->AddPayloadOctets4(passkey));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadOctets4(passkey));
   return evt_ptr;
 }
 
@@ -590,8 +554,8 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateKeypressNotificati
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::KEYPRESS_NOTIFICATION));
 
-  ASSERT(evt_ptr->AddPayloadAddress(peer));
-  ASSERT(evt_ptr->AddPayloadOctets1(notification_type));
+  CHECK(evt_ptr->AddPayloadAddress(peer));
+  CHECK(evt_ptr->AddPayloadOctets1(notification_type));
   return evt_ptr;
 }
 
@@ -634,7 +598,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateLeAdvertisingRepor
 bool EventPacketBuilder::AddLeAdvertisingReport(LeAdvertisement::AdvertisementType event_type,
                                                 LeAdvertisement::AddressType addr_type, const Address& addr,
                                                 const vector<uint8_t>& data, uint8_t rssi) {
-  ASSERT(event_code_ == EventCode::LE_META_EVENT);
+  CHECK(event_code_ == EventCode::LE_META_EVENT);
 
   // Upcast the payload to add the next report.
   LeMetaEventBuilder* meta_ptr = static_cast<LeMetaEventBuilder*>(payload_.get());
@@ -655,9 +619,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateRemoteSupportedFea
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::READ_REMOTE_SUPPORTED_FEATURES_COMPLETE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets8(features));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets8(features));
 
   return evt_ptr;
 }
@@ -667,7 +631,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLin
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LINK_KEY_REQUEST_REPLY, status);
 
-  ASSERT(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadAddress(address));
 
   return evt_ptr;
 }
@@ -677,7 +641,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLin
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LINK_KEY_REQUEST_NEGATIVE_REPLY, status);
 
-  ASSERT(evt_ptr->AddPayloadAddress(address));
+  CHECK(evt_ptr->AddPayloadAddress(address));
 
   return evt_ptr;
 }
@@ -687,7 +651,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteWri
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::WRITE_LINK_POLICY_SETTINGS, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
 
   return evt_ptr;
 }
@@ -697,7 +661,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteWri
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::WRITE_LINK_SUPERVISION_TIMEOUT, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
 
   return evt_ptr;
 }
@@ -708,8 +672,8 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLeR
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LE_READ_BUFFER_SIZE, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets2(hc_le_data_packet_length));
-  ASSERT(evt_ptr->AddPayloadOctets1(hc_total_num_le_data_packets));
+  CHECK(evt_ptr->AddPayloadOctets2(hc_le_data_packet_length));
+  CHECK(evt_ptr->AddPayloadOctets1(hc_total_num_le_data_packets));
 
   return evt_ptr;
 }
@@ -720,7 +684,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLeR
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LE_READ_LOCAL_SUPPORTED_FEATURES, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets8(le_features));
+  CHECK(evt_ptr->AddPayloadOctets8(le_features));
 
   return evt_ptr;
 }
@@ -731,7 +695,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLeR
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LE_READ_WHITE_LIST_SIZE, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets8(white_list_size));
+  CHECK(evt_ptr->AddPayloadOctets8(white_list_size));
 
   return evt_ptr;
 }
@@ -742,7 +706,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLeR
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LE_RAND, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets8(random_val));
+  CHECK(evt_ptr->AddPayloadOctets8(random_val));
 
   return evt_ptr;
 }
@@ -753,7 +717,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLeR
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LE_READ_SUPPORTED_STATES, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets8(le_states));
+  CHECK(evt_ptr->AddPayloadOctets8(le_states));
 
   return evt_ptr;
 }
@@ -765,7 +729,7 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateCommandCompleteLeG
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       EventPacketBuilder::CreateCommandCompleteOnlyStatusEvent(OpCode::LE_GET_VENDOR_CAPABILITIES, status);
 
-  ASSERT(evt_ptr->AddPayloadOctets(vendor_cap));
+  CHECK(evt_ptr->AddPayloadOctets(vendor_cap));
 
   return evt_ptr;
 }
@@ -775,9 +739,9 @@ std::unique_ptr<EventPacketBuilder> EventPacketBuilder::CreateEncryptionChange(h
   std::unique_ptr<EventPacketBuilder> evt_ptr =
       std::unique_ptr<EventPacketBuilder>(new EventPacketBuilder(EventCode::ENCRYPTION_CHANGE));
 
-  ASSERT(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
-  ASSERT(evt_ptr->AddPayloadOctets2(handle));
-  ASSERT(evt_ptr->AddPayloadOctets1(encryption_enable));
+  CHECK(evt_ptr->AddPayloadOctets1(static_cast<uint8_t>(status)));
+  CHECK(evt_ptr->AddPayloadOctets2(handle));
+  CHECK(evt_ptr->AddPayloadOctets1(encryption_enable));
 
   return evt_ptr;
 }
@@ -790,8 +754,7 @@ size_t EventPacketBuilder::size() const {
 void EventPacketBuilder::Serialize(std::back_insert_iterator<std::vector<uint8_t>> it) const {
   insert(static_cast<uint8_t>(event_code_), it);
   uint8_t payload_size = size() - 2;  // Event code and payload size
-  ASSERT_LOG(size() - 2 == static_cast<size_t>(payload_size), "Payload too large for an event: %d",
-             static_cast<int>(size()));
+  CHECK(size() - 2 == static_cast<size_t>(payload_size)) << "Payload too large for an event: " << size();
   insert(payload_size, it);
   payload_->Serialize(it);
 }
