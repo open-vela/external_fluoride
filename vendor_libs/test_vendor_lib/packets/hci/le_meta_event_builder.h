@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <base/logging.h>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -43,11 +42,9 @@ class LeMetaEventBuilder : public RawBuilder {
 
   // Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section
   // 7.7.65.1
-  static std::unique_ptr<LeMetaEventBuilder> CreateLeConnectionCompleteEvent(hci::Status status, uint16_t handle,
-                                                                             uint8_t role, uint8_t peer_address_type,
-                                                                             const Address& peer, uint16_t interval,
-                                                                             uint16_t latency,
-                                                                             uint16_t supervision_timeout);
+  static std::unique_ptr<LeMetaEventBuilder> CreateLeConnectionCompleteEvent(
+      hci::Status status, uint16_t handle, uint8_t role, uint8_t peer_address_type, const Address& peer,
+      uint16_t interval, uint16_t latency, uint16_t supervision_timeout, uint8_t master_clock_accuracy = 0);
 
   // Bluetooth Core Specification Version 4.2, Volume 2, Part E, Section
   // 7.7.65.2
