@@ -70,8 +70,4 @@ void Device::SendLinkLayerPacket(model::packets::LinkLayerPacketView to_send,
   }
 }
 
-void Device::SetAddress(Address) {
-  LOG_INFO("%s does not implement %s", GetTypeString().c_str(), __func__);
-}
-
 }  // namespace test_vendor_lib
