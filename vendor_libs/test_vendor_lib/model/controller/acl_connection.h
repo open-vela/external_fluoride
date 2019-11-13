@@ -18,11 +18,9 @@
 
 #include <cstdint>
 
-#include "hci/address.h"
+#include "types/address.h"
 
 namespace test_vendor_lib {
-
-using ::bluetooth::hci::Address;
 
 // Model the connection of a device to the controller.
 class AclConnection {

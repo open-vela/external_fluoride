@@ -18,7 +18,6 @@
 #include <memory>
 
 #include "hci/acl_manager.h"
-#include "l2cap/classic/dynamic_channel_manager.h"
 #include "l2cap/classic/internal/fixed_channel_impl.h"
 #include "l2cap/classic/internal/link.h"
 #include "l2cap/internal/parameter_provider.h"
@@ -35,8 +34,8 @@ Link::Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_c
            l2cap::internal::ParameterProvider* parameter_provider,
            DynamicChannelServiceManagerImpl* dynamic_service_manager,
            FixedChannelServiceManagerImpl* fixed_service_manager)
-    : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)), scheduler_(std::move(scheduler)),
-      receiver_(acl_connection_->GetAclQueueEnd(), l2cap_handler_, scheduler_.get()),
+    : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)),
+      reassembler_(acl_connection_->GetAclQueueEnd(), l2cap_handler_), scheduler_(std::move(scheduler)),
       parameter_provider_(parameter_provider), dynamic_service_manager_(dynamic_service_manager),
       fixed_service_manager_(fixed_service_manager),
       signalling_manager_(l2cap_handler_, this, dynamic_service_manager_, &dynamic_channel_allocator_,
@@ -60,7 +59,8 @@ void Link::Disconnect() {
 
 std::shared_ptr<FixedChannelImpl> Link::AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
   auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
-  scheduler_->AttachChannel(cid, channel);
+  scheduler_->AttachChannel(cid, channel->GetQueueDownEnd(), cid);
+  reassembler_.AttachChannel(cid, channel->GetQueueDownEnd(), {});
   return channel;
 }
 
@@ -76,12 +76,6 @@ void Link::SendConnectionRequest(Psm psm, Cid local_cid) {
   signalling_manager_.SendConnectionRequest(psm, local_cid);
 }
 
-void Link::SendConnectionRequest(Psm psm, Cid local_cid,
-                                 PendingDynamicChannelConnection pending_dynamic_channel_connection) {
-  local_cid_to_pending_dynamic_channel_connection_map_[local_cid] = std::move(pending_dynamic_channel_connection);
-  signalling_manager_.SendConnectionRequest(psm, local_cid);
-}
-
 void Link::SendDisconnectionRequest(Cid local_cid, Cid remote_cid) {
   signalling_manager_.SendDisconnectionRequest(local_cid, remote_cid);
 }
@@ -94,9 +88,9 @@ std::shared_ptr<DynamicChannelImpl> Link::AllocateDynamicChannel(Psm psm, Cid re
                                                                  SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateChannel(psm, remote_cid, security_policy);
   if (channel != nullptr) {
-    scheduler_->AttachChannel(channel->GetCid(), channel);
+    scheduler_->AttachChannel(channel->GetCid(), channel->GetQueueDownEnd(), channel->GetRemoteCid());
+    reassembler_.AttachChannel(channel->GetCid(), channel->GetQueueDownEnd(), {});
   }
-  channel->local_initiated_ = false;
   return channel;
 }
 
@@ -104,16 +98,10 @@ std::shared_ptr<DynamicChannelImpl> Link::AllocateReservedDynamicChannel(Cid res
                                                                          SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateReservedChannel(reserved_cid, psm, remote_cid, security_policy);
   if (channel != nullptr) {
-    scheduler_->AttachChannel(channel->GetCid(), channel);
+    scheduler_->AttachChannel(channel->GetCid(), channel->GetQueueDownEnd(), channel->GetRemoteCid());
+    reassembler_.AttachChannel(channel->GetCid(), channel->GetQueueDownEnd(), {});
   }
-  channel->local_initiated_ = true;
   return channel;
-}
-
-classic::DynamicChannelConfigurationOption Link::GetConfigurationForInitialConfiguration(Cid cid) {
-  ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
-         local_cid_to_pending_dynamic_channel_connection_map_.end());
-  return local_cid_to_pending_dynamic_channel_connection_map_[cid].configuration_;
 }
 
 void Link::FreeDynamicChannel(Cid cid) {
@@ -135,50 +123,6 @@ void Link::RefreshRefCount() {
     link_idle_disconnect_alarm_.Schedule(common::BindOnce(&Link::Disconnect, common::Unretained(this)),
                                          parameter_provider_->GetClassicLinkIdleDisconnectTimeout());
   }
-}
-
-void Link::NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> user_channel) {
-  ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
-         local_cid_to_pending_dynamic_channel_connection_map_.end());
-  auto& pending_dynamic_channel_connection = local_cid_to_pending_dynamic_channel_connection_map_[cid];
-  pending_dynamic_channel_connection.handler_->Post(
-      common::BindOnce(std::move(pending_dynamic_channel_connection.on_open_callback_), std::move(user_channel)));
-  local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
-}
-
-void Link::NotifyChannelFail(Cid cid) {
-  ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
-         local_cid_to_pending_dynamic_channel_connection_map_.end());
-  auto& pending_dynamic_channel_connection = local_cid_to_pending_dynamic_channel_connection_map_[cid];
-  // TODO(cmanton) Pass proper connection falure result to user
-  DynamicChannelManager::ConnectionResult result;
-  pending_dynamic_channel_connection.handler_->Post(
-      common::BindOnce(std::move(pending_dynamic_channel_connection.on_fail_callback_), result));
-  local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
-}
-
-void Link::SetRemoteConnectionlessMtu(Mtu mtu) {
-  remote_mtu_ = mtu;
-}
-
-Mtu Link::GetRemoteConnectionlessMtu() const {
-  return remote_mtu_;
-}
-
-void Link::SetRemoteSupportsErtm(bool supported) {
-  remote_supports_ertm_ = supported;
-}
-
-bool Link::GetRemoteSupportsErtm() const {
-  return remote_supports_ertm_;
-}
-
-void Link::SetRemoteSupportsFcs(bool supported) {
-  remote_supports_fcs_ = supported;
-}
-
-bool Link::GetRemoteSupportsFcs() const {
-  return remote_supports_fcs_;
 }
 
 }  // namespace internal

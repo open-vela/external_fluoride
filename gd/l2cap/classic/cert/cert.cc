@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "l2cap/classic/cert/cert.h"
+
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
@@ -27,7 +29,6 @@
 #include "hci/cert/cert.h"
 #include "hci/hci_packets.h"
 #include "l2cap/classic/cert/api.grpc.pb.h"
-#include "l2cap/classic/cert/cert.h"
 #include "l2cap/classic/l2cap_classic_module.h"
 #include "l2cap/l2cap_packets.h"
 #include "os/log.h"
@@ -51,9 +52,9 @@ using namespace facade;
 
 constexpr auto kEventTimeout = std::chrono::seconds(1);
 
-class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
+class L2capModuleCertService : public L2capModuleCert::Service {
  public:
-  L2capClassicModuleCertService(hci::AclManager* acl_manager, os::Handler* facade_handler)
+  L2capModuleCertService(hci::AclManager* acl_manager, os::Handler* facade_handler)
       : handler_(facade_handler), acl_manager_(acl_manager) {
     ASSERT(handler_ != nullptr);
     acl_manager_->RegisterCallbacks(&acl_callbacks, handler_);
@@ -76,37 +77,6 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
     packet->AddOctets(std::vector<uint8_t>(req_string.begin(), req_string.end()));
     std::unique_ptr<BasicFrameBuilder> l2cap_builder = BasicFrameBuilder::Create(request->channel(), std::move(packet));
     outgoing_packet_queue_.push(std::move(l2cap_builder));
-    send_packet_from_queue();
-    return ::grpc::Status::OK;
-  }
-
-  ::grpc::Status SendIFrame(::grpc::ServerContext* context, const ::bluetooth::l2cap::classic::cert::IFrame* request,
-                            ::bluetooth::l2cap::classic::cert::SendIFrameResult* response) override {
-    std::unique_ptr<RawBuilder> packet = std::make_unique<RawBuilder>();
-    auto req_string = request->information();
-    packet->AddOctets(std::vector<uint8_t>(req_string.begin(), req_string.end()));
-    std::unique_ptr<BasePacketBuilder> l2cap_builder;
-    auto f = static_cast<Final>(request->f());
-    if (request->sar() == static_cast<int>(SegmentationAndReassembly::START)) {
-      l2cap_builder = EnhancedInformationStartFrameBuilder::Create(
-          request->channel(), request->tx_seq(), f, request->req_seq(), request->sdu_size(), std::move(packet));
-    } else {
-      l2cap_builder = EnhancedInformationFrameBuilder::Create(
-          request->channel(), request->tx_seq(), f, request->req_seq(),
-          static_cast<SegmentationAndReassembly>(request->sar()), std::move(packet));
-    }
-    outgoing_packet_queue_.push(std::move(l2cap_builder));
-    send_packet_from_queue();
-    return ::grpc::Status::OK;
-  }
-
-  ::grpc::Status SendSFrame(::grpc::ServerContext* context, const ::bluetooth::l2cap::classic::cert::SFrame* request,
-                            ::bluetooth::l2cap::classic::cert::SendSFrameResult* response) override {
-    auto f = static_cast<Final>(request->f());
-    auto p = static_cast<Poll>(request->p());
-    auto s = static_cast<SupervisoryFunction>(request->s());
-    auto builder = EnhancedSupervisoryFrameBuilder::Create(request->channel(), s, p, f, request->req_seq());
-    outgoing_packet_queue_.push(std::move(builder));
     send_packet_from_queue();
     return ::grpc::Status::OK;
   }
@@ -135,22 +105,7 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
   ::grpc::Status SendConfigurationRequest(
       ::grpc::ServerContext* context, const ::bluetooth::l2cap::classic::cert::ConfigurationRequest* request,
       ::bluetooth::l2cap::classic::cert::SendConfigurationRequestResult* response) override {
-    std::vector<std::unique_ptr<ConfigurationOption>> config;
-    if (request->retransmission_config().mode() == ChannelRetransmissionFlowControlMode::ERTM) {
-      auto option = std::make_unique<RetransmissionAndFlowControlConfigurationOption>();
-      option->mode_ = RetransmissionAndFlowControlModeOption::ENHANCED_RETRANSMISSION;
-      option->tx_window_size_ = 10;
-      option->max_transmit_ = 20;
-      option->retransmission_time_out_ = 2000;
-      option->monitor_time_out_ = 12000;
-      option->maximum_pdu_size_ = 1010;
-      config.push_back(std::move(option));
-      auto no_fcs = std::make_unique<FrameCheckSequenceOption>();
-      no_fcs->fcs_type_ = FcsType::NO_FCS;
-      config.push_back(std::move(no_fcs));
-    }
-    auto builder = ConfigurationRequestBuilder::Create(request->signal_id(), request->dcid(), Continuation::END,
-                                                       std::move(config));
+    auto builder = ConfigurationRequestBuilder::Create(request->signal_id(), request->dcid(), Continuation::END, {});
     auto l2cap_builder = BasicFrameBuilder::Create(kClassicSignallingCid, std::move(builder));
     outgoing_packet_queue_.push(std::move(l2cap_builder));
     send_packet_from_queue();
@@ -160,19 +115,8 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
   ::grpc::Status SendConfigurationResponse(
       ::grpc::ServerContext* context, const ::bluetooth::l2cap::classic::cert::ConfigurationResponse* request,
       ::bluetooth::l2cap::classic::cert::SendConfigurationResponseResult* response) override {
-    std::vector<std::unique_ptr<ConfigurationOption>> config;
-    if (request->retransmission_config().mode() == ChannelRetransmissionFlowControlMode::ERTM) {
-      auto option = std::make_unique<RetransmissionAndFlowControlConfigurationOption>();
-      option->mode_ = RetransmissionAndFlowControlModeOption::ENHANCED_RETRANSMISSION;
-      option->tx_window_size_ = 10;
-      option->max_transmit_ = 20;
-      option->retransmission_time_out_ = 2000;
-      option->monitor_time_out_ = 12000;
-      option->maximum_pdu_size_ = 1010;
-      config.push_back(std::move(option));
-    }
     auto builder = ConfigurationResponseBuilder::Create(request->signal_id(), request->scid(), Continuation::END,
-                                                        ConfigurationResponseResult::SUCCESS, std::move(config));
+                                                        ConfigurationResponseResult::SUCCESS, {});
     auto l2cap_builder = BasicFrameBuilder::Create(kClassicSignallingCid, std::move(builder));
     outgoing_packet_queue_.push(std::move(l2cap_builder));
     send_packet_from_queue();
@@ -239,7 +183,7 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
     switch (request->type()) {
       case InformationRequestType::CONNECTIONLESS_MTU: {
         auto builder = InformationResponseConnectionlessMtuBuilder::Create(request->signal_id(),
-                                                                           InformationRequestResult::SUCCESS, 100);
+                                                                           InformationRequestResult::NOT_SUPPORTED, 0);
         auto l2cap_builder = BasicFrameBuilder::Create(kClassicSignallingCid, std::move(builder));
         outgoing_packet_queue_.push(std::move(l2cap_builder));
         send_packet_from_queue();
@@ -247,7 +191,7 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
       }
       case InformationRequestType::EXTENDED_FEATURES: {
         auto builder = InformationResponseExtendedFeaturesBuilder::Create(
-            request->signal_id(), InformationRequestResult::SUCCESS, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
+            request->signal_id(), InformationRequestResult::NOT_SUPPORTED, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         auto l2cap_builder = BasicFrameBuilder::Create(kClassicSignallingCid, std::move(builder));
         outgoing_packet_queue_.push(std::move(l2cap_builder));
         send_packet_from_queue();
@@ -280,8 +224,7 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
 
   ::grpc::Status FetchL2capLog(::grpc::ServerContext* context, const FetchL2capLogRequest* request,
                                ::grpc::ServerWriter<FetchL2capLogResponse>* writer) override {
-    fetching_l2cap_log_ = true;
-    while (!context->IsCancelled() && fetching_l2cap_log_) {
+    while (!context->IsCancelled()) {
       if (!l2cap_log_.empty()) {
         auto& response = l2cap_log_.front();
         writer->Write(response);
@@ -298,16 +241,6 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
     }
     return ::grpc::Status::OK;
   }
-
-  ::grpc::Status StopFetchingL2capLog(
-      ::grpc::ServerContext* context, const ::bluetooth::l2cap::classic::cert::StopFetchingL2capLogRequest* request,
-      ::bluetooth::l2cap::classic::cert::StopFetchingL2capLogResponse* response) override {
-    fetching_l2cap_log_ = false;
-    l2cap_log_cv_.notify_one();
-    return ::grpc::Status::OK;
-  }
-
-  bool fetching_l2cap_log_ = false;
   std::mutex l2cap_log_mutex_;
   std::queue<FetchL2capLogResponse> l2cap_log_;
   std::condition_variable l2cap_log_cv_;
@@ -353,7 +286,7 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
   void send_packet_from_queue() {
     if (outgoing_packet_queue_.size() == 1) {
       acl_connection_->GetAclQueueEnd()->RegisterEnqueue(
-          handler_, common::Bind(&L2capClassicModuleCertService::enqueue_packet_to_acl, common::Unretained(this)));
+          handler_, common::Bind(&L2capModuleCertService::enqueue_packet_to_acl, common::Unretained(this)));
     }
   }
 
@@ -460,31 +393,15 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
         auto type = information_response_view.GetInfoType();
         switch (type) {
           case InformationRequestInfoType::CONNECTIONLESS_MTU: {
-            auto view = InformationResponseConnectionlessMtuView::Create(information_response_view);
-            if (!view.IsValid()) {
-              return;
-            }
             log_response.mutable_information_response()->set_type(InformationRequestType::CONNECTIONLESS_MTU);
-            log_response.mutable_information_response()->set_information_value(view.GetConnectionlessMtu());
             break;
           }
           case InformationRequestInfoType::EXTENDED_FEATURES_SUPPORTED: {
-            auto view = InformationResponseExtendedFeaturesView::Create(information_response_view);
-            if (!view.IsValid()) {
-              return;
-            }
             log_response.mutable_information_response()->set_type(InformationRequestType::EXTENDED_FEATURES);
-            int mask = view.GetEnhancedRetransmissionMode() << 3 | view.GetFcsOption() << 5;
-            log_response.mutable_information_response()->set_information_value(mask);
             break;
           }
           case InformationRequestInfoType::FIXED_CHANNELS_SUPPORTED: {
-            auto view = InformationResponseFixedChannelsView::Create(information_response_view);
-            if (!view.IsValid()) {
-              return;
-            }
             log_response.mutable_information_response()->set_type(InformationRequestType::FIXED_CHANNELS);
-            log_response.mutable_information_response()->set_information_value(view.GetFixedChannels());
             break;
           }
         }
@@ -503,13 +420,12 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
 
   class AclCallbacks : public hci::ConnectionCallbacks {
    public:
-    AclCallbacks(L2capClassicModuleCertService* module) : module_(module) {}
+    AclCallbacks(L2capModuleCertService* module) : module_(module) {}
     void OnConnectSuccess(std::unique_ptr<hci::AclConnection> connection) override {
       module_->acl_connection_ = std::move(connection);
       module_->acl_connection_->RegisterDisconnectCallback(common::BindOnce([](hci::ErrorCode) {}), module_->handler_);
       module_->acl_connection_->GetAclQueueEnd()->RegisterDequeue(
-          module_->handler_,
-          common::Bind(&L2capClassicModuleCertService::on_incoming_packet, common::Unretained(module_)));
+          module_->handler_, common::Bind(&L2capModuleCertService::on_incoming_packet, common::Unretained(module_)));
       dequeue_registered_ = true;
       FetchL2capLogResponse response;
       response.mutable_link_up()->mutable_remote()->set_address(module_->acl_connection_->GetAddress().ToString());
@@ -525,36 +441,36 @@ class L2capClassicModuleCertService : public L2capClassicModuleCert::Service {
 
     bool dequeue_registered_ = false;
 
-    L2capClassicModuleCertService* module_;
+    L2capModuleCertService* module_;
   } acl_callbacks{this};
 
   std::mutex mutex_;
 };
 
-void L2capClassicModuleCertModule::ListDependencies(ModuleList* list) {
+void L2capModuleCertModule::ListDependencies(ModuleList* list) {
   ::bluetooth::grpc::GrpcFacadeModule::ListDependencies(list);
   list->add<hci::AclManager>();
   list->add<hci::HciLayer>();
 }
 
-void L2capClassicModuleCertModule::Start() {
+void L2capModuleCertModule::Start() {
   ::bluetooth::grpc::GrpcFacadeModule::Start();
   GetDependency<hci::HciLayer>()->EnqueueCommand(hci::WriteScanEnableBuilder::Create(hci::ScanEnable::PAGE_SCAN_ONLY),
                                                  common::BindOnce([](hci::CommandCompleteView) {}), GetHandler());
-  service_ = new L2capClassicModuleCertService(GetDependency<hci::AclManager>(), GetHandler());
+  service_ = new L2capModuleCertService(GetDependency<hci::AclManager>(), GetHandler());
 }
 
-void L2capClassicModuleCertModule::Stop() {
+void L2capModuleCertModule::Stop() {
   delete service_;
   ::bluetooth::grpc::GrpcFacadeModule::Stop();
 }
 
-::grpc::Service* L2capClassicModuleCertModule::GetService() const {
+::grpc::Service* L2capModuleCertModule::GetService() const {
   return service_;
 }
 
-const ModuleFactory L2capClassicModuleCertModule::Factory =
-    ::bluetooth::ModuleFactory([]() { return new L2capClassicModuleCertModule(); });
+const ModuleFactory L2capModuleCertModule::Factory =
+    ::bluetooth::ModuleFactory([]() { return new L2capModuleCertModule(); });
 
 }  // namespace cert
 }  // namespace classic

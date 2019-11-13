@@ -232,10 +232,14 @@ TEST_F(L2capTest, CreateConnection_ConfigRequest) {
   uint16_t cid = l2cap_->CreateConnection(kPsm, raw_address);
   CHECK(cid != 0);
 
-  // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
-  CHECK(cnt_.L2caConnectCfmCb == 1);
-
+  {
+    // Simulate a successful connection response
+    l2cap_->OnConnectionReady(kPsm, kCid,
+                              [&cid](std::function<void(uint16_t)> func) {
+                                LOG_INFO(LOG_TAG, "In closure cid:%d", cid);
+                                func(cid);
+                              });
+  }
   CHECK(l2cap_->ConfigRequest(cid, nullptr));
 }
 
@@ -249,10 +253,14 @@ TEST_F(L2capTest, CreateConnection_ConfigResponse) {
   uint16_t cid = l2cap_->CreateConnection(kPsm, raw_address);
   CHECK(cid != 0);
 
-  // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
-  CHECK(cnt_.L2caConnectCfmCb == 1);
-
+  {
+    // Simulate a successful connection response
+    l2cap_->OnConnectionReady(kPsm, kCid,
+                              [&cid](std::function<void(uint16_t)> func) {
+                                LOG_INFO(LOG_TAG, "In closure cid:%d", cid);
+                                func(cid);
+                              });
+  }
   CHECK(l2cap_->ConfigResponse(cid, nullptr));
 }
 
@@ -266,10 +274,14 @@ TEST_F(L2capTest, CreateConnection_DisconnectRequest) {
   uint16_t cid = l2cap_->CreateConnection(kPsm, raw_address);
   CHECK(cid != 0);
 
-  // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
-  CHECK(cnt_.L2caConnectCfmCb == 1);
-
+  {
+    // Simulate a successful connection response
+    l2cap_->OnConnectionReady(kPsm, kCid,
+                              [&cid](std::function<void(uint16_t)> func) {
+                                LOG_INFO(LOG_TAG, "In closure cid:%d", cid);
+                                func(cid);
+                              });
+  }
   CHECK(l2cap_->DisconnectRequest(cid));
 }
 
@@ -283,10 +295,14 @@ TEST_F(L2capTest, CreateConnection_DisconnectResponse) {
   uint16_t cid = l2cap_->CreateConnection(kPsm, raw_address);
   CHECK(cid != 0);
 
-  // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
-  CHECK(cnt_.L2caConnectCfmCb == 1);
-
+  {
+    // Simulate a successful connection response
+    l2cap_->OnConnectionReady(kPsm, kCid,
+                              [&cid](std::function<void(uint16_t)> func) {
+                                LOG_INFO(LOG_TAG, "In closure cid:%d", cid);
+                                func(cid);
+                              });
+  }
   CHECK(l2cap_->DisconnectResponse(cid));
 }
 
@@ -300,13 +316,18 @@ TEST_F(L2capTest, CreateConnection_WithHandshake) {
   uint16_t cid = l2cap_->CreateConnection(kPsm, raw_address);
   CHECK(cid != 0);
 
-  // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
+  {
+    // Simulate a successful connection response
+    l2cap_->OnConnectionReady(kPsm, kCid,
+                              [&cid](std::function<void(uint16_t)> func) {
+                                LOG_INFO(LOG_TAG, "In closure cid:%d", cid);
+                                func(cid);
+                              });
+  }
   CHECK(cnt_.L2caConnectCfmCb == 1);
 
   CHECK(l2cap_->ConfigRequest(cid, nullptr) == true);
   CHECK(cnt_.L2caConfigCfmCb == 1);
-  CHECK(cnt_.L2caConfigIndCb == 1);
 
   BT_HDR* bt_hdr = (BT_HDR*)bt_hdr_data;
 

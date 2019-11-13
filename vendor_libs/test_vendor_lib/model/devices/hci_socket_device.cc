@@ -91,9 +91,8 @@ HciSocketDevice::HciSocketDevice(int file_descriptor) : socket_file_descriptor_(
         close_callback_();
       });
 
-  RegisterEventChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) {
-    SendHci(hci::PacketType::EVENT, packet);
-  });
+  RegisterEventChannel(
+      [this](std::shared_ptr<std::vector<uint8_t>> packet) { SendHci(hci::PacketType::EVENT, packet); });
   RegisterAclChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) { SendHci(hci::PacketType::ACL, packet); });
   RegisterScoChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) { SendHci(hci::PacketType::SCO, packet); });
 }

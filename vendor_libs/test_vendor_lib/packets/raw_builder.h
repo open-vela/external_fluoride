@@ -19,13 +19,11 @@
 #include <cstdint>
 #include <vector>
 
-#include "hci/address.h"
 #include "packets/packet_builder.h"
+#include "types/address.h"
 
 namespace test_vendor_lib {
 namespace packets {
-
-using ::bluetooth::hci::Address;
 
 class RawBuilder : public PacketBuilder<true> {
  public:
