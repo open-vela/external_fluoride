@@ -195,11 +195,7 @@ void ClassicSignallingManager::OnConfigurationRequest(SignalId signal_id, Cid ci
   channel->SetIncomingConfigurationStatus(DynamicChannelImpl::ConfigurationStatus::CONFIGURED);
   if (channel->GetOutgoingConfigurationStatus() == DynamicChannelImpl::ConfigurationStatus::CONFIGURED) {
     std::unique_ptr<DynamicChannel> user_channel = std::make_unique<DynamicChannel>(channel, handler_);
-    if (channel->local_initiated_) {
-      link_->NotifyChannelCreation(cid, std::move(user_channel));
-    } else {
-      dynamic_service_manager_->GetService(channel->GetPsm())->NotifyChannelCreation(std::move(user_channel));
-    }
+    dynamic_service_manager_->GetService(channel->GetPsm())->NotifyChannelCreation(std::move(user_channel));
   }
 }
 
@@ -223,11 +219,7 @@ void ClassicSignallingManager::OnConfigurationResponse(SignalId signal_id, Cid c
   channel->SetOutgoingConfigurationStatus(DynamicChannelImpl::ConfigurationStatus::CONFIGURED);
   if (channel->GetIncomingConfigurationStatus() == DynamicChannelImpl::ConfigurationStatus::CONFIGURED) {
     std::unique_ptr<DynamicChannel> user_channel = std::make_unique<DynamicChannel>(channel, handler_);
-    if (channel->local_initiated_) {
-      link_->NotifyChannelCreation(cid, std::move(user_channel));
-    } else {
-      dynamic_service_manager_->GetService(channel->GetPsm())->NotifyChannelCreation(std::move(user_channel));
-    }
+    dynamic_service_manager_->GetService(channel->GetPsm())->NotifyChannelCreation(std::move(user_channel));
   }
   alarm_.Cancel();
   handle_send_next_command();

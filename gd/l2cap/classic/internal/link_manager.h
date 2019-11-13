@@ -52,6 +52,12 @@ class LinkManager : public hci::ConnectionCallbacks {
     FixedChannelManager::OnConnectionFailureCallback on_fail_callback_;
   };
 
+  struct PendingDynamicChannelConnection {
+    os::Handler* handler_;
+    DynamicChannelManager::OnConnectionOpenCallback on_open_callback_;
+    DynamicChannelManager::OnConnectionFailureCallback on_fail_callback_;
+  };
+
   struct PendingLink {
     std::vector<PendingFixedChannelConnection> pending_fixed_channel_connections_;
   };
@@ -70,7 +76,7 @@ class LinkManager : public hci::ConnectionCallbacks {
   // DynamicChannelManager methods
 
   void ConnectDynamicChannelServices(hci::Address device,
-                                     Link::PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm);
+                                     PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm);
 
  private:
   // Dependencies
@@ -84,8 +90,7 @@ class LinkManager : public hci::ConnectionCallbacks {
   std::unordered_map<hci::Address, PendingLink> pending_links_;
   std::unordered_map<hci::Address, Link> links_;
   std::unordered_map<hci::Address, std::list<Psm>> pending_dynamic_channels_;
-  std::unordered_map<hci::Address, std::list<Link::PendingDynamicChannelConnection>>
-      pending_dynamic_channels_callbacks_;
+  std::unordered_map<hci::Address, std::list<PendingDynamicChannelConnection>> pending_dynamic_channels_callbacks_;
   DISALLOW_COPY_AND_ASSIGN(LinkManager);
 };
 
