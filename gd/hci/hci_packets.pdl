@@ -683,8 +683,6 @@ enum ErrorCode: 8 {
   UNSPECIFIED_ERROR = 0x1F,
   UNSUPPORTED_LMP_OR_LL_PARAMETER = 0x20,
   ROLE_CHANGE_NOT_ALLOWED = 0x21,
-  ENCRYPTION_MODE_NOT_ACCEPTABLE = 0x25,
-  CONTROLLER_BUSY = 0x3A,
 }
 
 // Events that are defined with their respective commands
@@ -1053,7 +1051,7 @@ packet UserPasskeyRequestReply : SecurityCommand (op_code = USER_PASSKEY_REQUEST
   numeric_value : 32, // 000000-999999 decimal or 0x0-0xF423F
 }
 
-packet UserPasskeyRequestReplyComplete : CommandComplete (command_op_code = USER_PASSKEY_REQUEST_REPLY) {
+packet UserPasskeyReplyComplete : CommandComplete (command_op_code = USER_PASSKEY_REQUEST_REPLY) {
   status : ErrorCode,
   bd_addr : Address,
 }
@@ -1415,7 +1413,7 @@ packet DeleteStoredLinkKey : SecurityCommand (op_code = DELETE_STORED_LINK_KEY) 
 
 packet DeleteStoredLinkKeyComplete : CommandComplete (command_op_code = DELETE_STORED_LINK_KEY) {
   status : ErrorCode,
-  num_keys_deleted : 16,
+  num_keys_deleted : 8,
 }
 
 packet WriteLocalName : CommandPacket (op_code = WRITE_LOCAL_NAME) {
@@ -1530,7 +1528,7 @@ packet ReadAuthenticationEnableComplete : CommandComplete (command_op_code = REA
   authentication_enable : AuthenticationEnable,
 }
 
-packet WriteAuthenticationEnable : SecurityCommand (op_code = WRITE_AUTHENTICATION_ENABLE) {
+packet WriteAuthenticationEnable : CommandPacket (op_code = WRITE_AUTHENTICATION_ENABLE) {
   authentication_enable : AuthenticationEnable,
 }
 
@@ -1560,10 +1558,6 @@ packet ReadVoiceSetting : CommandPacket (op_code = READ_VOICE_SETTING) {
 
 packet WriteVoiceSetting : CommandPacket (op_code = WRITE_VOICE_SETTING) {
   _payload_,  // placeholder (unimplemented)
-}
-
-packet WriteVoiceSettingComplete : CommandComplete (command_op_code = WRITE_VOICE_SETTING) {
-  status : ErrorCode,
 }
 
 packet ReadAutomaticFlushTimeout : ConnectionManagementCommand (op_code = READ_AUTOMATIC_FLUSH_TIMEOUT) {
@@ -1911,7 +1905,7 @@ packet ReadSecureConnectionsHostSupportComplete : CommandComplete (command_op_co
   secure_connections_host_support : Enable,
 }
 
-packet WriteSecureConnectionsHostSupport : SecurityCommand (op_code = WRITE_SECURE_CONNECTIONS_HOST_SUPPORT) {
+packet WriteSecureConnectionsHostSupport : CommandPacket (op_code = WRITE_SECURE_CONNECTIONS_HOST_SUPPORT) {
   secure_connections_host_support : Enable,
 }
 
@@ -2028,13 +2022,6 @@ packet ReadDataBlockSize : CommandPacket (op_code = READ_DATA_BLOCK_SIZE) {
 packet ReadLocalSupportedCodecs : CommandPacket (op_code = READ_LOCAL_SUPPORTED_CODECS) {
 }
 
-packet ReadLocalSupportedCodecsComplete : CommandComplete (command_op_code = READ_LOCAL_SUPPORTED_CODECS) {
-  status : ErrorCode,
-  _size_(supported_codecs) : 8,
-  supported_codecs : 8[],
-  _size_(vendor_specific_codecs) : 8,
-  vendor_specific_codecs : 32[],
-}
 
   // STATUS_PARAMETERS
 packet ReadFailedContactCounter : ConnectionManagementCommand (op_code = READ_FAILED_CONTACT_COUNTER) {
@@ -2128,12 +2115,6 @@ packet ReadEncryptionKeySize : SecurityCommand (op_code = READ_ENCRYPTION_KEY_SI
   _reserved_ : 4,
 }
 
-packet ReadEncryptionKeySizeComplete : CommandComplete (command_op_code = READ_ENCRYPTION_KEY_SIZE) {
-  status : ErrorCode,
-  connection_handle : 12,
-  _reserved_ : 4,
-  key_size : 8,
-}
 
   // TESTING
 enum LoopbackMode : 8 {
@@ -2367,9 +2348,6 @@ packet LeCreateConnectionStatus : CommandStatus (command_op_code = LE_CREATE_CON
 packet LeCreateConnectionCancel : LeConnectionManagementCommand (op_code = LE_CREATE_CONNECTION_CANCEL) {
 }
 
-packet LeCreateConnectionCancelStatus : CommandStatus (command_op_code = LE_CREATE_CONNECTION_CANCEL) {
-}
-
 packet LeCreateConnectionCancelComplete : CommandComplete (command_op_code = LE_CREATE_CONNECTION_CANCEL) {
   status : ErrorCode,
 }
@@ -2458,9 +2436,6 @@ packet LeStartEncryption : LeSecurityCommand (op_code = LE_START_ENCRYPTION) {
   ltk: 8[16],
 }
 
-packet LeStartEncryptionStatus : CommandStatus (command_op_code = LE_START_ENCRYPTION) {
-}
-
 packet LeLongTermKeyRequestReply : LeSecurityCommand (op_code = LE_LONG_TERM_KEY_REQUEST_REPLY) {
   connection_handle: 16,
   long_term_key: 8[16],
@@ -2523,24 +2498,12 @@ packet LeAddDeviceToResolvingList : LeSecurityCommand (op_code = LE_ADD_DEVICE_T
   _payload_,  // placeholder (unimplemented)
 }
 
-packet LeAddDeviceToResolvingListComplete : CommandComplete (command_op_code = LE_ADD_DEVICE_TO_RESOLVING_LIST) {
-  status : ErrorCode,
-}
-
 packet LeRemoveDeviceFromResolvingList : LeSecurityCommand (op_code = LE_REMOVE_DEVICE_FROM_RESOLVING_LIST) {
   _payload_,  // placeholder (unimplemented)
 }
 
-packet LeRemoveDeviceFromResolvingListComplete : CommandComplete (command_op_code = LE_REMOVE_DEVICE_FROM_RESOLVING_LIST) {
-  status : ErrorCode,
-}
-
 packet LeClearResolvingList : LeSecurityCommand (op_code = LE_CLEAR_RESOLVING_LIST) {
   _payload_,  // placeholder (unimplemented)
-}
-
-packet LeClearResolvingListComplete : CommandComplete (command_op_code = LE_CLEAR_RESOLVING_LIST) {
-  status : ErrorCode,
 }
 
 packet LeReadResolvingListSize : LeSecurityCommand (op_code = LE_READ_RESOLVING_LIST_SIZE) {
@@ -2655,17 +2618,12 @@ packet LeSetPeriodicAdvertisingEnable : LeAdvertisingCommand (op_code = LE_SET_P
   _payload_,  // placeholder (unimplemented)
 }
 
-struct PhyScanParameters {
-  le_scan_type : LeScanType,
-  le_scan_interval : 16, // 0x0004-0xFFFF Default 0x10 (10ms)
-  le_scan_window : 16, // 0x004-0xFFFF Default 0x10 (10ms)
-}
-
 packet LeSetExtendedScanParameters : LeScanningCommand (op_code = LE_SET_EXTENDED_SCAN_PARAMETERS) {
+  le_scan_type : LeScanType,
+  le_scan_interval : 32, // 0x0004-0x00FFFFFF Default 0x10 (10ms)
+  le_scan_window : 32, // 0x004-0xFFFF Default 0x10 (10ms)
   own_address_type : AddressType,
   scanning_filter_policy : LeSetScanningFilterPolicy,
-  scanning_phys : 8,
-  parameters : PhyScanParameters[],
 }
 
 packet LeSetExtendedScanParametersComplete : CommandComplete (command_op_code = LE_SET_EXTENDED_SCAN_PARAMETERS) {
@@ -2737,9 +2695,6 @@ packet LeSetPrivacyMode : LeSecurityCommand (op_code = LE_SET_PRIVACY_MODE) {
   _payload_,  // placeholder (unimplemented)
 }
 
-packet LeSetPrivacyModeComplete : CommandComplete (command_op_code = LE_SET_PRIVACY_MODE) {
-  status : ErrorCode,
-}
 
   // VENDOR_SPECIFIC
 packet LeGetVendorCapabilities : VendorCommand (op_code = LE_GET_VENDOR_CAPABILITIES) {
@@ -3019,8 +2974,8 @@ packet ReadRemoteVersionInformationComplete : EventPacket (event_code = READ_REM
   connection_handle : 12,
   _reserved_ : 4,
   version : 8,
-  manufacturer_name : 16,
-  sub_version : 16,
+  manufacturer_name : 8,
+  sub_version : 8,
 }
 
 packet QosSetupComplete : EventPacket (event_code = QOS_SETUP_COMPLETE){

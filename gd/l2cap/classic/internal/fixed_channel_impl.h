@@ -19,8 +19,6 @@
 #include "common/bidi_queue.h"
 #include "l2cap/cid.h"
 #include "l2cap/classic/fixed_channel.h"
-#include "l2cap/internal/channel_impl.h"
-#include "l2cap/l2cap_packets.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -31,7 +29,7 @@ namespace internal {
 
 class Link;
 
-class FixedChannelImpl : public l2cap::internal::ChannelImpl {
+class FixedChannelImpl {
  public:
   FixedChannelImpl(Cid cid, Link* link, os::Handler* l2cap_handler);
 
@@ -66,15 +64,6 @@ class FixedChannelImpl : public l2cap::internal::ChannelImpl {
   common::BidiQueueEnd<packet::PacketView<packet::kLittleEndian>, packet::BasePacketBuilder>* GetQueueDownEnd() {
     return channel_queue_.GetDownEnd();
   }
-
-  Cid GetCid() const {
-    return cid_;
-  }
-
-  Cid GetRemoteCid() const {
-    return cid_;
-  }
-  void SetSender(l2cap::internal::Sender* sender) override;
 
  private:
   // Constructor states

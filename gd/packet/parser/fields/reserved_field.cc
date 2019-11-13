@@ -38,17 +38,13 @@ std::string ReservedField::GetDataType() const {
 
 void ReservedField::GenExtractor(std::ostream&, int, bool) const {}
 
-std::string ReservedField::GetGetterFunctionName() const {
-  return "";
-}
-
 void ReservedField::GenGetter(std::ostream&, Size, Size) const {
   // There is no Getter for a reserved field
 }
 
-std::string ReservedField::GetBuilderParameterType() const {
+bool ReservedField::GenBuilderParameter(std::ostream&) const {
   // There is no builder parameter for a reserved field
-  return "";
+  return false;
 }
 
 bool ReservedField::HasParameterValidator() const {

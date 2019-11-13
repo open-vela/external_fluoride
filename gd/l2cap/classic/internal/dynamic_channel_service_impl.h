@@ -19,7 +19,6 @@
 #include "common/bind.h"
 
 #include "l2cap/classic/dynamic_channel.h"
-#include "l2cap/classic/dynamic_channel_configuration_option.h"
 #include "l2cap/classic/dynamic_channel_manager.h"
 #include "l2cap/classic/dynamic_channel_service.h"
 
@@ -35,15 +34,10 @@ class DynamicChannelServiceImpl {
     os::Handler* user_handler_ = nullptr;
     DynamicChannelManager::OnRegistrationCompleteCallback on_registration_complete_callback_;
     DynamicChannelManager::OnConnectionOpenCallback on_connection_open_callback_;
-    DynamicChannelConfigurationOption configuration_;
   };
 
   virtual void NotifyChannelCreation(std::unique_ptr<DynamicChannel> channel) {
     user_handler_->Post(common::BindOnce(on_connection_open_callback_, std::move(channel)));
-  }
-
-  DynamicChannelConfigurationOption GetConfigOption() const {
-    return config_option_;
   }
 
   friend class DynamicChannelServiceManagerImpl;
@@ -51,15 +45,12 @@ class DynamicChannelServiceImpl {
  protected:
   // protected access for mocking
   DynamicChannelServiceImpl(os::Handler* user_handler,
-                            DynamicChannelManager::OnConnectionOpenCallback on_connection_open_callback,
-                            DynamicChannelConfigurationOption config_option)
-      : user_handler_(user_handler), on_connection_open_callback_(std::move(on_connection_open_callback)),
-        config_option_(config_option) {}
+                            DynamicChannelManager::OnConnectionOpenCallback on_connection_open_callback)
+      : user_handler_(user_handler), on_connection_open_callback_(std::move(on_connection_open_callback)) {}
 
  private:
   os::Handler* user_handler_ = nullptr;
   DynamicChannelManager::OnConnectionOpenCallback on_connection_open_callback_;
-  DynamicChannelConfigurationOption config_option_;
 };
 
 }  // namespace internal

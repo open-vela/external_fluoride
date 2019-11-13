@@ -56,7 +56,7 @@ struct AclManager::acl_connection {
 };
 
 struct AclManager::impl {
-  impl(const AclManager& acl_manager) : acl_manager_(acl_manager) {}
+  impl(AclManager& acl_manager) : acl_manager_(acl_manager) {}
 
   void Start() {
     hci_layer_ = acl_manager_.GetDependency<HciLayer>();
@@ -1580,7 +1580,7 @@ struct AclManager::impl {
     handler_->Post(BindOnce(&impl::cleanup, common::Unretained(this), handle));
   }
 
-  const AclManager& acl_manager_;
+  AclManager& acl_manager_;
 
   Controller* controller_ = nullptr;
   uint16_t max_acl_packet_credits_ = 0;

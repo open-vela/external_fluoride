@@ -18,13 +18,11 @@
 
 #include "os/log.h"
 
-#include "hci/address.h"
+#include "types/address.h"
 
 using std::shared_ptr;
 
 namespace test_vendor_lib {
-
-using ::bluetooth::hci::Address;
 
 bool AclConnectionHandler::HasHandle(uint16_t handle) const {
   if (acl_connections_.count(handle) == 0) {
@@ -42,23 +40,17 @@ uint16_t AclConnectionHandler::GetUnusedHandle() {
   return unused_handle;
 }
 
-bool AclConnectionHandler::CreatePendingConnection(
-    Address addr, bool authenticate_on_connect) {
+bool AclConnectionHandler::CreatePendingConnection(Address addr) {
   if (classic_connection_pending_) {
     return false;
   }
   classic_connection_pending_ = true;
   pending_connection_address_ = addr;
-  authenticate_pending_classic_connection_ = authenticate_on_connect;
   return true;
 }
 
-bool AclConnectionHandler::HasPendingConnection(Address addr) const {
+bool AclConnectionHandler::HasPendingConnection(Address addr) {
   return classic_connection_pending_ && pending_connection_address_ == addr;
-}
-
-bool AclConnectionHandler::AuthenticatePendingConnection() const {
-  return authenticate_pending_classic_connection_;
 }
 
 bool AclConnectionHandler::CancelPendingConnection(Address addr) {
@@ -85,8 +77,7 @@ bool AclConnectionHandler::CreatePendingLeConnection(Address addr, uint8_t addre
   return true;
 }
 
-bool AclConnectionHandler::HasPendingLeConnection(Address addr,
-                                                  uint8_t address_type) const {
+bool AclConnectionHandler::HasPendingLeConnection(Address addr, uint8_t address_type) {
   return le_connection_pending_ && pending_le_connection_address_ == addr &&
          pending_le_connection_address_type_ == address_type;
 }

@@ -16,14 +16,8 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "common/bidi_queue.h"
 #include "l2cap/cid.h"
-#include "l2cap/classic/dynamic_channel_configuration_option.h"
-#include "l2cap/internal/channel_impl.h"
-#include "l2cap/internal/data_controller.h"
-#include "l2cap/internal/sender.h"
 #include "l2cap/l2cap_packets.h"
 #include "packet/base_packet_builder.h"
 #include "packet/packet_view.h"
@@ -35,10 +29,9 @@ namespace internal {
 /**
  * Handle the scheduling of packets through the l2cap stack.
  * For each attached channel, dequeue its outgoing packets and enqueue it to the given LinkQueueUpEnd, according to some
- * policy (cid).
- *
- * Note: If a channel cannot dequeue from ChannelQueueDownEnd so that the buffer for incoming packet is full, further
- * incoming packets will be dropped.
+ * policy (cid). Dequeue incoming packets from LinkQueueUpEnd, and enqueue it to ChannelQueueDownEnd. Note: If a channel
+ * cannot dequeue from ChannelQueueDownEnd so that the buffer for incoming packet is full, further incoming packets will
+ * be dropped.
  */
 class Scheduler {
  public:
@@ -48,16 +41,16 @@ class Scheduler {
   using LowerEnqueue = UpperDequeue;
   using LowerDequeue = UpperEnqueue;
   using LowerQueueUpEnd = common::BidiQueueEnd<LowerEnqueue, LowerDequeue>;
+  using DemuxPolicy = common::Callback<Cid(const UpperEnqueue&)>;
 
   /**
    * Attach the channel with the specified ChannelQueueDownEnd into the scheduler.
-   * Scheduler needs to notify the channel its Sender through SetSender().
    *
    * @param cid The channel to attach to the scheduler.
-   * @param channel The reference to a DynamicChannelImpl object. Use nullptr for fixed channel.
-   * TODO (b/144503952): Rethink about channel abstraction. Currently channel contains duplicated info as remote_cid
+   * @param channel_down_end The ChannelQueueDownEnd associated with the channel to attach to the scheduler.
+   * @param remote_cid The destination endpoint of the packet.
    */
-  virtual void AttachChannel(Cid cid, std::shared_ptr<ChannelImpl> channel) {}
+  virtual void AttachChannel(Cid cid, UpperQueueDownEnd* channel_down_end, Cid remote_cid) {}
 
   /**
    * Detach the channel from the scheduler.
@@ -67,16 +60,9 @@ class Scheduler {
   virtual void DetachChannel(Cid cid) {}
 
   /**
-   * Callback from the sender to indicate that the scheduler could dequeue number_packets from it
+   * Return the lower queue up end, which can be used to enqueue or dequeue.
    */
-  virtual void OnPacketsReady(Cid cid, int number_packets) {}
-
-  /**
-   * Get the data controller for Reassembler
-   */
-  virtual DataController* GetDataController(Cid cid) {
-    return nullptr;
-  }
+  virtual LowerQueueUpEnd* GetLowerQueueUpEnd() const = 0;
 
   virtual ~Scheduler() = default;
 };

@@ -69,7 +69,7 @@ class Link {
 
   virtual std::shared_ptr<FixedChannelImpl> AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
     auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
-    scheduler_->AttachChannel(cid, channel);
+    scheduler_->AttachChannel(cid, channel->GetQueueDownEnd(), cid);
     return channel;
   }
 
@@ -88,10 +88,6 @@ class Link {
       link_idle_disconnect_alarm_.Schedule(common::BindOnce(&Link::Disconnect, common::Unretained(this)),
                                            parameter_provider_->GetLeLinkIdleDisconnectTimeout());
     }
-  }
-
-  virtual std::string ToString() {
-    return GetDevice().ToString();
   }
 
  private:

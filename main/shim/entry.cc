@@ -54,10 +54,6 @@ bluetooth::shim::IL2cap* bluetooth::shim::GetL2cap() {
   return GetGabeldorscheStack()->GetL2cap();
 }
 
-bluetooth::shim::IName* bluetooth::shim::GetName() {
-  return GetGabeldorscheStack()->GetName();
-}
-
 bluetooth::shim::IPage* bluetooth::shim::GetPage() {
   return GetGabeldorscheStack()->GetPage();
 }
