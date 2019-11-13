@@ -74,7 +74,14 @@ class FixedChannelImpl : public l2cap::internal::ChannelImpl {
   Cid GetRemoteCid() const {
     return cid_;
   }
-  void SetSender(l2cap::internal::Sender* sender) override;
+
+  RetransmissionAndFlowControlModeOption GetChannelMode() const {
+    return RetransmissionAndFlowControlModeOption::L2CAP_BASIC;
+  }
+
+  void SetChannelMode(RetransmissionAndFlowControlModeOption) {
+    LOG_ERROR("Setting channel mode on a fixed channel cid 0x%02hx", cid_);
+  }
 
  private:
   // Constructor states

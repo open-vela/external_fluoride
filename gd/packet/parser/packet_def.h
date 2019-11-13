@@ -33,8 +33,6 @@ class PacketDef : public ParentDef {
 
   void GenParserDefinition(std::ostream& s) const;
 
-  void GenParserDefinitionPybind11(std::ostream& s) const;
-
   void GenParserFieldGetter(std::ostream& s, const PacketField* field) const;
 
   void GenValidator(std::ostream& s) const;
@@ -43,8 +41,6 @@ class PacketDef : public ParentDef {
 
   void GenBuilderDefinition(std::ostream& s) const;
 
-  void GenBuilderDefinitionPybind11(std::ostream& s) const;
-
   void GenTestDefine(std::ostream& s) const;
 
   void GenFuzzTestDefine(std::ostream& s) const;
@@ -52,8 +48,6 @@ class PacketDef : public ParentDef {
   FieldList GetParametersToValidate() const;
 
   void GenBuilderCreate(std::ostream& s) const;
-
-  void GenBuilderCreatePybind11(std::ostream& s) const;
 
   void GenBuilderParameterChecker(std::ostream& s) const;
 

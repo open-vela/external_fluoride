@@ -31,7 +31,6 @@
 #include "os/queue.h"
 #include "packet/base_packet_builder.h"
 #include "packet/packet_view.h"
-#include "packet/raw_builder.h"
 
 namespace bluetooth {
 namespace l2cap {
@@ -47,23 +46,23 @@ class ErtmController : public DataController {
   ~ErtmController();
   // Segmentation is handled here
   void OnSdu(std::unique_ptr<packet::BasePacketBuilder> sdu) override;
-  void OnPdu(packet::PacketView<true> pdu) override;
-  std::unique_ptr<packet::BasePacketBuilder> GetNextPacket() override;
-  void EnableFcs(bool enabled) override;
-  void SetRetransmissionAndFlowControlOptions(const RetransmissionAndFlowControlConfigurationOption& option) override;
+  void OnPdu(BasicFrameView pdu) override;
+  std::unique_ptr<BasicFrameBuilder> GetNextPacket() override;
 
  private:
-  Cid cid_;
-  Cid remote_cid_;
-  os::EnqueueBuffer<UpperEnqueue> enqueue_buffer_;
-  os::Handler* handler_;
-  std::queue<std::unique_ptr<packet::BasePacketBuilder>> pdu_queue_;
-  Scheduler* scheduler_;
-  bool fcs_enabled_ = false;
+  [[maybe_unused]] Cid cid_;
+  [[maybe_unused]] Cid remote_cid_;
+  [[maybe_unused]] os::EnqueueBuffer<UpperEnqueue> enqueue_buffer_;
+  [[maybe_unused]] os::Handler* handler_;
+  std::queue<std::unique_ptr<BasicFrameBuilder>> pdu_queue_;
+  [[maybe_unused]] Scheduler* scheduler_;
+  // TODO: Support FCS
+  [[maybe_unused]] FcsType fcs_type_ = FcsType::NO_FCS;
 
   class PacketViewForReassembly : public packet::PacketView<kLittleEndian> {
    public:
     PacketViewForReassembly(const PacketView& packetView) : PacketView(packetView) {}
+    PacketViewForReassembly(nullptr_t) : PacketView(nullptr) {}
     void AppendPacketView(packet::PacketView<kLittleEndian> to_append) {
       Append(to_append);
     }
@@ -71,38 +70,39 @@ class ErtmController : public DataController {
 
   class CopyablePacketBuilder : public packet::BasePacketBuilder {
    public:
-    CopyablePacketBuilder(std::shared_ptr<packet::RawBuilder> builder) : builder_(std::move(builder)) {}
+    CopyablePacketBuilder(std::unique_ptr<packet::BasePacketBuilder> builder) : builder_(builder.release()) {}
 
     void Serialize(BitInserter& it) const override;
 
     size_t size() const override;
 
+    std::unique_ptr<packet::BasePacketBuilder> Create();
+
    private:
-    std::shared_ptr<packet::RawBuilder> builder_;
+    std::shared_ptr<packet::BasePacketBuilder> builder_;
   };
 
-  PacketViewForReassembly reassembly_stage_{std::make_shared<std::vector<uint8_t>>()};
+  PacketViewForReassembly reassembly_stage_{nullptr};
   SegmentationAndReassembly sar_state_ = SegmentationAndReassembly::END;
 
   void stage_for_reassembly(SegmentationAndReassembly sar, const packet::PacketView<kLittleEndian>& payload);
-  void send_pdu(std::unique_ptr<packet::BasePacketBuilder> pdu);
+  void send_pdu(std::unique_ptr<BasicFrameBuilder> pdu);
 
   void close_channel();
 
-  void on_pdu_no_fcs(const packet::PacketView<true>& pdu);
-  void on_pdu_fcs(const packet::PacketView<true>& pdu);
-
   // Configuration options
-  uint16_t local_tx_window_ = 10;
-  uint16_t local_max_transmit_ = 20;
-  uint16_t local_retransmit_timeout_ms_ = 2000;
-  uint16_t local_monitor_timeout_ms_ = 12000;
+  // TODO: Configure these number
+  [[maybe_unused]] uint16_t local_tx_window_ = 10;
+  [[maybe_unused]] uint16_t local_max_transmit_ = 20;
+  [[maybe_unused]] uint16_t local_retransmit_timeout_ms_ = 2000;
+  [[maybe_unused]] uint16_t local_monitor_timeout_ms_ = 12000;
+  [[maybe_unused]] uint16_t local_mps_ = 1010;
 
-  uint16_t remote_tx_window_ = 10;
-  uint16_t remote_mps_ = 1010;
-
-  uint16_t size_each_packet_ =
-      (remote_mps_ - 4 /* basic L2CAP header */ - 2 /* SDU length */ - 2 /* Extended control */ - 2 /* FCS */);
+  [[maybe_unused]] uint16_t remote_tx_window_ = 10;
+  [[maybe_unused]] uint16_t remote_max_transmit_ = 20;
+  [[maybe_unused]] uint16_t remote_retransmit_timeout_ms_ = 2000;
+  [[maybe_unused]] uint16_t remote_monitor_timeout_ms_ = 12000;
+  [[maybe_unused]] uint16_t remote_mps_ = 1010;
 
   struct impl;
   std::unique_ptr<impl> pimpl_;

@@ -39,8 +39,7 @@ class PhyLayerFactory {
 
   std::shared_ptr<PhyLayer> GetPhyLayer(
       const std::function<void(model::packets::LinkLayerPacketView)>&
-          device_receive,
-      uint32_t device_id);
+          device_receive);
 
   void UnregisterPhyLayer(uint32_t id);
 
@@ -66,20 +65,17 @@ class PhyLayerImpl : public PhyLayer {
   PhyLayerImpl(Phy::Type phy_type, uint32_t id,
                const std::function<void(model::packets::LinkLayerPacketView)>&
                    device_receive,
-               uint32_t device_id,
-               const std::shared_ptr<PhyLayerFactory> factory);
+               const std::shared_ptr<PhyLayerFactory>& factory);
   virtual ~PhyLayerImpl() override;
 
   virtual void Send(
       const std::shared_ptr<model::packets::LinkLayerPacketBuilder> packet)
       override;
-  void Send(model::packets::LinkLayerPacketView packet) override;
-  void Receive(model::packets::LinkLayerPacketView packet) override;
-  void Unregister() override;
-  bool IsFactoryId(uint32_t factory_id) override;
-  void TimerTick() override;
-
-  uint32_t device_id_;
+  virtual void Send(model::packets::LinkLayerPacketView packet) override;
+  virtual void Receive(model::packets::LinkLayerPacketView packet) override;
+  virtual void Unregister() override;
+  virtual bool IsFactoryId(uint32_t factory_id) override;
+  virtual void TimerTick() override;
 
  private:
   std::shared_ptr<PhyLayerFactory> factory_;

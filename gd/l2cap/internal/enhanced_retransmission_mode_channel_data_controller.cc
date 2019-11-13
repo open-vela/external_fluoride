@@ -76,10 +76,8 @@ struct ErtmController::impl {
   bool local_busy_ = false;
   int unacked_frames_ = 0;
   // TODO: Instead of having a map, we may consider about a better data structure
-  // Map from TxSeq to (SAR, SDU size for START packet, information payload)
-  std::map<uint8_t, std::tuple<SegmentationAndReassembly, uint16_t, std::shared_ptr<packet::RawBuilder>>> unacked_list_;
-  // Stores (SAR, SDU size for START packet, information payload)
-  std::queue<std::tuple<SegmentationAndReassembly, uint16_t, std::unique_ptr<packet::RawBuilder>>> pending_frames_;
+  std::map<uint8_t, std::pair<SegmentationAndReassembly, CopyablePacketBuilder>> unacked_list_;
+  std::queue<std::pair<SegmentationAndReassembly, std::unique_ptr<packet::BasePacketBuilder>>> pending_frames_;
   int retry_count_ = 0;
   std::map<uint8_t /* tx_seq, */, int /* count */> retry_i_frames_;
   bool rnr_sent_ = false;
@@ -94,14 +92,13 @@ struct ErtmController::impl {
 
   // Events (@see 8.6.5.4)
 
-  void data_request(SegmentationAndReassembly sar, std::unique_ptr<packet::RawBuilder> pdu, uint16_t sdu_size = 0) {
-    // Note: sdu_size only applies to START packet
+  void data_request(SegmentationAndReassembly sar, std::unique_ptr<packet::BasePacketBuilder> pdu) {
     if (tx_state_ == TxState::XMIT && !remote_busy() && rem_window_not_full()) {
-      send_data(sar, sdu_size, std::move(pdu));
+      send_data(sar, std::move(pdu));
     } else if (tx_state_ == TxState::XMIT && (remote_busy() || rem_window_full())) {
-      pend_data(sar, sdu_size, std::move(pdu));
+      pend_data(sar, std::move(pdu));
     } else if (tx_state_ == TxState::WAIT_F) {
-      pend_data(sar, sdu_size, std::move(pdu));
+      pend_data(sar, std::move(pdu));
     }
   }
 
@@ -490,11 +487,11 @@ struct ErtmController::impl {
   }
 
   bool with_valid_req_seq(uint8_t req_seq) {
-    return expected_ack_seq_ <= req_seq && req_seq <= next_tx_seq_;
+    return expected_ack_seq_ <= req_seq && req_seq < next_tx_seq_;
   }
 
   bool with_valid_req_seq_retrans(uint8_t req_seq) {
-    return expected_ack_seq_ <= req_seq && req_seq <= next_tx_seq_;
+    return expected_ack_seq_ <= req_seq && req_seq < next_tx_seq_;
   }
 
   bool with_valid_f_bit(Final f) {
@@ -553,38 +550,19 @@ struct ErtmController::impl {
 
   // Actions (@see 8.6.5.6)
 
-  void _send_i_frame(SegmentationAndReassembly sar, std::unique_ptr<CopyablePacketBuilder> segment, uint8_t req_seq,
-                     uint8_t tx_seq, uint16_t sdu_size = 0, Final f = Final::NOT_SET) {
-    std::unique_ptr<packet::BasePacketBuilder> builder;
-    if (sar == SegmentationAndReassembly::START) {
-      if (controller_->fcs_enabled_) {
-        builder = EnhancedInformationStartFrameWithFcsBuilder::Create(controller_->remote_cid_, tx_seq, f, req_seq,
-                                                                      sdu_size, std::move(segment));
-      } else {
-        builder = EnhancedInformationStartFrameBuilder::Create(controller_->remote_cid_, tx_seq, f, req_seq, sdu_size,
-                                                               std::move(segment));
-      }
-    } else {
-      if (controller_->fcs_enabled_) {
-        builder = EnhancedInformationFrameWithFcsBuilder::Create(controller_->remote_cid_, tx_seq, f, req_seq, sar,
-                                                                 std::move(segment));
-      } else {
-        builder = EnhancedInformationFrameBuilder::Create(controller_->remote_cid_, tx_seq, f, req_seq, sar,
-                                                          std::move(segment));
-      }
-    }
+  void _send_i_frame(SegmentationAndReassembly sar, std::unique_ptr<packet::BasePacketBuilder> segment, uint8_t req_seq,
+                     uint8_t tx_seq, Final f = Final::NOT_SET) {
+    auto builder =
+        ExtendedInformationFrameBuilder::Create(controller_->remote_cid_, f, req_seq, sar, tx_seq, std::move(segment));
     controller_->send_pdu(std::move(builder));
   }
 
-  void send_data(SegmentationAndReassembly sar, uint16_t sdu_size, std::unique_ptr<packet::RawBuilder> segment,
+  void send_data(SegmentationAndReassembly sar, std::unique_ptr<packet::BasePacketBuilder> segment,
                  Final f = Final::NOT_SET) {
-    std::shared_ptr<packet::RawBuilder> shared_segment(segment.release());
     unacked_list_.emplace(std::piecewise_construct, std::forward_as_tuple(next_tx_seq_),
-                          std::forward_as_tuple(sar, sdu_size, shared_segment));
-
-    std::unique_ptr<CopyablePacketBuilder> copyable_packet_builder =
-        std::make_unique<CopyablePacketBuilder>(std::get<2>(unacked_list_.find(next_tx_seq_)->second));
-    _send_i_frame(sar, std::move(copyable_packet_builder), buffer_seq_, next_tx_seq_, sdu_size, f);
+                          std::forward_as_tuple(sar, std::move(segment)));
+    _send_i_frame(sar, unacked_list_.find(next_tx_seq_)->second.second.Create(), buffer_seq_, next_tx_seq_, f);
+    // TODO hsz fix me
     unacked_frames_++;
     frames_sent_++;
     retry_i_frames_[next_tx_seq_] = 1;
@@ -592,8 +570,8 @@ struct ErtmController::impl {
     start_retrans_timer();
   }
 
-  void pend_data(SegmentationAndReassembly sar, uint16_t sdu_size, std::unique_ptr<packet::RawBuilder> data) {
-    pending_frames_.emplace(std::make_tuple(sar, sdu_size, std::move(data)));
+  void pend_data(SegmentationAndReassembly sar, std::unique_ptr<packet::BasePacketBuilder> data) {
+    pending_frames_.emplace(std::make_pair(sar, std::move(data)));
   }
 
   void process_req_seq(uint8_t req_seq) {
@@ -608,12 +586,7 @@ struct ErtmController::impl {
   }
 
   void _send_s_frame(SupervisoryFunction s, uint8_t req_seq, Poll p, Final f) {
-    std::unique_ptr<packet::BasePacketBuilder> builder;
-    if (controller_->fcs_enabled_) {
-      builder = EnhancedSupervisoryFrameWithFcsBuilder::Create(controller_->remote_cid_, s, p, f, req_seq);
-    } else {
-      builder = EnhancedSupervisoryFrameBuilder::Create(controller_->remote_cid_, s, p, f, req_seq);
-    }
+    auto builder = EnhancedSupervisoryFrameBuilder::Create(controller_->remote_cid_, s, p, f, req_seq);
     controller_->send_pdu(std::move(builder));
   }
 
@@ -729,10 +702,8 @@ struct ErtmController::impl {
     uint8_t i = req_seq;
     Final f = (p == Poll::NOT_SET ? Final::NOT_SET : Final::POLL_RESPONSE);
     while (unacked_list_.find(i) == unacked_list_.end()) {
-      std::unique_ptr<CopyablePacketBuilder> copyable_packet_builder =
-          std::make_unique<CopyablePacketBuilder>(std::get<2>(unacked_list_.find(i)->second));
-      _send_i_frame(std::get<0>(unacked_list_.find(i)->second), std::move(copyable_packet_builder), buffer_seq_, i,
-                    std::get<1>(unacked_list_.find(i)->second), f);
+      _send_i_frame(unacked_list_.find(i)->second.first, unacked_list_.find(i)->second.second.Create(), buffer_seq_, i,
+                    f);
       retry_i_frames_[i]++;
       if (retry_i_frames_[i] == controller_->local_max_transmit_) {
         CloseChannel();
@@ -749,10 +720,8 @@ struct ErtmController::impl {
       LOG_ERROR("Received invalid SREJ");
       return;
     }
-    std::unique_ptr<CopyablePacketBuilder> copyable_packet_builder =
-        std::make_unique<CopyablePacketBuilder>(std::get<2>(unacked_list_.find(req_seq)->second));
-    _send_i_frame(std::get<0>(unacked_list_.find(req_seq)->second), std::move(copyable_packet_builder), buffer_seq_,
-                  req_seq, std::get<1>(unacked_list_.find(req_seq)->second), f);
+    _send_i_frame(unacked_list_.find(req_seq)->second.first, unacked_list_.find(req_seq)->second.second.Create(),
+                  buffer_seq_, req_seq, f);
     retry_i_frames_[req_seq]++;
     start_retrans_timer();
   }
@@ -763,7 +732,7 @@ struct ErtmController::impl {
     }
     while (rem_window_not_full() && !pending_frames_.empty()) {
       auto& frame = pending_frames_.front();
-      send_data(std::get<0>(frame), std::get<1>(frame), std::move(std::get<2>(frame)), f);
+      send_data(frame.first, std::move(frame.second), f);
       pending_frames_.pop();
       f = Final::NOT_SET;
     }
@@ -784,36 +753,29 @@ struct ErtmController::impl {
 
 // Segmentation is handled here
 void ErtmController::OnSdu(std::unique_ptr<packet::BasePacketBuilder> sdu) {
-  auto sdu_size = sdu->size();
+  LOG_ERROR("Not implemented");
+  // TODO: Optimize the calculation. We don't need to count for SDU length in CONTINUATION or END packets. We don't need
+  // to FCS when disabled.
+  auto size_each_packet =
+      (remote_mps_ - 4 /* basic L2CAP header */ - 2 /* SDU length */ - 2 /* Extended control */ - 2 /* FCS */);
   std::vector<std::unique_ptr<packet::RawBuilder>> segments;
-  packet::FragmentingInserter fragmenting_inserter(size_each_packet_, std::back_insert_iterator(segments));
+  packet::FragmentingInserter fragmenting_inserter(size_each_packet, std::back_insert_iterator(segments));
   sdu->Serialize(fragmenting_inserter);
-  fragmenting_inserter.finalize();
   if (segments.size() == 1) {
-    pimpl_->data_request(SegmentationAndReassembly::UNSEGMENTED, std::move(segments[0]));
+    pimpl_->data_request(SegmentationAndReassembly::UNSEGMENTED, std::move(sdu));
     return;
   }
-  pimpl_->data_request(SegmentationAndReassembly::START, std::move(segments[0]), sdu_size);
-  for (auto i = 1; i < segments.size() - 1; i++) {
-    pimpl_->data_request(SegmentationAndReassembly::CONTINUATION, std::move(segments[i]));
+  auto sar = SegmentationAndReassembly::START;
+  for (auto i = 0; i < segments.size() - 1; i++) {
+    pimpl_->data_request(sar, std::move(segments[i]));
+    sar = SegmentationAndReassembly::CONTINUATION;
   }
-  pimpl_->data_request(SegmentationAndReassembly::END, std::move(segments.back()));
+  sar = SegmentationAndReassembly::END;
+  pimpl_->data_request(sar, std::move(segments.back()));
 }
 
-void ErtmController::OnPdu(packet::PacketView<true> pdu) {
-  if (fcs_enabled_) {
-    on_pdu_fcs(pdu);
-  } else {
-    on_pdu_no_fcs(pdu);
-  }
-}
-
-void ErtmController::on_pdu_no_fcs(const packet::PacketView<true>& pdu) {
-  auto basic_frame_view = BasicFrameView::Create(pdu);
-  if (!basic_frame_view.IsValid()) {
-    return;
-  }
-  auto standard_frame_view = StandardFrameView::Create(basic_frame_view);
+void ErtmController::OnPdu(BasicFrameView pdu) {
+  auto standard_frame_view = StandardFrameView::Create(pdu);
   if (!standard_frame_view.IsValid()) {
     LOG_WARN("Received invalid frame");
     return;
@@ -855,54 +817,7 @@ void ErtmController::on_pdu_no_fcs(const packet::PacketView<true>& pdu) {
   }
 }
 
-void ErtmController::on_pdu_fcs(const packet::PacketView<true>& pdu) {
-  auto basic_frame_view = BasicFrameWithFcsView::Create(pdu);
-  if (!basic_frame_view.IsValid()) {
-    return;
-  }
-  auto standard_frame_view = StandardFrameWithFcsView::Create(basic_frame_view);
-  if (!standard_frame_view.IsValid()) {
-    LOG_WARN("Received invalid frame");
-    return;
-  }
-  auto type = standard_frame_view.GetFrameType();
-  if (type == FrameType::I_FRAME) {
-    auto i_frame_view = EnhancedInformationFrameWithFcsView::Create(standard_frame_view);
-    if (!i_frame_view.IsValid()) {
-      LOG_WARN("Received invalid frame");
-      return;
-    }
-    pimpl_->recv_i_frame(i_frame_view.GetF(), i_frame_view.GetTxSeq(), i_frame_view.GetReqSeq(), i_frame_view.GetSar(),
-                         i_frame_view.GetPayload());
-  } else if (type == FrameType::S_FRAME) {
-    auto s_frame_view = EnhancedSupervisoryFrameWithFcsView::Create(standard_frame_view);
-    if (!s_frame_view.IsValid()) {
-      LOG_WARN("Received invalid frame");
-      return;
-    }
-    auto req_seq = s_frame_view.GetReqSeq();
-    auto f = s_frame_view.GetF();
-    auto p = s_frame_view.GetP();
-    switch (s_frame_view.GetS()) {
-      case SupervisoryFunction::RECEIVER_READY:
-        pimpl_->recv_rr(req_seq, p, f);
-        break;
-      case SupervisoryFunction::RECEIVER_NOT_READY:
-        pimpl_->recv_rnr(req_seq, p, f);
-        break;
-      case SupervisoryFunction::REJECT:
-        pimpl_->recv_rej(req_seq, p, f);
-        break;
-      case SupervisoryFunction::SELECT_REJECT:
-        pimpl_->recv_srej(req_seq, p, f);
-        break;
-    }
-  } else {
-    LOG_WARN("Received invalid frame");
-  }
-}
-
-std::unique_ptr<packet::BasePacketBuilder> ErtmController::GetNextPacket() {
+std::unique_ptr<BasicFrameBuilder> ErtmController::GetNextPacket() {
   auto next = std::move(pdu_queue_.front());
   pdu_queue_.pop();
   return next;
@@ -944,21 +859,9 @@ void ErtmController::stage_for_reassembly(SegmentationAndReassembly sar,
   }
 }
 
-void ErtmController::EnableFcs(bool enabled) {
-  fcs_enabled_ = enabled;
-}
-
-void ErtmController::send_pdu(std::unique_ptr<packet::BasePacketBuilder> pdu) {
+void ErtmController::send_pdu(std::unique_ptr<BasicFrameBuilder> pdu) {
   pdu_queue_.emplace(std::move(pdu));
   scheduler_->OnPacketsReady(cid_, 1);
-}
-
-void ErtmController::SetRetransmissionAndFlowControlOptions(
-    const RetransmissionAndFlowControlConfigurationOption& option) {
-  local_tx_window_ = option.tx_window_size_;
-  local_max_transmit_ = option.max_transmit_;
-  local_retransmit_timeout_ms_ = option.retransmission_time_out_;
-  local_monitor_timeout_ms_ = option.monitor_time_out_;
 }
 
 void ErtmController::close_channel() {
@@ -971,6 +874,10 @@ size_t ErtmController::CopyablePacketBuilder::size() const {
 
 void ErtmController::CopyablePacketBuilder::Serialize(BitInserter& it) const {
   builder_->Serialize(it);
+}
+
+std::unique_ptr<BasePacketBuilder> ErtmController::CopyablePacketBuilder::Create() {
+  return std::unique_ptr<packet::BasePacketBuilder>(builder_.get());
 }
 
 }  // namespace internal
