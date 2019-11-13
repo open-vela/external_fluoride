@@ -27,8 +27,6 @@ class EnumGen {
 
   void GenDefinition(std::ostream& stream);
 
-  void GenDefinitionPybind11(std::ostream& stream);
-
   void GenLogging(std::ostream& stream);
 
   EnumDef e_;

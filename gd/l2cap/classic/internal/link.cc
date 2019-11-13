@@ -110,10 +110,12 @@ std::shared_ptr<DynamicChannelImpl> Link::AllocateReservedDynamicChannel(Cid res
   return channel;
 }
 
-classic::DynamicChannelConfigurationOption Link::GetConfigurationForInitialConfiguration(Cid cid) {
-  ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
-         local_cid_to_pending_dynamic_channel_connection_map_.end());
-  return local_cid_to_pending_dynamic_channel_connection_map_[cid].configuration_;
+void Link::SetChannelRetransmissionFlowControlMode(Cid cid, RetransmissionAndFlowControlModeOption mode) {
+  if (dynamic_channel_allocator_.FindChannelByCid(cid) == nullptr) {
+    LOG_ERROR("Channel doesn't exist: %d", cid);
+    return;
+  }
+  scheduler_->SetChannelRetransmissionFlowControlMode(cid, mode);
 }
 
 void Link::FreeDynamicChannel(Cid cid) {
@@ -137,12 +139,12 @@ void Link::RefreshRefCount() {
   }
 }
 
-void Link::NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> user_channel) {
+void Link::NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> channel) {
   ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
          local_cid_to_pending_dynamic_channel_connection_map_.end());
   auto& pending_dynamic_channel_connection = local_cid_to_pending_dynamic_channel_connection_map_[cid];
   pending_dynamic_channel_connection.handler_->Post(
-      common::BindOnce(std::move(pending_dynamic_channel_connection.on_open_callback_), std::move(user_channel)));
+      common::BindOnce(std::move(pending_dynamic_channel_connection.on_open_callback_), std::move(channel)));
   local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
 }
 
@@ -155,30 +157,6 @@ void Link::NotifyChannelFail(Cid cid) {
   pending_dynamic_channel_connection.handler_->Post(
       common::BindOnce(std::move(pending_dynamic_channel_connection.on_fail_callback_), result));
   local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
-}
-
-void Link::SetRemoteConnectionlessMtu(Mtu mtu) {
-  remote_mtu_ = mtu;
-}
-
-Mtu Link::GetRemoteConnectionlessMtu() const {
-  return remote_mtu_;
-}
-
-void Link::SetRemoteSupportsErtm(bool supported) {
-  remote_supports_ertm_ = supported;
-}
-
-bool Link::GetRemoteSupportsErtm() const {
-  return remote_supports_ertm_;
-}
-
-void Link::SetRemoteSupportsFcs(bool supported) {
-  remote_supports_fcs_ = supported;
-}
-
-bool Link::GetRemoteSupportsFcs() const {
-  return remote_supports_fcs_;
 }
 
 }  // namespace internal

@@ -67,13 +67,15 @@ class L2capSegmenterTest : public ::testing::Test {
     queue_handler_ = new os::Handler(thread_);
     mock_channel_ = std::make_shared<testing::MockChannelImpl>();
     EXPECT_CALL(*mock_channel_, GetQueueDownEnd()).WillRepeatedly(Return(channel_queue_.GetDownEnd()));
+    EXPECT_CALL(*mock_channel_, GetChannelMode())
+        .WillRepeatedly(Return(RetransmissionAndFlowControlModeOption::L2CAP_BASIC));
     EXPECT_CALL(*mock_channel_, GetCid()).WillRepeatedly(Return(0x41));
     EXPECT_CALL(*mock_channel_, GetRemoteCid()).WillRepeatedly(Return(0x41));
-    sender_ = new Sender(queue_handler_, &scheduler_, mock_channel_);
+    segmenter_ = new Sender(queue_handler_, &scheduler_, mock_channel_);
   }
 
   void TearDown() override {
-    delete sender_;
+    delete segmenter_;
     queue_handler_->Clear();
     user_handler_->Clear();
     delete queue_handler_;
@@ -86,7 +88,7 @@ class L2capSegmenterTest : public ::testing::Test {
   os::Handler* queue_handler_ = nullptr;
   common::BidiQueue<Sender::UpperEnqueue, Sender::UpperDequeue> channel_queue_{10};
   std::shared_ptr<testing::MockChannelImpl> mock_channel_;
-  Sender* sender_ = nullptr;
+  Sender* segmenter_ = nullptr;
   FakeScheduler scheduler_;
 };
 
@@ -99,7 +101,7 @@ TEST_F(L2capSegmenterTest, send_packet) {
       queue_handler_, common::Bind(&L2capSegmenterTest::enqueue_callback, common::Unretained(this)));
   auto status = future.wait_for(std::chrono::milliseconds(3));
   EXPECT_EQ(status, std::future_status::ready);
-  auto packet = sender_->GetNextPacket();
+  auto packet = segmenter_->GetNextPacket();
   EXPECT_NE(packet, nullptr);
 }
 

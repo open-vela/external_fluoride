@@ -55,30 +55,20 @@ std::unique_ptr<Sender::UpperDequeue> Sender::GetNextPacket() {
   return data_controller_->GetNextPacket();
 }
 
-void Sender::SetChannelRetransmissionFlowControlMode(const RetransmissionAndFlowControlConfigurationOption& option) {
-  if (mode_ == option.mode_) {
+void Sender::SetChannelRetransmissionFlowControlMode(RetransmissionAndFlowControlModeOption mode) {
+  if (mode_ == mode) {
     return;
   }
-  if (option.mode_ == RetransmissionAndFlowControlModeOption::L2CAP_BASIC) {
+  if (mode_ == RetransmissionAndFlowControlModeOption::L2CAP_BASIC) {
     data_controller_ =
         std::make_unique<BasicModeDataController>(channel_id_, remote_channel_id_, queue_end_, handler_, scheduler_);
     return;
   }
-  if (option.mode_ == RetransmissionAndFlowControlModeOption::ENHANCED_RETRANSMISSION) {
+  if (mode == RetransmissionAndFlowControlModeOption::ENHANCED_RETRANSMISSION) {
     data_controller_ =
         std::make_unique<ErtmController>(channel_id_, remote_channel_id_, queue_end_, handler_, scheduler_);
-    data_controller_->SetRetransmissionAndFlowControlOptions(option);
     return;
   }
-}
-
-void Sender::SetFcsType(FcsType fcs_type) {
-  // TODO: FCS is enabled when "not both side explicitly disable it".
-  data_controller_->EnableFcs(fcs_type == FcsType::DEFAULT);
-}
-
-void Sender::SetIncomingMtu(Mtu mtu) {
-  // TODO: Enforce MTU
 }
 
 DataController* Sender::GetDataController() {
