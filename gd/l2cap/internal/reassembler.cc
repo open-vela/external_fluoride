@@ -15,12 +15,12 @@
  */
 
 #include "l2cap/internal/reassembler.h"
-
 #include "common/bidi_queue.h"
 #include "l2cap/cid.h"
-#include "l2cap/classic/internal/dynamic_channel_impl.h"
 #include "l2cap/l2cap_packets.h"
+#include "packet/base_packet_builder.h"
 #include "packet/packet_view.h"
+#
 
 namespace bluetooth {
 namespace l2cap {
@@ -37,10 +37,11 @@ Reassembler::~Reassembler() {
 }
 
 void Reassembler::AttachChannel(Cid cid, Reassembler::UpperQueueDownEnd* channel_down_end,
-                                std::shared_ptr<classic::internal::DynamicChannelImpl> channel) {
+                                Reassembler::ChannelConfigurationOptions options) {
   ASSERT_LOG(channel_map_.find(cid) == channel_map_.end(), "Channel is already attached");
+  auto pair = ChannelBufferAndOptions(channel_down_end, options);
   channel_map_.emplace(std::piecewise_construct, std::forward_as_tuple(cid),
-                       std::forward_as_tuple(channel_down_end, channel));
+                       std::forward_as_tuple(channel_down_end, options));
 }
 
 void Reassembler::DetachChannel(Cid cid) {
@@ -57,13 +58,12 @@ void Reassembler::link_queue_dequeue_callback() {
   }
   Cid cid = static_cast<Cid>(basic_frame_view.GetChannelId());
   auto channel = channel_map_.find(cid);
-  if (channel == channel_map_.end() || (cid >= kFirstDynamicChannel && channel->second.channel_ == nullptr)) {
+  if (channel == channel_map_.end()) {
     LOG_WARN("Received a packet with invalid cid: %d", cid);
     return;  // Channel is not attached to scheduler
   }
 
-  auto channel_mode = cid < kFirstDynamicChannel ? RetransmissionAndFlowControlModeOption::L2CAP_BASIC
-                                                 : channel->second.channel_->GetMode();
+  auto channel_mode = channel->second.options_.mode_;
   switch (channel_mode) {
     case RetransmissionAndFlowControlModeOption::L2CAP_BASIC:
       handle_basic_mode_packet(cid, basic_frame_view);
