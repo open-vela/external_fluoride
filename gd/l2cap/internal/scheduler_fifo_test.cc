@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 #include <future>
 
+#include "l2cap/l2cap_packets.h"
 #include "os/handler.h"
 #include "os/queue.h"
 #include "os/thread.h"
