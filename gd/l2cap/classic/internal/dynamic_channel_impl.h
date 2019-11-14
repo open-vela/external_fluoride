@@ -20,8 +20,6 @@
 #include "hci/address.h"
 #include "l2cap/cid.h"
 #include "l2cap/classic/dynamic_channel.h"
-#include "l2cap/l2cap_packets.h"
-#include "l2cap/mtu.h"
 #include "l2cap/psm.h"
 #include "os/handler.h"
 #include "os/log.h"
@@ -69,20 +67,16 @@ class DynamicChannelImpl {
 
   enum class ConfigurationStatus { NOT_CONFIGURED, CONFIGURED };
 
-  virtual ConfigurationStatus GetOutgoingConfigurationStatus() const;
   virtual void SetOutgoingConfigurationStatus(ConfigurationStatus status);
-
-  virtual ConfigurationStatus GetIncomingConfigurationStatus() const;
   virtual void SetIncomingConfigurationStatus(ConfigurationStatus status);
 
-  virtual Mtu GetIncomingMtu() const;
-  virtual void SetIncomingMtu(Mtu mtu);
+  virtual ConfigurationStatus GetOutgoingConfigurationStatus() const {
+    return outgoing_configuration_status_;
+  }
 
-  virtual RetransmissionAndFlowControlModeOption GetMode() const;
-  virtual void SetMode(RetransmissionAndFlowControlModeOption mode);
-
-  virtual FcsType GetFcsType() const;
-  virtual void SetFcsType(FcsType fcs_type);
+  virtual ConfigurationStatus GetIncomingConfigurationStatus() const {
+    return incoming_configuration_status_;
+  }
 
  private:
   const Psm psm_;
@@ -104,11 +98,6 @@ class DynamicChannelImpl {
       kChannelQueueSize};
   ConfigurationStatus outgoing_configuration_status_ = ConfigurationStatus::NOT_CONFIGURED;
   ConfigurationStatus incoming_configuration_status_ = ConfigurationStatus::NOT_CONFIGURED;
-
-  Mtu incoming_mtu_ = kDefaultClassicMtu;
-  RetransmissionAndFlowControlModeOption mode_ = RetransmissionAndFlowControlModeOption::L2CAP_BASIC;
-  // TODO: Add all RetransmissionAndFlowControlConfigurationOptions
-  FcsType fcs_type_ = FcsType::DEFAULT;
 
   DISALLOW_COPY_AND_ASSIGN(DynamicChannelImpl);
 };
