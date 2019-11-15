@@ -44,6 +44,7 @@
 #include "hci_internals.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
+#include "main/shim/shim.h"
 #include "osi/include/alarm.h"
 #include "osi/include/list.h"
 #include "osi/include/log.h"
@@ -510,8 +511,7 @@ static void command_timed_out(void* original_wait_entry) {
 
   uint8_t* hci_packet = reinterpret_cast<uint8_t*>(bt_hdr + 1);
 
-  UINT16_TO_STREAM(hci_packet,
-                   HCI_GRP_VENDOR_SPECIFIC | HCI_CONTROLLER_DEBUG_INFO_OCF);
+  UINT16_TO_STREAM(hci_packet, HCI_CONTROLLER_DEBUG_INFO);
   UINT8_TO_STREAM(hci_packet, 0);  // No parameters
 
   hci_firmware_log_fd = hci_open_firmware_log_file();
@@ -720,7 +720,21 @@ void hci_layer_cleanup_interface() {
   }
 }
 
+namespace bluetooth {
+namespace shim {
+const hci_t* hci_layer_get_interface();
+}  // namespace shim
+}  // namespace bluetooth
+
 const hci_t* hci_layer_get_interface() {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::hci_layer_get_interface();
+  } else {
+    return bluetooth::legacy::hci_layer_get_interface();
+  }
+}
+
+const hci_t* bluetooth::legacy::hci_layer_get_interface() {
   buffer_allocator = buffer_allocator_get_interface();
   btsnoop = btsnoop_get_interface();
   packet_fragmenter = packet_fragmenter_get_interface();
