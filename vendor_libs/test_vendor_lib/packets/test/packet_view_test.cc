@@ -52,13 +52,13 @@ template <typename T>
 class IteratorTest : public ::testing::Test {
  public:
   IteratorTest() = default;
-  ~IteratorTest() override = default;
+  ~IteratorTest() = default;
 
-  void SetUp() override {
+  void SetUp() {
     packet = std::shared_ptr<T>(new T({View(std::make_shared<const vector<uint8_t>>(count_all), 0, count_all.size())}));
   }
 
-  void TearDown() override {
+  void TearDown() {
     packet.reset();
   }
 
@@ -71,14 +71,14 @@ TYPED_TEST_CASE(IteratorTest, PacketViewTypes);
 class IteratorExtractTest : public ::testing::Test {
  public:
   IteratorExtractTest() = default;
-  ~IteratorExtractTest() override = default;
+  ~IteratorExtractTest() = default;
 };
 
 template <typename T>
 class PacketViewTest : public IteratorTest<T> {
  public:
   PacketViewTest() = default;
-  ~PacketViewTest() override = default;
+  ~PacketViewTest() = default;
 };
 
 using PacketViewTypes = ::testing::Types<PacketView<true>, PacketView<false>>;
@@ -87,13 +87,13 @@ TYPED_TEST_CASE(PacketViewTest, PacketViewTypes);
 class PacketViewMultiViewTest : public ::testing::Test {
  public:
   PacketViewMultiViewTest() = default;
-  ~PacketViewMultiViewTest() override = default;
+  ~PacketViewMultiViewTest() = default;
 };
 
 class ViewTest : public ::testing::Test {
  public:
   ViewTest() = default;
-  ~ViewTest() override = default;
+  ~ViewTest() = default;
 };
 
 TEST(IteratorExtractTest, extractLeTest) {

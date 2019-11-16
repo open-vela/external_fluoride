@@ -24,6 +24,8 @@ cc_library_static {
         "hci/le_meta_event_builder.cc",
         "hci/sco_packet_builder.cc",
         "hci/sco_packet_view.cc",
+        "link_layer/link_layer_packet_builder.cc",
+        "link_layer/link_layer_packet_view.cc",
     ],
     cflags: [
         "-fvisibility=hidden",
@@ -36,7 +38,6 @@ cc_library_static {
         "system/bt/vendor_libs/test_vendor_lib/include",
         "system/bt/vendor_libs/test_vendor_lib/",
         "system/bt/",
-        "system/bt/gd",
     ],
     shared_libs: [
         "libbase",
@@ -54,6 +55,7 @@ cc_test_host {
         "clang_coverage_bin",
     ],
     srcs: [
+        "test/link_layer_packet_builder_test.cc",
         "test/packet_builder_test.cc",
         "test/packet_view_test.cc",
         "hci/test/acl_builder_test.cc",
@@ -67,7 +69,6 @@ cc_test_host {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
         "system/bt/hci/include",
         "system/bt/vendor_libs/test_vendor_lib",
         "system/bt/vendor_libs/test_vendor_lib/include",

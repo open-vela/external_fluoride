@@ -28,7 +28,9 @@ cc_binary {
         "libbase",
         "libchrome",
         "libcutils",
+        "libhwbinder",
         "libhidlbase",
+        "libhidltransport",
         "liblog",
         "libutils",
     ],
@@ -39,9 +41,6 @@ cc_binary {
         "-Werror",
         "-DHAS_NO_BDROID_BUILDCFG",
     ],
-    generated_headers: [
-        "RootCanalGeneratedPackets_h",
-    ],
     static_libs: [
         "android.hardware.bluetooth-async",
         "android.hardware.bluetooth-hci",
@@ -50,7 +49,6 @@ cc_binary {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
         "system/bt/hci/include",
         "system/bt/internal_include",
         "system/bt/stack/include",
@@ -73,6 +71,7 @@ cc_library_shared {
         "libchrome",
         "libcutils",
         "libhidlbase",
+        "libhidltransport",
         "liblog",
         "libutils",
     ],
@@ -82,9 +81,6 @@ cc_library_shared {
         "-Werror",
         "-DHAS_NO_BDROID_BUILDCFG",
     ],
-    generated_headers: [
-        "RootCanalGeneratedPackets_h",
-    ],
     static_libs: [
         "android.hardware.bluetooth-async",
         "android.hardware.bluetooth-hci",
@@ -93,7 +89,6 @@ cc_library_shared {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/gd",
         "system/bt/hci/include",
         "system/bt/internal_include",
         "system/bt/stack/include",
