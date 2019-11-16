@@ -31,7 +31,6 @@
 #include "gd/shim/ihci_layer.h"
 #include "gd/shim/iinquiry.h"
 #include "gd/shim/il2cap.h"
-#include "gd/shim/iname.h"
 #include "gd/shim/ipage.h"
 #include "gd/shim/iscanning.h"
 #include "gd/shim/istack.h"
