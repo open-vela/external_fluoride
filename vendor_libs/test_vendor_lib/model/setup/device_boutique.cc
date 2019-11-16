@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "device_boutique"
+
 #include "device_boutique.h"
 
-#include "os/log.h"
+#include "base/logging.h"
+#include "osi/include/log.h"
 
 using std::vector;
 
@@ -30,16 +33,16 @@ std::unordered_map<std::string, std::function<std::shared_ptr<Device>()>>& Devic
 // Register a constructor for a device type.
 bool DeviceBoutique::Register(const std::string& device_type,
                               const std::function<std::shared_ptr<Device>()> device_constructor) {
-  LOG_INFO("Registering %s", device_type.c_str());
+  LOG_INFO(LOG_TAG, "Registering %s", device_type.c_str());
   GetMap()[device_type] = device_constructor;
   return true;
 }
 
 std::shared_ptr<Device> DeviceBoutique::Create(const vector<std::string>& args) {
-  ASSERT(!args.empty());
+  CHECK(!args.empty());
 
   if (GetMap().find(args[0]) == GetMap().end()) {
-    LOG_WARN("No constructor registered for %s", args[0].c_str());
+    LOG_WARN(LOG_TAG, "No constructor registered for %s", args[0].c_str());
     return std::shared_ptr<Device>(nullptr);
   }
 
