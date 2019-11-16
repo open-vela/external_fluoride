@@ -33,28 +33,35 @@ namespace security {
  */
 class ISecurityManagerListener {
  public:
-  virtual ~ISecurityManagerListener() = 0;
+  ISecurityManagerListener(os::Handler* handler) : handler_(handler) {}
+  virtual ~ISecurityManagerListener() = default;
 
   /**
    * Called when a device is successfully bonded.
    *
    * @param device pointer to the bonded device
    */
-  virtual void OnDeviceBonded(std::shared_ptr<bluetooth::hci::Device> device) = 0;
+  virtual void OnDeviceBonded(std::shared_ptr<bluetooth::hci::Device> device);
 
   /**
    * Called when a device is successfully un-bonded.
    *
    * @param device pointer to the device that is no longer bonded
    */
-  virtual void OnDeviceUnbonded(std::shared_ptr<bluetooth::hci::Device> device) = 0;
+  virtual void OnDeviceUnbonded(std::shared_ptr<bluetooth::hci::Device> device);
 
   /**
    * Called as a result of a failure during the bonding process.
    *
    * @param device pointer to the device that is no longer bonded
    */
-  virtual void OnDeviceBondFailed(std::shared_ptr<bluetooth::hci::Device> device) = 0;
+  virtual void OnDeviceBondFailed(std::shared_ptr<bluetooth::hci::Device> device);
+
+  bool operator==(const ISecurityManagerListener& rhs) const {
+    return &*this == &rhs;
+  }
+
+  os::Handler* handler_ = nullptr;
 };
 
 /**
@@ -96,7 +103,7 @@ class SecurityManager {
    *
    * @param listener ISecurityManagerListener instance to handle callbacks
    */
-  void RegisterCallbackListener(ISecurityManagerListener* listener, os::Handler* handler);
+  void RegisterCallbackListener(ISecurityManagerListener* listener);
 
   /**
    * Unregister listener for callback events from SecurityManager

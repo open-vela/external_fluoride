@@ -22,8 +22,6 @@
 #include "os/handler.h"
 #include "security/channel/security_manager_channel.h"
 
-#include <utility>
-
 namespace bluetooth {
 namespace security {
 
@@ -82,7 +80,7 @@ class SecurityManagerImpl /*: public channel::ISecurityManagerChannelListener*/ 
    *
    * @param listener ISecurityManagerListener instance to handle callbacks
    */
-  void RegisterCallbackListener(ISecurityManagerListener* listener, os::Handler* handler);
+  void RegisterCallbackListener(ISecurityManagerListener* listener);
 
   /**
    * Unregister listener for callback events from SecurityManager
@@ -92,10 +90,10 @@ class SecurityManagerImpl /*: public channel::ISecurityManagerChannelListener*/ 
   void UnregisterCallbackListener(ISecurityManagerListener* listener);
 
  protected:
-  std::vector<std::pair<ISecurityManagerListener*, os::Handler*>> listeners_;
-  void NotifyDeviceBonded(std::shared_ptr<bluetooth::hci::Device> device);
-  void NotifyDeviceBondFailed(std::shared_ptr<bluetooth::hci::Device> device);
-  void NotifyDeviceUnbonded(std::shared_ptr<bluetooth::hci::Device> device);
+  std::vector<ISecurityManagerListener*> listeners_;
+  void FireDeviceBondedCallbacks(std::shared_ptr<bluetooth::hci::Device> device);
+  void FireBondFailedCallbacks(std::shared_ptr<bluetooth::hci::Device> device);
+  void FireUnbondCallbacks(std::shared_ptr<bluetooth::hci::Device> device);
 
   // ISecurityManagerChannel
   void OnChangeConnectionLinkKeyComplete(std::shared_ptr<hci::Device> device,
