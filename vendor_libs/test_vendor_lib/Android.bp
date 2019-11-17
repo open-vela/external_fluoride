@@ -35,6 +35,7 @@ cc_library_static {
         "model/setup/test_channel_transport.cc",
         "model/setup/test_command_handler.cc",
         "model/setup/test_model.cc",
+        ":BluetoothPacketSources",
     ],
     cflags: [
         "-fvisibility=hidden",
@@ -47,15 +48,12 @@ cc_library_static {
         "include",
         ".",
     ],
-    header_libs: [
-        "libbluetooth_headers",
+    generated_headers: [
+        "RootCanalGeneratedPackets_h",
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/utils/include",
-        "system/bt/hci/include",
-        "system/bt/internal_include",
-        "system/bt/stack/include",
+        "system/bt/gd",
     ],
     shared_libs: [
         "libbase",
@@ -90,9 +88,7 @@ cc_test_host {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/utils/include",
-        "system/bt/hci/include",
-        "system/bt/stack/include",
+        "system/bt/gd",
     ],
     shared_libs: [
         "liblog",
@@ -126,9 +122,10 @@ cc_test_host {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/utils/include",
-        "system/bt/hci/include",
-        "system/bt/stack/include",
+        "system/bt/gd",
+    ],
+    generated_headers: [
+        "RootCanalGeneratedPackets_h",
     ],
     shared_libs: [
         "liblog",
@@ -136,5 +133,19 @@ cc_test_host {
     static_libs: [
         "libbt-rootcanal-types",
         "libbt-rootcanal",
+    ],
+}
+
+genrule {
+    name: "RootCanalGeneratedPackets_h",
+    tools: [
+        "bluetooth_packetgen",
+    ],
+    cmd: "$(location bluetooth_packetgen) --root_namespace=model --include=system/bt/vendor_libs/test_vendor_lib --out=$(genDir) $(in)",
+    srcs: [
+        "packets/link_layer_packets.pdl",
+    ],
+    out: [
+        "packets/link_layer_packets.h",
     ],
 }
