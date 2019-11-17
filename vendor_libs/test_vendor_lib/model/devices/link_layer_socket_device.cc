@@ -18,9 +18,8 @@
 
 #include <unistd.h>
 
-#include "packet/packet_view.h"
-#include "packet/raw_builder.h"
-#include "packet/view.h"
+#include "packets/packet_view.h"
+#include "packets/view.h"
 
 using std::vector;
 
@@ -31,18 +30,18 @@ LinkLayerSocketDevice::LinkLayerSocketDevice(int socket_fd, Phy::Type phy_type)
 
 void LinkLayerSocketDevice::TimerTick() {
   if (bytes_left_ == 0) {
-    auto packet_size = std::make_shared<std::vector<uint8_t>>(kSizeBytes);
-
-    size_t bytes_received = socket_.TryReceive(kSizeBytes, packet_size->data());
+    size_t size_bytes = sizeof(uint32_t);
+    received_ = std::make_shared<std::vector<uint8_t>>(size_bytes);
+    size_t bytes_received = socket_.TryReceive(size_bytes, received_->data());
     if (bytes_received == 0) {
       return;
     }
-    ASSERT_LOG(bytes_received == kSizeBytes, "bytes_received == %d", static_cast<int>(bytes_received));
-    bluetooth::packet::PacketView<bluetooth::packet::kLittleEndian> size(
-        {bluetooth::packet::View(packet_size, 0, kSizeBytes)});
+    ASSERT_LOG(bytes_received == size_bytes, "bytes_received == %d",
+               static_cast<int>(bytes_received));
+    packets::PacketView<true> size({packets::View(received_, 0, size_bytes)});
     bytes_left_ = size.begin().extract<uint32_t>();
-    received_ = std::make_shared<std::vector<uint8_t>>(bytes_left_);
-    offset_ = 0;
+    received_->resize(size_bytes + bytes_left_);
+    offset_ = size_bytes;
   }
   size_t bytes_received = socket_.TryReceive(bytes_left_, received_->data() + offset_);
   if (bytes_received == 0) {
@@ -63,16 +62,11 @@ void LinkLayerSocketDevice::TimerTick() {
 
 void LinkLayerSocketDevice::IncomingPacket(
     model::packets::LinkLayerPacketView packet) {
-  auto size_packet = bluetooth::packet::RawBuilder();
-  size_packet.AddOctets4(packet.size());
-  std::vector<uint8_t> size_bytes;
-  bluetooth::packet::BitInserter bit_inserter(size_bytes);
-  size_packet.Serialize(bit_inserter);
+  std::shared_ptr<std::vector<uint8_t>> payload_bytes =
+      std::make_shared<std::vector<uint8_t>>(packet.begin(), packet.end());
+  packets::PacketView<true> packet_view(payload_bytes);
 
-  if (socket_.TrySend(size_bytes) == kSizeBytes) {
-    std::vector<uint8_t> payload_bytes{packet.begin(), packet.end()};
-    socket_.TrySend(payload_bytes);
-  }
+  socket_.TrySend(packet_view);
 }
 
 }  // namespace test_vendor_lib
