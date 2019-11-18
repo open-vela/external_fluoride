@@ -57,6 +57,10 @@ class ISecurityManagerListener {
    */
   virtual void OnDeviceBondFailed(std::shared_ptr<bluetooth::hci::Device> device) = 0;
 
+  bool operator==(const ISecurityManagerListener& rhs) const {
+    return &*this == &rhs;
+  }
+
   os::Handler* handler_ = nullptr;
 };
 
