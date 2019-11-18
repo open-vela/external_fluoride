@@ -38,7 +38,7 @@ class ChannelImpl {
   GetQueueUpEnd() = 0;
 
   /**
-   * Return the queue end for lower layer (sender and receiver)
+   * Return the queue end for lower layer (segmenter and reassembler)
    */
   virtual common::BidiQueueEnd<packet::PacketView<packet::kLittleEndian>, packet::BasePacketBuilder>*
   GetQueueDownEnd() = 0;
