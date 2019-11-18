@@ -24,12 +24,13 @@
 #include "l2cap/cid.h"
 #include "l2cap/internal/channel_impl.h"
 #include "l2cap/internal/scheduler.h"
-#include "l2cap/internal/sender.h"
+#include "l2cap/internal/segmenter.h"
 #include "os/handler.h"
 #include "os/queue.h"
 
 namespace bluetooth {
 namespace l2cap {
+
 namespace internal {
 
 class Fifo : public Scheduler {
@@ -38,14 +39,12 @@ class Fifo : public Scheduler {
   ~Fifo() override;
   void AttachChannel(Cid cid, std::shared_ptr<ChannelImpl> channel) override;
   void DetachChannel(Cid cid) override;
-  void OnPacketsReady(Cid cid, int number_packets) override;
-  void SetChannelRetransmissionFlowControlMode(Cid cid, RetransmissionAndFlowControlModeOption mode) override;
-  DataController* GetDataController(Cid cid) override;
+  void NotifyPacketsReady(Cid cid, int number_packets) override;
 
  private:
   LowerQueueUpEnd* link_queue_up_end_;
   os::Handler* handler_;
-  std::unordered_map<Cid, Sender> segmenter_map_;
+  std::unordered_map<Cid, Segmenter> segmenter_map_;
   std::queue<std::pair<Cid, int>> next_to_dequeue_and_num_packets;
 
   bool link_queue_enqueue_registered_ = false;
