@@ -47,10 +47,8 @@ void Sniffer::IncomingPacket(model::packets::LinkLayerPacketView packet) {
   if (!match_source && !match_dest) {
     return;
   }
-  LOG_INFO("%s %s -> %s (Type %s)",
-           (match_source ? (match_dest ? "<->" : "<--") : "-->"),
-           source.ToString().c_str(), dest.ToString().c_str(),
-           model::packets::PacketTypeText(packet.GetType()).c_str());
+  LOG_INFO("%s %s -> %s (Type %d)", (match_source ? (match_dest ? "<->" : "<--") : "-->"), source.ToString().c_str(),
+           dest.ToString().c_str(), static_cast<int>(packet.GetType()));
 }
 
 }  // namespace test_vendor_lib
