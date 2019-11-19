@@ -35,14 +35,10 @@ std::string BodyField::GetDataType() const {
 
 void BodyField::GenExtractor(std::ostream&, int, bool) const {}
 
-std::string BodyField::GetGetterFunctionName() const {
-  return "";
-}
-
 void BodyField::GenGetter(std::ostream&, Size, Size) const {}
 
-std::string BodyField::GetBuilderParameterType() const {
-  return "";
+bool BodyField::GenBuilderParameter(std::ostream&) const {
+  return false;
 }
 
 bool BodyField::HasParameterValidator() const {
