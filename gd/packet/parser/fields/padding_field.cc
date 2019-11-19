@@ -40,14 +40,10 @@ std::string PaddingField::GetDataType() const {
 
 void PaddingField::GenExtractor(std::ostream&, int, bool) const {}
 
-std::string PaddingField::GetGetterFunctionName() const {
-  return "";
-}
-
 void PaddingField::GenGetter(std::ostream&, Size, Size) const {}
 
-std::string PaddingField::GetBuilderParameterType() const {
-  return "";
+bool PaddingField::GenBuilderParameter(std::ostream&) const {
+  return false;
 }
 
 bool PaddingField::HasParameterValidator() const {

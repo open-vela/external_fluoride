@@ -144,14 +144,9 @@ void VectorField::GenExtractor(std::ostream& s, int num_leading_bits, bool for_s
   s << "}";
 }
 
-std::string VectorField::GetGetterFunctionName() const {
-  std::stringstream ss;
-  ss << "Get" << util::UnderscoreToCamelCase(GetName());
-  return ss.str();
-}
-
 void VectorField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) const {
-  s << GetDataType() << " " << GetGetterFunctionName() << "() {";
+  s << GetDataType();
+  s << " Get" << util::UnderscoreToCamelCase(GetName()) << "() {";
   s << "ASSERT(was_validated_);";
   s << "size_t end_index = size();";
   s << "auto to_bound = begin();";
@@ -165,14 +160,13 @@ void VectorField::GenGetter(std::ostream& s, Size start_offset, Size end_offset)
   s << "}\n";
 }
 
-std::string VectorField::GetBuilderParameterType() const {
-  std::stringstream ss;
+bool VectorField::GenBuilderParameter(std::ostream& s) const {
   if (element_field_->BuilderParameterMustBeMoved()) {
-    ss << "std::vector<" << element_field_->GetDataType() << ">";
+    s << "std::vector<" << element_field_->GetDataType() << "> " << GetName();
   } else {
-    ss << "const std::vector<" << element_field_->GetDataType() << ">&";
+    s << "const std::vector<" << element_field_->GetDataType() << ">& " << GetName();
   }
-  return ss.str();
+  return true;
 }
 
 bool VectorField::BuilderParameterMustBeMoved() const {
@@ -221,12 +215,4 @@ void VectorField::SetSizeField(const SizeField* size_field) {
 
 const std::string& VectorField::GetSizeModifier() const {
   return size_modifier_;
-}
-
-bool VectorField::IsContainerField() const {
-  return true;
-}
-
-const PacketField* VectorField::GetElementField() const {
-  return element_field_;
 }
