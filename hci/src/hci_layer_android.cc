@@ -32,8 +32,6 @@
 #include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
 #include <android/hardware/bluetooth/1.0/IBluetoothHciCallbacks.h>
 #include <android/hardware/bluetooth/1.0/types.h>
-#include <android/hardware/bluetooth/1.1/IBluetoothHci.h>
-#include <android/hardware/bluetooth/1.1/IBluetoothHciCallbacks.h>
 #include <hwbinder/ProcessState.h>
 
 #define LOG_PATH "/data/misc/bluetooth/logs/firmware_events.log"
@@ -45,18 +43,16 @@ using ::android::hardware::ProcessState;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 using ::android::hardware::bluetooth::V1_0::HciPacket;
+using ::android::hardware::bluetooth::V1_0::IBluetoothHci;
+using ::android::hardware::bluetooth::V1_0::IBluetoothHciCallbacks;
 using ::android::hardware::bluetooth::V1_0::Status;
-
-using namespace ::android::hardware::bluetooth;
 
 extern void initialization_complete();
 extern void hci_event_received(const base::Location& from_here, BT_HDR* packet);
 extern void acl_event_received(BT_HDR* packet);
 extern void sco_data_received(BT_HDR* packet);
-extern void iso_data_received(BT_HDR* packet);
 
-android::sp<V1_0::IBluetoothHci> btHci;
-android::sp<V1_1::IBluetoothHci> btHci_1_1;
+android::sp<IBluetoothHci> btHci;
 
 class BluetoothHciDeathRecipient : public hidl_death_recipient {
  public:
@@ -67,7 +63,7 @@ class BluetoothHciDeathRecipient : public hidl_death_recipient {
 };
 android::sp<BluetoothHciDeathRecipient> bluetoothHciDeathRecipient = new BluetoothHciDeathRecipient();
 
-class BluetoothHciCallbacks : public V1_1::IBluetoothHciCallbacks {
+class BluetoothHciCallbacks : public IBluetoothHciCallbacks {
  public:
   BluetoothHciCallbacks() {
     buffer_allocator = buffer_allocator_get_interface();
@@ -111,26 +107,13 @@ class BluetoothHciCallbacks : public V1_1::IBluetoothHciCallbacks {
     return Void();
   }
 
-  Return<void> isoDataReceived(const hidl_vec<uint8_t>& data) override {
-    BT_HDR* packet = WrapPacketAndCopy(MSG_HC_TO_STACK_HCI_ISO, data);
-    iso_data_received(packet);
-    return Void();
-  }
-
   const allocator_t* buffer_allocator;
 };
 
 void hci_initialize() {
   LOG_INFO(LOG_TAG, "%s", __func__);
 
-  btHci_1_1 = V1_1::IBluetoothHci::getService();
-
-  if (btHci_1_1 != nullptr) {
-    btHci = btHci_1_1;
-  } else {
-    btHci = V1_0::IBluetoothHci::getService();
-  }
-
+  btHci = IBluetoothHci::getService();
   // If android.hardware.bluetooth* is not found, Bluetooth can not continue.
   CHECK(btHci != nullptr);
   auto death_link = btHci->linkToDeath(bluetoothHciDeathRecipient, 0);
@@ -143,13 +126,8 @@ void hci_initialize() {
 
   // Block allows allocation of a variable that might be bypassed by goto.
   {
-    android::sp<V1_1::IBluetoothHciCallbacks> callbacks =
-        new BluetoothHciCallbacks();
-    if (btHci_1_1 != nullptr) {
-      btHci_1_1->initialize(callbacks);
-    } else {
-      btHci->initialize(callbacks);
-    }
+    android::sp<IBluetoothHciCallbacks> callbacks = new BluetoothHciCallbacks();
+    btHci->initialize(callbacks);
   }
 }
 
@@ -178,13 +156,6 @@ void hci_transmit(BT_HDR* packet) {
       break;
     case MSG_STACK_TO_HC_HCI_SCO:
       btHci->sendScoData(data);
-      break;
-    case MSG_STACK_TO_HC_HCI_ISO:
-      if (btHci_1_1 != nullptr) {
-        btHci_1_1->sendIsoData(data);
-      } else {
-        LOG_ERROR(LOG_TAG, "ISO is not supported in HAL v1.0");
-      }
       break;
     default:
       LOG_ERROR(LOG_TAG, "Unknown packet type (%d)", event);
