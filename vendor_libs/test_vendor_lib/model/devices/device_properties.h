@@ -49,9 +49,8 @@ class DeviceProperties {
     return extended_features_[0];
   }
 
-  void SetExtendedFeatures(uint64_t features, uint8_t page_number) {
-    ASSERT(page_number < extended_features_.size());
-    extended_features_[page_number] = features;
+  void SetSupportedFeatures(uint64_t features) {
+    extended_features_[0] = features;
   }
 
   // Specification Version 4.2, Volume 2, Part E, Section 7.4.4
@@ -312,7 +311,7 @@ class DeviceProperties {
   std::vector<uint8_t> supported_codecs_;
   std::vector<uint32_t> vendor_specific_codecs_;
   std::vector<uint8_t> supported_commands_;
-  std::vector<uint64_t> extended_features_{{0x875b3fd8fe8ffeff, 0x0f}};
+  std::vector<uint64_t> extended_features_{{0x875b3fd8fe8ffeff, 0x07}};
   ClassOfDevice class_of_device_{{0, 0, 0}};
   std::vector<uint8_t> extended_inquiry_data_;
   std::vector<uint8_t> name_;
