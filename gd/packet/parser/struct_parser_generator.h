@@ -24,14 +24,14 @@
 
 class StructParserGenerator {
  public:
-  explicit StructParserGenerator(const Declarations& declarations);
+  StructParserGenerator(Declarations& declarations);
 
   void Generate(std::ostream& s) const;
 
  private:
   class TreeNode {
    public:
-    explicit TreeNode(const StructDef* s)
+    TreeNode(const StructDef* s)
         : struct_def_(s), packet_field_(s->GetNewField(s->name_ + "_parse", ParseLocation())) {}
     const StructDef* struct_def_;
     const PacketField* packet_field_;

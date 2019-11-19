@@ -49,14 +49,8 @@ void VariableLengthStructField::GenExtractor(std::ostream& s, int, bool) const {
   s << "}";
 }
 
-std::string VariableLengthStructField::GetGetterFunctionName() const {
-  std::stringstream ss;
-  ss << "Get" << util::UnderscoreToCamelCase(GetName());
-  return ss.str();
-}
-
 void VariableLengthStructField::GenGetter(std::ostream& s, Size start_offset, Size end_offset) const {
-  s << GetDataType() << " " << GetGetterFunctionName() << "() const {";
+  s << "std::unique_ptr<" << type_name_ << "> Get" << util::UnderscoreToCamelCase(GetName()) << "() const {";
   s << "ASSERT(was_validated_);";
   s << "size_t end_index = size();";
   s << "auto to_bound = begin();";
@@ -67,8 +61,9 @@ void VariableLengthStructField::GenGetter(std::ostream& s, Size start_offset, Si
   s << "}\n";
 }
 
-std::string VariableLengthStructField::GetBuilderParameterType() const {
-  return GetDataType();
+bool VariableLengthStructField::GenBuilderParameter(std::ostream& s) const {
+  s << GetDataType() << " " << GetName();
+  return true;
 }
 
 bool VariableLengthStructField::BuilderParameterMustBeMoved() const {
