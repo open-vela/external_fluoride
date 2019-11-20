@@ -17,6 +17,7 @@
 package android.bluetooth;
 
 import android.bluetooth.IBluetoothCallback;
+import android.bluetooth.IBluetoothMetadataListener;
 import android.bluetooth.IBluetoothSocketManager;
 import android.bluetooth.IBluetoothStateChangeCallback;
 import android.bluetooth.BluetoothActivityEnergyInfo;
@@ -34,12 +35,14 @@ import android.os.ResultReceiver;
  */
 interface IBluetooth
 {
+    @UnsupportedAppUsage
     boolean isEnabled();
     int getState();
     boolean enable();
     boolean enableNoAutoConnect();
     boolean disable();
 
+    @UnsupportedAppUsage
     String getAddress();
     ParcelUuid[] getUuids();
     boolean setName(in String name);
@@ -47,13 +50,18 @@ interface IBluetooth
     BluetoothClass getBluetoothClass();
     boolean setBluetoothClass(in BluetoothClass bluetoothClass);
 
+    int getIoCapability();
+    boolean setIoCapability(int capability);
+    int getLeIoCapability();
+    boolean setLeIoCapability(int capability);
+
     int getScanMode();
     boolean setScanMode(int mode, int duration);
 
     int getDiscoverableTimeout();
     boolean setDiscoverableTimeout(int timeout);
 
-    boolean startDiscovery();
+    boolean startDiscovery(String callingPackage);
     boolean cancelDiscovery();
     boolean isDiscovering();
     long getDiscoveryEndMillis();
@@ -73,10 +81,12 @@ interface IBluetooth
 
     String getRemoteName(in BluetoothDevice device);
     int getRemoteType(in BluetoothDevice device);
+    @UnsupportedAppUsage
     String getRemoteAlias(in BluetoothDevice device);
     boolean setRemoteAlias(in BluetoothDevice device, in String name);
     int getRemoteClass(in BluetoothDevice device);
     ParcelUuid[] getRemoteUuids(in BluetoothDevice device);
+    @UnsupportedAppUsage
     boolean fetchRemoteUuids(in BluetoothDevice device);
     boolean sdpSearch(in BluetoothDevice device, in ParcelUuid uuid);
     int getBatteryLevel(in BluetoothDevice device);
@@ -88,12 +98,15 @@ interface IBluetooth
     boolean setPairingConfirmation(in BluetoothDevice device, boolean accept);
 
     int getPhonebookAccessPermission(in BluetoothDevice device);
+    boolean setSilenceMode(in BluetoothDevice device, boolean silence);
+    boolean getSilenceMode(in BluetoothDevice device);
     boolean setPhonebookAccessPermission(in BluetoothDevice device, int value);
     int getMessageAccessPermission(in BluetoothDevice device);
     boolean setMessageAccessPermission(in BluetoothDevice device, int value);
     int getSimAccessPermission(in BluetoothDevice device);
     boolean setSimAccessPermission(in BluetoothDevice device, int value);
 
+    @UnsupportedAppUsage
     void sendConnectionStateChange(in BluetoothDevice device, int profile, int state, int prevState);
 
     void registerCallback(in IBluetoothCallback callback);
@@ -115,6 +128,13 @@ interface IBluetooth
     int getLeMaximumAdvertisingDataLength();
     BluetoothActivityEnergyInfo reportActivityInfo();
 
+    // For Metadata
+    boolean registerMetadataListener(in IBluetoothMetadataListener listener, in BluetoothDevice device);
+    boolean unregisterMetadataListener(in BluetoothDevice device);
+    boolean setMetadata(in BluetoothDevice device, in int key, in byte[] value);
+    byte[] getMetadata(in BluetoothDevice device, in int key);
+
+
     /**
      * Requests the controller activity info asynchronously.
      * The implementor is expected to reply with the
@@ -126,4 +146,7 @@ interface IBluetooth
 
     void onLeServiceUp();
     void onBrEdrDown();
+
+    boolean connectAllEnabledProfiles(in BluetoothDevice device);
+    boolean disconnectAllEnabledProfiles(in BluetoothDevice device);
 }

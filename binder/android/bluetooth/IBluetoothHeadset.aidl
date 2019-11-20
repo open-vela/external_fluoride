@@ -29,8 +29,10 @@ import android.bluetooth.BluetoothDevice;
  */
 interface IBluetoothHeadset {
     // Public API
+    @UnsupportedAppUsage
     List<BluetoothDevice> getConnectedDevices();
     List<BluetoothDevice> getDevicesMatchingConnectionStates(in int[] states);
+    @UnsupportedAppUsage
     int getConnectionState(in BluetoothDevice device);
     boolean startVoiceRecognition(in BluetoothDevice device);
     boolean stopVoiceRecognition(in BluetoothDevice device);
@@ -40,9 +42,13 @@ interface IBluetoothHeadset {
                                          in String arg);
 
     // Hidden API
+    @UnsupportedAppUsage
     boolean connect(in BluetoothDevice device);
+    @UnsupportedAppUsage
     boolean disconnect(in BluetoothDevice device);
+    @UnsupportedAppUsage
     boolean setPriority(in BluetoothDevice device, int priority);
+    @UnsupportedAppUsage
     int getPriority(in BluetoothDevice device);
     int getAudioState(in BluetoothDevice device);
     boolean isAudioOn();
@@ -53,7 +59,7 @@ interface IBluetoothHeadset {
     void setForceScoAudio(boolean forced);
     boolean startScoUsingVirtualVoiceCall();
     boolean stopScoUsingVirtualVoiceCall();
-    oneway void phoneStateChanged(int numActive, int numHeld, int callState, String number, int type);
+    oneway void phoneStateChanged(int numActive, int numHeld, int callState, String number, int type, String name);
     void clccResponse(int index, int direction, int status, int mode, boolean mpty,
                       String number, int type);
     boolean setActiveDevice(in BluetoothDevice device);
