@@ -104,9 +104,7 @@ Return<void> BluetoothHci::initialize_impl(
 
   controller_ = std::make_shared<DualModeController>();
 
-  char mac_property[PROPERTY_VALUE_MAX] = "";
-  property_get("bt.rootcanal_mac_address", mac_property, "3C:5A:B4:01:02:03");
-  controller_->Initialize({"dmc", std::string(mac_property)});
+  controller_->Initialize({"dmc", "3C:5A:B4:01:02:03"});
 
   controller_->RegisterEventChannel(
       [this, cb](std::shared_ptr<std::vector<uint8_t>> packet) {
