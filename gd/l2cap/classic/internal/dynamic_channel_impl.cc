@@ -19,7 +19,6 @@
 #include "l2cap/cid.h"
 #include "l2cap/classic/internal/dynamic_channel_impl.h"
 #include "l2cap/classic/internal/link.h"
-#include "l2cap/internal/sender.h"
 #include "l2cap/psm.h"
 #include "l2cap/security_policy.h"
 #include "os/handler.h"
@@ -98,10 +97,6 @@ void DynamicChannelImpl::SetIncomingConfigurationStatus(ConfigurationStatus stat
   incoming_configuration_status_ = status;
 }
 
-void DynamicChannelImpl::SetSender(l2cap::internal::Sender* sender) {
-  sender_ = sender;
-}
-
 Mtu DynamicChannelImpl::GetIncomingMtu() const {
   return incoming_mtu_;
 }
@@ -110,9 +105,16 @@ void DynamicChannelImpl::SetIncomingMtu(Mtu mtu) {
   incoming_mtu_ = mtu;
 }
 
-void DynamicChannelImpl::SetRetransmissionFlowControlConfig(
-    const RetransmissionAndFlowControlConfigurationOption& option) {
-  sender_->SetChannelRetransmissionFlowControlMode(option.mode_);
+RetransmissionAndFlowControlModeOption DynamicChannelImpl::GetChannelMode() const {
+  return mode_;
+}
+
+void DynamicChannelImpl::SetChannelMode(RetransmissionAndFlowControlModeOption mode) {
+  mode_ = mode;
+}
+
+FcsType DynamicChannelImpl::GetFcsType() const {
+  return fcs_type_;
 }
 
 void DynamicChannelImpl::SetFcsType(FcsType fcs_type) {

@@ -99,9 +99,8 @@ class L2capModuleFacadeService : public L2capModuleFacade::Service {
                              const ::bluetooth::l2cap::classic::OpenChannelRequest* request,
                              ::google::protobuf::Empty* response) override {
     auto psm = request->psm();
-    auto mode = request->mode();
     dynamic_channel_helper_map_.emplace(
-        psm, std::make_unique<L2capDynamicChannelHelper>(this, l2cap_layer_, facade_handler_, psm, mode));
+        psm, std::make_unique<L2capDynamicChannelHelper>(this, l2cap_layer_, facade_handler_, psm));
     hci::Address peer;
     ASSERT(hci::Address::FromString(request->remote().address(), peer));
     dynamic_channel_helper_map_[psm]->Connect(peer);
@@ -184,37 +183,27 @@ class L2capModuleFacadeService : public L2capModuleFacade::Service {
 
   ::grpc::Status SetDynamicChannel(::grpc::ServerContext* context, const SetEnableDynamicChannelRequest* request,
                                    google::protobuf::Empty* response) override {
-    dynamic_channel_helper_map_.emplace(
-        request->psm(), std::make_unique<L2capDynamicChannelHelper>(this, l2cap_layer_, facade_handler_, request->psm(),
-                                                                    request->retransmission_mode()));
+    dynamic_channel_helper_map_.emplace(request->psm(), std::make_unique<L2capDynamicChannelHelper>(
+                                                            this, l2cap_layer_, facade_handler_, request->psm()));
     return ::grpc::Status::OK;
   }
 
   class L2capDynamicChannelHelper {
    public:
     L2capDynamicChannelHelper(L2capModuleFacadeService* service, L2capClassicModule* l2cap_layer, os::Handler* handler,
-                              Psm psm, RetransmissionFlowControlMode mode)
+                              Psm psm)
         : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm) {
       dynamic_channel_manager_ = l2cap_layer_->GetDynamicChannelManager();
-      DynamicChannelConfigurationOption configuration_option;
-      if (mode == RetransmissionFlowControlMode::BASIC) {
-        configuration_option.channel_mode =
-            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC;
-      } else if (mode == RetransmissionFlowControlMode::ERTM) {
-        configuration_option.channel_mode =
-            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION;
-      }
       dynamic_channel_manager_->RegisterService(
-          psm, configuration_option, {},
+          psm, {},
           common::BindOnce(&L2capDynamicChannelHelper::on_l2cap_service_registration_complete,
                            common::Unretained(this)),
           common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)), handler_);
     }
 
     void Connect(hci::Address address) {
-      // TODO: specify channel mode
       dynamic_channel_manager_->ConnectChannel(
-          address, {}, psm_, common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
+          address, psm_, common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
           common::Bind(&L2capDynamicChannelHelper::on_connect_fail, common::Unretained(this)), handler_);
     }
 
@@ -249,7 +238,7 @@ class L2capModuleFacadeService : public L2capModuleFacade::Service {
     }
 
     std::unique_ptr<packet::BasePacketBuilder> enqueue_callback(std::vector<uint8_t> packet) {
-      auto packet_one = std::make_unique<packet::RawBuilder>(2000);
+      auto packet_one = std::make_unique<packet::RawBuilder>();
       packet_one->AddOctets(packet);
       channel_->GetQueueUpEnd()->UnregisterEnqueue();
       return packet_one;
