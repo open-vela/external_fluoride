@@ -59,7 +59,7 @@ class RootCertService : public ::bluetooth::cert::RootCert::Service {
         break;
       case BluetoothModule::L2CAP:
         modules.add<::bluetooth::cert::ReadOnlyPropertyServerModule>();
-        modules.add<::bluetooth::l2cap::classic::cert::L2capClassicModuleCertModule>();
+        modules.add<::bluetooth::l2cap::classic::cert::L2capModuleCertModule>();
         break;
       default:
         return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "invalid module under test");
