@@ -18,17 +18,20 @@
 
 #include <chrono>
 #include <cstdint>
+#include <list>
 #include <map>
 #include <string>
 #include <vector>
 
+#include "hci/address.h"
 #include "model/devices/device_properties.h"
 #include "model/setup/phy_layer.h"
-#include "types/address.h"
 
 #include "packets/link_layer_packets.h"
 
 namespace test_vendor_lib {
+
+using ::bluetooth::hci::Address;
 
 // Represent a Bluetooth Device
 //  - Provide Get*() and Set*() functions for device attributes.
@@ -84,7 +87,7 @@ class Device {
                                    Phy::Type phy_type);
 
  protected:
-  std::map<Phy::Type, std::vector<std::shared_ptr<PhyLayer>>> phy_layers_;
+  std::map<Phy::Type, std::list<std::shared_ptr<PhyLayer>>> phy_layers_;
 
   std::chrono::steady_clock::time_point last_advertisement_;
 
