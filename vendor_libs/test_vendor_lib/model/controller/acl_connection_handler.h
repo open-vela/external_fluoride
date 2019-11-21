@@ -21,10 +21,12 @@
 #include <unordered_map>
 
 #include "acl_connection.h"
+#include "hci/address.h"
 #include "include/acl.h"
-#include "types/address.h"
 
 namespace test_vendor_lib {
+
+using ::bluetooth::hci::Address;
 
 class AclConnectionHandler {
  public:
@@ -32,12 +34,13 @@ class AclConnectionHandler {
 
   virtual ~AclConnectionHandler() = default;
 
-  bool CreatePendingConnection(Address addr);
-  bool HasPendingConnection(Address addr);
+  bool CreatePendingConnection(Address addr, bool authenticate_on_connect);
+  bool HasPendingConnection(Address addr) const;
   bool CancelPendingConnection(Address addr);
+  bool AuthenticatePendingConnection() const;
 
   bool CreatePendingLeConnection(Address addr, uint8_t addr_type);
-  bool HasPendingLeConnection(Address addr, uint8_t addr_type);
+  bool HasPendingLeConnection(Address addr, uint8_t addr_type) const;
   bool CancelPendingLeConnection(Address addr, uint8_t addr_type);
 
   uint16_t CreateConnection(Address addr);
@@ -63,10 +66,12 @@ class AclConnectionHandler {
  private:
   std::unordered_map<uint16_t, AclConnection> acl_connections_;
   bool classic_connection_pending_{false};
-  Address pending_connection_address_;
+  Address pending_connection_address_{Address::kEmpty};
+  bool authenticate_pending_classic_connection_{false};
   bool le_connection_pending_{false};
-  Address pending_le_connection_address_;
-  uint8_t pending_le_connection_address_type_;
+  Address pending_le_connection_address_{Address::kEmpty};
+  uint8_t pending_le_connection_address_type_{false};
+
   uint16_t GetUnusedHandle();
   uint16_t last_handle_{acl::kReservedHandle - 2};
   void set_own_address_type(uint16_t handle, uint8_t own_address_type);

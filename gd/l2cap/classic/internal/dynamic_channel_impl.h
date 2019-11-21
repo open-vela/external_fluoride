@@ -20,6 +20,9 @@
 #include "hci/address.h"
 #include "l2cap/cid.h"
 #include "l2cap/classic/dynamic_channel.h"
+#include "l2cap/internal/channel_impl.h"
+#include "l2cap/l2cap_packets.h"
+#include "l2cap/mtu.h"
 #include "l2cap/psm.h"
 #include "os/handler.h"
 #include "os/log.h"
@@ -31,7 +34,7 @@ namespace internal {
 
 class Link;
 
-class DynamicChannelImpl {
+class DynamicChannelImpl : public l2cap::internal::ChannelImpl {
  public:
   DynamicChannelImpl(Psm psm, Cid cid, Cid remote_cid, Link* link, os::Handler* l2cap_handler);
 
@@ -67,16 +70,26 @@ class DynamicChannelImpl {
 
   enum class ConfigurationStatus { NOT_CONFIGURED, CONFIGURED };
 
+  virtual ConfigurationStatus GetOutgoingConfigurationStatus() const;
   virtual void SetOutgoingConfigurationStatus(ConfigurationStatus status);
+
+  virtual ConfigurationStatus GetIncomingConfigurationStatus() const;
   virtual void SetIncomingConfigurationStatus(ConfigurationStatus status);
 
-  virtual ConfigurationStatus GetOutgoingConfigurationStatus() const {
-    return outgoing_configuration_status_;
-  }
+  /**
+   * Callback from the Scheduler to notify the Sender for this channel. On config update, channel might notify the
+   * configuration to Sender
+   */
+  void SetSender(l2cap::internal::Sender* sender) override;
 
-  virtual ConfigurationStatus GetIncomingConfigurationStatus() const {
-    return incoming_configuration_status_;
-  }
+  virtual void SetIncomingMtu(Mtu mtu);
+
+  virtual void SetRetransmissionFlowControlConfig(const RetransmissionAndFlowControlConfigurationOption& mode);
+
+  virtual void SetFcsType(FcsType fcs_type);
+
+  // TODO(cmanton) Do something a little bit better than this
+  bool local_initiated_{false};
 
  private:
   const Psm psm_;
@@ -98,6 +111,8 @@ class DynamicChannelImpl {
       kChannelQueueSize};
   ConfigurationStatus outgoing_configuration_status_ = ConfigurationStatus::NOT_CONFIGURED;
   ConfigurationStatus incoming_configuration_status_ = ConfigurationStatus::NOT_CONFIGURED;
+
+  l2cap::internal::Sender* sender_ = nullptr;
 
   DISALLOW_COPY_AND_ASSIGN(DynamicChannelImpl);
 };

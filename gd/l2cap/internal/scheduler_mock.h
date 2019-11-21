@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "l2cap/internal/channel_impl.h"
 #include "l2cap/internal/scheduler.h"
 
 #include <gmock/gmock.h>
@@ -25,13 +26,11 @@ namespace l2cap {
 namespace internal {
 namespace testing {
 
-using hci::testing::MockAclConnection;
-
 class MockScheduler : public Scheduler {
  public:
-  MOCK_METHOD(void, AttachChannel, (Cid cid, UpperQueueDownEnd* channel_down_end, Cid remote_cid), (override));
+  MOCK_METHOD(void, AttachChannel, (Cid cid, std::shared_ptr<l2cap::internal::ChannelImpl> channel), (override));
   MOCK_METHOD(void, DetachChannel, (Cid cid), (override));
-  MOCK_METHOD(LowerQueueUpEnd*, GetLowerQueueUpEnd, (), (override, const));
+  MOCK_METHOD(void, OnPacketsReady, (Cid cid, int number_packet), (override));
 };
 
 }  // namespace testing

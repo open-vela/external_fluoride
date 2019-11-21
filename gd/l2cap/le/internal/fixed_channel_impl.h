@@ -18,6 +18,7 @@
 
 #include "common/bidi_queue.h"
 #include "l2cap/cid.h"
+#include "l2cap/internal/channel_impl.h"
 #include "l2cap/le/fixed_channel.h"
 #include "os/handler.h"
 #include "os/log.h"
@@ -29,7 +30,7 @@ namespace internal {
 
 class Link;
 
-class FixedChannelImpl {
+class FixedChannelImpl : public l2cap::internal::ChannelImpl {
  public:
   FixedChannelImpl(Cid cid, Link* link, os::Handler* l2cap_handler);
 
@@ -52,6 +53,9 @@ class FixedChannelImpl {
     return acquired_;
   }
 
+  Cid GetCid() const override;
+  Cid GetRemoteCid() const override;
+  void SetSender(l2cap::internal::Sender* sender) override;
   virtual void OnClosed(hci::ErrorCode status);
 
   virtual std::string ToString() {
