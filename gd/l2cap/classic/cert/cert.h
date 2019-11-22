@@ -9,9 +9,9 @@ namespace l2cap {
 namespace classic {
 namespace cert {
 
-class L2capClassicModuleCertService;
+class L2capModuleCertService;
 
-class L2capClassicModuleCertModule : public ::bluetooth::grpc::GrpcFacadeModule {
+class L2capModuleCertModule : public ::bluetooth::grpc::GrpcFacadeModule {
  public:
   static const ModuleFactory Factory;
 
@@ -22,7 +22,7 @@ class L2capClassicModuleCertModule : public ::bluetooth::grpc::GrpcFacadeModule 
   ::grpc::Service* GetService() const override;
 
  private:
-  L2capClassicModuleCertService* service_;
+  L2capModuleCertService* service_;
 };
 
 }  // namespace cert

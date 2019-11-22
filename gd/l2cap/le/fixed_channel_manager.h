@@ -50,9 +50,9 @@ class FixedChannelManager {
     hci::ErrorCode hci_error = hci::ErrorCode::SUCCESS;
   };
   /**
-   * OnConnectionFailureCallback(ConnectionResult failure_reason);
+   * OnConnectionFailureCallback(std::string failure_reason);
    */
-  using OnConnectionFailureCallback = common::OnceCallback<void(ConnectionResult)>;
+  using OnConnectionFailureCallback = common::OnceCallback<void(ConnectionResult result)>;
 
   /**
    * OnConnectionOpenCallback(FixedChannel channel);
