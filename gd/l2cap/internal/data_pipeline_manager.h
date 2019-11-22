@@ -25,10 +25,13 @@
 #include "l2cap/cid.h"
 #include "l2cap/classic/internal/channel_configuration_state.h"
 #include "l2cap/internal/channel_impl.h"
-#include "l2cap/internal/data_controller.h"
+#include "l2cap/internal/receiver.h"
+#include "l2cap/internal/scheduler.h"
+#include "l2cap/internal/scheduler_fifo.h"
 #include "l2cap/l2cap_packets.h"
 #include "l2cap/mtu.h"
 #include "os/handler.h"
+#include "os/log.h"
 #include "os/queue.h"
 #include "packet/base_packet_builder.h"
 #include "packet/packet_view.h"
@@ -36,47 +39,37 @@
 namespace bluetooth {
 namespace l2cap {
 namespace internal {
-class Scheduler;
 
 /**
- * A middle layer between L2CAP channel and outgoing packet scheduler.
- * Fetches data (SDU) from an L2CAP channel queue end, handles L2CAP segmentation, and gives data to L2CAP scheduler.
+ * Manages data pipeline from channel queue end to link queue end, per link.
+ * Contains a Scheduler and Receiver per link.
+ * Contains a Sender and its corrsponding DataController per attached channel.
  */
-class Sender {
+class DataPipelineManager {
  public:
   using UpperEnqueue = packet::PacketView<packet::kLittleEndian>;
   using UpperDequeue = packet::BasePacketBuilder;
   using UpperQueueDownEnd = common::BidiQueueEnd<UpperEnqueue, UpperDequeue>;
+  using LowerEnqueue = UpperDequeue;
+  using LowerDequeue = UpperEnqueue;
+  using LowerQueueUpEnd = common::BidiQueueEnd<LowerEnqueue, LowerDequeue>;
 
-  Sender(os::Handler* handler, Scheduler* scheduler, std::shared_ptr<ChannelImpl> channel);
-  ~Sender();
+  DataPipelineManager(os::Handler* handler, LowerQueueUpEnd* link_queue_up_end)
+      : handler_(handler), scheduler_(std::make_unique<Fifo>(this, link_queue_up_end, handler)),
+        receiver_(link_queue_up_end, handler, this) {}
 
-  /**
-   * Callback from scheduler to indicate that scheduler already dequeued a packet from sender's queue.
-   * Segmenter can continue dequeuing from channel queue end.
-   */
-  void OnPacketSent();
-
-  /**
-   * Called by the scheduler to return the next PDU to be sent
-   */
-  std::unique_ptr<UpperDequeue> GetNextPacket();
-
-  void UpdateClassicConfiguration(classic::internal::ChannelConfigurationState config);
-  DataController* GetDataController();
+  virtual void AttachChannel(Cid cid, std::shared_ptr<ChannelImpl> channel);
+  virtual void DetachChannel(Cid cid);
+  virtual DataController* GetDataController(Cid cid);
+  virtual void OnPacketSent(Cid cid);
+  virtual void UpdateClassicConfiguration(Cid cid, classic::internal::ChannelConfigurationState config);
+  virtual ~DataPipelineManager() = default;
 
  private:
   os::Handler* handler_;
-  UpperQueueDownEnd* queue_end_;
-  Scheduler* scheduler_;
-  const Cid channel_id_;
-  const Cid remote_channel_id_;
-  bool is_dequeue_registered_ = false;
-  RetransmissionAndFlowControlModeOption mode_ = RetransmissionAndFlowControlModeOption::L2CAP_BASIC;
-  std::unique_ptr<DataController> data_controller_;
-
-  void try_register_dequeue();
-  void dequeue_callback();
+  std::unique_ptr<Scheduler> scheduler_;
+  Receiver receiver_;
+  std::unordered_map<Cid, Sender> sender_map_;
 };
 }  // namespace internal
 }  // namespace l2cap

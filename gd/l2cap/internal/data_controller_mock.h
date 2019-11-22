@@ -16,39 +16,27 @@
 
 #pragma once
 
-#include "common/bidi_queue.h"
-#include "l2cap/cid.h"
-#include "l2cap/l2cap_packets.h"
+#include "l2cap/internal/data_controller.h"
 
+#include <gmock/gmock.h>
+
+// Unit test interfaces
 namespace bluetooth {
 namespace l2cap {
 namespace internal {
-class Sender;
+namespace testing {
 
-/**
- * Common interface for internal channel implementation
- */
-class ChannelImpl {
+class MockDataController : public DataController {
  public:
-  virtual ~ChannelImpl() = default;
-
-  /**
-   * Return the queue end for upper layer (L2CAP user)
-   */
-  virtual common::BidiQueueEnd<packet::BasePacketBuilder, packet::PacketView<packet::kLittleEndian>>*
-  GetQueueUpEnd() = 0;
-
-  /**
-   * Return the queue end for lower layer (sender and receiver)
-   */
-  virtual common::BidiQueueEnd<packet::PacketView<packet::kLittleEndian>, packet::BasePacketBuilder>*
-  GetQueueDownEnd() = 0;
-
-  virtual Cid GetCid() const = 0;
-
-  virtual Cid GetRemoteCid() const = 0;
+  MOCK_METHOD(void, OnSdu, (std::unique_ptr<packet::BasePacketBuilder>), (override));
+  MOCK_METHOD(void, OnPdu, (packet::PacketView<true>), (override));
+  MOCK_METHOD(std::unique_ptr<packet::BasePacketBuilder>, GetNextPacket, (), (override));
+  MOCK_METHOD(void, EnableFcs, (bool), (override));
+  MOCK_METHOD(void, SetRetransmissionAndFlowControlOptions, (const RetransmissionAndFlowControlConfigurationOption&),
+              (override));
 };
 
+}  // namespace testing
 }  // namespace internal
 }  // namespace l2cap
 }  // namespace bluetooth
