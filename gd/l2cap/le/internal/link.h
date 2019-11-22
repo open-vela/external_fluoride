@@ -90,10 +90,6 @@ class Link {
     }
   }
 
-  virtual std::string ToString() {
-    return GetDevice().ToString();
-  }
-
  private:
   os::Handler* l2cap_handler_;
   l2cap::internal::FixedChannelAllocator<FixedChannelImpl, Link> fixed_channel_allocator_{this, l2cap_handler_};
