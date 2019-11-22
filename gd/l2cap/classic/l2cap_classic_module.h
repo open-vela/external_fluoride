@@ -27,18 +27,18 @@ namespace classic {
 
 class L2capClassicModule : public bluetooth::Module {
  public:
-  L2capClassicModule() = default;
-  ~L2capClassicModule() = default;
+  L2capClassicModule();
+  virtual ~L2capClassicModule();
 
   /**
    * Get the api to the classic fixed channel l2cap module
    */
-  std::unique_ptr<FixedChannelManager> GetFixedChannelManager();
+  virtual std::unique_ptr<FixedChannelManager> GetFixedChannelManager();
 
   /**
    * Get the api to the classic dynamic channel l2cap module
    */
-  std::unique_ptr<DynamicChannelManager> GetDynamicChannelManager();
+  virtual std::unique_ptr<DynamicChannelManager> GetDynamicChannelManager();
 
   static const ModuleFactory Factory;
 

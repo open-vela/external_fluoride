@@ -39,13 +39,12 @@ class Fifo : public Scheduler {
   void AttachChannel(Cid cid, std::shared_ptr<ChannelImpl> channel) override;
   void DetachChannel(Cid cid) override;
   void OnPacketsReady(Cid cid, int number_packets) override;
-  void SetChannelRetransmissionFlowControlMode(Cid cid, RetransmissionAndFlowControlModeOption mode) override;
   DataController* GetDataController(Cid cid) override;
 
  private:
   LowerQueueUpEnd* link_queue_up_end_;
   os::Handler* handler_;
-  std::unordered_map<Cid, Sender> segmenter_map_;
+  std::unordered_map<Cid, Sender> sender_map_;
   std::queue<std::pair<Cid, int>> next_to_dequeue_and_num_packets;
 
   bool link_queue_enqueue_registered_ = false;

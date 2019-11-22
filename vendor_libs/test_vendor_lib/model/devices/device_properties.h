@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -49,8 +50,9 @@ class DeviceProperties {
     return extended_features_[0];
   }
 
-  void SetSupportedFeatures(uint64_t features) {
-    extended_features_[0] = features;
+  void SetExtendedFeatures(uint64_t features, uint8_t page_number) {
+    ASSERT(page_number < extended_features_.size());
+    extended_features_[page_number] = features;
   }
 
   // Specification Version 4.2, Volume 2, Part E, Section 7.4.4
@@ -144,12 +146,13 @@ class DeviceProperties {
   }
 
   void SetName(const std::vector<uint8_t>& name) {
-    name_ = name;
+    name_.fill(0);
+    for (size_t i = 0; i < 248 && i < name.size(); i++) {
+      name_[i] = name[i];
+    }
   }
 
-  const std::vector<uint8_t>& GetName() const {
-    return name_;
-  }
+  const std::array<uint8_t, 248>& GetName() const { return name_; }
 
   void SetExtendedInquiryData(const std::vector<uint8_t>& eid) {
     extended_inquiry_data_ = eid;
@@ -311,10 +314,10 @@ class DeviceProperties {
   std::vector<uint8_t> supported_codecs_;
   std::vector<uint32_t> vendor_specific_codecs_;
   std::vector<uint8_t> supported_commands_;
-  std::vector<uint64_t> extended_features_{{0x875b3fd8fe8ffeff, 0x07}};
+  std::vector<uint64_t> extended_features_{{0x875b3fd8fe8ffeff, 0x0f}};
   ClassOfDevice class_of_device_{{0, 0, 0}};
   std::vector<uint8_t> extended_inquiry_data_;
-  std::vector<uint8_t> name_;
+  std::array<uint8_t, 248> name_;
   Address address_;
   uint8_t page_scan_repetition_mode_;
   uint16_t clock_offset_;
