@@ -39,8 +39,6 @@
 #include "l2c_int.h"
 #include "l2cdefs.h"
 
-extern fixed_queue_t* btu_general_alarm_queue;
-
 /* Flag passed to retransmit_i_frames() when all packets should be retransmitted
  */
 #define L2C_FCR_RETX_ALL_PKTS 0xFF
@@ -181,8 +179,8 @@ void l2c_fcr_start_timer(tL2C_CCB* p_ccb) {
 
   /* Only start a timer that was not started */
   if (!alarm_is_scheduled(p_ccb->fcrb.mon_retrans_timer)) {
-    alarm_set_on_queue(p_ccb->fcrb.mon_retrans_timer, tout,
-                       l2c_ccb_timer_timeout, p_ccb, btu_general_alarm_queue);
+    alarm_set_on_mloop(p_ccb->fcrb.mon_retrans_timer, tout,
+                       l2c_ccb_timer_timeout, p_ccb);
   }
 }
 
@@ -713,9 +711,8 @@ void l2c_fcr_proc_pdu(tL2C_CCB* p_ccb, BT_HDR* p_buf) {
          * final,  */
         /* then it speeds up recovery significantly if we poll him back soon
          * after his poll. */
-        alarm_set_on_queue(p_ccb->fcrb.mon_retrans_timer, BT_1SEC_TIMEOUT_MS,
-                           l2c_ccb_timer_timeout, p_ccb,
-                           btu_general_alarm_queue);
+        alarm_set_on_mloop(p_ccb->fcrb.mon_retrans_timer, BT_1SEC_TIMEOUT_MS,
+                           l2c_ccb_timer_timeout, p_ccb);
       }
       osi_free(p_buf);
       return;
@@ -837,25 +834,13 @@ void l2c_lcc_proc_pdu(tL2C_CCB* p_ccb, BT_HDR* p_buf) {
   }
 
   if (p_ccb->is_first_seg) {
-    if (p_buf->len < sizeof(sdu_length)) {
-      L2CAP_TRACE_ERROR("%s: buffer length=%d too small. Need at least 2.",
-                        __func__, p_buf->len);
-      android_errorWriteWithInfoLog(0x534e4554, "120665616", -1, NULL, 0);
-      /* Discard the buffer */
-      osi_free(p_buf);
-      return;
-    }
     STREAM_TO_UINT16(sdu_length, p);
-
     /* Check the SDU Length with local MTU size */
     if (sdu_length > p_ccb->local_conn_cfg.mtu) {
       /* Discard the buffer */
       osi_free(p_buf);
       return;
     }
-
-    p_buf->len -= sizeof(sdu_length);
-    p_buf->offset += sizeof(sdu_length);
 
     if (sdu_length < p_buf->len) {
       L2CAP_TRACE_ERROR("%s: Invalid sdu_length: %d", __func__, sdu_length);
@@ -875,26 +860,12 @@ void l2c_lcc_proc_pdu(tL2C_CCB* p_ccb, BT_HDR* p_buf) {
     p_data->len = 0;
     p_ccb->ble_sdu_length = sdu_length;
     L2CAP_TRACE_DEBUG("%s SDU Length = %d", __func__, sdu_length);
+    p_buf->len -= sizeof(sdu_length);
+    p_buf->offset += sizeof(sdu_length);
     p_data->offset = 0;
 
-  } else {
+  } else
     p_data = p_ccb->ble_sdu;
-    if (p_buf->len > (p_ccb->ble_sdu_length - p_data->len)) {
-      L2CAP_TRACE_ERROR("%s: buffer length=%d too big. max=%d. Dropped",
-                        __func__, p_data->len,
-                        (p_ccb->ble_sdu_length - p_data->len));
-      android_errorWriteWithInfoLog(0x534e4554, "75298652", -1, NULL, 0);
-      osi_free(p_buf);
-
-      /* Throw away all pending fragments and disconnects */
-      p_ccb->is_first_seg = true;
-      osi_free(p_ccb->ble_sdu);
-      p_ccb->ble_sdu = NULL;
-      p_ccb->ble_sdu_length = 0;
-      l2cu_disconnect_chnl(p_ccb);
-      return;
-    }
-  }
 
   memcpy((uint8_t*)(p_data + 1) + p_data->offset + p_data->len,
          (uint8_t*)(p_buf + 1) + p_buf->offset, p_buf->len);
@@ -907,6 +878,9 @@ void l2c_lcc_proc_pdu(tL2C_CCB* p_ccb, BT_HDR* p_buf) {
     p_ccb->ble_sdu_length = 0;
   } else if (p_data->len < p_ccb->ble_sdu_length) {
     p_ccb->is_first_seg = false;
+  } else {
+    L2CAP_TRACE_ERROR("%s Length in the SDU messed up", __func__);
+    // TODO: reset every thing may be???
   }
 
   osi_free(p_buf);
@@ -1333,9 +1307,8 @@ static void process_i_frame(tL2C_CCB* p_ccb, BT_HDR* p_buf, uint16_t ctrl_word,
     if (delay_ack) {
       /* If it is the first I frame we did not ack, start ack timer */
       if (!alarm_is_scheduled(p_ccb->fcrb.ack_timer)) {
-        alarm_set_on_queue(p_ccb->fcrb.ack_timer, L2CAP_FCR_ACK_TIMEOUT_MS,
-                           l2c_fcrb_ack_timer_timeout, p_ccb,
-                           btu_general_alarm_queue);
+        alarm_set_on_mloop(p_ccb->fcrb.ack_timer, L2CAP_FCR_ACK_TIMEOUT_MS,
+                           l2c_fcrb_ack_timer_timeout, p_ccb);
       }
     } else if ((fixed_queue_is_empty(p_ccb->xmit_hold_q) ||
                 l2c_fcr_is_flow_controlled(p_ccb)) &&
@@ -2230,9 +2203,8 @@ bool l2c_fcr_renegotiate_chan(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
 
         l2cu_process_our_cfg_req(p_ccb, &p_ccb->our_cfg);
         l2cu_send_peer_config_req(p_ccb, &p_ccb->our_cfg);
-        alarm_set_on_queue(p_ccb->l2c_ccb_timer, L2CAP_CHNL_CFG_TIMEOUT_MS,
-                           l2c_ccb_timer_timeout, p_ccb,
-                           btu_general_alarm_queue);
+        alarm_set_on_mloop(p_ccb->l2c_ccb_timer, L2CAP_CHNL_CFG_TIMEOUT_MS,
+                           l2c_ccb_timer_timeout, p_ccb);
         return (true);
       }
     }
