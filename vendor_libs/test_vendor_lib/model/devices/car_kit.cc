@@ -31,7 +31,8 @@ CarKit::CarKit() : Device(kCarKitPropertiesFile) {
   page_scan_delay_ms_ = std::chrono::milliseconds(600);
 
   // Stub in packet handling for now
-  link_layer_controller_.RegisterAclChannel([](std::shared_ptr<std::vector<uint8_t>>) {});
+  link_layer_controller_.RegisterAclChannel(
+      [](std::shared_ptr<bluetooth::hci::AclPacketBuilder>) {});
   link_layer_controller_.RegisterEventChannel(
       [](std::shared_ptr<bluetooth::hci::EventPacketBuilder>) {});
   link_layer_controller_.RegisterScoChannel([](std::shared_ptr<std::vector<uint8_t>>) {});
@@ -43,7 +44,7 @@ CarKit::CarKit() : Device(kCarKitPropertiesFile) {
 
   properties_.SetPageScanRepetitionMode(0);
   properties_.SetClassOfDevice(0x600420);
-  properties_.SetSupportedFeatures(0x8779ff9bfe8defff);
+  properties_.SetExtendedFeatures(0x8779ff9bfe8defff, 0);
   properties_.SetExtendedInquiryData({
       16,  // length
       9,   // Type: Device Name
