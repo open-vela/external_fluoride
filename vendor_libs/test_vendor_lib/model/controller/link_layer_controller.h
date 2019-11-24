@@ -25,6 +25,7 @@
 #include "model/devices/device_properties.h"
 #include "model/setup/async_manager.h"
 #include "packets/link_layer_packets.h"
+#include "packets/packet_view.h"
 #include "security_manager.h"
 
 namespace test_vendor_lib {
@@ -37,15 +38,13 @@ class LinkLayerController {
 
   LinkLayerController(const DeviceProperties& properties) : properties_(properties) {}
   bluetooth::hci::ErrorCode SendCommandToRemoteByAddress(
-      bluetooth::hci::OpCode opcode, bluetooth::packet::PacketView<true> args,
+      bluetooth::hci::OpCode opcode, packets::PacketView<true> args,
       const Address& remote);
   bluetooth::hci::ErrorCode SendCommandToRemoteByHandle(
-      bluetooth::hci::OpCode opcode, bluetooth::packet::PacketView<true> args,
+      bluetooth::hci::OpCode opcode, packets::PacketView<true> args,
       uint16_t handle);
-  bluetooth::hci::ErrorCode SendScoToRemote(
-      bluetooth::hci::ScoPacketView sco_packet);
-  bluetooth::hci::ErrorCode SendAclToRemote(
-      bluetooth::hci::AclPacketView acl_packet);
+  hci::Status SendScoToRemote(bluetooth::hci::ScoPacketView sco_packet);
+  hci::Status SendAclToRemote(bluetooth::hci::AclPacketView acl_packet);
 
   void WriteSimplePairingMode(bool enabled);
   void StartSimplePairing(const Address& address);
@@ -58,7 +57,7 @@ class LinkLayerController {
       const Address& peer, uint8_t io_capability, uint8_t oob_data_present_flag,
       uint8_t authentication_requirements);
   bluetooth::hci::ErrorCode IoCapabilityRequestNegativeReply(
-      const Address& peer, bluetooth::hci::ErrorCode reason);
+      const Address& peer, hci::Status reason);
   bluetooth::hci::ErrorCode UserConfirmationRequestReply(const Address& peer);
   bluetooth::hci::ErrorCode UserConfirmationRequestNegativeReply(
       const Address& peer);

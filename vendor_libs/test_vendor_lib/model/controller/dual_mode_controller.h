@@ -106,326 +106,315 @@ class DualModeController : public Device {
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.1
 
   // 7.1.1
-  void HciInquiry(bluetooth::packet::PacketView<true> args);
+  void HciInquiry(packets::PacketView<true> args);
 
   // 7.1.2
-  void HciInquiryCancel(bluetooth::packet::PacketView<true> args);
+  void HciInquiryCancel(packets::PacketView<true> args);
 
   // 7.1.5
-  void HciCreateConnection(bluetooth::packet::PacketView<true> args);
+  void HciCreateConnection(packets::PacketView<true> args);
 
   // 7.1.6
-  void HciDisconnect(bluetooth::packet::PacketView<true> args);
+  void HciDisconnect(packets::PacketView<true> args);
 
   // 7.1.8
-  void HciAcceptConnectionRequest(bluetooth::packet::PacketView<true> args);
+  void HciAcceptConnectionRequest(packets::PacketView<true> args);
 
   // 7.1.9
-  void HciRejectConnectionRequest(bluetooth::packet::PacketView<true> args);
+  void HciRejectConnectionRequest(packets::PacketView<true> args);
 
   // 7.1.10
-  void HciLinkKeyRequestReply(bluetooth::packet::PacketView<true> args);
+  void HciLinkKeyRequestReply(packets::PacketView<true> args);
 
   // 7.1.11
-  void HciLinkKeyRequestNegativeReply(bluetooth::packet::PacketView<true> args);
+  void HciLinkKeyRequestNegativeReply(packets::PacketView<true> args);
 
   // 7.1.14
-  void HciChangeConnectionPacketType(bluetooth::packet::PacketView<true> args);
+  void HciChangeConnectionPacketType(packets::PacketView<true> args);
 
   // 7.1.15
-  void HciAuthenticationRequested(bluetooth::packet::PacketView<true> args);
+  void HciAuthenticationRequested(packets::PacketView<true> args);
 
   // 7.1.16
-  void HciSetConnectionEncryption(bluetooth::packet::PacketView<true> args);
+  void HciSetConnectionEncryption(packets::PacketView<true> args);
 
   // 7.1.17
-  void HciChangeConnectionLinkKey(bluetooth::packet::PacketView<true> args);
+  void HciChangeConnectionLinkKey(packets::PacketView<true> args);
 
   // 7.1.18
-  void HciMasterLinkKey(bluetooth::packet::PacketView<true> args);
+  void HciMasterLinkKey(packets::PacketView<true> args);
 
   // 7.1.19
-  void HciRemoteNameRequest(bluetooth::packet::PacketView<true> args);
+  void HciRemoteNameRequest(packets::PacketView<true> args);
 
   // 7.2.8
-  void HciSwitchRole(bluetooth::packet::PacketView<true> args);
+  void HciSwitchRole(packets::PacketView<true> args);
 
   // 7.1.21
-  void HciReadRemoteSupportedFeatures(bluetooth::packet::PacketView<true> args);
+  void HciReadRemoteSupportedFeatures(packets::PacketView<true> args);
 
   // 7.1.22
-  void HciReadRemoteExtendedFeatures(bluetooth::packet::PacketView<true> args);
+  void HciReadRemoteExtendedFeatures(packets::PacketView<true> args);
 
   // 7.1.23
-  void HciReadRemoteVersionInformation(
-      bluetooth::packet::PacketView<true> args);
+  void HciReadRemoteVersionInformation(packets::PacketView<true> args);
 
   // 7.1.24
-  void HciReadClockOffset(bluetooth::packet::PacketView<true> args);
+  void HciReadClockOffset(packets::PacketView<true> args);
 
   // 7.1.29
-  void HciIoCapabilityRequestReply(bluetooth::packet::PacketView<true> args);
+  void HciIoCapabilityRequestReply(packets::PacketView<true> args);
 
   // 7.1.30
-  void HciUserConfirmationRequestReply(
-      bluetooth::packet::PacketView<true> args);
+  void HciUserConfirmationRequestReply(packets::PacketView<true> args);
 
   // 7.1.31
-  void HciUserConfirmationRequestNegativeReply(
-      bluetooth::packet::PacketView<true> args);
+  void HciUserConfirmationRequestNegativeReply(packets::PacketView<true> args);
 
   // 7.1.32
-  void HciUserPasskeyRequestReply(bluetooth::packet::PacketView<true> args);
+  void HciUserPasskeyRequestReply(packets::PacketView<true> args);
 
   // 7.1.33
-  void HciUserPasskeyRequestNegativeReply(
-      bluetooth::packet::PacketView<true> args);
+  void HciUserPasskeyRequestNegativeReply(packets::PacketView<true> args);
 
   // 7.1.34
-  void HciRemoteOobDataRequestReply(bluetooth::packet::PacketView<true> args);
+  void HciRemoteOobDataRequestReply(packets::PacketView<true> args);
 
   // 7.1.35
-  void HciRemoteOobDataRequestNegativeReply(
-      bluetooth::packet::PacketView<true> args);
+  void HciRemoteOobDataRequestNegativeReply(packets::PacketView<true> args);
 
   // 7.1.36
-  void HciIoCapabilityRequestNegativeReply(
-      bluetooth::packet::PacketView<true> args);
+  void HciIoCapabilityRequestNegativeReply(packets::PacketView<true> args);
 
   // Link Policy Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.2
 
   // 7.2.1
-  void HciHoldMode(bluetooth::packet::PacketView<true> args);
+  void HciHoldMode(packets::PacketView<true> args);
 
   // 7.2.2
-  void HciSniffMode(bluetooth::packet::PacketView<true> args);
+  void HciSniffMode(packets::PacketView<true> args);
 
   // 7.2.3
-  void HciExitSniffMode(bluetooth::packet::PacketView<true> args);
+  void HciExitSniffMode(packets::PacketView<true> args);
 
   // 7.2.6
-  void HciQosSetup(bluetooth::packet::PacketView<true> args);
+  void HciQosSetup(packets::PacketView<true> args);
 
   // 7.2.10
-  void HciWriteLinkPolicySettings(bluetooth::packet::PacketView<true> args);
+  void HciWriteLinkPolicySettings(packets::PacketView<true> args);
 
   // 7.2.12
-  void HciWriteDefaultLinkPolicySettings(
-      bluetooth::packet::PacketView<true> args);
+  void HciWriteDefaultLinkPolicySettings(packets::PacketView<true> args);
 
   // 7.2.13
-  void HciFlowSpecification(bluetooth::packet::PacketView<true> args);
+  void HciFlowSpecification(packets::PacketView<true> args);
 
   // 7.2.14
-  void HciSniffSubrating(bluetooth::packet::PacketView<true> args);
+  void HciSniffSubrating(packets::PacketView<true> args);
 
   // Link Controller Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.3
 
   // 7.3.1
-  void HciSetEventMask(bluetooth::packet::PacketView<true> args);
+  void HciSetEventMask(packets::PacketView<true> args);
 
   // 7.3.2
-  void HciReset(bluetooth::packet::PacketView<true> args);
+  void HciReset(packets::PacketView<true> args);
 
   // 7.3.3
-  void HciSetEventFilter(bluetooth::packet::PacketView<true> args);
+  void HciSetEventFilter(packets::PacketView<true> args);
 
   // 7.3.10
-  void HciDeleteStoredLinkKey(bluetooth::packet::PacketView<true> args);
+  void HciDeleteStoredLinkKey(packets::PacketView<true> args);
 
   // 7.3.11
-  void HciWriteLocalName(bluetooth::packet::PacketView<true> args);
+  void HciWriteLocalName(packets::PacketView<true> args);
 
   // 7.3.12
-  void HciReadLocalName(bluetooth::packet::PacketView<true> args);
+  void HciReadLocalName(packets::PacketView<true> args);
 
   // 7.3.16
-  void HciWritePageTimeout(bluetooth::packet::PacketView<true> args);
+  void HciWritePageTimeout(packets::PacketView<true> args);
 
   // 7.3.18
-  void HciWriteScanEnable(bluetooth::packet::PacketView<true> args);
+  void HciWriteScanEnable(packets::PacketView<true> args);
 
   // 7.3.22
-  void HciWriteInquiryScanActivity(bluetooth::packet::PacketView<true> args);
+  void HciWriteInquiryScanActivity(packets::PacketView<true> args);
 
   // 7.3.23
-  void HciReadAuthenticationEnable(bluetooth::packet::PacketView<true> args);
+  void HciReadAuthenticationEnable(packets::PacketView<true> args);
 
   // 7.3.24
-  void HciWriteAuthenticationEnable(bluetooth::packet::PacketView<true> args);
+  void HciWriteAuthenticationEnable(packets::PacketView<true> args);
 
   // 7.3.26
-  void HciWriteClassOfDevice(bluetooth::packet::PacketView<true> args);
+  void HciWriteClassOfDevice(packets::PacketView<true> args);
 
   // 7.3.28
-  void HciWriteVoiceSetting(bluetooth::packet::PacketView<true> args);
+  void HciWriteVoiceSetting(packets::PacketView<true> args);
 
   // 7.3.39
-  void HciHostBufferSize(bluetooth::packet::PacketView<true> args);
+  void HciHostBufferSize(packets::PacketView<true> args);
 
   // 7.3.42
-  void HciWriteLinkSupervisionTimeout(bluetooth::packet::PacketView<true> args);
+  void HciWriteLinkSupervisionTimeout(packets::PacketView<true> args);
 
   // 7.3.45
-  void HciWriteCurrentIacLap(bluetooth::packet::PacketView<true> args);
+  void HciWriteCurrentIacLap(packets::PacketView<true> args);
 
   // 7.3.48
-  void HciWriteInquiryScanType(bluetooth::packet::PacketView<true> args);
+  void HciWriteInquiryScanType(packets::PacketView<true> args);
 
   // 7.3.50
-  void HciWriteInquiryMode(bluetooth::packet::PacketView<true> args);
+  void HciWriteInquiryMode(packets::PacketView<true> args);
 
   // 7.3.52
-  void HciWritePageScanType(bluetooth::packet::PacketView<true> args);
+  void HciWritePageScanType(packets::PacketView<true> args);
 
   // 7.3.56
-  void HciWriteExtendedInquiryResponse(
-      bluetooth::packet::PacketView<true> args);
+  void HciWriteExtendedInquiryResponse(packets::PacketView<true> args);
 
   // 7.3.57
-  void HciRefreshEncryptionKey(bluetooth::packet::PacketView<true> args);
+  void HciRefreshEncryptionKey(packets::PacketView<true> args);
 
   // 7.3.59
-  void HciWriteSimplePairingMode(bluetooth::packet::PacketView<true> args);
+  void HciWriteSimplePairingMode(packets::PacketView<true> args);
 
   // 7.3.79
-  void HciWriteLeHostSupport(bluetooth::packet::PacketView<true> args);
+  void HciWriteLeHostSupport(packets::PacketView<true> args);
 
   // 7.3.92
-  void HciWriteSecureConnectionsHostSupport(
-      bluetooth::packet::PacketView<true> args);
+  void HciWriteSecureConnectionsHostSupport(packets::PacketView<true> args);
 
   // Informational Parameters Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.4
 
   // 7.4.5
-  void HciReadBufferSize(bluetooth::packet::PacketView<true> args);
+  void HciReadBufferSize(packets::PacketView<true> args);
 
   // 7.4.1
-  void HciReadLocalVersionInformation(bluetooth::packet::PacketView<true> args);
+  void HciReadLocalVersionInformation(packets::PacketView<true> args);
 
   // 7.4.6
-  void HciReadBdAddr(bluetooth::packet::PacketView<true> args);
+  void HciReadBdAddr(packets::PacketView<true> args);
 
   // 7.4.2
-  void HciReadLocalSupportedCommands(bluetooth::packet::PacketView<true> args);
+  void HciReadLocalSupportedCommands(packets::PacketView<true> args);
 
   // 7.4.3
-  void HciReadLocalSupportedFeatures(bluetooth::packet::PacketView<true> args);
+  void HciReadLocalSupportedFeatures(packets::PacketView<true> args);
 
   // 7.4.4
-  void HciReadLocalExtendedFeatures(bluetooth::packet::PacketView<true> args);
+  void HciReadLocalExtendedFeatures(packets::PacketView<true> args);
 
   // 7.4.8
-  void HciReadLocalSupportedCodecs(bluetooth::packet::PacketView<true> args);
+  void HciReadLocalSupportedCodecs(packets::PacketView<true> args);
 
   // Status Parameters Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.5
 
   // 7.5.7
-  void HciReadEncryptionKeySize(bluetooth::packet::PacketView<true> args);
+  void HciReadEncryptionKeySize(packets::PacketView<true> args);
 
   // Test Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.7
 
   // 7.7.1
-  void HciReadLoopbackMode(bluetooth::packet::PacketView<true> args);
+  void HciReadLoopbackMode(packets::PacketView<true> args);
 
   // 7.7.2
-  void HciWriteLoopbackMode(bluetooth::packet::PacketView<true> args);
+  void HciWriteLoopbackMode(packets::PacketView<true> args);
 
   // LE Controller Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.8
 
   // 7.8.1
-  void HciLeSetEventMask(bluetooth::packet::PacketView<true> args);
+  void HciLeSetEventMask(packets::PacketView<true> args);
 
   // 7.8.2
-  void HciLeReadBufferSize(bluetooth::packet::PacketView<true> args);
+  void HciLeReadBufferSize(packets::PacketView<true> args);
 
   // 7.8.3
-  void HciLeReadLocalSupportedFeatures(
-      bluetooth::packet::PacketView<true> args);
+  void HciLeReadLocalSupportedFeatures(packets::PacketView<true> args);
 
   // 7.8.4
-  void HciLeSetRandomAddress(bluetooth::packet::PacketView<true> args);
+  void HciLeSetRandomAddress(packets::PacketView<true> args);
 
   // 7.8.5
-  void HciLeSetAdvertisingParameters(bluetooth::packet::PacketView<true> args);
+  void HciLeSetAdvertisingParameters(packets::PacketView<true> args);
 
   // 7.8.7
-  void HciLeSetAdvertisingData(bluetooth::packet::PacketView<true> args);
+  void HciLeSetAdvertisingData(packets::PacketView<true> args);
 
   // 7.8.8
-  void HciLeSetScanResponseData(bluetooth::packet::PacketView<true> args);
+  void HciLeSetScanResponseData(packets::PacketView<true> args);
 
   // 7.8.9
-  void HciLeSetAdvertisingEnable(bluetooth::packet::PacketView<true> args);
+  void HciLeSetAdvertisingEnable(packets::PacketView<true> args);
 
   // 7.8.10
-  void HciLeSetScanParameters(bluetooth::packet::PacketView<true> args);
+  void HciLeSetScanParameters(packets::PacketView<true> args);
 
   // 7.8.11
-  void HciLeSetScanEnable(bluetooth::packet::PacketView<true> args);
+  void HciLeSetScanEnable(packets::PacketView<true> args);
 
   // 7.8.12
-  void HciLeCreateConnection(bluetooth::packet::PacketView<true> args);
+  void HciLeCreateConnection(packets::PacketView<true> args);
 
   // 7.8.18
-  void HciLeConnectionUpdate(bluetooth::packet::PacketView<true> args);
+  void HciLeConnectionUpdate(packets::PacketView<true> args);
 
   // 7.8.13
-  void HciLeConnectionCancel(bluetooth::packet::PacketView<true> args);
+  void HciLeConnectionCancel(packets::PacketView<true> args);
 
   // 7.8.14
-  void HciLeReadWhiteListSize(bluetooth::packet::PacketView<true> args);
+  void HciLeReadWhiteListSize(packets::PacketView<true> args);
 
   // 7.8.15
-  void HciLeClearWhiteList(bluetooth::packet::PacketView<true> args);
+  void HciLeClearWhiteList(packets::PacketView<true> args);
 
   // 7.8.16
-  void HciLeAddDeviceToWhiteList(bluetooth::packet::PacketView<true> args);
+  void HciLeAddDeviceToWhiteList(packets::PacketView<true> args);
 
   // 7.8.17
-  void HciLeRemoveDeviceFromWhiteList(bluetooth::packet::PacketView<true> args);
+  void HciLeRemoveDeviceFromWhiteList(packets::PacketView<true> args);
 
   // 7.8.21
-  void HciLeReadRemoteFeatures(bluetooth::packet::PacketView<true> args);
+  void HciLeReadRemoteFeatures(packets::PacketView<true> args);
 
   // 7.8.23
-  void HciLeRand(bluetooth::packet::PacketView<true> args);
+  void HciLeRand(packets::PacketView<true> args);
 
   // 7.8.24
-  void HciLeStartEncryption(bluetooth::packet::PacketView<true> args);
+  void HciLeStartEncryption(packets::PacketView<true> args);
 
   // 7.8.27
-  void HciLeReadSupportedStates(bluetooth::packet::PacketView<true> args);
+  void HciLeReadSupportedStates(packets::PacketView<true> args);
 
   // 7.8.38
-  void HciLeAddDeviceToResolvingList(bluetooth::packet::PacketView<true> args);
+  void HciLeAddDeviceToResolvingList(packets::PacketView<true> args);
 
   // 7.8.39
-  void HciLeRemoveDeviceFromResolvingList(
-      bluetooth::packet::PacketView<true> args);
+  void HciLeRemoveDeviceFromResolvingList(packets::PacketView<true> args);
 
   // 7.8.40
-  void HciLeClearResolvingList(bluetooth::packet::PacketView<true> args);
+  void HciLeClearResolvingList(packets::PacketView<true> args);
 
   // 7.8.77
-  void HciLeSetPrivacyMode(bluetooth::packet::PacketView<true> args);
+  void HciLeSetPrivacyMode(packets::PacketView<true> args);
 
   // Vendor-specific Commands
 
-  void HciLeVendorSleepMode(bluetooth::packet::PacketView<true> args);
-  void HciLeVendorCap(bluetooth::packet::PacketView<true> args);
-  void HciLeVendorMultiAdv(bluetooth::packet::PacketView<true> args);
-  void HciLeVendor155(bluetooth::packet::PacketView<true> args);
-  void HciLeVendor157(bluetooth::packet::PacketView<true> args);
-  void HciLeEnergyInfo(bluetooth::packet::PacketView<true> args);
-  void HciLeAdvertisingFilter(bluetooth::packet::PacketView<true> args);
-  void HciLeExtendedScanParams(bluetooth::packet::PacketView<true> args);
+  void HciLeVendorSleepMode(packets::PacketView<true> args);
+  void HciLeVendorCap(packets::PacketView<true> args);
+  void HciLeVendorMultiAdv(packets::PacketView<true> args);
+  void HciLeVendor155(packets::PacketView<true> args);
+  void HciLeVendor157(packets::PacketView<true> args);
+  void HciLeEnergyInfo(packets::PacketView<true> args);
+  void HciLeAdvertisingFilter(packets::PacketView<true> args);
+  void HciLeExtendedScanParams(packets::PacketView<true> args);
 
   void SetTimerPeriod(std::chrono::milliseconds new_period);
   void StartTimer();
@@ -440,6 +429,9 @@ class DualModeController : public Device {
 
   void AddConnectionAction(const TaskCallback& callback, uint16_t handle);
 
+  // Creates a command complete event and sends it back to the HCI.
+  void SendCommandComplete(hci::OpCode command_opcode, const std::vector<uint8_t>& return_parameters) const;
+
   void SendCommandCompleteUnknownOpCodeEvent(uint16_t command_opcode) const;
 
   // Callbacks to send packets back to the HCI.
@@ -453,11 +445,9 @@ class DualModeController : public Device {
   // Maintains the commands to be registered and used in the HciHandler object.
   // Keys are command opcodes and values are the callbacks to handle each
   // command.
-  std::unordered_map<uint16_t,
-                     std::function<void(bluetooth::packet::PacketView<true>)>>
-      active_hci_commands_;
+  std::unordered_map<uint16_t, std::function<void(packets::PacketView<true>)>> active_hci_commands_;
 
-  bluetooth::hci::LoopbackMode loopback_mode_;
+  hci::LoopbackMode loopback_mode_;
 
   SecurityManager security_manager_;
 

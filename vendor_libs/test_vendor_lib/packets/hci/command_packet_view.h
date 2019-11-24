@@ -15,54 +15,32 @@
  */
 
 #pragma once
-#include <cstdint>
 
-#include "include/hci/event_code.h"
-#include "include/hci/le_sub_event_code.h"
-#include "include/hci/op_code.h"
-#include "include/hci/status.h"
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+#include "packets/packet_view.h"
 
 namespace test_vendor_lib {
-namespace hci {
+namespace packets {
 
-enum class PacketType : uint8_t {
-  UNKNOWN = 0,
-  COMMAND = 1,
-  ACL = 2,
-  SCO = 3,
-  EVENT = 4,
+// Command packets are specified in the Bluetooth Core Specification Version
+// 4.2, Volume 2, Part E, Section 5.4.1
+class CommandPacketView : public PacketView<true> {
+ public:
+  virtual ~CommandPacketView() override = default;
+
+  static CommandPacketView Create(std::shared_ptr<std::vector<uint8_t>> packet);
+
+  uint16_t GetOpcode() const;
+
+  PacketView<true> GetPayload() const;
+
+ private:
+  CommandPacketView(std::shared_ptr<std::vector<uint8_t>> packet);
+  CommandPacketView() = delete;
 };
 
-enum class LinkType : uint8_t {
-  SCO = 0x00,
-  ACL = 0x01,
-  ESCO = 0x02,
-};
-
-enum class LoopbackMode : uint8_t {
-  NO = 0x00,
-  LOCAL = 0x01,
-  REMOTE = 0x02,
-};
-
-/* HCI, PAL, and LMP Version numbers are the same */
-enum class Version : uint8_t {
-  V1_0 = 0,
-  V1_1 = 1,
-  V1_2 = 2,
-  V2_0 = 3,
-  V2_1 = 4,
-  V3_0 = 5,
-  V4_0 = 6,
-  V4_1 = 7,
-  V4_2 = 8,
-  V5_0 = 9,
-};
-
-enum class Role : uint8_t {
-  MASTER = 0x00,
-  SLAVE = 0x01,
-};
-
-}  // namespace hci
+}  // namespace packets
 }  // namespace test_vendor_lib
