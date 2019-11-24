@@ -17,52 +17,30 @@
 #pragma once
 #include <cstdint>
 
-#include "include/hci/event_code.h"
-#include "include/hci/le_sub_event_code.h"
-#include "include/hci/op_code.h"
-#include "include/hci/status.h"
-
 namespace test_vendor_lib {
 namespace hci {
 
-enum class PacketType : uint8_t {
-  UNKNOWN = 0,
-  COMMAND = 1,
-  ACL = 2,
-  SCO = 3,
-  EVENT = 4,
+enum class Status : uint8_t {
+  SUCCESS = 0,
+  UNKNOWN_COMMAND = 1,
+  UNKNOWN_CONNECTION = 2,
+  HARDWARE_FAILURE = 3,
+  PAGE_TIMEOUT = 4,
+  AUTHENTICATION_FAILURE = 5,
+  PIN_OR_KEY_MISSING = 6,
+  MEMORY_CAPACITY_EXCEEDED = 7,
+  CONNECTION_TIMEOUT = 8,
+  COMMAND_DISALLOWED = 0x0c,
+  CONNECTION_REJECTED_LIMITED_RESOURCES = 0x0d,
+  CONNECTION_REJECTED_SECURITY = 0x0e,
+  CONNECTION_REJECTED_UNACCEPTABLE_BD_ADDR = 0x0f,
+  INVALID_HCI_COMMAND_PARAMETERS = 0x12,
+  REMOTE_USER_TERMINATED_CONNECTION = 0x13,
+  CONNECTION_TERMINATED_BY_LOCAL_HOST = 0x16,
+  UNSPECIFIED_ERROR = 0x1f,
+  ENCRYPTION_MODE_NOT_ACCEPTABLE = 0x25,
+  HOST_BUSY_PAIRING = 0x38,
+  CONTROLLER_BUSY = 0x3a,
 };
-
-enum class LinkType : uint8_t {
-  SCO = 0x00,
-  ACL = 0x01,
-  ESCO = 0x02,
-};
-
-enum class LoopbackMode : uint8_t {
-  NO = 0x00,
-  LOCAL = 0x01,
-  REMOTE = 0x02,
-};
-
-/* HCI, PAL, and LMP Version numbers are the same */
-enum class Version : uint8_t {
-  V1_0 = 0,
-  V1_1 = 1,
-  V1_2 = 2,
-  V2_0 = 3,
-  V2_1 = 4,
-  V3_0 = 5,
-  V4_0 = 6,
-  V4_1 = 7,
-  V4_2 = 8,
-  V5_0 = 9,
-};
-
-enum class Role : uint8_t {
-  MASTER = 0x00,
-  SLAVE = 0x01,
-};
-
-}  // namespace hci
+}
 }  // namespace test_vendor_lib
