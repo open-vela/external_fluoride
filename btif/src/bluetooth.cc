@@ -40,20 +40,20 @@
 #include <hardware/bt_hearing_aid.h>
 #include <hardware/bt_hf_client.h>
 #include <hardware/bt_hh.h>
+#include <hardware/bt_hl.h>
 #include <hardware/bt_mce.h>
 #include <hardware/bt_pan.h>
 #include <hardware/bt_rc.h>
 #include <hardware/bt_sdp.h>
 #include <hardware/bt_sock.h>
 
+#include "avrcp_service.h"
 #include "bt_utils.h"
 #include "bta/include/bta_hearing_aid_api.h"
 #include "bta/include/bta_hf_client_api.h"
-#include "btif/avrcp/avrcp_service.h"
 #include "btif_a2dp.h"
 #include "btif_api.h"
 #include "btif_av.h"
-#include "btif_bqr.h"
 #include "btif_config.h"
 #include "btif_debug.h"
 #include "btif_debug_btsnoop.h"
@@ -62,17 +62,17 @@
 #include "btif_storage.h"
 #include "btsnoop.h"
 #include "btsnoop_mem.h"
-#include "common/address_obfuscator.h"
-#include "common/metrics.h"
 #include "device/include/interop.h"
-#include "main/shim/shim.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocation_tracker.h"
 #include "osi/include/log.h"
+#include "osi/include/metrics.h"
 #include "osi/include/osi.h"
 #include "osi/include/wakelock.h"
-#include "stack/gatt/connection_manager.h"
 #include "stack_manager.h"
+
+/* Test interface includes */
+#include "mca_api.h"
 
 using bluetooth::hearing_aid::HearingAidInterface;
 
@@ -82,7 +82,6 @@ using bluetooth::hearing_aid::HearingAidInterface;
 
 bt_callbacks_t* bt_hal_cbacks = NULL;
 bool restricted_mode = false;
-bool single_user_mode = false;
 
 /*******************************************************************************
  *  Externs
@@ -101,6 +100,8 @@ extern const btsock_interface_t* btif_sock_get_interface();
 extern const bthh_interface_t* btif_hh_get_interface();
 /* hid device profile */
 extern const bthd_interface_t* btif_hd_get_interface();
+/* health device profile */
+extern const bthl_interface_t* btif_hl_get_interface();
 /*pan*/
 extern const btpan_interface_t* btif_pan_get_interface();
 /*map client*/
@@ -115,6 +116,9 @@ extern const btrc_ctrl_interface_t* btif_rc_ctrl_get_interface();
 extern const btsdp_interface_t* btif_sdp_get_interface();
 /*Hearing Aid client*/
 extern HearingAidInterface* btif_hearing_aid_get_interface();
+
+/* List all test interface here */
+extern const btmcap_test_interface_t* stack_mcap_get_interface();
 
 /*******************************************************************************
  *  Functions
@@ -134,16 +138,8 @@ static bool is_profile(const char* p1, const char* p2) {
  *
  ****************************************************************************/
 
-static int init(bt_callbacks_t* callbacks, bool start_restricted,
-                bool is_single_user_mode) {
-  LOG_INFO(LOG_TAG, "%s: start restricted = %d ; single user = %d", __func__,
-           start_restricted, is_single_user_mode);
-
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO(LOG_TAG, "%s Enable Gd bluetooth functionality", __func__);
-  } else {
-    LOG_INFO(LOG_TAG, "%s Preserving legacy bluetooth functionality", __func__);
-  }
+static int init(bt_callbacks_t* callbacks) {
+  LOG_INFO(LOG_TAG, "%s", __func__);
 
   if (interface_ready()) return BT_STATUS_DONE;
 
@@ -152,14 +148,16 @@ static int init(bt_callbacks_t* callbacks, bool start_restricted,
 #endif
 
   bt_hal_cbacks = callbacks;
-  restricted_mode = start_restricted;
-  single_user_mode = is_single_user_mode;
   stack_manager_get_interface()->init_stack();
   btif_debug_init();
   return BT_STATUS_SUCCESS;
 }
 
-static int enable() {
+static int enable(bool start_restricted) {
+  LOG_INFO(LOG_TAG, "%s: start restricted = %d", __func__, start_restricted);
+
+  restricted_mode = start_restricted;
+
   if (!interface_ready()) return BT_STATUS_NOT_READY;
 
   stack_manager_get_interface()->start_up_stack_async();
@@ -176,7 +174,6 @@ static int disable(void) {
 static void cleanup(void) { stack_manager_get_interface()->clean_up_stack(); }
 
 bool is_restricted_mode() { return restricted_mode; }
-bool is_single_user_mode() { return single_user_mode; }
 
 static int get_adapter_properties(void) {
   /* sanity check */
@@ -326,15 +323,13 @@ static void dump(int fd, const char** arguments) {
   osi_allocator_debug_dump(fd);
   alarm_debug_dump(fd);
   HearingAid::DebugDump(fd);
-  connection_manager::dump(fd);
-  bluetooth::bqr::DebugDump(fd);
 #if (BTSNOOP_MEM == TRUE)
   btif_debug_btsnoop_dump(fd);
 #endif
 }
 
 static void dumpMetrics(std::string* output) {
-  bluetooth::common::BluetoothMetricsLogger::GetInstance()->WriteString(output);
+  system_bt_osi::BluetoothMetricsLogger::GetInstance()->WriteString(output);
 }
 
 static const void* get_profile_interface(const char* profile_id) {
@@ -368,6 +363,9 @@ static const void* get_profile_interface(const char* profile_id) {
   if (is_profile(profile_id, BT_PROFILE_HIDDEV_ID))
     return btif_hd_get_interface();
 
+  if (is_profile(profile_id, BT_PROFILE_HEALTH_ID))
+    return btif_hl_get_interface();
+
   if (is_profile(profile_id, BT_PROFILE_SDP_CLIENT_ID))
     return btif_sdp_get_interface();
 
@@ -379,6 +377,9 @@ static const void* get_profile_interface(const char* profile_id) {
 
   if (is_profile(profile_id, BT_PROFILE_AV_RC_CTRL_ID))
     return btif_rc_ctrl_get_interface();
+
+  if (is_profile(profile_id, BT_TEST_INTERFACE_MCAP_ID))
+    return stack_mcap_get_interface();
 
   if (is_profile(profile_id, BT_PROFILE_HEARING_AID_ID))
     return btif_hearing_aid_get_interface();
@@ -450,11 +451,6 @@ static bluetooth::avrcp::ServiceInterface* get_avrcp_service(void) {
   return bluetooth::avrcp::AvrcpService::GetServiceInterface();
 }
 
-static std::string obfuscate_address(const RawAddress& address) {
-  return bluetooth::common::AddressObfuscator::GetInstance()->Obfuscate(
-      address);
-}
-
 EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
     sizeof(bluetoothInterface),
     init,
@@ -490,5 +486,4 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
     interop_database_clear,
     interop_database_add,
     get_avrcp_service,
-    obfuscate_address,
 };

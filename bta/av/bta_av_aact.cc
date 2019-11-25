@@ -79,6 +79,7 @@
 /* ACL quota we are letting FW use for A2DP Offload Tx. */
 #define BTA_AV_A2DP_OFFLOAD_XMIT_QUOTA 4
 
+#define MAX_2MBPS_AVDTP_MTU 663
 #define BTIF_A2DP_MAX_BITPOOL_MQ 35
 
 static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb,
@@ -965,7 +966,7 @@ void bta_av_free_sdb(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
  *
  ******************************************************************************/
 void bta_av_config_ind(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
-  tBTA_AV_CI_SETCONFIG setconfig{};
+  tBTA_AV_CI_SETCONFIG setconfig;
   tAVDT_SEP_INFO* p_info;
   const AvdtpSepConfig* p_evt_cfg = &p_data->str_msg.cfg;
   uint8_t psc_mask = (p_evt_cfg->psc_mask | p_scb->cfg.psc_mask);
@@ -1167,7 +1168,6 @@ void bta_av_setconfig_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     } else {
       /* we do not know the peer device and it is using non-SBC codec
        * we need to know all the SEPs on SNK */
-      if (p_scb->uuid_int == 0) p_scb->uuid_int = p_scb->open_api.uuid;
       bta_av_discover_req(p_scb, NULL);
       return;
     }
@@ -1247,6 +1247,7 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     open.chnl = p_scb->chnl;
     open.hndl = p_scb->hndl;
     open.status = BTA_AV_SUCCESS;
+    open.starting = bta_av_chk_start(p_scb);
     open.edr = 0;
     p = BTM_ReadRemoteFeatures(p_scb->PeerAddress());
     if (p != NULL) {
@@ -1262,10 +1263,8 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     bta_ar_avdt_conn(BTA_ID_AV, open.bd_addr, p_scb->hdi);
 #endif
     if (p_scb->seps[p_scb->sep_idx].tsep == AVDT_TSEP_SRC) {
-      open.starting = false;
       open.sep = AVDT_TSEP_SNK;
     } else if (p_scb->seps[p_scb->sep_idx].tsep == AVDT_TSEP_SNK) {
-      open.starting = bta_av_chk_start(p_scb);
       open.sep = AVDT_TSEP_SRC;
     }
 
@@ -2101,8 +2100,6 @@ void bta_av_data_path(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
   bool new_buf = false;
   uint8_t m_pt = 0x60;
   tAVDT_DATA_OPT_MASK opt;
-
-  if (!p_scb->started) return;
 
   if (p_scb->cong) return;
 
@@ -3109,7 +3106,7 @@ void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb,
   ARRAY_TO_STREAM(p_param, offload_start->codec_info,
                   (int8_t)sizeof(offload_start->codec_info));
   p_scb->offload_started = true;
-  BTM_VendorSpecificCommand(HCI_CONTROLLER_A2DP, p_param - param,
+  BTM_VendorSpecificCommand(HCI_CONTROLLER_A2DP_OPCODE_OCF, p_param - param,
                             param, offload_vendor_callback);
 }
 
@@ -3117,7 +3114,7 @@ void bta_av_vendor_offload_stop() {
   uint8_t param[sizeof(tBT_A2DP_OFFLOAD)];
   APPL_TRACE_DEBUG("%s", __func__);
   param[0] = VS_HCI_A2DP_OFFLOAD_STOP;
-  BTM_VendorSpecificCommand(HCI_CONTROLLER_A2DP, 1, param,
+  BTM_VendorSpecificCommand(HCI_CONTROLLER_A2DP_OPCODE_OCF, 1, param,
                             offload_vendor_callback);
 }
 /*******************************************************************************
@@ -3250,7 +3247,7 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb,
       APPL_TRACE_ERROR("%s: Unknown Codec type ", __func__);
       return;
   }
-  if (mtu > MAX_3MBPS_AVDTP_MTU) mtu = MAX_3MBPS_AVDTP_MTU;
+  if (mtu > BTA_AV_MAX_A2DP_MTU) mtu = BTA_AV_MAX_A2DP_MTU;
   p_a2dp_offload->codec_type = codec_type;
   p_a2dp_offload->max_latency = 0;
   p_a2dp_offload->mtu = mtu;
