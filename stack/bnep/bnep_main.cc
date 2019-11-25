@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2001-2012 Broadcom Corporation
+ *  Copyright (C) 2001-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -255,9 +255,9 @@ static void bnep_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg) {
                        bnep_conn_timer_timeout, p_bcb);
 
     if (p_bcb->con_flags & BNEP_FLAGS_IS_ORIG) {
-      btm_sec_mx_access_request(p_bcb->rem_bda, BT_PSM_BNEP, true,
-                                BTM_SEC_PROTO_BNEP, p_bcb->src_uuid.As32Bit(),
-                                &bnep_sec_check_complete, p_bcb);
+      btm_sec_mx_access_request(
+          p_bcb->rem_bda, BT_PSM_BNEP, true, BTM_SEC_PROTO_BNEP,
+          bnep_get_uuid32(&(p_bcb->src_uuid)), &bnep_sec_check_complete, p_bcb);
     }
   }
 }
@@ -299,7 +299,8 @@ static void bnep_config_cfm(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg) {
 
       if (p_bcb->con_flags & BNEP_FLAGS_IS_ORIG) {
         btm_sec_mx_access_request(p_bcb->rem_bda, BT_PSM_BNEP, true,
-                                  BTM_SEC_PROTO_BNEP, p_bcb->src_uuid.As32Bit(),
+                                  BTM_SEC_PROTO_BNEP,
+                                  bnep_get_uuid32(&(p_bcb->src_uuid)),
                                   &bnep_sec_check_complete, p_bcb);
       }
     }
@@ -622,6 +623,7 @@ static void bnep_data_ind(uint16_t l2cap_cid, BT_HDR* p_buf) {
   if (bnep_cb.p_data_buf_cb) {
     (*bnep_cb.p_data_buf_cb)(p_bcb->handle, *p_src_addr, *p_dst_addr, protocol,
                              p_buf, fw_ext_present);
+    osi_free(p_buf);
   } else if (bnep_cb.p_data_ind_cb) {
     (*bnep_cb.p_data_ind_cb)(p_bcb->handle, *p_src_addr, *p_dst_addr, protocol,
                              p, rem_len, fw_ext_present);
