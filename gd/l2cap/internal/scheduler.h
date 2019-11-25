@@ -50,9 +50,33 @@ class Scheduler {
   using LowerQueueUpEnd = common::BidiQueueEnd<LowerEnqueue, LowerDequeue>;
 
   /**
+   * Attach the channel with the specified ChannelQueueDownEnd into the scheduler.
+   * Scheduler needs to notify the channel its Sender through SetSender().
+   *
+   * @param cid The channel to attach to the scheduler.
+   * @param channel The reference to a DynamicChannelImpl object. Use nullptr for fixed channel.
+   * TODO (b/144503952): Rethink about channel abstraction. Currently channel contains duplicated info as remote_cid
+   */
+  virtual void AttachChannel(Cid cid, std::shared_ptr<ChannelImpl> channel) {}
+
+  /**
+   * Detach the channel from the scheduler.
+   *
+   * @param cid The channel to detach to the scheduler.
+   */
+  virtual void DetachChannel(Cid cid) {}
+
+  /**
    * Callback from the sender to indicate that the scheduler could dequeue number_packets from it
    */
   virtual void OnPacketsReady(Cid cid, int number_packets) {}
+
+  /**
+   * Get the data controller for Reassembler
+   */
+  virtual DataController* GetDataController(Cid cid) {
+    return nullptr;
+  }
 
   virtual ~Scheduler() = default;
 };

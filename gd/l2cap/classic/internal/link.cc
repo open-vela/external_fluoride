@@ -22,6 +22,7 @@
 #include "l2cap/classic/internal/fixed_channel_impl.h"
 #include "l2cap/classic/internal/link.h"
 #include "l2cap/internal/parameter_provider.h"
+#include "l2cap/internal/scheduler.h"
 #include "os/alarm.h"
 
 namespace bluetooth {
@@ -30,16 +31,19 @@ namespace classic {
 namespace internal {
 
 Link::Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_connection,
+           std::unique_ptr<l2cap::internal::Scheduler> scheduler,
            l2cap::internal::ParameterProvider* parameter_provider,
            DynamicChannelServiceManagerImpl* dynamic_service_manager,
            FixedChannelServiceManagerImpl* fixed_service_manager)
-    : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)),
-      data_pipeline_manager_(l2cap_handler, acl_connection_->GetAclQueueEnd()), parameter_provider_(parameter_provider),
-      dynamic_service_manager_(dynamic_service_manager), fixed_service_manager_(fixed_service_manager),
-      signalling_manager_(l2cap_handler_, this, &data_pipeline_manager_, dynamic_service_manager_,
-                          &dynamic_channel_allocator_, fixed_service_manager_) {
+    : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)), scheduler_(std::move(scheduler)),
+      receiver_(acl_connection_->GetAclQueueEnd(), l2cap_handler_, scheduler_.get()),
+      parameter_provider_(parameter_provider), dynamic_service_manager_(dynamic_service_manager),
+      fixed_service_manager_(fixed_service_manager),
+      signalling_manager_(l2cap_handler_, this, dynamic_service_manager_, &dynamic_channel_allocator_,
+                          fixed_service_manager_) {
   ASSERT(l2cap_handler_ != nullptr);
   ASSERT(acl_connection_ != nullptr);
+  ASSERT(scheduler_ != nullptr);
   ASSERT(parameter_provider_ != nullptr);
   link_idle_disconnect_alarm_.Schedule(common::BindOnce(&Link::Disconnect, common::Unretained(this)),
                                        parameter_provider_->GetClassicLinkIdleDisconnectTimeout());
@@ -56,7 +60,7 @@ void Link::Disconnect() {
 
 std::shared_ptr<FixedChannelImpl> Link::AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
   auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
-  data_pipeline_manager_.AttachChannel(cid, channel);
+  scheduler_->AttachChannel(cid, channel);
   return channel;
 }
 
@@ -86,21 +90,21 @@ void Link::SendInformationRequest(InformationRequestInfoType type) {
   signalling_manager_.SendInformationRequest(type);
 }
 
-std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateDynamicChannel(Psm psm, Cid remote_cid,
-                                                                                  SecurityPolicy security_policy) {
+std::shared_ptr<DynamicChannelImpl> Link::AllocateDynamicChannel(Psm psm, Cid remote_cid,
+                                                                 SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateChannel(psm, remote_cid, security_policy);
   if (channel != nullptr) {
-    data_pipeline_manager_.AttachChannel(channel->GetCid(), channel);
+    scheduler_->AttachChannel(channel->GetCid(), channel);
   }
   channel->local_initiated_ = false;
   return channel;
 }
 
-std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateReservedDynamicChannel(
-    Cid reserved_cid, Psm psm, Cid remote_cid, SecurityPolicy security_policy) {
+std::shared_ptr<DynamicChannelImpl> Link::AllocateReservedDynamicChannel(Cid reserved_cid, Psm psm, Cid remote_cid,
+                                                                         SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateReservedChannel(reserved_cid, psm, remote_cid, security_policy);
   if (channel != nullptr) {
-    data_pipeline_manager_.AttachChannel(channel->GetCid(), channel);
+    scheduler_->AttachChannel(channel->GetCid(), channel);
   }
   channel->local_initiated_ = true;
   return channel;
@@ -116,7 +120,7 @@ void Link::FreeDynamicChannel(Cid cid) {
   if (dynamic_channel_allocator_.FindChannelByCid(cid) == nullptr) {
     return;
   }
-  data_pipeline_manager_.DetachChannel(cid);
+  scheduler_->DetachChannel(cid);
   dynamic_channel_allocator_.FreeChannel(cid);
 }
 

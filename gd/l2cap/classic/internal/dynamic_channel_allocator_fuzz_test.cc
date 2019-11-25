@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
+#include "l2cap/classic/internal/dynamic_channel_allocator.h"
 #include "l2cap/classic/internal/link_mock.h"
-#include "l2cap/internal/dynamic_channel_allocator.h"
 #include "l2cap/internal/parameter_provider_mock.h"
 
 #include <gmock/gmock.h>
 
 namespace bluetooth {
 namespace l2cap {
+namespace classic {
 namespace internal {
 
-using classic::internal::testing::MockLink;
 using hci::testing::MockAclConnection;
 using l2cap::internal::testing::MockParameterProvider;
 using l2cap::internal::testing::MockScheduler;
+using testing::MockLink;
 using ::testing::NiceMock;
 using ::testing::Return;
 
-const hci::AddressWithType device{{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}}, hci::AddressType::PUBLIC_IDENTITY_ADDRESS};
+const hci::Address device{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}};
 
 class L2capClassicDynamicChannelAllocatorFuzzTest {
  public:
@@ -47,7 +48,8 @@ class L2capClassicDynamicChannelAllocatorFuzzTest {
     handler_ = new os::Handler(thread_);
     mock_parameter_provider_ = new NiceMock<MockParameterProvider>();
     mock_classic_link_ =
-        new NiceMock<MockLink>(handler_, mock_parameter_provider_, std::make_unique<NiceMock<MockAclConnection>>());
+        new NiceMock<MockLink>(handler_, mock_parameter_provider_, std::make_unique<NiceMock<MockAclConnection>>(),
+                               std::make_unique<NiceMock<MockScheduler>>());
     EXPECT_CALL(*mock_classic_link_, GetDevice()).WillRepeatedly(Return(device));
     channel_allocator_ = std::make_unique<DynamicChannelAllocator>(mock_classic_link_, handler_);
   }
@@ -77,10 +79,11 @@ class L2capClassicDynamicChannelAllocatorFuzzTest {
 };
 
 }  // namespace internal
+}  // namespace classic
 }  // namespace l2cap
 }  // namespace bluetooth
 
 void RunL2capClassicDynamicChannelAllocatorFuzzTest(const uint8_t* data, size_t size) {
-  bluetooth::l2cap::internal::L2capClassicDynamicChannelAllocatorFuzzTest test;
+  bluetooth::l2cap::classic::internal::L2capClassicDynamicChannelAllocatorFuzzTest test;
   test.RunTests(data, size);
 }
