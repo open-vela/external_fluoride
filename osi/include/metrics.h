@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 Google, Inc.
+ *  Copyright (C) 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include <bta/include/bta_api.h>
 #include <stdint.h>
 #include <memory>
 #include <string>
@@ -105,8 +104,6 @@ class A2dpSessionMetrics {
   int32_t buffer_overruns_total = -1;
   float buffer_underruns_average = -1;
   int32_t buffer_underruns_count = -1;
-  int64_t codec_index = -1;
-  bool is_a2dp_offload = false;
 };
 
 class BluetoothMetricsLogger {
@@ -212,20 +209,13 @@ class BluetoothMetricsLogger {
    */
   void LogA2dpSession(const A2dpSessionMetrics& a2dp_session_metrics);
 
-  /**
-   * Log Headset profile RFCOMM connection event
-   *
-   * @param service_id the BTA service ID for this headset connection
-   */
-  void LogHeadsetProfileRfcConnection(tBTA_SERVICE_ID service_id);
-
   /*
-   * Writes the metrics, in base64 protobuf format, into the descriptor FD,
-   * metrics events are always cleared after dump
+   * Writes the metrics, in base64 protobuf format, into the descriptor FD
+   * If CLEAR is true, metrics events are cleared afterwards.
    */
-  void WriteBase64(int fd);
-  void WriteBase64String(std::string* serialized);
-  void WriteString(std::string* serialized);
+  void WriteBase64(int fd, bool clear);
+  void WriteBase64String(std::string* serialized, bool clear);
+  void WriteString(std::string* serialized, bool clear);
 
   /*
    * Reset the metrics logger by cleaning up its staging queues and existing
