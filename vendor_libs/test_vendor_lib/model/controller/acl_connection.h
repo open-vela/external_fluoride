@@ -18,18 +18,23 @@
 
 #include <cstdint>
 
-#include "hci/address.h"
+#include "types/address.h"
 
 namespace test_vendor_lib {
-
-using ::bluetooth::hci::Address;
 
 // Model the connection of a device to the controller.
 class AclConnection {
  public:
-  AclConnection(Address addr) : address_(addr), address_type_(0), own_address_type_(0) {}
+  AclConnection(const Address& addr) : address_(addr), connected_(false), encrypted_(false) {}
 
   virtual ~AclConnection() = default;
+
+  void SetConnected(bool connected) {
+    connected_ = connected;
+  };
+  bool IsConnected() const {
+    return connected_;
+  };
 
   void Encrypt() {
     encrypted_ = true;
@@ -38,33 +43,19 @@ class AclConnection {
     return encrypted_;
   };
 
-  Address GetAddress() const {
+  const Address& GetAddress() const {
     return address_;
   }
-  void SetAddress(Address address) {
+  void SetAddress(const Address& address) {
     address_ = address;
-  }
-
-  uint8_t GetAddressType() const {
-    return address_type_;
-  }
-  void SetAddressType(uint8_t address_type) {
-    address_type_ = address_type;
-  }
-  uint8_t GetOwnAddressType() const {
-    return own_address_type_;
-  }
-  void SetOwnAddressType(uint8_t address_type) {
-    own_address_type_ = address_type;
   }
 
  private:
   Address address_;
-  uint8_t address_type_;
-  uint8_t own_address_type_;
 
   // State variables
-  bool encrypted_{false};
+  bool connected_;
+  bool encrypted_;
 };
 
 }  // namespace test_vendor_lib
