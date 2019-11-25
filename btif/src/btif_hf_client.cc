@@ -747,7 +747,7 @@ static bt_status_t send_at_cmd(const RawAddress* bd_addr, int cmd, int val1,
 }
 
 static const bthf_client_interface_t bthfClientInterface = {
-    sizeof(bthf_client_interface_t),
+    .size = sizeof(bthf_client_interface_t),
     .init = init,
     .connect = connect,
     .disconnect = disconnect,
@@ -949,7 +949,7 @@ static void btif_hf_client_upstreams_evt(uint16_t event, char* p_param) {
                 (bthf_client_call_state_t)p_data->clcc.status,
                 p_data->clcc.mpty ? BTHF_CLIENT_CALL_MPTY_TYPE_MULTI
                                   : BTHF_CLIENT_CALL_MPTY_TYPE_SINGLE,
-                p_data->clcc.number_present ? p_data->clcc.number : NULL);
+                p_data->clcc.number_present ? p_data->clcc.number : "");
       break;
 
     case BTA_HF_CLIENT_CNUM_EVT:
@@ -998,6 +998,10 @@ static void btif_hf_client_upstreams_evt(uint16_t event, char* p_param) {
       break;
     case BTA_HF_CLIENT_RING_INDICATION:
       HAL_CBACK(bt_hf_client_callbacks, ring_indication_cb, &cb->peer_bda);
+      break;
+    case BTA_HF_CLIENT_UNKNOWN_EVT:
+      HAL_CBACK(bt_hf_client_callbacks, unknown_event_cb, &cb->peer_bda,
+                p_data->unknown.event_string);
       break;
     default:
       BTIF_TRACE_WARNING("%s: Unhandled event: %d", __func__, event);
