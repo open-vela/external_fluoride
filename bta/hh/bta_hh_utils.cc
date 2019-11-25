@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2005-2012 Broadcom Corporation
+ *  Copyright 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #if (BTA_HH_INCLUDED == TRUE)
 
 #include "bta_hh_int.h"
+#include "btif/include/btif_storage.h"
+#include "device/include/interop.h"
 #include "osi/include/osi.h"
 
 /* if SSR max latency is not defined by remote device, set the default value
@@ -393,6 +395,16 @@ tBTA_HH_STATUS bta_hh_read_ssr_param(const RawAddress& bd_addr,
         if (ssr_max_latency > BTA_HH_SSR_MAX_LATENCY_DEF)
           ssr_max_latency = BTA_HH_SSR_MAX_LATENCY_DEF;
 
+        char remote_name[BTM_MAX_REM_BD_NAME_LEN] = "";
+        if (btif_storage_get_stored_remote_name(bd_addr, remote_name)) {
+          if (interop_match_name(INTEROP_HID_HOST_LIMIT_SNIFF_INTERVAL,
+                                 remote_name)) {
+            if (ssr_max_latency > 18 /* slots * 0.625ms */) {
+              ssr_max_latency = 18;
+            }
+          }
+        }
+
         *p_max_ssr_lat = ssr_max_latency;
       } else
         *p_max_ssr_lat = p_cb->kdev[i].dscp_info.ssr_max_latency;
@@ -437,7 +449,9 @@ void bta_hh_cleanup_disable(tBTA_HH_STATUS status) {
   }
 
   if (bta_hh_cb.p_cback) {
-    (*bta_hh_cb.p_cback)(BTA_HH_DISABLE_EVT, (tBTA_HH*)&status);
+    tBTA_HH bta_hh;
+    bta_hh.status = status;
+    (*bta_hh_cb.p_cback)(BTA_HH_DISABLE_EVT, &bta_hh);
     /* all connections are down, no waiting for diconnect */
     memset(&bta_hh_cb, 0, sizeof(tBTA_HH_CB));
   }
