@@ -20,10 +20,9 @@
 #include <memory>
 
 #include "hci/acl_manager.h"
-#include "l2cap/internal/data_pipeline_manager.h"
 #include "l2cap/internal/fixed_channel_allocator.h"
-#include "l2cap/internal/ilink.h"
 #include "l2cap/internal/parameter_provider.h"
+#include "l2cap/internal/scheduler.h"
 #include "l2cap/le/internal/fixed_channel_impl.h"
 #include "os/alarm.h"
 
@@ -32,15 +31,15 @@ namespace l2cap {
 namespace le {
 namespace internal {
 
-class Link : public l2cap::internal::ILink {
+class Link {
  public:
   Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_connection,
-       l2cap::internal::ParameterProvider* parameter_provider)
-      : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)),
-        data_pipeline_manager_(l2cap_handler, acl_connection_->GetAclQueueEnd()),
+       std::unique_ptr<l2cap::internal::Scheduler> scheduler, l2cap::internal::ParameterProvider* parameter_provider)
+      : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)), scheduler_(std::move(scheduler)),
         parameter_provider_(parameter_provider) {
     ASSERT(l2cap_handler_ != nullptr);
     ASSERT(acl_connection_ != nullptr);
+    ASSERT(scheduler_ != nullptr);
     ASSERT(parameter_provider_ != nullptr);
     link_idle_disconnect_alarm_.Schedule(common::BindOnce(&Link::Disconnect, common::Unretained(this)),
                                          parameter_provider_->GetLeLinkIdleDisconnectTimeout());
@@ -70,7 +69,7 @@ class Link : public l2cap::internal::ILink {
 
   virtual std::shared_ptr<FixedChannelImpl> AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
     auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
-    data_pipeline_manager_.AttachChannel(cid, channel);
+    scheduler_->AttachChannel(cid, channel);
     return channel;
   }
 
@@ -95,13 +94,11 @@ class Link : public l2cap::internal::ILink {
     return GetDevice().ToString();
   }
 
-  void SendDisconnectionRequest(Cid local_cid, Cid remote_cid) override {}
-
  private:
   os::Handler* l2cap_handler_;
   l2cap::internal::FixedChannelAllocator<FixedChannelImpl, Link> fixed_channel_allocator_{this, l2cap_handler_};
   std::unique_ptr<hci::AclConnection> acl_connection_;
-  l2cap::internal::DataPipelineManager data_pipeline_manager_;
+  std::unique_ptr<l2cap::internal::Scheduler> scheduler_;
   l2cap::internal::ParameterProvider* parameter_provider_;
   os::Alarm link_idle_disconnect_alarm_{l2cap_handler_};
   DISALLOW_COPY_AND_ASSIGN(Link);

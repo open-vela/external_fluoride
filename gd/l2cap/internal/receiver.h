@@ -34,8 +34,6 @@ namespace bluetooth {
 namespace l2cap {
 namespace internal {
 
-class DataPipelineManager;
-
 /**
  * Handle receiving L2CAP PDUs from link queue and distribute them into into channel data controllers.
  * Dequeue incoming packets from LinkQueueUpEnd, and enqueue it to ChannelQueueDownEnd. Note: If a channel
@@ -53,13 +51,13 @@ class Receiver {
   using LowerDequeue = UpperEnqueue;
   using LowerQueueUpEnd = common::BidiQueueEnd<LowerEnqueue, LowerDequeue>;
 
-  Receiver(LowerQueueUpEnd* link_queue_up_end, os::Handler* handler, DataPipelineManager* data_pipeline_manager);
+  Receiver(LowerQueueUpEnd* link_queue_up_end, os::Handler* handler, Scheduler* scheduler);
   ~Receiver();
 
  private:
   LowerQueueUpEnd* link_queue_up_end_;
   os::Handler* handler_;
-  DataPipelineManager* data_pipeline_manager_;
+  Scheduler* scheduler_;
 
   void link_queue_dequeue_callback();
 };
