@@ -475,7 +475,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
  *
  * Function         btm_vsc_brcm_features_complete
  *
- * Description      Command Complete callback for HCI_BLE_VENDOR_CAP
+ * Description      Command Complete callback for HCI_BLE_VENDOR_CAP_OCF
  *
  * Returns          void
  *
@@ -488,7 +488,7 @@ static void btm_ble_vendor_capability_vsc_cmpl_cback(
   BTM_TRACE_DEBUG("%s", __func__);
 
   /* Check status of command complete event */
-  CHECK(p_vcs_cplt_params->opcode == HCI_BLE_VENDOR_CAP);
+  CHECK(p_vcs_cplt_params->opcode == HCI_BLE_VENDOR_CAP_OCF);
   CHECK(p_vcs_cplt_params->param_len > 0);
 
   p = p_vcs_cplt_params->p_param_buf;
@@ -498,7 +498,7 @@ static void btm_ble_vendor_capability_vsc_cmpl_cback(
     BTM_TRACE_DEBUG("%s: Status = 0x%02x (0 is success)", __func__, status);
     return;
   }
-  CHECK(p_vcs_cplt_params->param_len >= BTM_VSC_CHIP_CAPABILITY_RSP_LEN);
+  CHECK(p_vcs_cplt_params->param_len > BTM_VSC_CHIP_CAPABILITY_RSP_LEN);
   STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.adv_inst_max, p);
   STREAM_TO_UINT8(btm_cb.cmn_ble_vsc_cb.rpa_offloading, p);
   STREAM_TO_UINT16(btm_cb.cmn_ble_vsc_cb.tot_scan_results_strg, p);
@@ -587,7 +587,7 @@ extern void BTM_BleReadControllerFeatures(
   BTM_TRACE_DEBUG("BTM_BleReadControllerFeatures");
 
   p_ctrl_le_feature_rd_cmpl_cback = p_vsc_cback;
-  BTM_VendorSpecificCommand(HCI_BLE_VENDOR_CAP, 0, NULL,
+  BTM_VendorSpecificCommand(HCI_BLE_VENDOR_CAP_OCF, 0, NULL,
                             btm_ble_vendor_capability_vsc_cmpl_cback);
 }
 #else
