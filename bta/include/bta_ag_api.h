@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,9 +27,16 @@
 
 #include "bta_api.h"
 
+#include <string>
+#include <vector>
+
 /*****************************************************************************
  *  Constants and data types
  ****************************************************************************/
+/* Number of SCBs (AG service instances that can be registered) */
+#define BTA_AG_MAX_NUM_CLIENTS 6
+
+#define HFP_HSP_VERSION_UNKNOWN 0x0000
 #define HFP_VERSION_1_1 0x0101
 #define HFP_VERSION_1_5 0x0105
 #define HFP_VERSION_1_6 0x0106
@@ -37,6 +44,9 @@
 
 #define HSP_VERSION_1_0 0x0100
 #define HSP_VERSION_1_2 0x0102
+
+#define HFP_VERSION_CONFIG_KEY "HfpVersion"
+#define HFP_SDP_FEATURES_CONFIG_KEY "HfpSdpFeatures"
 
 /* Note, if you change the default version here, please also change the one in
  * bta_hs_api.h, they are meant to be the same.
@@ -57,6 +67,12 @@
 #define BTA_AG_FEAT_EXTERR 0x00000100 /* Extended error codes */
 #define BTA_AG_FEAT_CODEC 0x00000200  /* Codec Negotiation */
 
+/* AG SDP feature masks */
+#define BTA_AG_FEAT_WBS_SUPPORT 0x0020 /* Supports WBS */
+
+/* Only SDP feature bits 0 to 4 matches BRSF feature bits */
+#define HFP_SDP_BRSF_FEATURES_MASK 0x001F
+
 /* Valid feature bit mask for HFP 1.6 (and below) */
 #define HFP_1_6_FEAT_MASK 0x000003FF
 
@@ -72,14 +88,6 @@
 #define BTA_AG_FEAT_VOIP 0x00100000    /* VoIP call */
 
 typedef uint32_t tBTA_AG_FEAT;
-
-/* AG parse mode */
-#define BTA_AG_PARSE 0 /* Perform AT command parsing in AG */
-
-/* Pass data directly to phone's AT command interpreter */
-#define BTA_AG_PASS_THROUGH 1
-
-typedef uint8_t tBTA_AG_PARSE_MODE;
 
 /* AG open status */
 #define BTA_AG_SUCCESS 0        /* Connection successfully opened */
@@ -140,6 +148,7 @@ typedef uint8_t tBTA_AG_STATUS;
 #define BTA_AG_UNAT_RES 20         /* Response to unknown AT command event */
 #define BTA_AG_MULTI_CALL_RES 21   /* SLC at three way call */
 #define BTA_AG_BIND_RES 22         /* Activate/Deactivate HF indicator */
+#define BTA_AG_IND_RES_ON_DEMAND 33 /* Update an indicator value forcible */
 
 typedef uint8_t tBTA_AG_RES;
 
@@ -255,6 +264,12 @@ typedef uint16_t tBTA_AG_PEER_CODEC;
 #define BTA_AG_BTRH_READ 3     /* Read the current value */
 #define BTA_AG_BTRH_NO_RESP 4  /* Not in RH States (reply to read) */
 
+/* clip type constants */
+#define BTA_AG_CLIP_TYPE_MIN 128
+#define BTA_AG_CLIP_TYPE_MAX 175
+#define BTA_AG_CLIP_TYPE_DEFAULT 129
+#define BTA_AG_CLIP_TYPE_VOIP 255
+
 /* ASCII character string of arguments to the AT command or result */
 #ifndef BTA_AG_AT_MAX_LEN
 #define BTA_AG_AT_MAX_LEN 256
@@ -268,7 +283,7 @@ typedef struct {
 } tBTA_AG_IND;
 
 /* data type for BTA_AgResult() */
-typedef struct {
+struct tBTA_AG_RES_DATA {
   char str[BTA_AG_AT_MAX_LEN + 1];
   tBTA_AG_IND ind;
   uint16_t num;
@@ -277,7 +292,8 @@ typedef struct {
   uint8_t
       ok_flag; /* Indicates if response is finished, and if error occurred */
   bool state;
-} tBTA_AG_RES_DATA;
+  static const tBTA_AG_RES_DATA kEmpty;
+};
 
 /* AG callback events */
 #define BTA_AG_ENABLE_EVT 0      /* AG enabled */
@@ -313,6 +329,7 @@ typedef struct {
 #define BTA_AG_AT_BCS_EVT 27  /* Codec select */
 #define BTA_AG_AT_BIND_EVT 28 /* HF indicator */
 #define BTA_AG_AT_BIEV_EVT 29 /* HF indicator updates from peer */
+#define BTA_AG_AT_BIA_EVT 32  /* AG indicator activation event from peer */
 
 typedef uint8_t tBTA_AG_EVT;
 
@@ -332,7 +349,7 @@ typedef struct {
 /* data associated with BTA_AG_OPEN_EVT */
 typedef struct {
   tBTA_AG_HDR hdr;
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
   tBTA_SERVICE_ID service_id;
   tBTA_AG_STATUS status;
 } tBTA_AG_OPEN;
@@ -340,23 +357,23 @@ typedef struct {
 /* data associated with BTA_AG_CLOSE_EVT */
 typedef struct {
   tBTA_AG_HDR hdr;
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
 } tBTA_AG_CLOSE;
 
 /* data associated with BTA_AG_CONN_EVT */
 typedef struct {
   tBTA_AG_HDR hdr;
   tBTA_AG_PEER_FEAT peer_feat;
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
   tBTA_AG_PEER_CODEC peer_codec;
 } tBTA_AG_CONN;
 
 /* data associated with AT command event */
 typedef struct {
   tBTA_AG_HDR hdr;
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
   char str[BTA_AG_AT_MAX_LEN + 1];
-  uint16_t num;
+  uint32_t num;
   uint8_t idx;   /* call number used by CLCC and CHLD */
   uint16_t lidx; /* long index, ex, HF indicator */
 } tBTA_AG_VAL;
@@ -459,7 +476,7 @@ typedef struct {
  * Returns          BTA_SUCCESS if OK, BTA_FAILURE otherwise.
  *
  ******************************************************************************/
-tBTA_STATUS BTA_AgEnable(tBTA_AG_PARSE_MODE parse_mode, tBTA_AG_CBACK* p_cback);
+tBTA_STATUS BTA_AgEnable(tBTA_AG_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -471,7 +488,7 @@ tBTA_STATUS BTA_AgEnable(tBTA_AG_PARSE_MODE parse_mode, tBTA_AG_CBACK* p_cback);
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AgDisable(void);
+void BTA_AgDisable();
 
 /*******************************************************************************
  *
@@ -484,7 +501,8 @@ void BTA_AgDisable(void);
  *
  ******************************************************************************/
 void BTA_AgRegister(tBTA_SERVICE_MASK services, tBTA_SEC sec_mask,
-                    tBTA_AG_FEAT features, const char* p_service_names[],
+                    tBTA_AG_FEAT features,
+                    const std::vector<std::string>& service_names,
                     uint8_t app_id);
 
 /*******************************************************************************
@@ -512,8 +530,7 @@ void BTA_AgDeregister(uint16_t handle);
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AgOpen(uint16_t handle, BD_ADDR bd_addr, tBTA_SEC sec_mask,
-                tBTA_SERVICE_MASK services);
+void BTA_AgOpen(uint16_t handle, const RawAddress& bd_addr, tBTA_SEC sec_mask);
 
 /*******************************************************************************
  *
@@ -559,15 +576,13 @@ void BTA_AgAudioClose(uint16_t handle);
  * Function         BTA_AgResult
  *
  * Description      Send an AT result code to a headset or hands-free device.
- *                  This function is only used when the AG parse mode is set
- *                  to BTA_AG_PARSE.
  *
  *
  * Returns          void
  *
  ******************************************************************************/
 void BTA_AgResult(uint16_t handle, tBTA_AG_RES result,
-                  tBTA_AG_RES_DATA* p_data);
+                  const tBTA_AG_RES_DATA& data);
 
 /*******************************************************************************
  *
@@ -582,5 +597,9 @@ void BTA_AgResult(uint16_t handle, tBTA_AG_RES result,
  *
  ******************************************************************************/
 void BTA_AgSetCodec(uint16_t handle, tBTA_AG_PEER_CODEC codec);
+
+void BTA_AgSetScoAllowed(bool value);
+
+void BTA_AgSetActiveDevice(const RawAddress& active_device_addr);
 
 #endif /* BTA_AG_API_H */
