@@ -21,7 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 
 #ifndef FALSE
 #define FALSE false
@@ -81,6 +80,9 @@
 /* HCI command from upper layer     */
 #define BT_EVT_TO_BTU_HCI_CMD 0x1600
 
+/* ISO Data from HCI                */
+#define BT_EVT_TO_BTU_HCI_ISO 0x1700
+
 /* L2CAP segment(s) transmitted     */
 #define BT_EVT_TO_BTU_L2C_SEG_XMIT 0x1900
 
@@ -120,6 +122,8 @@
 #define BT_EVT_TO_LM_HCI_ACL_ACK 0x2b00
 /* LM Diagnostics commands          */
 #define BT_EVT_TO_LM_DIAG 0x2c00
+/* HCI ISO Data                     */
+#define BT_EVT_TO_LM_HCI_ISO 0x2d00
 
 #define BT_EVT_TO_BTM_CMDS 0x2f00
 #define BT_EVT_TO_BTM_PM_MDCHG_EVT (0x0001 | BT_EVT_TO_BTM_CMDS)
@@ -562,15 +566,30 @@ typedef uint8_t tAMP_KEY_TYPE;
 #define BT_OCTET8_LEN 8
 typedef uint8_t BT_OCTET8[BT_OCTET8_LEN]; /* octet array: size 16 */
 
-#define LINK_KEY_LEN 16
-typedef uint8_t LINK_KEY[LINK_KEY_LEN]; /* Link Key */
-
 #define AMP_LINK_KEY_LEN 32
 typedef uint8_t
     AMP_LINK_KEY[AMP_LINK_KEY_LEN]; /* Dedicated AMP and GAMP Link Keys */
 
-#define BT_OCTET16_LEN 16
-typedef uint8_t BT_OCTET16[BT_OCTET16_LEN]; /* octet array: size 16 */
+/* Some C files include this header file */
+#ifdef __cplusplus
+
+#include <array>
+
+constexpr int OCTET16_LEN = 16;
+typedef std::array<uint8_t, OCTET16_LEN> Octet16;
+
+constexpr int LINK_KEY_LEN = OCTET16_LEN;
+typedef Octet16 LinkKey; /* Link Key */
+
+/* Sample LTK from BT Spec 5.1 | Vol 6, Part C 1
+ * 0x4C68384139F574D836BCF34E9DFB01BF */
+constexpr Octet16 SAMPLE_LTK = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
+                                0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
+inline bool is_sample_ltk(const Octet16& ltk) {
+  return ltk == SAMPLE_LTK;
+}
+
+#endif
 
 #define PIN_CODE_LEN 16
 typedef uint8_t PIN_CODE[PIN_CODE_LEN]; /* Pin Code (upto 128 bits) MSB is 0 */
@@ -814,7 +833,7 @@ typedef uint8_t tBT_DEVICE_TYPE;
 #define TRACE_LAYER_A2DP 0x00210000
 #define TRACE_LAYER_SAP 0x00220000
 #define TRACE_LAYER_AMP 0x00230000
-#define TRACE_LAYER_MCA 0x00240000
+#define TRACE_LAYER_MCA 0x00240000 /* OBSOLETED */
 #define TRACE_LAYER_ATT 0x00250000
 #define TRACE_LAYER_SMP 0x00260000
 #define TRACE_LAYER_NFC 0x00270000
@@ -925,13 +944,5 @@ typedef uint8_t tBT_DEVICE_TYPE;
 
 /* Define a function for logging */
 typedef void(BT_LOG_FUNC)(int trace_type, const char* fmt_str, ...);
-
-static inline bool is_sample_ltk(const BT_OCTET16 ltk) {
-  /* Sample LTK from BT Spec 5.1 | Vol 6, Part C 1
-   * 0x4C68384139F574D836BCF34E9DFB01BF */
-  const uint8_t SAMPLE_LTK[] = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
-                                0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
-  return memcmp(ltk, SAMPLE_LTK, BT_OCTET16_LEN) == 0;
-}
 
 #endif

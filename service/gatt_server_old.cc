@@ -23,6 +23,8 @@
 #include <unistd.h>
 
 #include <base/bind.h>
+#include <base/bind_helpers.h>
+#include <base/callback.h>
 #include <algorithm>
 #include <array>
 #include <condition_variable>
@@ -76,8 +78,6 @@ static bluetooth::gatt::ServerInternals* g_internal = nullptr;
 enum { kPipeReadEnd = 0, kPipeWriteEnd = 1, kPipeNumEnds = 2 };
 
 }  // namespace
-
-void DoNothing(uint8_t p) {}
 
 namespace bluetooth {
 namespace gatt {
@@ -136,8 +136,10 @@ void RegisterServerCallback(int status, int server_if,
 
   g_internal->server_if = server_if;
 
-  pending_svc_decl.push_back(
-      {.type = BTGATT_DB_PRIMARY_SERVICE, .uuid = app_uuid});
+  pending_svc_decl.push_back({
+      .uuid = app_uuid,
+      .type = BTGATT_DB_PRIMARY_SERVICE,
+  });
 }
 
 void ServiceAddedCallback(int status, int server_if,
@@ -354,11 +356,11 @@ void RegisterClientCallback(int status, int client_if,
   // Setup our advertisement. This has no callback.
   g_internal->gatt->advertiser->SetData(0 /* std_inst */, false,
                                         {/*TODO: put inverval 2,2 here*/},
-                                        base::Bind(&DoNothing));
+                                        base::DoNothing());
 
   g_internal->gatt->advertiser->Enable(
       0 /* std_inst */, true, base::Bind(&EnableAdvertisingCallback),
-      0 /* no duration */, 0 /* no maxExtAdvEvent*/, base::Bind(&DoNothing));
+      0 /* no duration */, 0 /* no maxExtAdvEvent*/, base::DoNothing());
 }
 
 void ServiceStoppedCallback(int status, int server_if, int srvc_handle) {
@@ -502,8 +504,8 @@ int ServerInternals::Initialize() {
 bt_status_t ServerInternals::AddCharacteristic(const Uuid& uuid,
                                                uint8_t properties,
                                                uint16_t permissions) {
-  pending_svc_decl.push_back({.type = BTGATT_DB_CHARACTERISTIC,
-                              .uuid = uuid,
+  pending_svc_decl.push_back({.uuid = uuid,
+                              .type = BTGATT_DB_CHARACTERISTIC,
                               .properties = properties,
                               .permissions = permissions});
   return BT_STATUS_SUCCESS;
@@ -579,7 +581,7 @@ bool Server::SetAdvertisement(const std::vector<Uuid>& ids,
 
   // Setup our advertisement. This has no callback.
   internal_->gatt->advertiser->SetData(0, false, /* beacon, not scan response */
-                                       {}, base::Bind(&DoNothing));
+                                       {}, base::DoNothing());
   // transmit_name,               /* name */
   // 2, 2,                         interval
   // mutable_manufacturer_data,
@@ -605,7 +607,7 @@ bool Server::SetScanResponse(const std::vector<Uuid>& ids,
 
   // Setup our advertisement. This has no callback.
   internal_->gatt->advertiser->SetData(0, true, /* scan response */
-                                       {}, base::Bind(&DoNothing));
+                                       {}, base::DoNothing());
   // transmit_name,              /* name */
   // false,                      /* no txpower */
   // 2, 2,                        interval
