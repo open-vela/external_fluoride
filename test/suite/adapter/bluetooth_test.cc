@@ -21,7 +21,6 @@
 #include <stdio.h>
 #include <mutex>
 #include "btcore/include/property.h"
-#include "osi/include/properties.h"
 
 namespace {
 
@@ -71,8 +70,6 @@ void BluetoothTest::TearDown() {
   bt_hal_interface->RemoveObserver(this);
   bt_hal_interface->CleanUp();
   ASSERT_FALSE(bt_hal_interface->IsInitialized());
-
-  osi_property_set("debug.bluetooth.unittest", "false");
 }
 
 void BluetoothTest::ClearSemaphore(semaphore_t* sem) {
