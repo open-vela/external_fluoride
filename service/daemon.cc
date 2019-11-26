@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <memory>
 
 #include <base/logging.h>
-#include <base/run_loop.h>
 
 #include "service/adapter.h"
 #include "service/hal/bluetooth_gatt_interface.h"
@@ -45,7 +44,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     CleanUpBluetoothStack();
   }
 
-  void StartMainLoop() override { base::RunLoop().Run(); }
+  void StartMainLoop() override { message_loop_->Run(); }
 
   Settings* GetSettings() const override { return settings_.get(); }
 

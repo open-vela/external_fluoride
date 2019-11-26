@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ tPORT* port_allocate_port(uint8_t dlci, const RawAddress& bd_addr) {
   }
 
   /* If here, no free PORT found */
-  return nullptr;
+  return (NULL);
 }
 
 /*******************************************************************************
@@ -104,7 +104,7 @@ tPORT* port_allocate_port(uint8_t dlci, const RawAddress& bd_addr) {
  ******************************************************************************/
 void port_set_defaults(tPORT* p_port) {
   p_port->ev_mask = 0;
-  p_port->p_callback = nullptr;
+  p_port->p_callback = NULL;
   p_port->port_ctrl = 0;
   p_port->error = 0;
   p_port->line_status = 0;
@@ -207,16 +207,12 @@ void port_release_port(tPORT* p_port) {
 
   mutex_global_lock();
   BT_HDR* p_buf;
-  while ((p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_port->rx.queue)) !=
-         nullptr) {
+  while ((p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_port->rx.queue)) != NULL)
     osi_free(p_buf);
-  }
   p_port->rx.queue_size = 0;
 
-  while ((p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_port->tx.queue)) !=
-         nullptr) {
+  while ((p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_port->tx.queue)) != NULL)
     osi_free(p_buf);
-  }
   p_port->tx.queue_size = 0;
   mutex_global_unlock();
 
@@ -235,10 +231,10 @@ void port_release_port(tPORT* p_port) {
     rfc_port_timer_stop(p_port);
 
     mutex_global_lock();
-    fixed_queue_free(p_port->tx.queue, nullptr);
-    p_port->tx.queue = nullptr;
-    fixed_queue_free(p_port->rx.queue, nullptr);
-    p_port->rx.queue = nullptr;
+    fixed_queue_free(p_port->tx.queue, NULL);
+    p_port->tx.queue = NULL;
+    fixed_queue_free(p_port->rx.queue, NULL);
+    p_port->rx.queue = NULL;
     mutex_global_unlock();
 
     if (p_port->keep_port_handle) {
@@ -258,7 +254,7 @@ void port_release_port(tPORT* p_port) {
       p_port->mtu = p_port->keep_mtu;
 
       p_port->state = PORT_STATE_OPENING;
-      p_port->rfc.p_mcb = nullptr;
+      p_port->rfc.p_mcb = NULL;
       if (p_port->is_server) p_port->dlci &= 0xfe;
 
       p_port->local_ctrl.modem_signal = p_port->default_signal_state;
@@ -280,16 +276,21 @@ void port_release_port(tPORT* p_port) {
  *
  ******************************************************************************/
 tRFC_MCB* port_find_mcb(const RawAddress& bd_addr) {
-  for (tRFC_MCB& mcb : rfc_cb.port.rfc_mcb) {
-    if ((mcb.state != RFC_MX_STATE_IDLE) && (mcb.bd_addr == bd_addr)) {
+  int i;
+
+  for (i = 0; i < MAX_BD_CONNECTIONS; i++) {
+    if ((rfc_cb.port.rfc_mcb[i].state != RFC_MX_STATE_IDLE) &&
+        rfc_cb.port.rfc_mcb[i].bd_addr == bd_addr) {
       /* Multiplexer channel found do not change anything */
-      VLOG(1) << __func__ << ": found bd_addr=" << bd_addr
-              << ", rfc_mcb=" << &mcb << ", lcid=" << loghex(mcb.lcid);
-      return &mcb;
+      VLOG(1) << __func__ << ": found bd_addr:" << bd_addr;
+      RFCOMM_TRACE_DEBUG(
+          "port_find_mcb: rfc_cb.port.rfc_mcb:index:%d, %p, lcid:%d", i,
+          &rfc_cb.port.rfc_mcb[i], rfc_cb.port.rfc_mcb[i].lcid);
+      return (&rfc_cb.port.rfc_mcb[i]);
     }
   }
   VLOG(1) << __func__ << ": not found, bd_addr:" << bd_addr;
-  return nullptr;
+  return (NULL);
 }
 
 /*******************************************************************************
@@ -305,26 +306,20 @@ tRFC_MCB* port_find_mcb(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 tPORT* port_find_mcb_dlci_port(tRFC_MCB* p_mcb, uint8_t dlci) {
-  if (!p_mcb) {
-    LOG(ERROR) << __func__ << ": p_mcb is null, dlci=" << std::to_string(dlci);
-    return nullptr;
-  }
+  uint8_t inx;
 
-  if (dlci > RFCOMM_MAX_DLCI) {
-    LOG(WARNING) << __func__ << ": DLCI " << std::to_string(dlci)
-                 << " is too large, bd_addr=" << p_mcb->bd_addr
-                 << ", p_mcb=" << p_mcb;
-    return nullptr;
-  }
+  if (!p_mcb) return (NULL);
 
-  uint8_t inx = p_mcb->port_inx[dlci];
+  if (dlci > RFCOMM_MAX_DLCI) return (NULL);
+
+  inx = p_mcb->port_inx[dlci];
   if (inx == 0) {
-    LOG(INFO) << __func__ << ": Cannot find allocated RFCOMM app port for DLCI "
-              << std::to_string(dlci) << " on " << p_mcb->bd_addr
-              << ", p_mcb=" << p_mcb;
-    return nullptr;
-  }
-  return &rfc_cb.port.port[inx - 1];
+    RFCOMM_TRACE_DEBUG(
+        "port_find_mcb_dlci_port: p_mcb:%p, port_inx[dlci:%d] is 0", p_mcb,
+        dlci);
+    return (NULL);
+  } else
+    return (&rfc_cb.port.port[inx - 1]);
 }
 
 /*******************************************************************************
@@ -337,17 +332,22 @@ tPORT* port_find_mcb_dlci_port(tRFC_MCB* p_mcb, uint8_t dlci) {
  *
  ******************************************************************************/
 tPORT* port_find_dlci_port(uint8_t dlci) {
-  for (tPORT& port : rfc_cb.port.port) {
-    if (port.in_use && (port.rfc.p_mcb == nullptr)) {
-      if (port.dlci == dlci) {
-        return &port;
-      } else if ((dlci & 0x01) && (port.dlci == (dlci - 1))) {
-        port.dlci++;
-        return &port;
+  uint16_t i;
+  tPORT* p_port;
+
+  for (i = 0; i < MAX_RFC_PORTS; i++) {
+    p_port = &rfc_cb.port.port[i];
+
+    if (p_port->in_use && (p_port->rfc.p_mcb == NULL)) {
+      if (p_port->dlci == dlci) {
+        return (p_port);
+      } else if ((dlci & 0x01) && (p_port->dlci == (dlci - 1))) {
+        p_port->dlci++;
+        return (p_port);
       }
     }
   }
-  return nullptr;
+  return (NULL);
 }
 
 /*******************************************************************************
@@ -360,12 +360,17 @@ tPORT* port_find_dlci_port(uint8_t dlci) {
  *
  ******************************************************************************/
 tPORT* port_find_port(uint8_t dlci, const RawAddress& bd_addr) {
-  for (tPORT& port : rfc_cb.port.port) {
-    if (port.in_use && (port.dlci == dlci) && (port.bd_addr == bd_addr)) {
-      return &port;
+  uint16_t i;
+  tPORT* p_port;
+
+  for (i = 0; i < MAX_RFC_PORTS; i++) {
+    p_port = &rfc_cb.port.port[i];
+    if (p_port->in_use && (p_port->dlci == dlci) &&
+        p_port->bd_addr == bd_addr) {
+      return (p_port);
     }
   }
-  return nullptr;
+  return (NULL);
 }
 
 /*******************************************************************************

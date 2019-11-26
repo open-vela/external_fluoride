@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  *
  ******************************************************************************/
 
-#include "internal_include/bt_target.h"
+#include "include/bt_target.h"
 
 #define LOG_TAG "bt_osi_alarm"
 
@@ -252,7 +252,7 @@ void alarm_cancel(alarm_t* alarm) {
   CHECK(alarms != NULL);
   if (!alarm) return;
 
-  std::shared_ptr<std::recursive_mutex> local_mutex_ref = alarm->callback_mutex;
+  std::shared_ptr<std::recursive_mutex> local_mutex_ref;
   {
     std::lock_guard<std::mutex> lock(alarms_mutex);
     local_mutex_ref = alarm->callback_mutex;
@@ -653,8 +653,7 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
       }
 
       alarm->closure.i.Reset(Bind(alarm_ready_mloop, alarm));
-      get_message_loop()->task_runner()->PostTask(FROM_HERE,
-                                                  alarm->closure.i.callback());
+      get_message_loop()->PostTask(FROM_HERE, alarm->closure.i.callback());
     } else {
       fixed_queue_enqueue(alarm->queue, alarm);
     }

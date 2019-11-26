@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -342,21 +342,6 @@ void btm_ble_add_2_white_list_complete(uint8_t status) {
 void btm_ble_remove_from_white_list_complete(uint8_t* p,
                                              UNUSED_ATTR uint16_t evt_len) {
   BTM_TRACE_EVENT("%s status=%d", __func__, *p);
-}
-
-void btm_ble_create_conn_cancel_complete(uint8_t* p) {
-  uint8_t status;
-  STREAM_TO_UINT8(status, p);
-
-  if (status == HCI_ERR_COMMAND_DISALLOWED) {
-    /* This is a sign that logic around keeping connection state is broken */
-    LOG(ERROR)
-        << "Attempt to cancel LE connection, when no connection is pending.";
-    if (btm_ble_get_conn_st() == BLE_CONN_CANCEL) {
-      btm_ble_set_conn_st(BLE_CONN_IDLE);
-      btm_ble_update_mode_operation(HCI_ROLE_UNKNOWN, nullptr, status);
-    }
-  }
 }
 
 void btm_send_hci_create_connection(
