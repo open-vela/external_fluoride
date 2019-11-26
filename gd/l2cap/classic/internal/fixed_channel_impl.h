@@ -74,6 +74,7 @@ class FixedChannelImpl : public l2cap::internal::ChannelImpl {
   Cid GetRemoteCid() const {
     return cid_;
   }
+  void SetSender(l2cap::internal::Sender* sender) override;
 
  private:
   // Constructor states

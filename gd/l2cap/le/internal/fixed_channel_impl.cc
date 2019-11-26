@@ -107,6 +107,10 @@ Cid FixedChannelImpl::GetRemoteCid() const {
   return cid_;
 }
 
+void FixedChannelImpl::SetSender(l2cap::internal::Sender* sender) {
+  ASSERT_LOG(false, "Should not set sender for fixed channel");
+}
+
 }  // namespace internal
 }  // namespace le
 }  // namespace l2cap
