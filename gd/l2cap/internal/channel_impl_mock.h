@@ -34,6 +34,7 @@ class MockChannelImpl : public ChannelImpl {
               GetQueueDownEnd, (), (override));
   MOCK_METHOD(Cid, GetCid, (), (const, override));
   MOCK_METHOD(Cid, GetRemoteCid, (), (const, override));
+  MOCK_METHOD(void, SetSender, (l2cap::internal::Sender*), (override));
 };
 
 }  // namespace testing

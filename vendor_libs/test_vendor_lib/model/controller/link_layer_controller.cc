@@ -55,64 +55,65 @@ void LinkLayerController::SendLinkLayerPacket(
   });
 }
 
-ErrorCode LinkLayerController::SendCommandToRemoteByAddress(
-    OpCode opcode, bluetooth::packet::PacketView<true> args,
+bluetooth::hci::ErrorCode LinkLayerController::SendCommandToRemoteByAddress(
+    bluetooth::hci::OpCode opcode, bluetooth::packet::PacketView<true> args,
     const Address& remote) {
   Address local_address = properties_.GetAddress();
 
   switch (opcode) {
-    case (OpCode::REMOTE_NAME_REQUEST):
+    case (bluetooth::hci::OpCode::REMOTE_NAME_REQUEST):
       // LMP features get requested with remote name requests.
       SendLinkLayerPacket(model::packets::ReadRemoteLmpFeaturesBuilder::Create(
           local_address, remote));
       SendLinkLayerPacket(model::packets::RemoteNameRequestBuilder::Create(
           local_address, remote));
       break;
-    case (OpCode::READ_REMOTE_SUPPORTED_FEATURES):
+    case (bluetooth::hci::OpCode::READ_REMOTE_SUPPORTED_FEATURES):
       SendLinkLayerPacket(
           model::packets::ReadRemoteSupportedFeaturesBuilder::Create(
               local_address, remote));
       break;
-    case (OpCode::READ_REMOTE_EXTENDED_FEATURES): {
+    case (bluetooth::hci::OpCode::READ_REMOTE_EXTENDED_FEATURES): {
       uint8_t page_number =
           (args.begin() + 2).extract<uint8_t>();  // skip the handle
       SendLinkLayerPacket(
           model::packets::ReadRemoteExtendedFeaturesBuilder::Create(
               local_address, remote, page_number));
     } break;
-    case (OpCode::READ_REMOTE_VERSION_INFORMATION):
+    case (bluetooth::hci::OpCode::READ_REMOTE_VERSION_INFORMATION):
       SendLinkLayerPacket(
           model::packets::ReadRemoteVersionInformationBuilder::Create(
               local_address, remote));
       break;
-    case (OpCode::READ_CLOCK_OFFSET):
+    case (bluetooth::hci::OpCode::READ_CLOCK_OFFSET):
       SendLinkLayerPacket(model::packets::ReadClockOffsetBuilder::Create(
           local_address, remote));
       break;
     default:
       LOG_INFO("Dropping unhandled command 0x%04x",
                static_cast<uint16_t>(opcode));
-      return ErrorCode::UNKNOWN_HCI_COMMAND;
+      return bluetooth::hci::ErrorCode::UNKNOWN_HCI_COMMAND;
   }
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::SendCommandToRemoteByHandle(
-    OpCode opcode, bluetooth::packet::PacketView<true> args, uint16_t handle) {
+bluetooth::hci::ErrorCode LinkLayerController::SendCommandToRemoteByHandle(
+    bluetooth::hci::OpCode opcode, bluetooth::packet::PacketView<true> args,
+    uint16_t handle) {
   // TODO: Handle LE connections
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
   return SendCommandToRemoteByAddress(opcode, args,
                                       connections_.GetAddress(handle));
 }
 
-ErrorCode LinkLayerController::SendAclToRemote(
+bluetooth::hci::ErrorCode LinkLayerController::SendAclToRemote(
     bluetooth::hci::AclPacketView acl_packet) {
   uint16_t handle = acl_packet.GetHandle();
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   Address my_address = properties_.GetAddress();
@@ -153,7 +154,7 @@ ErrorCode LinkLayerController::SendAclToRemote(
       my_address, destination, std::move(raw_builder_ptr));
 
   SendLinkLayerPacket(std::move(acl));
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::IncomingPacket(
@@ -320,7 +321,8 @@ void LinkLayerController::IncomingRemoteNameRequestResponse(
   ASSERT(view.IsValid());
 
   send_event_(bluetooth::hci::RemoteNameRequestCompleteBuilder::Create(
-      ErrorCode::SUCCESS, packet.GetSourceAddress(), view.GetName()));
+      bluetooth::hci::ErrorCode::SUCCESS, packet.GetSourceAddress(),
+      view.GetName()));
 }
 
 void LinkLayerController::IncomingReadRemoteLmpFeatures(
@@ -358,7 +360,7 @@ void LinkLayerController::IncomingReadRemoteSupportedFeaturesResponse(
     uint16_t handle = connections_.GetHandle(source);
     send_event_(
         bluetooth::hci::ReadRemoteSupportedFeaturesCompleteBuilder::Create(
-            ErrorCode::SUCCESS, handle, view.GetFeatures()));
+            bluetooth::hci::ErrorCode::SUCCESS, handle, view.GetFeatures()));
   } else {
     LOG_INFO("Discarding response from a disconnected device %s",
              source.ToString().c_str());
@@ -370,9 +372,10 @@ void LinkLayerController::IncomingReadRemoteExtendedFeatures(
   auto view = model::packets::ReadRemoteExtendedFeaturesView::Create(packet);
   ASSERT(view.IsValid());
   uint8_t page_number = view.GetPageNumber();
-  uint8_t error_code = static_cast<uint8_t>(ErrorCode::SUCCESS);
+  uint8_t error_code = static_cast<uint8_t>(bluetooth::hci::ErrorCode::SUCCESS);
   if (page_number > properties_.GetExtendedFeaturesMaximumPageNumber()) {
-    error_code = static_cast<uint8_t>(ErrorCode::INVALID_LMP_OR_LL_PARAMETERS);
+    error_code = static_cast<uint8_t>(
+        bluetooth::hci::ErrorCode::INVALID_LMP_OR_LL_PARAMETERS);
   }
   SendLinkLayerPacket(
       model::packets::ReadRemoteExtendedFeaturesResponseBuilder::Create(
@@ -391,7 +394,7 @@ void LinkLayerController::IncomingReadRemoteExtendedFeaturesResponse(
     uint16_t handle = connections_.GetHandle(packet.GetSourceAddress());
     send_event_(
         bluetooth::hci::ReadRemoteExtendedFeaturesCompleteBuilder::Create(
-            static_cast<ErrorCode>(view.GetStatus()), handle,
+            static_cast<bluetooth::hci::ErrorCode>(view.GetStatus()), handle,
             view.GetPageNumber(), view.GetMaxPageNumber(), view.GetFeatures()));
   } else {
     LOG_INFO("Discarding response from a disconnected device %s",
@@ -417,7 +420,7 @@ void LinkLayerController::IncomingReadRemoteVersionResponse(
     uint16_t handle = connections_.GetHandle(packet.GetSourceAddress());
     send_event_(
         bluetooth::hci::ReadRemoteVersionInformationCompleteBuilder::Create(
-            ErrorCode::SUCCESS, handle, view.GetLmpVersion(),
+            bluetooth::hci::ErrorCode::SUCCESS, handle, view.GetLmpVersion(),
             view.GetManufacturerName(), view.GetLmpSubversion()));
   } else {
     LOG_INFO("Discarding response from a disconnected device %s",
@@ -440,7 +443,7 @@ void LinkLayerController::IncomingReadClockOffsetResponse(
   if (connections_.IsDeviceConnected(source)) {
     uint16_t handle = connections_.GetHandle(packet.GetSourceAddress());
     send_event_(bluetooth::hci::ReadClockOffsetCompleteBuilder::Create(
-        ErrorCode::SUCCESS, handle, view.GetOffset()));
+        bluetooth::hci::ErrorCode::SUCCESS, handle, view.GetOffset()));
   } else {
     LOG_INFO("Discarding response from a disconnected device %s",
              source.ToString().c_str());
@@ -477,7 +480,8 @@ void LinkLayerController::IncomingEncryptConnection(
     return;
   }
   send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
-      ErrorCode::SUCCESS, handle, bluetooth::hci::EncryptionEnabled::ON));
+      bluetooth::hci::ErrorCode::SUCCESS, handle,
+      bluetooth::hci::EncryptionEnabled::ON));
 
   uint16_t count = security_manager_.ReadKey(peer);
   if (count == 0) {
@@ -501,7 +505,8 @@ void LinkLayerController::IncomingEncryptConnectionResponse(
     return;
   }
   auto packet = bluetooth::hci::EncryptionChangeBuilder::Create(
-      ErrorCode::SUCCESS, handle, bluetooth::hci::EncryptionEnabled::ON);
+      bluetooth::hci::ErrorCode::SUCCESS, handle,
+      bluetooth::hci::EncryptionEnabled::ON);
   send_event_(std::move(packet));
 }
 
@@ -771,7 +776,8 @@ void LinkLayerController::HandleLeConnection(Address address, uint8_t address_ty
     return;
   }
   auto packet = bluetooth::hci::LeConnectionCompleteBuilder::Create(
-      ErrorCode::SUCCESS, handle, static_cast<bluetooth::hci::Role>(role),
+      bluetooth::hci::ErrorCode::SUCCESS, handle,
+      static_cast<bluetooth::hci::Role>(role),
       static_cast<bluetooth::hci::AddressType>(address_type), address,
       connection_interval, connection_latency, supervision_timeout,
       static_cast<bluetooth::hci::MasterClockAccuracy>(0x00));
@@ -889,7 +895,7 @@ void LinkLayerController::IncomingPageRejectPacket(
   ASSERT(reject.IsValid());
   LOG_INFO("%s: Sending CreateConnectionComplete", __func__);
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
-      static_cast<ErrorCode>(reject.GetReason()), 0x0eff,
+      static_cast<bluetooth::hci::ErrorCode>(reject.GetReason()), 0x0eff,
       incoming.GetSourceAddress(), bluetooth::hci::LinkType::ACL,
       bluetooth::hci::Enable::DISABLED);
   send_event_(std::move(packet));
@@ -906,7 +912,7 @@ void LinkLayerController::IncomingPageResponsePacket(
     return;
   }
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
-      ErrorCode::SUCCESS, handle, incoming.GetSourceAddress(),
+      bluetooth::hci::ErrorCode::SUCCESS, handle, incoming.GetSourceAddress(),
       bluetooth::hci::LinkType::ACL, bluetooth::hci::Enable::DISABLED);
   send_event_(std::move(packet));
 
@@ -1066,37 +1072,37 @@ void LinkLayerController::AuthenticateRemoteStage2(const Address& peer) {
   ASSERT(security_manager_.GetAuthenticationAddress() == peer);
   // Check key in security_manager_ ?
   auto packet = bluetooth::hci::AuthenticationCompleteBuilder::Create(
-      ErrorCode::SUCCESS, handle);
+      bluetooth::hci::ErrorCode::SUCCESS, handle);
   send_event_(std::move(packet));
 }
 
-ErrorCode LinkLayerController::LinkKeyRequestReply(
+bluetooth::hci::ErrorCode LinkLayerController::LinkKeyRequestReply(
     const Address& peer, const std::array<uint8_t, 16>& key) {
   security_manager_.WriteKey(peer, key);
   security_manager_.AuthenticationRequestFinished();
 
   ScheduleTask(milliseconds(5), [this, peer]() { AuthenticateRemoteStage2(peer); });
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::LinkKeyRequestNegativeReply(
+bluetooth::hci::ErrorCode LinkLayerController::LinkKeyRequestNegativeReply(
     const Address& address) {
   security_manager_.DeleteKey(address);
   // Simple pairing to get a key
   uint16_t handle = connections_.GetHandle(address);
   if (handle == acl::kReservedHandle) {
     LOG_INFO("%s: Device not connected %s", __func__, address.ToString().c_str());
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   security_manager_.AuthenticationRequest(address, handle);
 
   ScheduleTask(milliseconds(5), [this, address]() { StartSimplePairing(address); });
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::IoCapabilityRequestReply(
+bluetooth::hci::ErrorCode LinkLayerController::IoCapabilityRequestReply(
     const Address& peer, uint8_t io_capability, uint8_t oob_data_present_flag,
     uint8_t authentication_requirements) {
   security_manager_.SetLocalIoCapability(peer, io_capability, oob_data_present_flag, authentication_requirements);
@@ -1118,13 +1124,13 @@ ErrorCode LinkLayerController::IoCapabilityRequestReply(
         authentication_requirements));
   }
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::IoCapabilityRequestNegativeReply(
-    const Address& peer, ErrorCode reason) {
+bluetooth::hci::ErrorCode LinkLayerController::IoCapabilityRequestNegativeReply(
+    const Address& peer, bluetooth::hci::ErrorCode reason) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
 
   security_manager_.InvalidateIoCapabilities();
@@ -1133,13 +1139,13 @@ ErrorCode LinkLayerController::IoCapabilityRequestNegativeReply(
       properties_.GetAddress(), peer, static_cast<uint8_t>(reason));
   SendLinkLayerPacket(std::move(packet));
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::UserConfirmationRequestReply(
+bluetooth::hci::ErrorCode LinkLayerController::UserConfirmationRequestReply(
     const Address& peer) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
   // TODO: Key could be calculated here.
   std::array<uint8_t, 16> key_vec{1, 2,  3,  4,  5,  6,  7,  8,
@@ -1155,50 +1161,50 @@ ErrorCode LinkLayerController::UserConfirmationRequestReply(
 
   ScheduleTask(milliseconds(15),
                [this, peer]() { AuthenticateRemoteStage2(peer); });
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::UserConfirmationRequestNegativeReply(
-    const Address& peer) {
+bluetooth::hci::ErrorCode
+LinkLayerController::UserConfirmationRequestNegativeReply(const Address& peer) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::UserPasskeyRequestReply(const Address& peer,
-                                                       uint32_t numeric_value) {
+bluetooth::hci::ErrorCode LinkLayerController::UserPasskeyRequestReply(
+    const Address& peer, uint32_t numeric_value) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
   LOG_INFO("TODO:Do something with the passkey %06d", numeric_value);
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::UserPasskeyRequestNegativeReply(
+bluetooth::hci::ErrorCode LinkLayerController::UserPasskeyRequestNegativeReply(
     const Address& peer) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::RemoteOobDataRequestReply(
+bluetooth::hci::ErrorCode LinkLayerController::RemoteOobDataRequestReply(
     const Address& peer, const std::vector<uint8_t>& c,
     const std::vector<uint8_t>& r) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
   LOG_INFO("TODO:Do something with the OOB data c=%d r=%d", c[0], r[0]);
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::RemoteOobDataRequestNegativeReply(
-    const Address& peer) {
+bluetooth::hci::ErrorCode
+LinkLayerController::RemoteOobDataRequestNegativeReply(const Address& peer) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+    return bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE;
   }
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::HandleAuthenticationRequest(const Address& address, uint16_t handle) {
@@ -1209,22 +1215,23 @@ void LinkLayerController::HandleAuthenticationRequest(const Address& address, ui
   } else {  // Should never happen for our phones
     // Check for a key, try to authenticate, ask for a PIN.
     auto packet = bluetooth::hci::AuthenticationCompleteBuilder::Create(
-        ErrorCode::AUTHENTICATION_FAILURE, handle);
+        bluetooth::hci::ErrorCode::AUTHENTICATION_FAILURE, handle);
     send_event_(std::move(packet));
   }
 }
 
-ErrorCode LinkLayerController::AuthenticationRequested(uint16_t handle) {
+bluetooth::hci::ErrorCode LinkLayerController::AuthenticationRequested(
+    uint16_t handle) {
   if (!connections_.HasHandle(handle)) {
     LOG_INFO("Authentication Requested for unknown handle %04x", handle);
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   Address remote = connections_.GetAddress(handle);
 
   ScheduleTask(milliseconds(5), [this, remote, handle]() { HandleAuthenticationRequest(remote, handle); });
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::HandleSetConnectionEncryption(const Address& peer, uint16_t handle,
@@ -1233,7 +1240,7 @@ void LinkLayerController::HandleSetConnectionEncryption(const Address& peer, uin
 
   if (connections_.IsEncrypted(handle) && encryption_enable) {
     auto packet = bluetooth::hci::EncryptionChangeBuilder::Create(
-        ErrorCode::SUCCESS, handle,
+        bluetooth::hci::ErrorCode::SUCCESS, handle,
         static_cast<bluetooth::hci::EncryptionEnabled>(encryption_enable));
     send_event_(std::move(packet));
     return;
@@ -1251,33 +1258,33 @@ void LinkLayerController::HandleSetConnectionEncryption(const Address& peer, uin
   SendLinkLayerPacket(std::move(packet));
 }
 
-ErrorCode LinkLayerController::SetConnectionEncryption(
+bluetooth::hci::ErrorCode LinkLayerController::SetConnectionEncryption(
     uint16_t handle, uint8_t encryption_enable) {
   if (!connections_.HasHandle(handle)) {
     LOG_INFO("Set Connection Encryption for unknown handle %04x", handle);
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   if (connections_.IsEncrypted(handle) && !encryption_enable) {
-    return ErrorCode::ENCRYPTION_MODE_NOT_ACCEPTABLE;
+    return bluetooth::hci::ErrorCode::ENCRYPTION_MODE_NOT_ACCEPTABLE;
   }
   Address remote = connections_.GetAddress(handle);
 
   if (security_manager_.ReadKey(remote) == 0) {
-    return ErrorCode::PIN_OR_KEY_MISSING;
+    return bluetooth::hci::ErrorCode::PIN_OR_KEY_MISSING;
   }
 
   ScheduleTask(milliseconds(5), [this, remote, handle, encryption_enable]() {
     HandleSetConnectionEncryption(remote, handle, encryption_enable);
   });
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::AcceptConnectionRequest(const Address& addr,
-                                                       bool try_role_switch) {
+bluetooth::hci::ErrorCode LinkLayerController::AcceptConnectionRequest(
+    const Address& addr, bool try_role_switch) {
   if (!connections_.HasPendingConnection(addr)) {
     LOG_INFO("%s: No pending connection for %s", __func__, addr.ToString().c_str());
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   LOG_INFO("%s: Accept in 200ms", __func__);
@@ -1286,7 +1293,7 @@ ErrorCode LinkLayerController::AcceptConnectionRequest(const Address& addr,
     MakeSlaveConnection(addr, try_role_switch);
   });
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::MakeSlaveConnection(const Address& addr, bool try_role_switch) {
@@ -1302,22 +1309,22 @@ void LinkLayerController::MakeSlaveConnection(const Address& addr, bool try_role
   }
   LOG_INFO("%s CreateConnection returned handle 0x%x", __func__, handle);
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
-      ErrorCode::SUCCESS, handle, addr, bluetooth::hci::LinkType::ACL,
-      bluetooth::hci::Enable::DISABLED);
+      bluetooth::hci::ErrorCode::SUCCESS, handle, addr,
+      bluetooth::hci::LinkType::ACL, bluetooth::hci::Enable::DISABLED);
   send_event_(std::move(packet));
 }
 
-ErrorCode LinkLayerController::RejectConnectionRequest(const Address& addr,
-                                                       uint8_t reason) {
+bluetooth::hci::ErrorCode LinkLayerController::RejectConnectionRequest(
+    const Address& addr, uint8_t reason) {
   if (!connections_.HasPendingConnection(addr)) {
     LOG_INFO("%s: No pending connection for %s", __func__, addr.ToString().c_str());
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   ScheduleTask(milliseconds(200),
                [this, addr, reason]() { RejectSlaveConnection(addr, reason); });
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::RejectSlaveConnection(const Address& addr, uint8_t reason) {
@@ -1328,37 +1335,39 @@ void LinkLayerController::RejectSlaveConnection(const Address& addr, uint8_t rea
   SendLinkLayerPacket(std::move(to_send));
 
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
-      static_cast<ErrorCode>(reason), 0xeff, addr,
+      static_cast<bluetooth::hci::ErrorCode>(reason), 0xeff, addr,
       bluetooth::hci::LinkType::ACL, bluetooth::hci::Enable::DISABLED);
   send_event_(std::move(packet));
 }
 
-ErrorCode LinkLayerController::CreateConnection(const Address& addr, uint16_t,
-                                                uint8_t, uint16_t,
-                                                uint8_t allow_role_switch) {
+bluetooth::hci::ErrorCode LinkLayerController::CreateConnection(
+    const Address& addr, uint16_t, uint8_t, uint16_t,
+    uint8_t allow_role_switch) {
   if (!connections_.CreatePendingConnection(
           addr, properties_.GetAuthenticationEnable() == 1)) {
-    return ErrorCode::CONTROLLER_BUSY;
+    return bluetooth::hci::ErrorCode::CONTROLLER_BUSY;
   }
   auto page = model::packets::PageBuilder::Create(
       properties_.GetAddress(), addr, properties_.GetClassOfDevice(),
       allow_role_switch);
   SendLinkLayerPacket(std::move(page));
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::CreateConnectionCancel(const Address& addr) {
+bluetooth::hci::ErrorCode LinkLayerController::CreateConnectionCancel(
+    const Address& addr) {
   if (!connections_.CancelPendingConnection(addr)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::Disconnect(uint16_t handle, uint8_t reason) {
+bluetooth::hci::ErrorCode LinkLayerController::Disconnect(uint16_t handle,
+                                                          uint8_t reason) {
   // TODO: Handle LE
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   const Address& remote = connections_.GetAddress(handle);
@@ -1370,144 +1379,145 @@ ErrorCode LinkLayerController::Disconnect(uint16_t handle, uint8_t reason) {
   ScheduleTask(milliseconds(20), [this, handle]() {
     DisconnectCleanup(
         handle,
-        static_cast<uint8_t>(ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST));
+        static_cast<uint8_t>(
+            bluetooth::hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST));
   });
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::DisconnectCleanup(uint16_t handle, uint8_t reason) {
   // TODO: Clean up other connection state.
   auto packet = bluetooth::hci::DisconnectionCompleteBuilder::Create(
-      ErrorCode::SUCCESS, handle, static_cast<ErrorCode>(reason));
+      bluetooth::hci::ErrorCode::SUCCESS, handle,
+      static_cast<bluetooth::hci::ErrorCode>(reason));
   send_event_(std::move(packet));
 }
 
-ErrorCode LinkLayerController::ChangeConnectionPacketType(uint16_t handle,
-                                                          uint16_t types) {
+bluetooth::hci::ErrorCode LinkLayerController::ChangeConnectionPacketType(
+    uint16_t handle, uint16_t types) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
   auto packet = bluetooth::hci::ConnectionPacketTypeChangedBuilder::Create(
-      ErrorCode::SUCCESS, handle, types);
+      bluetooth::hci::ErrorCode::SUCCESS, handle, types);
   std::shared_ptr<bluetooth::hci::ConnectionPacketTypeChangedBuilder>
       shared_packet = std::move(packet);
   ScheduleTask(milliseconds(20), [this, shared_packet]() {
     send_event_(std::move(shared_packet));
   });
 
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::ChangeConnectionLinkKey(uint16_t handle) {
+bluetooth::hci::ErrorCode LinkLayerController::ChangeConnectionLinkKey(
+    uint16_t handle) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::MasterLinkKey(uint8_t /* key_flag */) {
+bluetooth::hci::ErrorCode LinkLayerController::MasterLinkKey(
+    uint8_t /* key_flag */) {
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::HoldMode(uint16_t handle,
-                                        uint16_t hold_mode_max_interval,
-                                        uint16_t hold_mode_min_interval) {
+bluetooth::hci::ErrorCode LinkLayerController::HoldMode(
+    uint16_t handle, uint16_t hold_mode_max_interval,
+    uint16_t hold_mode_min_interval) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   if (hold_mode_max_interval < hold_mode_min_interval) {
-    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+    return bluetooth::hci::ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
   }
 
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::SniffMode(uint16_t handle,
-                                         uint16_t sniff_max_interval,
-                                         uint16_t sniff_min_interval,
-                                         uint16_t sniff_attempt,
-                                         uint16_t sniff_timeout) {
+bluetooth::hci::ErrorCode LinkLayerController::SniffMode(
+    uint16_t handle, uint16_t sniff_max_interval, uint16_t sniff_min_interval,
+    uint16_t sniff_attempt, uint16_t sniff_timeout) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   if (sniff_max_interval < sniff_min_interval || sniff_attempt < 0x0001 || sniff_attempt > 0x7FFF ||
       sniff_timeout > 0x7FFF) {
-    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+    return bluetooth::hci::ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
   }
 
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::ExitSniffMode(uint16_t handle) {
+bluetooth::hci::ErrorCode LinkLayerController::ExitSniffMode(uint16_t handle) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::QosSetup(uint16_t handle, uint8_t service_type,
-                                        uint32_t /* token_rate */,
-                                        uint32_t /* peak_bandwidth */,
-                                        uint32_t /* latency */,
-                                        uint32_t /* delay_variation */) {
+bluetooth::hci::ErrorCode LinkLayerController::QosSetup(
+    uint16_t handle, uint8_t service_type, uint32_t /* token_rate */,
+    uint32_t /* peak_bandwidth */, uint32_t /* latency */,
+    uint32_t /* delay_variation */) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   if (service_type > 0x02) {
-    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+    return bluetooth::hci::ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
   }
 
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::SwitchRole(Address /* bd_addr */,
-                                          uint8_t /* role */) {
+bluetooth::hci::ErrorCode LinkLayerController::SwitchRole(Address /* bd_addr */,
+                                                          uint8_t /* role */) {
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::WriteLinkPolicySettings(uint16_t handle,
-                                                       uint16_t) {
+bluetooth::hci::ErrorCode LinkLayerController::WriteLinkPolicySettings(
+    uint16_t handle, uint16_t) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::FlowSpecification(
+bluetooth::hci::ErrorCode LinkLayerController::FlowSpecification(
     uint16_t handle, uint8_t flow_direction, uint8_t service_type,
     uint32_t /* token_rate */, uint32_t /* token_bucket_size */,
     uint32_t /* peak_bandwidth */, uint32_t /* access_latency */) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
 
   if (flow_direction > 0x01 || service_type > 0x02) {
-    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+    return bluetooth::hci::ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
   }
 
   // TODO: implement real logic
-  return ErrorCode::COMMAND_DISALLOWED;
+  return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
 }
 
-ErrorCode LinkLayerController::WriteLinkSupervisionTimeout(uint16_t handle,
-                                                           uint16_t) {
+bluetooth::hci::ErrorCode LinkLayerController::WriteLinkSupervisionTimeout(
+    uint16_t handle, uint16_t) {
   if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
+    return bluetooth::hci::ErrorCode::UNKNOWN_CONNECTION;
   }
-  return ErrorCode::SUCCESS;
+  return bluetooth::hci::ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::LeWhiteListClear() {
@@ -1625,8 +1635,8 @@ void LinkLayerController::InquiryCancel() {
 void LinkLayerController::InquiryTimeout() {
   if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) {
     inquiry_state_ = Inquiry::InquiryState::STANDBY;
-    auto packet =
-        bluetooth::hci::InquiryCompleteBuilder::Create(ErrorCode::SUCCESS);
+    auto packet = bluetooth::hci::InquiryCompleteBuilder::Create(
+        bluetooth::hci::ErrorCode::SUCCESS);
     send_event_(std::move(packet));
   }
 }
