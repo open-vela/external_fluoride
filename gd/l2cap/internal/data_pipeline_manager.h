@@ -23,7 +23,6 @@
 #include "common/bind.h"
 #include "data_controller.h"
 #include "l2cap/cid.h"
-#include "l2cap/classic/internal/channel_configuration_state.h"
 #include "l2cap/internal/channel_impl.h"
 #include "l2cap/internal/receiver.h"
 #include "l2cap/internal/scheduler.h"
@@ -62,7 +61,6 @@ class DataPipelineManager {
   virtual void DetachChannel(Cid cid);
   virtual DataController* GetDataController(Cid cid);
   virtual void OnPacketSent(Cid cid);
-  virtual void UpdateClassicConfiguration(Cid cid, classic::internal::ChannelConfigurationState config);
   virtual ~DataPipelineManager() = default;
 
  private:
