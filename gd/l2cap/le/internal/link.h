@@ -22,7 +22,6 @@
 #include "hci/acl_manager.h"
 #include "l2cap/internal/data_pipeline_manager.h"
 #include "l2cap/internal/fixed_channel_allocator.h"
-#include "l2cap/internal/ilink.h"
 #include "l2cap/internal/parameter_provider.h"
 #include "l2cap/le/internal/fixed_channel_impl.h"
 #include "os/alarm.h"
@@ -32,7 +31,7 @@ namespace l2cap {
 namespace le {
 namespace internal {
 
-class Link : public l2cap::internal::ILink {
+class Link {
  public:
   Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_connection,
        l2cap::internal::ParameterProvider* parameter_provider)
@@ -94,8 +93,6 @@ class Link : public l2cap::internal::ILink {
   virtual std::string ToString() {
     return GetDevice().ToString();
   }
-
-  void SendDisconnectionRequest(Cid local_cid, Cid remote_cid) override {}
 
  private:
   os::Handler* l2cap_handler_;
