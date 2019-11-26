@@ -82,10 +82,11 @@ class A2dpTransport : public ::bluetooth::audio::IBluetoothTransportInstance {
       return a2dp_ack_to_bt_audio_ctrl_ack(A2DP_CTRL_ACK_INCALL_FAILURE);
     }
 
-    if (btif_av_stream_started_ready()) {
-      // Already started, ACK back immediately.
-      return a2dp_ack_to_bt_audio_ctrl_ack(A2DP_CTRL_ACK_SUCCESS);
+    if (btif_a2dp_source_is_streaming()) {
+      LOG(ERROR) << __func__ << ": source is busy streaming";
+      return a2dp_ack_to_bt_audio_ctrl_ack(A2DP_CTRL_ACK_FAILURE);
     }
+
     if (btif_av_stream_ready()) {
       /*
        * Post start event and wait for audio path to open.
@@ -99,6 +100,11 @@ class A2dpTransport : public ::bluetooth::audio::IBluetoothTransportInstance {
         return a2dp_ack_to_bt_audio_ctrl_ack(A2DP_CTRL_ACK_PENDING);
       }
       a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+      return a2dp_ack_to_bt_audio_ctrl_ack(A2DP_CTRL_ACK_SUCCESS);
+    }
+
+    if (btif_av_stream_started_ready()) {
+      // Already started, ACK back immediately.
       return a2dp_ack_to_bt_audio_ctrl_ack(A2DP_CTRL_ACK_SUCCESS);
     }
     LOG(ERROR) << __func__ << ": AV stream is not ready to start";
@@ -131,7 +137,7 @@ class A2dpTransport : public ::bluetooth::audio::IBluetoothTransportInstance {
 
   void StopRequest() override {
     if (btif_av_get_peer_sep() == AVDT_TSEP_SNK &&
-        !btif_av_stream_started_ready()) {
+        !btif_a2dp_source_is_streaming()) {
       return;
     }
     LOG(INFO) << __func__ << ": handling";

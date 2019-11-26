@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "beacon_swarm"
+
 #include "beacon_swarm.h"
 
 #include "model/setup/device_boutique.h"
@@ -21,14 +23,14 @@
 using std::vector;
 
 namespace test_vendor_lib {
-bool BeaconSwarm::registered_ = DeviceBoutique::Register("beacon_swarm", &BeaconSwarm::Create);
+bool BeaconSwarm::registered_ = DeviceBoutique::Register(LOG_TAG, &BeaconSwarm::Create);
 
 BeaconSwarm::BeaconSwarm() {
   advertising_interval_ms_ = std::chrono::milliseconds(1280);
-  properties_.SetLeAdvertisementType(0x03 /* NON_CONNECT */);
+  properties_.SetLeAdvertisementType(BTM_BLE_NON_CONNECT_EVT);
   properties_.SetLeAdvertisement({
       0x15,  // Length
-      0x09 /* TYPE_NAME_CMPL */,
+      BTM_BLE_AD_TYPE_NAME_CMPL,
       'g',
       'D',
       'e',
@@ -50,12 +52,12 @@ BeaconSwarm::BeaconSwarm() {
       'r',
       'm',
       0x02,  // Length
-      0x01 /* TYPE_FLAG */,
-      0x4 /* BREDR_NOT_SPT */ | 0x2 /* GEN_DISC_FLAG */,
+      BTM_BLE_AD_TYPE_FLAG,
+      BTM_BLE_BREDR_NOT_SPT | BTM_BLE_GEN_DISC_FLAG,
   });
 
   properties_.SetLeScanResponse({0x06,  // Length
-                                 0x08 /* TYPE_NAME_SHORT */, 'c', 'b', 'e', 'a', 'c'});
+                                 BTM_BLE_AD_TYPE_NAME_SHORT, 'c', 'b', 'e', 'a', 'c'});
 }
 
 void BeaconSwarm::Initialize(const vector<std::string>& args) {
