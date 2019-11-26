@@ -35,8 +35,11 @@ import android.os.ResultReceiver;
  */
 interface IBluetooth
 {
+    @UnsupportedAppUsage
+    boolean isEnabled();
     int getState();
-    boolean enable(boolean quietMode);
+    boolean enable();
+    boolean enableNoAutoConnect();
     boolean disable();
 
     @UnsupportedAppUsage
@@ -67,7 +70,8 @@ interface IBluetooth
     int getProfileConnectionState(int profile);
 
     BluetoothDevice[] getBondedDevices();
-    boolean createBond(in BluetoothDevice device, in int transport, in OobData oobData);
+    boolean createBond(in BluetoothDevice device, in int transport);
+    boolean createBondOutOfBand(in BluetoothDevice device, in int transport, in OobData oobData);
     boolean cancelBondProcess(in BluetoothDevice device);
     boolean removeBond(in BluetoothDevice device);
     int getBondState(in BluetoothDevice device);
