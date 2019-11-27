@@ -46,8 +46,10 @@ interface IBluetoothHeadset {
     boolean connect(in BluetoothDevice device);
     @UnsupportedAppUsage
     boolean disconnect(in BluetoothDevice device);
-    boolean setConnectionPolicy(in BluetoothDevice device, int connectionPolicy);
-    int getConnectionPolicy(in BluetoothDevice device);
+    @UnsupportedAppUsage
+    boolean setPriority(in BluetoothDevice device, int priority);
+    @UnsupportedAppUsage
+    int getPriority(in BluetoothDevice device);
     int getAudioState(in BluetoothDevice device);
     boolean isAudioOn();
     boolean connectAudio();
