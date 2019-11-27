@@ -286,7 +286,7 @@ AdvertiserId LeAdvertisingManager::CreateAdvertiser(
   return id;
 }
 
-AdvertiserId LeAdvertisingManager::ExtendedCreateAdvertiser(
+AdvertiserId LeAdvertisingManager::CreateAdvertiser(
     const ExtendedAdvertisingConfig& config, const common::Callback<void(Address, AddressType)>& scan_callback,
     const common::Callback<void(ErrorCode, uint8_t, uint8_t)>& set_terminated_callback, os::Handler* handler) {
   if (config.directed) {

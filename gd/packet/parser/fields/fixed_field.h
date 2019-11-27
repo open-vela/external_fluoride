@@ -33,8 +33,6 @@ class FixedField : public ScalarField {
 
   virtual void GenGetter(std::ostream& s, Size start_offset, Size end_offset) const override;
 
-  virtual std::string GetBuilderParameterType() const override;
-
   virtual bool GenBuilderParameter(std::ostream&) const override;
 
   virtual bool HasParameterValidator() const override;
