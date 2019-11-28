@@ -544,21 +544,11 @@ static void bta_av_a2dp_sdp_cback(bool found, tA2DP_Service* p_service,
   APPL_TRACE_DEBUG("%s: peer %s : found=%s", __func__,
                    peer_address.ToString().c_str(), (found) ? "true" : "false");
 
-  tBTA_AV_SCB* p_scb = NULL;
-  if (peer_address != RawAddress::kEmpty) {
-    p_scb = bta_av_addr_to_scb(peer_address);
-  }
-  if (p_scb == NULL) {
-    p_scb = bta_av_hndl_to_scb(bta_av_cb.handle);
-  }
+  tBTA_AV_SCB* p_scb = bta_av_hndl_to_scb(bta_av_cb.handle);
   if (p_scb == NULL) {
     APPL_TRACE_ERROR("%s: no scb found for SDP handle(0x%x)", __func__,
                      bta_av_cb.handle);
     return;
-  }
-  if (bta_av_cb.handle != p_scb->hndl) {
-    APPL_TRACE_WARNING("%s: SDP bta_handle expected=0x%x processing=0x%x",
-                       __func__, bta_av_cb.handle, p_scb->hndl);
   }
 
   if (!found) {
@@ -594,7 +584,7 @@ static void bta_av_a2dp_sdp_cback(bool found, tA2DP_Service* p_service,
   } else {
     p_scb->SetAvdtpVersion(0);
   }
-  p_msg->hdr.layer_specific = p_scb->hndl;
+  p_msg->hdr.layer_specific = bta_av_cb.handle;
 
   bta_sys_sendmsg(p_msg);
 }
@@ -858,6 +848,9 @@ void bta_av_do_disc_a2dp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   bta_sys_app_open(BTA_ID_AV, p_scb->app_id, p_scb->PeerAddress());
 
+  /* only one A2DP find service is active at a time */
+  bta_av_cb.handle = p_scb->hndl;
+
   /* set up parameters */
   db_params.db_len = BTA_AV_DISC_BUF_SIZE;
   db_params.num_attr = 3;
@@ -882,10 +875,7 @@ void bta_av_do_disc_a2dp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
         "sdp_uuid=0x%x : status=%d",
         __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->uuid_int,
         sdp_uuid, find_service_status);
-    bta_av_a2dp_sdp_cback(false, nullptr, p_scb->PeerAddress());
-  } else {
-    /* only one A2DP find service is active at a time */
-    bta_av_cb.handle = p_scb->hndl;
+    bta_av_a2dp_sdp_cback(false, nullptr, RawAddress::kEmpty);
   }
 }
 
@@ -3079,14 +3069,14 @@ void bta_av_open_at_inc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 }
 
 void offload_vendor_callback(tBTM_VSC_CMPL* param) {
-  uint8_t status = 0;
+  tBTA_AV value{0};
   uint8_t sub_opcode = 0;
   if (param->param_len) {
     APPL_TRACE_DEBUG("%s: param_len = %d status = %d", __func__,
                      param->param_len, param->p_param_buf[0]);
-    status = param->p_param_buf[0];
+    value.status = param->p_param_buf[0];
   }
-  if (status == 0) {
+  if (value.status == 0) {
     sub_opcode = param->p_param_buf[1];
     APPL_TRACE_DEBUG("%s: subopcode = %d", __func__, sub_opcode);
     switch (sub_opcode) {
@@ -3094,7 +3084,7 @@ void offload_vendor_callback(tBTM_VSC_CMPL* param) {
         APPL_TRACE_DEBUG("%s: VS_HCI_STOP_A2DP_MEDIA successful", __func__);
         break;
       case VS_HCI_A2DP_OFFLOAD_START:
-        (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, (tBTA_AV*)&status);
+        (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &value);
         break;
       default:
         break;
@@ -3103,7 +3093,7 @@ void offload_vendor_callback(tBTM_VSC_CMPL* param) {
     APPL_TRACE_DEBUG("%s: Offload failed for subopcode= %d", __func__,
                      sub_opcode);
     if (param->opcode != VS_HCI_A2DP_OFFLOAD_STOP)
-      (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, (tBTA_AV*)&status);
+      (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &value);
   }
 }
 
