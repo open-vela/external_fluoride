@@ -2379,11 +2379,10 @@ static void btif_av_handle_event(uint8_t peer_sep,
                                  tBTA_AV_HNDL bta_handle,
                                  const BtifAvEvent& btif_av_event) {
   BtifAvPeer* peer = nullptr;
-  BTIF_TRACE_EVENT(
-      "%s: peer_sep=%s (%d) peer_address=%s bta_handle=0x%x event=%s", __func__,
-      (peer_sep == AVDT_TSEP_SRC) ? "Source" : "Sink", peer_sep,
-      peer_address.ToString().c_str(), bta_handle,
-      btif_av_event.ToString().c_str());
+  BTIF_TRACE_EVENT("%s: peer_sep=%s (%d) peer_address=%s handle=0x%x event=%s",
+                   __func__, (peer_sep == AVDT_TSEP_SRC) ? "Source" : "Sink",
+                   peer_sep, peer_address.ToString().c_str(), bta_handle,
+                   btif_av_event.ToString().c_str());
 
   // Find the peer
   if (peer_address != RawAddress::kEmpty) {
@@ -2401,8 +2400,8 @@ static void btif_av_handle_event(uint8_t peer_sep,
   }
   if (peer == nullptr) {
     BTIF_TRACE_ERROR(
-        "%s: Cannot find or create %s peer for peer_address=%s bta_handle=0x%x "
-        ": event dropped: %s",
+        "%s: Cannot find or create %s peer for peer_address=%s handle=0x%x : "
+        "event dropped: %s",
         __func__, (peer_sep == AVDT_TSEP_SRC) ? "Source" : "Sink",
         peer_address.ToString().c_str(), bta_handle,
         btif_av_event.ToString().c_str());
@@ -2442,7 +2441,7 @@ static void btif_av_handle_bta_av_event(uint8_t peer_sep,
       const tBTA_AV_REGISTER& registr = p_data->registr;
       bta_handle = registr.hndl;
       uint8_t peer_id = registr.app_id;  // The PeerId is used as AppId
-      BTIF_TRACE_DEBUG("%s: bta_handle=0x%x app_id=%d", __func__, bta_handle,
+      BTIF_TRACE_DEBUG("%s: handle=0x%x app_id=%d", __func__, bta_handle,
                        registr.app_id);
       if (peer_sep == AVDT_TSEP_SNK) {
         btif_av_source.BtaHandleRegistered(peer_id, bta_handle);
@@ -2540,7 +2539,7 @@ static void btif_av_handle_bta_av_event(uint8_t peer_sep,
       break;
     }
   }
-  BTIF_TRACE_DEBUG("%s: peer_address=%s bta_handle=0x%x", __func__,
+  BTIF_TRACE_DEBUG("%s: peer_address=%s handle=0x%x", __func__,
                    peer_address.ToString().c_str(), bta_handle);
 
   btif_av_handle_event(peer_sep, peer_address, bta_handle, btif_av_event);
@@ -2862,27 +2861,6 @@ void btif_av_stream_start(void) {
                                    BTIF_AV_START_STREAM_REQ_EVT);
 }
 
-void src_do_suspend_in_main_thread(btif_av_sm_event_t event) {
-  if (event != BTIF_AV_SUSPEND_STREAM_REQ_EVT &&
-      event != BTIF_AV_STOP_STREAM_REQ_EVT)
-    return;
-  auto src_do_stream_suspend = [](btif_av_sm_event_t event) {
-    bool is_idle = true;
-    for (auto it : btif_av_source.Peers()) {
-      const BtifAvPeer* peer = it.second;
-      if (peer->StateMachine().StateId() == BtifAvStateMachine::kStateStarted) {
-        btif_av_source_dispatch_sm_event(peer->PeerAddress(), event);
-        is_idle = false;
-      }
-    }
-    if (is_idle) {
-      btif_a2dp_on_stopped(nullptr);
-    }
-  };
-  // switch to main thread to prevent a race condition of accessing peers
-  do_in_main_thread(FROM_HERE, base::Bind(src_do_stream_suspend, event));
-}
-
 void btif_av_stream_stop(const RawAddress& peer_address) {
   LOG_INFO(LOG_TAG, "%s peer %s", __func__, peer_address.ToString().c_str());
 
@@ -2892,15 +2870,23 @@ void btif_av_stream_stop(const RawAddress& peer_address) {
   }
 
   // The active peer might have changed and we might be in the process
-  // of reconfiguring the stream. We need to stop the appropriate peer(s).
-  src_do_suspend_in_main_thread(BTIF_AV_STOP_STREAM_REQ_EVT);
+  // of reconfiguring the stream. We need to stop the appopriate peer(s).
+  for (auto it : btif_av_source.Peers()) {
+    const BtifAvPeer* peer = it.second;
+    btif_av_source_dispatch_sm_event(peer->PeerAddress(),
+                                     BTIF_AV_STOP_STREAM_REQ_EVT);
+  }
 }
 
 void btif_av_stream_suspend(void) {
   LOG_INFO(LOG_TAG, "%s", __func__);
   // The active peer might have changed and we might be in the process
   // of reconfiguring the stream. We need to suspend the appropriate peer(s).
-  src_do_suspend_in_main_thread(BTIF_AV_SUSPEND_STREAM_REQ_EVT);
+  for (auto it : btif_av_source.Peers()) {
+    const BtifAvPeer* peer = it.second;
+    btif_av_source_dispatch_sm_event(peer->PeerAddress(),
+                                     BTIF_AV_SUSPEND_STREAM_REQ_EVT);
+  }
 }
 
 void btif_av_stream_start_offload(void) {
