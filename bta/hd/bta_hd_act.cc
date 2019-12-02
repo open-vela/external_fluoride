@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2005-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ static bool check_descriptor(uint8_t* data, uint16_t length,
 
       case 0x85:  // Report ID
         *has_report_id = TRUE;
-        [[fallthrough]];
+
       default:
         ptr += (item & 0x03);
         break;
@@ -104,9 +104,7 @@ void bta_hd_api_enable(tBTA_HD_DATA* p_data) {
   }
 
   /* signal BTA call back event */
-  tBTA_HD bta_hd;
-  bta_hd.status = status;
-  (*bta_hd_cb.p_cback)(BTA_HD_ENABLE_EVT, &bta_hd);
+  (*bta_hd_cb.p_cback)(BTA_HD_ENABLE_EVT, (tBTA_HD*)&status);
 }
 
 /*******************************************************************************
@@ -141,9 +139,7 @@ void bta_hd_api_disable(void) {
     APPL_TRACE_ERROR("%s: Failed to deregister HID device (%s)", __func__, ret);
   }
 
-  tBTA_HD bta_hd;
-  bta_hd.status = status;
-  (*bta_hd_cb.p_cback)(BTA_HD_DISABLE_EVT, &bta_hd);
+  (*bta_hd_cb.p_cback)(BTA_HD_DISABLE_EVT, (tBTA_HD*)&status);
 
   memset(&bta_hd_cb, 0, sizeof(tBTA_HD_CB));
 }
@@ -236,9 +232,7 @@ void bta_hd_unregister_act(UNUSED_ATTR tBTA_HD_DATA* p_data) {
   bta_hd_cb.sdp_handle = 0;
   bta_sys_remove_uuid(UUID_SERVCLASS_HUMAN_INTERFACE);
 
-  tBTA_HD bta_hd;
-  bta_hd.status = status;
-  (*bta_hd_cb.p_cback)(BTA_HD_UNREGISTER_APP_EVT, &bta_hd);
+  (*bta_hd_cb.p_cback)(BTA_HD_UNREGISTER_APP_EVT, (tBTA_HD*)&status);
 }
 
 /*******************************************************************************
@@ -526,9 +520,7 @@ extern void bta_hd_intr_data_act(tBTA_HD_DATA* p_data) {
   ret.len = len;
   ret.p_data = p_buf;
 
-  tBTA_HD bta_hd;
-  bta_hd.intr_data = ret;
-  (*bta_hd_cb.p_cback)(BTA_HD_INTR_DATA_EVT, &bta_hd);
+  (*bta_hd_cb.p_cback)(BTA_HD_INTR_DATA_EVT, (tBTA_HD*)&ret);
 }
 
 /*******************************************************************************
@@ -577,9 +569,7 @@ extern void bta_hd_get_report_act(tBTA_HD_DATA* p_data) {
     ret.buffer_size = *p_buf | (*(p_buf + 1) << 8);
   }
 
-  tBTA_HD bta_hd;
-  bta_hd.get_report = ret;
-  (*bta_hd_cb.p_cback)(BTA_HD_GET_REPORT_EVT, &bta_hd);
+  (*bta_hd_cb.p_cback)(BTA_HD_GET_REPORT_EVT, (tBTA_HD*)&ret);
 }
 
 /*******************************************************************************
@@ -624,9 +614,7 @@ extern void bta_hd_set_report_act(tBTA_HD_DATA* p_data) {
   ret.len = len;
   ret.p_data = p_buf;
 
-  tBTA_HD bta_hd;
-  bta_hd.set_report = ret;
-  (*bta_hd_cb.p_cback)(BTA_HD_SET_REPORT_EVT, &bta_hd);
+  (*bta_hd_cb.p_cback)(BTA_HD_SET_REPORT_EVT, (tBTA_HD*)&ret);
 }
 
 /*******************************************************************************
