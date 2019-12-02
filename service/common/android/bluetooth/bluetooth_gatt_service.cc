@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 //  limitations under the License.
 //
 
-#include "service/common/android/bluetooth/bluetooth_gatt_service.h"
-#include "service/common/android/bluetooth/bluetooth_gatt_characteristic.h"
-#include "service/common/android/bluetooth/uuid.h"
+#include "android/bluetooth/bluetooth_gatt_service.h"
+#include "android/bluetooth/bluetooth_gatt_characteristic.h"
+#include "android/bluetooth/uuid.h"
 
 #include <utils/String16.h>
 #include <utils/String8.h>
@@ -64,7 +64,7 @@ status_t BluetoothGattService::readFromParcel(const Parcel* parcel) {
   UUID uuid;
   status = parcel->readParcelable(&uuid);
   if (status != OK) return status;
-  uuid_ = uuid;
+  uuid_ = uuid.uuid;
 
   std::vector<BluetoothGattCharacteristic> characteristics;
   status = parcel->readParcelableVector(&characteristics);

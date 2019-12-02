@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 Google, Inc.
+ *  Copyright 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,8 +17,9 @@
  ******************************************************************************/
 
 #include "adapter/bluetooth_test.h"
+#include <binder/ProcessState.h>
+#include <stdio.h>
 #include <mutex>
-#include "btcore/include/bdaddr.h"
 #include "btcore/include/property.h"
 
 namespace {
@@ -32,6 +33,7 @@ std::mutex callback_lock;
 namespace bttest {
 
 void BluetoothTest::SetUp() {
+  android::ProcessState::self()->startThreadPool();
   bt_interface_ = nullptr;
   state_ = BT_STATE_OFF;
   properties_changed_count_ = 0;
@@ -46,6 +48,9 @@ void BluetoothTest::SetUp() {
   remote_device_properties_callback_sem_ = semaphore_new(0);
   adapter_state_changed_callback_sem_ = semaphore_new(0);
   discovery_state_changed_callback_sem_ = semaphore_new(0);
+
+  remove("/data/misc/bluedroid/bt_config.conf.encrypted-checksum");
+  remove("/data/misc/bluedroid/bt_config.bak.encrypted-checksum");
 
   bluetooth::hal::BluetoothInterface::Initialize();
   ASSERT_TRUE(bluetooth::hal::BluetoothInterface::IsInitialized());
@@ -89,9 +94,9 @@ bt_property_t* BluetoothTest::GetProperty(bt_property_type_t type) {
   return nullptr;
 }
 
-bt_property_t* BluetoothTest::GetRemoteDeviceProperty(const bt_bdaddr_t* addr,
+bt_property_t* BluetoothTest::GetRemoteDeviceProperty(const RawAddress* addr,
                                                       bt_property_type_t type) {
-  if (!bdaddr_equals(&curr_remote_device_, addr)) return nullptr;
+  if (curr_remote_device_ != *addr) return nullptr;
 
   for (int i = 0; i < remote_device_properties_changed_count_; i++) {
     if (remote_device_last_changed_properties_[i].type == type) {
@@ -129,10 +134,10 @@ void BluetoothTest::AdapterPropertiesCallback(bt_status_t status,
 
 // callback
 void BluetoothTest::RemoteDevicePropertiesCallback(bt_status_t status,
-                                                   bt_bdaddr_t* remote_bd_addr,
+                                                   RawAddress* remote_bd_addr,
                                                    int num_properties,
                                                    bt_property_t* properties) {
-  bdaddr_copy(&curr_remote_device_, remote_bd_addr);
+  curr_remote_device_ = *remote_bd_addr;
   property_free_array(remote_device_last_changed_properties_,
                       remote_device_properties_changed_count_);
   remote_device_last_changed_properties_ =
