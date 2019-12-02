@@ -633,7 +633,7 @@ void bta_hh_data_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
  *
  * Function         bta_hh_handsk_act
  *
- * Description      HID Host process a handshake acknoledgement.
+ * Description      HID Host process a handshake acknowledgement.
  *
  *
  * Returns          void
@@ -652,7 +652,7 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
     /* GET_ transsaction, handshake indicate unsupported request */
     case BTA_HH_GET_PROTO_EVT:
       bta_hh.hs_data.rsp_data.proto_mode = BTA_HH_PROTO_UNKNOWN;
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case BTA_HH_GET_RPT_EVT:
     case BTA_HH_GET_IDLE_EVT:
       bta_hh.hs_data.handle = p_cb->hid_handle;
@@ -660,7 +660,9 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
       bta_hh.hs_data.status = bta_hh_get_trans_status(p_data->hid_cback.data);
       if (bta_hh.hs_data.status == BTA_HH_OK)
         bta_hh.hs_data.status = BTA_HH_HS_TRANS_NOT_SPT;
-
+      if (p_cb->w4_evt == BTA_HH_GET_RPT_EVT)
+        bta_hh_co_get_rpt_rsp(bta_hh.dev_status.handle, bta_hh.hs_data.status,
+                              NULL, 0);
       (*bta_hh_cb.p_cback)(p_cb->w4_evt, &bta_hh);
       p_cb->w4_evt = 0;
       break;
@@ -672,6 +674,9 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
       bta_hh.dev_status.handle = p_cb->hid_handle;
       bta_hh.dev_status.status =
           bta_hh_get_trans_status(p_data->hid_cback.data);
+      if (p_cb->w4_evt == BTA_HH_SET_RPT_EVT)
+        bta_hh_co_set_rpt_rsp(bta_hh.dev_status.handle,
+                              bta_hh.dev_status.status);
       (*bta_hh_cb.p_cback)(p_cb->w4_evt, &bta_hh);
       p_cb->w4_evt = 0;
       break;
@@ -733,6 +738,8 @@ void bta_hh_ctrl_dat_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
       break;
     case BTA_HH_GET_RPT_EVT:
       hs_data.rsp_data.p_rpt_data = pdata;
+      bta_hh_co_get_rpt_rsp(hs_data.handle, hs_data.status, pdata->data,
+                            pdata->len);
       break;
     case BTA_HH_GET_PROTO_EVT:
       /* match up BTE/BTA report/boot mode def*/
@@ -748,11 +755,11 @@ void bta_hh_ctrl_dat_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
       break;
     /* should not expect control DATA for SET_ transaction */
     case BTA_HH_SET_PROTO_EVT:
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case BTA_HH_SET_RPT_EVT:
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case BTA_HH_SET_IDLE_EVT:
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     default:
 #if (BTA_HH_DEBUG == TRUE)
       APPL_TRACE_DEBUG("invalid  transaction type for DATA payload: 4_evt[%s]",
@@ -1054,21 +1061,21 @@ void bta_hh_write_dev_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
     } else {
       switch (p_data->api_sndcmd.t_type) {
         case HID_TRANS_SET_PROTOCOL:
-        /* fall through */
+          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
         case HID_TRANS_GET_REPORT:
-        /* fall through */
+          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
         case HID_TRANS_SET_REPORT:
-        /* fall through */
+          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
         case HID_TRANS_GET_PROTOCOL:
-        /* fall through */
+          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
         case HID_TRANS_GET_IDLE:
-        /* fall through */
+          FALLTHROUGH_INTENDED;  /* FALLTHROUGH */
         case HID_TRANS_SET_IDLE: /* set w4_handsk event name for callback
                                     function use */
           p_cb->w4_evt = event;
           break;
         case HID_TRANS_DATA: /* output report */
-                             /* fall through */
+          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
         case HID_TRANS_CONTROL:
           /* no handshake event will be generated */
           /* if VC_UNPLUG is issued, set flag */
