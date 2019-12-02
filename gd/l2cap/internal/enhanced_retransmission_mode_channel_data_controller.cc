@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "common/bind.h"
-#include "l2cap/internal/ilink.h"
 #include "os/alarm.h"
 #include "packet/fragmenting_inserter.h"
 #include "packet/raw_builder.h"
@@ -29,10 +28,10 @@
 namespace bluetooth {
 namespace l2cap {
 namespace internal {
-ErtmController::ErtmController(ILink* link, Cid cid, Cid remote_cid, UpperQueueDownEnd* channel_queue_end,
-                               os::Handler* handler, Scheduler* scheduler)
-    : link_(link), cid_(cid), remote_cid_(remote_cid), enqueue_buffer_(channel_queue_end), handler_(handler),
-      scheduler_(scheduler), pimpl_(std::make_unique<impl>(this, handler)) {}
+ErtmController::ErtmController(Cid cid, Cid remote_cid, UpperQueueDownEnd* channel_queue_end, os::Handler* handler,
+                               Scheduler* scheduler)
+    : cid_(cid), remote_cid_(remote_cid), enqueue_buffer_(channel_queue_end), handler_(handler), scheduler_(scheduler),
+      pimpl_(std::make_unique<impl>(this, handler)) {}
 
 ErtmController::~ErtmController() = default;
 
@@ -154,7 +153,7 @@ struct ErtmController::impl {
       send_rr_or_rnr(Poll::POLL);
       // send rr or rnr(p=1)
       retry_count_ = 1;
-      start_monitor_timer();
+      start_retrans_timer();
       tx_state_ = TxState::WAIT_F;
     }
   }
@@ -771,7 +770,7 @@ struct ErtmController::impl {
   }
 
   void CloseChannel() {
-    controller_->close_channel();
+    // TODO: Needs a reference to signaller
   }
 
   void pop_srej_list() {
@@ -1006,7 +1005,7 @@ void ErtmController::SetRetransmissionAndFlowControlOptions(
 }
 
 void ErtmController::close_channel() {
-  link_->SendDisconnectionRequest(cid_, remote_cid_);
+  // TODO: Get a reference to signalling manager
 }
 
 size_t ErtmController::CopyablePacketBuilder::size() const {

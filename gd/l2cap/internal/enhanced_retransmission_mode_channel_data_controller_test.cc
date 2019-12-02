@@ -18,7 +18,6 @@
 
 #include <gtest/gtest.h>
 
-#include "l2cap/internal/ilink_mock.h"
 #include "l2cap/internal/scheduler_mock.h"
 #include "l2cap/l2cap_packets.h"
 #include "packet/raw_builder.h"
@@ -74,8 +73,7 @@ class ErtmDataControllerTest : public ::testing::Test {
 TEST_F(ErtmDataControllerTest, transmit_no_fcs) {
   common::BidiQueue<Scheduler::UpperEnqueue, Scheduler::UpperDequeue> channel_queue{10};
   testing::MockScheduler scheduler;
-  testing::MockILink link;
-  ErtmController controller{&link, 1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
+  ErtmController controller{1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
   EXPECT_CALL(scheduler, OnPacketsReady(1, 1));
   controller.OnSdu(CreateSdu({'a', 'b', 'c', 'd'}));
   auto next_packet = controller.GetNextPacket();
@@ -97,8 +95,7 @@ TEST_F(ErtmDataControllerTest, transmit_no_fcs) {
 TEST_F(ErtmDataControllerTest, receive_no_fcs) {
   common::BidiQueue<Scheduler::UpperEnqueue, Scheduler::UpperDequeue> channel_queue{10};
   testing::MockScheduler scheduler;
-  testing::MockILink link;
-  ErtmController controller{&link, 1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
+  ErtmController controller{1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
   auto segment = CreateSdu({'a', 'b', 'c', 'd'});
   auto builder = EnhancedInformationFrameBuilder::Create(1, 0, Final::NOT_SET, 0,
                                                          SegmentationAndReassembly::UNSEGMENTED, std::move(segment));
@@ -114,8 +111,7 @@ TEST_F(ErtmDataControllerTest, receive_no_fcs) {
 TEST_F(ErtmDataControllerTest, reassemble_valid_sdu) {
   common::BidiQueue<Scheduler::UpperEnqueue, Scheduler::UpperDequeue> channel_queue{10};
   testing::MockScheduler scheduler;
-  testing::MockILink link;
-  ErtmController controller{&link, 1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
+  ErtmController controller{1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
   auto segment1 = CreateSdu({'a'});
   auto segment2 = CreateSdu({'b', 'c'});
   auto segment3 = CreateSdu({'d', 'e', 'f'});
@@ -137,11 +133,10 @@ TEST_F(ErtmDataControllerTest, reassemble_valid_sdu) {
   EXPECT_EQ(data, "abcdef");
 }
 
-TEST_F(ErtmDataControllerTest, reassemble_invalid_sdu_size_in_start_frame_will_disconnect) {
+TEST_F(ErtmDataControllerTest, reassemble_invalid_sdu_size_in_start_frame) {
   common::BidiQueue<Scheduler::UpperEnqueue, Scheduler::UpperDequeue> channel_queue{10};
   testing::MockScheduler scheduler;
-  testing::MockILink link;
-  ErtmController controller{&link, 1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
+  ErtmController controller{1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
   auto segment1 = CreateSdu({'a'});
   auto segment2 = CreateSdu({'b', 'c'});
   auto segment3 = CreateSdu({'d', 'e', 'f'});
@@ -155,7 +150,6 @@ TEST_F(ErtmDataControllerTest, reassemble_invalid_sdu_size_in_start_frame_will_d
   auto builder3 = EnhancedInformationFrameBuilder::Create(1, 2, Final::NOT_SET, 0, SegmentationAndReassembly::END,
                                                           std::move(segment3));
   base_view = GetPacketView(std::move(builder3));
-  EXPECT_CALL(link, SendDisconnectionRequest(1, 1));
   controller.OnPdu(base_view);
   sync_handler(queue_handler_);
   auto payload = channel_queue.GetUpEnd()->TryDequeue();
@@ -165,8 +159,7 @@ TEST_F(ErtmDataControllerTest, reassemble_invalid_sdu_size_in_start_frame_will_d
 TEST_F(ErtmDataControllerTest, transmit_with_fcs) {
   common::BidiQueue<Scheduler::UpperEnqueue, Scheduler::UpperDequeue> channel_queue{10};
   testing::MockScheduler scheduler;
-  testing::MockILink link;
-  ErtmController controller{&link, 1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
+  ErtmController controller{1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
   controller.EnableFcs(true);
   EXPECT_CALL(scheduler, OnPacketsReady(1, 1));
   controller.OnSdu(CreateSdu({'a', 'b', 'c', 'd'}));
@@ -189,8 +182,7 @@ TEST_F(ErtmDataControllerTest, transmit_with_fcs) {
 TEST_F(ErtmDataControllerTest, receive_packet_with_fcs) {
   common::BidiQueue<Scheduler::UpperEnqueue, Scheduler::UpperDequeue> channel_queue{10};
   testing::MockScheduler scheduler;
-  testing::MockILink link;
-  ErtmController controller{&link, 1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
+  ErtmController controller{1, 1, channel_queue.GetDownEnd(), queue_handler_, &scheduler};
   controller.EnableFcs(true);
   auto segment = CreateSdu({'a', 'b', 'c', 'd'});
   auto builder = EnhancedInformationFrameWithFcsBuilder::Create(
