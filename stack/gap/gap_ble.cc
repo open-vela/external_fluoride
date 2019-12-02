@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2017 The Android Open Source Project
+ *  Copyright (C) 2017 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@
 #include "gatt_api.h"
 
 using base::StringPrintf;
-using bluetooth::Uuid;
 
 namespace {
 
@@ -36,7 +35,7 @@ typedef struct {
 } tGAP_REQUEST;
 
 typedef struct {
-  RawAddress bda;
+  BD_ADDR bda;
   tGAP_BLE_CMPL_CBACK* p_cback;
   uint16_t conn_id;
   uint16_t cl_op_uuid;
@@ -52,7 +51,7 @@ typedef struct {
 
 void server_attr_request_cback(uint16_t, uint32_t, tGATTS_REQ_TYPE,
                                tGATTS_DATA*);
-void client_connect_cback(tGATT_IF, const RawAddress&, uint16_t, bool,
+void client_connect_cback(tGATT_IF, BD_ADDR, uint16_t, bool,
                           tGATT_DISCONN_REASON, tGATT_TRANSPORT);
 void client_cmpl_cback(uint16_t, tGATTC_OPTYPE, tGATT_STATUS,
                        tGATT_CL_COMPLETE*);
@@ -76,9 +75,9 @@ std::array<tGAP_ATTR, GAP_MAX_CHAR_NUM> gatt_attr;
 tGATT_IF gatt_if;
 
 /** returns LCB with macthing bd address, or nullptr */
-tGAP_CLCB* find_clcb_by_bd_addr(const RawAddress& bda) {
+tGAP_CLCB* find_clcb_by_bd_addr(BD_ADDR bda) {
   for (auto& cb : gap_clcbs)
-    if (cb.bda == bda) return &cb;
+    if (!memcmp(cb.bda, bda, BD_ADDR_LEN)) return &cb;
 
   return nullptr;
 }
@@ -92,10 +91,11 @@ tGAP_CLCB* ble_find_clcb_by_conn_id(uint16_t conn_id) {
 }
 
 /** allocates a GAP connection link control block */
-tGAP_CLCB* clcb_alloc(const RawAddress& bda) {
+tGAP_CLCB* clcb_alloc(BD_ADDR bda) {
   gap_clcbs.emplace_back();
   tGAP_CLCB& cb = gap_clcbs.back();
-  cb.bda = bda;
+
+  memcpy(cb.bda, bda, BD_ADDR_LEN);
   return &cb;
 }
 
@@ -123,7 +123,7 @@ tGATT_STATUS read_attr_value(uint16_t handle, tGATT_VALUE* p_value,
   for (const tGAP_ATTR& db_attr : gatt_attr) {
     const tGAP_BLE_ATTR_VALUE& attr_value = db_attr.attr_value;
     if (handle == db_attr.handle) {
-      if (db_attr.uuid != GATT_UUID_GAP_DEVICE_NAME && is_long)
+      if (db_attr.uuid != GATT_UUID_GAP_DEVICE_NAME && is_long == true)
         return GATT_NOT_LONG;
 
       switch (db_attr.uuid) {
@@ -223,7 +223,7 @@ void server_attr_request_cback(uint16_t conn_id, uint32_t trans_id,
 
     default:
       DVLOG(1) << StringPrintf("Unknown/unexpected LE GAP ATT request: 0x%02x",
-                               type);
+                              type);
       break;
   }
 
@@ -247,7 +247,8 @@ bool send_cl_read_request(tGAP_CLCB& clcb) {
   tGATT_READ_PARAM param;
   memset(&param, 0, sizeof(tGATT_READ_PARAM));
 
-  param.service.uuid = Uuid::From16Bit(uuid);
+  param.service.uuid.len = LEN_UUID_16;
+  param.service.uuid.uu.uuid16 = uuid;
   param.service.s_handle = 1;
   param.service.e_handle = 0xFFFF;
   param.service.auth_req = 0;
@@ -284,7 +285,7 @@ void cl_op_cmpl(tGAP_CLCB& clcb, bool status, uint16_t len, uint8_t* p_name) {
 }
 
 /** Client connection callback */
-void client_connect_cback(tGATT_IF, const RawAddress& bda, uint16_t conn_id,
+void client_connect_cback(tGATT_IF, BD_ADDR bda, uint16_t conn_id,
                           bool connected, tGATT_DISCONN_REASON reason,
                           tGATT_TRANSPORT) {
   tGAP_CLCB* p_clcb = find_clcb_by_bd_addr(bda);
@@ -353,7 +354,7 @@ void client_cmpl_cback(uint16_t conn_id, tGATTC_OPTYPE op, tGATT_STATUS status,
   }
 }
 
-bool accept_client_operation(const RawAddress& peer_bda, uint16_t uuid,
+bool accept_client_operation(BD_ADDR peer_bda, uint16_t uuid,
                              tGAP_BLE_CMPL_CBACK* p_cback) {
   if (p_cback == NULL && uuid != GATT_UUID_GAP_PREF_CONN_PARAM) return false;
 
@@ -362,8 +363,10 @@ bool accept_client_operation(const RawAddress& peer_bda, uint16_t uuid,
     p_clcb = clcb_alloc(peer_bda);
   }
 
-  DVLOG(1) << __func__ << ": BDA: " << peer_bda
-           << StringPrintf(" cl_op_uuid: 0x%04x", uuid);
+  DVLOG(1) << StringPrintf("%s() - BDA: %08x%04x  cl_op_uuid: 0x%04x", __func__,
+                          (peer_bda[0] << 24) + (peer_bda[1] << 16) +
+                              (peer_bda[2] << 8) + peer_bda[3],
+                          (peer_bda[4] << 8) + peer_bda[5], uuid);
 
   if (GATT_GetConnIdIfConnected(gatt_if, peer_bda, &p_clcb->conn_id,
                                 BT_TRANSPORT_LE))
@@ -393,44 +396,42 @@ bool accept_client_operation(const RawAddress& peer_bda, uint16_t uuid,
  *
  ******************************************************************************/
 void gap_attr_db_init(void) {
+  tBT_UUID app_uuid = {LEN_UUID_128, {0}};
   uint16_t service_handle;
 
   /* Fill our internal UUID with a fixed pattern 0x82 */
-  std::array<uint8_t, Uuid::kNumBytes128> tmp;
-  tmp.fill(0x82);
-  Uuid app_uuid = Uuid::From128BitBE(tmp);
+  memset(&app_uuid.uu.uuid128, 0x82, LEN_UUID_128);
   gatt_attr.fill({});
 
-  gatt_if = GATT_Register(app_uuid, &gap_cback);
+  gatt_if = GATT_Register(&app_uuid, &gap_cback);
 
   GATT_StartIf(gatt_if);
 
-  Uuid svc_uuid = Uuid::From16Bit(UUID_SERVCLASS_GAP_SERVER);
-  Uuid name_uuid = Uuid::From16Bit(GATT_UUID_GAP_DEVICE_NAME);
-  Uuid icon_uuid = Uuid::From16Bit(GATT_UUID_GAP_ICON);
-  Uuid addr_res_uuid = Uuid::From16Bit(GATT_UUID_GAP_CENTRAL_ADDR_RESOL);
+  bt_uuid_t svc_uuid, name_uuid, icon_uuid, pref_uuid, addr_res_uuid;
+  uuid_128_from_16(&svc_uuid, UUID_SERVCLASS_GAP_SERVER);
+  uuid_128_from_16(&name_uuid, GATT_UUID_GAP_DEVICE_NAME);
+  uuid_128_from_16(&icon_uuid, GATT_UUID_GAP_ICON);
+  uuid_128_from_16(&pref_uuid, GATT_UUID_GAP_PREF_CONN_PARAM);
+  uuid_128_from_16(&addr_res_uuid, GATT_UUID_GAP_CENTRAL_ADDR_RESOL);
 
   btgatt_db_element_t service[] = {
-    {
-        .uuid = svc_uuid,
-        .type = BTGATT_DB_PRIMARY_SERVICE,
-    },
-    {.uuid = name_uuid,
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_PRIMARY_SERVICE, .uuid = svc_uuid},
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = name_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ},
-    {.uuid = icon_uuid,
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = icon_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ},
-    {.uuid = addr_res_uuid,
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = addr_res_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ}
 #if (BTM_PERIPHERAL_ENABLED == TRUE) /* Only needed for peripheral testing */
     ,
-    {.uuid = Uuid::From16Bit(GATT_UUID_GAP_PREF_CONN_PARAM),
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = pref_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ}
 #endif
@@ -515,7 +516,7 @@ void GAP_BleAttrDBUpdate(uint16_t attr_uuid, tGAP_BLE_ATTR_VALUE* p_value) {
  * Returns          true if read started, else false if GAP is busy
  *
  ******************************************************************************/
-bool GAP_BleReadPeerPrefConnParams(const RawAddress& peer_bda) {
+bool GAP_BleReadPeerPrefConnParams(BD_ADDR peer_bda) {
   return accept_client_operation(peer_bda, GATT_UUID_GAP_PREF_CONN_PARAM, NULL);
 }
 
@@ -529,8 +530,7 @@ bool GAP_BleReadPeerPrefConnParams(const RawAddress& peer_bda) {
  * Returns          true if request accepted
  *
  ******************************************************************************/
-bool GAP_BleReadPeerDevName(const RawAddress& peer_bda,
-                            tGAP_BLE_CMPL_CBACK* p_cback) {
+bool GAP_BleReadPeerDevName(BD_ADDR peer_bda, tGAP_BLE_CMPL_CBACK* p_cback) {
   return accept_client_operation(peer_bda, GATT_UUID_GAP_DEVICE_NAME, p_cback);
 }
 
@@ -543,7 +543,7 @@ bool GAP_BleReadPeerDevName(const RawAddress& peer_bda,
  * Returns          true if request accepted
  *
  ******************************************************************************/
-bool GAP_BleReadPeerAddressResolutionCap(const RawAddress& peer_bda,
+bool GAP_BleReadPeerAddressResolutionCap(BD_ADDR peer_bda,
                                          tGAP_BLE_CMPL_CBACK* p_cback) {
   return accept_client_operation(peer_bda, GATT_UUID_GAP_CENTRAL_ADDR_RESOL,
                                  p_cback);
@@ -558,12 +558,14 @@ bool GAP_BleReadPeerAddressResolutionCap(const RawAddress& peer_bda,
  * Returns          true if request accepted
  *
  ******************************************************************************/
-bool GAP_BleCancelReadPeerDevName(const RawAddress& peer_bda) {
+bool GAP_BleCancelReadPeerDevName(BD_ADDR peer_bda) {
   tGAP_CLCB* p_clcb = find_clcb_by_bd_addr(peer_bda);
 
-  DVLOG(1) << __func__ << ": BDA: " << peer_bda
-           << StringPrintf(" cl_op_uuid: 0x%04x",
-                           (p_clcb == NULL) ? 0 : p_clcb->cl_op_uuid);
+  DVLOG(1) << StringPrintf("%s: BDA: %08x%04x  cl_op_uuid: 0x%04x", __func__,
+                          (peer_bda[0] << 24) + (peer_bda[1] << 16) +
+                              (peer_bda[2] << 8) + peer_bda[3],
+                          (peer_bda[4] << 8) + peer_bda[5],
+                          (p_clcb == NULL) ? 0 : p_clcb->cl_op_uuid);
 
   if (p_clcb == NULL) {
     LOG(ERROR) << "Cannot cancel current op is not get dev name";
