@@ -37,7 +37,6 @@ namespace bluetooth {
 namespace l2cap {
 namespace internal {
 class Scheduler;
-class ILink;
 
 /**
  * A middle layer between L2CAP channel and outgoing packet scheduler.
@@ -49,7 +48,7 @@ class Sender {
   using UpperDequeue = packet::BasePacketBuilder;
   using UpperQueueDownEnd = common::BidiQueueEnd<UpperEnqueue, UpperDequeue>;
 
-  Sender(os::Handler* handler, ILink* link, Scheduler* scheduler, std::shared_ptr<ChannelImpl> channel);
+  Sender(os::Handler* handler, Scheduler* scheduler, std::shared_ptr<ChannelImpl> channel);
   ~Sender();
 
   /**
@@ -68,7 +67,6 @@ class Sender {
 
  private:
   os::Handler* handler_;
-  ILink* link_;
   UpperQueueDownEnd* queue_end_;
   Scheduler* scheduler_;
   const Cid channel_id_;
