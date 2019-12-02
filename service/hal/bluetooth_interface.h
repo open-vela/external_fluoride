@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -54,22 +54,24 @@ class BluetoothInterface {
                                            int num_properties,
                                            bt_property_t* properties);
     virtual void RemoteDevicePropertiesCallback(bt_status_t status,
-                                                bt_bdaddr_t* remote_bd_addr,
+                                                RawAddress* remote_bd_addr,
                                                 int num_properties,
                                                 bt_property_t* properties);
+    virtual void DeviceFoundCallback(int num_properties,
+                                     bt_property_t* properties);
     virtual void DiscoveryStateChangedCallback(bt_discovery_state_t state);
-    virtual void PinRequestCallback(bt_bdaddr_t* remote_bd_addr,
+    virtual void PinRequestCallback(RawAddress* remote_bd_addr,
                                     bt_bdname_t* bd_name, uint32_t cod,
                                     bool min_16_digit);
-    virtual void SSPRequestCallback(bt_bdaddr_t* remote_bd_addr,
+    virtual void SSPRequestCallback(RawAddress* remote_bd_addr,
                                     bt_bdname_t* bd_name, uint32_t cod,
                                     bt_ssp_variant_t pairing_variant,
                                     uint32_t pass_key);
     virtual void BondStateChangedCallback(bt_status_t status,
-                                          bt_bdaddr_t* remote_bd_addr,
+                                          RawAddress* remote_bd_addr,
                                           bt_bond_state_t state);
     virtual void AclStateChangedCallback(bt_status_t status,
-                                         const bt_bdaddr_t& remote_bdaddr,
+                                         const RawAddress& remote_bdaddr,
                                          bt_acl_state_t state);
 
     // TODO(armansito): Complete the list of callbacks.
@@ -110,11 +112,6 @@ class BluetoothInterface {
 
   // Returns the HAL callbacks that have been initialized previously.
   virtual bt_callbacks_t* GetHALCallbacks() const = 0;
-
-  // The HAL module pointer that represents the underlying Bluetooth adapter.
-  // This is implemented in and provided by the shared Bluetooth library, so
-  // this isn't owned by us.
-  virtual const bluetooth_device_t* GetHALAdapter() const = 0;
 
  protected:
   BluetoothInterface() = default;
