@@ -184,16 +184,6 @@ tAVRC_STS avrc_parse_notification_rsp(uint8_t* p_stream, uint16_t len,
       break;
 
     case AVRC_EVT_ADDR_PLAYER_CHANGE:
-      min_len += 4;
-      if (len < min_len) goto length_error;
-      BE_STREAM_TO_UINT16(p_rsp->param.addr_player.player_id, p_stream);
-      BE_STREAM_TO_UINT16(p_rsp->param.addr_player.uid_counter, p_stream);
-      break;
-
-    case AVRC_EVT_PLAY_POS_CHANGED:
-      min_len += 4;
-      if (len < min_len) goto length_error;
-      BE_STREAM_TO_UINT32(p_rsp->param.play_pos, p_stream);
       break;
 
     case AVRC_EVT_UIDS_CHANGE:
@@ -201,6 +191,7 @@ tAVRC_STS avrc_parse_notification_rsp(uint8_t* p_stream, uint16_t len,
 
     case AVRC_EVT_TRACK_REACHED_END:
     case AVRC_EVT_TRACK_REACHED_START:
+    case AVRC_EVT_PLAY_POS_CHANGED:
     case AVRC_EVT_BATTERY_STATUS_CHANGE:
     case AVRC_EVT_SYSTEM_STATUS_CHANGE:
     default:
@@ -451,7 +442,7 @@ static tAVRC_STS avrc_pars_browse_rsp(tAVRC_MSG_BROWSE* p_msg,
           set_br_pl_rsp->charset_id, set_br_pl_rsp->folder_depth);
 
       set_br_pl_rsp->p_folders = (tAVRC_NAME*)osi_malloc(
-          set_br_pl_rsp->folder_depth * sizeof(tAVRC_NAME));
+          set_br_pl_rsp->num_items * sizeof(tAVRC_NAME));
 
       /* Read each of the folder in the depth */
       for (uint32_t i = 0; i < set_br_pl_rsp->folder_depth; i++) {
@@ -806,7 +797,7 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(tAVRC_MSG_VENDOR* p_msg,
       if (len < min_len) goto length_error;
       BE_STREAM_TO_UINT32(p_result->get_play_status.song_len, p);
       BE_STREAM_TO_UINT32(p_result->get_play_status.song_pos, p);
-      BE_STREAM_TO_UINT8(p_result->get_play_status.play_status, p);
+      BE_STREAM_TO_UINT8(p_result->get_play_status.status, p);
       break;
 
     case AVRC_PDU_SET_ADDRESSED_PLAYER:

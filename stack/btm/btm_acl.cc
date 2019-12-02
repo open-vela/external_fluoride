@@ -45,7 +45,6 @@
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btu.h"
-#include "common/metrics.h"
 #include "device/include/controller.h"
 #include "device/include/interop.h"
 #include "hcidefs.h"
@@ -164,8 +163,8 @@ bool btm_ble_get_acl_remote_addr(tBTM_SEC_DEV_REC* p_dev_rec,
       break;
 
     case BTM_BLE_ADDR_STATIC:
-      conn_addr = p_dev_rec->ble.identity_addr;
-      *p_addr_type = p_dev_rec->ble.identity_addr_type;
+      conn_addr = p_dev_rec->ble.static_addr;
+      *p_addr_type = p_dev_rec->ble.static_addr_type;
       break;
 
     default:
@@ -538,7 +537,9 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
                            tBTM_CMPL_CB* p_cb) {
   tACL_CONN* p;
   tBTM_SEC_DEV_REC* p_dev_rec = NULL;
+#if (BTM_SCO_INCLUDED == TRUE)
   bool is_sco_active;
+#endif
   tBTM_STATUS status;
   tBTM_PM_MODE pwr_mode;
   tBTM_PM_PWR_MD settings;
@@ -566,10 +567,12 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
   if (interop_match_addr(INTEROP_DISABLE_ROLE_SWITCH, &remote_bd_addr))
     return BTM_DEV_BLACKLISTED;
 
+#if (BTM_SCO_INCLUDED == TRUE)
   /* Check if there is any SCO Active on this BD Address */
   is_sco_active = btm_is_sco_active_by_bdaddr(remote_bd_addr);
 
   if (is_sco_active) return (BTM_NO_RESOURCES);
+#endif
 
   /* Ignore role switch request if the previous request was not completed */
   if (p->switch_role_state != BTM_ACL_SWKEY_STATE_IDLE) {
@@ -825,8 +828,7 @@ void btm_use_preferred_conn_params(const RawAddress& bda) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(bda);
 
   /* If there are any preferred connection parameters, set them now */
-  if ((p_lcb != NULL) && (p_dev_rec != NULL) &&
-      (p_dev_rec->conn_params.min_conn_int >= BTM_BLE_CONN_INT_MIN) &&
+  if ((p_dev_rec->conn_params.min_conn_int >= BTM_BLE_CONN_INT_MIN) &&
       (p_dev_rec->conn_params.min_conn_int <= BTM_BLE_CONN_INT_MAX) &&
       (p_dev_rec->conn_params.max_conn_int >= BTM_BLE_CONN_INT_MIN) &&
       (p_dev_rec->conn_params.max_conn_int <= BTM_BLE_CONN_INT_MAX) &&
@@ -890,11 +892,6 @@ void btm_read_remote_version_complete(uint8_t* p) {
         if (p_acl_cb->transport == BT_TRANSPORT_BR_EDR) {
           btm_read_remote_features(p_acl_cb->hci_handle);
         }
-        bluetooth::common::LogRemoteVersionInfo(
-            handle, status, p_acl_cb->lmp_version, p_acl_cb->manufacturer,
-            p_acl_cb->lmp_subversion);
-      } else {
-        bluetooth::common::LogRemoteVersionInfo(handle, status, 0, 0, 0);
       }
 
       if (p_acl_cb->transport == BT_TRANSPORT_LE) {
@@ -1085,21 +1082,13 @@ void btm_read_remote_features_complete(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_read_remote_ext_features_complete(uint8_t* p, uint8_t evt_len) {
+void btm_read_remote_ext_features_complete(uint8_t* p) {
   tACL_CONN* p_acl_cb;
   uint8_t page_num, max_page;
   uint16_t handle;
   uint8_t acl_idx;
 
   BTM_TRACE_DEBUG("btm_read_remote_ext_features_complete");
-
-  if (evt_len < HCI_EXT_FEATURES_SUCCESS_EVT_LEN) {
-    android_errorWriteLog(0x534e4554, "141552859");
-    BTM_TRACE_ERROR(
-        "btm_read_remote_ext_features_complete evt length too short. length=%d",
-        evt_len);
-    return;
-  }
 
   ++p;
   STREAM_TO_UINT16(handle, p);
@@ -1118,19 +1107,6 @@ void btm_read_remote_ext_features_complete(uint8_t* p, uint8_t evt_len) {
     BTM_TRACE_ERROR("btm_read_remote_ext_features_complete page=%d unknown",
                     max_page);
     return;
-  }
-
-  if (page_num > HCI_EXT_FEATURES_PAGE_MAX) {
-    android_errorWriteLog(0x534e4554, "141552859");
-    BTM_TRACE_ERROR("btm_read_remote_ext_features_complete num_page=%d invalid",
-                    page_num);
-    return;
-  }
-
-  if (page_num > max_page) {
-    BTM_TRACE_WARNING(
-        "btm_read_remote_ext_features_complete num_page=%d, max_page=%d "
-        "invalid", page_num, max_page);
   }
 
   p_acl_cb = &btm_cb.acl_db[acl_idx];
@@ -2629,7 +2605,7 @@ void btm_acl_paging(BT_HDR* p, const RawAddress& bda) {
   } else {
     if (!BTM_ACL_IS_CONNECTED(bda)) {
       VLOG(1) << "connecting_bda: " << btm_cb.connecting_bda;
-      if (btm_cb.paging && bda == btm_cb.connecting_bda) {
+      if (btm_cb.paging && bda != btm_cb.connecting_bda) {
         fixed_queue_enqueue(btm_cb.page_queue, p);
       } else {
         p_dev_rec = btm_find_or_alloc_dev(bda);
