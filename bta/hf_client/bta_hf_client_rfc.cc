@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -98,9 +98,12 @@ static void bta_hf_client_mgmt_cback(uint32_t code, uint16_t port_handle) {
       APPL_TRACE_DEBUG("%s: allocating a new CB for incoming connection",
                        __func__);
       // Find the BDADDR of the peer device
-      RawAddress peer_addr;
-      uint16_t lcid;
-      PORT_CheckConnection(port_handle, peer_addr, &lcid);
+      RawAddress peer_addr = RawAddress::kEmpty;
+      uint16_t lcid = 0;
+      int status = PORT_CheckConnection(port_handle, &peer_addr, &lcid);
+      if (status != PORT_SUCCESS) {
+        LOG(ERROR) << __func__ << ": PORT_CheckConnection returned " << status;
+      }
 
       // Since we accepted a remote request we should allocate a handle first.
       uint16_t tmp_handle = -1;
@@ -284,7 +287,7 @@ void bta_hf_client_rfc_do_close(tBTA_HF_CLIENT_DATA* p_data) {
     /* Cancel SDP if it had been started. */
     if (client_cb->p_disc_db) {
       (void)SDP_CancelServiceSearch(client_cb->p_disc_db);
-      bta_hf_client_free_db(NULL);
+      osi_free_and_reset((void**)&client_cb->p_disc_db);
     }
   }
 }

@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2016 The Android Open Source Project
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -329,6 +329,8 @@ void bta_hf_client_resume_open(tBTA_HF_CLIENT_CB* client_cb) {
     client_cb->state = BTA_HF_CLIENT_OPENING_ST;
     tBTA_HF_CLIENT_DATA msg;
     msg.hdr.layer_specific = client_cb->handle;
+    msg.api_open.bd_addr = client_cb->peer_addr;
+    msg.api_open.sec_mask = client_cb->cli_sec_mask;
     bta_hf_client_start_open(&msg);
   }
 }
@@ -363,8 +365,8 @@ static void bta_hf_client_collision_timer_cback(void* data) {
  ******************************************************************************/
 void bta_hf_client_collision_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
                                    uint8_t id, UNUSED_ATTR uint8_t app_id,
-                                   const RawAddress* peer_addr) {
-  tBTA_HF_CLIENT_CB* client_cb = bta_hf_client_find_cb_by_bda(*peer_addr);
+                                   const RawAddress& peer_addr) {
+  tBTA_HF_CLIENT_CB* client_cb = bta_hf_client_find_cb_by_bda(peer_addr);
   if (client_cb != NULL && client_cb->state == BTA_HF_CLIENT_OPENING_ST) {
     if (id == BTA_ID_SYS) /* ACL collision */
     {
@@ -381,12 +383,12 @@ void bta_hf_client_collision_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
     /* Cancel SDP if it had been started. */
     if (client_cb->p_disc_db) {
       (void)SDP_CancelServiceSearch(client_cb->p_disc_db);
-      bta_hf_client_free_db(NULL);
+      osi_free_and_reset((void**)&client_cb->p_disc_db);
     }
 
     /* reopen registered server */
     /* Collision may be detected before or after we close servers. */
-    // bta_hf_client_start_server();
+    bta_hf_client_start_server();
 
     /* Start timer to handle connection opening restart */
     alarm_set_on_mloop(client_cb->collision_timer,
@@ -749,17 +751,12 @@ void bta_hf_client_sm_execute(uint16_t event, tBTA_HF_CLIENT_DATA* p_data) {
     evt.bd_addr = client_cb->peer_addr;
     if (client_cb->state == BTA_HF_CLIENT_INIT_ST) {
       bta_hf_client_app_callback(BTA_HF_CLIENT_CLOSE_EVT, &evt);
+      APPL_TRACE_DEBUG("%s: marking CB handle %d to false", __func__, client_cb->handle);
+      client_cb->is_allocated = false;
     } else if (client_cb->state == BTA_HF_CLIENT_OPEN_ST) {
       evt.open.handle = client_cb->handle;
       bta_hf_client_app_callback(BTA_HF_CLIENT_OPEN_EVT, &evt);
     }
-  }
-
-  /* if the next state is INIT then release the cb for future use */
-  if (client_cb->state == BTA_HF_CLIENT_INIT_ST) {
-    APPL_TRACE_DEBUG("%s: marking CB handle %d to false", __func__,
-                     client_cb->handle);
-    client_cb->is_allocated = false;
   }
 
   VLOG(2) << __func__ << ": device " << client_cb->peer_addr
