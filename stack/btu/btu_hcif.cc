@@ -57,7 +57,6 @@
 using base::Location;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
-extern void btm_process_inq_results2(uint8_t* p, uint8_t inq_res_mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
 extern void smp_cancel_start_encryption_attempt();
 
@@ -76,7 +75,8 @@ static void btu_hcif_authentication_comp_evt(uint8_t* p);
 static void btu_hcif_rmt_name_request_comp_evt(uint8_t* p, uint16_t evt_len);
 static void btu_hcif_encryption_change_evt(uint8_t* p);
 static void btu_hcif_read_rmt_features_comp_evt(uint8_t* p);
-static void btu_hcif_read_rmt_ext_features_comp_evt(uint8_t* p);
+static void btu_hcif_read_rmt_ext_features_comp_evt(uint8_t* p,
+                                                    uint8_t evt_len);
 static void btu_hcif_read_rmt_version_comp_evt(uint8_t* p);
 static void btu_hcif_qos_setup_comp_evt(uint8_t* p);
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context);
@@ -296,7 +296,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_read_rmt_features_comp_evt(p);
       break;
     case HCI_READ_RMT_EXT_FEATURES_COMP_EVT:
-      btu_hcif_read_rmt_ext_features_comp_evt(p);
+      btu_hcif_read_rmt_ext_features_comp_evt(p, hci_evt_len);
       break;
     case HCI_READ_RMT_VERSION_COMP_EVT:
       btu_hcif_read_rmt_version_comp_evt(p);
@@ -1212,7 +1212,8 @@ static void btu_hcif_read_rmt_features_comp_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_read_rmt_ext_features_comp_evt(uint8_t* p) {
+static void btu_hcif_read_rmt_ext_features_comp_evt(uint8_t* p,
+                                                    uint8_t evt_len) {
   uint8_t* p_cur = p;
   uint8_t status;
   uint16_t handle;
@@ -1220,7 +1221,7 @@ static void btu_hcif_read_rmt_ext_features_comp_evt(uint8_t* p) {
   STREAM_TO_UINT8(status, p_cur);
 
   if (status == HCI_SUCCESS)
-    btm_read_remote_ext_features_complete(p);
+    btm_read_remote_ext_features_complete(p, evt_len);
   else {
     STREAM_TO_UINT16(handle, p_cur);
     btm_read_remote_ext_features_failed(status, handle);
