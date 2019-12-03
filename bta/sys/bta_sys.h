@@ -31,6 +31,8 @@
 #include <base/logging.h>
 #include <base/threading/thread.h>
 
+#include "bta/include/bta_closure_api.h"
+
 /*****************************************************************************
  *  Constants and data types
  ****************************************************************************/
@@ -222,7 +224,7 @@ extern void bta_sys_deregister(uint8_t id);
 extern bool bta_sys_is_register(uint8_t id);
 extern uint16_t bta_sys_get_sys_features(void);
 extern void bta_sys_sendmsg(void* p_msg);
-extern void bta_sys_start_timer(alarm_t* alarm, uint64_t interval_ms,
+extern void bta_sys_start_timer(alarm_t* alarm, period_ms_t interval,
                                 uint16_t event, uint16_t layer_specific);
 extern void bta_sys_disable(tBTA_SYS_HW_MODULE module);
 
