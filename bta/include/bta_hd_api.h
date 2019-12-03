@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 The Android Open Source Project
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2016 The Android Open Source Project
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -79,11 +79,11 @@ typedef struct {
 typedef struct {
   tBTA_HD_STATUS status;
   bool in_use;
-  BD_ADDR bda;
+  RawAddress bda;
 } tBTA_HD_REG_STATUS;
 
 typedef struct {
-  BD_ADDR bda;
+  RawAddress bda;
   tBTA_HD_STATUS status;
 } tBTA_HD_CONN;
 
@@ -215,7 +215,7 @@ extern void BTA_HdVirtualCableUnplug(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdConnect(BD_ADDR addr);
+extern void BTA_HdConnect(const RawAddress& addr);
 
 /*******************************************************************************
  *
@@ -237,7 +237,7 @@ extern void BTA_HdDisconnect(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdAddDevice(BD_ADDR addr);
+extern void BTA_HdAddDevice(const RawAddress& addr);
 
 /*******************************************************************************
  *
@@ -248,7 +248,7 @@ extern void BTA_HdAddDevice(BD_ADDR addr);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdRemoveDevice(BD_ADDR addr);
+extern void BTA_HdRemoveDevice(const RawAddress& addr);
 
 /*******************************************************************************
  *
