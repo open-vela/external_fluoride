@@ -26,10 +26,3 @@ filegroup {
         ":BluetoothSecurityPairingTestSources",
     ],
 }
-
-filegroup {
-     name: "BluetoothFacade_security_layer",
-     srcs: [
-         "facade.cc",
-     ],
-}
