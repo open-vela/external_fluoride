@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <base/logging.h>
 #include <base/threading/thread.h>
 #include <log/log.h>
+#include <statslog.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -589,6 +590,13 @@ static void btu_hcif_connection_comp_evt(uint8_t* p) {
 
   handle = HCID_GET_HANDLE(handle);
 
+  if (status != HCI_SUCCESS) {
+    HCI_TRACE_DEBUG(
+        "%s: Connection failed: status=%d, handle=%d, link_type=%d, "
+        "enc_mode=%d",
+        __func__, status, handle, link_type, enc_mode);
+  }
+
   if (link_type == HCI_LINK_TYPE_ACL) {
     btm_sec_connected(bda, handle, status, enc_mode);
 
@@ -653,6 +661,13 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
 
   handle = HCID_GET_HANDLE(handle);
 
+  if ((reason != HCI_ERR_CONN_CAUSE_LOCAL_HOST) &&
+      (reason != HCI_ERR_PEER_USER)) {
+    /* Uncommon disconnection reasons */
+    HCI_TRACE_DEBUG("%s: Got Disconn Complete Event: reason=%d, handle=%d",
+                    __func__, reason, handle);
+  }
+
 #if (BTM_SCO_INCLUDED == TRUE)
   /* If L2CAP doesn't know about it, send it to SCO */
   if (!l2c_link_hci_disc_comp(handle, reason)) btm_sco_removed(handle, reason);
@@ -710,27 +725,33 @@ constexpr uint8_t MIN_KEY_SIZE = 7;
 
 static void read_encryption_key_size_complete_after_encryption_change(
     uint8_t status, uint16_t handle, uint8_t key_size) {
+  int ret = android::util::stats_write(
+      android::util::BLUETOOTH_CLASSIC_PAIRING_EVENT_REPORTED, "", handle,
+      HCI_READ_ENCR_KEY_SIZE, HCI_COMMAND_COMPLETE_EVT, status, 0, key_size);
+  if (ret < 0) {
+    LOG(WARNING) << __func__ << ": failed to log encryption key size "
+                 << std::to_string(key_size);
+  }
+
   if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
     /* If remote device stop the encryption before we call "Read Encryption Key
      * Size", we might receive Insufficient Security, which means that link is
      * no longer encrypted. */
-    HCI_TRACE_WARNING("%s encryption stopped on link: 0x%02x", __func__,
-                      handle);
+    LOG(INFO) << __func__ << ": encryption stopped on link: " << loghex(handle);
     return;
   }
 
   if (status != HCI_SUCCESS) {
-    HCI_TRACE_WARNING("%s: disconnecting, status: 0x%02x", __func__, status);
+    LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
     btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
     return;
   }
 
   if (key_size < MIN_KEY_SIZE) {
     android_errorWriteLog(0x534e4554, "124301137");
-    HCI_TRACE_ERROR(
-        "%s encryption key too short, disconnecting. handle: 0x%02x, key_size: "
-        "%d",
-        __func__, handle, key_size);
+    LOG(ERROR) << __func__
+               << " encryption key too short, disconnecting. handle: "
+               << loghex(handle) << " key_size: " << +key_size;
 
     btsnd_hcic_disconnect(handle, HCI_ERR_HOST_REJECT_SECURITY);
     return;
@@ -996,7 +1017,13 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     case HCI_BLE_CREATE_LL_CONN:
-      btm_ble_create_ll_conn_complete(*p);
+    case HCI_LE_EXTENDED_CREATE_CONNECTION:
+      // No command complete event for those commands according to spec
+      LOG(ERROR) << "No command complete expected, but received!";
+      break;
+
+    case HCI_BLE_CREATE_CONN_CANCEL:
+      btm_ble_create_conn_cancel_complete(p);
       break;
 
     case HCI_BLE_TRANSMITTER_TEST:
@@ -1029,7 +1056,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
 #endif
     default:
       if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
-        btm_vsc_complete(p, opcode, evt_len, (tBTM_CMPL_CB*)p_cplt_cback);
+        btm_vsc_complete(p, opcode, evt_len, (tBTM_VSC_CMPL_CB*)p_cplt_cback);
       break;
   }
 }
@@ -1171,6 +1198,7 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
             break;
 
           case HCI_BLE_CREATE_LL_CONN:
+          case HCI_LE_EXTENDED_CREATE_CONNECTION:
             btm_ble_create_ll_conn_complete(status);
             break;
 
@@ -1202,14 +1230,14 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
           default:
             if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
               btm_vsc_complete(&status, opcode, 1,
-                               (tBTM_CMPL_CB*)p_vsc_status_cback);
+                               (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
             break;
         }
 
       } else {
         if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC)
           btm_vsc_complete(&status, opcode, 1,
-                           (tBTM_CMPL_CB*)p_vsc_status_cback);
+                           (tBTM_VSC_CMPL_CB*)p_vsc_status_cback);
       }
   }
 }
@@ -1666,27 +1694,33 @@ static void btu_hcif_enhanced_flush_complete_evt(void) {
 
 static void read_encryption_key_size_complete_after_key_refresh(
     uint8_t status, uint16_t handle, uint8_t key_size) {
+  int ret = android::util::stats_write(
+      android::util::BLUETOOTH_CLASSIC_PAIRING_EVENT_REPORTED, "", handle,
+      HCI_READ_ENCR_KEY_SIZE, HCI_COMMAND_COMPLETE_EVT, status, 0, key_size);
+  if (ret < 0) {
+    LOG(WARNING) << __func__ << ": failed to log encryption key size "
+                 << std::to_string(key_size);
+  }
+
   if (status == HCI_ERR_INSUFFCIENT_SECURITY) {
     /* If remote device stop the encryption before we call "Read Encryption Key
      * Size", we might receive Insufficient Security, which means that link is
      * no longer encrypted. */
-    HCI_TRACE_WARNING("%s encryption stopped on link: 0x%02x", __func__,
-                      handle);
+    LOG(INFO) << __func__ << ": encryption stopped on link: " << loghex(handle);
     return;
   }
 
   if (status != HCI_SUCCESS) {
-    HCI_TRACE_WARNING("%s: disconnecting, status: 0x%02x", __func__, status);
+    LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
     btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
     return;
   }
 
   if (key_size < MIN_KEY_SIZE) {
     android_errorWriteLog(0x534e4554, "124301137");
-    HCI_TRACE_WARNING(
-        "%s encryption key too short, disconnecting. handle: 0x%02x, key_size: "
-        "%d",
-        __func__, handle, key_size);
+    LOG(ERROR) << __func__
+               << " encryption key too short, disconnecting. handle: "
+               << loghex(handle) << " key_size: " << +key_size;
 
     btsnd_hcic_disconnect(handle, HCI_ERR_HOST_REJECT_SECURITY);
     return;
