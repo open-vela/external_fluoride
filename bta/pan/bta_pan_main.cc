@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2004-2012 Broadcom Corporation
+ *  Copyright (C) 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,8 +51,7 @@ enum {
   BTA_PAN_CONN_OPEN,
   BTA_PAN_CONN_CLOSE,
   BTA_PAN_FREE_BUF,
-  BTA_PAN_IGNORE,
-  BTA_PAN_MAX_ACTIONS
+  BTA_PAN_IGNORE
 };
 
 /* type for action functions */
@@ -185,9 +184,11 @@ static void bta_pan_sm_execute(tBTA_PAN_SCB* p_scb, uint16_t event,
   /* execute action functions */
   for (i = 0; i < BTA_PAN_ACTIONS; i++) {
     action = state_table[event][i];
-    CHECK(action < BTA_PAN_MAX_ACTIONS);
-    if (action == BTA_PAN_IGNORE) continue;
-    (*bta_pan_action[action])(p_scb, p_data);
+    if (action != BTA_PAN_IGNORE) {
+      (*bta_pan_action[action])(p_scb, p_data);
+    } else {
+      break;
+    }
   }
 }
 
@@ -243,7 +244,7 @@ static void bta_pan_api_open(tBTA_PAN_DATA* p_data) {
   if (p_scb != NULL) {
     bta_pan_open(p_scb, p_data);
   } else {
-    bta_pan.open.bd_addr = p_data->api_open.bd_addr;
+    bdcpy(bta_pan.open.bd_addr, p_data->api_open.bd_addr);
     bta_pan.open.status = BTA_PAN_FAIL;
     bta_pan_cb.p_cback(BTA_PAN_OPEN_EVT, &bta_pan);
   }
