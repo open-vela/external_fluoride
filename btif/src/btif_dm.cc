@@ -925,8 +925,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  uint32_t cod;
   bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
+  uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1108,7 +1108,6 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
 
       LOG_WARN(LOG_TAG, "%s: Incoming HID Connection", __func__);
       bt_property_t prop;
-      RawAddress bd_addr;
       Uuid uuid = Uuid::From16Bit(UUID_SERVCLASS_HUMAN_INTERFACE);
 
       prop.type = BT_PROPERTY_UUIDS;
@@ -1179,6 +1178,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       case HCI_ERR_AUTH_FAILURE:
       case HCI_ERR_KEY_MISSING:
         btif_storage_remove_bonded_device(&bd_addr);
+        [[fallthrough]];
       case HCI_ERR_HOST_REJECT_SECURITY:
       case HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE:
       case HCI_ERR_UNIT_KEY_USED:

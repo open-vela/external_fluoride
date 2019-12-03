@@ -1,0 +1,24 @@
+filegroup {
+    name: "BluetoothShimSources",
+    srcs: [
+            "advertising.cc",
+            "controller.cc",
+            "connectability.cc",
+            "discoverability.cc",
+            "hci_layer.cc",
+            "inquiry.cc",
+            "l2cap.cc",
+            "name.cc",
+            "page.cc",
+            "scanning.cc",
+            "stack.cc",
+    ],
+}
+
+filegroup {
+    name: "BluetoothShimTestSources",
+    srcs: [
+    ],
+}
+
+
