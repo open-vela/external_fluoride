@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -56,21 +56,23 @@ extern void RFCOMM_DataReq(tRFC_MCB* p_mcb, uint8_t dlci, BT_HDR* p_buf);
 
 extern void RFCOMM_DlcReleaseReq(tRFC_MCB* p_mcb, uint8_t dlci);
 
-extern void RFCOMM_ParNegReq(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu);
-extern void RFCOMM_ParNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu,
-                             uint8_t cl, uint8_t k);
+extern void RFCOMM_ParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
+                                               uint16_t mtu);
+extern void RFCOMM_ParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
+                                                uint16_t mtu, uint8_t cl,
+                                                uint8_t k);
 
 extern void RFCOMM_TestReq(uint8_t* p_data, uint16_t len);
 
-#define RFCOMM_FLOW_STATE_DISABLE 0
-#define RFCOMM_FLOW_STATE_ENABLE 1
+extern void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, bool state);
 
-extern void RFCOMM_FlowReq(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t state);
-
-extern void RFCOMM_PortNegReq(tRFC_MCB* p_mcb, uint8_t dlci,
-                              tPORT_STATE* p_pars);
-extern void RFCOMM_PortNegRsp(tRFC_MCB* p_mcb, uint8_t dlci,
-                              tPORT_STATE* p_pars, uint16_t param_mask);
+extern void RFCOMM_PortParameterNegotiationRequest(tRFC_MCB* p_mcb,
+                                                   uint8_t dlci,
+                                                   tPORT_STATE* p_pars);
+extern void RFCOMM_PortParameterNegotiationResponse(tRFC_MCB* p_mcb,
+                                                    uint8_t dlci,
+                                                    tPORT_STATE* p_pars,
+                                                    uint16_t param_mask);
 
 extern void RFCOMM_ControlReq(tRFC_MCB* p_mcb, uint8_t dlci,
                               tPORT_CTRL* p_pars);
@@ -224,7 +226,7 @@ typedef struct {
   tRFC_MCB* p_rfc_lcid_mcb[MAX_L2CAP_CHANNELS];
   bool peer_rx_disabled; /* If true peer sent FCOFF */
   uint8_t last_mux;      /* Last mux allocated */
-  uint8_t last_port;     /* Last port allocated */
+  uint8_t last_port_index;  // Index of last port allocated in rfc_cb.port
 } tRFCOMM_CB;
 
 /* Main Control Block for the RFCOMM Layer (PORT and RFC) */
@@ -295,7 +297,8 @@ extern void rfc_process_l2cap_congestion(tRFC_MCB* p_mcb, bool is_congested);
 /*
  * Functions provided by the rfc_utils.cc
 */
-tRFC_MCB* rfc_alloc_multiplexer_channel(BD_ADDR bd_addr, bool is_initiator);
+tRFC_MCB* rfc_alloc_multiplexer_channel(const RawAddress& bd_addr,
+                                        bool is_initiator);
 extern void rfc_release_multiplexer_channel(tRFC_MCB* p_rfc_mcb);
 extern void rfc_timer_start(tRFC_MCB* p_rfc_mcb, uint16_t timeout);
 extern void rfc_timer_stop(tRFC_MCB* p_rfc_mcb);
@@ -308,8 +311,9 @@ tRFC_MCB* rfc_find_lcid_mcb(uint16_t lcid);
 extern void rfc_save_lcid_mcb(tRFC_MCB* p_rfc_mcb, uint16_t lcid);
 extern void rfc_check_mcb_active(tRFC_MCB* p_mcb);
 extern void rfc_port_closed(tPORT* p_port);
-extern void rfc_sec_check_complete(BD_ADDR bd_addr, tBT_TRANSPORT transport,
-                                   void* p_ref_data, uint8_t res);
+extern void rfc_sec_check_complete(const RawAddress* bd_addr,
+                                   tBT_TRANSPORT transport, void* p_ref_data,
+                                   uint8_t res);
 extern void rfc_inc_credit(tPORT* p_port, uint8_t credit);
 extern void rfc_dec_credit(tPORT* p_port);
 extern void rfc_check_send_cmd(tRFC_MCB* p_mcb, BT_HDR* p_buf);
