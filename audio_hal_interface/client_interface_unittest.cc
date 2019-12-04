@@ -65,16 +65,16 @@ class TestTransport : public bluetooth::audio::IBluetoothTransportInstance {
  public:
   TestTransport(SessionType session_type)
       : bluetooth::audio::IBluetoothTransportInstance(session_type, {}){};
-  bluetooth::audio::BluetoothAudioCtrlAck StartRequest() override {
+  bluetooth::audio::BluetoothAudioCtrlAck StartRequest() {
     return bluetooth::audio::BluetoothAudioCtrlAck::SUCCESS_FINISHED;
   }
-  bluetooth::audio::BluetoothAudioCtrlAck SuspendRequest() override {
+  bluetooth::audio::BluetoothAudioCtrlAck SuspendRequest() {
     return bluetooth::audio::BluetoothAudioCtrlAck::SUCCESS_FINISHED;
   }
-  void StopRequest() override {}
+  void StopRequest() {}
   bool GetPresentationPosition(uint64_t* remote_delay_report_ns,
                                uint64_t* total_bytes_readed,
-                               timespec* data_position) override {
+                               timespec* data_position) {
     if (remote_delay_report_ns) {
       *remote_delay_report_ns = kRemoteDelayReportMs * 1000000;
     }
@@ -86,10 +86,9 @@ class TestTransport : public bluetooth::audio::IBluetoothTransportInstance {
     }
     return true;
   }
-  void MetadataChanged(
-      const source_metadata_t& source_metadata __unused) override {}
-  void ResetPresentationPosition() override{};
-  void LogBytesRead(size_t bytes_readed __unused) override{};
+  void MetadataChanged(const source_metadata_t& source_metadata __unused) {}
+  void ResetPresentationPosition(){};
+  void LogBytesRead(size_t bytes_readed __unused){};
 };
 
 class BluetoothAudioClientInterfaceTest : public Test {
@@ -99,9 +98,9 @@ class BluetoothAudioClientInterfaceTest : public Test {
 
   static constexpr int kClientIfReturnSuccess = 0;
 
-  void SetUp() override {}
+  virtual void SetUp() override {}
 
-  void TearDown() override {
+  virtual void TearDown() override {
     clientif_ = nullptr;
     test_transport_ = nullptr;
   }
