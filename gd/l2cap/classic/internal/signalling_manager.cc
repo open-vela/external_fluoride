@@ -68,7 +68,6 @@ void ClassicSignallingManager::OnCommandReject(CommandRejectView command_reject_
     LOG_WARN("Unknown command reject");
     return;
   }
-  alarm_.Cancel();
   handle_send_next_command();
 
   LOG_INFO("Command rejected");
@@ -215,7 +214,6 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
     handle_send_next_command();
     return;
   }
-  alarm_.Cancel();
   if (result != ConnectionResponseResult::SUCCESS) {
     handle_send_next_command();
     return;
@@ -227,6 +225,7 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
     handle_send_next_command();
     return;
   }
+  alarm_.Cancel();
 
   auto& configuration_state = channel_configuration_[new_channel->GetCid()];
   auto initial_config = link_->GetConfigurationForInitialConfiguration(new_channel->GetCid());
