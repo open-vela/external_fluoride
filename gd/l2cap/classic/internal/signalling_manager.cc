@@ -68,7 +68,6 @@ void ClassicSignallingManager::OnCommandReject(CommandRejectView command_reject_
     LOG_WARN("Unknown command reject");
     return;
   }
-  alarm_.Cancel();
   handle_send_next_command();
 
   LOG_INFO("Command rejected");
@@ -215,7 +214,6 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
     handle_send_next_command();
     return;
   }
-  alarm_.Cancel();
   if (result != ConnectionResponseResult::SUCCESS) {
     handle_send_next_command();
     return;
@@ -227,6 +225,7 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
     handle_send_next_command();
     return;
   }
+  alarm_.Cancel();
 
   auto& configuration_state = channel_configuration_[new_channel->GetCid()];
   auto initial_config = link_->GetConfigurationForInitialConfiguration(new_channel->GetCid());
@@ -408,6 +407,7 @@ void ClassicSignallingManager::OnDisconnectionRequest(SignalId signal_id, Cid ci
   enqueue_buffer_->Enqueue(std::move(builder), handler_);
   channel->OnClosed(hci::ErrorCode::SUCCESS);
   link_->FreeDynamicChannel(cid);
+  handle_send_next_command();
 }
 
 void ClassicSignallingManager::OnDisconnectionResponse(SignalId signal_id, Cid remote_cid, Cid cid) {
@@ -442,6 +442,7 @@ void ClassicSignallingManager::OnEchoRequest(SignalId signal_id, const PacketVie
   raw_builder->AddOctets(packet_vector);
   auto builder = EchoResponseBuilder::Create(signal_id.Value(), std::move(raw_builder));
   enqueue_buffer_->Enqueue(std::move(builder), handler_);
+  handle_send_next_command();
 }
 
 void ClassicSignallingManager::OnEchoResponse(SignalId signal_id, const PacketView<kLittleEndian>& packet) {
