@@ -30,7 +30,7 @@ class LeScanningManagerCallbacks {
   virtual ~LeScanningManagerCallbacks() = default;
   virtual void on_advertisements(std::vector<std::shared_ptr<LeReport>>) = 0;
   virtual void on_timeout() = 0;
-  virtual os::Handler* Handler() = 0;
+  os::Handler* handler;
 };
 
 class LeScanningManager : public bluetooth::Module {
