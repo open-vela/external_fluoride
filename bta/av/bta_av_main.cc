@@ -635,9 +635,6 @@ static void bta_av_api_register(tBTA_AV_DATA* p_data) {
     for (int i = codec_index_min; i < codec_index_max; i++) {
       btav_a2dp_codec_index_t codec_index =
           static_cast<btav_a2dp_codec_index_t>(i);
-      if (!bta_av_co_is_supported_codec(codec_index)) {
-        continue;
-      }
       if (!(*bta_av_a2dp_cos.init)(codec_index, &avdtp_stream_config.cfg)) {
         continue;
       }
@@ -1108,10 +1105,8 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
                   "%s: peer %s BTM_SwitchRole(BTM_ROLE_MASTER) error: %d",
                   __func__, p_scb->PeerAddress().ToString().c_str(), status);
       }
-      if (status != BTM_DEV_BLACKLISTED) {
-        is_ok = false;
-        p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
-      }
+      is_ok = false;
+      p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
     }
   }
 
@@ -1387,8 +1382,6 @@ const char* bta_av_evt_code(uint16_t evt_code) {
 }
 
 void bta_debug_av_dump(int fd) {
-  if (appl_trace_level < BT_TRACE_LEVEL_DEBUG) return;
-
   dprintf(fd, "\nBTA AV State:\n");
   dprintf(fd, "  State Machine State: %s\n", bta_av_st_code(bta_av_cb.state));
   dprintf(fd, "  Link signalling timer: %s\n",
@@ -1417,9 +1410,6 @@ void bta_debug_av_dump(int fd) {
   for (size_t i = 0; i < sizeof(bta_av_cb.lcb) / sizeof(bta_av_cb.lcb[0]);
        i++) {
     const tBTA_AV_LCB& lcb = bta_av_cb.lcb[i];
-    if (lcb.addr.IsEmpty()) {
-      continue;
-    }
     dprintf(fd, "\n  Link control block: %zu peer: %s\n", i,
             lcb.addr.ToString().c_str());
     dprintf(fd, "    Connected stream handle mask: 0x%x\n", lcb.conn_msk);
@@ -1430,18 +1420,12 @@ void bta_debug_av_dump(int fd) {
     if (p_scb == nullptr) {
       continue;
     }
-    if (p_scb->PeerAddress().IsEmpty()) {
-      continue;
-    }
     dprintf(fd, "\n  BTA ID: %zu peer: %s\n", i,
             p_scb->PeerAddress().ToString().c_str());
     dprintf(fd, "    SDP discovery started: %s\n",
             p_scb->sdp_discovery_started ? "true" : "false");
     for (size_t j = 0; j < BTAV_A2DP_CODEC_INDEX_MAX; j++) {
       const tBTA_AV_SEP& sep = p_scb->seps[j];
-      if (sep.av_handle == 0) {
-        continue;
-      }
       dprintf(fd, "    SEP ID: %zu\n", j);
       dprintf(fd, "      SEP AVDTP handle: %d\n", sep.av_handle);
       dprintf(fd, "      Local SEP type: %d\n", sep.tsep);

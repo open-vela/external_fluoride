@@ -20,9 +20,8 @@ static_library("types") {
   ]
 
   sources = [
-    "bluetooth/uuid.cc",
-    "le_address.cc",
     "raw_address.cc",
+    "bluetooth/uuid.cc",
   ]
 
   include_dirs = [
