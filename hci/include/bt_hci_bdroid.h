@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
  *****************************************************************************/
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #define HCI_ACL_MAX_SIZE 1024
 #define HCI_MAX_FRAME_SIZE (HCI_ACL_MAX_SIZE + 4)
