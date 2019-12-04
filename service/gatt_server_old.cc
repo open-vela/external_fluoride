@@ -136,10 +136,8 @@ void RegisterServerCallback(int status, int server_if,
 
   g_internal->server_if = server_if;
 
-  pending_svc_decl.push_back({
-      .uuid = app_uuid,
-      .type = BTGATT_DB_PRIMARY_SERVICE,
-  });
+  pending_svc_decl.push_back(
+      {.type = BTGATT_DB_PRIMARY_SERVICE, .uuid = app_uuid});
 }
 
 void ServiceAddedCallback(int status, int server_if,
@@ -504,8 +502,8 @@ int ServerInternals::Initialize() {
 bt_status_t ServerInternals::AddCharacteristic(const Uuid& uuid,
                                                uint8_t properties,
                                                uint16_t permissions) {
-  pending_svc_decl.push_back({.uuid = uuid,
-                              .type = BTGATT_DB_CHARACTERISTIC,
+  pending_svc_decl.push_back({.type = BTGATT_DB_CHARACTERISTIC,
+                              .uuid = uuid,
                               .properties = properties,
                               .permissions = permissions});
   return BT_STATUS_SUCCESS;
