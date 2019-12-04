@@ -24,9 +24,8 @@ namespace bluetooth {
 namespace l2cap {
 namespace internal {
 
-LeCreditBasedDataController::LeCreditBasedDataController(ILink* link, Cid cid, Cid remote_cid,
-                                                         UpperQueueDownEnd* channel_queue_end, os::Handler* handler,
-                                                         Scheduler* scheduler)
+LeCreditBasedDataController::LeCreditBasedDataController(Cid cid, Cid remote_cid, UpperQueueDownEnd* channel_queue_end,
+                                                         os::Handler* handler, Scheduler* scheduler)
     : cid_(cid), remote_cid_(remote_cid), enqueue_buffer_(channel_queue_end), handler_(handler), scheduler_(scheduler) {
 }
 
