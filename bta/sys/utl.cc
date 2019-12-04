@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2012 Broadcom Corporation
+ *  Copyright (C) 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -242,8 +242,7 @@ bool utl_isintstr(const char* p_s) {
  ******************************************************************************/
 bool utl_isdialchar(const char d) {
   return (((d >= '0') && (d <= '9')) || (d == '*') || (d == '+') ||
-          (d == '#') || (d == ';') || (d == ',') ||
-          ((d >= 'A') && (d <= 'C')) ||
+          (d == '#') || (d == ';') || ((d >= 'A') && (d <= 'C')) ||
           ((d == 'p') || (d == 'P') || (d == 'w') || (d == 'W')));
 }
 

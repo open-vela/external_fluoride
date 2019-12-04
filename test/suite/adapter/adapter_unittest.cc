@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -82,8 +82,7 @@ TEST_F(BluetoothTest, AdapterSetGetName) {
     property_free(new_name);
     new_name = property_new_name("BluetoothTestName2");
   }
-  std::string old_name((const char*)property_as_name(name_property)->name,
-                       name_property->len);
+  std::string old_name((const char*)property_as_name(name_property)->name);
 
   EXPECT_EQ(bt_interface()->set_adapter_property(new_name), BT_STATUS_SUCCESS);
   semaphore_wait(adapter_properties_callback_sem_);
@@ -152,7 +151,7 @@ TEST_F(BluetoothTest, AdapterDisableDuringBonding) {
   EXPECT_EQ(GetState(), BT_STATE_OFF)
       << "Test should be run with Adapter disabled";
 
-  RawAddress bdaddr = {{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}};
+  bt_bdaddr_t bdaddr = {{0x22, 0x22, 0x22, 0x22, 0x22, 0x22}};
 
   for (int i = 0; i < kTestRepeatCount; ++i) {
     EXPECT_EQ(bt_interface()->enable(false), BT_STATUS_SUCCESS);

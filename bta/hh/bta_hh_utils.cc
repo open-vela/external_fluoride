@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2005-2012 Broadcom Corporation
+ *  Copyright (C) 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -54,13 +54,14 @@ static const uint8_t bta_hh_mod_key_mask[BTA_HH_MOD_MAX_KEY] = {
  * Returns          void
  *
  ******************************************************************************/
-uint8_t bta_hh_find_cb(const RawAddress& bda) {
+uint8_t bta_hh_find_cb(BD_ADDR bda) {
   uint8_t xx;
 
   /* See how many active devices there are. */
   for (xx = 0; xx < BTA_HH_MAX_DEVICE; xx++) {
     /* check if any active/known devices is a match */
-    if ((bda == bta_hh_cb.kdev[xx].addr && !bda.IsEmpty())) {
+    if ((!bdcmp(bda, bta_hh_cb.kdev[xx].addr) &&
+         bdcmp(bda, bd_addr_null) != 0)) {
 #if (BTA_HH_DEBUG == TRUE)
       APPL_TRACE_DEBUG("found kdev_cb[%d] hid_handle = %d ", xx,
                        bta_hh_cb.kdev[xx].hid_handle)
@@ -78,7 +79,7 @@ uint8_t bta_hh_find_cb(const RawAddress& bda) {
   /* if no active device match, find a spot for it */
   for (xx = 0; xx < BTA_HH_MAX_DEVICE; xx++) {
     if (!bta_hh_cb.kdev[xx].in_use) {
-      bta_hh_cb.kdev[xx].addr = bda;
+      bdcpy(bta_hh_cb.kdev[xx].addr, bda);
       break;
     }
   }
@@ -370,15 +371,14 @@ void bta_hh_parse_mice_rpt(tBTA_HH_BOOT_RPT* p_mice_data, uint8_t* p_report,
  * Returns          tBTA_HH_STATUS  operation status
  *
  ******************************************************************************/
-tBTA_HH_STATUS bta_hh_read_ssr_param(const RawAddress& bd_addr,
-                                     uint16_t* p_max_ssr_lat,
+tBTA_HH_STATUS bta_hh_read_ssr_param(BD_ADDR bd_addr, uint16_t* p_max_ssr_lat,
                                      uint16_t* p_min_ssr_tout) {
   tBTA_HH_STATUS status = BTA_HH_ERR;
   tBTA_HH_CB* p_cb = &bta_hh_cb;
   uint8_t i;
   uint16_t ssr_max_latency;
   for (i = 0; i < BTA_HH_MAX_KNOWN; i++) {
-    if (p_cb->kdev[i].addr == bd_addr) {
+    if (memcmp(p_cb->kdev[i].addr, bd_addr, BD_ADDR_LEN) == 0) {
       /* if remote device does not have HIDSSRHostMaxLatency attribute in SDP,
       set SSR max latency default value here.  */
       if (p_cb->kdev[i].dscp_info.ssr_max_latency == HID_SSR_PARAM_INVALID) {
@@ -437,9 +437,7 @@ void bta_hh_cleanup_disable(tBTA_HH_STATUS status) {
   }
 
   if (bta_hh_cb.p_cback) {
-    tBTA_HH bta_hh;
-    bta_hh.status = status;
-    (*bta_hh_cb.p_cback)(BTA_HH_DISABLE_EVT, &bta_hh);
+    (*bta_hh_cb.p_cback)(BTA_HH_DISABLE_EVT, (tBTA_HH*)&status);
     /* all connections are down, no waiting for diconnect */
     memset(&bta_hh_cb, 0, sizeof(tBTA_HH_CB));
   }

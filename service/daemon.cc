@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,14 +19,12 @@
 #include <memory>
 
 #include <base/logging.h>
-#include <base/run_loop.h>
 
 #include "service/adapter.h"
 #include "service/hal/bluetooth_gatt_interface.h"
 #include "service/hal/bluetooth_interface.h"
 #include "service/ipc/ipc_manager.h"
 #include "service/settings.h"
-#include "service/switches.h"
 
 namespace bluetooth {
 
@@ -35,7 +33,7 @@ namespace {
 // The global Daemon instance.
 Daemon* g_daemon = nullptr;
 
-class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
+class DaemonImpl : public Daemon {
  public:
   DaemonImpl() : initialized_(false) {}
 
@@ -45,7 +43,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     CleanUpBluetoothStack();
   }
 
-  void StartMainLoop() override { base::RunLoop().Run(); }
+  void StartMainLoop() override { message_loop_->Run(); }
 
   Settings* GetSettings() const override { return settings_.get(); }
 
@@ -54,16 +52,6 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
   }
 
  private:
-  // ipc::IPCManager::Delegate implementation:
-  void OnIPCHandlerStarted(ipc::IPCManager::Type /* type */) override {
-    if (!settings_->EnableOnStart()) return;
-    adapter_->Enable(false /* start_restricted */);
-  }
-
-  void OnIPCHandlerStopped(ipc::IPCManager::Type /* type */) override {
-    // Do nothing.
-  }
-
   bool StartUpBluetoothInterfaces() {
     if (!hal::BluetoothInterface::Initialize()) goto failed;
 
@@ -94,24 +82,14 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     // If an IPC socket path was given, initialize IPC with it. Otherwise
     // initialize Binder IPC.
     if (settings_->UseSocketIPC()) {
-      if (!ipc_manager_->Start(ipc::IPCManager::TYPE_LINUX, this)) {
+      if (!ipc_manager_->Start(ipc::IPCManager::TYPE_LINUX, nullptr)) {
         LOG(ERROR) << "Failed to set up UNIX domain-socket IPCManager";
         return false;
       }
-      return true;
-    }
-
-#if !defined(OS_GENERIC)
-    if (!ipc_manager_->Start(ipc::IPCManager::TYPE_BINDER, this)) {
+    } else if (!ipc_manager_->Start(ipc::IPCManager::TYPE_BINDER, nullptr)) {
       LOG(ERROR) << "Failed to set up Binder IPCManager";
       return false;
     }
-#else
-    if (!ipc_manager_->Start(ipc::IPCManager::TYPE_DBUS, this)) {
-      LOG(ERROR) << "Failed to set up DBus IPCManager";
-      return false;
-    }
-#endif
 
     return true;
   }

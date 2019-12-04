@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ typedef struct {
   uint16_t hci_handle;
   uint16_t pkt_types_mask;
   uint16_t clock_offset;
-  RawAddress remote_addr;
+  BD_ADDR remote_addr;
   DEV_CLASS remote_dc;
   BD_NAME remote_name;
 
@@ -89,9 +89,6 @@ typedef struct {
 #define BTM_ACL_SWKEY_STATE_IN_PROGRESS 5
   uint8_t switch_role_state;
 
-#define BTM_MAX_SW_ROLE_FAILED_ATTEMPTS 3
-  uint8_t switch_role_failed_attempts;
-
 #define BTM_ACL_ENCRYPT_STATE_IDLE 0
 #define BTM_ACL_ENCRYPT_STATE_ENCRYPT_OFF 1 /* encryption turning off */
 #define BTM_ACL_ENCRYPT_STATE_TEMP_FUNC \
@@ -100,9 +97,9 @@ typedef struct {
   uint8_t encrypt_state;                   /* overall BTM encryption state */
 
   tBT_TRANSPORT transport;
-  RawAddress conn_addr;   /* local device address used for this connection */
+  BD_ADDR conn_addr;      /* local device address used for this connection */
   uint8_t conn_addr_type; /* local device address type for this connection */
-  RawAddress active_remote_addr;   /* remote address used on this connection */
+  BD_ADDR active_remote_addr;      /* remote address used on this connection */
   uint8_t active_remote_addr_type; /* local device address type for this
                                       connection */
   BD_FEATURES peer_le_features; /* Peer LE Used features mask for the device */
@@ -122,22 +119,9 @@ typedef struct {
   alarm_t* read_local_name_timer; /* Read local name timer */
   tBTM_CMPL_CB* p_rln_cmpl_cb;    /* Callback function to be called when  */
                                   /* read local name function complete    */
-
   alarm_t* read_rssi_timer;       /* Read RSSI timer */
   tBTM_CMPL_CB* p_rssi_cmpl_cb;   /* Callback function to be called when  */
                                   /* read RSSI function completes */
-
-  alarm_t* read_failed_contact_counter_timer; /* Read Failed Contact Counter */
-                                              /* timer */
-  tBTM_CMPL_CB* p_failed_contact_counter_cmpl_cb; /* Callback function to be */
-  /* called when read Failed Contact Counter function completes */
-
-  alarm_t*
-      read_automatic_flush_timeout_timer; /* Read Automatic Flush Timeout */
-                                          /* timer */
-  tBTM_CMPL_CB* p_automatic_flush_timeout_cmpl_cb; /* Callback function to be */
-  /* called when read Automatic Flush Timeout function completes */
-
   alarm_t* read_link_quality_timer;
   tBTM_CMPL_CB* p_link_qual_cmpl_cb; /* Callback function to be called when  */
                                      /* read link quality function completes */
@@ -164,7 +148,7 @@ typedef struct {
       p_le_test_cmd_cmpl_cb; /* Callback function to be called when
                              LE test mode command has been sent successfully */
 
-  RawAddress read_tx_pwr_addr; /* read TX power target address     */
+  BD_ADDR read_tx_pwr_addr; /* read TX power target address     */
 
 #define BTM_LE_SUPPORT_STATE_SIZE 8
   uint8_t le_supported_states[BTM_LE_SUPPORT_STATE_SIZE];
@@ -206,7 +190,7 @@ typedef struct {
   /* received for the current inquiry operation. (We do not   */
   /* want to flood the caller with multiple responses from    */
   /* the same device.                                         */
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
 } tINQ_BDADDR;
 
 typedef struct {
@@ -242,7 +226,7 @@ typedef struct {
   uint16_t page_scan_type; /* current page scan type */
   tBTM_INQ_TYPE scan_type;
 
-  RawAddress remname_bda; /* Name of bd addr for active remote name request */
+  BD_ADDR remname_bda; /* Name of bd addr for active remote name request */
 #define BTM_RMT_NAME_INACTIVE 0
 #define BTM_RMT_NAME_EXT 0x1 /* Initiated through API */
 #define BTM_RMT_NAME_SEC 0x2 /* Initiated internally by security manager */
@@ -291,6 +275,10 @@ typedef struct {
   uint8_t state;      /* Current state that the inquiry process is in */
   uint8_t inq_active; /* Bit Mask indicating type of inquiry is active */
   bool no_inc_ssp;    /* true, to stop inquiry on incoming SSP */
+#if (BTA_HOST_INTERLEAVE_SEARCH == TRUE)
+  btm_inq_state
+      next_state; /*interleaving state to determine next mode to be inquired*/
+#endif
 } tBTM_INQUIRY_VAR_ST;
 
 /* The MSB of the clock offset field indicates whether the offset is valid. */
@@ -350,6 +338,9 @@ typedef struct {
 */
 typedef struct {
   tBTM_ESCO_INFO esco; /* Current settings             */
+#if (BTM_SCO_HCI_INCLUDED == TRUE)
+  fixed_queue_t* xmit_data_q; /* SCO data transmitting queue  */
+#endif
   tBTM_SCO_CB* p_conn_cb; /* Callback for when connected  */
   tBTM_SCO_CB* p_disc_cb; /* Callback for when disconnect */
   uint16_t state;         /* The state of the SCO link    */
@@ -362,6 +353,9 @@ typedef struct {
 /* SCO Management control block */
 typedef struct {
   tBTM_SCO_IND_CBACK* app_sco_ind_cb;
+#if (BTM_SCO_HCI_INCLUDED == TRUE)
+  tBTM_SCO_DATA_CB* p_data_cb; /* Callback for SCO data over HCI */
+#endif
   tSCO_CONN sco_db[BTM_MAX_SCO_LINKS];
   enh_esco_params_t def_esco_parms;
   uint16_t sco_disc_reason;
@@ -407,6 +401,10 @@ typedef struct {
   uint16_t psm;             /* L2CAP PSM value */
   uint16_t security_flags;  /* Bitmap of required security features */
   uint8_t service_id;       /* Passed in authorization callback */
+#if (L2CAP_UCD_INCLUDED == TRUE)
+  uint16_t
+      ucd_security_flags; /* Bitmap of required security features for UCD */
+#endif
 #if BTM_SEC_SERVICE_NAME_LEN > 0
   uint8_t orig_service_name[BTM_SEC_SERVICE_NAME_LEN + 1];
   uint8_t term_service_name[BTM_SEC_SERVICE_NAME_LEN + 1];
@@ -437,18 +435,18 @@ typedef struct {
 } tBTM_SEC_BLE_KEYS;
 
 typedef struct {
-  RawAddress pseudo_addr; /* LE pseudo address of the device if different from
+  BD_ADDR pseudo_addr; /* LE pseudo address of the device if different from
                           device address  */
   tBLE_ADDR_TYPE ble_addr_type; /* LE device type: public or random address */
   tBLE_ADDR_TYPE static_addr_type; /* static address type */
-  RawAddress static_addr;          /* static address */
+  BD_ADDR static_addr;             /* static address */
 
 #define BTM_WHITE_LIST_BIT 0x01
 #define BTM_RESOLVING_LIST_BIT 0x02
   uint8_t in_controller_list; /* in controller resolving list or not */
   uint8_t resolving_list_index;
 #if (BLE_PRIVACY_SPT == TRUE)
-  RawAddress cur_rand_addr; /* current random address */
+  BD_ADDR cur_rand_addr; /* current random address */
 
 #define BTM_BLE_ADDR_PSEUDO 0 /* address index device record */
 #define BTM_BLE_ADDR_RRA 1    /* cur_rand_addr */
@@ -477,7 +475,7 @@ typedef struct {
                                                         services     */
   uint16_t hci_handle;     /* Handle to connection when exists   */
   uint16_t clock_offset;   /* Latest known clock offset          */
-  RawAddress bd_addr;      /* BD_ADDR of the device              */
+  BD_ADDR bd_addr;         /* BD_ADDR of the device              */
   DEV_CLASS dev_class;     /* DEV_CLASS of the device            */
   LINK_KEY link_key;       /* Device link key                    */
   uint8_t pin_code_length; /* Length of the pin_code used for paring */
@@ -524,6 +522,10 @@ typedef struct {
 
   uint8_t sec_state;  /* Operating state                    */
   bool is_originator; /* true if device is originating connection */
+#if (L2CAP_UCD_INCLUDED == TRUE)
+  bool is_ucd; /* true if device is sending or receiving UCD */
+               /* if incoming security failed, received UCD will be discarded */
+#endif
   bool role_master;           /* true if current mode is master     */
   uint16_t security_required; /* Security required for connection   */
   bool link_key_not_sent; /* link key notification has not been sent waiting for
@@ -717,7 +719,7 @@ typedef uint8_t tBTM_PAIRING_STATE;
 
 typedef struct {
   bool is_mux;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint16_t psm;
   bool is_orig;
   tBTM_SEC_CALLBACK* p_callback;
@@ -728,9 +730,25 @@ typedef struct {
   tBTM_BLE_SEC_ACT sec_act;
 } tBTM_SEC_QUEUE_ENTRY;
 
+#if (L2CAP_UCD_INCLUDED == TRUE)
+
+#define CONN_ORIENT_TERM 0x00          /* incoming connection oriented */
+#define CONN_ORIENT_ORIG 0x01          /* outgoing connection oriented */
+#define CONNLESS_TERM 0x02             /* incoming connectionless      */
+#define CONNLESS_ORIG 0x03             /* outgoing connectionless      */
+#define CONNECTION_TYPE_ORIG_MASK 0x01 /* mask for direction           */
+#define CONNECTION_TYPE_CONNLESS_MASK    \
+  0x02 /* mask for connectionless or not \
+          */
+typedef uint8_t CONNECTION_TYPE;
+
+#else
+
 #define CONN_ORIENT_TERM false
 #define CONN_ORIENT_ORIG true
 typedef bool CONNECTION_TYPE;
+
+#endif /* (L2CAP_UCD_INCLUDED == TRUE) */
 
 /* Define a structure to hold all the BTM data
 */
@@ -815,7 +833,7 @@ typedef struct {
   PIN_CODE pin_code;                /* for legacy devices */
   tBTM_PAIRING_STATE pairing_state; /* The current pairing state    */
   uint8_t pairing_flags;            /* The current pairing flags    */
-  RawAddress pairing_bda;           /* The device currently pairing */
+  BD_ADDR pairing_bda;              /* The device currently pairing */
   alarm_t* pairing_timer;           /* Timer for pairing process    */
   uint16_t disc_handle;             /* for legacy devices */
   uint8_t disc_reason;              /* for legacy devices */
@@ -824,7 +842,7 @@ typedef struct {
   tBTM_SEC_SERV_REC* p_out_serv;
   tBTM_MKEY_CALLBACK* mkey_cback;
 
-  RawAddress connecting_bda;
+  BD_ADDR connecting_bda;
   DEV_CLASS connecting_dc;
 
   uint8_t acl_disc_reason;
