@@ -650,8 +650,7 @@ void ClassicSignallingManager::on_command_timeout() {
       break;
     }
     case CommandCode::CONFIGURATION_REQUEST: {
-      auto channel = channel_allocator_->FindChannelByRemoteCid(command_just_sent_.destination_cid_);
-      SendDisconnectionRequest(channel->GetCid(), channel->GetRemoteCid());
+      SendDisconnectionRequest(command_just_sent_.source_cid_, command_just_sent_.destination_cid_);
       break;
     }
     default:
