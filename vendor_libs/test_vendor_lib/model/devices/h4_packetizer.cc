@@ -105,9 +105,6 @@ void H4Packetizer::OnDataReady(int fd) {
       if (errno == EAGAIN) {
         // No data, try again later.
         return;
-      } else if (errno == ECONNRESET) {
-        // They probably rejected our packet
-        return;
       } else {
         LOG_ALWAYS_FATAL("%s: Read packet type error: %s", __func__, strerror(errno));
       }
