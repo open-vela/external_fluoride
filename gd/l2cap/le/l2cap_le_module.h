@@ -26,13 +26,13 @@ namespace le {
 
 class L2capLeModule : public bluetooth::Module {
  public:
-  L2capLeModule();
-  virtual ~L2capLeModule();
+  L2capLeModule() = default;
+  ~L2capLeModule() = default;
 
   /**
    * Get the api to the LE fixed channel l2cap module
    */
-  virtual std::unique_ptr<FixedChannelManager> GetFixedChannelManager();
+  std::unique_ptr<FixedChannelManager> GetFixedChannelManager();
 
   static const ModuleFactory Factory;
 
