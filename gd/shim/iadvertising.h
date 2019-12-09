@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <cstddef>
-
 /**
  * The gd API exported to the legacy api
  */
@@ -24,11 +22,6 @@ namespace bluetooth {
 namespace shim {
 
 struct IAdvertising {
-  virtual void StartAdvertising() = 0;
-  virtual void StopAdvertising() = 0;
-
-  virtual size_t GetNumberOfAdvertisingInstances() const = 0;
-
   virtual ~IAdvertising() {}
 };
 
