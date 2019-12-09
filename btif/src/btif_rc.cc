@@ -2939,12 +2939,11 @@ static void register_for_event_notification(btif_rc_supported_event_t* p_event,
     return;
   }
   // interval is only valid for AVRC_EVT_PLAY_POS_CHANGED
-  uint32_t interval_in_seconds = 0;
+  uint32_t interval = 0;
   if (p_event->event_id == AVRC_EVT_PLAY_POS_CHANGED) {
-    interval_in_seconds = 2;
+    interval = 2000;
   }
-  status = register_notification_cmd(p_transaction->lbl, p_event->event_id,
-                                     interval_in_seconds, p_dev);
+  status = register_notification_cmd(p_transaction->lbl, p_event->event_id, interval, p_dev);
   if (status != BT_STATUS_SUCCESS) {
     BTIF_TRACE_ERROR("%s: Error in Notification registration: %d", __func__,
                      status);
