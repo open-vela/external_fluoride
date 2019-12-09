@@ -22,7 +22,7 @@
 #include <set>
 
 #include "common/blocking_queue.h"
-#include "grpc/grpc_event_queue.h"
+#include "grpc/grpc_event_stream.h"
 #include "hci/cert/api.grpc.pb.h"
 #include "hci/classic_security_manager.h"
 #include "hci/controller.h"
@@ -37,6 +37,7 @@ using ::grpc::ServerContext;
 
 using ::bluetooth::common::Bind;
 using ::bluetooth::common::BindOnce;
+using ::bluetooth::facade::EventStreamRequest;
 using ::bluetooth::packet::RawBuilder;
 
 namespace bluetooth {
@@ -84,7 +85,7 @@ class AclManagerCertService : public AclManagerCert::Service {
     acl_data.mutable_remote()->set_address(address.ToString());
     std::string data = std::string(packet->begin(), packet->end());
     acl_data.set_payload(data);
-    pending_acl_data_.OnIncomingEvent(acl_data);
+    acl_stream_.OnIncomingEvent(acl_data);
   }
 
   ~AclManagerCertService() {
@@ -104,12 +105,12 @@ class AclManagerCertService : public AclManagerCert::Service {
       connected_devices_.emplace(handle, address);
       ConnectionEvent event;
       event.mutable_remote()->set_address(address.ToString());
-      pending_connection_complete_.OnIncomingEvent(event);
+      connection_complete_stream_.OnIncomingEvent(event);
     } else {
       ConnectionFailedEvent event;
       event.mutable_remote()->set_address(address.ToString());
       event.set_reason(static_cast<uint32_t>(connection_complete.GetStatus()));
-      pending_connection_failed_.OnIncomingEvent(event);
+      connection_failed_stream_.OnIncomingEvent(event);
     }
   }
 
@@ -127,7 +128,7 @@ class AclManagerCertService : public AclManagerCert::Service {
       DisconnectionEvent event;
       event.mutable_remote()->set_address(address.ToString());
       event.set_reason(static_cast<uint32_t>(disconnection_complete.GetReason()));
-      pending_disconnection_.OnIncomingEvent(event);
+      disconnection_stream_.OnIncomingEvent(event);
     }
   }
 
@@ -155,6 +156,8 @@ class AclManagerCertService : public AclManagerCert::Service {
 
   void on_role_change(EventPacketView packet) { /*TODO*/
   }
+
+  using EventStream = ::bluetooth::grpc::GrpcEventStream<AclData, AclPacketView>;
 
   ::grpc::Status SetPageScanMode(::grpc::ServerContext* context, const ::bluetooth::hci::cert::PageScanMode* request,
                                  ::google::protobuf::Empty* response) override {
@@ -244,24 +247,25 @@ class AclManagerCertService : public AclManagerCert::Service {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status FetchAclData(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+  ::grpc::Status FetchAclData(::grpc::ServerContext* context, const facade::EventStreamRequest* request,
                               ::grpc::ServerWriter<AclData>* writer) override {
-    return pending_acl_data_.RunLoop(context, writer);
+    return acl_stream_.HandleRequest(context, request, writer);
   }
 
-  ::grpc::Status FetchConnectionComplete(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+  ::grpc::Status FetchConnectionComplete(::grpc::ServerContext* context, const EventStreamRequest* request,
                                          ::grpc::ServerWriter<ConnectionEvent>* writer) override {
-    return pending_connection_complete_.RunLoop(context, writer);
+    return connection_complete_stream_.HandleRequest(context, request, writer);
   };
 
-  ::grpc::Status FetchConnectionFailed(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+  ::grpc::Status FetchConnectionFailed(::grpc::ServerContext* context, const EventStreamRequest* request,
                                        ::grpc::ServerWriter<ConnectionFailedEvent>* writer) override {
-    return pending_connection_failed_.RunLoop(context, writer);
+    return connection_failed_stream_.HandleRequest(context, request, writer);
   };
 
-  ::grpc::Status FetchDisconnection(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+  ::grpc::Status FetchDisconnection(::grpc::ServerContext* context,
+                                    const ::bluetooth::facade::EventStreamRequest* request,
                                     ::grpc::ServerWriter<DisconnectionEvent>* writer) override {
-    return pending_disconnection_.RunLoop(context, writer);
+    return disconnection_stream_.HandleRequest(context, request, writer);
   }
 
  private:
@@ -273,10 +277,6 @@ class AclManagerCertService : public AclManagerCert::Service {
   mutable std::mutex mutex_;
   std::set<Address> accepted_devices_;
   std::map<uint16_t /* handle */, Address> connected_devices_;
-  ::bluetooth::grpc::GrpcEventQueue<AclData> pending_acl_data_{"FetchAclData"};
-  ::bluetooth::grpc::GrpcEventQueue<ConnectionEvent> pending_connection_complete_{"FetchConnectionComplete"};
-  ::bluetooth::grpc::GrpcEventQueue<ConnectionFailedEvent> pending_connection_failed_{"FetchConnectionFailed"};
-  ::bluetooth::grpc::GrpcEventQueue<DisconnectionEvent> pending_disconnection_{"FetchDisconnection"};
 
   constexpr static uint16_t kInvalidHandle = 0xffff;
 
@@ -288,6 +288,45 @@ class AclManagerCertService : public AclManagerCert::Service {
     }
     return kInvalidHandle;  // Can't find
   }
+
+  class ConnectionCompleteStreamCallback
+      : public ::bluetooth::grpc::GrpcEventStreamCallback<ConnectionEvent, ConnectionEvent> {
+   public:
+    void OnWriteResponse(ConnectionEvent* response, const ConnectionEvent& connection) override {
+      response->CopyFrom(connection);
+    }
+  } connection_complete_stream_callback_;
+  ::bluetooth::grpc::GrpcEventStream<ConnectionEvent, ConnectionEvent> connection_complete_stream_{
+      &connection_complete_stream_callback_};
+
+  class ConnectionFailedStreamCallback
+      : public ::bluetooth::grpc::GrpcEventStreamCallback<ConnectionFailedEvent, ConnectionFailedEvent> {
+   public:
+    void OnWriteResponse(ConnectionFailedEvent* response, const ConnectionFailedEvent& event) override {
+      response->CopyFrom(event);
+    }
+  } connection_failed_stream_callback_;
+  ::bluetooth::grpc::GrpcEventStream<ConnectionFailedEvent, ConnectionFailedEvent> connection_failed_stream_{
+      &connection_failed_stream_callback_};
+
+  class DisconnectionStreamCallback
+      : public ::bluetooth::grpc::GrpcEventStreamCallback<DisconnectionEvent, DisconnectionEvent> {
+   public:
+    void OnWriteResponse(DisconnectionEvent* response, const DisconnectionEvent& event) override {
+      response->CopyFrom(event);
+    }
+  } disconnection_stream_callback_;
+  ::bluetooth::grpc::GrpcEventStream<DisconnectionEvent, DisconnectionEvent> disconnection_stream_{
+      &disconnection_stream_callback_};
+
+  class AclStreamCallback : public ::bluetooth::grpc::GrpcEventStreamCallback<AclData, AclData> {
+   public:
+    void OnWriteResponse(AclData* response, const AclData& event) override {
+      response->CopyFrom(event);
+    }
+
+  } acl_stream_callback_;
+  ::bluetooth::grpc::GrpcEventStream<AclData, AclData> acl_stream_{&acl_stream_callback_};
 };
 
 void AclManagerCertModule::ListDependencies(ModuleList* list) {
