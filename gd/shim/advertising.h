@@ -29,11 +29,6 @@ class Advertising : public bluetooth::Module, public bluetooth::shim::IAdvertisi
   Advertising() = default;
   ~Advertising() = default;
 
-  void StartAdvertising() override;
-  void StopAdvertising() override;
-
-  size_t GetNumberOfAdvertisingInstances() const override;
-
   static const ModuleFactory Factory;
 
  protected:
