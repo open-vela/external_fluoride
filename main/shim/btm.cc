@@ -39,7 +39,8 @@ static constexpr size_t kRemoteDeviceNameLength = 248;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_process_inq_complete(uint8_t status, uint8_t result_type);
-extern void btm_process_inq_results(uint8_t* p, uint8_t result_mode);
+extern void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
+                                    uint8_t result_mode);
 
 using BtmRemoteDeviceName = tBTM_REMOTE_DEV_NAME;
 
@@ -50,7 +51,8 @@ void bluetooth::shim::Btm::OnInquiryResult(std::vector<const uint8_t> result) {
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, kInquiryResultMode);
+  btm_process_inq_results(inquiry_result_buf, result.size(),
+                          kInquiryResultMode);
 }
 
 void bluetooth::shim::Btm::OnInquiryResultWithRssi(
@@ -58,7 +60,8 @@ void bluetooth::shim::Btm::OnInquiryResultWithRssi(
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, kInquiryResultWithRssiMode);
+  btm_process_inq_results(inquiry_result_buf, result.size(),
+                          kInquiryResultWithRssiMode);
 }
 
 void bluetooth::shim::Btm::OnExtendedInquiryResult(
@@ -66,7 +69,8 @@ void bluetooth::shim::Btm::OnExtendedInquiryResult(
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, kExtendedInquiryResultMode);
+  btm_process_inq_results(inquiry_result_buf, result.size(),
+                          kExtendedInquiryResultMode);
 }
 
 void bluetooth::shim::Btm::OnInquiryComplete(uint16_t status) {
