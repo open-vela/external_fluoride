@@ -94,25 +94,15 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener {
    */
   void UnregisterCallbackListener(ISecurityManagerListener* listener);
 
-  /**
-   * Handle the events sent back from HCI that we care about
-   *
-   * @param packet data received from HCI
-   */
+  // ISecurityManagerChannel
   void OnHciEventReceived(hci::EventPacketView packet) override;
 
-  /**
-   * Pairing handler has finished or cancelled
-   *
-   * @param address address for pairing handler
-   * @param status status from SimplePairingComplete or other error code
-   */
-  void OnPairingHandlerComplete(hci::Address address, PairingResultOrFailure status);
+  void OnPairingHandlerComplete(hci::Address address);
 
  protected:
   std::vector<std::pair<ISecurityManagerListener*, os::Handler*>> listeners_;
   void NotifyDeviceBonded(hci::AddressWithType device);
-  void NotifyDeviceBondFailed(hci::AddressWithType device, PairingResultOrFailure status);
+  void NotifyDeviceBondFailed(hci::AddressWithType device);
   void NotifyDeviceUnbonded(hci::AddressWithType device);
 
  private:
