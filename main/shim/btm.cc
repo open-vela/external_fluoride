@@ -19,14 +19,12 @@
 #include <algorithm>
 #include <cstring>
 
-#include "stack/btm/btm_int_types.h"
-
 #include "main/shim/btm.h"
 #include "main/shim/entry.h"
 #include "main/shim/shim.h"
 #include "osi/include/log.h"
 
-extern tBTM_CB btm_cb;
+bluetooth::shim::Btm::Btm() {}
 
 static constexpr size_t kMaxInquiryResultSize = 4096;
 static uint8_t inquiry_result_buf[kMaxInquiryResultSize];
@@ -39,30 +37,11 @@ static constexpr uint8_t kExtendedInquiryResultMode = 2;
 
 static constexpr size_t kRemoteDeviceNameLength = 248;
 
-static constexpr uint8_t kAdvDataInfoNotPresent = 0xff;
-static constexpr uint8_t kTxPowerInformationNotPresent = 0x7f;
-static constexpr uint8_t kNotPeriodicAdvertisement = 0x00;
-
-static constexpr bool kActiveScanning = true;
-static constexpr bool kPassiveScanning = true;
-
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_process_inq_complete(uint8_t status, uint8_t result_type);
-extern void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
-                                    uint8_t result_mode);
-extern void btm_ble_process_adv_addr(RawAddress& raw_address,
-                                     uint8_t* address_type);
-extern void btm_ble_process_adv_pkt_cont(
-    uint16_t event_type, uint8_t address_type, const RawAddress& raw_address,
-    uint8_t primary_phy, uint8_t secondary_phy, uint8_t advertising_sid,
-    int8_t tx_power, int8_t rssi, uint16_t periodic_adv_int, uint8_t data_len,
-    uint8_t* data);
+extern void btm_process_inq_results(uint8_t* p, uint8_t result_mode);
 
 using BtmRemoteDeviceName = tBTM_REMOTE_DEV_NAME;
-
-bluetooth::shim::Btm::Btm() {}
-
-bluetooth::shim::Btm::~Btm() {}
 
 /**
  *
@@ -71,8 +50,7 @@ void bluetooth::shim::Btm::OnInquiryResult(std::vector<const uint8_t> result) {
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, result.size(),
-                          kInquiryResultMode);
+  btm_process_inq_results(inquiry_result_buf, kInquiryResultMode);
 }
 
 void bluetooth::shim::Btm::OnInquiryResultWithRssi(
@@ -80,8 +58,7 @@ void bluetooth::shim::Btm::OnInquiryResultWithRssi(
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, result.size(),
-                          kInquiryResultWithRssiMode);
+  btm_process_inq_results(inquiry_result_buf, kInquiryResultWithRssiMode);
 }
 
 void bluetooth::shim::Btm::OnExtendedInquiryResult(
@@ -89,8 +66,7 @@ void bluetooth::shim::Btm::OnExtendedInquiryResult(
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, result.size(),
-                          kExtendedInquiryResultMode);
+  btm_process_inq_results(inquiry_result_buf, kExtendedInquiryResultMode);
 }
 
 void bluetooth::shim::Btm::OnInquiryComplete(uint16_t status) {
@@ -453,83 +429,4 @@ bluetooth::shim::Btm::CancelAllReadRemoteDeviceName() {
            "%s Cancelling classic remote device name without one in progress",
            __func__);
   return bluetooth::shim::BTM_WRONG_MODE;
-}
-
-void bluetooth::shim::Btm::StartAdvertising() {
-  bluetooth::shim::GetAdvertising()->StartAdvertising();
-}
-
-void bluetooth::shim::Btm::StopAdvertising() {
-  bluetooth::shim::GetAdvertising()->StopAdvertising();
-}
-
-void bluetooth::shim::Btm::StartConnectability() {
-  bluetooth::shim::GetAdvertising()->StartAdvertising();
-}
-
-void bluetooth::shim::Btm::StopConnectability() {
-  bluetooth::shim::GetAdvertising()->StopAdvertising();
-}
-
-bool bluetooth::shim::Btm::StartActiveScanning() {
-  StartScanning(kActiveScanning);
-  return true;
-}
-
-bool bluetooth::shim::Btm::StopActiveScanning() {
-  bluetooth::shim::GetScanning()->StopScanning();
-  return true;
-}
-
-bool bluetooth::shim::Btm::StartObserving() {
-  StartScanning(kPassiveScanning);
-  return true;
-}
-
-bool bluetooth::shim::Btm::StopObserving() {
-  bluetooth::shim::GetScanning()->StopScanning();
-  return true;
-}
-
-void bluetooth::shim::Btm::StartScanning(bool use_active_scanning) {
-  bluetooth::shim::GetScanning()->StartScanning(
-      use_active_scanning,
-      [](AdvertisingReport report) {
-        LOG_INFO(LOG_TAG, "%s Received advertising report from device:%s",
-                 __func__, report.string_address.c_str());
-        RawAddress raw_address;
-        RawAddress::FromString(report.string_address, raw_address);
-
-        btm_ble_process_adv_addr(raw_address, &report.address_type);
-        btm_ble_process_adv_pkt_cont(
-            report.extended_event_type, report.address_type, raw_address,
-            kPhyConnectionLe1M, kPhyConnectionNone, kAdvDataInfoNotPresent,
-            kTxPowerInformationNotPresent, report.rssi,
-            kNotPeriodicAdvertisement, report.len, report.data);
-      },
-      [](DirectedAdvertisingReport report) {
-        LOG_WARN(LOG_TAG,
-                 "%s Directed advertising is unsupported from device:%s",
-                 __func__, report.string_address.c_str());
-      },
-      [](ExtendedAdvertisingReport report) {
-        LOG_INFO(LOG_TAG,
-                 "%s Received extended advertising report from device:%s",
-                 __func__, report.string_address.c_str());
-        RawAddress raw_address;
-        RawAddress::FromString(report.string_address, raw_address);
-        if (report.address_type != BLE_ADDR_ANONYMOUS) {
-          btm_ble_process_adv_addr(raw_address, &report.address_type);
-        }
-        btm_ble_process_adv_pkt_cont(
-            report.extended_event_type, report.address_type, raw_address,
-            kPhyConnectionLe1M, kPhyConnectionNone, kAdvDataInfoNotPresent,
-            kTxPowerInformationNotPresent, report.rssi,
-            kNotPeriodicAdvertisement, report.len, report.data);
-      },
-      []() { LOG_INFO(LOG_TAG, "%s Scanning timeout", __func__); });
-}
-
-size_t bluetooth::shim::Btm::GetNumberOfAdvertisingInstances() const {
-  return bluetooth::shim::GetAdvertising()->GetNumberOfAdvertisingInstances();
 }

@@ -250,7 +250,8 @@ static uint16_t get_ble_maxium_advertising_data_length(void) {
 }
 
 static uint8_t get_ble_number_of_supported_advertising_sets(void) {
-  return GetController()->GetControllerLeNumberOfSupportedAdverisingSets();
+  LOG_WARN(LOG_TAG, "%s TODO Unimplemented", __func__);
+  return 0;
 }
 
 static uint16_t get_acl_buffer_count_classic(void) {
