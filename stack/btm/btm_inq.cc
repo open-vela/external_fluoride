@@ -25,7 +25,6 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -118,7 +117,7 @@ const uint16_t BTM_EIR_UUID_LKUP_TBL[BTM_EIR_MAX_SERVICES] = {
 static void btm_initiate_inquiry(tBTM_INQUIRY_VAR_ST* p_inq);
 static tBTM_STATUS btm_set_inq_event_filter(uint8_t filter_cond_type,
                                             tBTM_INQ_FILT_COND* p_filt_cond);
-void btm_clr_inq_result_flt(void);
+static void btm_clr_inq_result_flt(void);
 
 static uint8_t btm_convert_uuid_to_eir_service(uint16_t uuid16);
 static void btm_set_eir_uuid(uint8_t* p_eir, tBTM_INQ_RESULTS* p_results);
@@ -782,6 +781,14 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
   if (bluetooth::shim::is_gd_shim_enabled()) {
+    p_inq->state = BTM_INQ_ACTIVE_STATE;
+    p_inq->p_inq_cmpl_cb = p_cmpl_cb;
+    p_inq->p_inq_results_cb = p_results_cb;
+    p_inq->inq_cmpl_info.num_resp = 0; /* Clear the results counter */
+    p_inq->inq_active = p_inqparms->mode;
+
+    btm_acl_update_busy_level(BTM_BLI_INQ_EVT);
+
     return bluetooth::shim::BTM_StartInquiry(p_inqparms, p_results_cb,
                                              p_cmpl_cb);
   }
@@ -1306,7 +1313,7 @@ void btm_clr_inq_db(const RawAddress* p_bda) {
  * Returns          true if found, else false (new entry)
  *
  ******************************************************************************/
-void btm_clr_inq_result_flt(void) {
+static void btm_clr_inq_result_flt(void) {
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
 
   osi_free_and_reset((void**)&p_inq->p_bd_db);
@@ -1664,8 +1671,7 @@ static void btm_initiate_inquiry(tBTM_INQUIRY_VAR_ST* p_inq) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
-                             uint8_t inq_res_mode) {
+void btm_process_inq_results(uint8_t* p, uint8_t inq_res_mode) {
   uint8_t num_resp, xx;
   RawAddress bda;
   tINQ_DB_ENT* p_i;
@@ -1694,29 +1700,10 @@ void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
 
   STREAM_TO_UINT8(num_resp, p);
 
-  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED) {
-    if (num_resp > 1) {
-      BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
-                      num_resp);
-      return;
-    }
-
-    constexpr uint16_t extended_inquiry_result_size = 254;
-    if (hci_evt_len - 1 != extended_inquiry_result_size) {
-      android_errorWriteLog(0x534e4554, "141620271");
-      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
-                      num_resp, hci_evt_len);
-      return;
-    }
-  } else if (inq_res_mode == BTM_INQ_RESULT_STANDARD ||
-             inq_res_mode == BTM_INQ_RESULT_WITH_RSSI) {
-    constexpr uint16_t inquiry_result_size = 14;
-    if (hci_evt_len < num_resp * inquiry_result_size) {
-      android_errorWriteLog(0x534e4554, "141620271");
-      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
-                      num_resp, hci_evt_len);
-      return;
-    }
+  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED && (num_resp > 1)) {
+    BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
+                    num_resp);
+    return;
   }
 
   for (xx = 0; xx < num_resp; xx++) {
