@@ -50,12 +50,9 @@ class ExtendedAdvertisingConfig : public AdvertisingConfig {
   bool include_tx_power;
   bool use_le_coded_phy;       // Primary advertisement PHY is LE Coded
   uint8_t secondary_max_skip;  // maximum advertising events to be skipped, 0x0 send AUX_ADV_IND prior ot the next event
-  SecondaryPhyType secondary_advertising_phy;
+  uint8_t secondary_advertising_phy;  // 1 = 1M, 2 = 2M, 3 = coded
   uint8_t sid;
-  Enable enable_scan_request_notifications;
-  OwnAddressType own_address_type;
-  Operation operation;
-  FragmentPreference fragment_preference;
+  bool enable_scan_request_notifications;
 };
 
 using AdvertiserId = int32_t;
