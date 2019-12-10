@@ -16,7 +16,6 @@
 #define LOG_TAG "bt_storage"
 
 #include "storage/legacy.h"
-
 #include "storage/legacy_osi_config.h"
 
 namespace bluetooth {
@@ -35,8 +34,8 @@ struct LegacyModule::impl {
     handler->Post(common::BindOnce(std::move(callback), filename, std::move(config)));
   }
 
-  void config_write(
-      const std::string filename, const config_t config, LegacyWriteConfigCallback callback, os::Handler* handler) {
+  void config_write(const std::string filename, const config_t config, LegacyWriteConfigCallback callback,
+                    os::Handler* handler) {
     handler->Post(common::BindOnce(std::move(callback), filename, legacy::osi::config::config_save(config, filename)));
   }
 
@@ -45,11 +44,8 @@ struct LegacyModule::impl {
         common::BindOnce(std::move(callback), filename, legacy::osi::config::checksum_read(filename.c_str())));
   }
 
-  void checksum_write(
-      const std::string filename,
-      const std::string checksum,
-      LegacyWriteChecksumCallback callback,
-      os::Handler* handler) {
+  void checksum_write(const std::string filename, const std::string checksum, LegacyWriteChecksumCallback callback,
+                      os::Handler* handler) {
     handler->Post(
         common::BindOnce(std::move(callback), filename, legacy::osi::config::checksum_save(checksum, filename)));
   }
@@ -74,41 +70,28 @@ void storage::LegacyModule::impl::Start() {
 
 void storage::LegacyModule::impl::Stop() {}
 
-void storage::LegacyModule::ConfigRead(
-    const std::string filename, LegacyReadConfigCallback callback, os::Handler* handler) {
-  GetHandler()->Post(common::BindOnce(
-      &LegacyModule::impl::config_read, common::Unretained(pimpl_.get()), filename, std::move(callback), handler));
+void storage::LegacyModule::ConfigRead(const std::string filename, LegacyReadConfigCallback callback,
+                                       os::Handler* handler) {
+  GetHandler()->Post(common::BindOnce(&LegacyModule::impl::config_read, common::Unretained(pimpl_.get()), filename,
+                                      std::move(callback), handler));
 }
 
-void storage::LegacyModule::ConfigWrite(
-    const std::string filename, const config_t& config, LegacyWriteConfigCallback callback, os::Handler* handler) {
-  GetHandler()->Post(common::BindOnce(
-      &LegacyModule::impl::config_write,
-      common::Unretained(pimpl_.get()),
-      filename,
-      config,
-      std::move(callback),
-      handler));
+void storage::LegacyModule::ConfigWrite(const std::string filename, const config_t& config,
+                                        LegacyWriteConfigCallback callback, os::Handler* handler) {
+  GetHandler()->Post(common::BindOnce(&LegacyModule::impl::config_write, common::Unretained(pimpl_.get()), filename,
+                                      config, std::move(callback), handler));
 }
 
-void storage::LegacyModule::ChecksumRead(
-    const std::string filename, LegacyReadChecksumCallback callback, os::Handler* handler) {
-  GetHandler()->Post(common::BindOnce(
-      &LegacyModule::impl::checksum_read, common::Unretained(pimpl_.get()), filename, std::move(callback), handler));
+void storage::LegacyModule::ChecksumRead(const std::string filename, LegacyReadChecksumCallback callback,
+                                         os::Handler* handler) {
+  GetHandler()->Post(common::BindOnce(&LegacyModule::impl::checksum_read, common::Unretained(pimpl_.get()), filename,
+                                      std::move(callback), handler));
 }
 
-void storage::LegacyModule::ChecksumWrite(
-    const std::string filename,
-    const std::string checksum,
-    LegacyWriteChecksumCallback callback,
-    os::Handler* handler) {
-  GetHandler()->Post(common::BindOnce(
-      &LegacyModule::impl::checksum_write,
-      common::Unretained(pimpl_.get()),
-      filename,
-      checksum,
-      std::move(callback),
-      handler));
+void storage::LegacyModule::ChecksumWrite(const std::string filename, const std::string checksum,
+                                          LegacyWriteChecksumCallback callback, os::Handler* handler) {
+  GetHandler()->Post(common::BindOnce(&LegacyModule::impl::checksum_write, common::Unretained(pimpl_.get()), filename,
+                                      checksum, std::move(callback), handler));
 }
 
 /**
