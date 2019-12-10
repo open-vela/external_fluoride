@@ -75,7 +75,8 @@ if [[ $? -ne 0 ]] ; then
 fi
 
 ## Check bluetooth_packets_python3 is compiled succssfully
-PYTHONPATH=$PYTHONPATH:$ANDROID_BUILD_TOP/out/host/linux-x86/lib64 python3.8 -c "
+export PYTHONPATH=$PYTHONPATH:$ANDROID_BUILD_TOP/out/host/linux-x86/lib64
+python3.8 -c "
 import bluetooth_packets_python3 as bp3
 bp3.BaseStruct
 "
