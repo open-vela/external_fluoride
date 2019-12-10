@@ -21,7 +21,6 @@
 
 #include "hci/address_with_type.h"
 #include "os/log.h"
-#include "security/initial_informations.h"
 #include "security/security_manager.h"
 
 namespace bluetooth {
@@ -49,7 +48,7 @@ std::shared_ptr<bluetooth::security::record::SecurityRecord> SecurityManagerImpl
 
 void SecurityManagerImpl::DispatchPairingHandler(std::shared_ptr<security::record::SecurityRecord> record,
                                                  bool locally_initiated) {
-  common::OnceCallback<void(hci::Address, PairingResultOrFailure)> callback =
+  common::OnceCallback<void(hci::Address)> callback =
       common::BindOnce(&SecurityManagerImpl::OnPairingHandlerComplete, common::Unretained(this));
   auto entry = pairing_handler_map_.find(record->GetDevice().GetAddress());
   if (entry != pairing_handler_map_.end()) {
@@ -137,10 +136,10 @@ void SecurityManagerImpl::NotifyDeviceBonded(hci::AddressWithType device) {
   }
 }
 
-void SecurityManagerImpl::NotifyDeviceBondFailed(hci::AddressWithType device, PairingResultOrFailure status) {
+void SecurityManagerImpl::NotifyDeviceBondFailed(hci::AddressWithType device) {
   for (auto& iter : listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnDeviceBondFailed, common::Unretained(iter.first),
-                                   device /*, status */));
+    iter.second->Post(
+        common::Bind(&ISecurityManagerListener::OnDeviceBondFailed, common::Unretained(iter.first), device));
   }
 }
 
@@ -220,16 +219,12 @@ void SecurityManagerImpl::OnHciEventReceived(hci::EventPacketView packet) {
   }
 }
 
-void SecurityManagerImpl::OnPairingHandlerComplete(hci::Address address, PairingResultOrFailure status) {
+void SecurityManagerImpl::OnPairingHandlerComplete(hci::Address address) {
   auto entry = pairing_handler_map_.find(address);
   if (entry != pairing_handler_map_.end()) {
     pairing_handler_map_.erase(entry);
   }
-  if (!std::holds_alternative<PairingFailure>(status)) {
-    NotifyDeviceBonded(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS));
-  } else {
-    NotifyDeviceBondFailed(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS), status);
-  }
+  NotifyDeviceBonded(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS));
 }
 
 }  // namespace internal
