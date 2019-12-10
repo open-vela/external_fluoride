@@ -155,7 +155,8 @@ bool btif_get_device_type(const RawAddress& bda, int* p_device_type) {
 
   if (!btif_config_get_int(bd_addr_str, "DevType", p_device_type)) return false;
 
-  LOG_DEBUG("%s: Device [%s] type %d", __func__, bd_addr_str, *p_device_type);
+  LOG_DEBUG(LOG_TAG, "%s: Device [%s] type %d", __func__, bd_addr_str,
+            *p_device_type);
   return true;
 }
 
@@ -167,7 +168,7 @@ bool btif_get_address_type(const RawAddress& bda, int* p_addr_type) {
 
   if (!btif_config_get_int(bd_addr_str, "AddrType", p_addr_type)) return false;
 
-  LOG_DEBUG("%s: Device [%s] address type %d", __func__, bd_addr_str,
+  LOG_DEBUG(LOG_TAG, "%s: Device [%s] address type %d", __func__, bd_addr_str,
             *p_addr_type);
   return true;
 }
@@ -218,14 +219,18 @@ static void init_metric_id_allocator() {
   // version of android without a metric id.
   std::vector<RawAddress> addresses_without_id;
 
-  for (const auto& mac_address : btif_config_get_paired_devices()) {
-    auto addr_str = mac_address.ToString();
+  for (auto& section : btif_config_sections()) {
+    auto& section_name = section.name;
+    RawAddress mac_address;
+    if (!RawAddress::FromString(section_name, mac_address)) {
+      continue;
+    }
     // if the section name is a mac address
     bool is_valid_id_found = false;
-    if (btif_config_exist(addr_str, BT_CONFIG_METRICS_ID_KEY)) {
+    if (btif_config_exist(section_name, BT_CONFIG_METRICS_ID_KEY)) {
       // there is one metric id under this mac_address
       int id = 0;
-      btif_config_get_int(addr_str, BT_CONFIG_METRICS_ID_KEY, &id);
+      btif_config_get_int(section_name, BT_CONFIG_METRICS_ID_KEY, &id);
       if (MetricIdAllocator::IsValidId(id)) {
         paired_device_map[mac_address] = id;
         is_valid_id_found = true;
@@ -280,8 +285,8 @@ static future_t* init(void) {
     btif_config_source = ORIGINAL;
   }
   if (!config) {
-    LOG_WARN("%s unable to load config file: %s; using backup.", __func__,
-             CONFIG_FILE_PATH);
+    LOG_WARN(LOG_TAG, "%s unable to load config file: %s; using backup.",
+             __func__, CONFIG_FILE_PATH);
     if (config_checksum_pass(CONFIG_BACKUP_COMPARE_PASS)) {
       config = btif_config_open(CONFIG_BACKUP_PATH);
       btif_config_source = BACKUP;
@@ -289,14 +294,16 @@ static future_t* init(void) {
     }
   }
   if (!config) {
-    LOG_WARN("%s unable to load backup; attempting to transcode legacy file.",
+    LOG_WARN(LOG_TAG,
+             "%s unable to load backup; attempting to transcode legacy file.",
              __func__);
     config = btif_config_transcode(CONFIG_LEGACY_FILE_PATH);
     btif_config_source = LEGACY;
     file_source = "Legacy";
   }
   if (!config) {
-    LOG_ERROR("%s unable to transcode legacy file; creating empty config.",
+    LOG_ERROR(LOG_TAG,
+              "%s unable to transcode legacy file; creating empty config.",
               __func__);
     config = storage_config_get_interface()->config_new_empty();
     btif_config_source = NEW_FILE;
@@ -339,7 +346,7 @@ static future_t* init(void) {
   // write back to disk.
   config_timer = alarm_new("btif.config");
   if (!config_timer) {
-    LOG_ERROR("%s unable to create alarm.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to create alarm.", __func__);
     goto error;
   }
 
@@ -362,7 +369,7 @@ static std::unique_ptr<config_t> btif_config_open(const char* filename) {
   if (!config) return nullptr;
 
   if (!config_has_section(*config, "Adapter")) {
-    LOG_ERROR("Config is missing adapter section");
+    LOG_ERROR(LOG_TAG, "Config is missing adapter section");
     return nullptr;
   }
 
@@ -577,23 +584,8 @@ bool btif_config_set_bin(const std::string& section, const std::string& key,
   return true;
 }
 
-std::vector<RawAddress> btif_config_get_paired_devices() {
-  std::vector<std::string> names;
-  {
-    std::unique_lock<std::recursive_mutex> lock(config_lock);
-    names = btif_config_cache.GetPersistentSectionNames();
-  }
-  std::vector<RawAddress> result;
-  result.reserve(names.size());
-  for (const auto& name : names) {
-    RawAddress addr = {};
-    if (!RawAddress::FromString(name, addr)) {
-      LOG(WARNING) << __func__ << ": " << name << " is not a valid address";
-      continue;
-    }
-    result.emplace_back(addr);
-  }
-  return result;
+const std::list<section_t>& btif_config_sections() {
+  return btif_config_cache.GetPersistentSections();
 }
 
 bool btif_config_remove(const std::string& section, const std::string& key) {
@@ -683,8 +675,9 @@ void btif_debug_config_dump(int fd) {
   if (!file_source) {
     file_source.emplace("Original");
   }
-  auto devices = btif_config_cache.GetPersistentSectionNames();
-  dprintf(fd, "  Devices loaded: %zu\n", devices.size());
+
+  dprintf(fd, "  Devices loaded: %zu\n",
+          btif_config_cache.GetPersistentSections().size());
   dprintf(fd, "  File created/tagged: %s\n", btif_config_time_created);
   dprintf(fd, "  File source: %s\n", file_source->c_str());
 }

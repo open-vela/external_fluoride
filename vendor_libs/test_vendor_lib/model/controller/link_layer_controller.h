@@ -124,13 +124,12 @@ class LinkLayerController {
 
   void RegisterTaskCancel(std::function<void(AsyncTaskId)> cancel);
   void Reset();
+  void AddControllerEvent(std::chrono::milliseconds delay, const TaskCallback& task);
+
+  void PageScan();
+  void Connections();
 
   void LeAdvertising();
-
-  void LeConnectionUpdateComplete(
-      bluetooth::hci::LeConnectionUpdateView connection_update_view);
-  ErrorCode LeConnectionUpdate(
-      bluetooth::hci::LeConnectionUpdateView connection_update_view);
 
   void HandleLeConnection(AddressWithType addr, AddressWithType own_addr,
                           uint8_t role, uint16_t connection_interval,
@@ -150,12 +149,6 @@ class LinkLayerController {
   bool LeResolvingListContainsDevice(Address addr, uint8_t addr_type);
   bool LeResolvingListFull();
   void LeSetPrivacyMode(uint8_t address_type, Address addr, uint8_t mode);
-
-  void HandleLeEnableEncryption(uint16_t handle, std::array<uint8_t, 8> rand,
-                                uint16_t ediv, std::array<uint8_t, 16> ltk);
-
-  ErrorCode LeEnableEncryption(uint16_t handle, std::array<uint8_t, 8> rand,
-                               uint16_t ediv, std::array<uint8_t, 16> ltk);
 
   ErrorCode SetLeAdvertisingEnable(uint8_t le_advertising_enable) {
     le_advertising_enable_ = le_advertising_enable;
@@ -247,8 +240,6 @@ class LinkLayerController {
                               uint32_t token_bucket_size,
                               uint32_t peak_bandwidth, uint32_t access_latency);
   ErrorCode WriteLinkSupervisionTimeout(uint16_t handle, uint16_t timeout);
-  ErrorCode WriteDefaultLinkPolicySettings(uint16_t settings);
-  uint16_t ReadDefaultLinkPolicySettings();
 
  protected:
   void SendLeLinkLayerPacket(
@@ -276,9 +267,6 @@ class LinkLayerController {
       model::packets::LinkLayerPacketView packet);
   void IncomingLeConnectPacket(model::packets::LinkLayerPacketView packet);
   void IncomingLeConnectCompletePacket(
-      model::packets::LinkLayerPacketView packet);
-  void IncomingLeEncryptConnection(model::packets::LinkLayerPacketView packet);
-  void IncomingLeEncryptConnectionResponse(
       model::packets::LinkLayerPacketView packet);
   void IncomingLeScanPacket(model::packets::LinkLayerPacketView packet);
   void IncomingLeScanResponsePacket(model::packets::LinkLayerPacketView packet);
@@ -316,7 +304,7 @@ class LinkLayerController {
 
   // Timing related state
   std::vector<AsyncTaskId> controller_events_;
-  AsyncTaskId timer_tick_task_{};
+  AsyncTaskId timer_tick_task_;
   std::chrono::milliseconds timer_period_ = std::chrono::milliseconds(100);
 
   // Callbacks to schedule tasks.
@@ -350,35 +338,33 @@ class LinkLayerController {
   std::chrono::steady_clock::time_point last_le_advertisement_;
 
   bluetooth::hci::OpCode le_scan_enable_{bluetooth::hci::OpCode::NONE};
-  uint8_t le_scan_type_{};
-  uint16_t le_scan_interval_{};
-  uint16_t le_scan_window_{};
-  uint8_t le_scan_filter_policy_{};
-  uint8_t le_scan_filter_duplicates_{};
-  uint8_t le_address_type_{};
+  uint8_t le_scan_type_;
+  uint16_t le_scan_interval_;
+  uint16_t le_scan_window_;
+  uint8_t le_scan_filter_policy_;
+  uint8_t le_scan_filter_duplicates_;
+  uint8_t le_address_type_;
 
   bool le_connect_{false};
-  uint16_t le_connection_interval_min_{};
-  uint16_t le_connection_interval_max_{};
-  uint16_t le_connection_latency_{};
-  uint16_t le_connection_supervision_timeout_{};
-  uint16_t le_connection_minimum_ce_length_{};
-  uint16_t le_connection_maximum_ce_length_{};
-  uint8_t le_initiator_filter_policy_{};
+  uint16_t le_connection_interval_min_;
+  uint16_t le_connection_interval_max_;
+  uint16_t le_connection_latency_;
+  uint16_t le_connection_supervision_timeout_;
+  uint16_t le_connection_minimum_ce_length_;
+  uint16_t le_connection_maximum_ce_length_;
+  uint8_t le_initiator_filter_policy_;
 
-  Address le_peer_address_{};
-  uint8_t le_peer_address_type_{};
+  Address le_peer_address_;
+  uint8_t le_peer_address_type_;
 
   // Classic state
 
   SecurityManager security_manager_{10};
   std::chrono::steady_clock::time_point last_inquiry_;
-  model::packets::InquiryType inquiry_mode_{
-      model::packets::InquiryType::STANDARD};
-  AsyncTaskId inquiry_timer_task_id_ = kInvalidTaskId;
-  uint64_t inquiry_lap_{};
-  uint8_t inquiry_max_responses_{};
-  uint16_t default_link_policy_settings_ = 0;
+  model::packets::InquiryType inquiry_mode_;
+  Inquiry::InquiryState inquiry_state_;
+  uint64_t inquiry_lap_;
+  uint8_t inquiry_max_responses_;
 
   bool page_scans_enabled_{false};
   bool inquiry_scans_enabled_{false};
