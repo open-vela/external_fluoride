@@ -21,7 +21,6 @@
 #include <memory>
 #include <utility>
 
-#include "crypto_toolbox/crypto_toolbox.h"
 #include "hci/address_with_type.h"
 
 namespace bluetooth {
@@ -32,7 +31,7 @@ enum BondState { NOT_BONDED, PAIRING, PAIRED, BONDED };
 
 class SecurityRecord {
  public:
-  explicit SecurityRecord(hci::AddressWithType address) : pseudo_address_(address), state_(NOT_BONDED) {}
+  explicit SecurityRecord(hci::AddressWithType device) : device_(device), state_(NOT_BONDED) {}
 
   /**
    * Returns true if the device is bonded to another device
@@ -65,26 +64,15 @@ class SecurityRecord {
     return key_type_;
   }
 
-  hci::AddressWithType GetPseudoAddress() {
-    return pseudo_address_;
+  hci::AddressWithType GetDevice() {
+    return device_;
   }
 
  private:
-  /* First address we have ever seen this device with, that we used to create bond */
-  const hci::AddressWithType pseudo_address_;
-
-  /* Identity Address */
-  std::optional<hci::AddressWithType> identity_address_;
-
+  const hci::AddressWithType device_;
   BondState state_;
   std::array<uint8_t, 16> link_key_ = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   hci::KeyType key_type_ = hci::KeyType::DEBUG_COMBINATION;
-
-  std::optional<crypto_toolbox::Octet16> ltk;
-  std::optional<uint16_t> ediv;
-  std::optional<std::array<uint8_t, 8>> rand;
-  std::optional<crypto_toolbox::Octet16> irk;
-  std::optional<crypto_toolbox::Octet16> signature_key;
 };
 
 }  // namespace record
