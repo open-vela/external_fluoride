@@ -26,19 +26,18 @@ from google.protobuf import empty_pb2
 
 
 class PTSL2capTest(PTSBaseTestClass):
-
     def setup_test(self):
         self.device_under_test = self.gd_devices[0]
 
         self.device_under_test.rootservice.StartStack(
             facade_rootservice_pb2.StartStackRequest(
-                module_under_test=facade_rootservice_pb2.BluetoothModule.Value(
-                    'L2CAP'),))
+                module_under_test=facade_rootservice_pb2.BluetoothModule.Value('L2CAP'),
+            )
+        )
 
         self.device_under_test.wait_channel_ready()
 
-        dut_address = self.device_under_test.controller_read_only_property.ReadLocalAddress(
-            empty_pb2.Empty()).address
+        dut_address = self.device_under_test.controller_read_only_property.ReadLocalAddress(empty_pb2.Empty()).address
         pts_address = self.controller_configs.get('pts_address').lower()
         self.device_under_test.address = dut_address
 
@@ -49,28 +48,26 @@ class PTSL2capTest(PTSBaseTestClass):
 
     def teardown_test(self):
         self.device_under_test.rootservice.StopStack(
-            facade_rootservice_pb2.StopStackRequest())
+            facade_rootservice_pb2.StopStackRequest()
+        )
 
     def _dut_connection_stream(self):
-        return EventCallbackStream(
-            self.device_under_test.l2cap.FetchConnectionComplete(
-                empty_pb2.Empty()))
+        return EventCallbackStream(self.device_under_test.l2cap.FetchConnectionComplete(empty_pb2.Empty()))
 
     def _dut_connection_close_stream(self):
-        return EventCallbackStream(
-            self.device_under_test.l2cap.FetchConnectionClose(
-                empty_pb2.Empty()))
+        return EventCallbackStream(self.device_under_test.l2cap.FetchConnectionClose(empty_pb2.Empty()))
 
     def _assert_connection_complete(self, due_connection_asserts, timeout=30):
         due_connection_asserts.assert_event_occurs(
-            lambda device: device.remote.address == self.pts_address.address,
-            timeout=timedelta(seconds=timeout))
+          lambda device : device.remote.address == self.pts_address.address,
+          timeout=timedelta(seconds=timeout)
+        )
 
-    def _assert_connection_close(self, due_connection_close_asserts,
-                                 timeout=30):
+    def _assert_connection_close(self, due_connection_close_asserts, timeout=30):
         due_connection_close_asserts.assert_event_occurs(
-            lambda device: device.remote.address == self.pts_address.address,
-            timeout=timedelta(seconds=timeout))
+          lambda device : device.remote.address == self.pts_address.address,
+          timeout=timedelta(seconds=timeout)
+        )
 
     def test_L2CAP_COS_CED_BV_01_C(self):
         """
@@ -81,17 +78,13 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.OpenChannel(
-                l2cap_facade_pb2.OpenChannelRequest(
-                    remote=self.pts_address, psm=psm))
+            self.device_under_test.l2cap.OpenChannel(l2cap_facade_pb2.OpenChannelRequest(remote=self.pts_address, psm=psm))
             self._assert_connection_complete(due_connection_asserts)
 
-            self.device_under_test.l2cap.CloseChannel(
-                l2cap_facade_pb2.CloseChannelRequest(psm=psm))
+            self.device_under_test.l2cap.CloseChannel(l2cap_facade_pb2.CloseChannelRequest(psm=psm))
             self._assert_connection_close(due_connection_close_asserts)
 
     def test_L2CAP_COS_CED_BV_03_C(self):
@@ -102,20 +95,14 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
 
-            self.device_under_test.l2cap.SendDynamicChannelPacket(
-                l2cap_facade_pb2.DynamicChannelPacket(
-                    psm=psm, payload=b'abc' * 34))
+            self.device_under_test.l2cap.SendDynamicChannelPacket(l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'*34))
             self._assert_connection_close(due_connection_close_asserts)
 
     def test_L2CAP_COS_CED_BV_04_C(self):
@@ -126,19 +113,14 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
             time.sleep(2)
-            self.device_under_test.l2cap.CloseChannel(
-                l2cap_facade_pb2.CloseChannelRequest(psm=psm))
+            self.device_under_test.l2cap.CloseChannel(l2cap_facade_pb2.CloseChannelRequest(psm=psm))
             self._assert_connection_close(due_connection_close_asserts)
 
     def test_L2CAP_COS_CED_BV_05_C(self):
@@ -149,15 +131,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
             self._assert_connection_close(due_connection_close_asserts)
 
@@ -169,15 +147,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
             self._assert_connection_close(due_connection_close_asserts)
 
@@ -189,15 +163,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
 
             time.sleep(120)
 
@@ -209,15 +179,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
             self._assert_connection_close(due_connection_close_asserts)
 
@@ -229,15 +195,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
             self._assert_connection_close(due_connection_close_asserts)
 
@@ -249,15 +211,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_complete(due_connection_asserts)
             time.sleep(5)
 
@@ -270,15 +228,11 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.BASIC))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC))
             self._assert_connection_close(due_connection_close_asserts)
 
     def test_L2CAP_COS_CFD_BV_08_C(self):
@@ -290,17 +244,14 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.OpenChannel(
-                l2cap_facade_pb2.OpenChannelRequest(
-                    remote=self.pts_address, psm=psm))
+            self.device_under_test.l2cap.OpenChannel(l2cap_facade_pb2.OpenChannelRequest(remote=self.pts_address, psm=psm))
             self._assert_connection_complete(due_connection_asserts)
-            self.device_under_test.l2cap.CloseChannel(
-                l2cap_facade_pb2.CloseChannelRequest(psm=psm))
+            self.device_under_test.l2cap.CloseChannel(l2cap_facade_pb2.CloseChannelRequest(psm=psm))
             self._assert_connection_close(due_connection_close_asserts)
+
 
     def test_L2CAP_ERM_BI_01_C(self):
         """
@@ -311,14 +262,10 @@ class PTSL2capTest(PTSBaseTestClass):
         with self._dut_connection_stream() as dut_connection_stream, \
             self._dut_connection_close_stream() as dut_connection_close_stream:
             due_connection_asserts = EventAsserts(dut_connection_stream)
-            due_connection_close_asserts = EventAsserts(
-                dut_connection_close_stream)
+            due_connection_close_asserts = EventAsserts(dut_connection_close_stream)
             psm = 1
 
-            self.device_under_test.l2cap.SetDynamicChannel(
-                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                    psm=psm,
-                    retransmission_mode=l2cap_facade_pb2.
-                    RetransmissionFlowControlMode.ERTM))
+            self.device_under_test.l2cap.SetDynamicChannel(l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM))
             self._assert_connection_complete(due_connection_asserts)
             self._pending_connection_close(timeout=60)
