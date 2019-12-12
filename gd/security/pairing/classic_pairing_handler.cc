@@ -21,41 +21,6 @@ namespace bluetooth {
 namespace security {
 namespace pairing {
 
-void ClassicPairingHandler::NotifyUiDisplayYesNo(uint32_t numeric_value) {
-  for (auto& iter : client_listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnDisplayYesNoDialogWithValue,
-                                   common::Unretained(iter.first), GetRecord()->GetPseudoAddress(), numeric_value));
-  }
-}
-
-void ClassicPairingHandler::NotifyUiDisplayYesNo() {
-  for (auto& iter : client_listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnDisplayYesNoDialog, common::Unretained(iter.first),
-                                   GetRecord()->GetPseudoAddress()));
-  }
-}
-
-void ClassicPairingHandler::NotifyUiDisplayPasskey(uint32_t passkey) {
-  for (auto& iter : client_listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnDisplayPasskeyDialog, common::Unretained(iter.first),
-                                   GetRecord()->GetPseudoAddress(), passkey));
-  }
-}
-
-void ClassicPairingHandler::NotifyUiDisplayPasskeyInput() {
-  for (auto& iter : client_listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnDisplayPasskeyInputDialog,
-                                   common::Unretained(iter.first), GetRecord()->GetPseudoAddress()));
-  }
-}
-
-void ClassicPairingHandler::NotifyUiDisplayCancel() {
-  for (auto& iter : client_listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnDisplayCancelDialog, common::Unretained(iter.first),
-                                   GetRecord()->GetPseudoAddress()));
-  }
-}
-
 void ClassicPairingHandler::OnRegistrationComplete(
     l2cap::classic::FixedChannelManager::RegistrationResult result,
     std::unique_ptr<l2cap::classic::FixedChannelService> fixed_channel_service) {
@@ -89,7 +54,6 @@ void ClassicPairingHandler::OnConnectionOpen(std::unique_ptr<l2cap::classic::Fix
 void ClassicPairingHandler::OnConnectionFail(l2cap::classic::FixedChannelManager::ConnectionResult result) {
   Cancel();
 }
-
 void ClassicPairingHandler::OnConnectionClose(hci::ErrorCode error_code) {
   // Called when the connection gets closed
   LOG_ERROR("Connection closed due to: %s", hci::ErrorCodeText(error_code).c_str());
@@ -274,8 +238,8 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // PassKey Entry, Initiator display, Responder input
-          NotifyUiDisplayPasskey(packet.GetNumericValue());
-          LOG_INFO("Passkey Entry: A display, B input");
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Authenticated
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
@@ -291,26 +255,26 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
       switch (responder_io_capability) {
         case hci::IoCapability::DISPLAY_ONLY:
           // NumericComparison, Initiator display, Responder auto confirm
-          LOG_INFO("Numeric Comparison: A DisplayYesNo, B auto confirm");
-          NotifyUiDisplayYesNo(packet.GetNumericValue());
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Unauthenticated
           break;
         case hci::IoCapability::DISPLAY_YES_NO:
           // NumericComparison Both Display, Both confirm
-          LOG_INFO("Numeric Comparison: A and B DisplayYesNo");
-          NotifyUiDisplayYesNo(packet.GetNumericValue());
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Authenticated
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // PassKey Entry, Initiator display, Responder input
-          NotifyUiDisplayPasskey(packet.GetNumericValue());
-          LOG_INFO("Passkey Entry: A display, B input");
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Authenticated
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
           // NumericComparison, auto confirm Responder, Yes/No confirm Initiator. Don't show confirmation value
-          NotifyUiDisplayYesNo();
-          LOG_INFO("Numeric Comparison: A DisplayYesNo, B auto confirm, no show value");
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Unauthenticated
           break;
       }
@@ -319,20 +283,20 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
       switch (responder_io_capability) {
         case hci::IoCapability::DISPLAY_ONLY:
           // PassKey Entry, Responder display, Initiator input
-          NotifyUiDisplayPasskeyInput();
-          LOG_INFO("Passkey Entry: A input, B display");
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Authenticated
           break;
         case hci::IoCapability::DISPLAY_YES_NO:
           // PassKey Entry, Responder display, Initiator input
-          NotifyUiDisplayPasskeyInput();
-          LOG_INFO("Passkey Entry: A input, B display");
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Authenticated
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // PassKey Entry, both input
-          NotifyUiDisplayPasskeyInput();
-          LOG_INFO("Passkey Entry: A input, B input");
+          // TODO(optedoblivion): Notify UI
+          LOG_INFO("Notify UI");
           // Authenticated
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
