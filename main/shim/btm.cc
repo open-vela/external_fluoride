@@ -22,7 +22,6 @@
 #include "stack/btm/btm_int_types.h"
 
 #include "main/shim/btm.h"
-#include "main/shim/controller.h"
 #include "main/shim/entry.h"
 #include "main/shim/shim.h"
 #include "osi/include/log.h"
@@ -31,6 +30,8 @@ extern tBTM_CB btm_cb;
 
 static constexpr size_t kMaxInquiryResultSize = 4096;
 static uint8_t inquiry_result_buf[kMaxInquiryResultSize];
+
+static int inquiry_type_ = 0;
 
 static constexpr uint8_t kInquiryResultMode = 0;
 static constexpr uint8_t kInquiryResultWithRssiMode = 1;
@@ -43,11 +44,12 @@ static constexpr uint8_t kTxPowerInformationNotPresent = 0x7f;
 static constexpr uint8_t kNotPeriodicAdvertisement = 0x00;
 
 static constexpr bool kActiveScanning = true;
-static constexpr bool kPassiveScanning = false;
+static constexpr bool kPassiveScanning = true;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_process_inq_complete(uint8_t status, uint8_t result_type);
-extern void btm_process_inq_results(uint8_t* p, uint8_t result_mode);
+extern void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
+                                    uint8_t result_mode);
 extern void btm_ble_process_adv_addr(RawAddress& raw_address,
                                      uint8_t* address_type);
 extern void btm_ble_process_adv_pkt_cont(
@@ -58,6 +60,10 @@ extern void btm_ble_process_adv_pkt_cont(
 
 using BtmRemoteDeviceName = tBTM_REMOTE_DEV_NAME;
 
+bluetooth::shim::Btm::Btm() {}
+
+bluetooth::shim::Btm::~Btm() {}
+
 /**
  *
  */
@@ -65,7 +71,8 @@ void bluetooth::shim::Btm::OnInquiryResult(std::vector<const uint8_t> result) {
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, kInquiryResultMode);
+  btm_process_inq_results(inquiry_result_buf, result.size(),
+                          kInquiryResultMode);
 }
 
 void bluetooth::shim::Btm::OnInquiryResultWithRssi(
@@ -73,7 +80,8 @@ void bluetooth::shim::Btm::OnInquiryResultWithRssi(
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, kInquiryResultWithRssiMode);
+  btm_process_inq_results(inquiry_result_buf, result.size(),
+                          kInquiryResultWithRssiMode);
 }
 
 void bluetooth::shim::Btm::OnExtendedInquiryResult(
@@ -81,17 +89,17 @@ void bluetooth::shim::Btm::OnExtendedInquiryResult(
   CHECK(result.size() < kMaxInquiryResultSize);
 
   std::copy(result.begin(), result.end(), inquiry_result_buf);
-  btm_process_inq_results(inquiry_result_buf, kExtendedInquiryResultMode);
+  btm_process_inq_results(inquiry_result_buf, result.size(),
+                          kExtendedInquiryResultMode);
 }
 
 void bluetooth::shim::Btm::OnInquiryComplete(uint16_t status) {
-  btm_process_inq_complete((status == 0) ? (BTM_SUCCESS) : (BTM_ERR_PROCESSING),
-                           static_cast<uint8_t>(inquiry_mode_));
+  btm_process_inq_complete(status, inquiry_type_);
 }
 
 bool bluetooth::shim::Btm::SetInquiryFilter(uint8_t mode, uint8_t type,
                                             tBTM_INQ_FILT_COND data) {
-  switch (static_cast<int>(mode)) {
+  switch (mode) {
     case kInquiryModeOff:
       break;
     case kLimitedInquiryMode:
@@ -119,16 +127,19 @@ void bluetooth::shim::Btm::ClearInquiryFilter() {
   LOG_WARN(LOG_TAG, "UNIMPLEMENTED %s", __func__);
 }
 
-void bluetooth::shim::Btm::SetStandardInquiryResultMode() {
+bool bluetooth::shim::Btm::SetStandardInquiryResultMode() {
   bluetooth::shim::GetInquiry()->SetStandardInquiryResultMode();
+  return true;
 }
 
-void bluetooth::shim::Btm::SetInquiryWithRssiResultMode() {
+bool bluetooth::shim::Btm::SetInquiryWithRssiResultMode() {
   bluetooth::shim::GetInquiry()->SetInquiryWithRssiResultMode();
+  return true;
 }
 
-void bluetooth::shim::Btm::SetExtendedInquiryResultMode() {
+bool bluetooth::shim::Btm::SetExtendedInquiryResultMode() {
   bluetooth::shim::GetInquiry()->SetExtendedInquiryResultMode();
+  return true;
 }
 
 void bluetooth::shim::Btm::SetInterlacedInquiryScan() {
@@ -140,7 +151,9 @@ void bluetooth::shim::Btm::SetStandardInquiryScan() {
 }
 
 bool bluetooth::shim::Btm::IsInterlacedScanSupported() const {
-  return controller_get_interface()->supports_interlaced_inquiry_scan();
+  // TODO(cmanton) This is a controller query
+  LOG_WARN(LOG_TAG, "UNIMPLEMENTED %s", __func__);
+  return true;
 }
 
 /**
@@ -148,7 +161,7 @@ bool bluetooth::shim::Btm::IsInterlacedScanSupported() const {
  */
 bool bluetooth::shim::Btm::StartInquiry(uint8_t mode, uint8_t duration,
                                         uint8_t max_responses) {
-  switch (static_cast<int>(mode)) {
+  switch (mode) {
     case kInquiryModeOff:
       LOG_DEBUG(LOG_TAG, "%s Stopping inquiry mode", __func__);
       bluetooth::shim::GetInquiry()->StopInquiry();
@@ -190,7 +203,6 @@ bool bluetooth::shim::Btm::StartInquiry(uint8_t mode, uint8_t duration,
       LOG_WARN(LOG_TAG, "%s Unknown inquiry mode:%d", __func__, mode);
       return false;
   }
-  inquiry_mode_ = static_cast<int>(mode);
   return true;
 }
 
@@ -459,18 +471,24 @@ void bluetooth::shim::Btm::StopConnectability() {
   bluetooth::shim::GetAdvertising()->StopAdvertising();
 }
 
-void bluetooth::shim::Btm::StartActiveScanning() {
+bool bluetooth::shim::Btm::StartActiveScanning() {
   StartScanning(kActiveScanning);
+  return true;
 }
 
-void bluetooth::shim::Btm::StopActiveScanning() {
+bool bluetooth::shim::Btm::StopActiveScanning() {
   bluetooth::shim::GetScanning()->StopScanning();
+  return true;
 }
 
-void bluetooth::shim::Btm::StartObserving() { StartScanning(kPassiveScanning); }
+bool bluetooth::shim::Btm::StartObserving() {
+  StartScanning(kPassiveScanning);
+  return true;
+}
 
-void bluetooth::shim::Btm::StopObserving() {
+bool bluetooth::shim::Btm::StopObserving() {
   bluetooth::shim::GetScanning()->StopScanning();
+  return true;
 }
 
 void bluetooth::shim::Btm::StartScanning(bool use_active_scanning) {
