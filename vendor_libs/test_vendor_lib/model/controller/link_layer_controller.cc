@@ -573,13 +573,11 @@ void LinkLayerController::IncomingInquiryResponsePacket(
           (bluetooth::hci::PageScanRepetitionMode)
               inquiry_response.GetPageScanRepetitionMode();
 
-      std::vector<bluetooth::hci::InquiryResult> responses;
-      responses.emplace_back();
-      responses.back().bd_addr_ = inquiry_response.GetSourceAddress();
-      responses.back().page_scan_repetition_mode_ = page_scan_repetition_mode;
-      responses.back().class_of_device_ = inquiry_response.GetClassOfDevice();
-      responses.back().clock_offset_ = inquiry_response.GetClockOffset();
-      auto packet = bluetooth::hci::InquiryResultBuilder::Create(responses);
+      auto packet = bluetooth::hci::InquiryResultBuilder::Create(
+          0x01, inquiry_response.GetSourceAddress(), page_scan_repetition_mode,
+          inquiry_response.GetClassOfDevice(),
+          inquiry_response.GetClockOffset());
+
       send_event_(std::move(packet));
     } break;
 
@@ -593,15 +591,10 @@ void LinkLayerController::IncomingInquiryResponsePacket(
           (bluetooth::hci::PageScanRepetitionMode)
               inquiry_response.GetPageScanRepetitionMode();
 
-      std::vector<bluetooth::hci::InquiryResultWithRssi> responses;
-      responses.emplace_back();
-      responses.back().address_ = inquiry_response.GetSourceAddress();
-      responses.back().page_scan_repetition_mode_ = page_scan_repetition_mode;
-      responses.back().class_of_device_ = inquiry_response.GetClassOfDevice();
-      responses.back().clock_offset_ = inquiry_response.GetClockOffset();
-      responses.back().rssi_ = inquiry_response.GetRssi();
-      auto packet =
-          bluetooth::hci::InquiryResultWithRssiBuilder::Create(responses);
+      auto packet = bluetooth::hci::InquiryResultWithRssiBuilder::Create(
+          0x01, inquiry_response.GetSourceAddress(), page_scan_repetition_mode,
+          inquiry_response.GetClassOfDevice(),
+          inquiry_response.GetClockOffset(), inquiry_response.GetRssi());
       send_event_(std::move(packet));
     } break;
 
