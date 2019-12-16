@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <unordered_map>
@@ -133,18 +132,9 @@ class Btm {
   ~Btm() = default;
 
   // Inquiry result callbacks
-  void OnInquiryResult(std::string string_address, uint8_t page_scan_rep_mode,
-                       std::string string_class_of_device,
-                       uint16_t clock_offset);
-  void OnInquiryResultWithRssi(std::string string_address,
-                               uint8_t page_scan_rep_mode,
-                               std::string string_class_of_device,
-                               uint16_t clock_offset, int8_t rssi);
-  void OnExtendedInquiryResult(std::string string_address,
-                               uint8_t page_scan_rep_mode,
-                               std::string string_class_of_device,
-                               uint16_t clock_offset, int8_t rssi,
-                               const uint8_t* gap_data, size_t gap_data_len);
+  void OnInquiryResult(std::vector<const uint8_t> result);
+  void OnInquiryResultWithRssi(std::vector<const uint8_t> result);
+  void OnExtendedInquiryResult(std::vector<const uint8_t> result);
   void OnInquiryComplete(uint16_t status);
 
   // Inquiry API
