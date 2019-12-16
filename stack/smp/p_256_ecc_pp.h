@@ -58,8 +58,9 @@ extern elliptic_curve_t curve_p256;
 
 bool ECC_ValidatePoint(const Point& p);
 
-void ECC_PointMult_Bin_NAF(Point* q, Point* p, uint32_t* n);
+void ECC_PointMult_Bin_NAF(Point* q, Point* p, uint32_t* n, uint32_t keyLength);
 
-#define ECC_PointMult(q, p, n) ECC_PointMult_Bin_NAF(q, p, n)
+#define ECC_PointMult(q, p, n, keyLength) \
+  ECC_PointMult_Bin_NAF(q, p, n, keyLength)
 
-void p_256_init_curve();
+void p_256_init_curve(uint32_t keyLength);
