@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cstdint>
+#include <future>
 #include <set>
 
 #include "gd/shim/only_include_this_file_into_legacy_stack___ever.h"
@@ -69,5 +70,3 @@ class TestStack : public bluetooth::shim::IStack {
   void Start();
   void Stop();
 };
-
-extern TestStack test_stack_;
