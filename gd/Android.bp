@@ -637,8 +637,6 @@ cc_library_host_shared{
     "packet/python3_module.cc",
     "l2cap/fcs.cc",
     ":BluetoothPacketSources",
-    "hci/address.cc",
-    "hci/class_of_device.cc",
   ],
   generated_headers: [
     "BluetoothGeneratedPackets_h",
