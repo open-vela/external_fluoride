@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 
-#include <base/callback.h>
-#include <base/location.h>
-#include <string>
-#include "common/message_loop_thread.h"
+#include "gd/shim/only_include_this_file_into_legacy_stack___ever.h"
+#include "main/shim/entry.h"
 
-namespace bluetooth {
-namespace shim {
-namespace stub {
-
-extern bool message_loop_thread_is_running_;
-extern bool message_loop_thread_do_in_thread_;
-
-}  // namespace stub
-}  // namespace shim
-}  // namespace bluetooth
+/**
+ * Entrypoints for stubbed bluetooth test library
+ *
+ * Gd stack is not supported using legacy test modes
+ */
+bluetooth::shim::IStack* bluetooth::shim::GetGabeldorscheStack() {
+  return (bluetooth::shim::IStack*)nullptr;
+}
