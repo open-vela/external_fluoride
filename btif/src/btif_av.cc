@@ -346,8 +346,7 @@ class BtifAvSource {
 
   bt_status_t Init(
       btav_source_callbacks_t* callbacks, int max_connected_audio_devices,
-      const std::vector<btav_a2dp_codec_config_t>& codec_priorities,
-      const std::vector<btav_a2dp_codec_config_t>& offloading_preference);
+      const std::vector<btav_a2dp_codec_config_t>& codec_priorities);
   void Cleanup();
 
   btav_source_callbacks_t* Callbacks() { return callbacks_; }
@@ -936,8 +935,7 @@ BtifAvSource::~BtifAvSource() { CleanupAllPeers(); }
 
 bt_status_t BtifAvSource::Init(
     btav_source_callbacks_t* callbacks, int max_connected_audio_devices,
-    const std::vector<btav_a2dp_codec_config_t>& codec_priorities,
-    const std::vector<btav_a2dp_codec_config_t>& offloading_preference) {
+    const std::vector<btav_a2dp_codec_config_t>& codec_priorities) {
   LOG_INFO(LOG_TAG, "%s: max_connected_audio_devices=%d", __PRETTY_FUNCTION__,
            max_connected_audio_devices);
   if (enabled_) return BT_STATUS_SUCCESS;
@@ -955,10 +953,6 @@ bt_status_t BtifAvSource::Init(
   BTIF_TRACE_DEBUG("a2dp_offload.enable = %d", a2dp_offload_enabled_);
 
   callbacks_ = callbacks;
-  if (a2dp_offload_enabled_) {
-    bluetooth::audio::a2dp::update_codec_offloading_capabilities(
-        offloading_preference);
-  }
   bta_av_co_init(codec_priorities);
 
   if (!btif_a2dp_source_init()) {
@@ -2646,11 +2640,10 @@ static void bta_av_sink_media_callback(tBTA_AV_EVT event,
 // Initializes the AV interface for source mode
 static bt_status_t init_src(
     btav_source_callbacks_t* callbacks, int max_connected_audio_devices,
-    const std::vector<btav_a2dp_codec_config_t>& codec_priorities,
-    const std::vector<btav_a2dp_codec_config_t>& offloading_preference) {
+    std::vector<btav_a2dp_codec_config_t> codec_priorities) {
   BTIF_TRACE_EVENT("%s", __func__);
   return btif_av_source.Init(callbacks, max_connected_audio_devices,
-                             codec_priorities, offloading_preference);
+                             codec_priorities);
 }
 
 // Initializes the AV interface for sink mode
@@ -3266,18 +3259,6 @@ void btif_av_reset_audio_delay(void) { btif_a2dp_control_reset_audio_delay(); }
 
 bool btif_av_is_a2dp_offload_enabled() {
   return btif_av_source.A2dpOffloadEnabled();
-}
-
-bool btif_av_is_a2dp_offload_running() {
-  if (!btif_av_is_a2dp_offload_enabled()) {
-    return false;
-  }
-  if (!bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    // since android::hardware::bluetooth::a2dp::V1_0 deprecated, offloading
-    // is supported by Bluetooth Audio HAL 2.0 only.
-    return false;
-  }
-  return bluetooth::audio::a2dp::is_hal_2_0_offloading();
 }
 
 bool btif_av_is_peer_silenced(const RawAddress& peer_address) {
