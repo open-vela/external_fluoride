@@ -26,6 +26,7 @@
 #include <hidl/ServiceManagement.h>
 #include <future>
 
+#include "btu.h"
 #include "osi/include/log.h"
 
 namespace bluetooth {
@@ -73,7 +74,9 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
                          const android::sp<IBluetoothAudioProvider>& provider)
       : sink_(sink), provider_(provider){};
 
-  Return<void> startStream() {
+  Return<void> startStream() override {
+    main_thread_hwbinder_timer_start(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(__func__));
     BluetoothAudioCtrlAck ack = sink_->StartRequest();
     if (ack != BluetoothAudioCtrlAck::PENDING) {
       auto hidl_retval =
@@ -82,10 +85,13 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
         LOG(ERROR) << __func__ << ": BluetoothAudioHal failure: " << hidl_retval.description();
       }
     }
+    main_thread_hwbinder_timer_stop();
     return Void();
   }
 
-  Return<void> suspendStream() {
+  Return<void> suspendStream() override {
+    main_thread_hwbinder_timer_start(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(__func__));
     BluetoothAudioCtrlAck ack = sink_->SuspendRequest();
     if (ack != BluetoothAudioCtrlAck::PENDING) {
       auto hidl_retval =
@@ -94,15 +100,22 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
         LOG(ERROR) << __func__ << ": BluetoothAudioHal failure: " << hidl_retval.description();
       }
     }
+    main_thread_hwbinder_timer_stop();
     return Void();
   }
 
-  Return<void> stopStream() {
+  Return<void> stopStream() override {
+    main_thread_hwbinder_timer_start(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(__func__));
     sink_->StopRequest();
+    main_thread_hwbinder_timer_stop();
     return Void();
   }
 
-  Return<void> getPresentationPosition(getPresentationPosition_cb _hidl_cb) {
+  Return<void> getPresentationPosition(
+      getPresentationPosition_cb _hidl_cb) override {
+    main_thread_hwbinder_timer_start(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(__func__));
     uint64_t remote_delay_report_ns;
     uint64_t total_bytes_read;
     timespec data_position;
@@ -125,10 +138,13 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
                      : BluetoothAudioStatus::FAILURE),
              remote_delay_report_ns, total_bytes_read,
              transmittedOctetsTimeStamp);
+    main_thread_hwbinder_timer_stop();
     return Void();
   }
 
-  Return<void> updateMetadata(const SourceMetadata& sourceMetadata) {
+  Return<void> updateMetadata(const SourceMetadata& sourceMetadata) override {
+    main_thread_hwbinder_timer_start(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(__func__));
     LOG(INFO) << __func__ << ": " << sourceMetadata.tracks.size()
               << " track(s)";
     // refer to StreamOut.impl.h within Audio HAL (AUDIO_HAL_VERSION_5_0)
@@ -145,6 +161,7 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
     const source_metadata_t source_metadata = {
         .track_count = metadata_vec.size(), .tracks = metadata_vec.data()};
     sink_->MetadataChanged(source_metadata);
+    main_thread_hwbinder_timer_stop();
     return Void();
   }
 
@@ -166,7 +183,8 @@ class BluetoothAudioDeathRecipient
       : bluetooth_audio_clientif_(clientif), message_loop_(message_loop) {}
   void serviceDied(
       uint64_t /*cookie*/,
-      const ::android::wp<::android::hidl::base::V1_0::IBase>& /*who*/) {
+      const ::android::wp<::android::hidl::base::V1_0::IBase>& /*who*/)
+      override {
     LOG(WARNING) << __func__ << ": restarting connection with new Audio Hal";
     if (bluetooth_audio_clientif_ != nullptr && message_loop_ != nullptr) {
       // restart the session on the correct thread

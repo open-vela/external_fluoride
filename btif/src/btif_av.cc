@@ -494,23 +494,12 @@ class BtifAvSource {
       const std::vector<btav_a2dp_codec_config_t>& codec_preferences,
       std::promise<void> peer_ready_promise) {
     // Restart the session if the codec for the active peer is updated
-    bool restart_session =
-        ((active_peer_ == peer_address) && !active_peer_.IsEmpty());
-    if (restart_session) {
+    if (!peer_address.IsEmpty() && active_peer_ == peer_address) {
       btif_a2dp_source_end_session(active_peer_);
     }
 
-    for (auto cp : codec_preferences) {
-      BTIF_TRACE_DEBUG("%s: codec_preference=%s", __func__,
-                       cp.ToString().c_str());
-      btif_a2dp_source_encoder_user_config_update_req(peer_address, cp);
-    }
-    if (restart_session) {
-      btif_a2dp_source_start_session(active_peer_,
-                                     std::move(peer_ready_promise));
-    } else {
-      peer_ready_promise.set_value();
-    }
+    btif_a2dp_source_encoder_user_config_update_req(
+        peer_address, codec_preferences, std::move(peer_ready_promise));
   }
 
   const std::map<RawAddress, BtifAvPeer*>& Peers() const { return peers_; }
@@ -1841,17 +1830,26 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event,
       // If remote tries to start A2DP when DUT is A2DP Source, then Suspend.
       // If A2DP is Sink and call is active, then disconnect the AVDTP channel.
       bool should_suspend = false;
-      if (peer_.IsSink() && !peer_.CheckFlags(BtifAvPeer::kFlagPendingStart |
-                                              BtifAvPeer::kFlagRemoteSuspend)) {
-        LOG(WARNING) << __PRETTY_FUNCTION__ << ": Peer " << peer_.PeerAddress()
-                     << " : trigger Suspend as remote initiated";
-        should_suspend = true;
-      }
+      if (peer_.IsSink()) {
+        if (!peer_.CheckFlags(BtifAvPeer::kFlagPendingStart |
+                              BtifAvPeer::kFlagRemoteSuspend)) {
+          LOG(WARNING) << __PRETTY_FUNCTION__ << ": Peer "
+                       << peer_.PeerAddress()
+                       << " : trigger Suspend as remote initiated";
+          should_suspend = true;
+        } else if (!peer_.IsActivePeer()) {
+          LOG(WARNING) << __PRETTY_FUNCTION__ << ": Peer "
+                       << peer_.PeerAddress()
+                       << " : trigger Suspend as non-active";
+          should_suspend = true;
+        }
 
-      // If peer is A2DP Source, do ACK commands to audio HAL and start media task
-      if (peer_.IsSink() && btif_a2dp_on_started(peer_.PeerAddress(), &p_av->start)) {
-        // Only clear pending flag after acknowledgement
-        peer_.ClearFlags(BtifAvPeer::kFlagPendingStart);
+        // If peer is A2DP Source, do ACK commands to audio HAL and start media
+        // task
+        if (btif_a2dp_on_started(peer_.PeerAddress(), &p_av->start)) {
+          // Only clear pending flag after acknowledgement
+          peer_.ClearFlags(BtifAvPeer::kFlagPendingStart);
+        }
       }
 
       // Remain in Open state if status failed
@@ -1886,17 +1884,20 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event,
 
     case BTA_AV_CLOSE_EVT:
       // AVDTP link is closed
-      if (peer_.IsActivePeer()) {
-        btif_a2dp_on_stopped(nullptr);
-      }
-
       // Change state to Idle, send acknowledgement if start is pending
       if (peer_.CheckFlags(BtifAvPeer::kFlagPendingStart)) {
         BTIF_TRACE_WARNING("%s: Peer %s : failed pending start request",
                            __PRETTY_FUNCTION__,
                            peer_.PeerAddress().ToString().c_str());
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        tBTA_AV_START av_start = {.chnl = p_av->close.chnl,
+                                  .hndl = p_av->close.hndl,
+                                  .status = BTA_AV_FAIL_STREAM,
+                                  .initiator = true,
+                                  .suspending = true};
+        btif_a2dp_on_started(peer_.PeerAddress(), &av_start);
         // Pending start flag will be cleared when exit current state
+      } else if (peer_.IsActivePeer()) {
+        btif_a2dp_on_stopped(nullptr);
       }
 
       // Inform the application that we are disconnected
@@ -1906,18 +1907,36 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event,
       break;
 
     case BTA_AV_RECONFIG_EVT:
-      if (peer_.CheckFlags(BtifAvPeer::kFlagPendingStart) &&
-          (p_av->reconfig.status == BTA_AV_SUCCESS)) {
-        LOG_INFO(LOG_TAG,
-                 "%s : Peer %s : Reconfig done - calling BTA_AvStart()",
-                 __PRETTY_FUNCTION__, peer_.PeerAddress().ToString().c_str());
+      if (p_av->reconfig.status != BTA_AV_SUCCESS) {
+        LOG(WARNING) << __PRETTY_FUNCTION__ << ": Peer " << peer_.PeerAddress()
+                     << " : failed reconfiguration";
+        if (peer_.CheckFlags(BtifAvPeer::kFlagPendingStart)) {
+          LOG(ERROR) << __PRETTY_FUNCTION__ << ": Peer " << peer_.PeerAddress()
+                     << " : cannot proceed to do AvStart";
+          peer_.ClearFlags(BtifAvPeer::kFlagPendingStart);
+          btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        }
+        if (peer_.IsSink()) {
+          src_disconnect_sink(peer_.PeerAddress());
+        } else if (peer_.IsSource()) {
+          sink_disconnect_src(peer_.PeerAddress());
+        }
+        break;
+      }
+
+      if (peer_.IsActivePeer()) {
+        LOG(INFO) << __PRETTY_FUNCTION__ << " : Peer " << peer_.PeerAddress()
+                  << " : Reconfig done - calling startSession() to audio HAL";
+        std::promise<void> peer_ready_promise;
+        std::future<void> peer_ready_future = peer_ready_promise.get_future();
+        btif_a2dp_source_start_session(peer_.PeerAddress(),
+                                       std::move(peer_ready_promise));
+      }
+      if (peer_.CheckFlags(BtifAvPeer::kFlagPendingStart)) {
+        LOG(INFO) << __PRETTY_FUNCTION__ << " : Peer " << peer_.PeerAddress()
+                  << " : Reconfig done - calling BTA_AvStart("
+                  << loghex(peer_.BtaHandle()) << ")";
         BTA_AvStart(peer_.BtaHandle());
-      } else if (peer_.CheckFlags(BtifAvPeer::kFlagPendingStart)) {
-        BTIF_TRACE_WARNING("%s: Peer %s : failed reconfiguration",
-                           __PRETTY_FUNCTION__,
-                           peer_.PeerAddress().ToString().c_str());
-        peer_.ClearFlags(BtifAvPeer::kFlagPendingStart);
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
       }
       break;
 
@@ -2013,15 +2032,14 @@ bool BtifAvStateMachine::StateStarted::ProcessEvent(uint32_t event,
       // always overrides.
       peer_.ClearFlags(BtifAvPeer::kFlagRemoteSuspend);
 
-      if (peer_.IsSink()) {
+      if (peer_.IsSink() &&
+          (peer_.IsActivePeer() || !btif_av_stream_started_ready())) {
         // Immediately stop transmission of frames while suspend is pending
-        if (peer_.IsActivePeer()) {
-          if (event == BTIF_AV_STOP_STREAM_REQ_EVT) {
-            btif_a2dp_on_stopped(nullptr);
-          } else {
-            // (event == BTIF_AV_SUSPEND_STREAM_REQ_EVT)
-            btif_a2dp_source_set_tx_flush(true);
-          }
+        if (event == BTIF_AV_STOP_STREAM_REQ_EVT) {
+          btif_a2dp_on_stopped(nullptr);
+        } else {
+          // ensure tx frames are immediately suspended
+          btif_a2dp_source_set_tx_flush(true);
         }
       } else if (peer_.IsSource()) {
         btif_a2dp_on_stopped(nullptr);
@@ -2056,8 +2074,10 @@ bool BtifAvStateMachine::StateStarted::ProcessEvent(uint32_t event,
                BtifAvEvent::EventName(event).c_str(), p_av->suspend.status,
                p_av->suspend.initiator, peer_.FlagsToString().c_str());
 
-      // A2DP suspended, stop A2DP encoder/decoder until resumed
-      btif_a2dp_on_suspended(&p_av->suspend);
+      // A2DP suspended, stop A2DP encoder / decoder until resumed
+      if (peer_.IsActivePeer() || !btif_av_stream_started_ready()) {
+        btif_a2dp_on_suspended(&p_av->suspend);
+      }
 
       // If not successful, remain in current state
       if (p_av->suspend.status != BTA_AV_SUCCESS) {
@@ -2099,7 +2119,11 @@ bool BtifAvStateMachine::StateStarted::ProcessEvent(uint32_t event,
       peer_.SetFlags(BtifAvPeer::kFlagPendingStop);
       peer_.ClearFlags(BtifAvPeer::kFlagLocalSuspendPending);
 
-      btif_a2dp_on_stopped(&p_av->suspend);
+      // Don't change the encoder and audio provider state by a non-active peer
+      // since they are shared between peers
+      if (peer_.IsActivePeer() || !btif_av_stream_started_ready()) {
+        btif_a2dp_on_stopped(&p_av->suspend);
+      }
 
       btif_report_audio_state(peer_.PeerAddress(), BTAV_AUDIO_STATE_STOPPED);
 
@@ -2379,10 +2403,11 @@ static void btif_av_handle_event(uint8_t peer_sep,
                                  tBTA_AV_HNDL bta_handle,
                                  const BtifAvEvent& btif_av_event) {
   BtifAvPeer* peer = nullptr;
-  BTIF_TRACE_EVENT("%s: peer_sep=%s (%d) peer_address=%s handle=0x%x event=%s",
-                   __func__, (peer_sep == AVDT_TSEP_SRC) ? "Source" : "Sink",
-                   peer_sep, peer_address.ToString().c_str(), bta_handle,
-                   btif_av_event.ToString().c_str());
+  BTIF_TRACE_EVENT(
+      "%s: peer_sep=%s (%d) peer_address=%s bta_handle=0x%x event=%s", __func__,
+      (peer_sep == AVDT_TSEP_SRC) ? "Source" : "Sink", peer_sep,
+      peer_address.ToString().c_str(), bta_handle,
+      btif_av_event.ToString().c_str());
 
   // Find the peer
   if (peer_address != RawAddress::kEmpty) {
@@ -2400,8 +2425,8 @@ static void btif_av_handle_event(uint8_t peer_sep,
   }
   if (peer == nullptr) {
     BTIF_TRACE_ERROR(
-        "%s: Cannot find or create %s peer for peer_address=%s handle=0x%x : "
-        "event dropped: %s",
+        "%s: Cannot find or create %s peer for peer_address=%s bta_handle=0x%x "
+        ": event dropped: %s",
         __func__, (peer_sep == AVDT_TSEP_SRC) ? "Source" : "Sink",
         peer_address.ToString().c_str(), bta_handle,
         btif_av_event.ToString().c_str());
@@ -2441,7 +2466,7 @@ static void btif_av_handle_bta_av_event(uint8_t peer_sep,
       const tBTA_AV_REGISTER& registr = p_data->registr;
       bta_handle = registr.hndl;
       uint8_t peer_id = registr.app_id;  // The PeerId is used as AppId
-      BTIF_TRACE_DEBUG("%s: handle=0x%x app_id=%d", __func__, bta_handle,
+      BTIF_TRACE_DEBUG("%s: bta_handle=0x%x app_id=%d", __func__, bta_handle,
                        registr.app_id);
       if (peer_sep == AVDT_TSEP_SNK) {
         btif_av_source.BtaHandleRegistered(peer_id, bta_handle);
@@ -2539,7 +2564,7 @@ static void btif_av_handle_bta_av_event(uint8_t peer_sep,
       break;
     }
   }
-  BTIF_TRACE_DEBUG("%s: peer_address=%s handle=0x%x", __func__,
+  BTIF_TRACE_DEBUG("%s: peer_address=%s bta_handle=0x%x", __func__,
                    peer_address.ToString().c_str(), bta_handle);
 
   btif_av_handle_event(peer_sep, peer_address, bta_handle, btif_av_event);
@@ -2804,6 +2829,11 @@ static bt_status_t codec_config_src(
     return BT_STATUS_NOT_READY;
   }
 
+  if (peer_address.IsEmpty()) {
+    LOG(WARNING) << __func__ << ": BTIF AV Source needs peer to config";
+    return BT_STATUS_PARM_INVALID;
+  }
+
   std::promise<void> peer_ready_promise;
   std::future<void> peer_ready_future = peer_ready_promise.get_future();
   bt_status_t status = do_in_main_thread(
@@ -2861,6 +2891,27 @@ void btif_av_stream_start(void) {
                                    BTIF_AV_START_STREAM_REQ_EVT);
 }
 
+void src_do_suspend_in_main_thread(btif_av_sm_event_t event) {
+  if (event != BTIF_AV_SUSPEND_STREAM_REQ_EVT &&
+      event != BTIF_AV_STOP_STREAM_REQ_EVT)
+    return;
+  auto src_do_stream_suspend = [](btif_av_sm_event_t event) {
+    bool is_idle = true;
+    for (auto it : btif_av_source.Peers()) {
+      const BtifAvPeer* peer = it.second;
+      if (peer->StateMachine().StateId() == BtifAvStateMachine::kStateStarted) {
+        btif_av_source_dispatch_sm_event(peer->PeerAddress(), event);
+        is_idle = false;
+      }
+    }
+    if (is_idle) {
+      btif_a2dp_on_stopped(nullptr);
+    }
+  };
+  // switch to main thread to prevent a race condition of accessing peers
+  do_in_main_thread(FROM_HERE, base::Bind(src_do_stream_suspend, event));
+}
+
 void btif_av_stream_stop(const RawAddress& peer_address) {
   LOG_INFO(LOG_TAG, "%s peer %s", __func__, peer_address.ToString().c_str());
 
@@ -2870,23 +2921,15 @@ void btif_av_stream_stop(const RawAddress& peer_address) {
   }
 
   // The active peer might have changed and we might be in the process
-  // of reconfiguring the stream. We need to stop the appopriate peer(s).
-  for (auto it : btif_av_source.Peers()) {
-    const BtifAvPeer* peer = it.second;
-    btif_av_source_dispatch_sm_event(peer->PeerAddress(),
-                                     BTIF_AV_STOP_STREAM_REQ_EVT);
-  }
+  // of reconfiguring the stream. We need to stop the appropriate peer(s).
+  src_do_suspend_in_main_thread(BTIF_AV_STOP_STREAM_REQ_EVT);
 }
 
 void btif_av_stream_suspend(void) {
   LOG_INFO(LOG_TAG, "%s", __func__);
   // The active peer might have changed and we might be in the process
   // of reconfiguring the stream. We need to suspend the appropriate peer(s).
-  for (auto it : btif_av_source.Peers()) {
-    const BtifAvPeer* peer = it.second;
-    btif_av_source_dispatch_sm_event(peer->PeerAddress(),
-                                     BTIF_AV_SUSPEND_STREAM_REQ_EVT);
-  }
+  src_do_suspend_in_main_thread(BTIF_AV_SUSPEND_STREAM_REQ_EVT);
 }
 
 void btif_av_stream_start_offload(void) {
