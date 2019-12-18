@@ -20,7 +20,6 @@
 
 #include "btif_config.h"
 
-#include <base/base64.h>
 #include <base/logging.h>
 #include <ctype.h>
 #include <openssl/rand.h>
@@ -39,7 +38,7 @@
 #include "btif_api.h"
 #include "btif_common.h"
 #include "btif_config_transcode.h"
-#include "btif_keystore.h"
+//#include "btif_keystore.h"
 #include "btif_util.h"
 #include "common/address_obfuscator.h"
 #include "osi/include/alarm.h"
@@ -59,15 +58,15 @@
 #define DISABLED "disabled"
 static const char* TIME_STRING_FORMAT = "%Y-%m-%d %H:%M:%S";
 
-constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
+// constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
 
-static bool btif_is_niap_mode() {
-  return getuid() == AID_BLUETOOTH && is_niap_mode();
-}
+/*static bool use_key_attestation() {
+  return getuid() == AID_BLUETOOTH && is_single_user_mode();
+}*/
 
 #define BT_CONFIG_METRICS_SECTION "Metrics"
 #define BT_CONFIG_METRICS_SALT_256BIT "Salt256Bit"
-using bluetooth::BtifKeystore;
+// using bluetooth::BtifKeystore;
 using bluetooth::common::AddressObfuscator;
 
 // TODO(armansito): Find a better way than searching by a hardcoded path.
@@ -94,21 +93,10 @@ static void btif_config_remove_restricted(config_t* config);
 static std::unique_ptr<config_t> btif_config_open(const char* filename, const char* checksum_filename);
 
 // Key attestation
-static std::string btif_convert_to_encrypt_key(
-    const std::string& unencrypt_str);
-static std::string btif_convert_to_unencrypt_key(
-    const std::string& encrypt_str);
-static bool btif_in_encrypt_key_name_list(std::string key);
-static bool btif_is_key_encrypted(int key_from_config_size,
-                                  std::string key_type_string);
-static std::string hash_file(const char* filename);
-static std::string read_checksum_file(const char* filename);
-static void write_checksum_file(const char* filename, const std::string& hash);
-
-static const int ENCRYPT_KEY_NAME_LIST_SIZE = 7;
-static const std::string encrypt_key_name_list[] = {
-    "LinkKey",      "LE_KEY_PENC", "LE_KEY_PID",  "LE_KEY_LID",
-    "LE_KEY_PCSRK", "LE_KEY_LENC", "LE_KEY_LCSRK"};
+// static std::string hash_file(const char* filename);
+// static std::string read_checksum_file(const char* filename);
+// static void write_checksum_file(const char* filename, const std::string&
+// hash);
 
 static enum ConfigSource {
   NOT_LOADED,
@@ -189,7 +177,7 @@ static std::recursive_mutex config_lock;  // protects operations on |config|.
 static std::unique_ptr<config_t> config;
 static alarm_t* config_timer;
 
-static BtifKeystore btif_keystore(new keystore::KeystoreClientImpl);
+// static BtifKeystore btif_keystore(new keystore::KeystoreClientImpl);
 
 // Module lifecycle functions
 
@@ -197,6 +185,9 @@ static future_t* init(void) {
   std::unique_lock<std::recursive_mutex> lock(config_lock);
 
   if (is_factory_reset()) delete_config_files();
+  /*if (is_factory_reset() ||
+      (use_key_attestation() && !btif_keystore.DoesKeyExist()))
+    delete_config_files();*/
 
   std::string file_source;
 
@@ -275,15 +266,14 @@ error:
 }
 
 static std::unique_ptr<config_t> btif_config_open(const char* filename, const char* checksum_filename) {
-  // START KEY ATTESTATION
+  /*// START KEY ATTESTATION
   // Get hash of current file
   std::string current_hash = hash_file(filename);
   // Get stored hash
   std::string stored_hash = read_checksum_file(checksum_filename);
   if (stored_hash.empty()) {
     LOG(ERROR) << __func__ << ": stored_hash=<empty>";
-    // Will encrypt once since the bt_config never encrypt.
-    if (!btif_keystore.DoesKeyExist() && !current_hash.empty()) {
+    if (!current_hash.empty()) {
       write_checksum_file(checksum_filename, current_hash);
       stored_hash = read_checksum_file(checksum_filename);
     }
@@ -292,7 +282,7 @@ static std::unique_ptr<config_t> btif_config_open(const char* filename, const ch
   if (current_hash != stored_hash) {
     return nullptr;
   }
-  // END KEY ATTESTATION
+  // END KEY ATTESTATION*/
 
   std::unique_ptr<config_t> config = config_new(filename);
   if (!config) return nullptr;
@@ -420,26 +410,12 @@ bool btif_config_get_bin(const std::string& section, const std::string& key,
   CHECK(length != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  const std::string* value_str;
-  const std::string* value_str_from_config =
-      config_get_string(*config, section, key, NULL);
+  const std::string* value_str = config_get_string(*config, section, key, NULL);
 
-  if (!value_str_from_config) {
+  if (!value_str) {
     VLOG(1) << __func__ << ": cannot find string for section " << section
             << ", key " << key;
     return false;
-  }
-
-  bool in_encrypt_key_name_list = btif_in_encrypt_key_name_list(key);
-  bool is_key_encrypted =
-      btif_is_key_encrypted(value_str_from_config->size(), key);
-
-  if (in_encrypt_key_name_list && is_key_encrypted) {
-    std::string tmp_value_str =
-        btif_convert_to_unencrypt_key(*value_str_from_config);
-    value_str = &tmp_value_str;
-  } else {
-    value_str = value_str_from_config;
   }
 
   size_t value_len = value_str->length();
@@ -455,69 +431,10 @@ bool btif_config_get_bin(const std::string& section, const std::string& key,
     }
 
   const char* ptr = value_str->c_str();
-  for (*length = 0; *ptr; ptr += 2, *length += 1) {
+  for (*length = 0; *ptr; ptr += 2, *length += 1)
     sscanf(ptr, "%02hhx", &value[*length]);
-  }
-
-  if (btif_is_niap_mode()) {
-    if (in_encrypt_key_name_list && !is_key_encrypted) {
-      std::string encrypt_str =
-          btif_convert_to_encrypt_key(*value_str_from_config);
-      config_set_string(config.get(), section, key, encrypt_str);
-    }
-  } else {
-    if (in_encrypt_key_name_list && is_key_encrypted) {
-      config_set_string(config.get(), section, key, value_str->c_str());
-    }
-  }
 
   return true;
-}
-
-static bool btif_in_encrypt_key_name_list(std::string key) {
-  return std::find(encrypt_key_name_list,
-                   encrypt_key_name_list + ENCRYPT_KEY_NAME_LIST_SIZE,
-                   key) != (encrypt_key_name_list + ENCRYPT_KEY_NAME_LIST_SIZE);
-}
-
-static bool btif_is_key_encrypted(int key_from_config_size,
-                                  std::string key_type_string) {
-  if (key_type_string.compare("LinkKey") == 0) {
-    return sizeof(LinkKey) * 2 != key_from_config_size;
-  } else if (key_type_string.compare("LE_KEY_PENC") == 0) {
-    return sizeof(tBTM_LE_PENC_KEYS) * 2 != key_from_config_size;
-  } else if (key_type_string.compare("LE_KEY_PID") == 0) {
-    return sizeof(tBTM_LE_PID_KEYS) * 2 != key_from_config_size;
-  } else if (key_type_string.compare("LE_KEY_LID") == 0) {
-    return sizeof(tBTM_LE_PID_KEYS) * 2 != key_from_config_size;
-  } else if (key_type_string.compare("LE_KEY_PCSRK") == 0) {
-    return sizeof(tBTM_LE_PCSRK_KEYS) * 2 != key_from_config_size;
-  } else if (key_type_string.compare("LE_KEY_LENC") == 0) {
-    return sizeof(tBTM_LE_LENC_KEYS) * 2 != key_from_config_size;
-  } else if (key_type_string.compare("LE_KEY_LCSRK") == 0) {
-    return sizeof(tBTM_LE_LCSRK_KEYS) * 2 != key_from_config_size;
-  } else {
-    VLOG(2) << __func__ << ": " << key_type_string
-            << " Key type is unknown, return false first";
-    return false;
-  }
-}
-
-static std::string btif_convert_to_unencrypt_key(
-    const std::string& encrypt_str) {
-  if (!encrypt_str.empty()) {
-    std::string tmp_encrypt_str("");
-    if (base::Base64Decode(encrypt_str, &tmp_encrypt_str)) {
-      std::string unencrypt_str = btif_keystore.Decrypt(tmp_encrypt_str);
-      if (!unencrypt_str.empty()) {
-        return unencrypt_str;
-      }
-    } else {
-      LOG(WARNING) << __func__
-                   << ": base64string decode fail, will return empty string";
-    }
-  }
-  return "";
 }
 
 size_t btif_config_get_bin_length(const std::string& section,
@@ -553,34 +470,13 @@ bool btif_config_set_bin(const std::string& section, const std::string& key,
     str[(i * 2) + 1] = lookup[value[i] & 0x0F];
   }
 
-  std::string value_str;
-  if (btif_is_niap_mode() && btif_in_encrypt_key_name_list(key)) {
-    value_str = btif_convert_to_encrypt_key(str);
-  } else {
-    value_str = str;
-  }
-
   {
     std::unique_lock<std::recursive_mutex> lock(config_lock);
-    config_set_string(config.get(), section, key, value_str);
+    config_set_string(config.get(), section, key, str);
   }
 
   osi_free(str);
   return true;
-}
-
-static std::string btif_convert_to_encrypt_key(
-    const std::string& unencrypt_str) {
-  if (!unencrypt_str.empty()) {
-    std::string encrypt_str = btif_keystore.Encrypt(unencrypt_str, 0);
-    if (!encrypt_str.empty()) {
-      base::Base64Encode(encrypt_str, &encrypt_str);
-      return encrypt_str;
-    } else {
-      LOG(ERROR) << __func__ << ": Encrypt fail, will return empty str.";
-    }
-  }
-  return "";
 }
 
 std::list<section_t>& btif_config_sections() { return config->sections; }
@@ -620,11 +516,11 @@ bool btif_config_clear(void) {
   bool ret = config_save(*config, CONFIG_FILE_PATH);
   btif_config_source = RESET;
 
-  // Save encrypted hash
+  /*// Save encrypted hash
   std::string current_hash = hash_file(CONFIG_FILE_PATH);
   if (!current_hash.empty()) {
     write_checksum_file(CONFIG_FILE_CHECKSUM_PATH, current_hash);
-  }
+  }*/
 
   return ret;
 }
@@ -647,11 +543,11 @@ static void btif_config_write(UNUSED_ATTR uint16_t event,
   std::unique_ptr<config_t> config_paired = config_new_clone(*config);
   btif_config_remove_unpaired(config_paired.get());
   config_save(*config_paired, CONFIG_FILE_PATH);
-  // Save hash
+  /*// Save hash
   std::string current_hash = hash_file(CONFIG_FILE_PATH);
   if (!current_hash.empty()) {
     write_checksum_file(CONFIG_FILE_CHECKSUM_PATH, current_hash);
-  }
+  }*/
 }
 
 static void btif_config_remove_unpaired(config_t* conf) {
@@ -743,13 +639,13 @@ static bool is_factory_reset(void) {
 static void delete_config_files(void) {
   remove(CONFIG_FILE_PATH);
   remove(CONFIG_BACKUP_PATH);
-  remove(CONFIG_FILE_CHECKSUM_PATH);
-  remove(CONFIG_BACKUP_CHECKSUM_PATH);
+  // remove(CONFIG_FILE_CHECKSUM_PATH);
+  // remove(CONFIG_BACKUP_CHECKSUM_PATH);
   osi_property_set("persist.bluetooth.factoryreset", "false");
 }
 
-static std::string hash_file(const char* filename) {
-  if (!btif_is_niap_mode()) {
+/*static std::string hash_file(const char* filename) {
+  if (!use_key_attestation()) {
     LOG(INFO) << __func__ << ": Disabled for multi-user";
     return DISABLED;
   }
@@ -777,7 +673,7 @@ static std::string hash_file(const char* filename) {
 }
 
 static std::string read_checksum_file(const char* checksum_filename) {
-  if (!btif_is_niap_mode()) {
+  if (!use_key_attestation()) {
     LOG(INFO) << __func__ << ": Disabled for multi-user";
     return DISABLED;
   }
@@ -791,7 +687,7 @@ static std::string read_checksum_file(const char* checksum_filename) {
 
 static void write_checksum_file(const char* checksum_filename,
                                 const std::string& hash) {
-  if (!btif_is_niap_mode()) {
+  if (!use_key_attestation()) {
     LOG(INFO) << __func__
               << ": Disabled for multi-user, since config changed removing "
                  "checksums.";
@@ -804,4 +700,4 @@ static void write_checksum_file(const char* checksum_filename,
       << __func__ << ": Failed encrypting checksum";
   CHECK(checksum_save(encrypted_checksum, checksum_filename))
       << __func__ << ": Failed to save checksum!";
-}
+}*/
