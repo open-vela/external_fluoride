@@ -243,8 +243,6 @@ class Btm {
   Timer* observing_timer_{nullptr};
   Timer* scanning_timer_{nullptr};
 
-  std::mutex sync_mutex_;
-
   LegacyInquiryCompleteCallback legacy_inquiry_complete_callback_{};
 
   uint8_t active_inquiry_mode_ = 0;
