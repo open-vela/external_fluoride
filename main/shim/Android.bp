@@ -1,0 +1,23 @@
+filegroup {
+    name: "LibBluetoothShimSources",
+    srcs: [
+        "btm.cc",
+        "btm_api.cc",
+        "controller.cc",
+        "entry.cc",
+        "hci_layer.cc",
+        "l2c_api.cc",
+        "l2cap.cc",
+        "shim.cc",
+        "timer.cc",
+    ]
+}
+
+filegroup {
+    name: "LibBluetoothShimTestSources",
+    srcs: [
+        "l2cap_test.cc",
+        "timer_test.cc",
+    ]
+}
+
