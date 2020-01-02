@@ -60,10 +60,7 @@ class EventCallbackStream(object):
 
     def __exit__(self, type, value, traceback):
         self.shutdown()
-        if traceback is None:
-            return True
-        else:
-            return False
+        return True
 
     def __del__(self):
         self.shutdown()
