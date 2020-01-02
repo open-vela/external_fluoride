@@ -25,7 +25,6 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -385,126 +384,6 @@ uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval) {
   if (p_interval) *p_interval = btm_cb.btm_inq_vars.inq_scan_period;
 
   return (btm_cb.btm_inq_vars.discoverable_mode);
-}
-
-/*******************************************************************************
- *
- * Function         BTM_SetPeriodicInquiryMode
- *
- * Description      This function is called to set the device periodic inquiry
- *                  mode. If the duration is zero, the periodic inquiry mode is
- *                  cancelled.
- *
- *                  Note: We currently do not allow concurrent inquiry and
- *                  periodic inquiry.
- *
- * Parameters:      p_inqparms - pointer to the inquiry information
- *                      mode - GENERAL or LIMITED inquiry
- *                      duration - length in 1.28 sec intervals (If '0', the
- *                                 inquiry is CANCELLED)
- *                      max_resps - maximum amount of devices to search for
- *                                  before ending the inquiry
- *                      filter_cond_type - BTM_CLR_INQUIRY_FILTER,
- *                                         BTM_FILTER_COND_DEVICE_CLASS, or
- *                                         BTM_FILTER_COND_BD_ADDR
- *                      filter_cond - value for the filter (based on
- *                                                          filter_cond_type)
- *
- *                  max_delay - maximum amount of time between successive
- *                              inquiries
- *                  min_delay - minimum amount of time between successive
- *                              inquiries
- *                  p_results_cb - callback returning pointer to results
- *                              (tBTM_INQ_RESULTS)
- *
- * Returns          BTM_CMD_STARTED if successfully started
- *                  BTM_ILLEGAL_VALUE if a bad parameter is detected
- *                  BTM_NO_RESOURCES if could not allocate a message buffer
- *                  BTM_SUCCESS - if cancelling the periodic inquiry
- *                  BTM_BUSY - if an inquiry is already active
- *                  BTM_WRONG_MODE if the device is not up.
- *
- ******************************************************************************/
-tBTM_STATUS BTM_SetPeriodicInquiryMode(tBTM_INQ_PARMS* p_inqparms,
-                                       uint16_t max_delay, uint16_t min_delay,
-                                       tBTM_INQ_RESULTS_CB* p_results_cb) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SetPeriodicInquiryMode(p_inqparms, max_delay,
-                                                       min_delay, p_results_cb);
-  }
-
-  tBTM_STATUS status;
-  tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
-
-  BTM_TRACE_API(
-      "BTM_SetPeriodicInquiryMode: mode: %d, dur: %d, rsps: %d, flt: %d, min: "
-      "%d, max: %d",
-      p_inqparms->mode, p_inqparms->duration, p_inqparms->max_resps,
-      p_inqparms->filter_cond_type, min_delay, max_delay);
-
-  /*** Make sure the device is ready ***/
-  if (!BTM_IsDeviceUp()) return (BTM_WRONG_MODE);
-
-  /* Only one active inquiry is allowed in this implementation.
-     Also do not allow an inquiry if the inquiry filter is being updated */
-  if (p_inq->inq_active || p_inq->inqfilt_active) return (BTM_BUSY);
-
-  /* If illegal parameters return false */
-  if (p_inqparms->mode != BTM_GENERAL_INQUIRY &&
-      p_inqparms->mode != BTM_LIMITED_INQUIRY)
-    return (BTM_ILLEGAL_VALUE);
-
-  /* Verify the parameters for this command */
-  if (p_inqparms->duration < BTM_MIN_INQUIRY_LEN ||
-      p_inqparms->duration > BTM_MAX_INQUIRY_LENGTH ||
-      min_delay <= p_inqparms->duration ||
-      min_delay < BTM_PER_INQ_MIN_MIN_PERIOD ||
-      min_delay > BTM_PER_INQ_MAX_MIN_PERIOD || max_delay <= min_delay ||
-      max_delay < BTM_PER_INQ_MIN_MAX_PERIOD)
-  /*       max_delay > BTM_PER_INQ_MAX_MAX_PERIOD)*/
-  /*  BTM_PER_INQ_MAX_MAX_PERIOD set to 1's in all bits. Condition resulting in
-     false always*/
-  {
-    return (BTM_ILLEGAL_VALUE);
-  }
-
-  /* Save the inquiry parameters to be used upon the completion of
-   * setting/clearing the inquiry filter */
-  p_inq->inqparms = *p_inqparms;
-  p_inq->per_min_delay = min_delay;
-  p_inq->per_max_delay = max_delay;
-  p_inq->inq_cmpl_info.num_resp = 0; /* Clear the results counter */
-  p_inq->p_inq_results_cb = p_results_cb;
-
-  p_inq->inq_active = (uint8_t)(
-      (p_inqparms->mode == BTM_LIMITED_INQUIRY)
-          ? (BTM_LIMITED_INQUIRY_ACTIVE | BTM_PERIODIC_INQUIRY_ACTIVE)
-          : (BTM_GENERAL_INQUIRY_ACTIVE | BTM_PERIODIC_INQUIRY_ACTIVE));
-
-  /* If a filter is specified, then save it for later and clear the current
-     filter.
-     The setting of the filter is done upon completion of clearing of the
-     previous
-     filter.
-  */
-  if (p_inqparms->filter_cond_type != BTM_CLR_INQUIRY_FILTER) {
-    p_inq->state = BTM_INQ_CLR_FILT_STATE;
-    p_inqparms->filter_cond_type = BTM_CLR_INQUIRY_FILTER;
-  } else /* The filter is not being used so simply clear it; the inquiry can
-            start after this operation */
-    p_inq->state = BTM_INQ_SET_FILT_STATE;
-
-  /* Before beginning the inquiry the current filter must be cleared, so
-   * initiate the command */
-  status = btm_set_inq_event_filter(p_inqparms->filter_cond_type,
-                                    &p_inqparms->filter_cond);
-  if (status != BTM_CMD_STARTED) {
-    /* If set filter command is not succesful reset the state */
-    p_inq->p_inq_results_cb = NULL;
-    p_inq->state = BTM_INQ_INACTIVE_STATE;
-  }
-
-  return (status);
 }
 
 /*******************************************************************************
@@ -1086,33 +965,6 @@ tBTM_STATUS BTM_ClearInqDb(const RawAddress* p_bda) {
 }
 
 /*******************************************************************************
- *
- * Function         BTM_ReadInquiryRspTxPower
- *
- * Description      This command will read the inquiry Transmit Power level used
- *                  to transmit the FHS and EIR data packets. This can be used
- *                  directly in the Tx Power Level EIR data type.
- *
- * Returns          BTM_SUCCESS if successful
- *
- ******************************************************************************/
-tBTM_STATUS BTM_ReadInquiryRspTxPower(tBTM_CMPL_CB* p_cb) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_ReadInquiryRspTxPower(p_cb);
-  }
-
-  if (btm_cb.devcb.p_inq_tx_power_cmpl_cb) return (BTM_BUSY);
-
-  btm_cb.devcb.p_inq_tx_power_cmpl_cb = p_cb;
-  alarm_set_on_mloop(btm_cb.devcb.read_inq_tx_power_timer,
-                     BTM_INQ_REPLY_TIMEOUT_MS, btm_read_inq_tx_power_timeout,
-                     NULL);
-
-  btsnd_hcic_read_inq_tx_power();
-  return (BTM_CMD_STARTED);
-}
-
-/*******************************************************************************
  *******************************************************************************
  *                                                                            **
  *                    BTM Internal Inquiry Functions                          **
@@ -1664,8 +1516,7 @@ static void btm_initiate_inquiry(tBTM_INQUIRY_VAR_ST* p_inq) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
-                             uint8_t inq_res_mode) {
+void btm_process_inq_results(uint8_t* p, uint8_t inq_res_mode) {
   uint8_t num_resp, xx;
   RawAddress bda;
   tINQ_DB_ENT* p_i;
@@ -1694,29 +1545,10 @@ void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
 
   STREAM_TO_UINT8(num_resp, p);
 
-  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED) {
-    if (num_resp > 1) {
-      BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
-                      num_resp);
-      return;
-    }
-
-    constexpr uint16_t extended_inquiry_result_size = 254;
-    if (hci_evt_len - 1 != extended_inquiry_result_size) {
-      android_errorWriteLog(0x534e4554, "141620271");
-      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
-                      num_resp, hci_evt_len);
-      return;
-    }
-  } else if (inq_res_mode == BTM_INQ_RESULT_STANDARD ||
-             inq_res_mode == BTM_INQ_RESULT_WITH_RSSI) {
-    constexpr uint16_t inquiry_result_size = 14;
-    if (hci_evt_len < num_resp * inquiry_result_size) {
-      android_errorWriteLog(0x534e4554, "141620271");
-      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
-                      num_resp, hci_evt_len);
-      return;
-    }
+  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED && (num_resp > 1)) {
+    BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
+                    num_resp);
+    return;
   }
 
   for (xx = 0; xx < num_resp; xx++) {
