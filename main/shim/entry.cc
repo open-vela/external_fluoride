@@ -69,7 +69,3 @@ bluetooth::shim::IPage* bluetooth::shim::GetPage() {
 bluetooth::shim::IScanning* bluetooth::shim::GetScanning() {
   return GetGabeldorscheStack()->GetScanning();
 }
-
-bluetooth::shim::ISecurity* bluetooth::shim::GetSecurity() {
-  return GetGabeldorscheStack()->GetSecurity();
-}

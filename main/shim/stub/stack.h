@@ -63,7 +63,6 @@ class TestStack : public bluetooth::shim::IStack {
   bluetooth::shim::IName* GetName();
   bluetooth::shim::IPage* GetPage();
   bluetooth::shim::IScanning* GetScanning();
-  bluetooth::shim::ISecurity* GetSecurity();
 
   TestGdShimL2cap test_l2cap_;
 
