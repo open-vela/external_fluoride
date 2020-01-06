@@ -34,5 +34,4 @@
 #include "gd/shim/iname.h"
 #include "gd/shim/ipage.h"
 #include "gd/shim/iscanning.h"
-#include "gd/shim/isecurity.h"
 #include "gd/shim/istack.h"
