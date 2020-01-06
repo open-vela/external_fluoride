@@ -28,7 +28,6 @@
 #include "shim/iname.h"
 #include "shim/ipage.h"
 #include "shim/iscanning.h"
-#include "shim/isecurity.h"
 #include "shim/istack.h"
 
 /**
@@ -55,7 +54,6 @@ class Stack : public IStack {
   IL2cap* GetL2cap() override;                      // IStack
   IPage* GetPage() override;                        // IStack
   IScanning* GetScanning() override;                // IStack
-  ISecurity* GetSecurity() override;                // IStack
 
  private:
   struct impl;
