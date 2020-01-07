@@ -27,6 +27,7 @@
 #include "hci/facade/le_advertising_manager_facade.pb.h"
 #include "hci/le_advertising_manager.h"
 #include "os/log.h"
+#include "packet/raw_builder.h"
 
 namespace bluetooth {
 namespace hci {
