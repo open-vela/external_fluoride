@@ -161,6 +161,9 @@ void ClassicSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, 
   }
 
   auto retransmission_flow_control_configuration = std::make_unique<RetransmissionAndFlowControlConfigurationOption>();
+  if (!link_->GetRemoteSupportsErtm()) {
+    initial_config.channel_mode = DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC;
+  }
   switch (initial_config.channel_mode) {
     case DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC:
       retransmission_flow_control_configuration->mode_ = RetransmissionAndFlowControlModeOption::L2CAP_BASIC;
@@ -183,10 +186,8 @@ void ClassicSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, 
 
   std::vector<std::unique_ptr<ConfigurationOption>> config;
   config.emplace_back(std::move(mtu_configuration));
-  if (initial_config.channel_mode != DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC) {
-    config.emplace_back(std::move(retransmission_flow_control_configuration));
-    config.emplace_back(std::move(fcs_option));
-  }
+  config.emplace_back(std::move(retransmission_flow_control_configuration));
+  config.emplace_back(std::move(fcs_option));
   SendConfigurationRequest(remote_cid, std::move(config));
 }
 
@@ -235,6 +236,9 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
   }
 
   auto retransmission_flow_control_configuration = std::make_unique<RetransmissionAndFlowControlConfigurationOption>();
+  if (!link_->GetRemoteSupportsErtm()) {
+    initial_config.channel_mode = DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC;
+  }
   switch (initial_config.channel_mode) {
     case DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC:
       retransmission_flow_control_configuration->mode_ = RetransmissionAndFlowControlModeOption::L2CAP_BASIC;
@@ -257,10 +261,8 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
 
   std::vector<std::unique_ptr<ConfigurationOption>> config;
   config.emplace_back(std::move(mtu_configuration));
-  if (initial_config.channel_mode != DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC) {
-    config.emplace_back(std::move(retransmission_flow_control_configuration));
-    config.emplace_back(std::move(fcs_option));
-  }
+  config.emplace_back(std::move(retransmission_flow_control_configuration));
+  config.emplace_back(std::move(fcs_option));
   SendConfigurationRequest(remote_cid, {});
 }
 
@@ -295,7 +297,7 @@ void ClassicSignallingManager::OnConfigurationRequest(SignalId signal_id, Cid ci
           config->monitor_time_out_ = 12000;
         }
         configuration_state.remote_retransmission_and_flow_control_ = *config;
-        rsp_options.emplace_back(std::make_unique<ConfigurationOption>(*config));
+        rsp_options.emplace_back(std::move(config));
         break;
       }
       case ConfigurationOptionType::FRAME_CHECK_SEQUENCE: {
