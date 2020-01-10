@@ -16,30 +16,12 @@
 
 #pragma once
 
-#include <grpc++/grpc++.h>
-
-#include "grpc/grpc_module.h"
-#include "hci/acl_manager.h"
+#include "btif/include/btif_config.h"
 
 namespace bluetooth {
-namespace hci {
-namespace facade {
+namespace shim {
 
-class AclManagerFacadeService;
+const storage_config_t* storage_config_get_interface();
 
-class AclManagerFacadeModule : public ::bluetooth::grpc::GrpcFacadeModule {
- public:
-  static const ModuleFactory Factory;
-
-  void ListDependencies(ModuleList* list) override;
-  void Start() override;
-  void Stop() override;
-  ::grpc::Service* GetService() const override;
-
- private:
-  AclManagerFacadeService* service_;
-};
-
-}  // namespace facade
-}  // namespace hci
+}  // namespace shim
 }  // namespace bluetooth
