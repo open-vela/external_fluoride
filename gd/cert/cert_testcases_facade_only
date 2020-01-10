@@ -5,5 +5,3 @@ LeAdvertisingManagerTest
 LeScanningManagerTest
 SimpleSecurityTest
 NeighborTest
-ControllerTest
-AclManagerTest
