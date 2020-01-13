@@ -30,7 +30,6 @@ static bluetooth::common::MessageLoopThread bt_shim_thread("bt_shim_thread");
 
 static bool gd_shim_enabled_ = false;
 static bool gd_shim_property_checked_ = false;
-static bool gd_stack_started_up_ = false;
 
 future_t* ShimModuleStartUp() {
   bt_shim_thread.StartUp();
@@ -38,12 +37,10 @@ future_t* ShimModuleStartUp() {
       << "Unable to start bt shim message loop thread.";
   module_start_up(get_module(GD_SHIM_BTM_MODULE));
   bluetooth::shim::StartGabeldorscheStack();
-  gd_stack_started_up_ = true;
   return kReturnImmediate;
 }
 
 future_t* ShimModuleShutDown() {
-  gd_stack_started_up_ = false;
   bluetooth::shim::StopGabeldorscheStack();
   module_shut_down(get_module(GD_SHIM_BTM_MODULE));
   bt_shim_thread.ShutDown();
@@ -69,5 +66,3 @@ bool bluetooth::shim::is_gd_shim_enabled() {
   }
   return gd_shim_enabled_;
 }
-
-bool bluetooth::shim::is_gd_stack_started_up() { return gd_stack_started_up_; }
