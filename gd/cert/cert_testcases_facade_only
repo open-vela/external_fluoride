@@ -7,4 +7,3 @@ SimpleSecurityTest
 NeighborTest
 ControllerTest
 AclManagerTest
-LeAclManagerTest
