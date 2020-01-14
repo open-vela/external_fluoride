@@ -64,7 +64,8 @@ void Link::UpdateConnectionParameter(SignalId signal_id, uint16_t conn_interval_
 
 std::shared_ptr<FixedChannelImpl> Link::AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
   auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
-  data_pipeline_manager_.AttachChannel(cid, channel, l2cap::internal::DataPipelineManager::ChannelMode::BASIC);
+  data_pipeline_manager_.AttachChannel(cid, channel,
+                                       l2cap::internal::DataPipelineManager::ChannelMode::LE_CREDIT_BASED);
   return channel;
 }
 
