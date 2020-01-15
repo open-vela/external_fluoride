@@ -48,6 +48,9 @@ class SecurityManagerChannel {
         hci_security_interface_(hci_layer->GetSecurityInterface(
             common::Bind(&SecurityManagerChannel::OnHciEventReceived, common::Unretained(this)), handler)),
         handler_(handler) {}
+  ~SecurityManagerChannel() {
+    delete listener_;
+  }
 
   /**
    * Send a given SMP command over the SecurityManagerChannel
