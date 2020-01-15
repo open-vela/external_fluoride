@@ -141,10 +141,6 @@ class ConnectionInterface {
     on_connection_closed_callback_ = std::move(on_connection_closed);
   }
 
-  hci::Address GetRemoteAddress() const {
-    return address_;
-  }
-
  private:
   const ConnectionInterfaceDescriptor cid_;
   const std::unique_ptr<l2cap::classic::DynamicChannel> channel_;
@@ -163,7 +159,9 @@ class ConnectionInterface {
 
 struct ConnectionInterfaceManager {
  public:
-  void AddConnection(ConnectionInterfaceDescriptor cid, std::unique_ptr<l2cap::classic::DynamicChannel> channel);
+  ConnectionInterfaceDescriptor AddChannel(std::unique_ptr<l2cap::classic::DynamicChannel> channel);
+  ConnectionInterfaceDescriptor AddChannel(ConnectionInterfaceDescriptor cid,
+                                           std::unique_ptr<l2cap::classic::DynamicChannel> channel);
   void RemoveConnection(ConnectionInterfaceDescriptor cid);
 
   void SetReadDataReadyCallback(ConnectionInterfaceDescriptor cid, ReadDataReadyCallback on_data_ready);
@@ -175,22 +173,26 @@ struct ConnectionInterfaceManager {
     return cid_to_interface_map_.size();
   }
 
-  void OnConnectionChanged(ConnectionOpenCallback on_open, hci::Address address, l2cap::Psm psm,
-                           ConnectionInterfaceDescriptor cid) {
+  void GeneralCallback(ConnectionOpenCallback on_open, hci::Address address, l2cap::Psm psm,
+                       ConnectionInterfaceDescriptor cid) {
     on_open(address.ToString(), static_cast<uint16_t>(psm), static_cast<uint16_t>(cid));
   }
 
-  void ConnectionOpened(ConnectionOpenCallback on_open, l2cap::Psm psm, ConnectionInterfaceDescriptor cid) {
-    hci::Address address = cid_to_interface_map_[cid]->GetRemoteAddress();
-    LOG_DEBUG("Connection opened address:%s psm:%hd cid:%hd", address.ToString().c_str(), psm, cid);
-    handler_->Post(common::BindOnce(&ConnectionInterfaceManager::OnConnectionChanged, common::Unretained(this), on_open,
+  void ConnectionOpened(ConnectionOpenCallback on_open, hci::Address address, l2cap::Psm psm,
+                        ConnectionInterfaceDescriptor cid) {
+    LOG_DEBUG("address:%s psm:%hd cid:%hd", address.ToString().c_str(), psm, cid);
+    handler_->Post(common::BindOnce(&ConnectionInterfaceManager::GeneralCallback, common::Unretained(this), on_open,
                                     address, psm, cid));
+    // TODO(cmanton) queue this pending connection address/psm tuple up for deletion
+    // There may be multiple, so only remove one
   }
 
-  void ConnectionFailed(ConnectionFailedCallback on_failed, hci::Address address, l2cap::Psm psm) {
-    LOG_DEBUG("Connection failed address:%s psm:%hd", address.ToString().c_str(), psm);
-    handler_->Post(common::BindOnce(&ConnectionInterfaceManager::OnConnectionChanged, common::Unretained(this),
-                                    std::move(on_failed), address, psm, kInvalidConnectionInterfaceDescriptor));
+  void ConnectionFailed(ConnectionOpenCallback on_open, hci::Address address, l2cap::Psm psm) {
+    LOG_DEBUG("Connection Failed");
+    // TODO(cmanton) queue this pending connection address/psm tuple up for deletion
+    // There may be multiple, so only remove one
+    handler_->Post(common::BindOnce(&ConnectionInterfaceManager::GeneralCallback, common::Unretained(this), on_open,
+                                    address, psm, kInvalidConnectionInterfaceDescriptor));
   }
 
   ConnectionInterfaceManager(os::Handler* handler);
@@ -203,7 +205,7 @@ struct ConnectionInterfaceManager {
   ConnectionInterfaceDescriptor current_connection_interface_descriptor_;
 
   bool HasResources() const;
-  bool ConnectionExists(ConnectionInterfaceDescriptor id) const;
+  bool ChannelExists(ConnectionInterfaceDescriptor id) const;
   bool CidExists(ConnectionInterfaceDescriptor id) const;
 
   std::unordered_map<ConnectionInterfaceDescriptor, std::unique_ptr<ConnectionInterface>> cid_to_interface_map_;
@@ -215,12 +217,17 @@ struct ConnectionInterfaceManager {
 ConnectionInterfaceManager::ConnectionInterfaceManager(os::Handler* handler)
     : handler_(handler), current_connection_interface_descriptor_(kStartConnectionInterfaceDescriptor) {}
 
-bool ConnectionInterfaceManager::ConnectionExists(ConnectionInterfaceDescriptor cid) const {
+bool ConnectionInterfaceManager::ChannelExists(ConnectionInterfaceDescriptor cid) const {
   return cid_to_interface_map_.find(cid) != cid_to_interface_map_.end();
 }
 
 bool ConnectionInterfaceManager::CidExists(ConnectionInterfaceDescriptor cid) const {
   return active_cid_set_.find(cid) != active_cid_set_.end();
+}
+
+void ConnectionInterfaceManager::FreeConnectionInterfaceDescriptor(ConnectionInterfaceDescriptor cid) {
+  ASSERT(CidExists(cid));
+  active_cid_set_.erase(cid);
 }
 
 ConnectionInterfaceDescriptor ConnectionInterfaceManager::AllocateConnectionInterfaceDescriptor() {
@@ -234,15 +241,20 @@ ConnectionInterfaceDescriptor ConnectionInterfaceManager::AllocateConnectionInte
   return current_connection_interface_descriptor_++;
 }
 
-void ConnectionInterfaceManager::FreeConnectionInterfaceDescriptor(ConnectionInterfaceDescriptor cid) {
-  ASSERT(CidExists(cid));
-  active_cid_set_.erase(cid);
+ConnectionInterfaceDescriptor ConnectionInterfaceManager::AddChannel(
+    std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+  if (!HasResources()) {
+    return kInvalidConnectionInterfaceDescriptor;
+  }
+  ConnectionInterfaceDescriptor cid = AllocateConnectionInterfaceDescriptor();
+  return AddChannel(cid, std::move(channel));
 }
 
-void ConnectionInterfaceManager::AddConnection(ConnectionInterfaceDescriptor cid,
-                                               std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
-  ASSERT(cid_to_interface_map_.count(cid) == 0);
-  cid_to_interface_map_.emplace(cid, std::make_unique<ConnectionInterface>(cid, std::move(channel), handler_));
+ConnectionInterfaceDescriptor ConnectionInterfaceManager::AddChannel(
+    ConnectionInterfaceDescriptor cid, std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+  auto channel_interface = std::make_unique<ConnectionInterface>(cid, std::move(channel), handler_);
+  cid_to_interface_map_[cid] = std::move(channel_interface);
+  return cid;
 }
 
 void ConnectionInterfaceManager::RemoveConnection(ConnectionInterfaceDescriptor cid) {
@@ -258,18 +270,18 @@ bool ConnectionInterfaceManager::HasResources() const {
 
 void ConnectionInterfaceManager::SetReadDataReadyCallback(ConnectionInterfaceDescriptor cid,
                                                           ReadDataReadyCallback on_data_ready) {
-  ASSERT(ConnectionExists(cid));
+  ASSERT(ChannelExists(cid));
   return cid_to_interface_map_[cid]->SetReadDataReadyCallback(on_data_ready);
 }
 
 void ConnectionInterfaceManager::SetConnectionClosedCallback(ConnectionInterfaceDescriptor cid,
                                                              ConnectionClosedCallback on_closed) {
-  ASSERT(ConnectionExists(cid));
+  ASSERT(ChannelExists(cid));
   return cid_to_interface_map_[cid]->SetConnectionClosedCallback(on_closed);
 }
 
 bool ConnectionInterfaceManager::Write(ConnectionInterfaceDescriptor cid, std::unique_ptr<packet::RawBuilder> packet) {
-  if (!ConnectionExists(cid)) {
+  if (!ChannelExists(cid)) {
     return false;
   }
   cid_to_interface_map_[cid]->Write(std::move(packet));
@@ -286,9 +298,8 @@ class PendingConnection {
 
   void OnConnectionOpen(std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
     LOG_DEBUG("Local initiated connection is open to device:%s for psm:%hd", address_.ToString().c_str(), psm_);
-    ASSERT_LOG(address_ == channel->GetDevice(), " Expected remote device does not match actual remote device");
-    connection_interface_manager_->AddConnection(cid_, std::move(channel));
-    connection_interface_manager_->ConnectionOpened(std::move(on_open_), psm_, cid_);
+    connection_interface_manager_->AddChannel(cid_, std::move(channel));
+    connection_interface_manager_->ConnectionOpened(std::move(on_open_), address_, psm_, cid_);
     deleter_();
   }
 
@@ -345,9 +356,10 @@ class ServiceInterface {
   void OnConnectionOpen(std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
     LOG_DEBUG("Remote initiated connection is open from device:%s for psm:%hd", channel->GetDevice().ToString().c_str(),
               psm_);
+    hci::Address address = channel->GetDevice();
     ConnectionInterfaceDescriptor cid = connection_interface_manager_->AllocateConnectionInterfaceDescriptor();
-    connection_interface_manager_->AddConnection(cid, std::move(channel));
-    connection_interface_manager_->ConnectionOpened(std::move(on_open_), psm_, cid);
+    connection_interface_manager_->AddChannel(cid, std::move(channel));
+    connection_interface_manager_->ConnectionOpened(on_open_, address, psm_, cid);
   }
 
   l2cap::SecurityPolicy GetSecurityPolicy() const {
@@ -550,6 +562,16 @@ void L2cap::Write(uint16_t raw_cid, const uint8_t* data, size_t len) {
   ConnectionInterfaceDescriptor cid(raw_cid);
   auto packet = MakeUniquePacket(data, len);
   GetHandler()->Post(common::BindOnce(&L2cap::impl::Write, common::Unretained(pimpl_.get()), cid, std::move(packet)));
+}
+
+void L2cap::WriteFlushable(uint16_t raw_cid, const uint8_t* data, size_t len) {
+  LOG_WARN("UNIMPLEMENTED Write flushable");
+  return Write(raw_cid, data, len);
+}
+
+void L2cap::WriteNonFlushable(uint16_t raw_cid, const uint8_t* data, size_t len) {
+  LOG_WARN("UNIMPLEMENTED Write non flushable");
+  return Write(raw_cid, data, len);
 }
 
 void L2cap::SendLoopbackResponse(std::function<void()> function) {
