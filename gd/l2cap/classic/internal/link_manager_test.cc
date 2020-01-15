@@ -39,7 +39,6 @@ namespace bluetooth {
 namespace l2cap {
 namespace classic {
 namespace internal {
-namespace {
 
 using hci::testing::MockAclConnection;
 using hci::testing::MockAclManager;
@@ -54,7 +53,7 @@ using ::testing::Return;
 using ::testing::SaveArg;
 
 constexpr static auto kTestIdleDisconnectTimeoutLong = std::chrono::milliseconds(1000);
-constexpr static auto kTestIdleDisconnectTimeoutShort = std::chrono::milliseconds(1000);
+constexpr static auto kTestIdleDisconnectTimeoutShort = std::chrono::milliseconds(30);
 
 class L2capClassicLinkManagerTest : public ::testing::Test {
  public:
@@ -123,27 +122,16 @@ TEST_F(L2capClassicLinkManagerTest, connect_fixed_channel_service_without_acl) {
   EXPECT_CALL(*acl_connection, RegisterDisconnectCallback(_, l2cap_handler_)).Times(1);
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
-  std::promise<void> promise_1, promise_2;
-  auto future_1 = promise_1.get_future();
-  auto future_2 = promise_2.get_future();
-  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_))
-      .WillOnce([&channel_1, &promise_1](std::unique_ptr<FixedChannel> channel) {
-        channel_1 = std::move(channel);
-        promise_1.set_value();
-      });
-  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_))
-      .WillOnce([&channel_2, &promise_2](std::unique_ptr<FixedChannel> channel) {
-        channel_2 = std::move(channel);
-        promise_2.set_value();
-      });
+  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
+    channel_1 = std::move(channel);
+  });
+  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_)).WillOnce([&channel_2](std::unique_ptr<FixedChannel> channel) {
+    channel_2 = std::move(channel);
+  });
   hci_callback_handler->Post(common::BindOnce(&hci::ConnectionCallbacks::OnConnectSuccess,
                                               common::Unretained(hci_connection_callbacks), std::move(acl_connection)));
   SyncHandler(hci_callback_handler);
-  auto future_1_status = future_1.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_1_status, std::future_status::ready);
   EXPECT_NE(channel_1, nullptr);
-  auto future_2_status = future_2.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_2_status, std::future_status::ready);
   EXPECT_NE(channel_2, nullptr);
 
   // Step 4: Calling ConnectServices() to the same device will no trigger another connection attempt
@@ -291,27 +279,16 @@ TEST_F(L2capClassicLinkManagerTest, not_acquiring_channels_should_disconnect_acl
   std::unique_ptr<MockAclConnection> acl_connection(raw_acl_connection);
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
-  std::promise<void> promise_1, promise_2;
-  auto future_1 = promise_1.get_future();
-  auto future_2 = promise_2.get_future();
-  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_))
-      .WillOnce([&channel_1, &promise_1](std::unique_ptr<FixedChannel> channel) {
-        channel_1 = std::move(channel);
-        promise_1.set_value();
-      });
-  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_))
-      .WillOnce([&channel_2, &promise_2](std::unique_ptr<FixedChannel> channel) {
-        channel_2 = std::move(channel);
-        promise_2.set_value();
-      });
+  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
+    channel_1 = std::move(channel);
+  });
+  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_)).WillOnce([&channel_2](std::unique_ptr<FixedChannel> channel) {
+    channel_2 = std::move(channel);
+  });
   hci_callback_handler->Post(common::BindOnce(&hci::ConnectionCallbacks::OnConnectSuccess,
                                               common::Unretained(hci_connection_callbacks), std::move(acl_connection)));
   SyncHandler(hci_callback_handler);
-  auto future_1_status = future_1.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_1_status, std::future_status::ready);
   EXPECT_NE(channel_1, nullptr);
-  auto future_2_status = future_2.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_2_status, std::future_status::ready);
   EXPECT_NE(channel_2, nullptr);
   hci::ErrorCode status_1 = hci::ErrorCode::SUCCESS;
   channel_1->RegisterOnCloseCallback(
@@ -370,27 +347,16 @@ TEST_F(L2capClassicLinkManagerTest, acquiring_channels_should_not_disconnect_acl
   std::unique_ptr<MockAclConnection> acl_connection(raw_acl_connection);
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
-  std::promise<void> promise_1, promise_2;
-  auto future_1 = promise_1.get_future();
-  auto future_2 = promise_2.get_future();
-  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_))
-      .WillOnce([&channel_1, &promise_1](std::unique_ptr<FixedChannel> channel) {
-        channel_1 = std::move(channel);
-        promise_1.set_value();
-      });
-  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_))
-      .WillOnce([&channel_2, &promise_2](std::unique_ptr<FixedChannel> channel) {
-        channel_2 = std::move(channel);
-        promise_2.set_value();
-      });
+  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
+    channel_1 = std::move(channel);
+  });
+  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_)).WillOnce([&channel_2](std::unique_ptr<FixedChannel> channel) {
+    channel_2 = std::move(channel);
+  });
   hci_callback_handler->Post(common::BindOnce(&hci::ConnectionCallbacks::OnConnectSuccess,
                                               common::Unretained(hci_connection_callbacks), std::move(acl_connection)));
   SyncHandler(hci_callback_handler);
-  auto future_1_status = future_1.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_1_status, std::future_status::ready);
   EXPECT_NE(channel_1, nullptr);
-  auto future_2_status = future_2.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_2_status, std::future_status::ready);
   EXPECT_NE(channel_2, nullptr);
   hci::ErrorCode status_1 = hci::ErrorCode::SUCCESS;
   channel_1->RegisterOnCloseCallback(
@@ -451,27 +417,16 @@ TEST_F(L2capClassicLinkManagerTest, acquiring_and_releasing_channels_should_even
   std::unique_ptr<MockAclConnection> acl_connection(raw_acl_connection);
   EXPECT_CALL(*acl_connection, GetAddress()).WillRepeatedly(Return(device));
   std::unique_ptr<FixedChannel> channel_1, channel_2;
-  std::promise<void> promise_1, promise_2;
-  auto future_1 = promise_1.get_future();
-  auto future_2 = promise_2.get_future();
-  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_))
-      .WillOnce([&channel_1, &promise_1](std::unique_ptr<FixedChannel> channel) {
-        channel_1 = std::move(channel);
-        promise_1.set_value();
-      });
-  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_))
-      .WillOnce([&channel_2, &promise_2](std::unique_ptr<FixedChannel> channel) {
-        channel_2 = std::move(channel);
-        promise_2.set_value();
-      });
+  EXPECT_CALL(mock_service_1, NotifyChannelCreation(_)).WillOnce([&channel_1](std::unique_ptr<FixedChannel> channel) {
+    channel_1 = std::move(channel);
+  });
+  EXPECT_CALL(mock_service_2, NotifyChannelCreation(_)).WillOnce([&channel_2](std::unique_ptr<FixedChannel> channel) {
+    channel_2 = std::move(channel);
+  });
   hci_callback_handler->Post(common::BindOnce(&hci::ConnectionCallbacks::OnConnectSuccess,
                                               common::Unretained(hci_connection_callbacks), std::move(acl_connection)));
   SyncHandler(hci_callback_handler);
-  auto future_1_status = future_1.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_1_status, std::future_status::ready);
   EXPECT_NE(channel_1, nullptr);
-  auto future_2_status = future_2.wait_for(kTestIdleDisconnectTimeoutShort);
-  EXPECT_EQ(future_2_status, std::future_status::ready);
   EXPECT_NE(channel_2, nullptr);
   hci::ErrorCode status_1 = hci::ErrorCode::SUCCESS;
   channel_1->RegisterOnCloseCallback(
@@ -500,7 +455,6 @@ TEST_F(L2capClassicLinkManagerTest, acquiring_and_releasing_channels_should_even
   user_handler->Clear();
 }
 
-}  // namespace
 }  // namespace internal
 }  // namespace classic
 }  // namespace l2cap
