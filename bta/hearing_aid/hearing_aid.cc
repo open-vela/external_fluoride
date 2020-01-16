@@ -232,7 +232,7 @@ class HearingAidImpl : public HearingAid {
   uint16_t overwrite_min_ce_len;
 
  public:
-  ~HearingAidImpl() override = default;
+  virtual ~HearingAidImpl() = default;
 
   HearingAidImpl(bluetooth::hearing_aid::HearingAidCallbacks* callbacks,
                  Closure initCb)
