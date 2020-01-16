@@ -16,7 +16,6 @@
 #define LOG_TAG "bt_gd_shim"
 
 #include <memory>
-#include <string>
 
 #include "common/bidi_queue.h"
 #include "hci/address.h"
@@ -30,10 +29,6 @@
 
 namespace bluetooth {
 namespace shim {
-
-namespace {
-constexpr char kModuleName[] = "shim::Connectability";
-}  // namespace
 
 const ModuleFactory Connectability::Factory = ModuleFactory([]() { return new Connectability(); });
 
@@ -68,10 +63,6 @@ void Connectability::Start() {
 
 void Connectability::Stop() {
   pimpl_.reset();
-}
-
-std::string Connectability::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim

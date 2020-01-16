@@ -40,7 +40,6 @@ class Storage : public bluetooth::Module, public bluetooth::shim::IStorage {
   void ListDependencies(ModuleList* list) override;  // Module
   void Start() override;                             // Module
   void Stop() override;                              // Module
-  std::string ToString() const override;             // Module
 
  private:
   struct impl;

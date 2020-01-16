@@ -31,10 +31,6 @@
 namespace bluetooth {
 namespace shim {
 
-namespace {
-constexpr char kModuleName[] = "shim::Name";
-}  // namespace
-
 struct Name::impl {
   void ReadRemoteNameRequest(const hci::Address address, hci::PageScanRepetitionMode page_scan_repetition_mode,
                              uint16_t clock_offset, hci::ClockOffsetValid clock_offset_valid,
@@ -123,10 +119,6 @@ void Name::Start() {
 
 void Name::Stop() {
   pimpl_.reset();
-}
-
-std::string Name::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim

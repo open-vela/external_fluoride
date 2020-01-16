@@ -29,10 +29,6 @@
 namespace bluetooth {
 namespace shim {
 
-namespace {
-constexpr char kModuleName[] = "shim::Storage";
-}
-
 struct Storage::impl {
   impl(bluetooth::storage::LegacyModule* storage_manager, os::Handler* handler);
   ~impl() = default;
@@ -139,10 +135,6 @@ void Storage::Start() {
 
 void Storage::Stop() {
   pimpl_.reset();
-}
-
-std::string Storage::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim

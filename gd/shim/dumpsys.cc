@@ -19,7 +19,6 @@
 #include <functional>
 #include <future>
 #include <memory>
-#include <string>
 #include <unordered_map>
 #include <utility>
 
@@ -30,10 +29,6 @@
 
 namespace bluetooth {
 namespace shim {
-
-namespace {
-constexpr char kModuleName[] = "shim::Dumpsys";
-}  // namespace
 
 struct Dumpsys::impl {
  public:
@@ -96,10 +91,6 @@ void Dumpsys::Start() {
 
 void Dumpsys::Stop() {
   pimpl_.reset();
-}
-
-std::string Dumpsys::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim

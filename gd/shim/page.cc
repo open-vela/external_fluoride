@@ -17,7 +17,6 @@
 
 #include <functional>
 #include <memory>
-#include <string>
 
 #include "common/bidi_queue.h"
 #include "hci/address.h"
@@ -33,9 +32,7 @@
 namespace bluetooth {
 namespace shim {
 
-namespace {
-constexpr char kModuleName[] = "shim::Page";
-}  // namespace
+const ModuleFactory Page::Factory = ModuleFactory([]() { return new Page(); });
 
 struct Page::impl {
   impl(neighbor::PageModule* module);
@@ -43,8 +40,6 @@ struct Page::impl {
 
   neighbor::PageModule* module_{nullptr};
 };
-
-const ModuleFactory Page::Factory = ModuleFactory([]() { return new Page(); });
 
 Page::impl::impl(neighbor::PageModule* module) : module_(module) {}
 
@@ -83,10 +78,6 @@ void Page::Start() {
 
 void Page::Stop() {
   pimpl_.reset();
-}
-
-std::string Page::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim
