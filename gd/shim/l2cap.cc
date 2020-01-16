@@ -51,8 +51,6 @@ constexpr char kModuleName[] = "shim::L2cap";
 const ModuleFactory L2cap::Factory = ModuleFactory([]() { return new L2cap(); });
 
 using ConnectionInterfaceDescriptor = uint16_t;
-using DeleterFunction = std::function<void(ConnectionInterfaceDescriptor)>;
-
 static const ConnectionInterfaceDescriptor kInvalidConnectionInterfaceDescriptor = 0;
 static const ConnectionInterfaceDescriptor kStartConnectionInterfaceDescriptor = 64;
 static const ConnectionInterfaceDescriptor kMaxConnections = UINT16_MAX - kStartConnectionInterfaceDescriptor - 1;
@@ -73,9 +71,9 @@ std::unique_ptr<packet::RawBuilder> MakeUniquePacket(const uint8_t* data, size_t
 class ConnectionInterface {
  public:
   ConnectionInterface(ConnectionInterfaceDescriptor cid, std::unique_ptr<l2cap::classic::DynamicChannel> channel,
-                      os::Handler* handler, DeleterFunction deleter)
+                      os::Handler* handler)
       : cid_(cid), channel_(std::move(channel)), handler_(handler), on_data_ready_callback_(nullptr),
-        on_connection_closed_callback_(nullptr), address_(channel_->GetDevice()), deleter_(deleter) {
+        on_connection_closed_callback_(nullptr), address_(channel_->GetDevice()) {
     channel_->RegisterOnCloseCallback(
         handler_, common::BindOnce(&ConnectionInterface::OnConnectionClosed, common::Unretained(this)));
     channel_->GetQueueUpEnd()->RegisterDequeue(
@@ -138,7 +136,6 @@ class ConnectionInterface {
               address_.ToString().c_str());
     ASSERT(on_connection_closed_callback_ != nullptr);
     on_connection_closed_callback_(cid_, static_cast<int>(error_code));
-    deleter_(cid_);
   }
 
   void SetConnectionClosedCallback(::bluetooth::shim::ConnectionClosedCallback on_connection_closed) {
@@ -160,8 +157,6 @@ class ConnectionInterface {
   ConnectionClosedCallback on_connection_closed_callback_;
 
   const hci::Address address_;
-
-  DeleterFunction deleter_{};
 
   std::queue<std::unique_ptr<packet::PacketBuilder<hci::kLittleEndian>>> write_queue_;
 
@@ -250,17 +245,14 @@ void ConnectionInterfaceManager::FreeConnectionInterfaceDescriptor(ConnectionInt
 void ConnectionInterfaceManager::AddConnection(ConnectionInterfaceDescriptor cid,
                                                std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
   ASSERT(cid_to_interface_map_.count(cid) == 0);
-  cid_to_interface_map_.emplace(cid, std::make_unique<ConnectionInterface>(
-                                         cid, std::move(channel), handler_, [this](ConnectionInterfaceDescriptor cid) {
-                                           LOG_DEBUG("Deleting connection interface cid:%hd", cid);
-                                           cid_to_interface_map_.erase(cid);
-                                           FreeConnectionInterfaceDescriptor(cid);
-                                         }));
+  cid_to_interface_map_.emplace(cid, std::make_unique<ConnectionInterface>(cid, std::move(channel), handler_));
 }
 
 void ConnectionInterfaceManager::RemoveConnection(ConnectionInterfaceDescriptor cid) {
   ASSERT(cid_to_interface_map_.count(cid) == 1);
   cid_to_interface_map_.find(cid)->second->Close();
+  cid_to_interface_map_.erase(cid);
+  FreeConnectionInterfaceDescriptor(cid);
 }
 
 bool ConnectionInterfaceManager::HasResources() const {
