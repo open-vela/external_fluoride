@@ -31,7 +31,6 @@ namespace bluetooth {
 namespace hci {
 
 constexpr uint16_t kQualcommDebugHandle = 0xedc;
-constexpr size_t kMaxQueuedPacketsPerConnection = 10;
 
 using common::Bind;
 using common::BindOnce;
@@ -54,9 +53,6 @@ struct AclManager::acl_connection {
   bool is_registered_ = false;
   // Credits: Track the number of packets which have been sent to the controller
   uint16_t number_of_sent_packets_ = 0;
-  bool enqueue_registered_{false};
-  std::queue<packet::PacketView<kLittleEndian>> incoming_queue_;
-
   void call_disconnect_callback() {
     disconnect_handler_->Post(BindOnce(std::move(on_disconnect_callback_), disconnect_reason_));
   }
@@ -225,17 +221,6 @@ struct AclManager::impl {
     return std::unique_ptr<AclPacketBuilder>(raw_pointer);
   }
 
-  std::unique_ptr<packet::PacketView<kLittleEndian>> OnIncomingReadReady(AclManager::acl_connection* connection) {
-    auto packet = connection->incoming_queue_.front();
-    connection->incoming_queue_.pop();
-    if (connection->incoming_queue_.empty()) {
-      auto queue_end = connection->queue_->GetDownEnd();
-      queue_end->UnregisterEnqueue();
-      connection->enqueue_registered_ = false;
-    }
-    return std::make_unique<PacketView<kLittleEndian>>(packet);
-  }
-
   void dequeue_and_route_acl_packet_to_connection() {
     auto packet = hci_queue_end_->TryDequeue();
     ASSERT(packet != nullptr);
@@ -256,19 +241,12 @@ struct AclManager::impl {
     // TODO hsz: define enqueue callback
     auto queue_end = connection_pair->second.queue_->GetDownEnd();
     PacketView<kLittleEndian> payload = packet->GetPayload();
-
-    if (connection_pair->second.incoming_queue_.size() > kMaxQueuedPacketsPerConnection) {
-      LOG_INFO("Dropping packet due to congestion from remote:%s",
-               connection_pair->second.address_with_type_.ToString().c_str());
-      return;
-    }
-
-    connection_pair->second.incoming_queue_.push(payload);
-    if (!connection_pair->second.enqueue_registered_) {
-      connection_pair->second.enqueue_registered_ = true;
-      queue_end->RegisterEnqueue(handler_, common::Bind(&AclManager::impl::OnIncomingReadReady,
-                                                        common::Unretained(this), &connection_pair->second));
-    }
+    queue_end->RegisterEnqueue(handler_, common::Bind(
+                                             [](decltype(queue_end) queue_end, PacketView<kLittleEndian> payload) {
+                                               queue_end->UnregisterEnqueue();
+                                               return std::make_unique<PacketView<kLittleEndian>>(payload);
+                                             },
+                                             queue_end, std::move(payload)));
   }
 
   void on_incoming_connection(EventPacketView packet) {
