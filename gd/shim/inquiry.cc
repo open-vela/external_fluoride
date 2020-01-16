@@ -17,7 +17,6 @@
 
 #include <functional>
 #include <memory>
-#include <string>
 
 #include "common/bidi_queue.h"
 #include "hci/address.h"
@@ -32,10 +31,6 @@
 
 namespace bluetooth {
 namespace shim {
-
-namespace {
-constexpr char kModuleName[] = "shim::Inquiry";
-}  // namespace
 
 constexpr size_t kMaxExtendedInquiryResponse = 240;
 
@@ -247,10 +242,6 @@ void Inquiry::Start() {
 
 void Inquiry::Stop() {
   pimpl_.reset();
-}
-
-std::string Inquiry::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim

@@ -19,7 +19,6 @@
 
 #include <functional>
 #include <memory>
-#include <string>
 
 #include "common/bind.h"
 #include "hci/address.h"
@@ -31,10 +30,6 @@
 
 namespace bluetooth {
 namespace shim {
-
-namespace {
-constexpr char kModuleName[] = "shim::Security";
-}  // namespace
 
 struct Security::impl {
   void CreateBond(std::string address, uint8_t address_type, uint8_t transport);
@@ -87,10 +82,6 @@ void Security::Start() {
 
 void Security::Stop() {
   pimpl_.reset();
-}
-
-std::string Security::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim

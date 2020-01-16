@@ -16,7 +16,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
 #include "module.h"
 #include "shim/idiscoverability.h"
@@ -42,7 +41,6 @@ class Discoverability : public bluetooth::Module, public bluetooth::shim::IDisco
   void ListDependencies(ModuleList* list) override;  // Module
   void Start() override;                             // Module
   void Stop() override;                              // Module
-  std::string ToString() const override;             // Module
 
  private:
   struct impl;

@@ -16,7 +16,6 @@
 #define LOG_TAG "bt_gd_shim"
 
 #include <memory>
-#include <string>
 
 #include "common/bidi_queue.h"
 #include "hci/address.h"
@@ -31,9 +30,7 @@
 namespace bluetooth {
 namespace shim {
 
-namespace {
-constexpr char kModuleName[] = "shim::Discoverability";
-}  // namespace
+const ModuleFactory Discoverability::Factory = ModuleFactory([]() { return new Discoverability(); });
 
 struct Discoverability::impl {
   impl(neighbor::DiscoverabilityModule* module) : module_(module) {}
@@ -43,8 +40,6 @@ struct Discoverability::impl {
   bool general_discoverability_enabled_{false};
   bool limited_discoverability_enabled_{false};
 };
-
-const ModuleFactory Discoverability::Factory = ModuleFactory([]() { return new Discoverability(); });
 
 void Discoverability::StopDiscoverability() {
   if (pimpl_->general_discoverability_enabled_ || pimpl_->limited_discoverability_enabled_) {
@@ -94,10 +89,6 @@ void Discoverability::Start() {
 
 void Discoverability::Stop() {
   pimpl_.reset();
-}
-
-std::string Discoverability::ToString() const {
-  return kModuleName;
 }
 
 }  // namespace shim
