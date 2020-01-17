@@ -25,7 +25,7 @@
 namespace bluetooth {
 namespace shim {
 
-using DumpsysFunction = std::function<void(int fd)>;
+using DumpFunction = std::function<void(int fd)>;
 
 struct IDumpsys {
   virtual void Dump(int fd) = 0;
