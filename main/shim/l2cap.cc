@@ -17,15 +17,12 @@
 
 #include <cstdint>
 
-#include "main/shim/dumpsys.h"
 #include "main/shim/entry.h"
 #include "main/shim/l2cap.h"
 #include "main/shim/shim.h"
 #include "osi/include/allocator.h"
 #include "osi/include/log.h"
 
-namespace {
-constexpr char kModuleName[] = "shim::legacy::L2cap";
 constexpr bool kDisconnectResponseRequired = false;
 constexpr size_t kBtHdrSize = sizeof(BT_HDR);
 constexpr uint16_t kConnectionFail = 1;
@@ -33,7 +30,6 @@ constexpr uint16_t kConnectionSuccess = 0;
 constexpr uint16_t kInvalidConnectionInterfaceDescriptor = 0;
 constexpr uint8_t kUnusedId = 0;
 constexpr uint16_t kUnusedResult = 0;
-}  // namespace
 
 bool bluetooth::legacy::shim::PsmManager::IsPsmRegistered(uint16_t psm) const {
   return psm_to_callback_map_.find(psm) != psm_to_callback_map_.end();
@@ -67,14 +63,7 @@ const tL2CAP_APPL_INFO* bluetooth::legacy::shim::PsmManager::Callbacks(
 bluetooth::legacy::shim::L2cap::L2cap()
     : classic_dynamic_psm_(kInitialClassicDynamicPsm),
       le_dynamic_psm_(kInitialLeDynamicPsm),
-      classic_virtual_psm_(kInitialClassicVirtualPsm) {
-  bluetooth::shim::RegisterDumpsysFunction(static_cast<void*>(this),
-                                           [this](int fd) { Dump(fd); });
-}
-
-bluetooth::legacy::shim::L2cap::~L2cap() {
-  bluetooth::shim::UnregisterDumpsysFunction(static_cast<void*>(this));
-}
+      classic_virtual_psm_(kInitialClassicVirtualPsm) {}
 
 bluetooth::legacy::shim::PsmManager& bluetooth::legacy::shim::L2cap::Le() {
   return le_;
@@ -387,11 +376,11 @@ bool bluetooth::legacy::shim::L2cap::DisconnectResponse(uint16_t cid) {
 
 void bluetooth::legacy::shim::L2cap::Dump(int fd) {
   if (cid_to_psm_map_.empty()) {
-    dprintf(fd, "%s No active l2cap channels\n", kModuleName);
+    dprintf(fd, "%s No active l2cap channels\n", "gd::shim::legacy::l2cap");
   } else {
     for (auto& connection : cid_to_psm_map_) {
-      dprintf(fd, "%s active l2cap channel cid:%hd psm:%hd\n", kModuleName,
-              connection.first, connection.second);
+      dprintf(fd, "%s active l2cap channel cid:%hd psm:%hd\n",
+              "gd::shim::legacy::l2cap", connection.first, connection.second);
     }
   }
 }
