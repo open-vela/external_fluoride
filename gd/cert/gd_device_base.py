@@ -98,11 +98,10 @@ class GdDeviceBase:
     def clean_up(self):
         self.grpc_channel.close()
         self.grpc_root_server_channel.close()
-        stop_signal = signal.SIGINT
-        self.backing_process.send_signal(stop_signal)
+        self.backing_process.send_signal(signal.SIGINT)
         backing_process_return_code = self.backing_process.wait()
         self.backing_process_logs.close()
-        if backing_process_return_code not in [-stop_signal, 0]:
+        if backing_process_return_code != 0:
             logging.error("backing process %s stopped with code: %d" %
                           (self.label, backing_process_return_code))
             return False
