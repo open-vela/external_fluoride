@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@
 
 class HashMapUtilsTest : public AllocationTestHarness {
  protected:
-  void SetUp() override { AllocationTestHarness::SetUp(); }
-  void TearDown() override {
+  virtual void SetUp() { AllocationTestHarness::SetUp(); }
+  virtual void TearDown() {
     map.clear();
     AllocationTestHarness::TearDown();
   }
