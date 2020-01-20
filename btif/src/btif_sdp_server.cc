@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright 2014 Samsung System LSI
+ * Copyright (C) 2014 Samsung System LSI
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 
 #define LOG_TAG "bt_btif_sdp_server"
 
-#include <log/log.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,7 +71,6 @@ static sdp_slot_t sdp_slots[MAX_SDP_SLOTS];
  *****************************************************************************/
 static int add_maps_sdp(const bluetooth_sdp_mas_record* rec);
 static int add_mapc_sdp(const bluetooth_sdp_mns_record* rec);
-static int add_pbapc_sdp(const bluetooth_sdp_pce_record* rec);
 static int add_pbaps_sdp(const bluetooth_sdp_pse_record* rec);
 static int add_opps_sdp(const bluetooth_sdp_ops_record* rec);
 static int add_saps_sdp(const bluetooth_sdp_sap_record* rec);
@@ -340,8 +338,7 @@ void on_create_record_event(int id) {
         handle = add_saps_sdp(&record->sap);
         break;
       case SDP_TYPE_PBAP_PCE:
-        handle = add_pbapc_sdp(&record->pce);
-        break;
+      //        break; not yet supported
       default:
         BTIF_TRACE_DEBUG("Record type %d is not supported", record->hdr.type);
         break;
@@ -359,7 +356,7 @@ void on_remove_record_event(int handle) {
   if (handle != -1 && handle != 0) {
     bool result;
     result = SDP_DeleteRecord(handle);
-    if (!result) {
+    if (result == false) {
       BTIF_TRACE_ERROR("  Unable to remove handle 0x%08x", handle);
     }
   }
@@ -532,49 +529,6 @@ static int add_mapc_sdp(const bluetooth_sdp_mns_record* rec) {
     APPL_TRACE_DEBUG("%s():  SDP Registered (handle 0x%08x)", __func__,
                      sdp_handle);
   }
-  return sdp_handle;
-}
-
-/* Create a PBAP Client SDP record based on information stored in a
- * bluetooth_sdp_pce_record */
-static int add_pbapc_sdp(const bluetooth_sdp_pce_record* rec) {
-  uint16_t service = UUID_SERVCLASS_PBAP_PCE;
-  uint16_t browse = UUID_SERVCLASS_PUBLIC_BROWSE_GROUP;
-  bool status = true;
-  uint32_t sdp_handle = 0;
-
-  APPL_TRACE_DEBUG("%s(): service name %s", __func__, rec->hdr.service_name);
-  sdp_handle = SDP_CreateRecord();
-  if (sdp_handle == 0) {
-    APPL_TRACE_ERROR("%s(): Unable to register PBAP Client Service", __func__);
-    return sdp_handle;
-  }
-
-  status &= SDP_AddServiceClassIdList(sdp_handle, 1, &service);
-
-  /* Add a name entry */
-  status &= SDP_AddAttribute(sdp_handle, (uint16_t)ATTR_ID_SERVICE_NAME,
-                             (uint8_t)TEXT_STR_DESC_TYPE,
-                             (uint32_t)(rec->hdr.service_name_length + 1),
-                             (uint8_t*)rec->hdr.service_name);
-
-  /* Add in the Bluetooth Profile Descriptor List */
-  status &= SDP_AddProfileDescriptorList(sdp_handle, service,
-                                         rec->hdr.profile_version);
-
-  /* Make the service browseable */
-  status &=
-      SDP_AddUuidSequence(sdp_handle, ATTR_ID_BROWSE_GROUP_LIST, 1, &browse);
-
-  if (!status) {
-    SDP_DeleteRecord(sdp_handle);
-    sdp_handle = 0;
-    APPL_TRACE_ERROR("%s() FAILED", __func__);
-    return sdp_handle;
-  }
-  bta_sys_add_uuid(service); /* UUID_SERVCLASS_PBAP_PCE */
-  APPL_TRACE_DEBUG("%s():  SDP Registered (handle 0x%08x)", __func__,
-                   sdp_handle);
   return sdp_handle;
 }
 

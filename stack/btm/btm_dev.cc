@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,8 +36,6 @@
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_api.h"
-#include "main/shim/btm_api.h"
-#include "main/shim/shim.h"
 
 /*******************************************************************************
  *
@@ -60,20 +58,17 @@
  * Returns          true if added OK, else false
  *
  ******************************************************************************/
-bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                      BD_NAME bd_name, uint8_t* features,
-                      uint32_t trusted_mask[], LinkKey* p_link_key,
-                      uint8_t key_type, tBTM_IO_CAP io_cap,
+bool BTM_SecAddDevice(BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_name,
+                      uint8_t* features, uint32_t trusted_mask[],
+                      LINK_KEY link_key, uint8_t key_type, tBTM_IO_CAP io_cap,
                       uint8_t pin_length) {
   BTM_TRACE_API("%s: link key type:%x", __func__, key_type);
 
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (!p_dev_rec) {
     p_dev_rec = btm_sec_allocate_dev_rec();
-    BTM_TRACE_API("%s: allocated p_dev_rec=%p, bd_addr=%s", __func__, p_dev_rec,
-                  bd_addr.ToString().c_str());
 
-    p_dev_rec->bd_addr = bd_addr;
+    memcpy(p_dev_rec->bd_addr, bd_addr, BD_ADDR_LEN);
     p_dev_rec->hci_handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_BR_EDR);
 
     /* use default value for background connection params */
@@ -122,10 +117,12 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
 
   BTM_SEC_COPY_TRUSTED_DEVICE(trusted_mask, p_dev_rec->trusted_mask);
 
-  if (p_link_key) {
-    VLOG(2) << __func__ << ": BDA: " << bd_addr;
+  if (link_key) {
+    BTM_TRACE_EVENT("%s: BDA: %02x:%02x:%02x:%02x:%02x:%02x", __func__,
+                    bd_addr[0], bd_addr[1], bd_addr[2], bd_addr[3], bd_addr[4],
+                    bd_addr[5]);
     p_dev_rec->sec_flags |= BTM_SEC_LINK_KEY_KNOWN;
-    p_dev_rec->link_key = *p_link_key;
+    memcpy(p_dev_rec->link_key, link_key, LINK_KEY_LEN);
     p_dev_rec->link_key_type = key_type;
     p_dev_rec->pin_code_length = pin_length;
 
@@ -151,12 +148,6 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
   return true;
 }
 
-void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec) {
-  p_dev_rec->link_key.fill(0);
-  memset(&p_dev_rec->ble.keys, 0, sizeof(tBTM_SEC_BLE_KEYS));
-  list_remove(btm_cb.sec_dev_rec, p_dev_rec);
-}
-
 /** Free resources associated with the device associated with |bd_addr| address.
  *
  * *** WARNING ***
@@ -167,11 +158,7 @@ void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec) {
  *
  * Returns true if removed OK, false if not found or ACL link is active.
  */
-bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecDeleteDevice(bd_addr);
-  }
-
+bool BTM_SecDeleteDevice(BD_ADDR bd_addr) {
   if (BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE) ||
       BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_BR_EDR)) {
     BTM_TRACE_WARNING("%s FAILED: Cannot Delete when connection is active",
@@ -181,13 +168,11 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
 
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec != NULL) {
-    RawAddress bda = p_dev_rec->bd_addr;
-
-    /* Clear out any saved BLE keys */
-    btm_sec_clear_ble_keys(p_dev_rec);
-    wipe_secrets_and_remove(p_dev_rec);
+    BD_ADDR bda;
+    memcpy(bda, bd_addr, BD_ADDR_LEN);
+    btm_sec_free_dev(p_dev_rec);
     /* Tell controller to get rid of the link key, if it has one stored */
-    BTM_DeleteStoredLinkKey(&bda, NULL);
+    BTM_DeleteStoredLinkKey(bda, NULL);
   }
 
   return true;
@@ -201,7 +186,7 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
  *                  remove device.
  *
  ******************************************************************************/
-extern void BTM_SecClearSecurityFlags(const RawAddress& bd_addr) {
+extern void BTM_SecClearSecurityFlags(BD_ADDR bd_addr) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec == NULL) return;
 
@@ -220,7 +205,7 @@ extern void BTM_SecClearSecurityFlags(const RawAddress& bd_addr) {
  * Returns          Pointer to the name or NULL
  *
  ******************************************************************************/
-char* BTM_SecReadDevName(const RawAddress& bd_addr) {
+char* BTM_SecReadDevName(BD_ADDR bd_addr) {
   char* p_name = NULL;
   tBTM_SEC_DEV_REC* p_srec;
 
@@ -228,6 +213,15 @@ char* BTM_SecReadDevName(const RawAddress& bd_addr) {
   if (p_srec != NULL) p_name = (char*)p_srec->sec_bd_name;
 
   return (p_name);
+}
+
+bool is_bd_addr_equal(void* data, void* context) {
+  tBTM_SEC_DEV_REC* p_dev_rec = static_cast<tBTM_SEC_DEV_REC*>(data);
+  BD_ADDR* bd_addr = static_cast<BD_ADDR*>(context);
+
+  if (!memcmp(p_dev_rec->bd_addr, bd_addr, BD_ADDR_LEN)) return false;
+
+  return true;
 }
 
 /*******************************************************************************
@@ -240,13 +234,11 @@ char* BTM_SecReadDevName(const RawAddress& bd_addr) {
  * Returns          Pointer to the record or NULL
  *
  ******************************************************************************/
-tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& bd_addr) {
+tBTM_SEC_DEV_REC* btm_sec_alloc_dev(BD_ADDR bd_addr) {
   tBTM_INQ_INFO* p_inq_info;
+  BTM_TRACE_EVENT("btm_sec_alloc_dev");
 
   tBTM_SEC_DEV_REC* p_dev_rec = btm_sec_allocate_dev_rec();
-
-  BTM_TRACE_EVENT("%s: allocated p_dev_rec=%p, bd_addr=%s", __func__, p_dev_rec,
-                  bd_addr.ToString().c_str());
 
   /* Check with the BT manager if details about remote device are known */
   /* outgoing connection */
@@ -256,18 +248,31 @@ tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& bd_addr) {
 
     p_dev_rec->device_type = p_inq_info->results.device_type;
     p_dev_rec->ble.ble_addr_type = p_inq_info->results.ble_addr_type;
-  } else if (bd_addr == btm_cb.connecting_bda)
+  } else if (!memcmp(bd_addr, btm_cb.connecting_bda, BD_ADDR_LEN))
     memcpy(p_dev_rec->dev_class, btm_cb.connecting_dc, DEV_CLASS_LEN);
 
   /* update conn params, use default value for background connection params */
   memset(&p_dev_rec->conn_params, 0xff, sizeof(tBTM_LE_CONN_PRAMS));
 
-  p_dev_rec->bd_addr = bd_addr;
+  memcpy(p_dev_rec->bd_addr, bd_addr, BD_ADDR_LEN);
 
   p_dev_rec->ble_hci_handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
   p_dev_rec->hci_handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_BR_EDR);
 
   return (p_dev_rec);
+}
+
+/*******************************************************************************
+ *
+ * Function         btm_sec_free_dev
+ *
+ * Description      Mark device record as not used
+ *
+ ******************************************************************************/
+void btm_sec_free_dev(tBTM_SEC_DEV_REC* p_dev_rec) {
+  /* Clear out any saved BLE keys */
+  btm_sec_clear_ble_keys(p_dev_rec);
+  list_remove(btm_cb.sec_dev_rec, p_dev_rec);
 }
 
 /*******************************************************************************
@@ -282,13 +287,15 @@ tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& bd_addr) {
  * Returns          true if device is known and role switch is supported
  *
  ******************************************************************************/
-bool btm_dev_support_switch(const RawAddress& bd_addr) {
+bool btm_dev_support_switch(BD_ADDR bd_addr) {
   tBTM_SEC_DEV_REC* p_dev_rec;
   uint8_t xx;
   bool feature_empty = true;
 
+#if (BTM_SCO_INCLUDED == TRUE)
   /* Role switch is not allowed if a SCO is up */
   if (btm_is_sco_active_by_bdaddr(bd_addr)) return (false);
+#endif
   p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec &&
       controller_get_interface()->supports_master_slave_role_switch()) {
@@ -345,11 +352,11 @@ tBTM_SEC_DEV_REC* btm_find_dev_by_handle(uint16_t handle) {
 
 bool is_address_equal(void* data, void* context) {
   tBTM_SEC_DEV_REC* p_dev_rec = static_cast<tBTM_SEC_DEV_REC*>(data);
-  const RawAddress* bd_addr = ((RawAddress*)context);
+  BD_ADDR* bd_addr = static_cast<BD_ADDR*>(context);
 
-  if (p_dev_rec->bd_addr == *bd_addr) return false;
+  if (!memcmp(p_dev_rec->bd_addr, *bd_addr, BD_ADDR_LEN)) return false;
   // If a LE random address is looking for device record
-  if (p_dev_rec->ble.pseudo_addr == *bd_addr) return false;
+  if (!memcmp(p_dev_rec->ble.pseudo_addr, *bd_addr, BD_ADDR_LEN)) return false;
 
   if (btm_ble_addr_resolvable(*bd_addr, p_dev_rec)) return false;
   return true;
@@ -365,9 +372,11 @@ bool is_address_equal(void* data, void* context) {
  * Returns          Pointer to the record or NULL
  *
  ******************************************************************************/
-tBTM_SEC_DEV_REC* btm_find_dev(const RawAddress& bd_addr) {
+tBTM_SEC_DEV_REC* btm_find_dev(const BD_ADDR bd_addr) {
+  if (!bd_addr) return NULL;
+
   list_node_t* n =
-      list_foreach(btm_cb.sec_dev_rec, is_address_equal, (void*)&bd_addr);
+      list_foreach(btm_cb.sec_dev_rec, is_address_equal, (void*)bd_addr);
   if (n) return static_cast<tBTM_SEC_DEV_REC*>(list_node(n));
 
   return NULL;
@@ -388,17 +397,14 @@ void btm_consolidate_dev(tBTM_SEC_DEV_REC* p_target_rec) {
   BTM_TRACE_DEBUG("%s", __func__);
 
   list_node_t* end = list_end(btm_cb.sec_dev_rec);
-  list_node_t* node = list_begin(btm_cb.sec_dev_rec);
-  while (node != end) {
+  for (list_node_t* node = list_begin(btm_cb.sec_dev_rec); node != end;
+       node = list_next(node)) {
     tBTM_SEC_DEV_REC* p_dev_rec =
         static_cast<tBTM_SEC_DEV_REC*>(list_node(node));
 
-    // we do list_remove in some cases, must grab next before removing
-    node = list_next(node);
-
     if (p_target_rec == p_dev_rec) continue;
 
-    if (p_dev_rec->bd_addr == p_target_rec->bd_addr) {
+    if (!memcmp(p_dev_rec->bd_addr, p_target_rec->bd_addr, BD_ADDR_LEN)) {
       memcpy(p_target_rec, p_dev_rec, sizeof(tBTM_SEC_DEV_REC));
       p_target_rec->ble = temp_rec.ble;
       p_target_rec->ble_hci_handle = temp_rec.ble_hci_handle;
@@ -413,20 +419,21 @@ void btm_consolidate_dev(tBTM_SEC_DEV_REC* p_target_rec) {
       p_target_rec->bond_type = temp_rec.bond_type;
 
       /* remove the combined record */
-      wipe_secrets_and_remove(p_dev_rec);
-      // p_dev_rec gets freed in list_remove, we should not  access it further
-      continue;
+      list_remove(btm_cb.sec_dev_rec, p_dev_rec);
+      break;
     }
 
     /* an RPA device entry is a duplicate of the target record */
     if (btm_ble_addr_resolvable(p_dev_rec->bd_addr, p_target_rec)) {
-      if (p_target_rec->ble.pseudo_addr == p_dev_rec->bd_addr) {
+      if (memcmp(p_target_rec->ble.pseudo_addr, p_dev_rec->bd_addr,
+                 BD_ADDR_LEN) == 0) {
         p_target_rec->ble.ble_addr_type = p_dev_rec->ble.ble_addr_type;
         p_target_rec->device_type |= p_dev_rec->device_type;
 
         /* remove the combined record */
-        wipe_secrets_and_remove(p_dev_rec);
+        list_remove(btm_cb.sec_dev_rec, p_dev_rec);
       }
+      break;
     }
   }
 }
@@ -441,7 +448,7 @@ void btm_consolidate_dev(tBTM_SEC_DEV_REC* p_target_rec) {
  * Returns          Pointer to the record or NULL
  *
  ******************************************************************************/
-tBTM_SEC_DEV_REC* btm_find_or_alloc_dev(const RawAddress& bd_addr) {
+tBTM_SEC_DEV_REC* btm_find_or_alloc_dev(BD_ADDR bd_addr) {
   tBTM_SEC_DEV_REC* p_dev_rec;
   BTM_TRACE_EVENT("btm_find_or_alloc_dev");
   p_dev_rec = btm_find_dev(bd_addr);
@@ -514,7 +521,7 @@ tBTM_SEC_DEV_REC* btm_sec_allocate_dev_rec(void) {
 
   if (list_length(btm_cb.sec_dev_rec) > BTM_SEC_MAX_DEVICE_RECORDS) {
     p_dev_rec = btm_find_oldest_dev_rec();
-    wipe_secrets_and_remove(p_dev_rec);
+    list_remove(btm_cb.sec_dev_rec, p_dev_rec);
   }
 
   p_dev_rec =
@@ -540,7 +547,7 @@ tBTM_SEC_DEV_REC* btm_sec_allocate_dev_rec(void) {
  * Returns          The device bond type if known, otherwise BOND_TYPE_UNKNOWN
  *
  ******************************************************************************/
-tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& bd_addr) {
+tBTM_BOND_TYPE btm_get_bond_type_dev(BD_ADDR bd_addr) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
 
   if (p_dev_rec == NULL) return BOND_TYPE_UNKNOWN;
@@ -558,8 +565,7 @@ tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& bd_addr) {
  * Returns          true on success, otherwise false
  *
  ******************************************************************************/
-bool btm_set_bond_type_dev(const RawAddress& bd_addr,
-                           tBTM_BOND_TYPE bond_type) {
+bool btm_set_bond_type_dev(BD_ADDR bd_addr, tBTM_BOND_TYPE bond_type) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
 
   if (p_dev_rec == NULL) return false;

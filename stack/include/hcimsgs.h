@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -64,8 +64,7 @@ extern void btsnd_hcic_exit_per_inq(void);
 
 #define HCIC_PARAM_SIZE_EXIT_PER_INQ 0
 /* Create Connection */
-extern void btsnd_hcic_create_conn(const RawAddress& dest,
-                                   uint16_t packet_types,
+extern void btsnd_hcic_create_conn(BD_ADDR dest, uint16_t packet_types,
                                    uint8_t page_scan_rep_mode,
                                    uint8_t page_scan_mode,
                                    uint16_t clock_offset, uint8_t allow_switch);
@@ -89,8 +88,10 @@ extern void btsnd_hcic_disconnect(uint16_t handle, uint8_t reason);
 #define HCI_DISC_REASON_OFF 2
 /* Disconnect */
 
+#if (BTM_SCO_INCLUDED == TRUE)
 /* Add SCO Connection */
 extern void btsnd_hcic_add_SCO_conn(uint16_t handle, uint16_t packet_types);
+#endif /* BTM_SCO_INCLUDED */
 
 #define HCIC_PARAM_SIZE_ADD_SCO_CONN 4
 
@@ -99,7 +100,7 @@ extern void btsnd_hcic_add_SCO_conn(uint16_t handle, uint16_t packet_types);
 /* Add SCO Connection */
 
 /* Create Connection Cancel */
-extern void btsnd_hcic_create_conn_cancel(const RawAddress& dest);
+extern void btsnd_hcic_create_conn_cancel(BD_ADDR dest);
 
 #define HCIC_PARAM_SIZE_CREATE_CONN_CANCEL 6
 
@@ -107,7 +108,7 @@ extern void btsnd_hcic_create_conn_cancel(const RawAddress& dest);
 /* Create Connection Cancel */
 
 /* Accept Connection Request */
-extern void btsnd_hcic_accept_conn(const RawAddress& bd_addr, uint8_t role);
+extern void btsnd_hcic_accept_conn(BD_ADDR bd_addr, uint8_t role);
 
 #define HCIC_PARAM_SIZE_ACCEPT_CONN 7
 
@@ -116,7 +117,7 @@ extern void btsnd_hcic_accept_conn(const RawAddress& bd_addr, uint8_t role);
 /* Accept Connection Request */
 
 /* Reject Connection Request */
-extern void btsnd_hcic_reject_conn(const RawAddress& bd_addr, uint8_t reason);
+extern void btsnd_hcic_reject_conn(BD_ADDR bd_addr, uint8_t reason);
 
 #define HCIC_PARAM_SIZE_REJECT_CONN 7
 
@@ -125,8 +126,7 @@ extern void btsnd_hcic_reject_conn(const RawAddress& bd_addr, uint8_t reason);
 /* Reject Connection Request */
 
 /* Link Key Request Reply */
-extern void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
-                                          const LinkKey& link_key);
+extern void btsnd_hcic_link_key_req_reply(BD_ADDR bd_addr, LINK_KEY link_key);
 
 #define HCIC_PARAM_SIZE_LINK_KEY_REQ_REPLY 22
 
@@ -135,7 +135,7 @@ extern void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
 /* Link Key Request Reply  */
 
 /* Link Key Request Neg Reply */
-extern void btsnd_hcic_link_key_neg_reply(const RawAddress& bd_addr);
+extern void btsnd_hcic_link_key_neg_reply(BD_ADDR bd_addr);
 
 #define HCIC_PARAM_SIZE_LINK_KEY_NEG_REPLY 6
 
@@ -143,8 +143,7 @@ extern void btsnd_hcic_link_key_neg_reply(const RawAddress& bd_addr);
 /* Link Key Request Neg Reply  */
 
 /* PIN Code Request Reply */
-extern void btsnd_hcic_pin_code_req_reply(const RawAddress& bd_addr,
-                                          uint8_t pin_code_len,
+extern void btsnd_hcic_pin_code_req_reply(BD_ADDR bd_addr, uint8_t pin_code_len,
                                           PIN_CODE pin_code);
 
 #define HCIC_PARAM_SIZE_PIN_CODE_REQ_REPLY 23
@@ -155,7 +154,7 @@ extern void btsnd_hcic_pin_code_req_reply(const RawAddress& bd_addr,
 /* PIN Code Request Reply  */
 
 /* Link Key Request Neg Reply */
-extern void btsnd_hcic_pin_code_neg_reply(const RawAddress& bd_addr);
+extern void btsnd_hcic_pin_code_neg_reply(BD_ADDR bd_addr);
 
 #define HCIC_PARAM_SIZE_PIN_CODE_NEG_REPLY 6
 
@@ -187,8 +186,7 @@ extern void btsnd_hcic_set_conn_encrypt(uint16_t handle, bool enable);
 /* Set Connection Encryption */
 
 /* Remote Name Request */
-extern void btsnd_hcic_rmt_name_req(const RawAddress& bd_addr,
-                                    uint8_t page_scan_rep_mode,
+extern void btsnd_hcic_rmt_name_req(BD_ADDR bd_addr, uint8_t page_scan_rep_mode,
                                     uint8_t page_scan_mode,
                                     uint16_t clock_offset);
 
@@ -201,7 +199,7 @@ extern void btsnd_hcic_rmt_name_req(const RawAddress& bd_addr,
 /* Remote Name Request */
 
 /* Remote Name Request Cancel */
-extern void btsnd_hcic_rmt_name_req_cancel(const RawAddress& bd_addr);
+extern void btsnd_hcic_rmt_name_req_cancel(BD_ADDR bd_addr);
 
 #define HCIC_PARAM_SIZE_RMT_NAME_REQ_CANCEL 6
 
@@ -242,9 +240,9 @@ extern void btsnd_hcic_setup_esco_conn(uint16_t handle,
 #define HCI_SETUP_ESCO_PKT_TYPES_OFF 15
 
 extern void btsnd_hcic_accept_esco_conn(
-    const RawAddress& bd_addr, uint32_t transmit_bandwidth,
-    uint32_t receive_bandwidth, uint16_t max_latency, uint16_t content_fmt,
-    uint8_t retrans_effort, uint16_t packet_types);
+    BD_ADDR bd_addr, uint32_t transmit_bandwidth, uint32_t receive_bandwidth,
+    uint16_t max_latency, uint16_t content_fmt, uint8_t retrans_effort,
+    uint16_t packet_types);
 #define HCIC_PARAM_SIZE_ACCEPT_ESCO 21
 
 #define HCI_ACCEPT_ESCO_BDADDR_OFF 0
@@ -255,8 +253,7 @@ extern void btsnd_hcic_accept_esco_conn(
 #define HCI_ACCEPT_ESCO_RETRAN_EFF_OFF 18
 #define HCI_ACCEPT_ESCO_PKT_TYPES_OFF 19
 
-extern void btsnd_hcic_reject_esco_conn(const RawAddress& bd_addr,
-                                        uint8_t reason);
+extern void btsnd_hcic_reject_esco_conn(BD_ADDR bd_addr, uint8_t reason);
 #define HCIC_PARAM_SIZE_REJECT_ESCO 7
 
 #define HCI_REJECT_ESCO_BDADDR_OFF 0
@@ -321,7 +318,7 @@ extern void btsnd_hcic_qos_setup(uint16_t handle, uint8_t flags,
 /* QoS Setup */
 
 /* Switch Role Request */
-extern void btsnd_hcic_switch_role(const RawAddress& bd_addr, uint8_t role);
+extern void btsnd_hcic_switch_role(BD_ADDR bd_addr, uint8_t role);
 
 #define HCIC_PARAM_SIZE_SWITCH_ROLE 7
 
@@ -380,9 +377,8 @@ extern void btsnd_hcic_write_ext_inquiry_response(void* buffer,
 #define HCIC_EXT_INQ_RESP_FEC_OFF 0
 #define HCIC_EXT_INQ_RESP_RESPONSE 1
 /* IO Capabilities Response */
-extern void btsnd_hcic_io_cap_req_reply(const RawAddress& bd_addr,
-                                        uint8_t capability, uint8_t oob_present,
-                                        uint8_t auth_req);
+extern void btsnd_hcic_io_cap_req_reply(BD_ADDR bd_addr, uint8_t capability,
+                                        uint8_t oob_present, uint8_t auth_req);
 
 #define HCIC_PARAM_SIZE_IO_CAP_RESP 9
 
@@ -392,8 +388,7 @@ extern void btsnd_hcic_io_cap_req_reply(const RawAddress& bd_addr,
 #define HCI_IO_CAP_AUTH_REQ_OFF 8
 
 /* IO Capabilities Req Neg Reply */
-extern void btsnd_hcic_io_cap_req_neg_reply(const RawAddress& bd_addr,
-                                            uint8_t err_code);
+extern void btsnd_hcic_io_cap_req_neg_reply(BD_ADDR bd_addr, uint8_t err_code);
 
 #define HCIC_PARAM_SIZE_IO_CAP_NEG_REPLY 7
 
@@ -405,29 +400,28 @@ extern void btsnd_hcic_read_local_oob_data(void);
 
 #define HCIC_PARAM_SIZE_R_LOCAL_OOB 0
 
-extern void btsnd_hcic_user_conf_reply(const RawAddress& bd_addr, bool is_yes);
+extern void btsnd_hcic_user_conf_reply(BD_ADDR bd_addr, bool is_yes);
 
 #define HCIC_PARAM_SIZE_UCONF_REPLY 6
 
 #define HCI_USER_CONF_BD_ADDR_OFF 0
 
-extern void btsnd_hcic_user_passkey_reply(const RawAddress& bd_addr,
-                                          uint32_t value);
+extern void btsnd_hcic_user_passkey_reply(BD_ADDR bd_addr, uint32_t value);
 
 #define HCIC_PARAM_SIZE_U_PKEY_REPLY 10
 
 #define HCI_USER_PASSKEY_BD_ADDR_OFF 0
 #define HCI_USER_PASSKEY_VALUE_OFF 6
 
-extern void btsnd_hcic_user_passkey_neg_reply(const RawAddress& bd_addr);
+extern void btsnd_hcic_user_passkey_neg_reply(BD_ADDR bd_addr);
 
 #define HCIC_PARAM_SIZE_U_PKEY_NEG_REPLY 6
 
 #define HCI_USER_PASSKEY_NEG_BD_ADDR_OFF 0
 
 /* Remote OOB Data Request Reply */
-extern void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr,
-                                     const Octet16& c, const Octet16& r);
+extern void btsnd_hcic_rem_oob_reply(BD_ADDR bd_addr, uint8_t* p_c,
+                                     uint8_t* p_r);
 
 #define HCIC_PARAM_SIZE_REM_OOB_REPLY 38
 
@@ -436,7 +430,7 @@ extern void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr,
 #define HCI_REM_OOB_DATA_R_OFF 22
 
 /* Remote OOB Data Request Negative Reply */
-extern void btsnd_hcic_rem_oob_neg_reply(const RawAddress& bd_addr);
+extern void btsnd_hcic_rem_oob_neg_reply(BD_ADDR bd_addr);
 
 #define HCIC_PARAM_SIZE_REM_OOB_NEG_REPLY 6
 
@@ -452,12 +446,13 @@ extern void btsnd_hcic_read_default_erroneous_data_rpt(void);
 
 #define HCIC_PARAM_SIZE_R_ERR_DATA_RPT 0
 
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 extern void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type);
 
 #define HCIC_PARAM_SIZE_ENHANCED_FLUSH 3
+#endif
 
-extern void btsnd_hcic_send_keypress_notif(const RawAddress& bd_addr,
-                                           uint8_t notif);
+extern void btsnd_hcic_send_keypress_notif(BD_ADDR bd_addr, uint8_t notif);
 
 #define HCIC_PARAM_SIZE_SEND_KEYPRESS_NOTIF 7
 
@@ -482,8 +477,7 @@ extern void btsnd_hcic_set_event_filter(uint8_t filt_type,
 /* Set Event Filter */
 
 /* Delete Stored Key */
-extern void btsnd_hcic_delete_stored_key(const RawAddress& bd_addr,
-                                         bool delete_all_flag);
+extern void btsnd_hcic_delete_stored_key(BD_ADDR bd_addr, bool delete_all_flag);
 
 #define HCIC_PARAM_SIZE_DELETE_STORED_KEY 7
 
@@ -558,7 +552,7 @@ extern void btsnd_hcic_write_voice_settings(
 extern void btsnd_hcic_write_auto_flush_tout(
     uint16_t handle, uint16_t timeout); /* Write Retransmit Timout */
 
-#define HCIC_PARAM_SIZE_WRITE_AUTOMATIC_FLUSH_TIMEOUT 4
+#define HCIC_PARAM_SIZE_WRITE_AUTO_FLUSH_TOUT 4
 
 #define HCI_FLUSH_TOUT_HANDLE_OFF 0
 #define HCI_FLUSH_TOUT_TOUT_OFF 2
@@ -608,10 +602,9 @@ extern void btsnd_hcic_write_cur_iac_lap(
 
 extern void btsnd_hcic_get_link_quality(uint16_t handle); /* Get Link Quality */
 extern void btsnd_hcic_read_rssi(uint16_t handle);        /* Read RSSI */
-using ReadEncKeySizeCb = base::OnceCallback<void(uint8_t, uint16_t, uint8_t)>;
-extern void btsnd_hcic_read_encryption_key_size(uint16_t handle, ReadEncKeySizeCb cb);
-extern void btsnd_hcic_read_failed_contact_counter(uint16_t handle);
-extern void btsnd_hcic_read_automatic_flush_timeout(uint16_t handle);
+using ReadEncKeySizeCb = base::Callback<void(uint8_t, uint16_t, uint8_t)>;
+extern void btsnd_hcic_read_encryption_key_size(uint16_t handle,
+                                                ReadEncKeySizeCb cb);
 extern void btsnd_hcic_enable_test_mode(
     void); /* Enable Device Under Test Mode */
 extern void btsnd_hcic_write_pagescan_type(
@@ -627,7 +620,7 @@ extern void btsnd_hcic_enhanced_set_up_synchronous_connection(
 
 /* Enhanced accept SCO connection request (CSA2) */
 extern void btsnd_hcic_enhanced_accept_synchronous_connection(
-    const RawAddress& bd_addr, enh_esco_params_t* p_parms);
+    BD_ADDR bd_addr, enh_esco_params_t* p_parms);
 
 #define HCI_DATA_HANDLE_MASK 0x0FFF
 
@@ -665,6 +658,7 @@ extern void btsnd_hcic_vendor_spec_cmd(void* buffer, uint16_t opcode,
  *             message size
  ******************************************************************************/
 #define HCIC_BLE_RAND_DI_SIZE 8
+#define HCIC_BLE_ENCRYT_KEY_SIZE 16
 #define HCIC_BLE_IRK_SIZE 16
 
 #define HCIC_PARAM_SIZE_SET_USED_FEAT_CMD 8
@@ -704,13 +698,6 @@ extern void btsnd_hcic_vendor_spec_cmd(void* buffer, uint16_t opcode,
 #define HCIC_PARAM_SIZE_BLE_READ_RESOLVABLE_ADDR_LOCAL 7
 #define HCIC_PARAM_SIZE_BLE_SET_ADDR_RESOLUTION_ENABLE 1
 #define HCIC_PARAM_SIZE_BLE_SET_RAND_PRIV_ADDR_TIMOUT 2
-
-#define HCIC_PARAM_SIZE_BLE_READ_PHY 2
-#define HCIC_PARAM_SIZE_BLE_SET_DEFAULT_PHY 3
-#define HCIC_PARAM_SIZE_BLE_SET_PHY 7
-#define HCIC_PARAM_SIZE_BLE_ENH_RX_TEST 3
-#define HCIC_PARAM_SIZE_BLE_ENH_TX_TEST 4
-
 #define HCIC_PARAM_SIZE_BLE_SET_DATA_LENGTH 6
 #define HCIC_PARAM_SIZE_BLE_WRITE_EXTENDED_SCAN_PARAM 11
 
@@ -723,11 +710,11 @@ extern void btsnd_hcic_ble_read_local_spt_feat(void);
 
 extern void btsnd_hcic_ble_set_local_used_feat(uint8_t feat_set[8]);
 
-extern void btsnd_hcic_ble_set_random_addr(const RawAddress& random_addr);
+extern void btsnd_hcic_ble_set_random_addr(BD_ADDR random_addr);
 
 extern void btsnd_hcic_ble_write_adv_params(
     uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type,
-    uint8_t addr_type_own, uint8_t addr_type_dir, const RawAddress& direct_bda,
+    uint8_t addr_type_own, uint8_t addr_type_dir, BD_ADDR direct_bda,
     uint8_t channel_map, uint8_t adv_filter_policy);
 
 extern void btsnd_hcic_ble_read_adv_chnl_tx_power(void);
@@ -748,7 +735,7 @@ extern void btsnd_hcic_ble_set_scan_enable(uint8_t scan_enable,
 
 extern void btsnd_hcic_ble_create_ll_conn(
     uint16_t scan_int, uint16_t scan_win, uint8_t init_filter_policy,
-    uint8_t addr_type_peer, const RawAddress& bda_peer, uint8_t addr_type_own,
+    uint8_t addr_type_peer, BD_ADDR bda_peer, uint8_t addr_type_own,
     uint16_t conn_int_min, uint16_t conn_int_max, uint16_t conn_latency,
     uint16_t conn_timeout, uint16_t min_ce_len, uint16_t max_ce_len);
 
@@ -756,16 +743,12 @@ extern void btsnd_hcic_ble_create_conn_cancel(void);
 
 extern void btsnd_hcic_ble_read_white_list_size(void);
 
-extern void btsnd_hcic_ble_clear_white_list(
-    base::OnceCallback<void(uint8_t*, uint16_t)> cb);
+extern void btsnd_hcic_ble_clear_white_list(void);
 
-extern void btsnd_hcic_ble_add_white_list(
-    uint8_t addr_type, const RawAddress& bda,
-    base::OnceCallback<void(uint8_t*, uint16_t)> cb);
+extern void btsnd_hcic_ble_add_white_list(uint8_t addr_type, BD_ADDR bda);
 
-extern void btsnd_hcic_ble_remove_from_white_list(
-    uint8_t addr_type, const RawAddress& bda,
-    base::OnceCallback<void(uint8_t*, uint16_t)> cb);
+extern void btsnd_hcic_ble_remove_from_white_list(uint8_t addr_type,
+                                                  BD_ADDR bda);
 
 extern void btsnd_hcic_ble_upd_ll_conn_params(
     uint16_t handle, uint16_t conn_int_min, uint16_t conn_int_max,
@@ -787,9 +770,11 @@ extern void btsnd_hcic_ble_rand(base::Callback<void(BT_OCTET8)> cb);
 
 extern void btsnd_hcic_ble_start_enc(uint16_t handle,
                                      uint8_t rand[HCIC_BLE_RAND_DI_SIZE],
-                                     uint16_t ediv, const Octet16& ltk);
+                                     uint16_t ediv,
+                                     uint8_t ltk[HCIC_BLE_ENCRYT_KEY_SIZE]);
 
-extern void btsnd_hcic_ble_ltk_req_reply(uint16_t handle, const Octet16& ltk);
+extern void btsnd_hcic_ble_ltk_req_reply(uint16_t handle,
+                                         uint8_t ltk[HCIC_BLE_ENCRYT_KEY_SIZE]);
 
 extern void btsnd_hcic_ble_ltk_req_neg_reply(uint16_t handle);
 
@@ -825,10 +810,9 @@ extern void btsnd_hcic_ble_set_data_length(uint16_t conn_handle,
                                            uint16_t tx_octets,
                                            uint16_t tx_time);
 
-extern void btsnd_hcic_ble_add_device_resolving_list(uint8_t addr_type_peer,
-                                                     const RawAddress& bda_peer,
-                                                     const Octet16& irk_peer,
-                                                     const Octet16& irk_local);
+extern void btsnd_hcic_ble_add_device_resolving_list(
+    uint8_t addr_type_peer, BD_ADDR bda_peer,
+    uint8_t irk_peer[HCIC_BLE_IRK_SIZE], uint8_t irk_local[HCIC_BLE_IRK_SIZE]);
 
 struct scanning_phy_cfg {
   uint8_t scan_type;
@@ -856,27 +840,28 @@ struct EXT_CONN_PHY_CFG {
   uint16_t max_ce_len;
 };
 
-extern void btsnd_hcic_ble_ext_create_conn(uint8_t init_filter_policy,
-                                           uint8_t addr_type_own,
-                                           uint8_t addr_type_peer,
-                                           const RawAddress& bda_peer,
-                                           uint8_t initiating_phys,
-                                           EXT_CONN_PHY_CFG* phy_cfg);
+extern void btsnd_hcic_ble_ext_create_conn(
+    uint8_t init_filter_policy, uint8_t addr_type_own, uint8_t addr_type_peer,
+    BD_ADDR bda_peer, uint8_t initiating_phys, EXT_CONN_PHY_CFG* phy_cfg);
+
+extern void btsnd_hcic_ble_add_device_resolving_list(
+    uint8_t addr_type_peer, BD_ADDR bda_peer,
+    uint8_t irk_peer[HCIC_BLE_IRK_SIZE], uint8_t irk_local[HCIC_BLE_IRK_SIZE]);
 
 extern void btsnd_hcic_ble_rm_device_resolving_list(uint8_t addr_type_peer,
-                                                    const RawAddress& bda_peer);
+                                                    BD_ADDR bda_peer);
 
 extern void btsnd_hcic_ble_set_privacy_mode(uint8_t addr_type_peer,
-                                            const RawAddress& bda_peer,
+                                            BD_ADDR bda_peer,
                                             uint8_t privacy_type);
 
 extern void btsnd_hcic_ble_clear_resolving_list(void);
 
-extern void btsnd_hcic_ble_read_resolvable_addr_peer(
-    uint8_t addr_type_peer, const RawAddress& bda_peer);
+extern void btsnd_hcic_ble_read_resolvable_addr_peer(uint8_t addr_type_peer,
+                                                     BD_ADDR bda_peer);
 
-extern void btsnd_hcic_ble_read_resolvable_addr_local(
-    uint8_t addr_type_peer, const RawAddress& bda_peer);
+extern void btsnd_hcic_ble_read_resolvable_addr_local(uint8_t addr_type_peer,
+                                                      BD_ADDR bda_peer);
 
 extern void btsnd_hcic_ble_set_addr_resolution_enable(
     uint8_t addr_resolution_enable);
