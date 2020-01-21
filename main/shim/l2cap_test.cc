@@ -227,8 +227,7 @@ TEST_F(L2capTest, CreateConnection_ConfigRequest) {
   CHECK(cid != 0);
 
   // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid,
-                                            true);
+  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
   CHECK(cnt_.L2caConnectCfmCb == 1);
 
   CHECK(l2cap_->ConfigRequest(cid, nullptr));
@@ -245,8 +244,7 @@ TEST_F(L2capTest, CreateConnection_ConfigResponse) {
   CHECK(cid != 0);
 
   // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid,
-                                            true);
+  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
   CHECK(cnt_.L2caConnectCfmCb == 1);
 
   CHECK(l2cap_->ConfigResponse(cid, nullptr));
@@ -263,8 +261,7 @@ TEST_F(L2capTest, CreateConnection_DisconnectRequest) {
   CHECK(cid != 0);
 
   // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid,
-                                            true);
+  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
   CHECK(cnt_.L2caConnectCfmCb == 1);
 
   CHECK(l2cap_->DisconnectRequest(cid));
@@ -281,8 +278,7 @@ TEST_F(L2capTest, CreateConnection_DisconnectResponse) {
   CHECK(cid != 0);
 
   // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid,
-                                            true);
+  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
   CHECK(cnt_.L2caConnectCfmCb == 1);
 
   CHECK(l2cap_->DisconnectResponse(cid));
@@ -299,8 +295,7 @@ TEST_F(L2capTest, CreateConnection_WithHandshake) {
   CHECK(cid != 0);
 
   // Simulate a successful connection response
-  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid,
-                                            true);
+  l2cap_->OnLocalInitiatedConnectionCreated("11:22:33:44:55:66", kPsm, kCid);
   CHECK(cnt_.L2caConnectCfmCb == 1);
 
   CHECK(l2cap_->ConfigRequest(cid, nullptr) == true);
