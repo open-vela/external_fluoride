@@ -244,7 +244,7 @@ uint16_t bluetooth::shim::legacy::L2cap::CreateConnection(
       std::bind(
           &bluetooth::shim::legacy::L2cap::OnLocalInitiatedConnectionCreated,
           this, std::placeholders::_1, std::placeholders::_2,
-          std::placeholders::_3, std::placeholders::_4),
+          std::placeholders::_3),
       std::move(connect_completed));
 
   uint16_t cid = completed.get();
@@ -264,16 +264,17 @@ uint16_t bluetooth::shim::legacy::L2cap::CreateConnection(
 }
 
 void bluetooth::shim::legacy::L2cap::OnLocalInitiatedConnectionCreated(
-    std::string string_address, uint16_t psm, uint16_t cid, bool connected) {
+    std::string string_address, uint16_t psm, uint16_t cid) {
   LOG_DEBUG(LOG_TAG,
             "Sending connection confirm to the upper stack but really "
             "a connection to %s has already been done cid:%hd",
             string_address.c_str(), cid);
-  if (connected) {
+  uint16_t status = kConnectionFail;
+  if (cid != kInvalidConnectionInterfaceDescriptor) {
     SetDownstreamCallbacks(cid);
+    status = kConnectionSuccess;
   }
-  Classic().Callbacks(psm)->pL2CA_ConnectCfm_Cb(
-      cid, connected ? (kConnectionSuccess) : (kConnectionFail));
+  Classic().Callbacks(psm)->pL2CA_ConnectCfm_Cb(cid, status);
 }
 
 bool bluetooth::shim::legacy::L2cap::Write(uint16_t cid, BT_HDR* bt_hdr) {
