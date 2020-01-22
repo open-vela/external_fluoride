@@ -63,13 +63,10 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     return ::grpc::Status::OK;
   }
 
-  void OnDisplayYesNoDialogWithValue(const bluetooth::hci::AddressWithType& address, uint32_t numeric_value,
-                                     common::OnceCallback<void(bool)> input_callback) {}
-  void OnDisplayYesNoDialog(const bluetooth::hci::AddressWithType& address,
-                            common::OnceCallback<void(bool)> input_callback) {}
+  void OnDisplayYesNoDialogWithValue(const bluetooth::hci::AddressWithType& address, uint32_t numeric_value) {}
+  void OnDisplayYesNoDialog(const bluetooth::hci::AddressWithType& address) {}
   void OnDisplayPasskeyDialog(const bluetooth::hci::AddressWithType& address, uint32_t passkey) {}
-  void OnDisplayPasskeyInputDialog(const bluetooth::hci::AddressWithType& address,
-                                   common::OnceCallback<void(uint32_t)> input_callback){};
+  void OnDisplayPasskeyInputDialog(const bluetooth::hci::AddressWithType& address){};
   void OnDisplayCancelDialog(const bluetooth::hci::AddressWithType& address) {}
   void OnDeviceBonded(hci::AddressWithType device) {}
   void OnDeviceUnbonded(hci::AddressWithType device) {}
