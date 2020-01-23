@@ -1,6 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 
-bluetooth_cert_test_file_list := \
+PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST := \
     $(call all-named-files-under,*.py,cert) \
     $(call all-named-files-under,*.sh,cert) \
     cert/cert_testcases \
@@ -18,20 +18,12 @@ bluetooth_cert_test_file_list := \
     neighbor/cert/neighbor_test.py
 
 
-bluetooth_cert_test_file_list := $(addprefix $(LOCAL_PATH)/,$(bluetooth_cert_test_file_list))
+PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST := $(addprefix $(LOCAL_PATH)/,$(PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST))
 
-bluetooth_cert_test_file_list += \
-    $(HOST_OUT_EXECUTABLES)/bluetooth_stack_with_facade \
-    $(HOST_OUT_SHARED_LIBRARIES)/libbluetooth_gd.so \
-    $(HOST_OUT_SHARED_LIBRARIES)/libgrpc++_unsecure.so \
-    $(HOST_OUT_NATIVE_TESTS)/root-canal/root-canal
-
-bluetooth_cert_zip_path := \
+PRIVATE_BLUETOOTH_CERT_ZIP_PATH := \
     $(call intermediates-dir-for,PACKAGING,bluetooth_cert_test_package,HOST)/bluetooth_cert_test.zip
 
-$(bluetooth_cert_zip_path): PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST := $(bluetooth_cert_test_file_list)
+$(PRIVATE_BLUETOOTH_CERT_ZIP_PATH) : $(SOONG_ZIP) $(PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST)
+	$(hide) $(SOONG_ZIP) -d -o $@ -C system/bt/gd $(addprefix -f ,$(PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST))
 
-$(bluetooth_cert_zip_path) : $(SOONG_ZIP) $(bluetooth_cert_test_file_list)
-	$(hide) $(SOONG_ZIP) -d -o $@ $(addprefix -f ,$(PRIVATE_BLUETOOTH_CERT_TEST_FILE_LIST))
-
-$(call dist-for-goals,bluetooth_stack_with_facade,$(bluetooth_cert_zip_path):bluetooth_cert_test.zip)
+$(call dist-for-goals,bluetooth_stack_with_facade,$(PRIVATE_BLUETOOTH_CERT_ZIP_PATH):bluetooth_cert_test.zip)
