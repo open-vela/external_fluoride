@@ -35,11 +35,12 @@ import android.os.ResultReceiver;
  */
 interface IBluetooth
 {
+    boolean isEnabled();
     int getState();
-    boolean enable(boolean quietMode);
+    boolean enable();
+    boolean enableNoAutoConnect();
     boolean disable();
 
-    @UnsupportedAppUsage
     String getAddress();
     ParcelUuid[] getUuids();
     boolean setName(in String name);
@@ -58,7 +59,7 @@ interface IBluetooth
     int getDiscoverableTimeout();
     boolean setDiscoverableTimeout(int timeout);
 
-    boolean startDiscovery(String callingPackage, String callingFeatureId);
+    boolean startDiscovery(String callingPackage);
     boolean cancelDiscovery();
     boolean isDiscovering();
     long getDiscoveryEndMillis();
@@ -67,7 +68,8 @@ interface IBluetooth
     int getProfileConnectionState(int profile);
 
     BluetoothDevice[] getBondedDevices();
-    boolean createBond(in BluetoothDevice device, in int transport, in OobData oobData);
+    boolean createBond(in BluetoothDevice device, in int transport);
+    boolean createBondOutOfBand(in BluetoothDevice device, in int transport, in OobData oobData);
     boolean cancelBondProcess(in BluetoothDevice device);
     boolean removeBond(in BluetoothDevice device);
     int getBondState(in BluetoothDevice device);
@@ -77,12 +79,10 @@ interface IBluetooth
 
     String getRemoteName(in BluetoothDevice device);
     int getRemoteType(in BluetoothDevice device);
-    @UnsupportedAppUsage
     String getRemoteAlias(in BluetoothDevice device);
     boolean setRemoteAlias(in BluetoothDevice device, in String name);
     int getRemoteClass(in BluetoothDevice device);
     ParcelUuid[] getRemoteUuids(in BluetoothDevice device);
-    @UnsupportedAppUsage
     boolean fetchRemoteUuids(in BluetoothDevice device);
     boolean sdpSearch(in BluetoothDevice device, in ParcelUuid uuid);
     int getBatteryLevel(in BluetoothDevice device);
@@ -101,6 +101,8 @@ interface IBluetooth
     boolean setMessageAccessPermission(in BluetoothDevice device, int value);
     int getSimAccessPermission(in BluetoothDevice device);
     boolean setSimAccessPermission(in BluetoothDevice device, int value);
+
+    void sendConnectionStateChange(in BluetoothDevice device, int profile, int state, int prevState);
 
     void registerCallback(in IBluetoothCallback callback);
     void unregisterCallback(in IBluetoothCallback callback);
@@ -139,11 +141,4 @@ interface IBluetooth
 
     void onLeServiceUp();
     void onBrEdrDown();
-
-    boolean connectAllEnabledProfiles(in BluetoothDevice device);
-    boolean disconnectAllEnabledProfiles(in BluetoothDevice device);
-
-    boolean setActiveDevice(in BluetoothDevice device, in int profiles);
-
-    List<BluetoothDevice> getMostRecentlyConnectedDevices();
 }

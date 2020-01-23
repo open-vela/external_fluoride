@@ -14,11 +14,15 @@
 // limitations under the License.
 //
 
+#define LOG_TAG "root_canal"
+
 #include "test_environment.h"
 
+#include <base/logging.h>
+#include <utils/Log.h>
 #include <future>
 
-#include "os/log.h"
+#include "hci_internals.h"
 
 using ::android::bluetooth::root_canal::TestEnvironment;
 
@@ -27,16 +31,16 @@ constexpr uint16_t kHciServerPort = 6402;
 constexpr uint16_t kLinkServerPort = 6403;
 
 int main(int argc, char** argv) {
-  LOG_INFO("main");
+  ALOGI("main");
   uint16_t test_port = kTestPort;
   uint16_t hci_server_port = kHciServerPort;
   uint16_t link_server_port = kLinkServerPort;
 
   for (int arg = 0; arg < argc; arg++) {
     int port = atoi(argv[arg]);
-    LOG_INFO("%d: %s (%d)", arg, argv[arg], port);
+    ALOGI("%d: %s (%d)", arg, argv[arg], port);
     if (port < 0 || port > 0xffff) {
-      LOG_WARN("%s out of range", argv[arg]);
+      ALOGW("%s out of range", argv[arg]);
     } else {
       switch (arg) {
         case 0:  // executable name
@@ -51,7 +55,7 @@ int main(int argc, char** argv) {
           link_server_port = port;
           break;
         default:
-          LOG_WARN("Ignored option %s", argv[arg]);
+          ALOGW("Ignored option %s", argv[arg]);
       }
     }
   }
