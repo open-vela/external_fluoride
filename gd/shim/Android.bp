@@ -21,7 +21,6 @@ filegroup {
 filegroup {
     name: "BluetoothShimTestSources",
     srcs: [
-            "l2cap_test.cc",
     ],
 }
 
