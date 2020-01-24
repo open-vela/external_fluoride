@@ -137,10 +137,6 @@ class ConnectionInterface {
   void OnConnectionClosed(hci::ErrorCode error_code) {
     LOG_DEBUG("Channel interface closed reason:%s cid:%hd device:%s", hci::ErrorCodeText(error_code).c_str(), cid_,
               address_.ToString().c_str());
-    if (dequeue_registered_) {
-      channel_->GetQueueUpEnd()->UnregisterDequeue();
-      dequeue_registered_ = false;
-    }
     ASSERT(on_connection_closed_callback_ != nullptr);
     on_connection_closed_callback_(cid_, static_cast<int>(error_code));
     deleter_(cid_);
@@ -265,11 +261,8 @@ void ConnectionInterfaceManager::AddConnection(ConnectionInterfaceDescriptor cid
 }
 
 void ConnectionInterfaceManager::RemoveConnection(ConnectionInterfaceDescriptor cid) {
-  if (cid_to_interface_map_.count(cid) == 1) {
-    cid_to_interface_map_.find(cid)->second->Close();
-  } else {
-    LOG_WARN("Closing a pending connection cid:%hd", cid);
-  }
+  ASSERT(cid_to_interface_map_.count(cid) == 1);
+  cid_to_interface_map_.find(cid)->second->Close();
 }
 
 bool ConnectionInterfaceManager::HasResources() const {
