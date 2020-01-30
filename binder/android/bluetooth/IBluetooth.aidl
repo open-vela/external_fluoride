@@ -144,8 +144,4 @@ interface IBluetooth
     boolean disconnectAllEnabledProfiles(in BluetoothDevice device);
 
     boolean setActiveDevice(in BluetoothDevice device, in int profiles);
-
-    List<BluetoothDevice> getMostRecentlyConnectedDevices();
-
-    boolean removeActiveDevice(in int profiles);
 }
