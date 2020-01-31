@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Android Open Source Project
+ * Copyright 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,33 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <grpc++/grpc++.h>
+#include <memory>
 
-#include "grpc/grpc_module.h"
-#include "hci/acl_manager.h"
+#include "module.h"
 
 namespace bluetooth {
-namespace hci {
-namespace cert {
+namespace att {
 
-class AclManagerCertService;
-
-class AclManagerCertModule : public ::bluetooth::grpc::GrpcFacadeModule {
+class AttModule : public bluetooth::Module {
  public:
+  AttModule() = default;
+  ~AttModule() = default;
+
   static const ModuleFactory Factory;
 
+ protected:
   void ListDependencies(ModuleList* list) override;
+
   void Start() override;
+
   void Stop() override;
-  ::grpc::Service* GetService() const override;
+
+  std::string ToString() const override;
 
  private:
-  AclManagerCertService* service_;
+  struct impl;
+  std::unique_ptr<impl> pimpl_;
+  DISALLOW_COPY_AND_ASSIGN(AttModule);
 };
 
-}  // namespace cert
-}  // namespace hci
+}  // namespace att
 }  // namespace bluetooth

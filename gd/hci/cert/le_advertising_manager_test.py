@@ -14,13 +14,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from __future__ import print_function
-
 import os
 import sys
 import logging
-
-sys.path.append(os.environ['ANDROID_BUILD_TOP'] + '/system/bt/gd')
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
 from cert.event_callback_stream import EventCallbackStream
@@ -79,9 +75,6 @@ class LeAdvertisingManagerTest(GdFacadeOnlyBaseTestClass):
         with EventCallbackStream(
                 self.cert_device.hci.FetchLeSubevents(
                     empty_proto.Empty())) as hci_le_event_stream:
-
-            hci_event_asserts = EventAsserts(hci_le_event_stream)
-
             # CERT Scans
             self.enqueue_hci_command(
                 hci_packets.LeSetRandomAddressBuilder('0C:05:04:03:02:01'),
@@ -123,6 +116,7 @@ class LeAdvertisingManagerTest(GdFacadeOnlyBaseTestClass):
             create_response = self.device_under_test.hci_le_advertising_manager.CreateAdvertiser(
                 request)
 
+            hci_event_asserts = EventAsserts(hci_le_event_stream)
             hci_event_asserts.assert_event_occurs(
                 lambda packet: b'Im_The_DUT' in packet.event)
 

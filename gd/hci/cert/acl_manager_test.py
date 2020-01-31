@@ -14,13 +14,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from __future__ import print_function
-
 import os
 import sys
 import logging
-
-sys.path.append(os.environ['ANDROID_BUILD_TOP'] + '/system/bt/gd')
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
 from cert.event_callback_stream import EventCallbackStream
@@ -86,10 +82,6 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
             EventCallbackStream(self.cert_device.hci.FetchAclPackets(empty_proto.Empty())) as cert_acl_data_stream, \
             EventCallbackStream(self.device_under_test.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
 
-            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
-            acl_data_asserts = EventAsserts(acl_data_stream)
-            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
-
             # CERT Enables scans and gets its address
             self.enqueue_hci_command(
                 hci_packets.WriteScanEnableBuilder(
@@ -112,6 +104,7 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
 
             self.enqueue_hci_command(hci_packets.ReadBdAddrBuilder(), True)
 
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
             cert_hci_event_asserts.assert_event_occurs(
                 get_address_from_complete)
 
@@ -122,8 +115,6 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                                 hci_packets.AddressType.PUBLIC_DEVICE_ADDRESS),
                             address=bytes(cert_address,
                                           'utf8')))) as connection_event_stream:
-
-                connection_event_asserts = EventAsserts(connection_event_stream)
                 connection_request = None
 
                 def get_connect_request(packet):
@@ -171,6 +162,7 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                     ))
 
                 # DUT gets a connection complete event and sends and receives
+                connection_event_asserts = EventAsserts(connection_event_stream)
                 handle = 0xfff
                 connection_event_asserts.assert_event_occurs(get_handle)
 
@@ -181,6 +173,8 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                             b'\x29\x00\x07\x00This is just SomeMoreAclData from the DUT'
                         )))
 
+                acl_data_asserts = EventAsserts(acl_data_stream)
+                cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
                 cert_acl_data_asserts.assert_event_occurs(
                     lambda packet: b'SomeMoreAclData' in packet.data)
                 acl_data_asserts.assert_event_occurs(
@@ -192,9 +186,6 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
         with EventCallbackStream(self.cert_device.hci.FetchEvents(empty_proto.Empty())) as cert_hci_event_stream, \
             EventCallbackStream(self.cert_device.hci.FetchAclPackets(empty_proto.Empty())) as cert_acl_data_stream, \
             EventCallbackStream(self.device_under_test.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
-
-            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
-            acl_data_asserts = EventAsserts(acl_data_stream)
 
             # CERT Enables scans and gets its address
             self.enqueue_hci_command(
@@ -218,6 +209,7 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
 
             self.enqueue_hci_command(hci_packets.ReadBdAddrBuilder(), True)
 
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
             cert_hci_event_asserts.assert_event_occurs(
                 get_address_from_complete)
 
@@ -228,8 +220,6 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                                 hci_packets.AddressType.PUBLIC_DEVICE_ADDRESS),
                             address=bytes(cert_address,
                                           'utf8')))) as connection_event_stream:
-
-                connection_event_asserts = EventAsserts(connection_event_stream)
                 connection_request = None
 
                 def get_connect_request(packet):
@@ -268,6 +258,8 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                 cert_hci_event_asserts.assert_event_occurs(get_handle)
                 cert_handle = handle
 
+                acl_data_asserts = EventAsserts(acl_data_stream)
+
                 self.enqueue_acl_data(
                     cert_handle, hci_packets.PacketBoundaryFlag.
                     FIRST_AUTOMATICALLY_FLUSHABLE,
@@ -284,6 +276,7 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                     bytes(b'\x88\x13\x07\x00' + b'Hello' * 1000))
 
                 # DUT gets a connection complete event and sends and receives
+                connection_event_asserts = EventAsserts(connection_event_stream)
                 connection_event_asserts.assert_event_occurs(get_handle)
 
                 acl_data_asserts.assert_event_occurs(
