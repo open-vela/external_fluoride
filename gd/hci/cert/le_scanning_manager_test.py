@@ -14,13 +14,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from __future__ import print_function
-
 import os
 import sys
 import logging
-
-sys.path.append(os.environ['ANDROID_BUILD_TOP'] + '/system/bt/gd')
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
 from cert.event_callback_stream import EventCallbackStream
@@ -80,8 +76,6 @@ class LeScanningManagerTest(GdFacadeOnlyBaseTestClass):
                 self.device_under_test.hci_le_scanning_manager.StartScan(
                     empty_proto.Empty())) as advertising_event_stream:
 
-            hci_event_asserts = EventAsserts(advertising_event_stream)
-
             # CERT Advertises
             gap_name = hci_packets.GapData()
             gap_name.data_type = hci_packets.GapDataType.COMPLETE_LOCAL_NAME
@@ -108,6 +102,7 @@ class LeScanningManagerTest(GdFacadeOnlyBaseTestClass):
             create_response = self.cert_device.hci_le_advertising_manager.CreateAdvertiser(
                 request)
 
+            hci_event_asserts = EventAsserts(advertising_event_stream)
             hci_event_asserts.assert_event_occurs(
                 lambda packet: b'Im_The_CERT' in packet.event)
 

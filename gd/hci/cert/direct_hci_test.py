@@ -14,13 +14,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from __future__ import print_function
-
 import os
 import sys
 import logging
-
-sys.path.append(os.environ['ANDROID_BUILD_TOP'] + '/system/bt/gd')
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
 from cert.event_callback_stream import EventCallbackStream
@@ -106,7 +102,6 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
         with EventCallbackStream(
                 self.device_under_test.hci.FetchEvents(
                     empty_proto.Empty())) as hci_event_stream:
-            hci_event_asserts = EventAsserts(hci_event_stream)
 
             self.enqueue_hci_command(
                 hci_packets.WriteLoopbackModeBuilder(
@@ -116,6 +111,7 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
             self.enqueue_hci_command(cmd2loop, True)
 
             looped_bytes = bytes(cmd2loop.Serialize())
+            hci_event_asserts = EventAsserts(hci_event_stream)
             hci_event_asserts.assert_event_occurs(
                 lambda packet: looped_bytes in packet.event)
 
@@ -124,9 +120,6 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
         with EventCallbackStream(
                 self.device_under_test.hci.FetchEvents(
                     empty_proto.Empty())) as hci_event_stream:
-
-            hci_event_asserts = EventAsserts(hci_event_stream)
-
             self.send_hal_hci_command(
                 hci_packets.WriteScanEnableBuilder(
                     hci_packets.ScanEnable.INQUIRY_AND_PAGE_SCAN))
@@ -134,6 +127,7 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
             lap.lap = 0x33
             self.enqueue_hci_command(
                 hci_packets.InquiryBuilder(lap, 0x30, 0xff), False)
+            hci_event_asserts = EventAsserts(hci_event_stream)
             hci_event_asserts.assert_event_occurs(
                 lambda packet: b'\x02\x0f' in packet.event
                 # Expecting an HCI Event (code 0x02, length 0x0f)
@@ -144,8 +138,6 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
         with EventCallbackStream(
                 self.device_under_test.hci.FetchLeSubevents(
                     empty_proto.Empty())) as hci_le_event_stream:
-
-            hci_event_asserts = EventAsserts(hci_le_event_stream)
 
             # DUT Scans
             self.enqueue_hci_command(
@@ -184,6 +176,7 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                 hci_packets.LeSetAdvertisingEnableBuilder(
                     hci_packets.Enable.ENABLED))
 
+            hci_event_asserts = EventAsserts(hci_le_event_stream)
             hci_event_asserts.assert_event_occurs(
                 lambda packet: b'Im_A_Cert' in packet.event)
 
@@ -201,11 +194,6 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
             EventCallbackStream(self.device_under_test.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
             EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
             EventCallbackStream(self.cert_device.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
-
-            le_event_asserts = EventAsserts(le_event_stream)
-            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
-            acl_data_asserts = EventAsserts(acl_data_stream)
-            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
 
             self.send_hal_hci_command(
                 hci_packets.LeSetRandomAddressBuilder('0C:05:04:03:02:01'))
@@ -271,6 +259,9 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                     return True
                 return False
 
+            le_event_asserts = EventAsserts(le_event_stream)
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
+
             cert_hci_event_asserts.assert_event_occurs(payload_handle)
             cert_handle = conn_handle
             conn_handle = 0xfff
@@ -295,6 +286,8 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                 hci_packets.BroadcastFlag.POINT_TO_POINT,
                 bytes(b'This is just SomeMoreAclData'))
 
+            acl_data_asserts = EventAsserts(acl_data_stream)
+            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
             cert_acl_data_asserts.assert_event_occurs(
                 lambda packet: logging.debug(packet.payload) or b'SomeAclData' in packet.payload
             )
@@ -360,11 +353,6 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
             EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
             EventCallbackStream(self.cert_device.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
 
-            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
-            hci_event_asserts = EventAsserts(hci_event_stream)
-            acl_data_asserts = EventAsserts(acl_data_stream)
-            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
-
             address = hci_packets.Address()
 
             def get_address_from_complete(packet):
@@ -383,6 +371,7 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
             # CERT Enables scans and gets its address
             self.send_hal_hci_command(hci_packets.ReadBdAddrBuilder())
 
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
             cert_hci_event_asserts.assert_event_occurs(
                 get_address_from_complete)
             self.send_hal_hci_command(
@@ -438,6 +427,8 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                 packet_bytes = packet.payload
                 return get_handle(packet_bytes)
 
+            hci_event_asserts = EventAsserts(hci_event_stream)
+
             cert_hci_event_asserts.assert_event_occurs(payload_handle)
             cert_handle = conn_handle
             conn_handle = 0xfff
@@ -462,6 +453,8 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                 hci_packets.BroadcastFlag.POINT_TO_POINT,
                 bytes(b'This is just SomeMoreAclData'))
 
+            acl_data_asserts = EventAsserts(acl_data_stream)
+            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
             cert_acl_data_asserts.assert_event_occurs(
                 lambda packet: b'SomeAclData' in packet.payload)
             acl_data_asserts.assert_event_occurs(
@@ -474,11 +467,6 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
             EventCallbackStream(self.device_under_test.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
             EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
             EventCallbackStream(self.cert_device.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
-
-            hci_event_asserts = EventAsserts(hci_event_stream)
-            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
-            acl_data_asserts = EventAsserts(acl_data_stream)
-            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
 
             address = hci_packets.Address()
 
@@ -501,7 +489,8 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                     hci_packets.ScanEnable.INQUIRY_AND_PAGE_SCAN), True)
             self.enqueue_hci_command(hci_packets.ReadBdAddrBuilder(), True)
 
-            hci_event_asserts.assert_event_occurs(get_address_from_complete)
+            dut_hci_event_asserts = EventAsserts(hci_event_stream)
+            dut_hci_event_asserts.assert_event_occurs(get_address_from_complete)
 
             # Cert Connects
             self.send_hal_hci_command(
@@ -523,7 +512,7 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                     return True
                 return False
 
-            hci_event_asserts.assert_event_occurs(get_connect_request)
+            dut_hci_event_asserts.assert_event_occurs(get_connect_request)
             self.enqueue_hci_command(
                 hci_packets.AcceptConnectionRequestBuilder(
                     connection_request.GetBdAddr(),
@@ -551,6 +540,9 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                 packet_bytes = packet.payload
                 return get_handle(packet_bytes)
 
+            hci_event_asserts = EventAsserts(hci_event_stream)
+
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
             cert_hci_event_asserts.assert_event_occurs(payload_handle)
             cert_handle = conn_handle
             conn_handle = 0xfff
@@ -575,6 +567,8 @@ class DirectHciTest(GdFacadeOnlyBaseTestClass):
                 hci_packets.BroadcastFlag.POINT_TO_POINT,
                 bytes(b'This is just SomeMoreAclData'))
 
+            acl_data_asserts = EventAsserts(acl_data_stream)
+            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
             cert_acl_data_asserts.assert_event_occurs(
                 lambda packet: b'SomeAclData' in packet.payload)
             acl_data_asserts.assert_event_occurs(
