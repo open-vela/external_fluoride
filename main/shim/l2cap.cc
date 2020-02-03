@@ -172,8 +172,8 @@ uint16_t bluetooth::shim::legacy::L2cap::RegisterService(
   }
 
   LOG_DEBUG(LOG_TAG, "Registering service on psm:%hd", psm);
-  RegisterServicePromise register_promise;
-  auto service_registered = register_promise.get_future();
+  RegisterServicePending register_pending;
+  auto service_registered = register_pending.get_future();
   bool use_ertm = false;
   if (p_ertm_info != nullptr &&
       p_ertm_info->preferred_mode == L2CAP_FCR_ERTM_MODE) {
@@ -186,7 +186,7 @@ uint16_t bluetooth::shim::legacy::L2cap::RegisterService(
           &bluetooth::shim::legacy::L2cap::OnRemoteInitiatedConnectionCreated,
           this, std::placeholders::_1, std::placeholders::_2,
           std::placeholders::_3),
-      std::move(register_promise));
+      std::move(register_pending));
 
   uint16_t registered_psm = service_registered.get();
   if (registered_psm != psm) {
@@ -213,10 +213,10 @@ void bluetooth::shim::legacy::L2cap::UnregisterService(uint16_t psm) {
   }
 
   LOG_DEBUG(LOG_TAG, "Unregistering service on psm:%hd", psm);
-  UnregisterServicePromise unregister_promise;
-  auto service_unregistered = unregister_promise.get_future();
+  UnregisterServicePending unregister_pending;
+  auto service_unregistered = unregister_pending.get_future();
   bluetooth::shim::GetL2cap()->UnregisterService(psm,
-                                                 std::move(unregister_promise));
+                                                 std::move(unregister_pending));
   service_unregistered.wait();
   Classic().UnregisterPsm(psm);
 }
@@ -229,8 +229,8 @@ uint16_t bluetooth::shim::legacy::L2cap::CreateConnection(
     return kInvalidConnectionInterfaceDescriptor;
   }
 
-  CreateConnectionPromise create_promise;
-  auto created = create_promise.get_future();
+  CreateConnectionPending create_pending;
+  auto created = create_pending.get_future();
   LOG_DEBUG(LOG_TAG, "Initiating local connection to psm:%hd address:%s", psm,
             raw_address.ToString().c_str());
 
@@ -240,7 +240,7 @@ uint16_t bluetooth::shim::legacy::L2cap::CreateConnection(
           &bluetooth::shim::legacy::L2cap::OnLocalInitiatedConnectionCreated,
           this, std::placeholders::_1, std::placeholders::_2,
           std::placeholders::_3, std::placeholders::_4),
-      std::move(create_promise));
+      std::move(create_pending));
 
   uint16_t cid = created.get();
   if (cid == kInvalidConnectionInterfaceDescriptor) {
