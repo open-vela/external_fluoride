@@ -108,7 +108,7 @@ class Link : public l2cap::internal::ILink {
   virtual void RefreshRefCount();
 
   virtual void NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> channel);
-  virtual void NotifyChannelFail(Cid cid, DynamicChannelManager::ConnectionResult result);
+  virtual void NotifyChannelFail(Cid cid);
 
   // Information received from signaling channel
   virtual void SetRemoteConnectionlessMtu(Mtu mtu);
