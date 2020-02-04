@@ -69,13 +69,9 @@ class Link : public l2cap::internal::ILink {
 
   virtual void Authenticate();
 
-  virtual void ReadRemoteVersionInformation();
-
   virtual void ReadRemoteSupportedFeatures();
 
   virtual void ReadRemoteExtendedFeatures();
-
-  virtual void ReadClockOffset();
 
   // FixedChannel methods
 
