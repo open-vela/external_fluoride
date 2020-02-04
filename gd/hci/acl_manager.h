@@ -142,7 +142,6 @@ class AclConnection {
   virtual bool ReadAfhChannelMap();
   virtual bool ReadRssi();
   virtual bool ReadClock(WhichClock which_clock);
-  virtual bool ReadRemoteVersionInformation();
   virtual bool ReadRemoteSupportedFeatures();
   virtual bool ReadRemoteExtendedFeatures();
 
