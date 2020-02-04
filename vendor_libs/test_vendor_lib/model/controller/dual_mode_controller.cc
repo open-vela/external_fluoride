@@ -1080,12 +1080,8 @@ void DualModeController::ReadLocalName(CommandPacketView command) {
 void DualModeController::WriteLocalName(CommandPacketView command) {
   auto command_view = gd_hci::WriteLocalNameView::Create(command);
   ASSERT(command_view.IsValid());
-  const auto local_name = command_view.GetLocalName();
-  std::vector<uint8_t> name_vec(248);
-  for (size_t i = 0; i < 248; i++) {
-    name_vec[i] = local_name[i];
-  }
-  properties_.SetName(name_vec);
+  properties_.SetName(std::vector<uint8_t>(command_view.GetLocalName().begin(),
+                                           command_view.GetLocalName().end()));
   auto packet = bluetooth::hci::WriteLocalNameCompleteBuilder::Create(
       kNumCommandPackets, ErrorCode::SUCCESS);
   send_event_(std::move(packet));
