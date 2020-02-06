@@ -617,8 +617,6 @@ typedef void (*btrc_ctrl_addressed_player_changed_callback)(
     const RawAddress& bd_addr, uint16_t id);
 typedef void (*btrc_ctrl_now_playing_contents_changed_callback)(
     const RawAddress& bd_addr);
-typedef void (*btrc_ctrl_available_player_changed_callback)(
-    const RawAddress& bd_addr);
 
 /** BT-RC Controller callback structure. */
 typedef struct {
@@ -645,7 +643,6 @@ typedef struct {
   btrc_ctrl_addressed_player_changed_callback addressed_player_changed_cb;
   btrc_ctrl_now_playing_contents_changed_callback
       now_playing_contents_changed_cb;
-  btrc_ctrl_available_player_changed_callback available_player_changed_cb;
 } btrc_ctrl_callbacks_t;
 
 /** Represents the standard BT-RC AVRCP Controller interface. */
