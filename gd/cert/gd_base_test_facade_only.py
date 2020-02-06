@@ -15,7 +15,6 @@
 #   limitations under the License.
 
 from acts.base_test import BaseTestClass
-from acts import context
 
 import importlib
 import logging
@@ -28,9 +27,10 @@ ANDROID_BUILD_TOP = os.environ.get('ANDROID_BUILD_TOP')
 
 class GdFacadeOnlyBaseTestClass(BaseTestClass):
 
-    def setup_class(self):
+    def __init__(self, configs):
+        BaseTestClass.__init__(self, configs)
 
-        log_path_base = context.get_current_context().get_full_output_path()
+        log_path_base = getattr(configs, "log_path", "/tmp/logs")
         gd_devices = self.controller_configs.get("GdDevice")
 
         self.rootcanal_running = False
