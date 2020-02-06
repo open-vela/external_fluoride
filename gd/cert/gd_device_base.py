@@ -23,7 +23,8 @@ import socket
 import subprocess
 import time
 
-from acts import context, error, tracelogger
+from acts import error
+from acts import tracelogger
 from acts.controllers.adb import AdbProxy
 
 import grpc
@@ -42,7 +43,8 @@ def replace_vars(string, config):
     if rootcanal_port is None:
         rootcanal_port = ""
     if serial_number == "DUT" or serial_number == "CERT":
-        raise Exception("Did you forget to configure the serial number?")
+        logging.warn("Did you forget to configure the serial number?")
+        raise Exception
     return string.replace("$ANDROID_HOST_OUT", ANDROID_HOST_OUT) \
                  .replace("$(grpc_port)", config.get("grpc_port")) \
                  .replace("$(grpc_root_server_port)", config.get("grpc_root_server_port")) \
@@ -57,8 +59,7 @@ class GdDeviceBase:
                  label, type_identifier, serial_number):
         self.label = label if label is not None else grpc_port
         # logging.log_path only exists when this is used in an ACTS test run.
-        self.log_path_base = context.get_current_context().get_full_output_path(
-        )
+        log_path_base = getattr(logging, 'log_path', '/tmp/logs')
         self.log = tracelogger.TraceLogger(
             GdDeviceBaseLoggerAdapter(logging.getLogger(), {
                 'device': label,
@@ -66,36 +67,32 @@ class GdDeviceBase:
             }))
 
         backing_process_logpath = os.path.join(
-            self.log_path_base,
-            '%s_%s_backing_logs.txt' % (type_identifier, label))
+            log_path_base, '%s_%s_backing_logs.txt' % (type_identifier, label))
         self.backing_process_logs = open(backing_process_logpath, 'w')
 
         cmd_str = json.dumps(cmd)
         if "--btsnoop=" not in cmd_str:
-            btsnoop_path = os.path.join(self.log_path_base,
+            btsnoop_path = os.path.join(log_path_base,
                                         '%s_btsnoop_hci.log' % label)
             cmd.append("--btsnoop=" + btsnoop_path)
 
-        self.serial_number = serial_number
-        if self.serial_number:
-            self.ad = AdbProxy(serial_number)
-            self.ad.tcp_forward(int(grpc_port), int(grpc_port))
-            self.ad.tcp_forward(
+        if serial_number:
+            ad = AdbProxy(serial_number)
+            ad.tcp_forward(int(grpc_port), int(grpc_port))
+            ad.tcp_forward(
                 int(grpc_root_server_port), int(grpc_root_server_port))
-            self.ad.reverse("tcp:%s tcp:%s" % (signal_port, signal_port))
-            self.ad.push(
+            ad.reverse("tcp:%s tcp:%s" % (signal_port, signal_port))
+            ad.push(
                 os.path.join(ANDROID_PRODUCT_OUT,
                              "system/bin/bluetooth_stack_with_facade"),
                 "system/bin")
-            self.ad.push(
+            ad.push(
                 os.path.join(ANDROID_PRODUCT_OUT,
                              "system/lib64/libbluetooth_gd.so"), "system/lib64")
-            self.ad.push(
+            ad.push(
                 os.path.join(ANDROID_PRODUCT_OUT,
                              "system/lib64/libgrpc++_unsecure.so"),
                 "system/lib64")
-            self.ad.shell("logcat -c")
-            self.ad.shell("rm /data/misc/bluetooth/logs/btsnoop_hci.log")
 
         tester_signal_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tester_signal_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,
@@ -129,14 +126,6 @@ class GdDeviceBase:
             logging.error("backing process %s stopped with code: %d" %
                           (self.label, backing_process_return_code))
             return False
-        if self.serial_number:
-            self.ad.shell("logcat -d -f /data/misc/bluetooth/logs/system_log")
-            self.ad.pull(
-                "/data/misc/bluetooth/logs/btsnoop_hci.log %s" % os.path.join(
-                    self.log_path_base, "%s_btsnoop_hci.log" % self.label))
-            self.ad.pull(
-                "/data/misc/bluetooth/logs/system_log %s" % os.path.join(
-                    self.log_path_base, "%s_system_log" % self.label))
 
     def wait_channel_ready(self):
         future = grpc.channel_ready_future(self.grpc_channel)
