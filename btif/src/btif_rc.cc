@@ -2535,9 +2535,9 @@ static bt_status_t set_volume(uint8_t volume) {
     BTIF_TRACE_DEBUG("%s: Peer supports absolute volume. newVolume: %d",
                      __func__, volume);
 
-    tAVRC_COMMAND avrc_cmd = {.volume = {.pdu = AVRC_PDU_SET_ABSOLUTE_VOLUME,
+    tAVRC_COMMAND avrc_cmd = {.volume = {.opcode = AVRC_OP_VENDOR,
+                                         .pdu = AVRC_PDU_SET_ABSOLUTE_VOLUME,
                                          .status = AVRC_STS_NO_ERROR,
-                                         .opcode = AVRC_OP_VENDOR,
                                          .volume = volume}};
 
     BT_HDR* p_msg = NULL;
@@ -2939,12 +2939,11 @@ static void register_for_event_notification(btif_rc_supported_event_t* p_event,
     return;
   }
   // interval is only valid for AVRC_EVT_PLAY_POS_CHANGED
-  uint32_t interval_in_seconds = 0;
+  uint32_t interval = 0;
   if (p_event->event_id == AVRC_EVT_PLAY_POS_CHANGED) {
-    interval_in_seconds = 2;
+    interval = 2000;
   }
-  status = register_notification_cmd(p_transaction->lbl, p_event->event_id,
-                                     interval_in_seconds, p_dev);
+  status = register_notification_cmd(p_transaction->lbl, p_event->event_id, interval, p_dev);
   if (status != BT_STATUS_SUCCESS) {
     BTIF_TRACE_ERROR("%s: Error in Notification registration: %d", __func__,
                      status);
@@ -3056,8 +3055,7 @@ static void handle_get_capability_response(tBTA_AV_META_MSG* pmeta_msg,
           (p_rsp->param.event_id[xx] == AVRC_EVT_APP_SETTING_CHANGE) ||
           (p_rsp->param.event_id[xx] == AVRC_EVT_NOW_PLAYING_CHANGE) ||
           (p_rsp->param.event_id[xx] == AVRC_EVT_ADDR_PLAYER_CHANGE) ||
-          (p_rsp->param.event_id[xx] == AVRC_EVT_UIDS_CHANGE) ||
-          (p_rsp->param.event_id[xx] == AVRC_EVT_AVAL_PLAYERS_CHANGE)) {
+          (p_rsp->param.event_id[xx] == AVRC_EVT_UIDS_CHANGE)) {
         p_event = (btif_rc_supported_event_t*)osi_malloc(
             sizeof(btif_rc_supported_event_t));
         p_event->event_id = p_rsp->param.event_id[xx];
@@ -3154,10 +3152,11 @@ static void handle_notification_response(tBTA_AV_META_MSG* pmeta_msg,
           break;
         } else {
           uint8_t* p_data = p_rsp->param.track;
+          /* Update the UID for current track
+           * Attributes will be fetched after the AVRCP procedure
+           */
           BE_STREAM_TO_UINT64(p_dev->rc_playing_uid, p_data);
           get_play_status_cmd(p_dev);
-          get_element_attribute_cmd(AVRC_MAX_NUM_MEDIA_ATTR_ID, attr_list,
-                                    p_dev);
         }
         break;
 
@@ -3172,11 +3171,6 @@ static void handle_notification_response(tBTA_AV_META_MSG* pmeta_msg,
         break;
 
       case AVRC_EVT_AVAL_PLAYERS_CHANGE:
-        BTIF_TRACE_DEBUG("%s: AVRC_EVT_AVAL_PLAYERS_CHANGE", __func__);
-        do_in_jni_thread(
-            FROM_HERE,
-            base::Bind(bt_rc_ctrl_callbacks->available_player_changed_cb,
-                       p_dev->rc_addr));
         break;
 
       case AVRC_EVT_ADDR_PLAYER_CHANGE:
@@ -3342,8 +3336,6 @@ static void handle_app_attr_response(tBTA_AV_META_MSG* pmeta_msg,
     rc_ctrl_procedure_complete(p_dev);
     return;
   }
-  p_dev->rc_app_settings.num_attrs = 0;
-  p_dev->rc_app_settings.num_ext_attrs = 0;
 
   for (xx = 0; xx < p_rsp->num_attr; xx++) {
     uint8_t st_index;
@@ -3817,10 +3809,6 @@ static void handle_get_playstatus_response(tBTA_AV_META_MSG* pmeta_msg,
   if (p_rsp->status == AVRC_STS_NO_ERROR) {
     do_in_jni_thread(
         FROM_HERE,
-        base::Bind(bt_rc_ctrl_callbacks->play_status_changed_cb, p_dev->rc_addr,
-                   (btrc_play_status_t)p_rsp->play_status));
-    do_in_jni_thread(
-        FROM_HERE,
         base::Bind(bt_rc_ctrl_callbacks->play_position_changed_cb,
                    p_dev->rc_addr, p_rsp->song_len, p_rsp->song_pos));
   } else {
@@ -3919,12 +3907,6 @@ static void handle_get_folder_items_response(tBTA_AV_META_MSG* pmeta_msg,
                    /* We want to make the ownership explicit in native */
                    btrc_items, item_count));
 
-    if (item_count > 0) {
-      if (btrc_items[0].item_type == AVRC_ITEM_PLAYER &&
-          (p_dev->rc_features & BTA_AV_FEAT_APP_SETTING)) {
-        list_player_app_setting_attrib_cmd(p_dev);
-      }
-    }
     /* Release the memory block for items and attributes allocated here.
      * Since the executor for do_in_jni_thread is a Single Thread Task Runner it
      * is okay to queue up the cleanup of btrc_items */
