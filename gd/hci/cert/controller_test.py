@@ -14,7 +14,8 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-import time
+import os
+import sys
 
 from acts import asserts
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
@@ -56,7 +57,6 @@ class ControllerTest(GdFacadeOnlyBaseTestClass):
             cert_address_response.address != dut_address_response.address,
             msg="Expected cert and dut address to be different %s" %
             cert_address_response.address)
-        time.sleep(1)  # This shouldn't be needed b/149120542
 
     def test_get_local_extended_features(self):
         request = controller_facade.PageNumberMsg()
