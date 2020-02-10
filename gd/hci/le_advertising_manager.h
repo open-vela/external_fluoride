@@ -41,23 +41,21 @@ class AdvertisingConfig {
 
 class ExtendedAdvertisingConfig : public AdvertisingConfig {
  public:
-  bool connectable = false;
-  bool scannable = false;
-  bool directed = false;
-  bool high_duty_directed_connectable = false;
-  bool legacy_pdus = false;
-  bool anonymous = false;
-  bool include_tx_power = false;
+  bool connectable;
+  bool scannable;
+  bool directed;
+  bool high_duty_directed_connectable;
+  bool legacy_pdus;
+  bool anonymous;
+  bool include_tx_power;
   bool use_le_coded_phy;       // Primary advertisement PHY is LE Coded
   uint8_t secondary_max_skip;  // maximum advertising events to be skipped, 0x0 send AUX_ADV_IND prior ot the next event
   SecondaryPhyType secondary_advertising_phy;
-  uint8_t sid = 0x00;
-  Enable enable_scan_request_notifications = Enable::DISABLED;
+  uint8_t sid;
+  Enable enable_scan_request_notifications;
   OwnAddressType own_address_type;
-  Operation operation;  // TODO(b/149221472): Support fragmentation
-  FragmentPreference fragment_preference = FragmentPreference::CONTROLLER_SHOULD_NOT;
-  ExtendedAdvertisingConfig() = default;
-  ExtendedAdvertisingConfig(const AdvertisingConfig& config);
+  Operation operation;
+  FragmentPreference fragment_preference;
 };
 
 using AdvertiserId = int32_t;
