@@ -34,8 +34,6 @@
 #include "common/metrics.h"
 #include "common/time_util.h"
 #include "device/include/controller.h"
-#include "main/shim/btm_api.h"
-#include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -234,9 +232,6 @@ static bool btm_serv_trusted(tBTM_SEC_DEV_REC* p_dev_rec,
  *
  ******************************************************************************/
 bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecRegister(p_cb_info);
-  }
 
   BTM_TRACE_EVENT("%s application registered", __func__);
 
@@ -259,6 +254,23 @@ bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
            btm_cb.api.p_le_callback);
   BTM_TRACE_EVENT("%s application registered", __func__);
   return (true);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_SecRegisterLinkKeyNotificationCallback
+ *
+ * Description      Application manager calls this function to register for
+ *                  link key notification.  When there is nobody registered
+ *                  we should avoid changing link key
+ *
+ * Returns          true if registered OK, else false
+ *
+ ******************************************************************************/
+bool BTM_SecRegisterLinkKeyNotificationCallback(
+    tBTM_LINK_KEY_CALLBACK* p_callback) {
+  btm_cb.api.p_link_key_callback = p_callback;
+  return true;
 }
 
 /*******************************************************************************
@@ -403,6 +415,28 @@ void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired) {
   btm_cb.connect_only_paired = connect_only_paired;
 }
 
+/*******************************************************************************
+ *
+ * Function         BTM_SetSecureConnectionsOnly
+ *
+ * Description      Enable or disable default treatment for Mode 4 Level 0
+ *                  services
+ *
+ * Parameter        secure_connections_only_mode -
+ *                  true means that the device should treat Mode 4 Level 0
+ *                       services as services of other levels.
+ *                  false means that the device should provide default
+ *                        treatment for Mode 4 Level 0 services.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_SetSecureConnectionsOnly(bool secure_connections_only_mode) {
+  BTM_TRACE_API("%s: Mode : %u", __func__, secure_connections_only_mode);
+
+  btm_cb.devcb.secure_connections_only = secure_connections_only_mode;
+  btm_cb.security_mode = BTM_SEC_MODE_SC;
+}
 #define BTM_NO_AVAIL_SEC_SERVICES ((uint16_t)0xffff)
 
 /*******************************************************************************
@@ -1000,7 +1034,7 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
 
 /*******************************************************************************
  *
- * Function         BTM_SecBond
+ * Function         BTM_SecBondByTransport
  *
  * Description      This function is called to perform bonding with peer device.
  *                  If the connection is already up, but not secure, pairing
@@ -1015,18 +1049,11 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
  *
  *  Note: After 2.1 parameters are not used and preserved here not to change API
  ******************************************************************************/
-tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                        tBT_TRANSPORT transport, uint8_t pin_len,
-                        uint8_t* p_pin, uint32_t trusted_mask[]) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport, pin_len,
-                                        p_pin, trusted_mask);
-  }
-
-  if (transport == BT_TRANSPORT_INVALID)
-    transport = BTM_UseLeLink(bd_addr) ? BT_TRANSPORT_LE : BT_TRANSPORT_BR_EDR;
-
+tBTM_STATUS BTM_SecBondByTransport(const RawAddress& bd_addr,
+                                   tBT_TRANSPORT transport, uint8_t pin_len,
+                                   uint8_t* p_pin, uint32_t trusted_mask[]) {
   tBT_DEVICE_TYPE dev_type;
+  tBLE_ADDR_TYPE addr_type;
 
   BTM_ReadDevInfo(bd_addr, &dev_type, &addr_type);
   /* LE device, do SMP pairing */
@@ -1041,6 +1068,29 @@ tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
 
 /*******************************************************************************
  *
+ * Function         BTM_SecBond
+ *
+ * Description      This function is called to perform bonding with peer device.
+ *                  If the connection is already up, but not secure, pairing
+ *                  is attempted.  If already paired BTM_SUCCESS is returned.
+ *
+ * Parameters:      bd_addr      - Address of the device to bond
+ *                  pin_len      - length in bytes of the PIN Code
+ *                  p_pin        - pointer to array with the PIN Code
+ *                  trusted_mask - bitwise OR of trusted services
+ *                                 (array of uint32_t)
+ *
+ *  Note: After 2.1 parameters are not used and preserved here not to change API
+ ******************************************************************************/
+tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, uint8_t pin_len,
+                        uint8_t* p_pin, uint32_t trusted_mask[]) {
+  tBT_TRANSPORT transport = BT_TRANSPORT_BR_EDR;
+  if (BTM_UseLeLink(bd_addr)) transport = BT_TRANSPORT_LE;
+  return btm_sec_bond_by_transport(bd_addr, transport, pin_len, p_pin,
+                                   trusted_mask);
+}
+/*******************************************************************************
+ *
  * Function         BTM_SecBondCancel
  *
  * Description      This function is called to cancel ongoing bonding process
@@ -1051,10 +1101,6 @@ tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
  *
  ******************************************************************************/
 tBTM_STATUS BTM_SecBondCancel(const RawAddress& bd_addr) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecBondCancel(bd_addr);
-  }
-
   tBTM_SEC_DEV_REC* p_dev_rec;
 
   BTM_TRACE_API("BTM_SecBondCancel()  State: %s flags:0x%x",
@@ -1119,6 +1165,30 @@ tBTM_STATUS BTM_SecBondCancel(const RawAddress& bd_addr) {
   }
 
   return BTM_WRONG_MODE;
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_SecGetDeviceLinkKey
+ *
+ * Description      This function is called to obtain link key for the device
+ *                  it returns BTM_SUCCESS if link key is available, or
+ *                  BTM_UNKNOWN_ADDR if Security Manager does not know about
+ *                  the device or device record does not contain link key info
+ *
+ * Parameters:      bd_addr      - Address of the device
+ *                  link_key     - Link Key is copied into this pointer
+ *
+ ******************************************************************************/
+tBTM_STATUS BTM_SecGetDeviceLinkKey(const RawAddress& bd_addr,
+                                    LinkKey* link_key) {
+  tBTM_SEC_DEV_REC* p_dev_rec;
+  p_dev_rec = btm_find_dev(bd_addr);
+  if ((p_dev_rec != NULL) && (p_dev_rec->sec_flags & BTM_SEC_LINK_KEY_KNOWN)) {
+    *link_key = p_dev_rec->link_key;
+    return (BTM_SUCCESS);
+  }
+  return (BTM_UNKNOWN_ADDR);
 }
 
 /*******************************************************************************
@@ -1518,6 +1588,90 @@ void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
 
 /*******************************************************************************
  *
+ * Function         BTM_BuildOobData
+ *
+ * Description      This function is called to build the OOB data payload to
+ *                  be sent over OOB (non-Bluetooth) link
+ *
+ * Parameters:      p_data  - the location for OOB data
+ *                  max_len - p_data size.
+ *                  c       - simple pairing Hash C.
+ *                  r       - simple pairing Randomizer  C.
+ *                  name_len- 0, local device name would not be included.
+ *                            otherwise, the local device name is included for
+ *                            up to this specified length
+ *
+ * Returns          Number of bytes in p_data.
+ *
+ ******************************************************************************/
+uint16_t BTM_BuildOobData(uint8_t* p_data, uint16_t max_len, const Octet16& c,
+                          const Octet16& r, uint8_t name_len) {
+  uint8_t* p = p_data;
+  uint16_t len = 0;
+  uint16_t name_size;
+  uint8_t name_type = BTM_EIR_SHORTENED_LOCAL_NAME_TYPE;
+
+  if (p_data && max_len >= BTM_OOB_MANDATORY_SIZE) {
+    /* add mandatory part */
+    UINT16_TO_STREAM(p, len);
+    BDADDR_TO_STREAM(p, *controller_get_interface()->get_address());
+
+    len = BTM_OOB_MANDATORY_SIZE;
+    max_len -= len;
+
+    /* now optional part */
+
+    /* add Hash C */
+    uint16_t delta = BTM_OOB_HASH_C_SIZE + 2;
+    if (max_len >= delta) {
+      *p++ = BTM_OOB_HASH_C_SIZE + 1;
+      *p++ = BTM_EIR_OOB_SSP_HASH_C_TYPE;
+      ARRAY_TO_STREAM(p, c.data(), BTM_OOB_HASH_C_SIZE);
+      len += delta;
+      max_len -= delta;
+    }
+
+    /* add Rand R */
+    delta = BTM_OOB_RAND_R_SIZE + 2;
+    if (max_len >= delta) {
+      *p++ = BTM_OOB_RAND_R_SIZE + 1;
+      *p++ = BTM_EIR_OOB_SSP_RAND_R_TYPE;
+      ARRAY_TO_STREAM(p, r.data(), BTM_OOB_RAND_R_SIZE);
+      len += delta;
+      max_len -= delta;
+    }
+
+    /* add class of device */
+    delta = BTM_OOB_COD_SIZE + 2;
+    if (max_len >= delta) {
+      *p++ = BTM_OOB_COD_SIZE + 1;
+      *p++ = BTM_EIR_OOB_COD_TYPE;
+      DEVCLASS_TO_STREAM(p, btm_cb.devcb.dev_class);
+      len += delta;
+      max_len -= delta;
+    }
+    name_size = name_len;
+    if (name_size > strlen(btm_cb.cfg.bd_name)) {
+      name_type = BTM_EIR_COMPLETE_LOCAL_NAME_TYPE;
+      name_size = (uint16_t)strlen(btm_cb.cfg.bd_name);
+    }
+    delta = name_size + 2;
+    if (max_len >= delta) {
+      *p++ = name_size + 1;
+      *p++ = name_type;
+      ARRAY_TO_STREAM(p, btm_cb.cfg.bd_name, name_size);
+      len += delta;
+      max_len -= delta;
+    }
+    /* update len */
+    p = p_data;
+    UINT16_TO_STREAM(p, len);
+  }
+  return len;
+}
+
+/*******************************************************************************
+ *
  * Function         BTM_BothEndsSupportSecureConnections
  *
  * Description      This function is called to check if both the local device
@@ -1558,6 +1712,64 @@ bool BTM_PeerSupportsSecureConnections(const RawAddress& bd_addr) {
   }
 
   return (p_dev_rec->remote_supports_secure_connections);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadOobData
+ *
+ * Description      This function is called to parse the OOB data payload
+ *                  received over OOB (non-Bluetooth) link
+ *
+ * Parameters:      p_data  - the location for OOB data
+ *                  eir_tag - The associated EIR tag to read the data.
+ *                  *p_len(output) - the length of the data with the given tag.
+ *
+ * Returns          the beginning of the data with the given tag.
+ *                  NULL, if the tag is not found.
+ *
+ ******************************************************************************/
+uint8_t* BTM_ReadOobData(uint8_t* p_data, uint8_t eir_tag, uint8_t* p_len) {
+  uint8_t* p = p_data;
+  uint16_t max_len;
+  uint8_t len, type;
+  uint8_t* p_ret = NULL;
+  uint8_t ret_len = 0;
+
+  if (p_data) {
+    STREAM_TO_UINT16(max_len, p);
+    if (max_len >= BTM_OOB_MANDATORY_SIZE) {
+      if (BTM_EIR_OOB_BD_ADDR_TYPE == eir_tag) {
+        p_ret = p; /* the location for bd_addr */
+        ret_len = BTM_OOB_BD_ADDR_SIZE;
+      } else {
+        p += BD_ADDR_LEN;
+        max_len -= BTM_OOB_MANDATORY_SIZE;
+        /* now the optional data in EIR format */
+        while (max_len > 0) {
+          len = *p++; /* tag data len + 1 */
+          type = *p++;
+          if (eir_tag == type) {
+            p_ret = p;
+            ret_len = len - 1;
+            break;
+          }
+          /* the data size of this tag is len + 1 (tag data len + 2) */
+          if (max_len > len) {
+            max_len -= len;
+            max_len--;
+            len--;
+            p += len;
+          } else
+            max_len = 0;
+        }
+      }
+    }
+  }
+
+  if (p_len) *p_len = ret_len;
+
+  return p_ret;
 }
 
 /*******************************************************************************
@@ -1729,10 +1941,12 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
   bool old_is_originator;
   tBTM_STATUS rc = BTM_SUCCESS;
   bool chk_acp_auth_done = false;
-  const bool is_originator = conn_type;
-  constexpr tBT_TRANSPORT transport =
+  bool is_originator;
+  tBT_TRANSPORT transport =
       BT_TRANSPORT_BR_EDR; /* should check PSM range in LE connection oriented
                               L2CAP connection */
+
+  is_originator = conn_type;
 
   BTM_TRACE_DEBUG("%s() is_originator:%d, 0x%x, psm=0x%04x", __func__,
                   is_originator, p_ref_data, psm);
@@ -3560,7 +3774,6 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
   tBTM_PAIRING_STATE old_state = btm_cb.pairing_state;
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
   bool are_bonding = false;
-  bool was_authenticating = false;
 
   if (p_dev_rec) {
     VLOG(2) << __func__ << ": Security Manager: in state: "
@@ -3601,35 +3814,16 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
 
   if (!p_dev_rec) return;
 
-  if (p_dev_rec->sec_state == BTM_SEC_STATE_AUTHENTICATING) {
-    p_dev_rec->sec_state = BTM_SEC_STATE_IDLE;
-    was_authenticating = true;
-    /* There can be a race condition, when we are starting authentication
-     * and the peer device is doing encryption.
-     * If first we receive encryption change up, then initiated
-     * authentication can not be performed.
-     * According to the spec we can not do authentication on the
-     * encrypted link, so device is correct.
-     */
-    if ((status == HCI_ERR_COMMAND_DISALLOWED) &&
-        ((p_dev_rec->sec_flags & (BTM_SEC_AUTHENTICATED | BTM_SEC_ENCRYPTED)) ==
-         (BTM_SEC_AUTHENTICATED | BTM_SEC_ENCRYPTED))) {
-      status = HCI_SUCCESS;
-    }
-    if (status == HCI_SUCCESS) {
-      p_dev_rec->sec_flags |= BTM_SEC_AUTHENTICATED;
-    }
-  }
+  if ((btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) &&
+      (btm_cb.pairing_flags & BTM_PAIR_FLAGS_WE_STARTED_DD) &&
+      (p_dev_rec->bd_addr == btm_cb.pairing_bda))
+    are_bonding = true;
 
   if ((btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) &&
-      (p_dev_rec->bd_addr == btm_cb.pairing_bda)) {
-    if (btm_cb.pairing_flags & BTM_PAIR_FLAGS_WE_STARTED_DD) {
-      are_bonding = true;
-    }
+      (p_dev_rec->bd_addr == btm_cb.pairing_bda))
     btm_sec_change_pairing_state(BTM_PAIR_STATE_IDLE);
-  }
 
-  if (was_authenticating == false) {
+  if (p_dev_rec->sec_state != BTM_SEC_STATE_AUTHENTICATING) {
     if ((btm_cb.api.p_auth_complete_callback && status != HCI_SUCCESS) &&
         (old_state != BTM_PAIR_STATE_IDLE)) {
       (*btm_cb.api.p_auth_complete_callback)(p_dev_rec->bd_addr,
@@ -3639,6 +3833,17 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
     return;
   }
 
+  /* There can be a race condition, when we are starting authentication and
+  ** the peer device is doing encryption.
+  ** If first we receive encryption change up, then initiated authentication
+  ** can not be performed.  According to the spec we can not do authentication
+  ** on the encrypted link, so device is correct.
+  */
+  if ((status == HCI_ERR_COMMAND_DISALLOWED) &&
+      ((p_dev_rec->sec_flags & (BTM_SEC_AUTHENTICATED | BTM_SEC_ENCRYPTED)) ==
+       (BTM_SEC_AUTHENTICATED | BTM_SEC_ENCRYPTED))) {
+    status = HCI_SUCCESS;
+  }
   /* Currently we do not notify user if it is a keyboard which connects */
   /* User probably Disabled the keyboard while it was asleap.  Let her try */
   if (btm_cb.api.p_auth_complete_callback) {
@@ -3648,6 +3853,8 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
                                              p_dev_rec->dev_class,
                                              p_dev_rec->sec_bd_name, status);
   }
+
+  p_dev_rec->sec_state = BTM_SEC_STATE_IDLE;
 
   /* If this is a bonding procedure can disconnect the link now */
   if (are_bonding) {
@@ -3693,6 +3900,8 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
     }
     return;
   }
+
+  p_dev_rec->sec_flags |= BTM_SEC_AUTHENTICATED;
 
   if (p_dev_rec->pin_code_length >= 16 ||
       p_dev_rec->link_key_type == BTM_LKEY_TYPE_AUTH_COMB ||

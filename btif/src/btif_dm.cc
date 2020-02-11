@@ -697,15 +697,7 @@ static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
     if (status != BT_STATUS_SUCCESS)
       bond_state_changed(status, bd_addr, BT_BOND_STATE_NONE);
   } else {
-    if (transport == BTA_TRANSPORT_UNKNOWN) {
-      if (device_type & BT_DEVICE_TYPE_BLE) {
-        transport = BTA_TRANSPORT_LE;
-      } else if (device_type & BT_DEVICE_TYPE_BREDR) {
-        transport = BTA_TRANSPORT_BR_EDR;
-      }
-      LOG_DEBUG(LOG_TAG, "%s guessing transport as %02x ", __func__, transport);
-    }
-    BTA_DmBond(bd_addr, addr_type, transport);
+    BTA_DmBondByTransport(bd_addr, transport);
   }
   /*  Track  originator of bond creation  */
   pairing_cb.is_local_initiated = true;
@@ -1116,6 +1108,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
 
       LOG_WARN(LOG_TAG, "%s: Incoming HID Connection", __func__);
       bt_property_t prop;
+      RawAddress bd_addr;
       Uuid uuid = Uuid::From16Bit(UUID_SERVCLASS_HUMAN_INTERFACE);
 
       prop.type = BT_PROPERTY_UUIDS;
@@ -1186,7 +1179,6 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       case HCI_ERR_AUTH_FAILURE:
       case HCI_ERR_KEY_MISSING:
         btif_storage_remove_bonded_device(&bd_addr);
-        [[fallthrough]];
       case HCI_ERR_HOST_REJECT_SECURITY:
       case HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE:
       case HCI_ERR_UNIT_KEY_USED:
