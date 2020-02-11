@@ -160,14 +160,11 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     return;
   }
 
-  // bool bonding = pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskBondingFlag;
-
+  LOG_INFO("Pairing finished successfully.");
   i.OnPairingFinished(PairingResult{
       .connection_address = i.remote_connection_address,
       .distributed_keys = std::get<DistributedKeys>(keyExchangeStatus),
   });
-
-  LOG_INFO("Pairing finished successfully.");
 }
 
 Phase1ResultOrFailure PairingHandlerLe::ExchangePairingFeature(const InitialInformations& i) {
