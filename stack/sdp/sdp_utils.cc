@@ -22,7 +22,9 @@
  *
  ******************************************************************************/
 
+#include <netinet/in.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <utility>
 #include <vector>
@@ -30,9 +32,14 @@
 #include "bt_common.h"
 #include "bt_types.h"
 
+#include "hcidefs.h"
+#include "hcimsgs.h"
+#include "l2cdefs.h"
+
 #include "sdp_api.h"
 #include "sdpint.h"
 
+#include "btu.h"
 #include "common/metrics.h"
 
 using bluetooth::Uuid;
