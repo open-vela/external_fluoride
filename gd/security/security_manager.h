@@ -70,11 +70,6 @@ class SecurityManager {
   void RemoveBond(hci::AddressWithType device);
 
   /**
-   * Register Security UI handler, for handling prompts around the Pairing process.
-   */
-  void SetUserInterfaceHandler(UI* user_interface, os::Handler* handler);
-
-  /**
    * Register to listen for callback events from SecurityManager
    *
    * @param listener ISecurityManagerListener instance to handle callbacks
