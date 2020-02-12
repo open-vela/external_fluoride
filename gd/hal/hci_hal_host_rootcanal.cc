@@ -21,7 +21,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <chrono>
 #include <csignal>
 #include <mutex>
 #include <queue>
@@ -93,28 +92,18 @@ const bool SnoopLogger::AlwaysFlush = true;
 class HciHalHostRootcanal : public HciHal {
  public:
   void registerIncomingPacketCallback(HciHalCallbacks* callback) override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
-    LOG_INFO("%s before", __func__);
-    {
-      std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-      ASSERT(incoming_packet_callback_ == nullptr && callback != nullptr);
-      incoming_packet_callback_ = callback;
-    }
-    LOG_INFO("%s after", __func__);
+    std::lock_guard<std::mutex> lock(mutex_);
+    ASSERT(incoming_packet_callback_ == nullptr && callback != nullptr);
+    incoming_packet_callback_ = callback;
   }
 
   void unregisterIncomingPacketCallback() override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
-    LOG_INFO("%s before", __func__);
-    {
-      std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-      incoming_packet_callback_ = nullptr;
-    }
-    LOG_INFO("%s after", __func__);
+    std::lock_guard<std::mutex> lock(mutex_);
+    incoming_packet_callback_ = nullptr;
   }
 
   void sendHciCommand(HciPacket command) override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(command);
     btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::CMD);
@@ -123,7 +112,7 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void sendAclData(HciPacket data) override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(data);
     btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::ACL);
@@ -132,7 +121,7 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void sendScoData(HciPacket data) override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(data);
     btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::SCO);
@@ -146,7 +135,7 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void Start() override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     ASSERT(sock_fd_ == INVALID_FD);
     sock_fd_ = ConnectToRootCanal(config_->GetServerAddress(), config_->GetPort());
     ASSERT(sock_fd_ != INVALID_FD);
@@ -158,38 +147,28 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void Stop() override {
-    std::lock_guard<std::mutex> lock(api_mutex_);
-    LOG_INFO("Rootcanal HAL is closing");
+    std::lock_guard<std::mutex> lock(mutex_);
     if (reactable_ != nullptr) {
       hci_incoming_thread_.GetReactor()->Unregister(reactable_);
-      LOG_INFO("Rootcanal HAL is stopping, start waiting for last callback");
-      // Wait up to 1 second for the last incoming packet callback to finish
-      hci_incoming_thread_.GetReactor()->WaitForUnregisteredReactable(std::chrono::milliseconds(1000));
-      LOG_INFO("Rootcanal HAL is stopping, finished waiting for last callback");
       ASSERT(sock_fd_ != INVALID_FD);
     }
     reactable_ = nullptr;
-    {
-      std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-      incoming_packet_callback_ = nullptr;
-    }
+    incoming_packet_callback_ = nullptr;
     ::close(sock_fd_);
     sock_fd_ = INVALID_FD;
     LOG_INFO("Rootcanal HAL is closed");
   }
 
  private:
-  // Held when APIs are called, NOT to be held during callbacks
-  std::mutex api_mutex_;
+  std::mutex mutex_;
   HciHalHostRootcanalConfig* config_ = HciHalHostRootcanalConfig::Get();
   HciHalCallbacks* incoming_packet_callback_ = nullptr;
-  std::mutex incoming_packet_callback_mutex_;
   int sock_fd_ = INVALID_FD;
   bluetooth::os::Thread hci_incoming_thread_ =
       bluetooth::os::Thread("hci_incoming_thread", bluetooth::os::Thread::Priority::NORMAL);
   bluetooth::os::Reactor::Reactable* reactable_ = nullptr;
   std::queue<std::vector<uint8_t>> hci_outgoing_queue_;
-  SnoopLogger* btsnoop_logger_ = nullptr;
+  SnoopLogger* btsnoop_logger_;
 
   void write_to_rootcanal_fd(HciPacket packet) {
     // TODO: replace this with new queue when it's ready
@@ -202,7 +181,7 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void send_packet_ready() {
-    std::lock_guard<std::mutex> lock(this->api_mutex_);
+    std::lock_guard<std::mutex> lock(this->mutex_);
     auto packet_to_send = this->hci_outgoing_queue_.front();
     auto bytes_written = write(this->sock_fd_, (void*)packet_to_send.data(), packet_to_send.size());
     this->hci_outgoing_queue_.pop();
@@ -217,13 +196,11 @@ class HciHalHostRootcanal : public HciHal {
   }
 
   void incoming_packet_received() {
-    {
-      std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-      if (incoming_packet_callback_ == nullptr) {
-        LOG_INFO("Dropping a packet");
-        return;
-      }
+    if (incoming_packet_callback_ == nullptr) {
+      LOG_INFO("Dropping a packet");
+      return;
     }
+
     uint8_t buf[kBufSize] = {};
 
     ssize_t received_size;
@@ -251,15 +228,9 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciEvtHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::EVT);
-      {
-        std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-        if (incoming_packet_callback_ == nullptr) {
-          LOG_INFO("Dropping an event after processing");
-          return;
-        }
-        incoming_packet_callback_->hciEventReceived(receivedHciPacket);
-      }
+      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING,
+                               SnoopLogger::PacketType::EVT);
+      incoming_packet_callback_->hciEventReceived(receivedHciPacket);
     }
 
     if (buf[0] == kH4Acl) {
@@ -277,15 +248,9 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciAclHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::ACL);
-      {
-        std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-        if (incoming_packet_callback_ == nullptr) {
-          LOG_INFO("Dropping an ACL packet after processing");
-          return;
-        }
-        incoming_packet_callback_->aclDataReceived(receivedHciPacket);
-      }
+      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING,
+                               SnoopLogger::PacketType::ACL);
+      incoming_packet_callback_->aclDataReceived(receivedHciPacket);
     }
 
     if (buf[0] == kH4Sco) {
@@ -301,21 +266,17 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciScoHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::SCO);
-      {
-        std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
-        if (incoming_packet_callback_ == nullptr) {
-          LOG_INFO("Dropping a SCO packet after processing");
-          return;
-        }
-        incoming_packet_callback_->scoDataReceived(receivedHciPacket);
-      }
+      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING,
+                               SnoopLogger::PacketType::SCO);
+      incoming_packet_callback_->scoDataReceived(receivedHciPacket);
     }
     memset(buf, 0, kBufSize);
   }
 };
 
-const ModuleFactory HciHal::Factory = ModuleFactory([]() { return new HciHalHostRootcanal(); });
+const ModuleFactory HciHal::Factory = ModuleFactory([]() {
+  return new HciHalHostRootcanal();
+});
 
 }  // namespace hal
 }  // namespace bluetooth
