@@ -697,6 +697,14 @@ static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
     if (status != BT_STATUS_SUCCESS)
       bond_state_changed(status, bd_addr, BT_BOND_STATE_NONE);
   } else {
+    if (transport == BTA_TRANSPORT_UNKNOWN) {
+      if (device_type & BT_DEVICE_TYPE_BLE) {
+        transport = BTA_TRANSPORT_LE;
+      } else if (device_type & BT_DEVICE_TYPE_BREDR) {
+        transport = BTA_TRANSPORT_BR_EDR;
+      }
+      LOG_DEBUG(LOG_TAG, "%s guessing transport as %02x ", __func__, transport);
+    }
     BTA_DmBond(bd_addr, addr_type, transport);
   }
   /*  Track  originator of bond creation  */
@@ -925,8 +933,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   uint32_t cod;
+  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
