@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,20 +27,11 @@
 #include "btcore/include/module.h"
 #include "btcore/include/version.h"
 #include "hcimsgs.h"
-#include "main/shim/controller.h"
-#include "main/shim/shim.h"
 #include "osi/include/future.h"
 #include "stack/include/btm_ble_api.h"
 
-const bt_event_mask_t BLE_EVENT_MASK = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-#if (BLE_PRIVACY_SPT == TRUE)
-                                         0x1E,
-#else
-                                         /* Disable "LE Enhanced Connection
-                                            Complete" when privacy is off */
-                                         0x1C,
-#endif
-                                         0x7f}};
+const bt_event_mask_t BLE_EVENT_MASK = {
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x1E, 0x7f}};
 
 const bt_event_mask_t CLASSIC_EVENT_MASK = {HCI_DUMO_EVENT_MASK_EXT};
 
@@ -53,11 +44,11 @@ const uint8_t SCO_HOST_BUFFER_SIZE = 0xff;
 #define BLE_SUPPORTED_FEATURES_SIZE 8
 #define MAX_LOCAL_SUPPORTED_CODECS_SIZE 8
 
-static const hci_t* local_hci;
+static const hci_t* hci;
 static const hci_packet_factory_t* packet_factory;
 static const hci_packet_parser_t* packet_parser;
 
-static RawAddress address;
+static bt_bdaddr_t address;
 static bt_version_t bt_version;
 
 static uint8_t supported_commands[HCI_SUPPORTED_COMMANDS_ARRAY_SIZE];
@@ -74,11 +65,6 @@ static uint8_t ble_resolving_list_max_size;
 static uint8_t ble_supported_states[BLE_SUPPORTED_STATES_SIZE];
 static bt_device_features_t features_ble;
 static uint16_t ble_suggested_default_data_length;
-static uint16_t ble_supported_max_tx_octets;
-static uint16_t ble_supported_max_tx_time;
-static uint16_t ble_supported_max_rx_octets;
-static uint16_t ble_supported_max_rx_time;
-
 static uint16_t ble_maxium_advertising_data_length;
 static uint8_t ble_number_of_supported_advertising_sets;
 static uint8_t local_supported_codecs[MAX_LOCAL_SUPPORTED_CODECS_SIZE];
@@ -90,8 +76,7 @@ static bool simple_pairing_supported;
 static bool secure_connections_supported;
 
 #define AWAIT_COMMAND(command) \
-  static_cast<BT_HDR*>(        \
-      future_await(local_hci->transmit_command_futured(command)))
+  static_cast<BT_HDR*>(future_await(hci->transmit_command_futured(command)))
 
 // Module lifecycle functions
 
@@ -227,12 +212,6 @@ static future_t* start_up(void) {
     }
 
     if (HCI_LE_DATA_LEN_EXT_SUPPORTED(features_ble.as_array)) {
-      response =
-          AWAIT_COMMAND(packet_factory->make_ble_read_maximum_data_length());
-      packet_parser->parse_ble_read_maximum_data_length_response(
-          response, &ble_supported_max_tx_octets, &ble_supported_max_tx_time,
-          &ble_supported_max_rx_octets, &ble_supported_max_rx_time);
-
       response = AWAIT_COMMAND(
           packet_factory->make_ble_read_suggested_default_data_length());
       packet_parser->parse_ble_read_suggested_default_data_length_response(
@@ -299,7 +278,7 @@ EXPORT_SYMBOL extern const module_t controller_module = {
 
 static bool get_is_ready(void) { return readable; }
 
-static const RawAddress* get_address(void) {
+static const bt_bdaddr_t* get_address(void) {
   CHECK(readable);
   return &address;
 }
@@ -403,13 +382,6 @@ static bool supports_ble_privacy(void) {
   return HCI_LE_ENHANCED_PRIVACY_SUPPORTED(features_ble.as_array);
 }
 
-static bool supports_ble_set_privacy_mode() {
-  CHECK(readable);
-  CHECK(ble_supported);
-  return HCI_LE_ENHANCED_PRIVACY_SUPPORTED(features_ble.as_array) &&
-         HCI_LE_SET_PRIVACY_MODE_SUPPORTED(supported_commands);
-}
-
 static bool supports_ble_packet_extension(void) {
   CHECK(readable);
   CHECK(ble_supported);
@@ -471,12 +443,6 @@ static uint16_t get_ble_suggested_default_data_length(void) {
   CHECK(readable);
   CHECK(ble_supported);
   return ble_suggested_default_data_length;
-}
-
-static uint16_t get_ble_maximum_tx_data_length(void) {
-  CHECK(readable);
-  CHECK(ble_supported);
-  return ble_supported_max_tx_octets;
 }
 
 static uint16_t get_ble_maxium_advertising_data_length(void) {
@@ -559,7 +525,6 @@ static const controller_t interface = {
     supports_ble_packet_extension,
     supports_ble_connection_parameters_request,
     supports_ble_privacy,
-    supports_ble_set_privacy_mode,
     supports_ble_2m_phy,
     supports_ble_coded_phy,
     supports_ble_extended_advertising,
@@ -571,7 +536,6 @@ static const controller_t interface = {
     get_acl_packet_size_classic,
     get_acl_packet_size_ble,
     get_ble_suggested_default_data_length,
-    get_ble_maximum_tx_data_length,
     get_ble_maxium_advertising_data_length,
     get_ble_number_of_supported_advertising_sets,
 
@@ -585,12 +549,12 @@ static const controller_t interface = {
     get_local_supported_codecs,
     get_le_all_initiating_phys};
 
-const controller_t* bluetooth::legacy::controller_get_interface() {
+const controller_t* controller_get_interface() {
   static bool loaded = false;
   if (!loaded) {
     loaded = true;
 
-    local_hci = hci_layer_get_interface();
+    hci = hci_layer_get_interface();
     packet_factory = hci_packet_factory_get_interface();
     packet_parser = hci_packet_parser_get_interface();
   }
@@ -598,19 +562,11 @@ const controller_t* bluetooth::legacy::controller_get_interface() {
   return &interface;
 }
 
-const controller_t* controller_get_interface() {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::controller_get_interface();
-  } else {
-    return bluetooth::legacy::controller_get_interface();
-  }
-}
-
 const controller_t* controller_get_test_interface(
     const hci_t* hci_interface,
     const hci_packet_factory_t* packet_factory_interface,
     const hci_packet_parser_t* packet_parser_interface) {
-  local_hci = hci_interface;
+  hci = hci_interface;
   packet_factory = packet_factory_interface;
   packet_parser = packet_parser_interface;
   return &interface;
