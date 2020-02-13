@@ -25,7 +25,6 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -673,18 +672,8 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
   /* Only one active inquiry is allowed in this implementation.
      Also do not allow an inquiry if the inquiry filter is being updated */
   if (p_inq->inq_active || p_inq->inqfilt_active) {
-    /*check if LE observe is already running*/
-    if (p_inq->scan_type == INQ_LE_OBSERVE &&
-        p_inq->p_inq_ble_results_cb != nullptr) {
-      BTM_TRACE_API("BTM_StartInquiry: LE observe in progress");
-      p_inq->scan_type = INQ_GENERAL;
-      p_inq->inq_active = BTM_INQUIRY_INACTIVE;
-      btm_cb.ble_ctr_cb.inq_var.scan_type = BTM_BLE_SCAN_MODE_NONE;
-      btm_send_hci_scan_enable(BTM_BLE_SCAN_DISABLE, BTM_BLE_DUPLICATE_ENABLE);
-    } else {
-      LOG(ERROR) << __func__ << ": BTM_BUSY";
-      return (BTM_BUSY);
-    }
+    LOG(ERROR) << __func__ << ": BTM_BUSY";
+    return (BTM_BUSY);
   } else {
     p_inq->scan_type = INQ_GENERAL;
   }
@@ -1517,8 +1506,7 @@ static void btm_initiate_inquiry(tBTM_INQUIRY_VAR_ST* p_inq) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
-                             uint8_t inq_res_mode) {
+void btm_process_inq_results(uint8_t* p, uint8_t inq_res_mode) {
   uint8_t num_resp, xx;
   RawAddress bda;
   tINQ_DB_ENT* p_i;
@@ -1547,29 +1535,10 @@ void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
 
   STREAM_TO_UINT8(num_resp, p);
 
-  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED) {
-    if (num_resp > 1) {
-      BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
-                      num_resp);
-      return;
-    }
-
-    constexpr uint16_t extended_inquiry_result_size = 254;
-    if (hci_evt_len - 1 != extended_inquiry_result_size) {
-      android_errorWriteLog(0x534e4554, "141620271");
-      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
-                      num_resp, hci_evt_len);
-      return;
-    }
-  } else if (inq_res_mode == BTM_INQ_RESULT_STANDARD ||
-             inq_res_mode == BTM_INQ_RESULT_WITH_RSSI) {
-    constexpr uint16_t inquiry_result_size = 14;
-    if (hci_evt_len < num_resp * inquiry_result_size) {
-      android_errorWriteLog(0x534e4554, "141620271");
-      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
-                      num_resp, hci_evt_len);
-      return;
-    }
+  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED && (num_resp > 1)) {
+    BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
+                    num_resp);
+    return;
   }
 
   for (xx = 0; xx < num_resp; xx++) {
@@ -1783,13 +1752,6 @@ void btm_process_inq_complete(uint8_t status, uint8_t mode) {
 
   p_inq->inqparms.mode &= ~(mode);
 
-  if (p_inq->scan_type == INQ_LE_OBSERVE && !p_inq->inq_active) {
-    /*end of LE observe*/
-    p_inq->p_inq_ble_results_cb = NULL;
-    p_inq->p_inq_ble_cmpl_cb = NULL;
-    p_inq->scan_type = INQ_NONE;
-  }
-
 #if (BTM_INQ_DEBUG == TRUE)
   BTM_TRACE_DEBUG(
       "btm_process_inq_complete inq_active:0x%x state:%d inqfilt_active:%d",
@@ -1836,12 +1798,6 @@ void btm_process_inq_complete(uint8_t status, uint8_t mode) {
       p_inq->scan_type == INQ_GENERAL)  // this inquiry is complete
   {
     p_inq->scan_type = INQ_NONE;
-    /* check if the LE observe is pending */
-    if (p_inq->p_inq_ble_results_cb != NULL) {
-      BTM_TRACE_DEBUG("BTM Inq Compl: resuming a pending LE scan");
-      BTM_BleObserve(1, 0, p_inq->p_inq_ble_results_cb,
-                     p_inq->p_inq_ble_cmpl_cb);
-    }
   }
 #if (BTM_INQ_DEBUG == TRUE)
   BTM_TRACE_DEBUG("inq_active:0x%x state:%d inqfilt_active:%d",
