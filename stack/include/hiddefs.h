@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -130,8 +130,6 @@ typedef struct desc_info {
 } tHID_DEV_DSCP_INFO;
 
 #define HID_SSR_PARAM_INVALID 0xffff
-
-#define HIDD_APP_DESCRIPTOR_LEN 2048
 
 typedef struct sdp_info {
   char svc_name[HID_MAX_SVC_NAME_LEN];   /*Service Name */
