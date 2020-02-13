@@ -314,18 +314,26 @@ uint8_t bta_av_rc_create(tBTA_AV_CB* p_cb, uint8_t role, uint8_t shdl,
   tAVRC_CONN_CB ccb;
   RawAddress bda = RawAddress::kAny;
   uint8_t status = BTA_AV_RC_ROLE_ACP;
-  tBTA_AV_SCB* p_scb = p_cb->p_scb[shdl - 1];
   int i;
   uint8_t rc_handle;
   tBTA_AV_RCB* p_rcb;
 
   if (role == AVCT_INT) {
+    // Can't grab a stream control block that doesn't have a valid handle
+    if (!shdl) {
+      APPL_TRACE_ERROR(
+          "%s: Can't grab stream control block for shdl = %d -> index = %d",
+          __func__, shdl, shdl - 1);
+      return BTA_AV_RC_HANDLE_NONE;
+    }
+    tBTA_AV_SCB* p_scb = p_cb->p_scb[shdl - 1];
     bda = p_scb->PeerAddress();
     status = BTA_AV_RC_ROLE_INT;
   } else {
     p_rcb = bta_av_get_rcb_by_shdl(shdl);
     if (p_rcb != NULL) {
       APPL_TRACE_ERROR("%s: ACP handle exist for shdl:%d", __func__, shdl);
+      p_rcb->lidx = lidx;
       return p_rcb->handle;
     }
   }
@@ -1466,7 +1474,7 @@ void bta_av_sig_chg(tBTA_AV_DATA* p_data) {
 #endif
   else {
     /* disconnected. */
-    APPL_TRACE_DEBUG("%s: bta_av_cb.conn_lcb is %d", __func__,
+    APPL_TRACE_DEBUG("%s: bta_av_cb.conn_lcb=0x%x", __func__,
                      bta_av_cb.conn_lcb);
 
     p_lcb = bta_av_find_lcb(p_data->str_msg.bd_addr, BTA_AV_LCB_FREE);
@@ -1492,7 +1500,8 @@ void bta_av_sig_chg(tBTA_AV_DATA* p_data) {
       }
     }
   }
-  APPL_TRACE_DEBUG("%s: sig_chg conn_lcb: 0x%x", __func__, p_cb->conn_lcb);
+  APPL_TRACE_DEBUG("%s: bta_av_cb.conn_lcb=0x%x after sig_chg", __func__,
+                   p_cb->conn_lcb);
 }
 
 /*******************************************************************************
@@ -1559,7 +1568,7 @@ static void bta_av_accept_signalling_timer_cback(void* data) {
     p_scb = p_cb->p_scb[inx];
   }
   if (p_scb) {
-    APPL_TRACE_DEBUG("%s: coll_mask = 0x%02X", __func__, p_scb->coll_mask);
+    APPL_TRACE_DEBUG("%s: coll_mask=0x%02x", __func__, p_scb->coll_mask);
 
     if (p_scb->coll_mask & BTA_AV_COLL_INC_TMR) {
       p_scb->coll_mask &= ~BTA_AV_COLL_INC_TMR;
@@ -1865,9 +1874,9 @@ void bta_av_rc_disc_done(UNUSED_ATTR tBTA_AV_DATA* p_data) {
       /*
        * In case scb is not created by the time we are done with SDP
        * we still need to send RC feature event. So we need to get BD
-       * from Message
+       * from Message.  Note that lidx is 1 based not 0 based
        */
-      rc_feat.peer_addr = p_cb->lcb[p_cb->rcb[rc_handle].lidx].addr;
+      rc_feat.peer_addr = p_cb->lcb[p_cb->rcb[rc_handle].lidx - 1].addr;
     } else {
       rc_feat.peer_addr = p_scb->PeerAddress();
     }
@@ -1939,11 +1948,6 @@ void bta_av_rc_closed(tBTA_AV_DATA* p_data) {
       } else {
         /* AVCT CCB is still there. dealloc */
         bta_av_del_rc(p_rcb);
-
-        /* if the AVRCP is no longer listening, create the listening channel */
-        if (bta_av_cb.rc_acp_handle == BTA_AV_RC_HANDLE_NONE &&
-            bta_av_cb.features & BTA_AV_FEAT_RCTG)
-          bta_av_rc_create(&bta_av_cb, AVCT_ACP, 0, BTA_AV_NUM_LINKS + 1);
       }
     } else if ((p_rcb->handle != BTA_AV_RC_HANDLE_NONE) &&
                (p_rcb->status & BTA_AV_RC_CONN_MASK)) {
@@ -1964,6 +1968,9 @@ void bta_av_rc_closed(tBTA_AV_DATA* p_data) {
   tBTA_AV bta_av_data;
   bta_av_data.rc_close = rc_close;
   (*p_cb->p_cback)(BTA_AV_RC_CLOSE_EVT, &bta_av_data);
+  if (bta_av_cb.rc_acp_handle == BTA_AV_RC_HANDLE_NONE
+                  && bta_av_cb.features & BTA_AV_FEAT_RCTG)
+      bta_av_rc_create(&bta_av_cb, AVCT_ACP, 0, BTA_AV_NUM_LINKS + 1);
 }
 
 /*******************************************************************************
