@@ -23,11 +23,19 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
+#include <cutils/log.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_types.h"
+#include "bt_utils.h"
+#include "btu.h"
+
+#include "hcidefs.h"
+#include "hcimsgs.h"
+#include "l2cdefs.h"
 
 #include "osi/include/osi.h"
 #include "sdp_api.h"
