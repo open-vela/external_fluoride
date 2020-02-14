@@ -501,6 +501,7 @@ void PacketDef::GenBuilderCreatePybind11(std::ostream& s) const {
   s << ".def(py::init([](";
   auto params = GetParamList();
   std::vector<std::string> constructor_args;
+  std::vector<std::string> keep_alive_args;
   int i = 1;
   for (const auto& param : params) {
     i++;
@@ -512,6 +513,7 @@ void PacketDef::GenBuilderCreatePybind11(std::ostream& s) const {
     // Use shared_ptr instead of unique_ptr for the Python interface
     if (param->BuilderParameterMustBeMoved()) {
       param_type = util::StringFindAndReplaceAll(param_type, "unique_ptr", "shared_ptr");
+      keep_alive_args.push_back(std::to_string(i));
     }
     ss << param_type << " " << param->GetName();
     constructor_args.push_back(ss.str());
@@ -531,37 +533,19 @@ void PacketDef::GenBuilderCreatePybind11(std::ostream& s) const {
     auto move_only_param_name = param->GetName() + "_move_only";
     s << param_type << " " << move_only_param_name << ";";
     if (param->IsContainerField()) {
-      // Assume single layer container and copy it
-      auto struct_type = param->GetElementField()->GetDataType();
-      struct_type = util::StringFindAndReplaceAll(struct_type, "std::unique_ptr<", "");
-      struct_type = util::StringFindAndReplaceAll(struct_type, ">", "");
+      // Assume single layer container
       s << "for (size_t i = 0; i < " << param->GetName() << ".size(); i++) {";
-      // Serialize each struct
-      s << "auto " << param->GetName() + "_bytes = std::make_shared<std::vector<uint8_t>>();";
-      s << param->GetName() + "_bytes->reserve(" << param->GetName() << "[i]->size());";
-      s << "auto " << param->GetName() + "_reparsed = std::make_unique<" << struct_type << ">();";
-      s << "BitInserter " << param->GetName() + "_bi(*" << param->GetName() << "_bytes);";
-      s << param->GetName() << "[i]->Serialize(" << param->GetName() << "_bi);";
-      // Parse it again
-      s << "auto " << param->GetName() << "_view = PacketView<kLittleEndian>(" << param->GetName() << "_bytes);";
-      s << "auto result = Parse" << struct_type << "(" << param->GetName() + "_view.begin());";
-      // Push it into a new container
       if (param->GetFieldType() == VectorField::kFieldType) {
-        s << move_only_param_name << ".push_back(std::move(" << param->GetName() + "_reparsed));";
+        s << move_only_param_name << ".emplace_back(" << param->GetName() << "[i].get());";
       } else if (param->GetFieldType() == ArrayField::kFieldType) {
-        s << move_only_param_name << "[i] = " << param->GetName() << "_reparsed;";
+        s << move_only_param_name << "[i].reset(" << param->GetName() << "[i].get());";
       } else {
         ERROR() << param << " is not supported by Pybind11";
       }
       s << "}";
     } else {
-      // Serialize the parameter and pass the bytes in a RawBuilder
-      s << "std::vector<uint8_t> " << param->GetName() + "_bytes;";
-      s << param->GetName() + "_bytes.reserve(" << param->GetName() << "->size());";
-      s << "BitInserter " << param->GetName() + "_bi(" << param->GetName() << "_bytes);";
-      s << param->GetName() << "->Serialize(" << param->GetName() + "_bi);";
-      s << move_only_param_name << " = ";
-      s << "std::make_unique<RawBuilder>(" << param->GetName() << "_bytes);";
+      // Release shared_ptr to unique_ptr and leave the Python copy as nullptr and to be garbage collected by Python
+      s << move_only_param_name << ".reset(" << param->GetName() << ".get());";
     }
   }
   s << "return " << name_ << "Builder::Create(";
@@ -581,7 +565,11 @@ void PacketDef::GenBuilderCreatePybind11(std::ostream& s) const {
     builder_vars.push_back(ss.str());
   }
   s << util::StringJoin(",", builder_vars) << ");}";
-  s << "))";
+  if (keep_alive_args.empty()) {
+    s << "))";
+  } else {
+    s << "), py::keep_alive<1," << util::StringJoin(",", keep_alive_args) << ">())";
+  }
 }
 
 void PacketDef::GenBuilderParameterChecker(std::ostream& s) const {
