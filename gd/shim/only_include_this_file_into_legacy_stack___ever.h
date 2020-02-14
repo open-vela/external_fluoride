@@ -33,7 +33,6 @@
 #include "gd/shim/iinquiry.h"
 #include "gd/shim/il2cap.h"
 #include "gd/shim/iname.h"
-#include "gd/shim/iname_db.h"
 #include "gd/shim/ipage.h"
 #include "gd/shim/iscanning.h"
 #include "gd/shim/isecurity.h"

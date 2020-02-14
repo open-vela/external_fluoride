@@ -26,8 +26,8 @@ namespace shim {
 
 class Name : public bluetooth::Module, public bluetooth::shim::IName {
  public:
-  void ReadRemoteNameRequest(std::string string_address, ReadRemoteNameCallback callback) override;
-  void CancelRemoteNameRequest(std::string string_address, CancelRemoteNameCallback callback) override;
+  void ReadRemoteNameRequest(std::string remote_address, ReadRemoteNameCallback callback) override;
+  void CancelRemoteNameRequest(std::string remote_address, CancelRemoteNameCallback callback) override;
 
   Name() = default;
   ~Name() = default;

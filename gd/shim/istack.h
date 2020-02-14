@@ -31,7 +31,6 @@ struct IDumpsys;
 struct IHciLayer;
 struct IInquiry;
 struct IName;
-struct INameDb;
 struct IL2cap;
 struct IPage;
 struct IScanning;
@@ -50,7 +49,6 @@ struct IStack {
   virtual IHciLayer* GetHciLayer() = 0;
   virtual IInquiry* GetInquiry() = 0;
   virtual IName* GetName() = 0;
-  virtual INameDb* GetNameDb() = 0;
   virtual IL2cap* GetL2cap() = 0;
   virtual IPage* GetPage() = 0;
   virtual IScanning* GetScanning() = 0;
