@@ -66,10 +66,6 @@ bluetooth::shim::IName* bluetooth::shim::GetName() {
   return GetGabeldorscheStack()->GetName();
 }
 
-bluetooth::shim::INameDb* bluetooth::shim::GetNameDb() {
-  return GetGabeldorscheStack()->GetNameDb();
-}
-
 bluetooth::shim::IPage* bluetooth::shim::GetPage() {
   return GetGabeldorscheStack()->GetPage();
 }
