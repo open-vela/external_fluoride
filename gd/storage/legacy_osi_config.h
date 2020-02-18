@@ -21,8 +21,6 @@
 #include <memory>
 #include <string>
 
-#ifndef CONFIG_DEFAULT_SECTION
-
 // The default section name to use if a key/value pair is not defined within
 // a section.
 #define CONFIG_DEFAULT_SECTION "Global"
@@ -40,8 +38,6 @@ struct section_t {
 struct config_t {
   std::list<section_t> sections;
 };
-
-#endif /* CONFIG_DEFAULT_SECTION */
 
 namespace bluetooth {
 namespace legacy {

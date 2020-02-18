@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Android Open Source Project
+ * Copyright 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,25 @@
 
 #include "module.h"
 
+struct config_t;
+
 namespace bluetooth {
 namespace shim {
 
-class Connectability : public bluetooth::Module {
- public:
-  void StartConnectability();
-  void StopConnectability();
-  bool IsConnectable() const;
+using ConfigReadCallback = std::function<void(std::unique_ptr<config_t>)>;
+using ConfigWriteCallback = std::function<void(bool)>;
+using ChecksumReadCallback = std::function<void(std::string)>;
+using ChecksumWriteCallback = std::function<void(bool)>;
 
-  Connectability() = default;
-  ~Connectability() = default;
+class Storage : public bluetooth::Module {
+ public:
+  void ConfigRead(const std::string filename, ConfigReadCallback callback);
+  void ConfigWrite(const std::string filename, const config_t* config, ConfigWriteCallback callback);
+  void ChecksumRead(const std::string filename, ChecksumReadCallback callback);
+  void ChecksumWrite(const std::string filename, const std::string& checksum, ChecksumWriteCallback callback);
+
+  Storage() = default;
+  ~Storage() = default;
 
   static const ModuleFactory Factory;
 
@@ -43,7 +51,7 @@ class Connectability : public bluetooth::Module {
  private:
   struct impl;
   std::unique_ptr<impl> pimpl_;
-  DISALLOW_COPY_AND_ASSIGN(Connectability);
+  DISALLOW_COPY_AND_ASSIGN(Storage);
 };
 
 }  // namespace shim
