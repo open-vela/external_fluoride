@@ -34,9 +34,7 @@
 
 namespace bluetooth {
 namespace neighbor {
-class ConnectabilityModule;
 class DiscoverabilityModule;
-class PageModule;
 }
 namespace hci {
 class Controller;
@@ -53,14 +51,14 @@ future_t* StopGabeldorscheStack();
 Advertising* GetAdvertising();
 bluetooth::hci::Controller* GetController();
 neighbor::DiscoverabilityModule* GetDiscoverability();
-neighbor::ConnectabilityModule* GetConnectability();
+Connectability* GetConnectability();
 Dumpsys* GetDumpsys();
 Inquiry* GetInquiry();
 HciLayer* GetHciLayer();
 L2cap* GetL2cap();
 Name* GetName();
 NameDb* GetNameDb();
-neighbor::PageModule* GetPage();
+Page* GetPage();
 Scanning* GetScanning();
 bluetooth::security::SecurityModule* GetSecurityModule();
 Storage* GetStorage();
