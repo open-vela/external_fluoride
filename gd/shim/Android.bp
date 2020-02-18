@@ -3,6 +3,7 @@ filegroup {
     srcs: [
             "advertising.cc",
             "connectability.cc",
+            "discoverability.cc",
             "dumpsys.cc",
             "hci_layer.cc",
             "inquiry.cc",
