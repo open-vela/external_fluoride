@@ -19,15 +19,16 @@
 #include <string>
 
 #include "module.h"
+#include "shim/iconnectability.h"
 
 namespace bluetooth {
 namespace shim {
 
-class Connectability : public bluetooth::Module {
+class Connectability : public bluetooth::Module, public bluetooth::shim::IConnectability {
  public:
-  void StartConnectability();
-  void StopConnectability();
-  bool IsConnectable() const;
+  void StartConnectability() override;
+  void StopConnectability() override;
+  bool IsConnectable() const override;
 
   Connectability() = default;
   ~Connectability() = default;
