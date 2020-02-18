@@ -38,5 +38,6 @@ class Name;
 class NameDb;
 class Scanning;
 class SecurityModule;
+class Storage;
 }  // namespace shim
 }  // namespace bluetooth

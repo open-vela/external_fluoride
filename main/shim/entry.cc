@@ -18,12 +18,11 @@
 #include "osi/include/future.h"
 
 #include "hci/controller.h"
+#include "neighbor/connectability.h"
 #include "neighbor/discoverability.h"
 #include "neighbor/page.h"
-#include "os/handler.h"
 #include "security/security_module.h"
 #include "shim/advertising.h"
-#include "shim/connectability.h"
 #include "shim/dumpsys.h"
 #include "shim/hci_layer.h"
 #include "shim/inquiry.h"
@@ -32,8 +31,8 @@
 #include "shim/name_db.h"
 #include "shim/scanning.h"
 #include "shim/stack.h"
+#include "shim/storage.h"
 #include "stack_manager.h"
-#include "storage/legacy.h"
 
 using bluetooth::shim::GetGabeldorscheStack;
 
@@ -45,10 +44,6 @@ future_t* bluetooth::shim::StartGabeldorscheStack() {
 future_t* bluetooth::shim::StopGabeldorscheStack() {
   GetGabeldorscheStack()->Stop();
   return (future_t*)nullptr;
-}
-
-bluetooth::os::Handler* bluetooth::shim::GetGdShimHandler() {
-  return bluetooth::shim::GetDumpsys()->GetGdShimHandler();
 }
 
 bluetooth::shim::Advertising* bluetooth::shim::GetAdvertising() {
@@ -63,10 +58,11 @@ bluetooth::hci::Controller* bluetooth::shim::GetController() {
       ->GetInstance<bluetooth::hci::Controller>();
 }
 
-bluetooth::shim::Connectability* bluetooth::shim::GetConnectability() {
+bluetooth::neighbor::ConnectabilityModule*
+bluetooth::shim::GetConnectability() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::shim::Connectability>();
+      ->GetInstance<bluetooth::neighbor::ConnectabilityModule>();
 }
 
 bluetooth::neighbor::DiscoverabilityModule*
@@ -130,8 +126,8 @@ bluetooth::security::SecurityModule* bluetooth::shim::GetSecurityModule() {
       ->GetInstance<bluetooth::security::SecurityModule>();
 }
 
-bluetooth::storage::LegacyModule* bluetooth::shim::GetStorage() {
+bluetooth::shim::Storage* bluetooth::shim::GetStorage() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::storage::LegacyModule>();
+      ->GetInstance<bluetooth::shim::Storage>();
 }
