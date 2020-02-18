@@ -36,9 +36,7 @@ class HciLayer;
 class L2cap;
 class Name;
 class NameDb;
-class Page;
 class Scanning;
-class Security;
 class SecurityModule;
 class Storage;
 }  // namespace shim

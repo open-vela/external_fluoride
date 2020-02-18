@@ -18,17 +18,17 @@
 #include "osi/include/future.h"
 
 #include "hci/controller.h"
+#include "neighbor/connectability.h"
 #include "neighbor/discoverability.h"
+#include "neighbor/page.h"
 #include "security/security_module.h"
 #include "shim/advertising.h"
-#include "shim/connectability.h"
 #include "shim/dumpsys.h"
 #include "shim/hci_layer.h"
 #include "shim/inquiry.h"
 #include "shim/l2cap.h"
 #include "shim/name.h"
 #include "shim/name_db.h"
-#include "shim/page.h"
 #include "shim/scanning.h"
 #include "shim/stack.h"
 #include "shim/storage.h"
@@ -58,10 +58,11 @@ bluetooth::hci::Controller* bluetooth::shim::GetController() {
       ->GetInstance<bluetooth::hci::Controller>();
 }
 
-bluetooth::shim::Connectability* bluetooth::shim::GetConnectability() {
+bluetooth::neighbor::ConnectabilityModule*
+bluetooth::shim::GetConnectability() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::shim::Connectability>();
+      ->GetInstance<bluetooth::neighbor::ConnectabilityModule>();
 }
 
 bluetooth::neighbor::DiscoverabilityModule*
@@ -107,22 +108,16 @@ bluetooth::shim::NameDb* bluetooth::shim::GetNameDb() {
       ->GetInstance<bluetooth::shim::NameDb>();
 }
 
-bluetooth::shim::Page* bluetooth::shim::GetPage() {
+bluetooth::neighbor::PageModule* bluetooth::shim::GetPage() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::shim::Page>();
+      ->GetInstance<bluetooth::neighbor::PageModule>();
 }
 
 bluetooth::shim::Scanning* bluetooth::shim::GetScanning() {
   return GetGabeldorscheStack()
       ->GetStackManager()
       ->GetInstance<bluetooth::shim::Scanning>();
-}
-
-bluetooth::shim::Security* bluetooth::shim::GetSecurity() {
-  return GetGabeldorscheStack()
-      ->GetStackManager()
-      ->GetInstance<bluetooth::shim::Security>();
 }
 
 bluetooth::security::SecurityModule* bluetooth::shim::GetSecurityModule() {
