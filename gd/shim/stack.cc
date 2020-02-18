@@ -43,6 +43,7 @@
 #include "shim/l2cap.h"
 #include "shim/name.h"
 #include "shim/name_db.h"
+#include "shim/page.h"
 #include "shim/scanning.h"
 #include "shim/storage.h"
 #include "stack_manager.h"
@@ -82,6 +83,7 @@ struct bluetooth::shim::Stack::impl {
     modules.add<::bluetooth::shim::Inquiry>();
     modules.add<::bluetooth::shim::Name>();
     modules.add<::bluetooth::shim::L2cap>();
+    modules.add<::bluetooth::shim::Page>();
     modules.add<::bluetooth::shim::Scanning>();
     modules.add<::bluetooth::shim::Storage>();
 
