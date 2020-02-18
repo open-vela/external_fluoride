@@ -19,18 +19,15 @@
 #include <string>
 
 #include "module.h"
+#include "shim/iname.h"
 
 namespace bluetooth {
 namespace shim {
 
-using ReadRemoteNameCallback =
-    std::function<void(std::string address_string, uint8_t hci_status, std::array<uint8_t, 248> remote_name)>;
-using CancelRemoteNameCallback = std::function<void(std::string address_string, uint8_t hci_status)>;
-
-class Name : public bluetooth::Module {
+class Name : public bluetooth::Module, public bluetooth::shim::IName {
  public:
-  void ReadRemoteNameRequest(std::string remote_address, ReadRemoteNameCallback callback);
-  void CancelRemoteNameRequest(std::string remote_address, CancelRemoteNameCallback callback);
+  void ReadRemoteNameRequest(std::string string_address, ReadRemoteNameCallback callback) override;
+  void CancelRemoteNameRequest(std::string string_address, CancelRemoteNameCallback callback) override;
 
   Name() = default;
   ~Name() = default;

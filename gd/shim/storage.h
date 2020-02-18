@@ -19,18 +19,12 @@
 #include <string>
 
 #include "module.h"
-
-struct config_t;
+#include "shim/istorage.h"
 
 namespace bluetooth {
 namespace shim {
 
-using ConfigReadCallback = std::function<void(std::unique_ptr<config_t>)>;
-using ConfigWriteCallback = std::function<void(bool)>;
-using ChecksumReadCallback = std::function<void(std::string)>;
-using ChecksumWriteCallback = std::function<void(bool)>;
-
-class Storage : public bluetooth::Module {
+class Storage : public bluetooth::Module, public bluetooth::shim::IStorage {
  public:
   void ConfigRead(const std::string filename, ConfigReadCallback callback);
   void ConfigWrite(const std::string filename, const config_t* config, ConfigWriteCallback callback);

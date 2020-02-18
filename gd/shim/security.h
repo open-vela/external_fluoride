@@ -19,23 +19,22 @@
 #include <string>
 
 #include "module.h"
+#include "shim/isecurity.h"
 
 namespace bluetooth {
 namespace shim {
 
-using SimplePairingCallback = std::function<bool(std::string address, uint32_t value, bool just_works)>;
-
-class Security : public bluetooth::Module {
+class Security : public bluetooth::Module, public bluetooth::shim::ISecurity {
  public:
   Security() = default;
   ~Security() = default;
 
-  void CreateBond(std::string address);
-  void CreateBondLe(std::string address, uint8_t address_type);
-  void CancelBond(std::string address);
-  void RemoveBond(std::string address);
+  void CreateBond(std::string address) override;
+  void CreateBondLe(std::string address, uint8_t address_type) override;
+  void CancelBond(std::string address) override;
+  void RemoveBond(std::string address) override;
 
-  void SetSimplePairingCallback(SimplePairingCallback callback);
+  void SetSimplePairingCallback(SimplePairingCallback callback) override;
 
   static const ModuleFactory Factory;
 

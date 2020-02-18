@@ -19,17 +19,18 @@
 #include <string>
 
 #include "module.h"
+#include "shim/ipage.h"
 
 namespace bluetooth {
 namespace shim {
 
-class Page : public bluetooth::Module {
+class Page : public bluetooth::Module, public bluetooth::shim::IPage {
  public:
-  void SetScanActivity(uint16_t interval, uint16_t window);
-  void GetScanActivity(uint16_t& interval, uint16_t& window) const;
+  void SetScanActivity(uint16_t interval, uint16_t window) override;
+  void GetScanActivity(uint16_t& interval, uint16_t& window) const override;
 
-  void SetInterlacedScan();
-  void SetStandardScan();
+  void SetInterlacedScan() override;
+  void SetStandardScan() override;
 
   Page() = default;
   ~Page() = default;
