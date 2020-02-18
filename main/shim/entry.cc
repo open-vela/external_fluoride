@@ -30,6 +30,7 @@
 #include "shim/inquiry.h"
 #include "shim/l2cap.h"
 #include "shim/name.h"
+#include "shim/name_db.h"
 #include "shim/stack.h"
 #include "stack_manager.h"
 #include "storage/legacy.h"
@@ -104,6 +105,12 @@ bluetooth::shim::Name* bluetooth::shim::GetName() {
   return GetGabeldorscheStack()
       ->GetStackManager()
       ->GetInstance<bluetooth::shim::Name>();
+}
+
+bluetooth::shim::NameDb* bluetooth::shim::GetNameDb() {
+  return GetGabeldorscheStack()
+      ->GetStackManager()
+      ->GetInstance<bluetooth::shim::NameDb>();
 }
 
 bluetooth::neighbor::PageModule* bluetooth::shim::GetPage() {
