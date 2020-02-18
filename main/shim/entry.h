@@ -33,9 +33,6 @@
 #include "osi/include/future.h"
 
 namespace bluetooth {
-namespace neighbor {
-class DiscoverabilityModule;
-}
 namespace hci {
 class Controller;
 }
@@ -50,7 +47,7 @@ future_t* StartGabeldorscheStack();
 future_t* StopGabeldorscheStack();
 Advertising* GetAdvertising();
 bluetooth::hci::Controller* GetController();
-neighbor::DiscoverabilityModule* GetDiscoverability();
+Discoverability* GetDiscoverability();
 Connectability* GetConnectability();
 Dumpsys* GetDumpsys();
 Inquiry* GetInquiry();
