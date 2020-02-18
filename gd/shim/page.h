@@ -13,51 +13,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <memory>
+#include <string>
 
-#include "neighbor/discoverability.h"
-#include "security/security_module.h"
-#include "shim/advertising.h"
-#include "shim/connectability.h"
-#include "shim/dumpsys.h"
-#include "shim/hci_layer.h"
-#include "shim/inquiry.h"
-#include "shim/l2cap.h"
-#include "shim/name.h"
-#include "shim/page.h"
-#include "shim/scanning.h"
-#include "shim/security.h"
-#include "shim/storage.h"
-#include "stack_manager.h"
+#include "module.h"
 
-/**
- * The shim layer implementation on the Gd stack side.
- */
 namespace bluetooth {
 namespace shim {
 
-class Stack {
+class Page : public bluetooth::Module {
  public:
-  Stack();
-  ~Stack() = default;
+  void SetScanActivity(uint16_t interval, uint16_t window);
+  void GetScanActivity(uint16_t& interval, uint16_t& window) const;
 
-  void Start();
-  void Stop();
+  void SetInterlacedScan();
+  void SetStandardScan();
 
-  StackManager* GetStackManager();
+  Page() = default;
+  ~Page() = default;
+
+  static const ModuleFactory Factory;
+
+ protected:
+  void ListDependencies(ModuleList* list) override;  // Module
+  void Start() override;                             // Module
+  void Stop() override;                              // Module
+  std::string ToString() const override;             // Module
 
  private:
   struct impl;
   std::unique_ptr<impl> pimpl_;
-
-  Stack(const Stack&) = delete;
-  void operator=(const Stack&) = delete;
+  DISALLOW_COPY_AND_ASSIGN(Page);
 };
-
-Stack* GetGabeldorscheStack();
 
 }  // namespace shim
 }  // namespace bluetooth
