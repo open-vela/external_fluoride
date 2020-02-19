@@ -72,13 +72,14 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
   ::grpc::Status OpenChannel(::grpc::ServerContext* context,
                              const ::bluetooth::l2cap::classic::OpenChannelRequest* request,
                              ::google::protobuf::Empty* response) override {
-    auto service_helper = dynamic_channel_helper_map_.find(request->psm());
-    if (service_helper == dynamic_channel_helper_map_.end()) {
-      return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Psm not registered");
-    }
+    std::unique_lock<std::mutex> lock(channel_map_mutex_);
+    auto psm = request->psm();
+    auto mode = request->mode();
+    dynamic_channel_helper_map_.emplace(
+        psm, std::make_unique<L2capDynamicChannelHelper>(this, l2cap_layer_, facade_handler_, psm, mode));
     hci::Address peer;
     ASSERT(hci::Address::FromString(request->remote().address(), peer));
-    dynamic_channel_helper_map_[request->psm()]->Connect(peer);
+    dynamic_channel_helper_map_[psm]->Connect(peer);
     return ::grpc::Status::OK;
   }
 
@@ -89,7 +90,7 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     if (dynamic_channel_helper_map_.find(request->psm()) == dynamic_channel_helper_map_.end()) {
       return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Psm not registered");
     }
-    dynamic_channel_helper_map_[psm]->Disconnect();
+    dynamic_channel_helper_map_[psm]->disconnect();
     return ::grpc::Status::OK;
   }
 
@@ -112,10 +113,16 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
    public:
     L2capDynamicChannelHelper(L2capClassicModuleFacadeService* service, L2capClassicModule* l2cap_layer,
                               os::Handler* handler, Psm psm, RetransmissionFlowControlMode mode)
-        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm), mode_(mode) {
+        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm) {
       dynamic_channel_manager_ = l2cap_layer_->GetDynamicChannelManager();
       DynamicChannelConfigurationOption configuration_option = {};
-      configuration_option.channel_mode = (DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode)mode;
+      if (mode == RetransmissionFlowControlMode::BASIC) {
+        configuration_option.channel_mode =
+            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC;
+      } else if (mode == RetransmissionFlowControlMode::ERTM) {
+        configuration_option.channel_mode =
+            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION;
+      }
       dynamic_channel_manager_->RegisterService(
           psm, configuration_option, {},
           common::BindOnce(&L2capDynamicChannelHelper::on_l2cap_service_registration_complete,
@@ -131,27 +138,13 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     }
 
     void Connect(hci::Address address) {
-      DynamicChannelConfigurationOption configuration_option = l2cap::classic::DynamicChannelConfigurationOption();
-      configuration_option.channel_mode = (DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode)mode_;
-
+      // TODO: specify channel mode
       dynamic_channel_manager_->ConnectChannel(
-          address, configuration_option, psm_,
-          common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
+          address, {}, psm_, common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
           common::Bind(&L2capDynamicChannelHelper::on_connect_fail, common::Unretained(this)), handler_);
-      std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-      if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(2), [this] { return channel_ != nullptr; })) {
-        LOG_WARN("Channel is not open for psm %d", psm_);
-      }
     }
 
-    void Disconnect() {
-      if (channel_ == nullptr) {
-        std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-        if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(2), [this] { return channel_ != nullptr; })) {
-          LOG_WARN("Channel is not open for psm %d", psm_);
-          return;
-        }
-      }
+    void disconnect() {
       channel_->Close();
     }
 
@@ -236,7 +229,6 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     std::unique_ptr<DynamicChannelService> service_;
     std::unique_ptr<DynamicChannel> channel_ = nullptr;
     Psm psm_;
-    RetransmissionFlowControlMode mode_ = RetransmissionFlowControlMode::BASIC;
     std::condition_variable channel_open_cv_;
     std::mutex channel_open_cv_mutex_;
   };
