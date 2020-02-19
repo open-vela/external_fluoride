@@ -37,12 +37,12 @@ class ISecurityManagerListener;
 
 namespace internal {
 
-class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, public UICallbacks {
+class SecurityManagerImpl : public channel::ISecurityManagerChannelListener {
  public:
   explicit SecurityManagerImpl(os::Handler* security_handler, l2cap::le::L2capLeModule* l2cap_le_module,
                                l2cap::classic::L2capClassicModule* l2cap_classic_module,
                                channel::SecurityManagerChannel* security_manager_channel, hci::HciLayer* hci_layer);
-  ~SecurityManagerImpl() = default;
+  virtual ~SecurityManagerImpl() = default;
 
   // All APIs must be invoked in SM layer handler
 
@@ -119,11 +119,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
    * @param status status from SimplePairingComplete or other error code
    */
   void OnPairingHandlerComplete(hci::Address address, PairingResultOrFailure status);
-
-  // UICallbacks implementation
-  void OnPairingPromptAccepted(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
-  void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
-  void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
 
  protected:
   std::vector<std::pair<ISecurityManagerListener*, os::Handler*>> listeners_;
