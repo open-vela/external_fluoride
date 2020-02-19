@@ -13,49 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <memory>
+#include <string>
 
-#include "neighbor/connectability.h"
-#include "neighbor/discoverability.h"
-#include "neighbor/name.h"
-#include "neighbor/page.h"
-#include "security/security_module.h"
-#include "shim/advertising.h"
-#include "shim/dumpsys.h"
-#include "shim/hci_layer.h"
-#include "shim/inquiry.h"
-#include "shim/l2cap.h"
-#include "stack_manager.h"
-#include "storage/legacy.h"
+#include "module.h"
 
-/**
- * The shim layer implementation on the Gd stack side.
- */
 namespace bluetooth {
 namespace shim {
 
-class Stack {
+class Advertising : public bluetooth::Module {
  public:
-  Stack();
-  ~Stack() = default;
+  Advertising() = default;
+  ~Advertising() = default;
 
-  void Start();
-  void Stop();
+  void StartAdvertising();
+  void StopAdvertising();
 
-  StackManager* GetStackManager();
+  size_t GetNumberOfAdvertisingInstances() const;
+
+  static const ModuleFactory Factory;
+
+ protected:
+  void ListDependencies(ModuleList* list) override;  // Module
+  void Start() override;                             // Module
+  void Stop() override;                              // Module
+  std::string ToString() const override;             // Module
 
  private:
   struct impl;
   std::unique_ptr<impl> pimpl_;
-
-  Stack(const Stack&) = delete;
-  void operator=(const Stack&) = delete;
+  DISALLOW_COPY_AND_ASSIGN(Advertising);
 };
-
-Stack* GetGabeldorscheStack();
 
 }  // namespace shim
 }  // namespace bluetooth
