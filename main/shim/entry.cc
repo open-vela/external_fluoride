@@ -18,6 +18,7 @@
 #include "osi/include/future.h"
 
 #include "hci/controller.h"
+#include "hci/le_scanning_manager.h"
 #include "neighbor/connectability.h"
 #include "neighbor/discoverability.h"
 #include "neighbor/page.h"
@@ -29,8 +30,6 @@
 #include "shim/inquiry.h"
 #include "shim/l2cap.h"
 #include "shim/name.h"
-#include "shim/name_db.h"
-#include "shim/scanning.h"
 #include "shim/stack.h"
 #include "stack_manager.h"
 #include "storage/legacy.h"
@@ -107,22 +106,16 @@ bluetooth::shim::Name* bluetooth::shim::GetName() {
       ->GetInstance<bluetooth::shim::Name>();
 }
 
-bluetooth::shim::NameDb* bluetooth::shim::GetNameDb() {
-  return GetGabeldorscheStack()
-      ->GetStackManager()
-      ->GetInstance<bluetooth::shim::NameDb>();
-}
-
 bluetooth::neighbor::PageModule* bluetooth::shim::GetPage() {
   return GetGabeldorscheStack()
       ->GetStackManager()
       ->GetInstance<bluetooth::neighbor::PageModule>();
 }
 
-bluetooth::shim::Scanning* bluetooth::shim::GetScanning() {
+bluetooth::hci::LeScanningManager* bluetooth::shim::GetScanning() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::shim::Scanning>();
+      ->GetInstance<bluetooth::hci::LeScanningManager>();
 }
 
 bluetooth::security::SecurityModule* bluetooth::shim::GetSecurityModule() {
