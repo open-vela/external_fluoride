@@ -39,7 +39,6 @@ class Handler;
 namespace neighbor {
 class ConnectabilityModule;
 class DiscoverabilityModule;
-class NameModule;
 class PageModule;
 }
 namespace hci {
@@ -69,7 +68,8 @@ Dumpsys* GetDumpsys();
 Inquiry* GetInquiry();
 HciLayer* GetHciLayer();
 L2cap* GetL2cap();
-neighbor::NameModule* GetName();
+Name* GetName();
+NameDb* GetNameDb();
 neighbor::PageModule* GetPage();
 hci::LeScanningManager* GetScanning();
 bluetooth::security::SecurityModule* GetSecurityModule();
