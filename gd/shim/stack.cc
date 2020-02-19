@@ -20,6 +20,7 @@
 #include "att/att_module.h"
 #include "hal/hci_hal.h"
 #include "hci/acl_manager.h"
+#include "hci/classic_security_manager.h"
 #include "hci/le_advertising_manager.h"
 #include "hci/le_scanning_manager.h"
 #include "l2cap/classic/l2cap_classic_module.h"
@@ -40,6 +41,7 @@
 #include "shim/inquiry.h"
 #include "shim/l2cap.h"
 #include "shim/name.h"
+#include "shim/name_db.h"
 #include "stack_manager.h"
 #include "storage/legacy.h"
 

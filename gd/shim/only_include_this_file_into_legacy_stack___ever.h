@@ -35,6 +35,7 @@ class Inquiry;
 class HciLayer;
 class L2cap;
 class Name;
+class NameDb;
 class Scanning;
 class SecurityModule;
 }  // namespace shim

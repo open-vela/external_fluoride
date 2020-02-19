@@ -69,6 +69,7 @@ Inquiry* GetInquiry();
 HciLayer* GetHciLayer();
 L2cap* GetL2cap();
 Name* GetName();
+NameDb* GetNameDb();
 neighbor::PageModule* GetPage();
 hci::LeScanningManager* GetScanning();
 bluetooth::security::SecurityModule* GetSecurityModule();
