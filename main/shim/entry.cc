@@ -18,17 +18,17 @@
 #include "osi/include/future.h"
 
 #include "hci/controller.h"
-#include "hci/le_advertising_manager.h"
 #include "hci/le_scanning_manager.h"
 #include "neighbor/connectability.h"
 #include "neighbor/discoverability.h"
-#include "neighbor/inquiry.h"
 #include "neighbor/name.h"
 #include "neighbor/page.h"
 #include "os/handler.h"
 #include "security/security_module.h"
+#include "shim/advertising.h"
 #include "shim/dumpsys.h"
 #include "shim/hci_layer.h"
+#include "shim/inquiry.h"
 #include "shim/l2cap.h"
 #include "shim/stack.h"
 #include "stack_manager.h"
@@ -50,10 +50,10 @@ bluetooth::os::Handler* bluetooth::shim::GetGdShimHandler() {
   return bluetooth::shim::GetDumpsys()->GetGdShimHandler();
 }
 
-bluetooth::hci::LeAdvertisingManager* bluetooth::shim::GetAdvertising() {
+bluetooth::shim::Advertising* bluetooth::shim::GetAdvertising() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::hci::LeAdvertisingManager>();
+      ->GetInstance<bluetooth::shim::Advertising>();
 }
 
 bluetooth::hci::Controller* bluetooth::shim::GetController() {
@@ -82,10 +82,10 @@ bluetooth::shim::Dumpsys* bluetooth::shim::GetDumpsys() {
       ->GetInstance<bluetooth::shim::Dumpsys>();
 }
 
-bluetooth::neighbor::InquiryModule* bluetooth::shim::GetInquiry() {
+bluetooth::shim::Inquiry* bluetooth::shim::GetInquiry() {
   return GetGabeldorscheStack()
       ->GetStackManager()
-      ->GetInstance<bluetooth::neighbor::InquiryModule>();
+      ->GetInstance<bluetooth::shim::Inquiry>();
 }
 
 bluetooth::shim::HciLayer* bluetooth::shim::GetHciLayer() {

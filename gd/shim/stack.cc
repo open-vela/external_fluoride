@@ -34,8 +34,10 @@
 #include "os/log.h"
 #include "os/thread.h"
 #include "security/security_module.h"
+#include "shim/advertising.h"
 #include "shim/dumpsys.h"
 #include "shim/hci_layer.h"
+#include "shim/inquiry.h"
 #include "shim/l2cap.h"
 #include "stack_manager.h"
 #include "storage/legacy.h"
@@ -68,7 +70,9 @@ struct bluetooth::shim::Stack::impl {
     modules.add<::bluetooth::shim::HciLayer>();
     modules.add<::bluetooth::security::SecurityModule>();
     modules.add<::bluetooth::storage::LegacyModule>();
+    modules.add<::bluetooth::shim::Advertising>();
     modules.add<::bluetooth::shim::Dumpsys>();
+    modules.add<::bluetooth::shim::Inquiry>();
     modules.add<::bluetooth::shim::L2cap>();
 
     stack_thread_ = new Thread("gd_stack_thread", Thread::Priority::NORMAL);
