@@ -35,89 +35,29 @@ class PyL2capChannel(object):
 
     def send(self, payload):
         self._device.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(
-                psm=self._psm, payload=payload))
-
-    def close_channel(self):
-        self._device.l2cap.CloseChannel(
-            l2cap_facade_pb2.CloseChannelRequest(psm=self._psm))
-
-
-class _ClassicConnectionResponseFutureWrapper(object):
-    """
-    The future object returned when we send a connection request from DUT. Can be used to get connection status and
-    create the corresponding PyL2capDynamicChannel object later
-    """
-
-    def __init__(self, grpc_response_future, device, psm):
-        self._grpc_response_future = grpc_response_future
-        self._device = device
-        self._psm = psm
-
-    def get_channel(self):
-        return PyL2capChannel(self._device, self._psm)
+            l2cap_facade_pb2.DynamicChannelPacket(psm=0x33, payload=payload))
 
 
 class PyL2cap(Closable):
 
-    def __init__(self, device, cert_address):
+    def __init__(self, device):
         self._device = device
-        self._cert_address = cert_address
 
     def close(self):
         pass
 
-    def register_dynamic_channel(
-            self,
-            psm=0x33,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC):
+    def open_channel(self,
+                     psm=0x33,
+                     mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC):
+
+        # todo, I don't understand what SetDynamicChannel means?
         self._device.l2cap.SetDynamicChannel(
             l2cap_facade_pb2.SetEnableDynamicChannelRequest(
                 psm=psm, retransmission_mode=mode))
         return PyL2capChannel(self._device, psm)
 
-    def connect_dynamic_channel_to_cert(
-            self,
-            psm=0x33,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC):
-        """
-        Send open Dynamic channel request to CERT.
-        Get a future for connection result, to be used after CERT accepts request
-        """
-        self.register_dynamic_channel(psm, mode)
-        response_future = self._device.l2cap.OpenChannel.future(
-            l2cap_facade_pb2.OpenChannelRequest(
-                psm=psm, remote=self._cert_address, mode=mode))
 
-        return _ClassicConnectionResponseFutureWrapper(response_future,
-                                                       self._device, psm)
-
-
-class PyLeL2capFixedChannel(IEventStream):
-
-    def __init__(self, device, cid, l2cap_stream):
-        self._device = device
-        self._cid = cid
-        self._le_l2cap_stream = l2cap_stream
-        self._our_le_l2cap_view = FilteringEventStream(
-            self._le_l2cap_stream,
-            L2capMatchers.PacketPayloadWithMatchingCid(self._cid))
-
-    def get_event_queue(self):
-        return self._our_le_l2cap_view.get_event_queue()
-
-    def send(self, payload):
-        self._device.l2cap_le.SendFixedChannelPacket(
-            l2cap_le_facade_pb2.FixedChannelPacket(
-                cid=self._cid, payload=payload))
-
-    def close_channel(self):
-        self._device.l2cap_le.SetFixedChannel(
-            l2cap_le_facade_pb2.SetEnableFixedChannelRequest(
-                cid=self._cid, enable=False))
-
-
-class PyLeL2capDynamicChannel(IEventStream):
+class PyLeL2capChannel(IEventStream):
 
     def __init__(self, device, psm, l2cap_stream):
         self._device = device
@@ -132,22 +72,13 @@ class PyLeL2capDynamicChannel(IEventStream):
 
     def send(self, payload):
         self._device.l2cap_le.SendDynamicChannelPacket(
-            l2cap_le_facade_pb2.DynamicChannelPacket(
-                psm=self._psm, payload=payload))
-
-    def close_channel(self):
-        self._device.l2cap_le.CloseDynamicChannel(
-            l2cap_le_facade_pb2.CloseDynamicChannelRequest(
-                remote=common.BluetoothAddressWithType(
-                    address=common.BluetoothAddress(
-                        address=b"22:33:ff:ff:11:00")),
-                psm=self._psm))
+            l2cap_le_facade_pb2.DynamicChannelPacket(psm=0x33, payload=payload))
 
 
-class _CreditBasedConnectionResponseFutureWrapper(object):
+class CreditBasedConnectionResponseFutureWrapper(object):
     """
     The future object returned when we send a connection request from DUT. Can be used to get connection status and
-    create the corresponding PyLeL2capDynamicChannel object later
+    create the corresponding PyLeL2capChannel object later
     """
 
     def __init__(self, grpc_response_future, device, psm, le_l2cap_stream):
@@ -163,8 +94,7 @@ class _CreditBasedConnectionResponseFutureWrapper(object):
     def get_channel(self):
         assertThat(self.get_status()).isEqualTo(
             l2cap_packets.LeCreditBasedConnectionResponseResult.SUCCESS)
-        return PyLeL2capDynamicChannel(self._device, self._psm,
-                                       self._le_l2cap_stream)
+        return PyLeL2capChannel(self._device, self._psm, self._le_l2cap_stream)
 
 
 class PyLeL2cap(Closable):
@@ -177,19 +107,11 @@ class PyLeL2cap(Closable):
     def close(self):
         safeClose(self._le_l2cap_stream)
 
-    def enable_fixed_channel(self, cid=4):
-        self._device.l2cap_le.SetFixedChannel(
-            l2cap_le_facade_pb2.SetEnableFixedChannelRequest(
-                cid=cid, enable=True))
-
-    def get_fixed_channel(self, cid=4):
-        return PyLeL2capFixedChannel(self._device, cid, self._le_l2cap_stream)
-
     def register_coc(self, psm=0x33):
         self._device.l2cap_le.SetDynamicChannel(
             l2cap_le_facade_pb2.SetEnableDynamicChannelRequest(
                 psm=psm, enable=True))
-        return PyLeL2capDynamicChannel(self._device, psm, self._le_l2cap_stream)
+        return PyLeL2capChannel(self._device, psm, self._le_l2cap_stream)
 
     def connect_coc_to_cert(self, psm=0x33):
         """
@@ -204,21 +126,5 @@ class PyLeL2cap(Closable):
                     address=common.BluetoothAddress(
                         address=b"22:33:ff:ff:11:00"))))
 
-        return _CreditBasedConnectionResponseFutureWrapper(
+        return CreditBasedConnectionResponseFutureWrapper(
             response_future, self._device, psm, self._le_l2cap_stream)
-
-    def update_connection_parameter(self,
-                                    conn_interval_min=0x10,
-                                    conn_interval_max=0x10,
-                                    conn_latency=0x0a,
-                                    supervision_timeout=0x64,
-                                    min_ce_length=12,
-                                    max_ce_length=12):
-        self._device.l2cap_le.SendConnectionParameterUpdate(
-            l2cap_le_facade_pb2.ConnectionParameter(
-                conn_interval_min=conn_interval_min,
-                conn_interval_max=conn_interval_max,
-                conn_latency=conn_latency,
-                supervision_timeout=supervision_timeout,
-                min_ce_length=min_ce_length,
-                max_ce_length=max_ce_length))

@@ -30,7 +30,6 @@
 #include "l2cap/le/internal/fixed_channel_impl.h"
 #include "l2cap/le/internal/fixed_channel_service_manager_impl.h"
 #include "l2cap/le/internal/signalling_manager.h"
-#include "l2cap/le/link_options.h"
 #include "os/alarm.h"
 
 namespace bluetooth {
@@ -40,7 +39,7 @@ namespace internal {
 
 class Link : public l2cap::internal::ILink {
  public:
-  Link(os::Handler* l2cap_handler, std::unique_ptr<hci::LeAclConnection> acl_connection,
+  Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_connection,
        l2cap::internal::ParameterProvider* parameter_provider,
        DynamicChannelServiceManagerImpl* dynamic_service_manager,
        FixedChannelServiceManagerImpl* fixed_service_manager);
@@ -48,7 +47,7 @@ class Link : public l2cap::internal::ILink {
   ~Link() override = default;
 
   inline hci::AddressWithType GetDevice() override {
-    return acl_connection_->GetAddressWithType();
+    return {acl_connection_->GetAddress(), acl_connection_->GetAddressType()};
   }
 
   struct PendingDynamicChannelConnection {
@@ -62,7 +61,7 @@ class Link : public l2cap::internal::ILink {
     return acl_connection_->GetRole();
   }
 
-  inline virtual hci::LeAclConnection* GetAclConnection() {
+  inline virtual hci::AclConnection* GetAclConnection() {
     return acl_connection_.get();
   }
 
@@ -122,22 +121,17 @@ class Link : public l2cap::internal::ILink {
 
   void SendLeCredit(Cid local_cid, uint16_t credit) override;
 
-  LinkOptions* GetLinkOptions() {
-    return &link_options_;
-  }
-
  private:
   os::Handler* l2cap_handler_;
   l2cap::internal::FixedChannelAllocator<FixedChannelImpl, Link> fixed_channel_allocator_{this, l2cap_handler_};
   l2cap::internal::DynamicChannelAllocator dynamic_channel_allocator_{this, l2cap_handler_};
-  std::unique_ptr<hci::LeAclConnection> acl_connection_;
+  std::unique_ptr<hci::AclConnection> acl_connection_;
   l2cap::internal::DataPipelineManager data_pipeline_manager_;
   l2cap::internal::ParameterProvider* parameter_provider_;
   DynamicChannelServiceManagerImpl* dynamic_service_manager_;
   LeSignallingManager signalling_manager_;
   std::unordered_map<Cid, PendingDynamicChannelConnection> local_cid_to_pending_dynamic_channel_connection_map_;
   os::Alarm link_idle_disconnect_alarm_{l2cap_handler_};
-  LinkOptions link_options_{acl_connection_.get(), this, l2cap_handler_};
   DISALLOW_COPY_AND_ASSIGN(Link);
 
   // Received connection update complete from ACL manager. SignalId is bound to a valid number when we need to send a

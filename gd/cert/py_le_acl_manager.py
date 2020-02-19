@@ -18,7 +18,8 @@ from google.protobuf import empty_pb2 as empty_proto
 
 from cert.event_stream import EventStream
 from cert.event_stream import IEventStream
-from cert.captures import HciCaptures
+from cert.captures import ConnectionCompleteCapture
+from cert.captures import LeConnectionCompleteCapture
 from cert.closable import Closable
 from cert.closable import safeClose
 from bluetooth_packets_python3 import hci_packets
@@ -59,7 +60,7 @@ class PyLeAclManagerAclConnection(IEventStream, Closable):
         safeClose(self.connection_event_stream)
 
     def wait_for_connection_complete(self):
-        connection_complete = HciCaptures.LeConnectionCompleteCapture()
+        connection_complete = LeConnectionCompleteCapture()
         assertThat(self.connection_event_stream).emits(connection_complete)
         self.handle = connection_complete.get().GetConnectionHandle()
 
@@ -103,7 +104,7 @@ class PyLeAclManager(Closable):
                                            remote_addr, None)
 
     def accept_connection(self):
-        connection_complete = HciCaptures.LeConnectionCompleteCapture()
+        connection_complete = ConnectionCompleteCapture()
         assertThat(self.incoming_connection_stream).emits(connection_complete)
         handle = connection_complete.get().GetConnectionHandle()
         return PyLeAclManagerAclConnection(self.device, self.le_acl_stream,

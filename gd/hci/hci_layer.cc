@@ -234,6 +234,12 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
 
   void Stop() {
     hal_->unregisterIncomingPacketCallback();
+    UnregisterEventHandler(EventCode::COMMAND_COMPLETE);
+    UnregisterEventHandler(EventCode::COMMAND_STATUS);
+    UnregisterEventHandler(EventCode::LE_META_EVENT);
+    UnregisterEventHandler(EventCode::PAGE_SCAN_REPETITION_MODE_CHANGE);
+    UnregisterEventHandler(EventCode::MAX_SLOTS_CHANGE);
+    UnregisterEventHandler(EventCode::VENDOR_SPECIFIC);
 
     acl_queue_.GetDownEnd()->UnregisterDequeue();
     incoming_acl_packet_buffer_.Clear();
@@ -310,13 +316,8 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
     SubeventCode subevent_code = meta_event_view.GetSubeventCode();
     ASSERT_LOG(subevent_handlers_.find(subevent_code) != subevent_handlers_.end(),
                "Unhandled le event of type 0x%02hhx (%s)", subevent_code, SubeventCodeText(subevent_code).c_str());
-    auto& registered = subevent_handlers_[subevent_code];
-    if (registered.handler != nullptr) {
-      registered.handler->Post(BindOnce(registered.subevent_handler, meta_event_view));
-    } else {
-      LOG_DEBUG("Dropping unregistered le event of type 0x%02hhx (%s)", subevent_code,
-                SubeventCodeText(subevent_code).c_str());
-    }
+    auto& registered_handler = subevent_handlers_[subevent_code].subevent_handler;
+    subevent_handlers_[subevent_code].handler->Post(BindOnce(registered_handler, meta_event_view));
   }
 
   // Invoked from HAL thread
@@ -330,14 +331,10 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
 
   void hci_event_received_handler(EventPacketView event) {
     EventCode event_code = event.GetEventCode();
-    if (event_handlers_.find(event_code) == event_handlers_.end()) {
-      LOG_DEBUG("Dropping unregistered event of type 0x%02hhx (%s)", event_code, EventCodeText(event_code).c_str());
-      return;
-    }
-    auto& registered = event_handlers_[event_code];
-    if (registered.handler != nullptr) {
-      registered.handler->Post(BindOnce(registered.event_handler, event));
-    }
+    ASSERT_LOG(event_handlers_.find(event_code) != event_handlers_.end(), "Unhandled event of type 0x%02hhx (%s)",
+               event_code, EventCodeText(event_code).c_str());
+    auto& registered_handler = event_handlers_[event_code].event_handler;
+    event_handlers_[event_code].handler->Post(BindOnce(registered_handler, std::move(event)));
   }
 
   // From HAL thread
@@ -424,7 +421,7 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
   }
 
   void handle_unregister_event_handler(EventCode event_code) {
-    event_handlers_[event_code] = EventHandler();
+    event_handlers_.erase(event_code);
   }
 
   void RegisterLeEventHandler(SubeventCode subevent_code, Callback<void(LeMetaEventView)> event_handler,
@@ -447,7 +444,7 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
   }
 
   void handle_unregister_le_event_handler(SubeventCode subevent_code) {
-    subevent_handlers_[subevent_code] = SubeventHandler();
+    subevent_handlers_.erase(subevent_code);
   }
 
   // The HAL
@@ -570,10 +567,6 @@ const ModuleFactory HciLayer::Factory = ModuleFactory([]() { return new HciLayer
 
 void HciLayer::ListDependencies(ModuleList* list) {
   list->add<hal::HciHal>();
-}
-
-os::Handler* HciLayer::GetHciHandler() {
-  return GetHandler();
 }
 
 void HciLayer::Start() {

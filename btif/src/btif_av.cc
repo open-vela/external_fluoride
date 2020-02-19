@@ -1046,12 +1046,18 @@ BtifAvPeer* BtifAvSource::FindOrCreatePeer(const RawAddress& peer_address,
         __PRETTY_FUNCTION__, peer_address.ToString().c_str());
     return nullptr;
   }
+
   // Get the BTA Handle (if known)
   if (bta_handle == kBtaHandleUnknown) {
     auto it = peer_id2bta_handle_.find(peer_id);
-    if (it != peer_id2bta_handle_.end()) {
-      bta_handle = it->second;
+    if (it == peer_id2bta_handle_.end() || it->second == kBtaHandleUnknown) {
+      BTIF_TRACE_ERROR(
+          "%s: Cannot create peer for peer_address=%s : "
+          "cannot convert Peer ID=%d to unique BTA Handle",
+          __PRETTY_FUNCTION__, peer_address.ToString().c_str(), peer_id);
+      return nullptr;
     }
+    bta_handle = it->second;
   }
 
   LOG_INFO("%s: Create peer: peer_address=%s bta_handle=0x%x peer_id=%d",
@@ -1139,7 +1145,18 @@ void BtifAvSource::BtaHandleRegistered(uint8_t peer_id,
 
   // Set the BTA Handle for the Peer (if exists)
   BtifAvPeer* peer = FindPeerByPeerId(peer_id);
-  if (peer != nullptr) {
+  if (peer != nullptr && peer->BtaHandle() != bta_handle) {
+    if (peer->BtaHandle() == kBtaHandleUnknown) {
+      BTIF_TRACE_EVENT(
+          "%s: Assign peer: peer_address=%s bta_handle=0x%x peer_id=%d",
+          __PRETTY_FUNCTION__, peer->PeerAddress().ToString().c_str(),
+          bta_handle, peer_id);
+    } else {
+      BTIF_TRACE_WARNING(
+          "%s: Correct peer: peer_address=%s bta_handle=0x%x->0x%x peer_id=%d",
+          __PRETTY_FUNCTION__, peer->PeerAddress().ToString().c_str(),
+          peer->BtaHandle(), bta_handle, peer_id);
+    }
     peer->SetBtaHandle(bta_handle);
   }
 }
@@ -1236,9 +1253,14 @@ BtifAvPeer* BtifAvSink::FindOrCreatePeer(const RawAddress& peer_address,
   // Get the BTA Handle (if known)
   if (bta_handle == kBtaHandleUnknown) {
     auto it = peer_id2bta_handle_.find(peer_id);
-    if (it != peer_id2bta_handle_.end()) {
-      bta_handle = it->second;
+    if (it == peer_id2bta_handle_.end() || it->second == kBtaHandleUnknown) {
+      BTIF_TRACE_ERROR(
+          "%s: Cannot create peer for peer_address=%s : "
+          "cannot convert Peer ID=%d to unique BTA Handle",
+          __PRETTY_FUNCTION__, peer_address.ToString().c_str(), peer_id);
+      return nullptr;
     }
+    bta_handle = it->second;
   }
 
   LOG_INFO("%s: Create peer: peer_address=%s bta_handle=0x%x peer_id=%d",
@@ -1328,7 +1350,18 @@ void BtifAvSink::BtaHandleRegistered(uint8_t peer_id, tBTA_AV_HNDL bta_handle) {
 
   // Set the BTA Handle for the Peer (if exists)
   BtifAvPeer* peer = FindPeerByPeerId(peer_id);
-  if (peer != nullptr) {
+  if (peer != nullptr && peer->BtaHandle() != bta_handle) {
+    if (peer->BtaHandle() == kBtaHandleUnknown) {
+      BTIF_TRACE_EVENT(
+          "%s: Assign peer: peer_address=%s bta_handle=0x%x peer_id=%d",
+          __PRETTY_FUNCTION__, peer->PeerAddress().ToString().c_str(),
+          bta_handle, peer_id);
+    } else {
+      BTIF_TRACE_WARNING(
+          "%s: Correct peer: peer_address=%s bta_handle=0x%x->0x%x peer_id=%d",
+          __PRETTY_FUNCTION__, peer->PeerAddress().ToString().c_str(),
+          peer->BtaHandle(), bta_handle, peer_id);
+    }
     peer->SetBtaHandle(bta_handle);
   }
 }
@@ -2693,25 +2726,20 @@ static bt_status_t connect_int(RawAddress* peer_address, uint16_t uuid) {
   BTIF_TRACE_EVENT("%s: peer_address=%s uuid=0x%x", __func__,
                    peer_address->ToString().c_str(), uuid);
 
-  auto connection_task = [](RawAddress* peer_address, uint16_t uuid) {
-    BtifAvPeer* peer = nullptr;
-    if (uuid == UUID_SERVCLASS_AUDIO_SOURCE) {
-      peer = btif_av_source.FindOrCreatePeer(*peer_address, kBtaHandleUnknown);
-    } else if (uuid == UUID_SERVCLASS_AUDIO_SINK) {
-      peer = btif_av_sink.FindOrCreatePeer(*peer_address, kBtaHandleUnknown);
-    }
+  BtifAvPeer* peer = nullptr;
+  if (uuid == UUID_SERVCLASS_AUDIO_SOURCE) {
+    peer = btif_av_source.FindOrCreatePeer(*peer_address, kBtaHandleUnknown);
     if (peer == nullptr) {
-      btif_queue_advance();
-      return;
+      return BT_STATUS_FAIL;
     }
-    peer->StateMachine().ProcessEvent(BTIF_AV_CONNECT_REQ_EVT, nullptr);
-  };
-  bt_status_t status = do_in_main_thread(
-      FROM_HERE, base::BindOnce(connection_task, peer_address, uuid));
-  if (status != BT_STATUS_SUCCESS) {
-    LOG(ERROR) << __func__ << ": can't post connection task to main_thread";
+  } else if (uuid == UUID_SERVCLASS_AUDIO_SINK) {
+    peer = btif_av_sink.FindOrCreatePeer(*peer_address, kBtaHandleUnknown);
+    if (peer == nullptr) {
+      return BT_STATUS_FAIL;
+    }
   }
-  return status;
+  peer->StateMachine().ProcessEvent(BTIF_AV_CONNECT_REQ_EVT, nullptr);
+  return BT_STATUS_SUCCESS;
 }
 
 static void set_source_silence_peer_int(const RawAddress& peer_address,
