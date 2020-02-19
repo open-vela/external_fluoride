@@ -39,12 +39,10 @@ class Handler;
 namespace neighbor {
 class ConnectabilityModule;
 class DiscoverabilityModule;
-class InquiryModule;
 class NameModule;
 class PageModule;
 }
 namespace hci {
-class LeAdvertisingManager;
 class Controller;
 class LeScanningManager;
 }
@@ -63,12 +61,12 @@ future_t* StopGabeldorscheStack();
 /* This returns a handler that might be used in shim to receive callbacks from
  * within the stack. */
 os::Handler* GetGdShimHandler();
-hci::LeAdvertisingManager* GetAdvertising();
+Advertising* GetAdvertising();
 bluetooth::hci::Controller* GetController();
 neighbor::DiscoverabilityModule* GetDiscoverability();
 neighbor::ConnectabilityModule* GetConnectability();
 Dumpsys* GetDumpsys();
-neighbor::InquiryModule* GetInquiry();
+Inquiry* GetInquiry();
 HciLayer* GetHciLayer();
 L2cap* GetL2cap();
 neighbor::NameModule* GetName();
