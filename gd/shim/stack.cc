@@ -20,7 +20,6 @@
 #include "att/att_module.h"
 #include "hal/hci_hal.h"
 #include "hci/acl_manager.h"
-#include "hci/classic_security_manager.h"
 #include "hci/le_advertising_manager.h"
 #include "hci/le_scanning_manager.h"
 #include "l2cap/classic/l2cap_classic_module.h"
@@ -40,8 +39,6 @@
 #include "shim/hci_layer.h"
 #include "shim/inquiry.h"
 #include "shim/l2cap.h"
-#include "shim/name.h"
-#include "shim/name_db.h"
 #include "stack_manager.h"
 #include "storage/legacy.h"
 
@@ -76,7 +73,6 @@ struct bluetooth::shim::Stack::impl {
     modules.add<::bluetooth::shim::Advertising>();
     modules.add<::bluetooth::shim::Dumpsys>();
     modules.add<::bluetooth::shim::Inquiry>();
-    modules.add<::bluetooth::shim::Name>();
     modules.add<::bluetooth::shim::L2cap>();
 
     stack_thread_ = new Thread("gd_stack_thread", Thread::Priority::NORMAL);
