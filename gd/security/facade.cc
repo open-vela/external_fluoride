@@ -68,10 +68,12 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
                                 ::google::protobuf::Empty* response) override {
     switch (request->message_type()) {
       case UiCallbackType::PASSKEY:
-        // TODO: security_module_->GetSecurityManager()->OnPasskeyEntry();
+        security_handler_->Post(
+            common::BindOnce(std::move(user_passkey_callbacks_[request->unique_id()]), request->numeric_value()));
         break;
       case UiCallbackType::YES_NO:
-        // TODO: security_module_->GetSecurityManager()->OnConfirmYesNo(request->boolean());
+        security_handler_->Post(
+            common::BindOnce(std::move(user_yes_no_callbacks_[request->unique_id()]), request->boolean()));
         break;
       default:
         LOG_ERROR("Unknown UiCallbackType %d", static_cast<int>(request->message_type()));
