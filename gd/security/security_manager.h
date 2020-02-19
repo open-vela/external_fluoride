@@ -32,7 +32,7 @@ namespace security {
  * Manages the security attributes, pairing, bonding of devices, and the
  * encryption/decryption of communications.
  */
-class SecurityManager : public UICallbacks {
+class SecurityManager {
  public:
   friend class SecurityModule;
 
@@ -87,10 +87,6 @@ class SecurityManager : public UICallbacks {
    * @param listener ISecurityManagerListener instance to unregister
    */
   void UnregisterCallbackListener(ISecurityManagerListener* listener);
-
-  void OnPairingPromptAccepted(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
-  void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
-  void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
 
  protected:
   SecurityManager(os::Handler* security_handler, internal::SecurityManagerImpl* security_manager_impl)
