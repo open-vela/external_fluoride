@@ -21,7 +21,6 @@
 #include "base/logging.h"  // LOG() stdout and android log
 #include "include/hardware/bluetooth.h"
 #include "osi/include/log.h"  // android log only
-#include "test/headless/get_options.h"
 #include "test/headless/headless.h"
 
 extern bt_interface_t bluetoothInterface;
@@ -138,7 +137,7 @@ bt_os_callouts_t bt_os_callouts{
 };
 }  // namespace
 
-void HeadlessStack::SetUp() {
+void Headless::SetUp() {
   LOG(INFO) << __func__ << " Entry";
 
   int status = bluetoothInterface.init(&bt_callbacks, false, false);
@@ -152,14 +151,14 @@ void HeadlessStack::SetUp() {
       : LOG(ERROR) << "Failed to set up Bluetooth OS callouts";
 
   bluetoothInterface.enable();
-  LOG_INFO(LOG_TAG, "%s HeadlessStack stack has enabled", __func__);
+  LOG_INFO(LOG_TAG, "%s Headless stack has enabled", __func__);
 
   std::unique_lock<std::mutex> lck(adapter_state_mutex_);
   while (bt_state_ != BT_STATE_ON) adapter_state_cv_.wait(lck);
-  LOG_INFO(LOG_TAG, "%s HeadlessStack stack is operational", __func__);
+  LOG_INFO(LOG_TAG, "%s Headless stack is operational", __func__);
 }
 
-void HeadlessStack::TearDown() {
+void Headless::TearDown() {
   LOG_INFO(LOG_TAG, "Stack has disabled");
   int status = bluetoothInterface.disable();
 
@@ -170,5 +169,5 @@ void HeadlessStack::TearDown() {
 
   std::unique_lock<std::mutex> lck(adapter_state_mutex_);
   while (bt_state_ != BT_STATE_OFF) adapter_state_cv_.wait(lck);
-  LOG_INFO(LOG_TAG, "%s HeadlessStack stack has exited", __func__);
+  LOG_INFO(LOG_TAG, "%s Headless stack has exited", __func__);
 }
