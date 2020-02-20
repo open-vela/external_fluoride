@@ -81,14 +81,18 @@ void StructDef::GenParse(std::ostream& s) const {
 
   if (!fields_.HasBody()) {
     s << "size_t end_index = struct_begin_it.NumBytesRemaining();";
-    s << "if (end_index < " << GetSize().bytes() << ")";
+    if (parent_ != nullptr) {
+      s << "if (end_index < " << GetSize().bytes() << " - to_fill->" << parent_->name_ << "::size())";
+    } else {
+      s << "if (end_index < " << GetSize().bytes() << ")";
+    }
     s << "{ return struct_begin_it.Subrange(0,0);}";
   }
 
   Size total_bits{0};
   for (const auto& field : fields_) {
     if (field->GetFieldType() != ReservedField::kFieldType && field->GetFieldType() != BodyField::kFieldType &&
-        field->GetFieldType() != FixedScalarField::kFieldType &&
+        field->GetFieldType() != FixedScalarField::kFieldType && field->GetFieldType() != SizeField::kFieldType &&
         field->GetFieldType() != ChecksumStartField::kFieldType && field->GetFieldType() != ChecksumField::kFieldType &&
         field->GetFieldType() != CountField::kFieldType) {
       total_bits += field->GetSize().bits();
@@ -115,15 +119,22 @@ void StructDef::GenParse(std::ostream& s) const {
       s << "}";
     }
     if (field->GetFieldType() == CountField::kFieldType || field->GetFieldType() == SizeField::kFieldType) {
+      s << field->GetDataType() << " " << field->GetName() << "_extracted;";
       s << "{";
+      s << "if (to_bound.NumBytesRemaining() < " << field->GetSize().bytes() << ")";
+      if (!fields_.HasBody()) {
+        s << "{ return to_bound.Subrange(to_bound.NumBytesRemaining(),0);}";
+      } else {
+        s << "{ return {};}";
+      }
       int num_leading_bits =
           field->GenBounds(s, GetStructOffsetForField(field->GetName()), Size(), field->GetStructSize());
-      s << "auto " << field->GetName() << "_ptr = &to_fill->" << field->GetName() << "_extracted_;";
+      s << "auto " << field->GetName() << "_ptr = &" << field->GetName() << "_extracted;";
       field->GenExtractor(s, num_leading_bits, true);
       s << "}";
     }
   }
-  s << "return struct_begin_it + to_fill->size();";
+  s << "return struct_begin_it + to_fill->" << name_ << "::size();";
   s << "}";
 }
 
@@ -172,12 +183,6 @@ void StructDef::GenDefinition(std::ostream& s) const {
   s << "\n";
 
   GenMembers(s);
-  for (const auto& field : fields_) {
-    if (field->GetFieldType() == CountField::kFieldType || field->GetFieldType() == SizeField::kFieldType) {
-      s << "\n private:\n";
-      s << " mutable " << field->GetDataType() << " " << field->GetName() << "_extracted_{0};";
-    }
-  }
   s << "};\n";
 
   if (fields_.HasBody()) {
