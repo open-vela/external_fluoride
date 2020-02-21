@@ -826,7 +826,5 @@ void bluetooth::shim::Btm::SetSimplePairingCallback(
     tBTM_SP_CALLBACK* callback) {
   auto security_manager =
       bluetooth::shim::GetSecurityModule()->GetSecurityManager();
-  // TODO(optedoblivion): security_manager->RegisterCallback(new
-  // ExtendedCallback(simple_pairing_callback_))
   simple_pairing_callback_ = callback;
 }
