@@ -160,7 +160,6 @@ void ClassicSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, 
 
   auto fcs_option = std::make_unique<FrameCheckSequenceOption>();
   fcs_option->fcs_type_ = FcsType::NO_FCS;
-  configuration_state.fcs_type_ = FcsType::NO_FCS;
   if (link_->GetRemoteSupportsFcs()) {
     fcs_option->fcs_type_ = FcsType::DEFAULT;
     configuration_state.fcs_type_ = FcsType::DEFAULT;
@@ -241,7 +240,6 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
 
   auto fcs_option = std::make_unique<FrameCheckSequenceOption>();
   fcs_option->fcs_type_ = FcsType::DEFAULT;
-  configuration_state.fcs_type_ = FcsType::DEFAULT;
   if (!link_->GetRemoteSupportsFcs()) {
     fcs_option->fcs_type_ = FcsType::NO_FCS;
     configuration_state.fcs_type_ = FcsType::NO_FCS;
