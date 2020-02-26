@@ -1101,6 +1101,7 @@ bool bluetooth::shim::BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
     LOG_INFO(LOG_TAG, "UNIMPLEMENTED %s le_key_callback", __func__);
   }
 
+  shim_btm.SetSimplePairingCallback(p_cb_info->p_sp_callback);
   return true;
 }
 
