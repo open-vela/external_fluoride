@@ -15,7 +15,6 @@
 #   limitations under the License.
 
 from acts.base_test import BaseTestClass
-from acts import context
 
 import importlib
 import logging
@@ -26,12 +25,14 @@ import subprocess
 ANDROID_BUILD_TOP = os.environ.get('ANDROID_BUILD_TOP')
 
 
-class GdFacadeOnlyBaseTestClass(BaseTestClass):
+class GdBaseTestClass(BaseTestClass):
 
-    def setup_class(self):
+    def __init__(self, configs):
+        BaseTestClass.__init__(self, configs)
 
-        log_path_base = context.get_current_context().get_full_output_path()
+        log_path_base = getattr(configs, "log_path", "/tmp/logs")
         gd_devices = self.controller_configs.get("GdDevice")
+        gd_cert_devices = self.controller_configs.get("GdCertDevice")
 
         self.rootcanal_running = False
         if 'rootcanal' in self.controller_configs:
@@ -56,12 +57,13 @@ class GdFacadeOnlyBaseTestClass(BaseTestClass):
                 stderr=self.rootcanal_logs)
             for gd_device in gd_devices:
                 gd_device["rootcanal_port"] = rootcanal_hci_port
+            for gd_cert_device in gd_cert_devices:
+                gd_cert_device["rootcanal_port"] = rootcanal_hci_port
 
         self.register_controller(
             importlib.import_module('cert.gd_device'), builtin=True)
-
-        self.device_under_test = self.gd_devices[1]
-        self.cert_device = self.gd_devices[0]
+        self.register_controller(
+            importlib.import_module('cert.gd_cert_device'), builtin=True)
 
     def teardown_class(self):
         if self.rootcanal_running:
