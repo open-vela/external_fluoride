@@ -21,9 +21,8 @@
 #include <set>
 #include <utility>
 
-#include "acl_fragmenter.h"
-#include "acl_manager.h"
 #include "common/bidi_queue.h"
+#include "hci/acl_fragmenter.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
 
@@ -225,6 +224,7 @@ struct AclManager::impl {
     hci_layer_->UnregisterEventHandler(EventCode::READ_REMOTE_EXTENDED_FEATURES_COMPLETE);
     hci_queue_end_->UnregisterDequeue();
     unregister_all_connections();
+    controller_->UnregisterCompletedAclPacketsCallback();
     acl_connections_.clear();
     hci_queue_end_ = nullptr;
     handler_ = nullptr;
@@ -244,7 +244,9 @@ struct AclManager::impl {
     connection_pair->second.number_of_sent_packets_ -= credits;
     acl_packet_credits_ += credits;
     ASSERT(acl_packet_credits_ <= max_acl_packet_credits_);
-    start_round_robin();
+    if (acl_packet_credits_ == credits) {
+      start_round_robin();
+    }
   }
 
   // Round-robin scheduler
