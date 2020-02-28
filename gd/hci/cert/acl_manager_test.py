@@ -38,10 +38,6 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
     def setup_class(self):
         super().setup_class(dut_module='HCI_INTERFACES', cert_module='HCI')
 
-    def register_for_event(self, event_code):
-        msg = hci_facade.EventCodeMsg(code=int(event_code))
-        self.cert.hci.RegisterEventHandler(msg)
-
     def enqueue_hci_command(self, command, expect_complete):
         cmd_bytes = bytes(command.Serialize())
         cmd = hci_facade.CommandMsg(command=cmd_bytes)
@@ -59,11 +55,12 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
         self.cert.hci.SendAclData(acl_msg)
 
     def test_dut_connects(self):
-        self.register_for_event(hci_packets.EventCode.CONNECTION_REQUEST)
-        self.register_for_event(hci_packets.EventCode.CONNECTION_COMPLETE)
-        self.register_for_event(
+        self.cert.hci.register_for_events(
+            hci_packets.EventCode.CONNECTION_REQUEST,
+            hci_packets.EventCode.CONNECTION_COMPLETE,
             hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
-        with EventStream(self.cert.hci.FetchEvents(empty_proto.Empty())) as cert_hci_event_stream, \
+
+        with self.cert.hci.new_event_stream() as cert_hci_event_stream, \
             EventStream(self.cert.hci.FetchAclPackets(empty_proto.Empty())) as cert_acl_data_stream, \
             EventStream(self.dut.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
 
@@ -127,11 +124,12 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                     lambda packet: b'SomeAclData' in packet.payload)
 
     def test_cert_connects(self):
-        self.register_for_event(hci_packets.EventCode.CONNECTION_COMPLETE)
-        self.register_for_event(hci_packets.EventCode.ROLE_CHANGE)
-        self.register_for_event(
+        self.cert.hci.register_for_events(
+            hci_packets.EventCode.ROLE_CHANGE,
+            hci_packets.EventCode.CONNECTION_COMPLETE,
             hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
-        with EventStream(self.cert.hci.FetchEvents(empty_proto.Empty())) as cert_hci_event_stream, \
+
+        with self.cert.hci.new_event_stream() as cert_hci_event_stream, \
             EventStream(self.cert.hci.FetchAclPackets(empty_proto.Empty())) as cert_acl_data_stream, \
             EventStream(self.dut.hci_acl_manager.FetchIncomingConnection(empty_proto.Empty())) as incoming_connection_stream, \
             EventStream(self.dut.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
@@ -183,11 +181,12 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
                 lambda packet: b'SomeAclData' in packet.payload)
 
     def test_recombination_l2cap_packet(self):
-        self.register_for_event(hci_packets.EventCode.CONNECTION_REQUEST)
-        self.register_for_event(hci_packets.EventCode.CONNECTION_COMPLETE)
-        self.register_for_event(
+        self.cert.hci.register_for_events(
+            hci_packets.EventCode.CONNECTION_REQUEST,
+            hci_packets.EventCode.CONNECTION_COMPLETE,
             hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
-        with EventStream(self.cert.hci.FetchEvents(empty_proto.Empty())) as cert_hci_event_stream, \
+
+        with self.cert.hci.new_event_stream() as cert_hci_event_stream, \
             EventStream(self.cert.hci.FetchAclPackets(empty_proto.Empty())) as cert_acl_data_stream, \
             EventStream(self.dut.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
 
