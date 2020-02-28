@@ -20,7 +20,8 @@ import time
 from mobly import asserts
 from datetime import datetime, timedelta
 from acts.base_test import BaseTestClass
-from cert.event_stream import EventStream
+from cert.event_callback_stream import EventCallbackStream
+from cert.event_asserts import EventAsserts
 from cert.truth import assertThat
 
 # Test packet nesting
@@ -95,40 +96,48 @@ class CertSelfTest(BaseTestClass):
         return True
 
     def test_assert_none_passes(self):
-        with EventStream(FetchEvents(events=[], delay_ms=50)) as event_stream:
-            event_stream.assert_none(timeout=timedelta(milliseconds=10))
+        with EventCallbackStream(FetchEvents(events=[],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none(timeout=timedelta(milliseconds=10))
 
     def test_assert_none_passes_after_one_second(self):
-        with EventStream(FetchEvents([1], delay_ms=1500)) as event_stream:
-            event_stream.assert_none(timeout=timedelta(seconds=1.0))
+        with EventCallbackStream(FetchEvents([1],
+                                             delay_ms=1500)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none(timeout=timedelta(seconds=1.0))
 
     def test_assert_none_fails(self):
         try:
-            with EventStream(FetchEvents(events=[17],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_none(timeout=timedelta(seconds=1))
+            with EventCallbackStream(FetchEvents(events=[17],
+                                                 delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_none(timeout=timedelta(seconds=1))
         except Exception as e:
             logging.debug(e)
             return True  # Failed as expected
         return False
 
     def test_assert_none_matching_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            event_stream.assert_none_matching(
+        with EventCallbackStream(FetchEvents(events=[1, 2, 3],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none_matching(
                 lambda data: data.value_ == 4, timeout=timedelta(seconds=0.15))
 
     def test_assert_none_matching_passes_after_1_second(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                     delay_ms=400)) as event_stream:
-            event_stream.assert_none_matching(
+        with EventCallbackStream(
+                FetchEvents(events=[1, 2, 3, 4], delay_ms=400)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none_matching(
                 lambda data: data.value_ == 4, timeout=timedelta(seconds=1))
 
     def test_assert_none_matching_fails(self):
         try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_none_matching(
+            with EventCallbackStream(
+                    FetchEvents(events=[1, 2, 3], delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_none_matching(
                     lambda data: data.value_ == 2, timeout=timedelta(seconds=1))
         except Exception as e:
             logging.debug(e)
@@ -136,24 +145,28 @@ class CertSelfTest(BaseTestClass):
         return False
 
     def test_assert_occurs_at_least_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 1, 2, 3],
-                                     delay_ms=40)) as event_stream:
-            event_stream.assert_event_occurs(
+        with EventCallbackStream(
+                FetchEvents(events=[1, 2, 3, 1, 2, 3],
+                            delay_ms=40)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_event_occurs(
                 lambda data: data.value_ == 1,
                 timeout=timedelta(milliseconds=300),
                 at_least_times=2)
 
     def test_assert_occurs_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            event_stream.assert_event_occurs(
+        with EventCallbackStream(FetchEvents(events=[1, 2, 3],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_event_occurs(
                 lambda data: data.value_ == 1, timeout=timedelta(seconds=1))
 
     def test_assert_occurs_fails(self):
         try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_event_occurs(
+            with EventCallbackStream(
+                    FetchEvents(events=[1, 2, 3], delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_event_occurs(
                     lambda data: data.value_ == 4, timeout=timedelta(seconds=1))
         except Exception as e:
             logging.debug(e)
@@ -161,18 +174,21 @@ class CertSelfTest(BaseTestClass):
         return False
 
     def test_assert_occurs_at_most_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                     delay_ms=50)) as event_stream:
-            event_stream.assert_event_occurs_at_most(
+        with EventCallbackStream(FetchEvents(events=[1, 2, 3, 4],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_event_occurs_at_most(
                 lambda data: data.value_ < 4,
                 timeout=timedelta(seconds=1),
                 at_most_times=3)
 
     def test_assert_occurs_at_most_fails(self):
         try:
-            with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_event_occurs_at_most(
+            with EventCallbackStream(
+                    FetchEvents(events=[1, 2, 3, 4],
+                                delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_event_occurs_at_most(
                     lambda data: data.value_ > 1,
                     timeout=timedelta(seconds=1),
                     at_most_times=2)
@@ -267,76 +283,4 @@ class CertSelfTest(BaseTestClass):
             assertThat(None).isNotNone()
         except Exception as e:
             return True
-        return False
-
-    def test_assertThat_eventStream_emits_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(lambda data: data.value_ == 1)
-
-    def test_assertThat_eventStream_emits_then_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(lambda data: data.value_ == 1).then(
-                lambda data: data.value_ == 3)
-
-    def test_assertThat_eventStream_emits_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(lambda data: data.value_ == 4)
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_eventStream_emits_then_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(
-                    lambda data: data.value_ == 1).emits(
-                        lambda data: data.value_ == 4)
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_eventStream_emitsInOrder_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(
-                lambda data: data.value_ == 1,
-                lambda data: data.value_ == 2).inOrder()
-
-    def test_assertThat_eventStream_emitsInAnyOrder_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(
-                lambda data: data.value_ == 2,
-                lambda data: data.value_ == 1).inAnyOrder().then(
-                    lambda data: data.value_ == 3)
-
-    def test_assertThat_eventStream_emitsInOrder_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(
-                    lambda data: data.value_ == 2,
-                    lambda data: data.value_ == 1).inOrder()
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_eventStream_emitsInAnyOrder_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(
-                    lambda data: data.value_ == 4,
-                    lambda data: data.value_ == 1).inAnyOrder()
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
         return False
