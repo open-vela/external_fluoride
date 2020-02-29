@@ -20,9 +20,7 @@ from mobly.asserts import assert_true
 from mobly.asserts import assert_false
 
 from mobly import signals
-from cert.event_stream import IEventStream
-from cert.event_stream import NOT_FOR_YOU_assert_event_occurs
-from cert.event_stream import NOT_FOR_YOU_assert_all_events_occur
+from cert.event_stream import EventStream
 
 import sys, traceback
 
@@ -65,7 +63,7 @@ class EventStreamSubject(ObjectSubject):
         if len(match_fns) == 0:
             raise signals.TestFailure("Must specify a match function")
         elif len(match_fns) == 1:
-            NOT_FOR_YOU_assert_event_occurs(self._value, match_fns[0])
+            self._value.assert_event_occurs(match_fns[0])
             return EventStreamContinuationSubject(self._value)
         else:
             return MultiMatchStreamSubject(self._value, match_fns)
@@ -78,13 +76,13 @@ class MultiMatchStreamSubject(object):
         self._match_fns = match_fns
 
     def inAnyOrder(self):
-        NOT_FOR_YOU_assert_all_events_occur(
-            self._stream, self._match_fns, order_matters=False)
+        self._stream.assert_all_events_occur(
+            self._match_fns, order_matters=False)
         return EventStreamContinuationSubject(self._stream)
 
     def inOrder(self):
-        NOT_FOR_YOU_assert_all_events_occur(
-            self._stream, self._match_fns, order_matters=True)
+        self._stream.assert_all_events_occur(
+            self._match_fns, order_matters=True)
         return EventStreamContinuationSubject(self._stream)
 
 
@@ -97,7 +95,7 @@ class EventStreamContinuationSubject(ObjectSubject):
         if len(match_fns) == 0:
             raise signals.TestFailure("Must specify a match function")
         elif len(match_fns) == 1:
-            NOT_FOR_YOU_assert_event_occurs(self._value, match_fns[0])
+            self._value.assert_event_occurs(match_fns[0])
             return EventStreamContinuationSubject(self._value)
         else:
             return MultiMatchStreamSubject(self._value, match_fns)
@@ -118,7 +116,7 @@ class BooleanSubject(ObjectSubject):
 def assertThat(subject):
     if type(subject) is bool:
         return BooleanSubject(subject)
-    elif isinstance(subject, IEventStream):
+    elif isinstance(subject, EventStream):
         return EventStreamSubject(subject)
     else:
         return ObjectSubject(subject)
