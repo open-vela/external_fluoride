@@ -24,46 +24,14 @@ from google.protobuf import text_format
 from concurrent.futures import ThreadPoolExecutor
 from grpc import RpcError
 
-from abc import ABC, abstractmethod
 
-from cert.closable import Closable
-
-
-class IEventStream(ABC):
-
-    @abstractmethod
-    def get_event_queue(self):
-        pass
-
-
-class FilteringEventStream(IEventStream):
-
-    def __init__(self, stream, filter_fn):
-        self.filter_fn = filter_fn
-        self.event_queue = SimpleQueue()
-        self.stream = stream
-
-        self.stream.register_callback(self.__event_callback, self.filter_fn)
-
-    def __event_callback(self, event):
-        self.event_queue.put(event)
-
-    def get_event_queue(self):
-        return self.event_queue
-
-    def unregister(self):
-        self.stream.unregister(self.__event_callback)
-
-
-DEFAULT_TIMEOUT_SECONDS = 3
-
-
-class EventStream(IEventStream, Closable):
+class EventStream(object):
     """
     A class that streams events from a gRPC stream, which you can assert on.
 
     Don't use these asserts directly, use the ones from cert.truth.
     """
+    DEFAULT_TIMEOUT_SECONDS = 3
 
     def __init__(self, server_stream_call):
         if server_stream_call is None:
@@ -75,10 +43,23 @@ class EventStream(IEventStream, Closable):
         self.executor = ThreadPoolExecutor()
         self.future = self.executor.submit(EventStream._event_loop, self)
 
-    def get_event_queue(self):
-        return self.event_queue
+    def __enter__(self):
+        return self
 
-    def close(self):
+    def __exit__(self, type, value, traceback):
+        self.shutdown()
+        return traceback is None
+
+    def __del__(self):
+        self.shutdown()
+
+    def remaining_time_delta(self, end_time):
+        remaining = end_time - datetime.now()
+        if remaining < timedelta(milliseconds=0):
+            remaining = timedelta(milliseconds=0)
+        return remaining
+
+    def shutdown(self):
         """
         Stop the gRPC lambda so that event_callback will not be invoked after th
         method returns.
@@ -165,7 +146,15 @@ class EventStream(IEventStream, Closable):
         :param timeout: a timedelta object
         :return:
         """
-        NOT_FOR_YOU_assert_none(self, timeout)
+        logging.debug("assert_none %fs" % (timeout.total_seconds()))
+        try:
+            event = self.event_queue.get(timeout=timeout.total_seconds())
+            asserts.assert_true(
+                event is None,
+                msg=("Expected None, but got %s" % text_format.MessageToString(
+                    event, as_one_line=True)))
+        except Empty:
+            return
 
     def assert_none_matching(
             self, match_fn, timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
@@ -177,7 +166,27 @@ class EventStream(IEventStream, Closable):
         :param timeout: a timedelta object
         :return:
         """
-        NOT_FOR_YOU_assert_none_matching(self, match_fn, timeout)
+        logging.debug("assert_none_matching %fs" % (timeout.total_seconds()))
+        event = None
+        end_time = datetime.now() + timeout
+        while event is None and datetime.now() < end_time:
+            remaining = self.remaining_time_delta(end_time)
+            logging.debug("Waiting for event (%fs remaining)" %
+                          (remaining.total_seconds()))
+            try:
+                current_event = self.event_queue.get(
+                    timeout=remaining.total_seconds())
+                if match_fn(current_event):
+                    event = current_event
+            except Empty:
+                continue
+        logging.debug("Done waiting for an event")
+        if event is None:
+            return  # Avoid an assert in MessageToString(None, ...)
+        asserts.assert_true(
+            event is None,
+            msg=("Expected None matching, but got %s" %
+                 text_format.MessageToString(event, as_one_line=True)))
 
     def assert_event_occurs(self,
                             match_fn,
@@ -193,7 +202,26 @@ class EventStream(IEventStream, Closable):
                                happen
         :return:
         """
-        NOT_FOR_YOU_assert_event_occurs(self, match_fn, at_least_times, timeout)
+        logging.debug("assert_event_occurs %d %fs" % (at_least_times,
+                                                      timeout.total_seconds()))
+        event_list = []
+        end_time = datetime.now() + timeout
+        while len(event_list) < at_least_times and datetime.now() < end_time:
+            remaining = self.remaining_time_delta(end_time)
+            logging.debug("Waiting for event (%fs remaining)" %
+                          (remaining.total_seconds()))
+            try:
+                current_event = self.event_queue.get(
+                    timeout=remaining.total_seconds())
+                if match_fn(current_event):
+                    event_list.append(current_event)
+            except Empty:
+                continue
+        logging.debug("Done waiting for event")
+        asserts.assert_true(
+            len(event_list) >= at_least_times,
+            msg=("Expected at least %d events, but got %d" % (at_least_times,
+                                                              len(event_list))))
 
     def assert_event_occurs_at_most(
             self,
@@ -214,7 +242,7 @@ class EventStream(IEventStream, Closable):
         event_list = []
         end_time = datetime.now() + timeout
         while len(event_list) <= at_most_times and datetime.now() < end_time:
-            remaining = static_remaining_time_delta(end_time)
+            remaining = self.remaining_time_delta(end_time)
             logging.debug("Waiting for event iteration (%fs remaining)" %
                           (remaining.total_seconds()))
             try:
@@ -235,117 +263,36 @@ class EventStream(IEventStream, Closable):
             match_fns,
             order_matters,
             timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
-        NOT_FOR_YOU_assert_all_events_occur(self, match_fns, order_matters,
-                                            timeout)
-
-
-def static_remaining_time_delta(end_time):
-    remaining = end_time - datetime.now()
-    if remaining < timedelta(milliseconds=0):
-        remaining = timedelta(milliseconds=0)
-    return remaining
-
-
-def NOT_FOR_YOU_assert_event_occurs(
-        istream,
-        match_fn,
-        at_least_times=1,
-        timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
-    logging.debug("assert_event_occurs %d %fs" % (at_least_times,
-                                                  timeout.total_seconds()))
-    event_list = []
-    end_time = datetime.now() + timeout
-    while len(event_list) < at_least_times and datetime.now() < end_time:
-        remaining = static_remaining_time_delta(end_time)
-        logging.debug(
-            "Waiting for event (%fs remaining)" % (remaining.total_seconds()))
-        try:
-            current_event = istream.get_event_queue().get(
-                timeout=remaining.total_seconds())
-            if match_fn(current_event):
-                event_list.append(current_event)
-        except Empty:
-            continue
-    logging.debug("Done waiting for event")
-    asserts.assert_true(
-        len(event_list) >= at_least_times,
-        msg=("Expected at least %d events, but got %d" % (at_least_times,
-                                                          len(event_list))))
-
-
-def NOT_FOR_YOU_assert_all_events_occur(
-        istream,
-        match_fns,
-        order_matters,
-        timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
-    logging.debug("assert_all_events_occur %fs" % timeout.total_seconds())
-    pending_matches = list(match_fns)
-    matched_order = []
-    end_time = datetime.now() + timeout
-    while len(pending_matches) > 0 and datetime.now() < end_time:
-        remaining = static_remaining_time_delta(end_time)
-        logging.debug(
-            "Waiting for event (%fs remaining)" % (remaining.total_seconds()))
-        try:
-            current_event = istream.get_event_queue().get(
-                timeout=remaining.total_seconds())
-            for match_fn in pending_matches:
-                if match_fn(current_event):
-                    pending_matches.remove(match_fn)
-                    matched_order.append(match_fn)
-        except Empty:
-            continue
-    logging.debug("Done waiting for event")
-    asserts.assert_true(
-        len(matched_order) == len(match_fns),
-        msg=("Expected at least %d events, but got %d" % (len(match_fns),
-                                                          len(matched_order))))
-    if order_matters:
-        correct_order = True
-        i = 0
-        while i < len(match_fns):
-            if match_fns[i] is not matched_order[i]:
-                correct_order = False
-                break
-            i += 1
+        logging.debug("assert_all_events_occur %fs" % timeout.total_seconds())
+        pending_matches = list(match_fns)
+        matched_order = []
+        end_time = datetime.now() + timeout
+        while len(pending_matches) > 0 and datetime.now() < end_time:
+            remaining = self.remaining_time_delta(end_time)
+            logging.debug("Waiting for event (%fs remaining)" %
+                          (remaining.total_seconds()))
+            try:
+                current_event = self.event_queue.get(
+                    timeout=remaining.total_seconds())
+                for match_fn in pending_matches:
+                    if match_fn(current_event):
+                        pending_matches.remove(match_fn)
+                        matched_order.append(match_fn)
+            except Empty:
+                continue
+        logging.debug("Done waiting for event")
         asserts.assert_true(
-            correct_order, "Events not received in correct order %s %s" %
-            (match_fns, matched_order))
-
-
-def NOT_FOR_YOU_assert_none_matching(
-        istream, match_fn, timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
-    logging.debug("assert_none_matching %fs" % (timeout.total_seconds()))
-    event = None
-    end_time = datetime.now() + timeout
-    while event is None and datetime.now() < end_time:
-        remaining = static_remaining_time_delta(end_time)
-        logging.debug(
-            "Waiting for event (%fs remaining)" % (remaining.total_seconds()))
-        try:
-            current_event = istream.get_event_queue().get(
-                timeout=remaining.total_seconds())
-            if match_fn(current_event):
-                event = current_event
-        except Empty:
-            continue
-    logging.debug("Done waiting for an event")
-    if event is None:
-        return  # Avoid an assert in MessageToString(None, ...)
-    asserts.assert_true(
-        event is None,
-        msg=("Expected None matching, but got %s" % text_format.MessageToString(
-            event, as_one_line=True)))
-
-
-def NOT_FOR_YOU_assert_none(istream,
-                            timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
-    logging.debug("assert_none %fs" % (timeout.total_seconds()))
-    try:
-        event = istream.get_event_queue().get(timeout=timeout.total_seconds())
-        asserts.assert_true(
-            event is None,
-            msg=("Expected None, but got %s" % text_format.MessageToString(
-                event, as_one_line=True)))
-    except Empty:
-        return
+            len(matched_order) == len(match_fns),
+            msg=("Expected at least %d events, but got %d" %
+                 (len(match_fns), len(matched_order))))
+        if order_matters:
+            correct_order = True
+            i = 0
+            while i < len(match_fns):
+                if match_fns[i] is not matched_order[i]:
+                    correct_order = False
+                    break
+                i += 1
+            asserts.assert_true(
+                correct_order, "Events not received in correct order %s %s" %
+                (match_fns, matched_order))
