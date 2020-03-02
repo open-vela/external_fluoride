@@ -19,11 +19,6 @@ from mobly import asserts
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
 from cert.event_stream import EventStream
-from cert.truth import assertThat
-from cert.closable import safeClose
-from cert.py_l2cap import PyL2cap
-from cert.py_acl_manager import PyAclManager
-from cert.matchers import L2capMatchers
 from facade import common_pb2
 from facade import rootservice_pb2 as facade_rootservice
 from google.protobuf import empty_pb2 as empty_proto
@@ -32,7 +27,6 @@ from neighbor.facade import facade_pb2 as neighbor_facade
 from hci.facade import acl_manager_facade_pb2 as acl_manager_facade
 import bluetooth_packets_python3 as bt_packets
 from bluetooth_packets_python3 import hci_packets, l2cap_packets
-from bluetooth_packets_python3.l2cap_packets import CommandCode
 
 # Assemble a sample packet. TODO: Use RawBuilder
 SAMPLE_PACKET = l2cap_packets.CommandRejectNotUnderstoodBuilder(1)
@@ -58,37 +52,20 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         self.dut.neighbor.EnablePageScan(
             neighbor_facade.EnableMsg(enabled=True))
 
-        self.control_table = {
-            CommandCode.CONNECTION_REQUEST:
-            self._on_connection_request_default,
-            CommandCode.CONNECTION_RESPONSE:
-            self._on_connection_response_default,
-            CommandCode.CONFIGURATION_REQUEST:
-            self._on_configuration_request_default,
-            CommandCode.CONFIGURATION_RESPONSE:
-            self._on_configuration_response_default,
-            CommandCode.DISCONNECTION_REQUEST:
-            self._on_disconnection_request_default,
-            CommandCode.DISCONNECTION_RESPONSE:
-            self._on_disconnection_response_default,
-            CommandCode.INFORMATION_REQUEST:
-            self._on_information_request_default,
-            CommandCode.INFORMATION_RESPONSE:
-            self._on_information_response_default
-        }
+        self.cert_acl_handle = 0
+
+        self.on_connection_request = None
+        self.on_connection_response = None
+        self.on_configuration_request = None
+        self.on_configuration_response = None
+        self.on_disconnection_request = None
+        self.on_disconnection_response = None
+        self.on_information_request = None
+        self.on_information_response = None
 
         self.scid_to_dcid = {}
         self.ertm_tx_window_size = 10
         self.ertm_max_transmit = 20
-
-        self.dut_l2cap = PyL2cap(self.dut)
-        self.cert_acl_manager = PyAclManager(self.cert)
-        self.cert_acl = None
-
-    def teardown_test(self):
-        self.cert_acl_manager.close()
-        safeClose(self.cert_acl)
-        super().teardown_test()
 
     def _on_connection_request_default(self, l2cap_control_view):
         connection_request_view = l2cap_packets.ConnectionRequestView(
@@ -104,7 +81,10 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
             NO_FURTHER_INFORMATION_AVAILABLE)
         connection_response_l2cap = l2cap_packets.BasicFrameBuilder(
             1, connection_response)
-        self.cert_acl.send(connection_response_l2cap.Serialize())
+        self.cert.hci_acl_manager.SendAclData(
+            acl_manager_facade.AclData(
+                handle=self.cert_acl_handle,
+                payload=bytes(connection_response_l2cap.Serialize())))
         return True
 
     def _on_connection_response_default(self, l2cap_control_view):
@@ -119,7 +99,10 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
             sid + 1, dcid, l2cap_packets.Continuation.END, [])
         config_request_l2cap = l2cap_packets.BasicFrameBuilder(
             1, config_request)
-        self.cert_acl.send(config_request_l2cap.Serialize())
+        self.cert.hci_acl_manager.SendAclData(
+            acl_manager_facade.AclData(
+                handle=self.cert_acl_handle,
+                payload=bytes(config_request_l2cap.Serialize())))
         return True
 
     def _on_connection_response_use_ertm(self, l2cap_control_view):
@@ -148,7 +131,10 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         config_request_l2cap = l2cap_packets.BasicFrameBuilder(
             1, config_request)
 
-        self.cert_acl.send(config_request_l2cap.Serialize())
+        self.cert.hci_acl_manager.SendAclData(
+            acl_manager_facade.AclData(
+                handle=self.cert_acl_handle,
+                payload=bytes(config_request_l2cap.Serialize())))
         return True
 
     def _on_connection_response_use_ertm_and_fcs(self, l2cap_control_view):
@@ -180,7 +166,10 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         config_request_l2cap = l2cap_packets.BasicFrameBuilder(
             1, config_request)
 
-        self.cert_acl.send(config_request_l2cap.Serialize())
+        self.cert.hci_acl_manager.SendAclData(
+            acl_manager_facade.AclData(
+                handle=self.cert_acl_handle,
+                payload=bytes(config_request_l2cap.Serialize())))
         return True
 
     def _on_configuration_request_default(self, l2cap_control_view):
@@ -233,7 +222,10 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
             sid, dcid, scid)
         disconnection_response_l2cap = l2cap_packets.BasicFrameBuilder(
             1, disconnection_response)
-        self.cert_acl.send(disconnection_response_l2cap.Serialize())
+        self.cert.hci_acl_manager.SendAclData(
+            acl_manager_facade.AclData(
+                handle=self.cert_acl_handle,
+                payload=bytes(disconnection_response_l2cap.Serialize())))
 
     def _on_disconnection_response_default(self, l2cap_control_view):
         disconnection_response = l2cap_packets.DisconnectionResponseView(
@@ -248,20 +240,29 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
             response = l2cap_packets.InformationResponseConnectionlessMtuBuilder(
                 sid, l2cap_packets.InformationRequestResult.SUCCESS, 100)
             response_l2cap = l2cap_packets.BasicFrameBuilder(1, response)
-            self.cert_acl.send(response_l2cap.Serialize())
+            self.cert.hci_acl_manager.SendAclData(
+                acl_manager_facade.AclData(
+                    handle=self.cert_acl_handle,
+                    payload=bytes(response_l2cap.Serialize())))
             return
         if information_type == l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED:
             response = l2cap_packets.InformationResponseExtendedFeaturesBuilder(
                 sid, l2cap_packets.InformationRequestResult.SUCCESS, 0, 0, 0, 1,
                 0, 1, 0, 0, 0, 0)
             response_l2cap = l2cap_packets.BasicFrameBuilder(1, response)
-            self.cert_acl.send(response_l2cap.Serialize())
+            self.cert.hci_acl_manager.SendAclData(
+                acl_manager_facade.AclData(
+                    handle=self.cert_acl_handle,
+                    payload=bytes(response_l2cap.Serialize())))
             return
         if information_type == l2cap_packets.InformationRequestInfoType.FIXED_CHANNELS_SUPPORTED:
             response = l2cap_packets.InformationResponseFixedChannelsBuilder(
                 sid, l2cap_packets.InformationRequestResult.SUCCESS, 2)
             response_l2cap = l2cap_packets.BasicFrameBuilder(1, response)
-            self.cert_acl.send(response_l2cap.Serialize())
+            self.cert.hci_acl_manager.SendAclData(
+                acl_manager_facade.AclData(
+                    handle=self.cert_acl_handle,
+                    payload=bytes(response_l2cap.Serialize())))
             return
 
     def _on_information_response_default(self, l2cap_control_view):
@@ -275,110 +276,342 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         if l2cap_view.GetChannelId() != 1:
             return
         l2cap_control_view = l2cap_packets.ControlView(l2cap_view.GetPayload())
-        fn = self.control_table.get(l2cap_control_view.GetCode())
-        if fn is not None:
-            fn(l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.CONNECTION_REQUEST:
+            return self.on_connection_request(
+                l2cap_control_view
+            ) if self.on_connection_request else self._on_connection_request_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.CONNECTION_RESPONSE:
+            return self.on_connection_response(
+                l2cap_control_view
+            ) if self.on_connection_response else self._on_connection_response_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.CONFIGURATION_REQUEST:
+            return self.on_configuration_request(
+                l2cap_control_view
+            ) if self.on_configuration_request else self._on_configuration_request_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.CONFIGURATION_RESPONSE:
+            return self.on_configuration_response(
+                l2cap_control_view
+            ) if self.on_configuration_response else self._on_configuration_response_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.DISCONNECTION_REQUEST:
+            return self.on_disconnection_request(
+                l2cap_control_view
+            ) if self.on_disconnection_request else self._on_disconnection_request_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.DISCONNECTION_RESPONSE:
+            return self.on_disconnection_response(
+                l2cap_control_view
+            ) if self.on_disconnection_response else self._on_disconnection_response_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.INFORMATION_REQUEST:
+            return self.on_information_request(
+                l2cap_control_view
+            ) if self.on_information_request else self._on_information_request_default(
+                l2cap_control_view)
+        if l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.INFORMATION_RESPONSE:
+            return self.on_information_response(
+                l2cap_control_view
+            ) if self.on_information_response else self._on_information_response_default(
+                l2cap_control_view)
         return
 
+    def is_correct_connection_request(self, l2cap_packet):
+        packet_bytes = l2cap_packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != 1:
+            return False
+        l2cap_control_view = l2cap_packets.ControlView(l2cap_view.GetPayload())
+        return l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.CONNECTION_REQUEST
+
+    def is_correct_configuration_response(self, l2cap_packet):
+        packet_bytes = l2cap_packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != 1:
+            return False
+        l2cap_control_view = l2cap_packets.ControlView(l2cap_view.GetPayload())
+        if l2cap_control_view.GetCode(
+        ) != l2cap_packets.CommandCode.CONFIGURATION_RESPONSE:
+            return False
+        configuration_response_view = l2cap_packets.ConfigurationResponseView(
+            l2cap_control_view)
+        return configuration_response_view.GetResult(
+        ) == l2cap_packets.ConfigurationResponseResult.SUCCESS
+
+    def is_correct_configuration_request(self, l2cap_packet):
+        packet_bytes = l2cap_packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != 1:
+            return False
+        l2cap_control_view = l2cap_packets.ControlView(l2cap_view.GetPayload())
+        return l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.CONFIGURATION_REQUEST
+
+    def is_correct_disconnection_request(self, l2cap_packet):
+        packet_bytes = l2cap_packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != 1:
+            return False
+        l2cap_control_view = l2cap_packets.ControlView(l2cap_view.GetPayload())
+        return l2cap_control_view.GetCode(
+        ) == l2cap_packets.CommandCode.DISCONNECTION_REQUEST
+
     def cert_send_b_frame(self, b_frame):
-        self.cert_acl.send(b_frame.Serialize())
+        self.cert.hci_acl_manager.SendAclData(
+            acl_manager_facade.AclData(
+                handle=self.cert_acl_handle,
+                payload=bytes(b_frame.Serialize())))
+
+    def get_req_seq_from_ertm_s_frame(self, scid, packet):
+        packet_bytes = packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != scid:
+            return False
+        standard_view = l2cap_packets.StandardFrameView(l2cap_view)
+        if standard_view.GetFrameType() == l2cap_packets.FrameType.I_FRAME:
+            return False
+        s_frame = l2cap_packets.EnhancedSupervisoryFrameView(standard_view)
+        return s_frame.GetReqSeq()
+
+    def get_s_from_ertm_s_frame(self, scid, packet):
+        packet_bytes = packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != scid:
+            return False
+        standard_view = l2cap_packets.StandardFrameView(l2cap_view)
+        if standard_view.GetFrameType() == l2cap_packets.FrameType.I_FRAME:
+            return False
+        s_frame = l2cap_packets.EnhancedSupervisoryFrameView(standard_view)
+        return s_frame.GetS()
+
+    def get_p_from_ertm_s_frame(self, scid, packet):
+        packet_bytes = packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != scid:
+            return False
+        standard_view = l2cap_packets.StandardFrameView(l2cap_view)
+        if standard_view.GetFrameType() == l2cap_packets.FrameType.I_FRAME:
+            return False
+        s_frame = l2cap_packets.EnhancedSupervisoryFrameView(standard_view)
+        return s_frame.GetP()
+
+    def get_f_from_ertm_s_frame(self, scid, packet):
+        packet_bytes = packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != scid:
+            return False
+        standard_view = l2cap_packets.StandardFrameView(l2cap_view)
+        if standard_view.GetFrameType() == l2cap_packets.FrameType.I_FRAME:
+            return False
+        s_frame = l2cap_packets.EnhancedSupervisoryFrameView(standard_view)
+        return s_frame.GetF()
+
+    def get_tx_seq_from_ertm_i_frame(self, scid, packet):
+        packet_bytes = packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != scid:
+            return False
+        standard_view = l2cap_packets.StandardFrameView(l2cap_view)
+        if standard_view.GetFrameType() == l2cap_packets.FrameType.S_FRAME:
+            return False
+        i_frame = l2cap_packets.EnhancedInformationFrameView(standard_view)
+        return i_frame.GetTxSeq()
+
+    def get_payload_from_ertm_i_frame(self, scid, packet):
+        packet_bytes = packet.payload
+        l2cap_view = l2cap_packets.BasicFrameView(
+            bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+        if l2cap_view.GetChannelId() != scid:
+            return False
+        standard_view = l2cap_packets.StandardFrameView(l2cap_view)
+        if standard_view.GetFrameType() == l2cap_packets.FrameType.S_FRAME:
+            return False
+        i_frame = l2cap_packets.EnhancedInformationFrameView(standard_view)
+        return i_frame.GetPayload()  # TODO(mylesgw): This doesn't work!
 
     def _setup_link_from_cert(self):
 
         self.dut.neighbor.EnablePageScan(
             neighbor_facade.EnableMsg(enabled=True))
-        self.cert_acl = self.cert_acl_manager.initiate_connection(
-            self.dut.address)
-        self.cert_acl.wait_for_connection_complete()
-        self.cert_acl_manager.get_acl_stream().register_callback(
-            self._handle_control_packet)
+
+        with EventStream(
+                self.cert.hci_acl_manager.CreateConnection(
+                    acl_manager_facade.ConnectionMsg(
+                        address_type=int(
+                            hci_packets.AddressType.PUBLIC_DEVICE_ADDRESS),
+                        address=bytes(self.dut_address.address)))
+        ) as connection_event_stream:
+
+            # Cert gets ConnectionComplete with a handle and sends ACL data
+            handle = 0xfff
+
+            def get_handle(packet):
+                packet_bytes = packet.event
+                if b'\x03\x0b\x00' in packet_bytes:
+                    nonlocal handle
+                    cc_view = hci_packets.ConnectionCompleteView(
+                        hci_packets.EventPacketView(
+                            bt_packets.PacketViewLittleEndian(
+                                list(packet_bytes))))
+                    handle = cc_view.GetConnectionHandle()
+                    return True
+                return False
+
+            connection_event_stream.assert_event_occurs(get_handle)
+
+        self.cert_acl_handle = handle
+        return handle
 
     def _open_channel(
             self,
+            cert_acl_data_stream,
             signal_id=1,
+            cert_acl_handle=0x1,
             scid=0x0101,
             psm=0x33,
             mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC):
 
-        self.dut_l2cap.open_channel(psm, mode)
+        self.dut.l2cap.SetDynamicChannel(
+            l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                psm=psm, retransmission_mode=mode))
+        open_channel = l2cap_packets.ConnectionRequestBuilder(
+            signal_id, psm, scid)
+        open_channel_l2cap = l2cap_packets.BasicFrameBuilder(1, open_channel)
+        self.cert_send_b_frame(open_channel_l2cap)
 
-        open_channel = l2cap_packets.BasicFrameBuilder(
-            1, l2cap_packets.ConnectionRequestBuilder(signal_id, psm, scid))
-        self.cert_send_b_frame(open_channel)
+        def verify_connection_response(packet):
+            packet_bytes = packet.payload
+            l2cap_view = l2cap_packets.BasicFrameView(
+                bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+            l2cap_control_view = l2cap_packets.ControlView(
+                l2cap_view.GetPayload())
+            if l2cap_control_view.GetCode(
+            ) != l2cap_packets.CommandCode.CONNECTION_RESPONSE:
+                return False
+            connection_response_view = l2cap_packets.ConnectionResponseView(
+                l2cap_control_view)
+            return connection_response_view.GetSourceCid(
+            ) == scid and connection_response_view.GetResult(
+            ) == l2cap_packets.ConnectionResponseResult.SUCCESS and connection_response_view.GetDestinationCid(
+            ) != 0
 
-        assertThat(self.cert_acl_manager.get_acl_stream()).emits(
-            L2capMatchers.ConnectionResponse(scid))
+        cert_acl_data_stream.assert_event_occurs(verify_connection_response)
 
     def test_connect_dynamic_channel_and_send_data(self):
-        self._setup_link_from_cert()
-
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(1, scid, psm)
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=0x33, payload=b'abc'))
-
-        assertThat(self.cert_acl).emits(lambda packet: b'abc' in packet.payload)
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(cert_acl_data_stream, 1, cert_acl_handle, scid,
+                               psm)
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=0x33, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b'abc' in packet.payload)
 
     def test_fixed_channel(self):
-        self._setup_link_from_cert()
-
+        cert_acl_handle = self._setup_link_from_cert()
         self.dut.l2cap.RegisterChannel(
             l2cap_facade_pb2.RegisterChannelRequest(channel=2))
         asserts.skip("FIXME: Not working")
-        self.dut.l2cap.SendL2capPacket(
-            l2cap_facade_pb2.L2capPacket(channel=2, payload=b"123"))
-
-        assertThat(self.cert_acl).emits(lambda packet: b'123' in packet.payload)
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            self.dut.l2cap.SendL2capPacket(
+                l2cap_facade_pb2.L2capPacket(channel=2, payload=b"123"))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b'123' in packet.payload)
 
     def test_receive_packet_from_unknown_channel(self):
-        self._setup_link_from_cert()
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(1, scid, psm)
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            0x99, 0, l2cap_packets.Final.NOT_SET, 1,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
-        assertThat(self.cert_acl).emitsNone(
-            L2capMatchers.SupervisoryFrame(scid, req_seq=4),
-            timeout=timedelta(seconds=1))
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(cert_acl_data_stream, 1, cert_acl_handle, scid,
+                               psm)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                0x99, 0, l2cap_packets.Final.NOT_SET, 1,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
+            cert_acl_data_stream.assert_none_matching(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 4,
+                timedelta(seconds=1))
 
     def test_open_two_channels(self):
-        self._setup_link_from_cert()
-
-        self._open_channel(1, 0x41, 0x41)
-        self._open_channel(2, 0x43, 0x43)
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self._open_channel(cert_acl_data_stream, 1, cert_acl_handle, 0x41,
+                               0x41)
+            self._open_channel(cert_acl_data_stream, 2, cert_acl_handle, 0x43,
+                               0x43)
 
     def test_connect_and_send_data_ertm_no_segmentation(self):
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc' * 34))
-        assertThat(
-            self.cert_acl).emits(lambda packet: b'abc' * 34 in packet.payload)
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(
+                    psm=psm, payload=b'abc' * 34))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b'abc' * 34 in packet.payload)
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 0, l2cap_packets.Final.NOT_SET, 1,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 0, l2cap_packets.Final.NOT_SET, 1,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
     def test_basic_operation_request_connection(self):
         """
@@ -386,236 +619,325 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify that the IUT is able to request the connection establishment for an L2CAP data channel and
         initiate the configuration procedure.
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
 
-        psm = 0x33
-        # TODO: Use another test case
-        self.dut.l2cap.OpenChannel(
-            l2cap_facade_pb2.OpenChannelRequest(
-                remote=self.cert_address, psm=psm))
-        assertThat(self.cert_acl).emits(L2capMatchers.ConnectionRequest())
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            psm = 0x33
+            # TODO: Use another test case
+            self.dut.l2cap.OpenChannel(
+                l2cap_facade_pb2.OpenChannelRequest(
+                    remote=self.cert_address, psm=psm))
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_connection_request)
 
     def test_accept_disconnect(self):
         """
         L2CAP/COS/CED/BV-07-C
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
 
-        scid = 0x41
-        psm = 0x33
-        self._open_channel(1, scid, psm)
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        dcid = self.scid_to_dcid[scid]
+            scid = 0x41
+            psm = 0x33
+            self._open_channel(cert_acl_data_stream, 1, cert_acl_handle, scid,
+                               psm)
 
-        close_channel = l2cap_packets.DisconnectionRequestBuilder(1, dcid, scid)
-        close_channel_l2cap = l2cap_packets.BasicFrameBuilder(1, close_channel)
-        self.cert_send_b_frame(close_channel_l2cap)
+            dcid = self.scid_to_dcid[scid]
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.DisconnectionResponse(scid, dcid))
+            close_channel = l2cap_packets.DisconnectionRequestBuilder(
+                1, dcid, scid)
+            close_channel_l2cap = l2cap_packets.BasicFrameBuilder(
+                1, close_channel)
+            self.cert_send_b_frame(close_channel_l2cap)
+
+            def verify_disconnection_response(packet):
+                packet_bytes = packet.payload
+                l2cap_view = l2cap_packets.BasicFrameView(
+                    bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+                l2cap_control_view = l2cap_packets.ControlView(
+                    l2cap_view.GetPayload())
+                if l2cap_control_view.GetCode(
+                ) != l2cap_packets.CommandCode.DISCONNECTION_RESPONSE:
+                    return False
+                disconnection_response_view = l2cap_packets.DisconnectionResponseView(
+                    l2cap_control_view)
+                return disconnection_response_view.GetSourceCid(
+                ) == scid and disconnection_response_view.GetDestinationCid(
+                ) == dcid
+
+            cert_acl_data_stream.assert_event_occurs(
+                verify_disconnection_response)
 
     def test_disconnect_on_timeout(self):
         """
         L2CAP/COS/CED/BV-08-C
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
 
-        scid = 0x41
-        psm = 0x33
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            scid = 0x41
+            psm = 0x33
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        # Don't send configuration request or response back
-        self.control_table[CommandCode.CONFIGURATION_REQUEST] = lambda _: True
-        self.control_table[CommandCode.CONNECTION_RESPONSE] = lambda _: True
+            # Don't send configuration request or response back
+            self.on_configuration_request = lambda _: True
+            self.on_connection_response = lambda _: True
 
-        self._open_channel(1, scid, psm)
+            self._open_channel(cert_acl_data_stream, 1, cert_acl_handle, scid,
+                               psm)
 
-        assertThat(self.cert_acl).emitsNone(
-            L2capMatchers.ConfigurationResponse())
+            def is_configuration_response(l2cap_packet):
+                packet_bytes = l2cap_packet.payload
+                l2cap_view = l2cap_packets.BasicFrameView(
+                    bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+                if l2cap_view.GetChannelId() != 1:
+                    return False
+                l2cap_control_view = l2cap_packets.ControlView(
+                    l2cap_view.GetPayload())
+                return l2cap_control_view.GetCode(
+                ) == l2cap_packets.CommandCode.CONFIGURATION_RESPONSE
+
+            cert_acl_data_stream.assert_none_matching(is_configuration_response)
 
     def test_retry_config_after_rejection(self):
         """
         L2CAP/COS/CFD/BV-02-C
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        psm = 0x33
-        scid = 0x41
+            psm = 0x33
+            scid = 0x41
 
-        self.control_table[
-            CommandCode.
-            CONFIGURATION_REQUEST] = self._on_configuration_request_unacceptable_parameters
+            self.on_configuration_request = self._on_configuration_request_unacceptable_parameters
 
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC)
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.BASIC)
 
-        assertThat(self.cert_acl).emits(L2capMatchers.ConfigurationResponse())
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationRequest(), at_least_times=2)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request, at_least_times=2)
 
     def test_respond_to_echo_request(self):
         """
         L2CAP/COS/ECH/BV-01-C [Respond to Echo Request]
         Verify that the IUT responds to an echo request.
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        echo_request = l2cap_packets.EchoRequestBuilder(
-            100, l2cap_packets.DisconnectionRequestBuilder(1, 2, 3))
-        echo_request_l2cap = l2cap_packets.BasicFrameBuilder(1, echo_request)
-        self.cert_send_b_frame(echo_request_l2cap)
+            echo_request = l2cap_packets.EchoRequestBuilder(
+                100, l2cap_packets.DisconnectionRequestBuilder(1, 2, 3))
+            echo_request_l2cap = l2cap_packets.BasicFrameBuilder(
+                1, echo_request)
+            self.cert_send_b_frame(echo_request_l2cap)
 
-        assertThat(self.cert_acl).emits(
-            lambda packet: b"\x06\x01\x04\x00\x02\x00\x03\x00" in packet.payload
-        )
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"\x06\x01\x04\x00\x02\x00\x03\x00" in packet.payload
+            )
 
     def test_reject_unknown_command(self):
         """
         L2CAP/COS/CED/BI-01-C
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        invalid_command_packet = b"\x04\x00\x01\x00\xff\x01\x00\x00"
-        self.cert_acl.send(invalid_command_packet)
+            invalid_command_packet = b"\x04\x00\x01\x00\xff\x01\x00\x00"
+            self.cert.hci_acl_manager.SendAclData(
+                acl_manager_facade.AclData(
+                    handle=cert_acl_handle,
+                    payload=bytes(invalid_command_packet)))
 
-        assertThat(self.cert_acl).emits(L2capMatchers.CommandReject())
+            def is_command_reject(l2cap_packet):
+                packet_bytes = l2cap_packet.payload
+                l2cap_view = l2cap_packets.BasicFrameView(
+                    bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+                if l2cap_view.GetChannelId() != 1:
+                    return False
+                l2cap_control_view = l2cap_packets.ControlView(
+                    l2cap_view.GetPayload())
+                return l2cap_control_view.GetCode(
+                ) == l2cap_packets.CommandCode.COMMAND_REJECT
+
+            cert_acl_data_stream.assert_event_occurs(is_command_reject)
 
     def test_query_for_1_2_features(self):
         """
         L2CAP/COS/IEX/BV-01-C [Query for 1.2 Features]
         """
-        self._setup_link_from_cert()
-        signal_id = 3
-        information_request = l2cap_packets.InformationRequestBuilder(
-            signal_id,
-            l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED
-        )
-        information_request_l2cap = l2cap_packets.BasicFrameBuilder(
-            1, information_request)
-        self.cert_send_b_frame(information_request_l2cap)
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            signal_id = 3
+            information_request = l2cap_packets.InformationRequestBuilder(
+                signal_id, l2cap_packets.InformationRequestInfoType.
+                EXTENDED_FEATURES_SUPPORTED)
+            information_request_l2cap = l2cap_packets.BasicFrameBuilder(
+                1, information_request)
+            self.cert_send_b_frame(information_request_l2cap)
 
-        def is_correct_information_response(l2cap_packet):
-            packet_bytes = l2cap_packet.payload
-            l2cap_view = l2cap_packets.BasicFrameView(
-                bt_packets.PacketViewLittleEndian(list(packet_bytes)))
-            if l2cap_view.GetChannelId() != 1:
-                return False
-            l2cap_control_view = l2cap_packets.ControlView(
-                l2cap_view.GetPayload())
-            if l2cap_control_view.GetCode(
-            ) != l2cap_packets.CommandCode.INFORMATION_RESPONSE:
-                return False
-            information_response_view = l2cap_packets.InformationResponseView(
-                l2cap_control_view)
-            return information_response_view.GetInfoType(
-            ) == l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED
+            def is_correct_information_response(l2cap_packet):
+                packet_bytes = l2cap_packet.payload
+                l2cap_view = l2cap_packets.BasicFrameView(
+                    bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+                if l2cap_view.GetChannelId() != 1:
+                    return False
+                l2cap_control_view = l2cap_packets.ControlView(
+                    l2cap_view.GetPayload())
+                if l2cap_control_view.GetCode(
+                ) != l2cap_packets.CommandCode.INFORMATION_RESPONSE:
+                    return False
+                information_response_view = l2cap_packets.InformationResponseView(
+                    l2cap_control_view)
+                return information_response_view.GetInfoType(
+                ) == l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED
 
-        assertThat(self.cert_acl).emits(is_correct_information_response)
+            cert_acl_data_stream.assert_event_occurs(
+                is_correct_information_response)
 
     def test_extended_feature_info_response_ertm(self):
         """
         L2CAP/EXF/BV-01-C [Extended Features Information Response for Enhanced
         Retransmission Mode]
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        signal_id = 3
-        information_request = l2cap_packets.InformationRequestBuilder(
-            signal_id,
-            l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED
-        )
-        information_request_l2cap = l2cap_packets.BasicFrameBuilder(
-            1, information_request)
-        self.cert_send_b_frame(information_request_l2cap)
+            signal_id = 3
+            information_request = l2cap_packets.InformationRequestBuilder(
+                signal_id, l2cap_packets.InformationRequestInfoType.
+                EXTENDED_FEATURES_SUPPORTED)
+            information_request_l2cap = l2cap_packets.BasicFrameBuilder(
+                1, information_request)
+            self.cert_send_b_frame(information_request_l2cap)
 
-        def is_correct_information_response(l2cap_packet):
-            packet_bytes = l2cap_packet.payload
-            l2cap_view = l2cap_packets.BasicFrameView(
-                bt_packets.PacketViewLittleEndian(list(packet_bytes)))
-            if l2cap_view.GetChannelId() != 1:
-                return False
-            l2cap_control_view = l2cap_packets.ControlView(
-                l2cap_view.GetPayload())
-            if l2cap_control_view.GetCode(
-            ) != l2cap_packets.CommandCode.INFORMATION_RESPONSE:
-                return False
-            information_response_view = l2cap_packets.InformationResponseView(
-                l2cap_control_view)
-            if information_response_view.GetInfoType(
-            ) != l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED:
-                return False
-            extended_features_view = l2cap_packets.InformationResponseExtendedFeaturesView(
-                information_response_view)
-            return extended_features_view.GetEnhancedRetransmissionMode()
+            def is_correct_information_response(l2cap_packet):
+                packet_bytes = l2cap_packet.payload
+                l2cap_view = l2cap_packets.BasicFrameView(
+                    bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+                if l2cap_view.GetChannelId() != 1:
+                    return False
+                l2cap_control_view = l2cap_packets.ControlView(
+                    l2cap_view.GetPayload())
+                if l2cap_control_view.GetCode(
+                ) != l2cap_packets.CommandCode.INFORMATION_RESPONSE:
+                    return False
+                information_response_view = l2cap_packets.InformationResponseView(
+                    l2cap_control_view)
+                if information_response_view.GetInfoType(
+                ) != l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED:
+                    return False
+                extended_features_view = l2cap_packets.InformationResponseExtendedFeaturesView(
+                    information_response_view)
+                return extended_features_view.GetEnhancedRetransmissionMode()
 
-        assertThat(self.cert_acl).emits(is_correct_information_response)
+            cert_acl_data_stream.assert_event_occurs(
+                is_correct_information_response)
 
     def test_extended_feature_info_response_fcs(self):
         """
         L2CAP/EXF/BV-03-C [Extended Features Information Response for FCS Option]
         Note: This is not mandated by L2CAP Spec
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        signal_id = 3
-        information_request = l2cap_packets.InformationRequestBuilder(
-            signal_id,
-            l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED
-        )
-        information_request_l2cap = l2cap_packets.BasicFrameBuilder(
-            1, information_request)
-        self.cert_send_b_frame(information_request_l2cap)
+            signal_id = 3
+            information_request = l2cap_packets.InformationRequestBuilder(
+                signal_id, l2cap_packets.InformationRequestInfoType.
+                EXTENDED_FEATURES_SUPPORTED)
+            information_request_l2cap = l2cap_packets.BasicFrameBuilder(
+                1, information_request)
+            self.cert_send_b_frame(information_request_l2cap)
 
-        def is_correct_information_response(l2cap_packet):
-            packet_bytes = l2cap_packet.payload
-            l2cap_view = l2cap_packets.BasicFrameView(
-                bt_packets.PacketViewLittleEndian(list(packet_bytes)))
-            if l2cap_view.GetChannelId() != 1:
-                return False
-            l2cap_control_view = l2cap_packets.ControlView(
-                l2cap_view.GetPayload())
-            if l2cap_control_view.GetCode(
-            ) != l2cap_packets.CommandCode.INFORMATION_RESPONSE:
-                return False
-            information_response_view = l2cap_packets.InformationResponseView(
-                l2cap_control_view)
-            if information_response_view.GetInfoType(
-            ) != l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED:
-                return False
-            extended_features_view = l2cap_packets.InformationResponseExtendedFeaturesView(
-                information_response_view)
-            return extended_features_view.GetFcsOption()
+            def is_correct_information_response(l2cap_packet):
+                packet_bytes = l2cap_packet.payload
+                l2cap_view = l2cap_packets.BasicFrameView(
+                    bt_packets.PacketViewLittleEndian(list(packet_bytes)))
+                if l2cap_view.GetChannelId() != 1:
+                    return False
+                l2cap_control_view = l2cap_packets.ControlView(
+                    l2cap_view.GetPayload())
+                if l2cap_control_view.GetCode(
+                ) != l2cap_packets.CommandCode.INFORMATION_RESPONSE:
+                    return False
+                information_response_view = l2cap_packets.InformationResponseView(
+                    l2cap_control_view)
+                if information_response_view.GetInfoType(
+                ) != l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED:
+                    return False
+                extended_features_view = l2cap_packets.InformationResponseExtendedFeaturesView(
+                    information_response_view)
+                return extended_features_view.GetFcsOption()
 
-        assertThat(self.cert_acl).emits(is_correct_information_response)
+            cert_acl_data_stream.assert_event_occurs(
+                is_correct_information_response)
 
     def test_config_channel_not_use_FCS(self):
         """
         L2CAP/FOC/BV-01-C [IUT Initiated Configuration of the FCS Option]
         Verify the IUT can configure a channel to not use FCS in I/S-frames.
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
-
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(lambda packet: b"abc" in packet.payload)
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"abc" in packet.payload)
 
     def test_explicitly_request_use_FCS(self):
         """
@@ -624,163 +946,196 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         should be used.
         """
 
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm_and_fcs
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            self.on_connection_response = self._on_connection_response_use_ertm_and_fcs
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
-
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(
-            self.cert_acl).emits(lambda packet: b"abc\x4f\xa3" in packet.payload
-                                )  # TODO: Use packet parser
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"abc\x4f\xa3" in packet.payload
+            )  # TODO: Use packet parser
 
     def test_implicitly_request_use_FCS(self):
         """
         L2CAP/FOC/BV-03-C [Lower Tester Implicitly Requests FCS should be Used]
         TODO: Update this test case. What's the difference between this one and test_explicitly_request_use_FCS?
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm_and_fcs
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            self.on_connection_response = self._on_connection_response_use_ertm_and_fcs
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
-
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(
-            self.cert_acl).emits(lambda packet: b"abc\x4f\xa3" in packet.payload
-                                )  # TODO: Use packet parser
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"abc\x4f\xa3" in packet.payload
+            )  # TODO: Use packet parser
 
     def test_transmit_i_frames(self):
         """
         L2CAP/ERM/BV-01-C [Transmit I-frames]
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
 
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            self.on_connection_response = self._on_connection_response_use_ertm
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(lambda packet: b"abc" in packet.payload)
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"abc" in packet.payload)
 
-        # Assemble a sample packet. TODO: Use RawBuilder
-        SAMPLE_PACKET = l2cap_packets.CommandRejectNotUnderstoodBuilder(1)
+            # Assemble a sample packet. TODO: Use RawBuilder
+            SAMPLE_PACKET = l2cap_packets.CommandRejectNotUnderstoodBuilder(1)
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 0, l2cap_packets.Final.NOT_SET, 1,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 0, l2cap_packets.Final.NOT_SET, 1,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(lambda packet: b"abc" in packet.payload)
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"abc" in packet.payload)
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 1, l2cap_packets.Final.NOT_SET, 2,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 1, l2cap_packets.Final.NOT_SET, 2,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(lambda packet: b"abc" in packet.payload)
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: b"abc" in packet.payload)
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 2, l2cap_packets.Final.NOT_SET, 3,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 2, l2cap_packets.Final.NOT_SET, 3,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
     def test_receive_i_frames(self):
         """
         L2CAP/ERM/BV-02-C [Receive I-Frames]
         Verify the IUT can receive in-sequence valid I-frames and deliver L2CAP SDUs to the Upper Tester
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        for i in range(3):
+            for i in range(3):
+                i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                    dcid, i, l2cap_packets.Final.NOT_SET, 0,
+                    l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                    SAMPLE_PACKET)
+                self.cert_send_b_frame(i_frame)
+                cert_acl_data_stream.assert_event_occurs(
+                    lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == i + 1
+                )
+
             i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-                dcid, i, l2cap_packets.Final.NOT_SET, 0,
-                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                dcid, 3, l2cap_packets.Final.NOT_SET, 0,
+                l2cap_packets.SegmentationAndReassembly.START, SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 4
+            )
+
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 4, l2cap_packets.Final.NOT_SET, 0,
+                l2cap_packets.SegmentationAndReassembly.CONTINUATION,
                 SAMPLE_PACKET)
             self.cert_send_b_frame(i_frame)
-            assertThat(self.cert_acl).emits(
-                L2capMatchers.SupervisoryFrame(scid, req_seq=i + 1))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 5
+            )
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 3, l2cap_packets.Final.NOT_SET, 0,
-            l2cap_packets.SegmentationAndReassembly.START, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, req_seq=4))
-
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 4, l2cap_packets.Final.NOT_SET, 0,
-            l2cap_packets.SegmentationAndReassembly.CONTINUATION, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, req_seq=5))
-
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 5, l2cap_packets.Final.NOT_SET, 0,
-            l2cap_packets.SegmentationAndReassembly.END, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, req_seq=6))
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 5, l2cap_packets.Final.NOT_SET, 0,
+                l2cap_packets.SegmentationAndReassembly.END, SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 6
+            )
 
     def test_acknowledging_received_i_frames(self):
         """
@@ -788,37 +1143,44 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT sends S-frame [RR] with the Poll bit not set to acknowledge data received from the
         Lower Tester
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        for i in range(3):
-            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-                dcid, i, l2cap_packets.Final.NOT_SET, 0,
-                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
-                SAMPLE_PACKET)
-            self.cert_send_b_frame(i_frame)
-            assertThat(self.cert_acl).emits(
-                L2capMatchers.SupervisoryFrame(scid, req_seq=i + 1))
+            for i in range(3):
+                i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                    dcid, i, l2cap_packets.Final.NOT_SET, 0,
+                    l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                    SAMPLE_PACKET)
+                self.cert_send_b_frame(i_frame)
+                cert_acl_data_stream.assert_event_occurs(
+                    lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == i + 1
+                )
 
-        assertThat(self.cert_acl).emitsNone(
-            L2capMatchers.SupervisoryFrame(scid, req_seq=4),
-            timeout=timedelta(seconds=1))
+            cert_acl_data_stream.assert_none_matching(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 4,
+                timedelta(seconds=1))
 
     def test_resume_transmitting_when_received_rr(self):
         """
@@ -828,41 +1190,51 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         previously sent I-frames.
         """
         self.ertm_tx_window_size = 1
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'def'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'def'))
 
-        # TODO: Besides checking TxSeq, we also want to check payload, once we can get it from packet view
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
-        assertThat(self.cert_acl).emitsNone(
-            L2capMatchers.InformationFrame(scid, tx_seq=1))
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE, 1)
-        self.cert_send_b_frame(s_frame)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1))
+            # TODO: Besides checking TxSeq, we also want to check payload, once we can get it from packet view
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
+            cert_acl_data_stream.assert_none_matching(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1,
+            )
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE,
+                1)
+            self.cert_send_b_frame(s_frame)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1
+            )
 
     def test_resume_transmitting_when_acknowledge_previously_sent(self):
         """
@@ -872,78 +1244,95 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         sent I-frames.
         """
         self.ertm_tx_window_size = 1
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'def'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'def'))
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
-        # TODO: If 1 second is greater than their retransmit timeout, use a smaller timeout
-        assertThat(self.cert_acl).emitsNone(
-            L2capMatchers.InformationFrame(scid, tx_seq=1),
-            timeout=timedelta(seconds=1))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
+            # TODO: If 1 second is greater than their retransmit timeout, use a smaller timeout
+            cert_acl_data_stream.assert_none_matching(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1,
+                timedelta(seconds=1))
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 0, l2cap_packets.Final.NOT_SET, 1,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 0, l2cap_packets.Final.NOT_SET, 1,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1
+            )
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 1, l2cap_packets.Final.NOT_SET, 2,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 1, l2cap_packets.Final.NOT_SET, 2,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
     def test_transmit_s_frame_rr_with_poll_bit_set(self):
         """
         L2CAP/ERM/BV-08-C [Send S-Frame [RR] with Poll Bit Set]
         Verify the IUT sends an S-frame [RR] with the Poll bit set when its retransmission timer expires.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        # TODO: Always use their retransmission timeout value
-        time.sleep(2)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            # TODO: Always use their retransmission timeout value
+            time.sleep(2)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL
+            )
 
     def test_transmit_s_frame_rr_with_final_bit_set(self):
         """
@@ -951,33 +1340,39 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT responds with an S-frame [RR] with the Final bit set after receiving an S-frame [RR]
         with the Poll bit set.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
-            l2cap_packets.Poll.POLL, l2cap_packets.Final.NOT_SET, 0)
-        self.cert_send_b_frame(s_frame)
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
+                l2cap_packets.Poll.POLL, l2cap_packets.Final.NOT_SET, 0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(
-                scid, f=l2cap_packets.Final.POLL_RESPONSE))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_f_from_ertm_s_frame(scid, packet) == l2cap_packets.Final.POLL_RESPONSE
+            )
 
     def test_s_frame_transmissions_exceed_max_transmit(self):
         """
@@ -985,31 +1380,38 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT will close the channel when the Monitor Timer expires.
         """
         asserts.skip("Need to configure DUT to have a shorter timer")
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
 
-        # Retransmission timer = 2, 20 * monitor timer = 360, so total timeout is 362
-        time.sleep(362)
-        assertThat(self.cert_acl).emits(L2capMatchers.DisconnectionRequest())
+            # Retransmission timer = 2, 20 * monitor timer = 360, so total timeout is 362
+            time.sleep(362)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_disconnection_request)
 
     def test_i_frame_transmissions_exceed_max_transmit(self):
         """
@@ -1017,37 +1419,46 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT will close the channel when it receives an S-frame [RR] with the final bit set that does
         not acknowledge the previous I-frame sent by the IUT.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
 
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE, 0)
-        self.cert_send_b_frame(s_frame)
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE,
+                0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emits(L2capMatchers.DisconnectionRequest())
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_disconnection_request)
 
     def test_respond_to_rej(self):
         """
@@ -1056,43 +1467,49 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         """
         self.ertm_tx_window_size = 2
         self.ertm_max_transmit = 2
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        for i in range(2):
-            assertThat(self.cert_acl).emits(
-                L2capMatchers.InformationFrame(scid, tx_seq=i),
-                timeout=timedelta(seconds=0.5))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            for i in range(2):
+                cert_acl_data_stream.assert_event_occurs(
+                    lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == i,
+                    timeout=timedelta(seconds=0.5))
 
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.REJECT,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
-        self.cert_send_b_frame(s_frame)
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.REJECT,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
+            self.cert_send_b_frame(s_frame)
 
-        for i in range(2):
-            assertThat(self.cert_acl).emits(
-                L2capMatchers.InformationFrame(scid, tx_seq=i),
-                timeout=timedelta(seconds=0.5))
+            for i in range(2):
+                cert_acl_data_stream.assert_event_occurs(
+                    lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == i,
+                    timeout=timedelta(seconds=0.5))
 
     def test_receive_s_frame_rr_final_bit_set(self):
         """
@@ -1100,40 +1517,49 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT will retransmit any previously sent I-frames unacknowledged by receipt of an S-Frame
         [RR] with the Final Bit set.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
 
-        # TODO: Always use their retransmission timeout value
-        time.sleep(2)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL))
+            # TODO: Always use their retransmission timeout value
+            time.sleep(2)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL
+            )
 
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE, 0)
-        self.cert_send_b_frame(s_frame)
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE,
+                0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
 
     def test_receive_i_frame_final_bit_set(self):
         """
@@ -1141,40 +1567,49 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT will retransmit any previously sent I-frames unacknowledged by receipt of an I-frame
         with the final bit set.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
 
-        # TODO: Always use their retransmission timeout value
-        time.sleep(2)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL))
+            # TODO: Always use their retransmission timeout value
+            time.sleep(2)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL
+            )
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 0, l2cap_packets.Final.POLL_RESPONSE, 0,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 0, l2cap_packets.Final.POLL_RESPONSE, 0,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
 
     def test_recieve_rnr(self):
         """
@@ -1182,40 +1617,49 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT will not retransmit any I-frames when it receives a remote busy indication from the
         Lower Tester (S-frame [RNR]).
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=0x33, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=0x33, payload=b'abc'))
 
-        # TODO: Always use their retransmission timeout value
-        time.sleep(2)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL))
+            # TODO: Always use their retransmission timeout value
+            time.sleep(2)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL
+            )
 
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.RECEIVER_NOT_READY,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE, 0)
-        self.cert_send_b_frame(s_frame)
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.RECEIVER_NOT_READY,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE,
+                0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emitsNone(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
+            cert_acl_data_stream.assert_none_matching(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
 
     def test_sent_rej_lost(self):
         """
@@ -1224,109 +1668,127 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         is lost.
         """
         self.ertm_tx_window_size = 5
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 0, l2cap_packets.Final.NOT_SET, 0,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, req_seq=1))
-
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, self.ertm_tx_window_size - 1, l2cap_packets.Final.NOT_SET, 0,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(
-                scid, s=l2cap_packets.SupervisoryFunction.REJECT))
-
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
-            l2cap_packets.Poll.POLL, l2cap_packets.Final.NOT_SET, 0)
-        self.cert_send_b_frame(s_frame)
-
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(
-                scid, req_seq=1, f=l2cap_packets.Final.POLL_RESPONSE))
-        for i in range(1, self.ertm_tx_window_size):
             i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-                dcid, i, l2cap_packets.Final.NOT_SET, 0,
+                dcid, 0, l2cap_packets.Final.NOT_SET, 0,
                 l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
                 SAMPLE_PACKET)
             self.cert_send_b_frame(i_frame)
-            assertThat(self.cert_acl).emits(
-                L2capMatchers.SupervisoryFrame(scid, req_seq=i + 1))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 1
+            )
+
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, self.ertm_tx_window_size - 1, l2cap_packets.Final.NOT_SET,
+                0, l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_s_from_ertm_s_frame(scid, packet) == l2cap_packets.SupervisoryFunction.REJECT
+            )
+
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.RECEIVER_READY,
+                l2cap_packets.Poll.POLL, l2cap_packets.Final.NOT_SET, 0)
+            self.cert_send_b_frame(s_frame)
+
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == 1 and self.get_f_from_ertm_s_frame(scid, packet) == l2cap_packets.Final.POLL_RESPONSE)
+            for i in range(1, self.ertm_tx_window_size):
+                i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                    dcid, i, l2cap_packets.Final.NOT_SET, 0,
+                    l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                    SAMPLE_PACKET)
+                self.cert_send_b_frame(i_frame)
+                cert_acl_data_stream.assert_event_occurs(
+                    lambda packet: self.get_req_seq_from_ertm_s_frame(scid, packet) == i + 1
+                )
 
     def test_handle_duplicate_srej(self):
         """
         L2CAP/ERM/BI-03-C [Handle Duplicate S-Frame [SREJ]]
         Verify the IUT will only retransmit the requested I-frame once after receiving a duplicate SREJ.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0),
-            timeout=timedelta(0.5))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1),
-            timeout=timedelta(0.5))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0,
+                timeout=timedelta(0.5))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1,
+                timeout=timedelta(0.5))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL
+            )
 
-        # Send SREJ with F not set
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.SELECT_REJECT,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
-        self.cert_send_b_frame(s_frame)
+            # Send SREJ with F not set
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.SELECT_REJECT,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emitsNone(timeout=timedelta(seconds=0.5))
-        # Send SREJ with F set
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.SELECT_REJECT,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE, 0)
-        self.cert_send_b_frame(s_frame)
+            cert_acl_data_stream.assert_none(timeout=timedelta(seconds=0.5))
+            # Send SREJ with F set
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.SELECT_REJECT,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE,
+                0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
 
     def test_handle_receipt_rej_and_rr_with_f_set(self):
         """
@@ -1335,57 +1797,66 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         followed by an S-frame [RR] with the Final bit set that indicates the same I-frames should be
         retransmitted.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0),
-            timeout=timedelta(0.5))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1),
-            timeout=timedelta(0.5))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL),
-            timeout=timedelta(2))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0,
+                timeout=timedelta(0.5))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1,
+                timeout=timedelta(0.5))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL,
+                timeout=timedelta(2))
 
-        # Send REJ with F not set
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.REJECT,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
-        self.cert_send_b_frame(s_frame)
+            # Send REJ with F not set
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.REJECT,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emitsNone(timeout=timedelta(seconds=0.5))
+            cert_acl_data_stream.assert_none(timeout=timedelta(seconds=0.5))
 
-        # Send RR with F set
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.REJECT,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE, 0)
-        self.cert_send_b_frame(s_frame)
+            # Send RR with F set
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.REJECT,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.POLL_RESPONSE,
+                0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1
+            )
 
     def test_handle_rej_and_i_frame_with_f_set(self):
         """
@@ -1393,56 +1864,65 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT will only retransmit the requested I-frames once after receiving an S-frame [REJ]
         followed by an I-frame with the Final bit set that indicates the same I-frames should be retransmitted.
         """
-        self._setup_link_from_cert()
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
+            # FIXME: Order shouldn't matter here
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
 
-        dcid = self.scid_to_dcid[scid]
+            dcid = self.scid_to_dcid[scid]
 
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        self.dut.l2cap.SendDynamicChannelPacket(
-            l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0),
-            timeout=timedelta(0.5))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1),
-            timeout=timedelta(0.5))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.SupervisoryFrame(scid, p=l2cap_packets.Poll.POLL),
-            timeout=timedelta(2))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            self.dut.l2cap.SendDynamicChannelPacket(
+                l2cap_facade_pb2.DynamicChannelPacket(psm=psm, payload=b'abc'))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0,
+                timeout=timedelta(0.5))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1,
+                timeout=timedelta(0.5))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_p_from_ertm_s_frame(scid, packet) == l2cap_packets.Poll.POLL,
+                timeout=timedelta(2))
 
-        # Send SREJ with F not set
-        s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            dcid, l2cap_packets.SupervisoryFunction.SELECT_REJECT,
-            l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
-        self.cert_send_b_frame(s_frame)
+            # Send SREJ with F not set
+            s_frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
+                dcid, l2cap_packets.SupervisoryFunction.SELECT_REJECT,
+                l2cap_packets.Poll.NOT_SET, l2cap_packets.Final.NOT_SET, 0)
+            self.cert_send_b_frame(s_frame)
 
-        assertThat(self.cert_acl).emitsNone(timeout=timedelta(seconds=0.5))
+            cert_acl_data_stream.assert_none(timeout=timedelta(seconds=0.5))
 
-        i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            dcid, 0, l2cap_packets.Final.POLL_RESPONSE, 0,
-            l2cap_packets.SegmentationAndReassembly.UNSEGMENTED, SAMPLE_PACKET)
-        self.cert_send_b_frame(i_frame)
+            i_frame = l2cap_packets.EnhancedInformationFrameBuilder(
+                dcid, 0, l2cap_packets.Final.POLL_RESPONSE, 0,
+                l2cap_packets.SegmentationAndReassembly.UNSEGMENTED,
+                SAMPLE_PACKET)
+            self.cert_send_b_frame(i_frame)
 
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=0))
-        assertThat(self.cert_acl).emits(
-            L2capMatchers.InformationFrame(scid, tx_seq=1))
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 0
+            )
+            cert_acl_data_stream.assert_event_occurs(
+                lambda packet: self.get_tx_seq_from_ertm_i_frame(scid, packet) == 1
+            )
 
     def test_initiated_configuration_request_ertm(self):
         """
@@ -1450,24 +1930,28 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT can send a Configuration Request command containing the F&EC option that specifies
         Enhanced Retransmission Mode.
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            self.on_connection_response = self._on_connection_response_use_ertm
 
-        self.control_table[
-            CommandCode.
-            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+            psm = 0x33
+            scid = 0x41
+            self._open_channel(
+                cert_acl_data_stream,
+                1,
+                cert_acl_handle,
+                scid,
+                psm,
+                mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
 
-        psm = 0x33
-        scid = 0x41
-        self._open_channel(
-            1,
-            scid,
-            psm,
-            mode=l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM)
+            # TODO: Fix this test. It doesn't work so far with PDL struct
 
-        # TODO: Fix this test. It doesn't work so far with PDL struct
-
-        assertThat(self.cert_acl).emits(L2capMatchers.ConfigurationRequest())
-        asserts.skip("Struct not working")
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_request)
+            asserts.skip("Struct not working")
 
     def test_respond_configuration_request_ertm(self):
         """
@@ -1475,18 +1959,23 @@ class L2capTest(GdFacadeOnlyBaseTestClass):
         Verify the IUT can accept a Configuration Request from the Lower Tester containing an F&EC option
         that specifies Enhanced Retransmission Mode.
         """
-        self._setup_link_from_cert()
+        cert_acl_handle = self._setup_link_from_cert()
+        with EventStream(
+                self.cert.hci_acl_manager.FetchAclData(
+                    empty_proto.Empty())) as cert_acl_data_stream:
+            cert_acl_data_stream.register_callback(self._handle_control_packet)
+            psm = 1
+            scid = 0x0101
+            self.retransmission_mode = l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM
+            self.dut.l2cap.SetDynamicChannel(
+                l2cap_facade_pb2.SetEnableDynamicChannelRequest(
+                    psm=psm, retransmission_mode=self.retransmission_mode))
 
-        psm = 1
-        scid = 0x0101
-        self.retransmission_mode = l2cap_facade_pb2.RetransmissionFlowControlMode.ERTM
-        self.dut.l2cap.SetDynamicChannel(
-            l2cap_facade_pb2.SetEnableDynamicChannelRequest(
-                psm=psm, retransmission_mode=self.retransmission_mode))
+            open_channel = l2cap_packets.ConnectionRequestBuilder(1, psm, scid)
+            open_channel_l2cap = l2cap_packets.BasicFrameBuilder(
+                1, open_channel)
+            self.cert_send_b_frame(open_channel_l2cap)
 
-        open_channel = l2cap_packets.ConnectionRequestBuilder(1, psm, scid)
-        open_channel_l2cap = l2cap_packets.BasicFrameBuilder(1, open_channel)
-        self.cert_send_b_frame(open_channel_l2cap)
-
-        # TODO: Verify that the type should be ERTM
-        assertThat(self.cert_acl).emits(L2capMatchers.ConfigurationResponse())
+            # TODO: Verify that the type should be ERTM
+            cert_acl_data_stream.assert_event_occurs(
+                self.is_correct_configuration_response)
