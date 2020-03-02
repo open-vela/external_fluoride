@@ -185,10 +185,9 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
                         type=common.BluetoothAddressTypeEnum.
                         PUBLIC_DEVICE_ADDRESS)))
 
-            # TODO: Figure out why this isn't happening anymore, bond event changes were recently introduced
-            # dut_bond_stream.assert_event_occurs(
-            #     lambda bond_event: bond_event.message_type == security_facade.BondMsgType.DEVICE_BONDED
-            # )
+            dut_bond_stream.assert_event_occurs(
+                lambda bond_event: bond_event.message_type == security_facade.BondMsgType.DEVICE_BONDED
+            )
 
     def test_display_only(self):
         dut_address = self.dut.hci_controller.GetMacAddress(
