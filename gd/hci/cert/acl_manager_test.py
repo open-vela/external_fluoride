@@ -28,11 +28,10 @@ from hci.facade import controller_facade_pb2 as controller_facade
 from hci.facade import facade_pb2 as hci_facade
 import bluetooth_packets_python3 as bt_packets
 from bluetooth_packets_python3 import hci_packets
-from cert.captures import ReadBdAddrCompleteCapture
-from cert.captures import ConnectionCompleteCapture
-from cert.captures import ConnectionRequestCapture
-from cert.py_hci import PyHci
-from cert.py_acl_manager import PyAclManager
+from captures import ReadBdAddrCompleteCapture
+from captures import ConnectionCompleteCapture
+from captures import ConnectionRequestCapture
+from py_hci import PyHci
 
 
 class AclManagerTest(GdFacadeOnlyBaseTestClass):
@@ -40,69 +39,185 @@ class AclManagerTest(GdFacadeOnlyBaseTestClass):
     def setup_class(self):
         super().setup_class(dut_module='HCI_INTERFACES', cert_module='HCI')
 
-    # todo: move into GdFacadeOnlyBaseTestClass, based on modules inited
-    def setup_test(self):
-        super().setup_test()
-        self.cert_hci = PyHci(self.cert)
-        self.dut_acl_manager = PyAclManager(self.dut)
-
-    def teardown_test(self):
-        self.cert_hci.close()
-        self.dut_acl_manager.close()
-        super().teardown_test()
+    def enqueue_acl_data(self, handle, pb_flag, b_flag, acl):
+        acl_msg = hci_facade.AclMsg(
+            handle=int(handle),
+            packet_boundary_flag=int(pb_flag),
+            broadcast_flag=int(b_flag),
+            data=acl)
+        self.cert.hci.SendAclData(acl_msg)
 
     def test_dut_connects(self):
-        self.cert_hci.enable_inquiry_and_page_scan()
-        cert_address = self.cert_hci.read_own_address()
+        self.cert.hci.register_for_events(
+            hci_packets.EventCode.CONNECTION_REQUEST,
+            hci_packets.EventCode.CONNECTION_COMPLETE,
+            hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
 
-        with self.dut_acl_manager.initiate_connection(cert_address) as dut_acl:
-            cert_acl = self.cert_hci.accept_connection()
-            cert_acl.send_first(
-                b'\x26\x00\x07\x00This is just SomeAclData from the Cert')
+        with PyHci(self.cert) as cert_hci, \
+            EventStream(self.dut.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
 
-            dut_acl.wait_for_connection_complete()
+            cert_hci.enable_inquiry_and_page_scan()
+            cert_address = cert_hci.read_own_address()
 
-            dut_acl.send(
-                b'\x29\x00\x07\x00This is just SomeMoreAclData from the DUT')
+            with EventStream(
+                    self.dut.hci_acl_manager.CreateConnection(
+                        acl_manager_facade.ConnectionMsg(
+                            address_type=int(
+                                hci_packets.AddressType.PUBLIC_DEVICE_ADDRESS),
+                            address=bytes(cert_address,
+                                          'utf8')))) as connection_event_stream:
 
-            assertThat(cert_acl).emits(
-                lambda packet: b'SomeMoreAclData' in packet.data)
-            assertThat(dut_acl).emits(
-                lambda packet: b'SomeAclData' in packet.payload)
+                # Cert Accepts
+                connection_request = ConnectionRequestCapture()
+                assertThat(
+                    cert_hci.get_event_stream()).emits(connection_request)
+
+                cert_hci.send_command_with_status(
+                    hci_packets.AcceptConnectionRequestBuilder(
+                        connection_request.get().GetBdAddr(),
+                        hci_packets.AcceptConnectionRequestRole.REMAIN_SLAVE))
+
+                # Cert gets ConnectionComplete with a handle and sends ACL data
+                connection_complete = ConnectionCompleteCapture()
+                assertThat(
+                    cert_hci.get_event_stream()).emits(connection_complete)
+                cert_handle = connection_complete.get().GetConnectionHandle()
+
+                self.enqueue_acl_data(
+                    cert_handle, hci_packets.PacketBoundaryFlag.
+                    FIRST_AUTOMATICALLY_FLUSHABLE,
+                    hci_packets.BroadcastFlag.POINT_TO_POINT,
+                    bytes(
+                        b'\x26\x00\x07\x00This is just SomeAclData from the Cert'
+                    ))
+
+                # DUT gets a connection complete event and sends and receives
+                connection_complete = ConnectionCompleteCapture()
+                connection_event_stream.assert_event_occurs(connection_complete)
+                dut_handle = connection_complete.get().GetConnectionHandle()
+
+                self.dut.hci_acl_manager.SendAclData(
+                    acl_manager_facade.AclData(
+                        handle=dut_handle,
+                        payload=bytes(
+                            b'\x29\x00\x07\x00This is just SomeMoreAclData from the DUT'
+                        )))
+
+                assertThat(cert_hci.get_acl_stream()).emits(
+                    lambda packet: b'SomeMoreAclData' in packet.data)
+                assertThat(acl_data_stream).emits(
+                    lambda packet: b'SomeAclData' in packet.payload)
 
     def test_cert_connects(self):
-        dut_address = self.dut.hci_controller.GetMacAddressSimple()
-        self.dut.neighbor.EnablePageScan(
-            neighbor_facade.EnableMsg(enabled=True))
+        self.cert.hci.register_for_events(
+            hci_packets.EventCode.ROLE_CHANGE,
+            hci_packets.EventCode.CONNECTION_COMPLETE,
+            hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
 
-        self.dut_acl_manager.listen_for_incoming_connections()
-        self.cert_hci.initiate_connection(dut_address)
+        with PyHci(self.cert) as cert_hci, \
+            EventStream(self.dut.hci_acl_manager.FetchIncomingConnection(empty_proto.Empty())) as incoming_connection_stream, \
+            EventStream(self.dut.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
 
-        dut_acl = self.dut_acl_manager.accept_connection()
-        dut_acl.send(
-            b'\x29\x00\x07\x00This is just SomeMoreAclData from the DUT')
+            # DUT Enables scans and gets its address
+            dut_address = self.dut.hci_controller.GetMacAddressSimple()
 
-        cert_acl = self.cert_hci.complete_connection()
-        cert_acl.send_first(
-            b'\x26\x00\x07\x00This is just SomeAclData from the Cert')
+            self.dut.neighbor.EnablePageScan(
+                neighbor_facade.EnableMsg(enabled=True))
 
-        assertThat(cert_acl).emits(
-            lambda packet: b'SomeMoreAclData' in packet.data)
-        assertThat(dut_acl).emits(
-            lambda packet: b'SomeAclData' in packet.payload)
+            # Cert connects
+            cert_hci.send_command_with_status(
+                hci_packets.CreateConnectionBuilder(
+                    dut_address.decode('utf-8'),
+                    0xcc18,  # Packet Type
+                    hci_packets.PageScanRepetitionMode.R1,
+                    0x0,
+                    hci_packets.ClockOffsetValid.INVALID,
+                    hci_packets.CreateConnectionRoleSwitch.ALLOW_ROLE_SWITCH))
+
+            # DUT gets a connection request
+            connection_complete = ConnectionCompleteCapture()
+            assertThat(incoming_connection_stream).emits(connection_complete)
+            dut_handle = connection_complete.get().GetConnectionHandle()
+
+            self.dut.hci_acl_manager.SendAclData(
+                acl_manager_facade.AclData(
+                    handle=dut_handle,
+                    payload=bytes(
+                        b'\x29\x00\x07\x00This is just SomeMoreAclData from the DUT'
+                    )))
+
+            connection_complete = ConnectionCompleteCapture()
+            assertThat(cert_hci.get_event_stream()).emits(connection_complete)
+            cert_handle = connection_complete.get().GetConnectionHandle()
+
+            self.enqueue_acl_data(
+                cert_handle,
+                hci_packets.PacketBoundaryFlag.FIRST_AUTOMATICALLY_FLUSHABLE,
+                hci_packets.BroadcastFlag.POINT_TO_POINT,
+                bytes(
+                    b'\x26\x00\x07\x00This is just SomeAclData from the Cert'))
+
+            assertThat(cert_hci.get_acl_stream()).emits(
+                lambda packet: b'SomeMoreAclData' in packet.data)
+            assertThat(acl_data_stream).emits(
+                lambda packet: b'SomeAclData' in packet.payload)
 
     def test_recombination_l2cap_packet(self):
-        self.cert_hci.enable_inquiry_and_page_scan()
-        cert_address = self.cert_hci.read_own_address()
+        self.cert.hci.register_for_events(
+            hci_packets.EventCode.CONNECTION_REQUEST,
+            hci_packets.EventCode.CONNECTION_COMPLETE,
+            hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
 
-        with self.dut_acl_manager.initiate_connection(cert_address) as dut_acl:
-            cert_acl = self.cert_hci.accept_connection()
-            cert_acl.send_first(b'\x06\x00\x07\x00Hello')
-            cert_acl.send_continuing(b'!')
-            cert_acl.send_first(b'\xe8\x03\x07\x00' + b'Hello' * 200)
+        with PyHci(self.cert) as cert_hci, \
+            EventStream(self.dut.hci_acl_manager.FetchAclData(empty_proto.Empty())) as acl_data_stream:
 
-            dut_acl.wait_for_connection_complete()
+            # CERT Enables scans and gets its address
+            cert_hci.enable_inquiry_and_page_scan()
+            cert_address = cert_hci.read_own_address()
 
-            assertThat(dut_acl).emits(
-                lambda packet: b'Hello!' in packet.payload,
-                lambda packet: b'Hello' * 200 in packet.payload).inOrder()
+            with EventStream(
+                    self.dut.hci_acl_manager.CreateConnection(
+                        acl_manager_facade.ConnectionMsg(
+                            address_type=int(
+                                hci_packets.AddressType.PUBLIC_DEVICE_ADDRESS),
+                            address=bytes(cert_address,
+                                          'utf8')))) as connection_event_stream:
+
+                # Cert Accepts
+                connection_request = ConnectionRequestCapture()
+                assertThat(
+                    cert_hci.get_event_stream()).emits(connection_request)
+                cert_hci.send_command_with_status(
+                    hci_packets.AcceptConnectionRequestBuilder(
+                        connection_request.get().GetBdAddr(),
+                        hci_packets.AcceptConnectionRequestRole.REMAIN_SLAVE))
+
+                # Cert gets ConnectionComplete with a handle and sends ACL data
+                connection_complete = ConnectionCompleteCapture()
+                assertThat(
+                    cert_hci.get_event_stream()).emits(connection_complete)
+                cert_handle = connection_complete.get().GetConnectionHandle()
+
+                self.enqueue_acl_data(
+                    cert_handle, hci_packets.PacketBoundaryFlag.
+                    FIRST_AUTOMATICALLY_FLUSHABLE,
+                    hci_packets.BroadcastFlag.POINT_TO_POINT,
+                    bytes(b'\x06\x00\x07\x00Hello'))
+                self.enqueue_acl_data(
+                    cert_handle,
+                    hci_packets.PacketBoundaryFlag.CONTINUING_FRAGMENT,
+                    hci_packets.BroadcastFlag.POINT_TO_POINT, bytes(b'!'))
+                self.enqueue_acl_data(
+                    cert_handle, hci_packets.PacketBoundaryFlag.
+                    FIRST_AUTOMATICALLY_FLUSHABLE,
+                    hci_packets.BroadcastFlag.POINT_TO_POINT,
+                    bytes(b'\xe8\x03\x07\x00' + b'Hello' * 200))
+
+                # DUT gets a connection complete event and sends and receives
+                connection_complete = ConnectionCompleteCapture()
+                connection_event_stream.assert_event_occurs(connection_complete)
+                dut_handle = connection_complete.get().GetConnectionHandle()
+
+                assertThat(acl_data_stream).emits(
+                    lambda packet: b'Hello!' in packet.payload).then(
+                        lambda packet: b'Hello' * 200 in packet.payload)
