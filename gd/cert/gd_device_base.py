@@ -23,17 +23,14 @@ import socket
 import subprocess
 import time
 
-from acts import context
+from acts import context, error, tracelogger
 from acts.controllers.adb import AdbProxy
 
 import grpc
 
-from cert.environment_provider import PRODUCT_DEVICE
-
-ANDROID_PRODUCT_OUT = os.path.join(
-    os.getcwd(), "out/dist/bluetooth_cert_test/out/target/product",
-    PRODUCT_DEVICE)
-
+ANDROID_BUILD_TOP = os.environ.get('ANDROID_BUILD_TOP')
+ANDROID_HOST_OUT = os.environ.get('ANDROID_HOST_OUT')
+ANDROID_PRODUCT_OUT = os.environ.get('ANDROID_PRODUCT_OUT')
 WAIT_CHANNEL_READY_TIMEOUT = 10
 
 
@@ -46,8 +43,7 @@ def replace_vars(string, config):
         rootcanal_port = ""
     if serial_number == "DUT" or serial_number == "CERT":
         raise Exception("Did you forget to configure the serial number?")
-    android_host_out = os.path.join(os.getcwd(), "out/host/linux-x86")
-    return string.replace("$ANDROID_HOST_OUT", android_host_out) \
+    return string.replace("$ANDROID_HOST_OUT", ANDROID_HOST_OUT) \
                  .replace("$(grpc_port)", config.get("grpc_port")) \
                  .replace("$(grpc_root_server_port)", config.get("grpc_root_server_port")) \
                  .replace("$(rootcanal_port)", rootcanal_port) \
@@ -63,6 +59,11 @@ class GdDeviceBase:
         # logging.log_path only exists when this is used in an ACTS test run.
         self.log_path_base = context.get_current_context().get_full_output_path(
         )
+        self.log = tracelogger.TraceLogger(
+            GdDeviceBaseLoggerAdapter(logging.getLogger(), {
+                'device': label,
+                'type_identifier': type_identifier
+            }))
 
         backing_process_logpath = os.path.join(
             self.log_path_base,
@@ -107,7 +108,7 @@ class GdDeviceBase:
 
         self.backing_process = subprocess.Popen(
             cmd,
-            cwd=os.getcwd(),
+            cwd=ANDROID_BUILD_TOP,
             env=os.environ.copy(),
             stdout=self.backing_process_logs,
             stderr=self.backing_process_logs)
@@ -145,3 +146,19 @@ class GdDeviceBase:
             future.result(timeout=WAIT_CHANNEL_READY_TIMEOUT)
         except grpc.FutureTimeoutError:
             logging.error("wait channel ready timeout")
+
+
+class GdDeviceBaseLoggerAdapter(logging.LoggerAdapter):
+
+    def process(self, msg, kwargs):
+        msg = "[%s|%s] %s" % (self.extra["type_identifier"],
+                              self.extra["device"], msg)
+        return (msg, kwargs)
+
+
+class GdDeviceConfigError(Exception):
+    """Raised when GdDevice configs are malformatted."""
+
+
+class GdDeviceError(error.ActsError):
+    """Raised when there is an error in GdDevice."""
