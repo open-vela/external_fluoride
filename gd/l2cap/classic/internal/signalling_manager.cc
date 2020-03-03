@@ -160,6 +160,7 @@ void ClassicSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, 
 
   auto fcs_option = std::make_unique<FrameCheckSequenceOption>();
   fcs_option->fcs_type_ = FcsType::NO_FCS;
+  configuration_state.fcs_type_ = FcsType::NO_FCS;
   if (link_->GetRemoteSupportsFcs()) {
     fcs_option->fcs_type_ = FcsType::DEFAULT;
     configuration_state.fcs_type_ = FcsType::DEFAULT;
@@ -240,6 +241,7 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
 
   auto fcs_option = std::make_unique<FrameCheckSequenceOption>();
   fcs_option->fcs_type_ = FcsType::DEFAULT;
+  configuration_state.fcs_type_ = FcsType::DEFAULT;
   if (!link_->GetRemoteSupportsFcs()) {
     fcs_option->fcs_type_ = FcsType::NO_FCS;
     configuration_state.fcs_type_ = FcsType::NO_FCS;
@@ -314,12 +316,15 @@ void ClassicSignallingManager::OnConfigurationRequest(SignalId signal_id, Cid ci
         break;
       }
       default:
-        LOG_WARN("Received some unsupported configuration option: %d", static_cast<int>(option->type_));
-        auto response =
-            ConfigurationResponseBuilder::Create(signal_id.Value(), channel->GetRemoteCid(), is_continuation,
-                                                 ConfigurationResponseResult::UNKNOWN_OPTIONS, {});
-        enqueue_buffer_->Enqueue(std::move(response), handler_);
-        return;
+        if (option->is_hint_ != ConfigurationOptionIsHint::OPTION_IS_A_HINT) {
+          LOG_WARN("Received some unsupported configuration option: %d", static_cast<int>(option->type_));
+          auto response =
+              ConfigurationResponseBuilder::Create(signal_id.Value(), channel->GetRemoteCid(), is_continuation,
+                                                   ConfigurationResponseResult::UNKNOWN_OPTIONS, {});
+          enqueue_buffer_->Enqueue(std::move(response), handler_);
+          return;
+        }
+        break;
     }
   }
 
@@ -359,18 +364,40 @@ void ClassicSignallingManager::OnConfigurationResponse(SignalId signal_id, Cid c
     return;
   }
 
-  if (result == ConfigurationResponseResult::PENDING) {
-    alarm_.Schedule(common::BindOnce(&ClassicSignallingManager::on_command_timeout, common::Unretained(this)),
-                    kTimeout);
-    return;
-  }
+  switch (result) {
+    default:
+    case ConfigurationResponseResult::REJECTED:
+    case ConfigurationResponseResult::UNKNOWN_OPTIONS:
+    case ConfigurationResponseResult::FLOW_SPEC_REJECTED:
+      LOG_WARN("Configuration response not SUCCESS: %s", ConfigurationResponseResultText(result).c_str());
+      handle_send_next_command();
+      return;
 
-  if (result != ConfigurationResponseResult::SUCCESS) {
-    LOG_WARN("Configuration response not SUCCESS");
-    handle_send_next_command();
-    return;
-  }
+    case ConfigurationResponseResult::PENDING:
+      alarm_.Schedule(common::BindOnce(&ClassicSignallingManager::on_command_timeout, common::Unretained(this)),
+                      kTimeout);
+      return;
 
+    case ConfigurationResponseResult::UNACCEPTABLE_PARAMETERS:
+      for (auto& option : options) {
+        if (option->type_ == ConfigurationOptionType::RETRANSMISSION_AND_FLOW_CONTROL) {
+          auto mtu_configuration = std::make_unique<MtuConfigurationOption>();
+          mtu_configuration->mtu_ = channel_configuration_[cid].incoming_mtu_;
+
+          std::vector<std::unique_ptr<ConfigurationOption>> config;
+          config.emplace_back(std::move(mtu_configuration));
+          alarm_.Cancel();
+          command_just_sent_.signal_id_ = kInvalidSignalId;
+          SendConfigurationRequest(channel->GetRemoteCid(), std::move(config));
+          return;
+        }
+      }
+      handle_send_next_command();
+      return;
+
+    case ConfigurationResponseResult::SUCCESS:
+      break;
+  }
   auto& configuration_state = channel_configuration_[channel->GetCid()];
 
   for (auto& option : options) {
@@ -485,7 +512,8 @@ void ClassicSignallingManager::OnInformationRequest(SignalId signal_id, Informat
     case InformationRequestInfoType::EXTENDED_FEATURES_SUPPORTED: {
       // TODO: implement this response
       auto response = InformationResponseExtendedFeaturesBuilder::Create(
-          signal_id.Value(), InformationRequestResult::SUCCESS, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0);
+          signal_id.Value(), InformationRequestResult::SUCCESS, 0, 0, 0, 1 /* ERTM */, 0 /* Streaming mode */,
+          1 /* FCS */, 0, 1 /* Fixed Channels */, 0, 0);
       enqueue_buffer_->Enqueue(std::move(response), handler_);
       break;
     }
@@ -671,7 +699,7 @@ void ClassicSignallingManager::on_command_timeout() {
     LOG_ERROR("No pending command");
     return;
   }
-
+  LOG_WARN("Response time out for %s", CommandCodeText(command_just_sent_.command_code_).c_str());
   switch (command_just_sent_.command_code_) {
     case CommandCode::CONNECTION_REQUEST: {
       link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
