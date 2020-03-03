@@ -58,13 +58,13 @@ class TestDelegate : public LowEnergyClient::Delegate {
   int connection_state_count() const { return connection_state_count_; }
 
   void OnConnectionState(LowEnergyClient* client, int status,
-                         const char* address, bool connected) override {
+                         const char* address, bool connected) {
     ASSERT_TRUE(client);
     connection_state_count_++;
   }
 
   void OnMtuChanged(LowEnergyClient* client, int status, const char* address,
-                    int mtu) override {
+                    int mtu) {
     ASSERT_TRUE(client);
     last_mtu_ = mtu;
   }
