@@ -15,6 +15,8 @@
  */
 
 #include "module.h"
+#include "os/handler.h"
+#include "os/thread.h"
 
 #include "gtest/gtest.h"
 
@@ -39,6 +41,8 @@ class ModuleTest : public ::testing::Test {
   Thread* thread_;
 };
 
+os::Handler* test_module_no_dependency_handler = nullptr;
+
 class TestModuleNoDependency : public Module {
  public:
   static const ModuleFactory Factory;
@@ -50,6 +54,7 @@ class TestModuleNoDependency : public Module {
   void Start() override {
     // A module is not considered started until Start() finishes
     EXPECT_FALSE(GetModuleRegistry()->IsStarted<TestModuleNoDependency>());
+    test_module_no_dependency_handler = GetHandler();
   }
 
   void Stop() override {
@@ -61,6 +66,8 @@ class TestModuleNoDependency : public Module {
 const ModuleFactory TestModuleNoDependency::Factory = ModuleFactory([]() {
   return new TestModuleNoDependency();
 });
+
+os::Handler* test_module_one_dependency_handler = nullptr;
 
 class TestModuleOneDependency : public Module {
  public:
@@ -76,6 +83,7 @@ class TestModuleOneDependency : public Module {
 
     // A module is not considered started until Start() finishes
     EXPECT_FALSE(GetModuleRegistry()->IsStarted<TestModuleOneDependency>());
+    test_module_one_dependency_handler = GetHandler();
   }
 
   void Stop() override {
@@ -197,6 +205,19 @@ TEST_F(ModuleTest, two_dependencies) {
   EXPECT_FALSE(registry_->IsStarted<TestModuleOneDependency>());
   EXPECT_FALSE(registry_->IsStarted<TestModuleNoDependencyTwo>());
   EXPECT_FALSE(registry_->IsStarted<TestModuleTwoDependencies>());
+}
+
+void post_two_module_one_handler() {
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  test_module_one_dependency_handler->Post(common::BindOnce([] { FAIL(); }));
+}
+
+TEST_F(ModuleTest, shutdown_with_unhandled_callback) {
+  ModuleList list;
+  list.add<TestModuleOneDependency>();
+  registry_->Start(&list, thread_);
+  test_module_no_dependency_handler->Post(common::BindOnce(&post_two_module_one_handler));
+  registry_->StopAll();
 }
 
 }  // namespace
