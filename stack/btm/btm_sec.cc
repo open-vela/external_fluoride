@@ -1016,12 +1016,11 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
  *  Note: After 2.1 parameters are not used and preserved here not to change API
  ******************************************************************************/
 tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                        tBT_TRANSPORT transport, int device_type,
-                        uint8_t pin_len, uint8_t* p_pin,
-                        uint32_t trusted_mask[]) {
+                        tBT_TRANSPORT transport, uint8_t pin_len,
+                        uint8_t* p_pin, uint32_t trusted_mask[]) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport,
-                                        device_type);
+    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport, pin_len,
+                                        p_pin, trusted_mask);
   }
 
   if (transport == BT_TRANSPORT_INVALID)
@@ -4347,7 +4346,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
