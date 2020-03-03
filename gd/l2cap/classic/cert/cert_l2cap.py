@@ -21,74 +21,20 @@ from cert.truth import assertThat
 import bluetooth_packets_python3 as bt_packets
 from bluetooth_packets_python3 import l2cap_packets
 from bluetooth_packets_python3.l2cap_packets import CommandCode
-from bluetooth_packets_python3.l2cap_packets import Final
-from bluetooth_packets_python3.l2cap_packets import SegmentationAndReassembly
-from bluetooth_packets_python3.l2cap_packets import SupervisoryFunction
-from bluetooth_packets_python3.l2cap_packets import Poll
-from bluetooth_packets_python3.l2cap_packets import InformationRequestInfoType
 from cert.event_stream import FilteringEventStream
 from cert.event_stream import IEventStream
 from cert.matchers import L2capMatchers
-from cert.captures import L2capCaptures
 
 
 class CertL2capChannel(IEventStream):
 
-    def __init__(self, device, scid, dcid, acl_stream, acl, control_channel):
+    def __init__(self, device, scid, acl_stream):
         self._device = device
         self._scid = scid
-        self._dcid = dcid
-        self._acl_stream = acl_stream
-        self._acl = acl
-        self._control_channel = control_channel
-        self._our_acl_view = FilteringEventStream(
-            acl_stream, L2capMatchers.ExtractBasicFrame(scid))
+        self._our_acl_view = acl_stream
 
     def get_event_queue(self):
         return self._our_acl_view.get_event_queue()
-
-    def send(self, packet):
-        frame = l2cap_packets.BasicFrameBuilder(self._dcid, packet)
-        self._acl.send(frame.Serialize())
-
-    def send_i_frame(self,
-                     tx_seq,
-                     req_seq,
-                     f=Final.NOT_SET,
-                     sar=SegmentationAndReassembly.UNSEGMENTED,
-                     payload=None):
-        frame = l2cap_packets.EnhancedInformationFrameBuilder(
-            self._dcid, tx_seq, f, req_seq, sar, payload)
-        self._acl.send(frame.Serialize())
-
-    def send_s_frame(self,
-                     req_seq,
-                     s=SupervisoryFunction.RECEIVER_READY,
-                     p=Poll.NOT_SET,
-                     f=Final.NOT_SET):
-        frame = l2cap_packets.EnhancedSupervisoryFrameBuilder(
-            self._dcid, s, p, f, req_seq)
-        self._acl.send(frame.Serialize())
-
-    def send_information_request(self, type):
-        assertThat(self._scid).isEqualTo(1)
-        signal_id = 3
-        information_request = l2cap_packets.InformationRequestBuilder(
-            signal_id, type)
-        self.send(information_request)
-
-    def send_extended_features_request(self):
-        self.send_information_request(
-            InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED)
-
-    def disconnect_and_verify(self):
-        assertThat(self._scid).isNotEqualTo(1)
-        self._control_channel.send(
-            l2cap_packets.DisconnectionRequestBuilder(1, self._dcid,
-                                                      self._scid))
-
-        assertThat(self._control_channel).emits(
-            L2capMatchers.DisconnectionResponse(self._scid, self._dcid))
 
 
 class CertL2cap(Closable):
@@ -118,9 +64,8 @@ class CertL2cap(Closable):
         }
 
         self.scid_to_dcid = {}
-
-        self.ertm_option = None
-        self.fcs_option = None
+        self.ertm_tx_window_size = 10
+        self.ertm_max_transmit = 20
 
     def close(self):
         self._acl_manager.close()
@@ -129,49 +74,46 @@ class CertL2cap(Closable):
     def connect_acl(self, remote_addr):
         self._acl = self._acl_manager.initiate_connection(remote_addr)
         self._acl.wait_for_connection_complete()
-        self.control_channel = CertL2capChannel(
-            self._device,
-            1,
-            1,
-            self._get_acl_stream(),
-            self._acl,
-            control_channel=None)
-        self._get_acl_stream().register_callback(self._handle_control_packet)
+        self.get_acl_stream().register_callback(self._handle_control_packet)
 
     def open_channel(self, signal_id, psm, scid):
-        self.control_channel.send(
-            l2cap_packets.ConnectionRequestBuilder(signal_id, psm, scid))
+        # what is the 1 here for?
+        open_channel = l2cap_packets.BasicFrameBuilder(
+            1, l2cap_packets.ConnectionRequestBuilder(signal_id, psm, scid))
+        self.send_acl(open_channel)
 
-        response = L2capCaptures.ConnectionResponse(scid)
-        assertThat(self.control_channel).emits(response)
-        return CertL2capChannel(self._device, scid,
-                                response.get().GetDestinationCid(),
-                                self._get_acl_stream(), self._acl,
-                                self.control_channel)
+        assertThat(self._acl).emits(L2capMatchers.ConnectionResponse(scid))
+        return CertL2capChannel(self._device, scid, self.get_acl_stream())
 
     # prefer to use channel abstraction instead, if at all possible
     def send_acl(self, packet):
         self._acl.send(packet.Serialize())
 
-    def get_control_channel(self):
-        return self.control_channel
-
-    def _get_acl_stream(self):
+    # temporary until clients migrated
+    def get_acl_stream(self):
         return self._acl_manager.get_acl_stream()
 
-    def turn_on_ertm(self, tx_window_size=10, max_transmit=20):
-        self.ertm_option = l2cap_packets.RetransmissionAndFlowControlConfigurationOption(
-        )
-        self.ertm_option.mode = l2cap_packets.RetransmissionAndFlowControlModeOption.L2CAP_BASIC
-        self.ertm_option.tx_window_size = tx_window_size
-        self.ertm_option.max_transmit = max_transmit
-        self.ertm_option.retransmission_time_out = 2000
-        self.ertm_option.monitor_time_out = 12000
-        self.ertm_option.maximum_pdu_size = 1010
+    # temporary until clients migrated
+    def get_acl(self):
+        return self._acl
 
-    def turn_on_fcs(self):
-        self.fcs_option = l2cap_packets.FrameCheckSequenceOption()
-        self.fcs_option.fcs_type = l2cap_packets.FcsType.DEFAULT
+    # temporary until clients migrated
+    def get_dcid(self, scid):
+        return self.scid_to_dcid[scid]
+
+    # more of a hack for the moment
+    def turn_on_ertm(self, tx_window_size=10, max_transmit=20):
+        self.ertm_tx_window_size = tx_window_size
+        self.ertm_max_transmit = max_transmit
+        self.control_table[
+            CommandCode.
+            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm
+
+    # more of a hack for the moment
+    def turn_on_ertm_and_fcs(self):
+        self.control_table[
+            CommandCode.
+            CONNECTION_RESPONSE] = self._on_connection_response_use_ertm_and_fcs
 
     # more of a hack for the moment
     def ignore_config_and_connections(self):
@@ -202,7 +144,9 @@ class CertL2cap(Closable):
             sid, cid, cid, l2cap_packets.ConnectionResponseResult.SUCCESS,
             l2cap_packets.ConnectionResponseStatus.
             NO_FURTHER_INFORMATION_AVAILABLE)
-        self.control_channel.send(connection_response)
+        connection_response_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, connection_response)
+        self.send_acl(connection_response_l2cap)
         return True
 
     def _on_connection_response_default(self, l2cap_control_view):
@@ -213,15 +157,72 @@ class CertL2cap(Closable):
         dcid = connection_response_view.GetDestinationCid()
         self.scid_to_dcid[scid] = dcid
 
-        options = []
-        if self.ertm_option is not None:
-            options.append(self.ertm_option)
-        if self.fcs_option is not None:
-            options.append(self.fcs_option)
+        config_request = l2cap_packets.ConfigurationRequestBuilder(
+            sid + 1, dcid, l2cap_packets.Continuation.END, [])
+        config_request_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, config_request)
+        self.send_acl(config_request_l2cap)
+        return True
+
+    def _on_connection_response_use_ertm(self, l2cap_control_view):
+        connection_response_view = l2cap_packets.ConnectionResponseView(
+            l2cap_control_view)
+        sid = connection_response_view.GetIdentifier()
+        scid = connection_response_view.GetSourceCid()
+        dcid = connection_response_view.GetDestinationCid()
+        self.scid_to_dcid[scid] = dcid
+
+        # FIXME: This doesn't work!
+        ertm_option = l2cap_packets.RetransmissionAndFlowControlConfigurationOption(
+        )
+        ertm_option.mode = l2cap_packets.RetransmissionAndFlowControlModeOption.L2CAP_BASIC
+        ertm_option.tx_window_size = self.ertm_tx_window_size
+        ertm_option.max_transmit = self.ertm_max_transmit
+        ertm_option.retransmission_time_out = 2000
+        ertm_option.monitor_time_out = 12000
+        ertm_option.maximum_pdu_size = 1010
+
+        options = [ertm_option]
 
         config_request = l2cap_packets.ConfigurationRequestBuilder(
             sid + 1, dcid, l2cap_packets.Continuation.END, options)
-        self.control_channel.send(config_request)
+
+        config_request_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, config_request)
+
+        self.send_acl(config_request_l2cap)
+        return True
+
+    def _on_connection_response_use_ertm_and_fcs(self, l2cap_control_view):
+        connection_response_view = l2cap_packets.ConnectionResponseView(
+            l2cap_control_view)
+        sid = connection_response_view.GetIdentifier()
+        scid = connection_response_view.GetSourceCid()
+        dcid = connection_response_view.GetDestinationCid()
+        self.scid_to_dcid[scid] = dcid
+
+        # FIXME: This doesn't work!
+        ertm_option = l2cap_packets.RetransmissionAndFlowControlConfigurationOption(
+        )
+        ertm_option.mode = l2cap_packets.RetransmissionAndFlowControlModeOption.L2CAP_BASIC
+        ertm_option.tx_window_size = self.ertm_tx_window_size
+        ertm_option.max_transmit = self.ertm_max_transmit
+        ertm_option.retransmission_time_out = 2000
+        ertm_option.monitor_time_out = 12000
+        ertm_option.maximum_pdu_size = 1010
+
+        fcs_option = l2cap_packets.FrameCheckSequenceOption()
+        fcs_option.fcs_type = l2cap_packets.FcsType.DEFAULT
+
+        options = [ertm_option, fcs_option]
+
+        config_request = l2cap_packets.ConfigurationRequestBuilder(
+            sid + 1, dcid, l2cap_packets.Continuation.END, options)
+
+        config_request_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, config_request)
+
+        self.send_acl(config_request_l2cap)
         return True
 
     def _on_connection_response_configuration_request_with_unknown_options_and_hint(
@@ -257,7 +258,9 @@ class CertL2cap(Closable):
         config_response = l2cap_packets.ConfigurationResponseBuilder(
             sid, self.scid_to_dcid.get(dcid, 0), l2cap_packets.Continuation.END,
             l2cap_packets.ConfigurationResponseResult.SUCCESS, [])
-        self.control_channel.send(config_response)
+        config_response_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, config_response)
+        self.send_acl(config_response_l2cap)
 
     def _on_configuration_request_unacceptable_parameters(
             self, l2cap_control_view):
@@ -278,7 +281,9 @@ class CertL2cap(Closable):
             sid, self.scid_to_dcid.get(dcid, 0), l2cap_packets.Continuation.END,
             l2cap_packets.ConfigurationResponseResult.UNACCEPTABLE_PARAMETERS,
             [mtu_opt, fcs_opt, rfc_opt])
-        self.control_channel.send(config_response)
+        config_response_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, config_response)
+        self.send_acl(config_response_l2cap)
 
     def _on_configuration_response_default(self, l2cap_control_view):
         configuration_response = l2cap_packets.ConfigurationResponseView(
@@ -293,7 +298,9 @@ class CertL2cap(Closable):
         dcid = disconnection_request.GetDestinationCid()
         disconnection_response = l2cap_packets.DisconnectionResponseBuilder(
             sid, dcid, scid)
-        self.control_channel.send(disconnection_response)
+        disconnection_response_l2cap = l2cap_packets.BasicFrameBuilder(
+            1, disconnection_response)
+        self.send_acl(disconnection_response_l2cap)
 
     def _on_disconnection_response_default(self, l2cap_control_view):
         disconnection_response = l2cap_packets.DisconnectionResponseView(
@@ -307,18 +314,21 @@ class CertL2cap(Closable):
         if information_type == l2cap_packets.InformationRequestInfoType.CONNECTIONLESS_MTU:
             response = l2cap_packets.InformationResponseConnectionlessMtuBuilder(
                 sid, l2cap_packets.InformationRequestResult.SUCCESS, 100)
-            self.control_channel.send(response)
+            response_l2cap = l2cap_packets.BasicFrameBuilder(1, response)
+            self.send_acl(response_l2cap)
             return
         if information_type == l2cap_packets.InformationRequestInfoType.EXTENDED_FEATURES_SUPPORTED:
             response = l2cap_packets.InformationResponseExtendedFeaturesBuilder(
                 sid, l2cap_packets.InformationRequestResult.SUCCESS, 0, 0, 0, 1,
                 0, 1, 0, 0, 0, 0)
-            self.control_channel.send(response)
+            response_l2cap = l2cap_packets.BasicFrameBuilder(1, response)
+            self.send_acl(response_l2cap)
             return
         if information_type == l2cap_packets.InformationRequestInfoType.FIXED_CHANNELS_SUPPORTED:
             response = l2cap_packets.InformationResponseFixedChannelsBuilder(
                 sid, l2cap_packets.InformationRequestResult.SUCCESS, 2)
-            self.control_channel.send(response)
+            response_l2cap = l2cap_packets.BasicFrameBuilder(1, response)
+            self.send_acl(response_l2cap)
             return
 
     def _on_information_response_default(self, l2cap_control_view):
