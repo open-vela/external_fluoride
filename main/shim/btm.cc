@@ -22,6 +22,7 @@
 #include <cstring>
 #include <mutex>
 
+#include "bta/include/bta_api.h"
 #include "main/shim/btm.h"
 #include "main/shim/controller.h"
 #include "main/shim/entry.h"
@@ -789,8 +790,16 @@ size_t bluetooth::shim::Btm::GetNumberOfAdvertisingInstances() const {
 tBTM_STATUS bluetooth::shim::Btm::CreateBond(const RawAddress& bd_addr,
                                              tBLE_ADDR_TYPE addr_type,
                                              tBT_TRANSPORT transport,
-                                             uint8_t pin_len, uint8_t* p_pin,
-                                             uint32_t trusted_mask[]) {
+                                             int device_type) {
+  if (transport == BTA_TRANSPORT_UNKNOWN) {
+    if (device_type & BT_DEVICE_TYPE_BLE) {
+      transport = BTA_TRANSPORT_LE;
+    } else if (device_type & BT_DEVICE_TYPE_BREDR) {
+      transport = BTA_TRANSPORT_BR_EDR;
+    }
+    LOG_DEBUG(LOG_TAG, "%s guessing transport as %02x ", __func__, transport);
+  }
+
   auto security_manager =
       bluetooth::shim::GetSecurityModule()->GetSecurityManager();
   switch (transport) {
@@ -820,11 +829,4 @@ bool bluetooth::shim::Btm::RemoveBond(const RawAddress& bd_addr) {
       bluetooth::shim::GetSecurityModule()->GetSecurityManager();
   security_manager->RemoveBond(ToAddressWithType(bd_addr, BLE_ADDR_PUBLIC));
   return true;
-}
-
-void bluetooth::shim::Btm::SetSimplePairingCallback(
-    tBTM_SP_CALLBACK* callback) {
-  auto security_manager =
-      bluetooth::shim::GetSecurityModule()->GetSecurityManager();
-  simple_pairing_callback_ = callback;
 }
