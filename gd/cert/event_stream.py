@@ -43,12 +43,10 @@ class FilteringEventStream(IEventStream):
         self.event_queue = SimpleQueue()
         self.stream = stream
 
-        self.stream.register_callback(
-            self.__event_callback,
-            lambda packet: self.filter_fn(packet) is not None)
+        self.stream.register_callback(self.__event_callback, self.filter_fn)
 
     def __event_callback(self, event):
-        self.event_queue.put(self.filter_fn(event))
+        self.event_queue.put(event)
 
     def get_event_queue(self):
         return self.event_queue
