@@ -29,6 +29,7 @@
 #include "btif_profile_queue.h"
 
 #include <base/bind.h>
+#include <base/callback.h>
 #include <base/logging.h>
 #include <base/strings/stringprintf.h>
 #include <string.h>
@@ -194,7 +195,14 @@ bt_status_t btif_queue_connect_next(void) {
 
   LOG_INFO(LOG_TAG, "%s: executing connection request: %s", __func__,
            head.ToString().c_str());
-  return head.connect();
+  bt_status_t b_status = head.connect();
+  if (b_status != BT_STATUS_SUCCESS) {
+    LOG_INFO(LOG_TAG,
+             "%s: connect %s failed, advance to next scheduled connection.",
+             __func__, head.ToString().c_str());
+    btif_queue_advance();
+  }
+  return b_status;
 }
 
 /*******************************************************************************
@@ -210,7 +218,6 @@ void btif_queue_release() {
   LOG_INFO(LOG_TAG, "%s", __func__);
   if (do_in_jni_thread(FROM_HERE, base::Bind(&queue_int_release)) !=
       BT_STATUS_SUCCESS) {
-    // Scheduling failed - the thread to schedule on is probably dead
-    queue_int_release();
+    LOG(FATAL) << __func__ << ": Failed to schedule on JNI thread";
   }
 }
