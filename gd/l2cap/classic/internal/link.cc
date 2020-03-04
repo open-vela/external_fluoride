@@ -148,6 +148,8 @@ std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateDynamicChanne
                                                                                   SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateChannel(psm, remote_cid, security_policy);
   if (channel != nullptr) {
+    data_pipeline_manager_.AttachChannel(channel->GetCid(), channel,
+                                         l2cap::internal::DataPipelineManager::ChannelMode::BASIC);
     RefreshRefCount();
   }
   channel->local_initiated_ = false;
@@ -158,6 +160,8 @@ std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateReservedDynam
     Cid reserved_cid, Psm psm, Cid remote_cid, SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateReservedChannel(reserved_cid, psm, remote_cid, security_policy);
   if (channel != nullptr) {
+    data_pipeline_manager_.AttachChannel(channel->GetCid(), channel,
+                                         l2cap::internal::DataPipelineManager::ChannelMode::BASIC);
     RefreshRefCount();
   }
   channel->local_initiated_ = true;
@@ -174,6 +178,7 @@ void Link::FreeDynamicChannel(Cid cid) {
   if (dynamic_channel_allocator_.FindChannelByCid(cid) == nullptr) {
     return;
   }
+  data_pipeline_manager_.DetachChannel(cid);
   dynamic_channel_allocator_.FreeChannel(cid);
   RefreshRefCount();
 }
