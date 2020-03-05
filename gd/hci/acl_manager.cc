@@ -16,16 +16,17 @@
 
 #include "hci/acl_manager.h"
 
+#include <atomic>
 #include <future>
 #include <queue>
 #include <set>
 #include <utility>
 
-#include "acl_fragmenter.h"
-#include "acl_manager.h"
 #include "common/bidi_queue.h"
+#include "hci/acl_fragmenter.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
+#include "security/security_module.h"
 
 namespace bluetooth {
 namespace hci {
@@ -82,16 +83,22 @@ struct AclManager::acl_connection {
   uint16_t number_of_sent_packets_ = 0;
   PacketViewForRecombination recombination_stage_{std::make_shared<std::vector<uint8_t>>()};
   int remaining_sdu_continuation_packet_size_ = 0;
-  bool enqueue_registered_ = false;
+  std::atomic_bool enqueue_registered_ = false;
   std::queue<packet::PacketView<kLittleEndian>> incoming_queue_;
 
+  ~acl_connection() {
+    if (enqueue_registered_.exchange(false)) {
+      queue_->GetDownEnd()->UnregisterEnqueue();
+    }
+    queue_.reset();
+  }
+
+  // Invoked from some external Queue Reactable context
   std::unique_ptr<packet::PacketView<kLittleEndian>> on_incoming_data_ready() {
     auto packet = incoming_queue_.front();
     incoming_queue_.pop();
-    if (incoming_queue_.empty()) {
-      auto queue_end = queue_->GetDownEnd();
-      queue_end->UnregisterEnqueue();
-      enqueue_registered_ = false;
+    if (incoming_queue_.empty() && enqueue_registered_.exchange(false)) {
+      queue_->GetDownEnd()->UnregisterEnqueue();
     }
     return std::make_unique<PacketView<kLittleEndian>>(packet);
   }
@@ -137,10 +144,8 @@ struct AclManager::acl_connection {
     }
 
     incoming_queue_.push(payload);
-    if (!enqueue_registered_) {
-      enqueue_registered_ = true;
-      auto queue_end = queue_->GetDownEnd();
-      queue_end->RegisterEnqueue(
+    if (!enqueue_registered_.exchange(true)) {
+      queue_->GetDownEnd()->RegisterEnqueue(
           handler_, common::Bind(&AclManager::acl_connection::on_incoming_data_ready, common::Unretained(this)));
     }
   }
@@ -150,7 +155,7 @@ struct AclManager::acl_connection {
   }
 };
 
-struct AclManager::impl {
+struct AclManager::impl : public security::ISecurityManagerListener {
   impl(const AclManager& acl_manager) : acl_manager_(acl_manager) {}
 
   void Start() {
@@ -208,8 +213,6 @@ struct AclManager::impl {
     hci_layer_->RegisterEventHandler(EventCode::READ_REMOTE_VERSION_INFORMATION_COMPLETE,
                                      Bind(&impl::on_read_remote_version_information_complete, common::Unretained(this)),
                                      handler_);
-    hci_layer_->RegisterEventHandler(EventCode::ENCRYPTION_CHANGE,
-                                     Bind(&impl::on_encryption_change, common::Unretained(this)), handler_);
     hci_layer_->RegisterEventHandler(EventCode::LINK_SUPERVISION_TIMEOUT_CHANGED,
                                      Bind(&impl::on_link_supervision_timeout_changed, common::Unretained(this)),
                                      handler_);
@@ -225,10 +228,15 @@ struct AclManager::impl {
     hci_layer_->UnregisterEventHandler(EventCode::READ_REMOTE_EXTENDED_FEATURES_COMPLETE);
     hci_queue_end_->UnregisterDequeue();
     unregister_all_connections();
+    if (enqueue_registered_.exchange(false)) {
+      hci_queue_end_->UnregisterEnqueue();
+    }
+    controller_->UnregisterCompletedAclPacketsCallback();
     acl_connections_.clear();
     hci_queue_end_ = nullptr;
     handler_ = nullptr;
     hci_layer_ = nullptr;
+    security_manager_.reset();
   }
 
   void incoming_acl_credits(uint16_t handle, uint16_t credits) {
@@ -244,7 +252,9 @@ struct AclManager::impl {
     connection_pair->second.number_of_sent_packets_ -= credits;
     acl_packet_credits_ += credits;
     ASSERT(acl_packet_credits_ <= max_acl_packet_credits_);
-    start_round_robin();
+    if (acl_packet_credits_ == credits) {
+      start_round_robin();
+    }
   }
 
   // Round-robin scheduler
@@ -310,14 +320,19 @@ struct AclManager::impl {
   }
 
   void send_next_fragment() {
-    hci_queue_end_->RegisterEnqueue(handler_,
-                                    common::Bind(&impl::handle_enqueue_next_fragment, common::Unretained(this)));
+    if (!enqueue_registered_.exchange(true)) {
+      hci_queue_end_->RegisterEnqueue(handler_,
+                                      common::Bind(&impl::handle_enqueue_next_fragment, common::Unretained(this)));
+    }
   }
 
+  // Invoked from some external Queue Reactable context 1
   std::unique_ptr<AclPacketBuilder> handle_enqueue_next_fragment() {
     ASSERT(acl_packet_credits_ > 0);
     if (acl_packet_credits_ == 1 || fragments_to_send_.size() == 1) {
-      hci_queue_end_->UnregisterEnqueue();
+      if (enqueue_registered_.exchange(false)) {
+        hci_queue_end_->UnregisterEnqueue();
+      }
       if (fragments_to_send_.size() == 1) {
         handler_->Post(common::BindOnce(&impl::start_round_robin, common::Unretained(this)));
       }
@@ -329,6 +344,7 @@ struct AclManager::impl {
     return std::unique_ptr<AclPacketBuilder>(raw_pointer);
   }
 
+  // Invoked from some external Queue Reactable context 2
   void dequeue_and_route_acl_packet_to_connection() {
     auto packet = hci_queue_end_->TryDequeue();
     ASSERT(packet != nullptr);
@@ -572,8 +588,11 @@ struct AclManager::impl {
     }
   }
 
-  void on_encryption_change(EventPacketView packet) {
-    EncryptionChangeView encryption_change_view = EncryptionChangeView::Create(packet);
+  void OnDeviceBonded(bluetooth::hci::AddressWithType device) override {}
+  void OnDeviceUnbonded(bluetooth::hci::AddressWithType device) override {}
+  void OnDeviceBondFailed(bluetooth::hci::AddressWithType device) override {}
+
+  void OnEncryptionStateChanged(EncryptionChangeView encryption_change_view) override {
     if (!encryption_change_view.IsValid()) {
       LOG_ERROR("Received on_encryption_change with invalid packet");
       return;
@@ -1174,6 +1193,11 @@ struct AclManager::impl {
         handler_);
   }
 
+  void set_security_module(security::SecurityModule* security_module) {
+    security_manager_ = security_module->GetSecurityManager();
+    security_manager_->RegisterCallbackListener(this, handler_);
+  }
+
   void accept_connection(Address address) {
     auto role = AcceptConnectionRequestRole::BECOME_MASTER;  // We prefer to be master
     hci_layer_->EnqueueCommand(AcceptConnectionRequestBuilder::Create(address, role),
@@ -1411,9 +1435,10 @@ struct AclManager::impl {
   }
 
   void handle_le_connection_update(uint16_t handle, uint16_t conn_interval_min, uint16_t conn_interval_max,
-                                   uint16_t conn_latency, uint16_t supervision_timeout) {
+                                   uint16_t conn_latency, uint16_t supervision_timeout, uint16_t min_ce_length,
+                                   uint16_t max_ce_length) {
     auto packet = LeConnectionUpdateBuilder::Create(handle, conn_interval_min, conn_interval_max, conn_latency,
-                                                    supervision_timeout, kMinimumCeLength, kMaximumCeLength);
+                                                    supervision_timeout, min_ce_length, max_ce_length);
     hci_layer_->EnqueueCommand(std::move(packet), common::BindOnce([](CommandStatusView status) {
                                  ASSERT(status.IsValid());
                                  ASSERT(status.GetCommandOpCode() == OpCode::LE_CREATE_CONNECTION);
@@ -1853,8 +1878,9 @@ struct AclManager::impl {
   }
 
   bool LeConnectionUpdate(uint16_t handle, uint16_t conn_interval_min, uint16_t conn_interval_max,
-                          uint16_t conn_latency, uint16_t supervision_timeout,
-                          common::OnceCallback<void(ErrorCode)> done_callback, os::Handler* handler) {
+                          uint16_t conn_latency, uint16_t supervision_timeout, uint16_t min_ce_length,
+                          uint16_t max_ce_length, common::OnceCallback<void(ErrorCode)> done_callback,
+                          os::Handler* handler) {
     auto& connection = check_and_get_connection(handle);
     if (connection.is_disconnected_) {
       LOG_INFO("Already disconnected");
@@ -1873,7 +1899,7 @@ struct AclManager::impl {
       return false;
     }
     handler_->Post(BindOnce(&impl::handle_le_connection_update, common::Unretained(this), handle, conn_interval_min,
-                            conn_interval_max, conn_latency, supervision_timeout));
+                            conn_interval_max, conn_latency, supervision_timeout, min_ce_length, max_ce_length));
     return true;
   }
 
@@ -1897,6 +1923,7 @@ struct AclManager::impl {
   std::map<uint16_t, acl_connection>::iterator current_connection_pair_;
 
   HciLayer* hci_layer_ = nullptr;
+  std::unique_ptr<security::SecurityManager> security_manager_;
   os::Handler* handler_ = nullptr;
   ConnectionCallbacks* client_callbacks_ = nullptr;
   os::Handler* client_handler_ = nullptr;
@@ -1907,6 +1934,7 @@ struct AclManager::impl {
   AclManagerCallbacks* le_acl_manager_client_callbacks_ = nullptr;
   os::Handler* le_acl_manager_client_handler_ = nullptr;
   common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* hci_queue_end_ = nullptr;
+  std::atomic_bool enqueue_registered_ = false;
   std::map<uint16_t, AclManager::acl_connection> acl_connections_;
   std::set<Address> connecting_;
   std::set<AddressWithType> connecting_le_;
@@ -2057,10 +2085,11 @@ bool AclConnection::ReadClock(WhichClock which_clock) {
 }
 
 bool AclConnection::LeConnectionUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max, uint16_t conn_latency,
-                                       uint16_t supervision_timeout,
+                                       uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length,
                                        common::OnceCallback<void(ErrorCode)> done_callback, os::Handler* handler) {
   return manager_->pimpl_->LeConnectionUpdate(handle_, conn_interval_min, conn_interval_max, conn_latency,
-                                              supervision_timeout, std::move(done_callback), handler);
+                                              supervision_timeout, min_ce_length, max_ce_length,
+                                              std::move(done_callback), handler);
 }
 
 void AclConnection::Finish() {
@@ -2121,6 +2150,10 @@ void AclManager::ReadDefaultLinkPolicySettings() {
 void AclManager::WriteDefaultLinkPolicySettings(uint16_t default_link_policy_settings) {
   GetHandler()->Post(BindOnce(&impl::write_default_link_policy_settings, common::Unretained(pimpl_.get()),
                               default_link_policy_settings));
+}
+
+void AclManager::SetSecurityModule(security::SecurityModule* security_module) {
+  GetHandler()->Post(BindOnce(&impl::set_security_module, common::Unretained(pimpl_.get()), security_module));
 }
 
 void AclManager::ListDependencies(ModuleList* list) {

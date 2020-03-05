@@ -72,8 +72,13 @@ class Link : public l2cap::internal::ILink {
   virtual void Disconnect();
 
   // Handles connection parameter update request from remote
-  virtual void UpdateConnectionParameter(SignalId signal_id, uint16_t conn_interval_min, uint16_t conn_interval_max,
-                                         uint16_t conn_latency, uint16_t supervision_timeout);
+  virtual void UpdateConnectionParameterFromRemote(SignalId signal_id, uint16_t conn_interval_min,
+                                                   uint16_t conn_interval_max, uint16_t conn_latency,
+                                                   uint16_t supervision_timeout);
+
+  virtual void SendConnectionParameterUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max,
+                                             uint16_t conn_latency, uint16_t supervision_timeout,
+                                             uint16_t min_ce_length, uint16_t max_ce_length);
 
   // FixedChannel methods
 
@@ -90,7 +95,7 @@ class Link : public l2cap::internal::ILink {
   void SendDisconnectionRequest(Cid local_cid, Cid remote_cid) override;
 
   // Invoked by signalling manager to indicate an outgoing connection request failed and link shall free resources
-  virtual void OnOutgoingConnectionRequestFail(Cid local_cid);
+  virtual void OnOutgoingConnectionRequestFail(Cid local_cid, LeCreditBasedConnectionResponseResult result);
 
   virtual std::shared_ptr<l2cap::internal::DynamicChannelImpl> AllocateDynamicChannel(Psm psm, Cid remote_cid,
                                                                                       SecurityPolicy security_policy);
@@ -98,15 +103,13 @@ class Link : public l2cap::internal::ILink {
   virtual std::shared_ptr<l2cap::internal::DynamicChannelImpl> AllocateReservedDynamicChannel(
       Cid reserved_cid, Psm psm, Cid remote_cid, SecurityPolicy security_policy);
 
-  virtual DynamicChannelConfigurationOption GetConfigurationForInitialConfiguration(Cid cid);
-
   virtual void FreeDynamicChannel(Cid cid);
 
   // Check how many channels are acquired or in use, if zero, start tear down timer, if non-zero, cancel tear down timer
   virtual void RefreshRefCount();
 
   void NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> user_channel);
-  void NotifyChannelFail(Cid cid);
+  void NotifyChannelFail(Cid cid, DynamicChannelManager::ConnectionResult result);
 
   virtual std::string ToString() {
     return GetDevice().ToString();
@@ -131,6 +134,9 @@ class Link : public l2cap::internal::ILink {
   os::Alarm link_idle_disconnect_alarm_{l2cap_handler_};
   DISALLOW_COPY_AND_ASSIGN(Link);
 
+  // Received connection update complete from ACL manager. SignalId is bound to a valid number when we need to send a
+  // response to remote. If SignalId is bound to an invalid number, we don't send a response to remote, because the
+  // connection update request is not from remote LL slave.
   void on_connection_update_complete(SignalId signal_id, hci::ErrorCode error_code);
 };
 
