@@ -64,6 +64,8 @@
 #include "device/include/controller.h"
 #include "device/include/interop.h"
 #include "internal_include/stack_config.h"
+#include "main/shim/btif_dm.h"
+#include "main/shim/shim.h"
 #include "osi/include/allocator.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
@@ -288,7 +290,45 @@ static void btif_dm_data_free(uint16_t event, tBTA_DM_SEC* dm_sec) {
     osi_free_and_reset((void**)&dm_sec->ble_key.p_key_value);
 }
 
-void btif_dm_init(uid_set_t* set) { uid_set = set; }
+static void btif_dm_send_bond_state_changed(RawAddress address, bt_bond_state_t bond_state) {
+  do_in_jni_thread(FROM_HERE, base::BindOnce([](RawAddress address, bt_bond_state_t bond_state) {
+    btif_stats_add_bond_event(address, BTIF_DM_FUNC_BOND_STATE_CHANGED, bond_state);
+    HAL_CBACK(bt_hal_cbacks, bond_state_changed_cb, BT_STATUS_SUCCESS, &address, bond_state);
+  }, address, bond_state));
+}
+
+void btif_dm_init(uid_set_t* set) {
+  uid_set = set;
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    bluetooth::shim::BTIF_DM_SetUiCallback([](RawAddress address, bt_bdname_t bd_name, uint32_t cod, bt_ssp_variant_t pairing_variant, uint32_t pass_key) {
+      do_in_jni_thread(FROM_HERE, base::BindOnce([](RawAddress address, bt_bdname_t bd_name, uint32_t cod, bt_ssp_variant_t pairing_variant, uint32_t pass_key) {
+        LOG(ERROR) << __func__ << ": UI Callback fired!";
+
+        //TODO: java BondStateMachine requires change into bonding state. If we ever send this event separately, consider removing this line
+        HAL_CBACK(bt_hal_cbacks, bond_state_changed_cb, BT_STATUS_SUCCESS, &address, BT_BOND_STATE_BONDING);
+
+        if (pairing_variant == BT_SSP_VARIANT_PASSKEY_ENTRY) {
+          // For passkey entry we must actually use pin request, due to BluetoothPairingController (in Settings)
+          HAL_CBACK(bt_hal_cbacks, pin_request_cb, &address, &bd_name, cod, false);
+          return;
+        }
+
+        HAL_CBACK(bt_hal_cbacks, ssp_request_cb, &address, &bd_name, cod, pairing_variant, pass_key);
+      }, address, bd_name, cod, pairing_variant, pass_key));
+    });
+
+    bluetooth::shim::BTIF_RegisterBondStateChangeListener(
+        [](RawAddress address) {
+          btif_dm_send_bond_state_changed(address, BT_BOND_STATE_BONDING);
+        },
+        [](RawAddress address) {
+          btif_dm_send_bond_state_changed(address, BT_BOND_STATE_BONDED);
+        },
+        [](RawAddress address) {
+          btif_dm_send_bond_state_changed(address, BT_BOND_STATE_NONE);
+        });
+  }
+}
 
 void btif_dm_cleanup(void) {
   if (uid_set) {
@@ -663,7 +703,7 @@ static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
   bool is_hid = check_cod(&bd_addr, COD_HID_POINTING);
   bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_BOND_STATE_BONDING);
 
-  int device_type;
+  int device_type = 0;
   int addr_type;
   std::string addrstr = bd_addr.ToString();
   const char* bdstr = addrstr.c_str();
@@ -697,7 +737,7 @@ static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
     if (status != BT_STATUS_SUCCESS)
       bond_state_changed(status, bd_addr, BT_BOND_STATE_NONE);
   } else {
-    BTA_DmBondByTransport(bd_addr, transport);
+    BTA_DmBond(bd_addr, addr_type, transport, device_type);
   }
   /*  Track  originator of bond creation  */
   pairing_cb.is_local_initiated = true;
@@ -1108,7 +1148,6 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
 
       LOG_WARN(LOG_TAG, "%s: Incoming HID Connection", __func__);
       bt_property_t prop;
-      RawAddress bd_addr;
       Uuid uuid = Uuid::From16Bit(UUID_SERVCLASS_HUMAN_INTERFACE);
 
       prop.type = BT_PROPERTY_UUIDS;
@@ -1179,6 +1218,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       case HCI_ERR_AUTH_FAILURE:
       case HCI_ERR_KEY_MISSING:
         btif_storage_remove_bonded_device(&bd_addr);
+        [[fallthrough]];
       case HCI_ERR_HOST_REJECT_SECURITY:
       case HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE:
       case HCI_ERR_UNIT_KEY_USED:
@@ -2374,6 +2414,16 @@ bt_status_t btif_dm_remove_bond(const RawAddress* bd_addr) {
 bt_status_t btif_dm_pin_reply(const RawAddress* bd_addr, uint8_t accept,
                               uint8_t pin_len, bt_pin_code_t* pin_code) {
   BTIF_TRACE_EVENT("%s: accept=%d", __func__, accept);
+
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    uint8_t tmp_dev_type = 0;
+    uint8_t tmp_addr_type = 0;
+    BTM_ReadDevInfo(*bd_addr, &tmp_dev_type, &tmp_addr_type);
+
+    do_in_main_thread(FROM_HERE, base::Bind(&bluetooth::shim::BTIF_DM_pin_reply, *bd_addr, tmp_addr_type, accept, pin_len, *pin_code));
+    return BT_STATUS_SUCCESS;
+  }
+
   if (pin_code == NULL || pin_len > PIN_CODE_LEN) return BT_STATUS_FAIL;
   if (pairing_cb.is_le_only) {
     int i;
@@ -2405,6 +2455,16 @@ bt_status_t btif_dm_pin_reply(const RawAddress* bd_addr, uint8_t accept,
 bt_status_t btif_dm_ssp_reply(const RawAddress* bd_addr,
                               bt_ssp_variant_t variant, uint8_t accept,
                               UNUSED_ATTR uint32_t passkey) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    uint8_t tmp_dev_type = 0;
+    uint8_t tmp_addr_type = 0;
+    BTM_ReadDevInfo(*bd_addr, &tmp_dev_type, &tmp_addr_type);
+
+    do_in_main_thread(
+    FROM_HERE,
+      base::Bind(&bluetooth::shim::BTIF_DM_ssp_reply, *bd_addr, tmp_addr_type, variant, accept));
+  }
+
   if (variant == BT_SSP_VARIANT_PASSKEY_ENTRY) {
     /* This is not implemented in the stack.
      * For devices with display, this is not needed
