@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@
 #include <stdint.h>
 
 #include "device_features.h"
-#include "hci_layer.h"
-#include "hci_packet_factory.h"
-#include "hci_packet_parser.h"
+#include "hci/include/hci_layer.h"
+#include "hci/include/hci_packet_factory.h"
+#include "hci/include/hci_packet_parser.h"
 
 static const char CONTROLLER_MODULE[] = "controller_module";
 
@@ -72,6 +72,7 @@ typedef struct controller_t {
   uint16_t (*get_acl_packet_size_ble)(void);
 
   uint16_t (*get_ble_default_data_packet_length)(void);
+  uint16_t (*get_ble_maximum_tx_data_length)(void);
   uint16_t (*get_ble_maxium_advertising_data_length)(void);
   uint8_t (*get_ble_number_of_supported_advertising_sets)(void);
 
@@ -87,6 +88,12 @@ typedef struct controller_t {
   uint8_t (*get_le_all_initiating_phys)(void);
 
 } controller_t;
+
+namespace bluetooth {
+namespace legacy {
+const controller_t* controller_get_interface();
+}  // namespace legacy
+}  // namespace bluetooth
 
 const controller_t* controller_get_interface();
 
