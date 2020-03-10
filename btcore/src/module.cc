@@ -65,7 +65,8 @@ bool module_init(const module_t* module) {
   CHECK(get_module_state(module) == MODULE_STATE_NONE);
 
   if (!call_lifecycle_function(module->init)) {
-    LOG_ERROR("%s Failed to initialize module \"%s\"", __func__, module->name);
+    LOG_ERROR(LOG_TAG, "%s Failed to initialize module \"%s\"", __func__,
+              module->name);
     return false;
   }
 
@@ -83,12 +84,13 @@ bool module_start_up(const module_t* module) {
   CHECK(get_module_state(module) == MODULE_STATE_INITIALIZED ||
         module->init == NULL);
 
-  LOG_INFO("%s Starting module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Starting module \"%s\"", __func__, module->name);
   if (!call_lifecycle_function(module->start_up)) {
-    LOG_ERROR("%s Failed to start up module \"%s\"", __func__, module->name);
+    LOG_ERROR(LOG_TAG, "%s Failed to start up module \"%s\"", __func__,
+              module->name);
     return false;
   }
-  LOG_INFO("%s Started module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Started module \"%s\"", __func__, module->name);
 
   set_module_state(module, MODULE_STATE_STARTED);
   return true;
@@ -102,12 +104,14 @@ void module_shut_down(const module_t* module) {
   // Only something to do if the module was actually started
   if (state < MODULE_STATE_STARTED) return;
 
-  LOG_INFO("%s Shutting down module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Shutting down module \"%s\"", __func__, module->name);
   if (!call_lifecycle_function(module->shut_down)) {
-    LOG_ERROR("%s Failed to shutdown module \"%s\". Continuing anyway.",
+    LOG_ERROR(LOG_TAG,
+              "%s Failed to shutdown module \"%s\". Continuing anyway.",
               __func__, module->name);
   }
-  LOG_INFO("%s Shutdown of module \"%s\" completed", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Shutdown of module \"%s\" completed", __func__,
+           module->name);
 
   set_module_state(module, MODULE_STATE_INITIALIZED);
 }
@@ -120,12 +124,13 @@ void module_clean_up(const module_t* module) {
   // Only something to do if the module was actually initialized
   if (state < MODULE_STATE_INITIALIZED) return;
 
-  LOG_INFO("%s Cleaning up module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Cleaning up module \"%s\"", __func__, module->name);
   if (!call_lifecycle_function(module->clean_up)) {
-    LOG_ERROR("%s Failed to cleanup module \"%s\". Continuing anyway.",
+    LOG_ERROR(LOG_TAG, "%s Failed to cleanup module \"%s\". Continuing anyway.",
               __func__, module->name);
   }
-  LOG_INFO("%s Cleanup of module \"%s\" completed", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Cleanup of module \"%s\" completed", __func__,
+           module->name);
 
   set_module_state(module, MODULE_STATE_NONE);
 }
