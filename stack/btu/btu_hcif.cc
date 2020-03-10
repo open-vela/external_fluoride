@@ -57,6 +57,7 @@
 using base::Location;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
+extern void btm_process_inq_results2(uint8_t* p, uint8_t inq_res_mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
 extern void smp_cancel_start_encryption_attempt();
 
@@ -64,11 +65,12 @@ extern void smp_cancel_start_encryption_attempt();
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
 /******************************************************************************/
 static void btu_hcif_inquiry_comp_evt(uint8_t* p);
-static void btu_hcif_inquiry_result_evt(uint8_t* p);
-static void btu_hcif_inquiry_rssi_result_evt(uint8_t* p);
-static void btu_hcif_extended_inquiry_result_evt(uint8_t* p);
+static void btu_hcif_inquiry_result_evt(uint8_t* p, uint8_t hci_evt_len);
+static void btu_hcif_inquiry_rssi_result_evt(uint8_t* p, uint8_t hci_evt_len);
+static void btu_hcif_extended_inquiry_result_evt(uint8_t* p,
+                                                 uint8_t hci_evt_len);
 
-static void btu_hcif_connection_comp_evt(uint8_t* p);
+static void btu_hcif_connection_comp_evt(uint8_t* p, uint8_t evt_len);
 static void btu_hcif_connection_request_evt(uint8_t* p);
 static void btu_hcif_disconnection_comp_evt(uint8_t* p);
 static void btu_hcif_authentication_comp_evt(uint8_t* p);
@@ -85,7 +87,7 @@ static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
 static void btu_hcif_hardware_error_evt(uint8_t* p);
 static void btu_hcif_flush_occured_evt(void);
 static void btu_hcif_role_change_evt(uint8_t* p);
-static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p);
+static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p, uint8_t evt_len);
 static void btu_hcif_mode_change_evt(uint8_t* p);
 static void btu_hcif_pin_code_request_evt(uint8_t* p);
 static void btu_hcif_link_key_request_evt(uint8_t* p);
@@ -263,16 +265,16 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_inquiry_comp_evt(p);
       break;
     case HCI_INQUIRY_RESULT_EVT:
-      btu_hcif_inquiry_result_evt(p);
+      btu_hcif_inquiry_result_evt(p, hci_evt_len);
       break;
     case HCI_INQUIRY_RSSI_RESULT_EVT:
-      btu_hcif_inquiry_rssi_result_evt(p);
+      btu_hcif_inquiry_rssi_result_evt(p, hci_evt_len);
       break;
     case HCI_EXTENDED_INQUIRY_RESULT_EVT:
-      btu_hcif_extended_inquiry_result_evt(p);
+      btu_hcif_extended_inquiry_result_evt(p, hci_evt_len);
       break;
     case HCI_CONNECTION_COMP_EVT:
-      btu_hcif_connection_comp_evt(p);
+      btu_hcif_connection_comp_evt(p, hci_evt_len);
       break;
     case HCI_CONNECTION_REQUEST_EVT:
       btu_hcif_connection_request_evt(p);
@@ -305,16 +307,16 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_qos_setup_comp_evt(p);
       break;
     case HCI_COMMAND_COMPLETE_EVT:
-      LOG_ERROR(LOG_TAG,
-                "%s should not have received a command complete event. "
-                "Someone didn't go through the hci transmit_command function.",
-                __func__);
+      LOG_ERROR(
+          "%s should not have received a command complete event. "
+          "Someone didn't go through the hci transmit_command function.",
+          __func__);
       break;
     case HCI_COMMAND_STATUS_EVT:
-      LOG_ERROR(LOG_TAG,
-                "%s should not have received a command status event. "
-                "Someone didn't go through the hci transmit_command function.",
-                __func__);
+      LOG_ERROR(
+          "%s should not have received a command status event. "
+          "Someone didn't go through the hci transmit_command function.",
+          __func__);
       break;
     case HCI_HARDWARE_ERROR_EVT:
       btu_hcif_hardware_error_evt(p);
@@ -326,7 +328,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_role_change_evt(p);
       break;
     case HCI_NUM_COMPL_DATA_PKTS_EVT:
-      btu_hcif_num_compl_data_pkts_evt(p);
+      btu_hcif_num_compl_data_pkts_evt(p, hci_evt_len);
       break;
     case HCI_MODE_CHANGE_EVT:
       btu_hcif_mode_change_evt(p);
@@ -948,9 +950,9 @@ static void btu_hcif_inquiry_comp_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_inquiry_result_evt(uint8_t* p) {
+static void btu_hcif_inquiry_result_evt(uint8_t* p, uint8_t hci_evt_len) {
   /* Store results in the cache */
-  btm_process_inq_results(p, BTM_INQ_RESULT_STANDARD);
+  btm_process_inq_results(p, hci_evt_len, BTM_INQ_RESULT_STANDARD);
 }
 
 /*******************************************************************************
@@ -962,9 +964,9 @@ static void btu_hcif_inquiry_result_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_inquiry_rssi_result_evt(uint8_t* p) {
+static void btu_hcif_inquiry_rssi_result_evt(uint8_t* p, uint8_t hci_evt_len) {
   /* Store results in the cache */
-  btm_process_inq_results(p, BTM_INQ_RESULT_WITH_RSSI);
+  btm_process_inq_results(p, hci_evt_len, BTM_INQ_RESULT_WITH_RSSI);
 }
 
 /*******************************************************************************
@@ -976,9 +978,10 @@ static void btu_hcif_inquiry_rssi_result_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_extended_inquiry_result_evt(uint8_t* p) {
+static void btu_hcif_extended_inquiry_result_evt(uint8_t* p,
+                                                 uint8_t hci_evt_len) {
   /* Store results in the cache */
-  btm_process_inq_results(p, BTM_INQ_RESULT_EXTENDED);
+  btm_process_inq_results(p, hci_evt_len, BTM_INQ_RESULT_EXTENDED);
 }
 
 /*******************************************************************************
@@ -990,13 +993,19 @@ static void btu_hcif_extended_inquiry_result_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_connection_comp_evt(uint8_t* p) {
+static void btu_hcif_connection_comp_evt(uint8_t* p, uint8_t evt_len) {
   uint8_t status;
   uint16_t handle;
   RawAddress bda;
   uint8_t link_type;
   uint8_t enc_mode;
   tBTM_ESCO_DATA esco_data;
+
+  if (evt_len < 11) {
+    android_errorWriteLog(0x534e4554, "141619686");
+    HCI_TRACE_WARNING("%s: malformed event of size %hhd", __func__, evt_len);
+    return;
+  }
 
   STREAM_TO_UINT8(status, p);
   STREAM_TO_UINT16(handle, p);
@@ -1648,6 +1657,12 @@ static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
  ******************************************************************************/
 static void btu_hcif_hardware_error_evt(uint8_t* p) {
   HCI_TRACE_ERROR("Ctlr H/w error event - code:0x%x", *p);
+  if (hci_is_root_inflammation_event_received()) {
+    // Ignore the hardware error event here as we have already received
+    // root inflammation event earlier.
+    HCI_TRACE_ERROR("H/w error event after root inflammation event!");
+    return;
+  }
 
   /* If anyone wants device status notifications, give him one. */
   btm_report_device_status(BTM_DEV_STATUS_DOWN);
@@ -1699,9 +1714,9 @@ static void btu_hcif_role_change_evt(uint8_t* p) {
  * Returns          void
  *
  ******************************************************************************/
-static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p) {
+static void btu_hcif_num_compl_data_pkts_evt(uint8_t* p, uint8_t evt_len) {
   /* Process for L2CAP and SCO */
-  l2c_link_process_num_completed_pkts(p);
+  l2c_link_process_num_completed_pkts(p, evt_len);
 
   /* Send on to SCO */
   /*?? No SCO for now */
