@@ -288,19 +288,12 @@ void ClassicSignallingManager::OnConfigurationRequest(SignalId signal_id, Cid ci
 
   auto& configuration_state = channel_configuration_[cid];
   std::vector<std::unique_ptr<ConfigurationOption>> rsp_options;
-  ConfigurationResponseResult result = ConfigurationResponseResult::SUCCESS;
 
   for (auto& option : options) {
     switch (option->type_) {
       case ConfigurationOptionType::MTU: {
-        auto* config = MtuConfigurationOption::Specialize(option.get());
-        if (config->mtu_ < kMinimumClassicMtu) {
-          LOG_WARN("Configuration request with Invalid MTU");
-          config->mtu_ = kDefaultClassicMtu;
-          rsp_options.emplace_back(std::make_unique<MtuConfigurationOption>(*config));
-          result = ConfigurationResponseResult::UNACCEPTABLE_PARAMETERS;
-        }
-        configuration_state.outgoing_mtu_ = config->mtu_;
+        configuration_state.outgoing_mtu_ = MtuConfigurationOption::Specialize(option.get())->mtu_;
+        // TODO: If less than minimum (required by spec), reject
         break;
       }
       case ConfigurationOptionType::FLUSH_TIMEOUT: {
@@ -352,7 +345,7 @@ void ClassicSignallingManager::OnConfigurationRequest(SignalId signal_id, Cid ci
   }
 
   auto response = ConfigurationResponseBuilder::Create(signal_id.Value(), channel->GetRemoteCid(), is_continuation,
-                                                       result, std::move(rsp_options));
+                                                       ConfigurationResponseResult::SUCCESS, std::move(rsp_options));
   enqueue_buffer_->Enqueue(std::move(response), handler_);
 }
 
