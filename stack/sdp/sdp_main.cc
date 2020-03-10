@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,22 +22,17 @@
  *
  ******************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_target.h"
-#include "bt_utils.h"
 #include "hcidefs.h"
-#include "hcimsgs.h"
 
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
 
 #include "btm_api.h"
-#include "btu.h"
 
 #include "sdp_api.h"
 #include "sdpint.h"
@@ -89,7 +84,7 @@ void sdp_init(void) {
 #if (SDP_SERVER_ENABLED == TRUE)
   /* Register with Security Manager for the specific security level */
   if (!BTM_SetSecurityLevel(false, SDP_SERVICE_NAME, BTM_SEC_SERVICE_SDP_SERVER,
-                            SDP_SECURITY_LEVEL, SDP_PSM, 0, 0)) {
+                            BTM_SEC_NONE, SDP_PSM, 0, 0)) {
     SDP_TRACE_ERROR("Security Registration Server failed");
     return;
   }
@@ -97,7 +92,7 @@ void sdp_init(void) {
 
   /* Register with Security Manager for the specific security level */
   if (!BTM_SetSecurityLevel(true, SDP_SERVICE_NAME, BTM_SEC_SERVICE_SDP_SERVER,
-                            SDP_SECURITY_LEVEL, SDP_PSM, 0, 0)) {
+                            BTM_SEC_NONE, SDP_PSM, 0, 0)) {
     SDP_TRACE_ERROR("Security Registration for Client failed");
     return;
   }
@@ -121,7 +116,8 @@ void sdp_init(void) {
   sdp_cb.reg_info.pL2CA_TxComplete_Cb = NULL;
 
   /* Now, register with L2CAP */
-  if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info)) {
+  if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info, true /* enable_snoop */,
+                     nullptr)) {
     SDP_TRACE_ERROR("SDP Registration failed");
   }
 }
@@ -132,26 +128,6 @@ void sdp_free(void) {
     sdp_cb.ccb[i].sdp_conn_timer = NULL;
   }
 }
-
-#if (SDP_DEBUG == TRUE)
-/*******************************************************************************
- *
- * Function         sdp_set_max_attr_list_size
- *
- * Description      This function sets the max attribute list size to use
- *
- * Returns          void
- *
- ******************************************************************************/
-uint16_t sdp_set_max_attr_list_size(uint16_t max_size) {
-  if (max_size > (sdp_cb.l2cap_my_cfg.mtu - 16))
-    max_size = sdp_cb.l2cap_my_cfg.mtu - 16;
-
-  sdp_cb.max_attr_list_size = max_size;
-
-  return sdp_cb.max_attr_list_size;
-}
-#endif
 
 /*******************************************************************************
  *
@@ -519,18 +495,19 @@ tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   /* Allocate a new CCB. Return if none available. */
   p_ccb = sdpu_allocate_ccb();
   if (p_ccb == NULL) {
-    SDP_TRACE_WARNING("SDP - no spare CCB for orig");
+    SDP_TRACE_WARNING("%s: no spare CCB for peer %s", __func__,
+                      p_bd_addr.ToString().c_str());
     return (NULL);
   }
 
-  SDP_TRACE_EVENT("SDP - Originate started");
+  SDP_TRACE_EVENT("%s: SDP - Originate started for peer %s", __func__,
+                  p_bd_addr.ToString().c_str());
 
   /* We are the originator of this connection */
   p_ccb->con_flags |= SDP_FLAGS_IS_ORIG;
 
   /* Save the BD Address and Channel ID. */
   p_ccb->device_address = p_bd_addr;
-  ;
 
   /* Transition to the next appropriate state, waiting for connection confirm.
    */
@@ -539,15 +516,14 @@ tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   cid = L2CA_ConnectReq(SDP_PSM, p_bd_addr);
 
   /* Check if L2CAP started the connection process */
-  if (cid != 0) {
-    p_ccb->connection_id = cid;
-
-    return (p_ccb);
-  } else {
-    SDP_TRACE_WARNING("SDP - Originate failed");
+  if (cid == 0) {
+    SDP_TRACE_WARNING("%s: SDP - Originate failed for peer %s", __func__,
+                      p_bd_addr.ToString().c_str());
     sdpu_release_ccb(p_ccb);
     return (NULL);
   }
+  p_ccb->connection_id = cid;
+  return (p_ccb);
 }
 
 /*******************************************************************************

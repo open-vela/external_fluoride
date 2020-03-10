@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <unistd.h>
 
 #include <base/bind.h>
+#include <base/bind_helpers.h>
+#include <base/callback.h>
 #include <algorithm>
 #include <array>
 #include <condition_variable>
@@ -77,13 +79,11 @@ enum { kPipeReadEnd = 0, kPipeWriteEnd = 1, kPipeNumEnds = 2 };
 
 }  // namespace
 
-void DoNothing(uint8_t p) {}
-
 namespace bluetooth {
 namespace gatt {
 
 struct Characteristic {
-  UUID uuid;
+  Uuid uuid;
   int blob_section;
   std::vector<uint8_t> blob;
 
@@ -97,11 +97,11 @@ struct ServerInternals {
   ServerInternals();
   ~ServerInternals();
   int Initialize();
-  bt_status_t AddCharacteristic(const UUID& uuid, uint8_t properties,
+  bt_status_t AddCharacteristic(const Uuid& uuid, uint8_t properties,
                                 uint16_t permissions);
 
-  // This maps API attribute UUIDs to BlueDroid handles.
-  std::map<UUID, int> uuid_to_attribute;
+  // This maps API attribute Uuids to BlueDroid handles.
+  std::map<Uuid, int> uuid_to_attribute;
 
   // The attribute cache, indexed by BlueDroid handles.
   std::unordered_map<int, Characteristic> characteristics;
@@ -111,7 +111,7 @@ struct ServerInternals {
 
   ScanResults scan_results;
 
-  UUID last_write;
+  Uuid last_write;
   const btgatt_interface_t* gatt;
   int server_if;
   int client_if;
@@ -130,20 +130,22 @@ namespace {
 
 /** Callback invoked in response to register_server */
 void RegisterServerCallback(int status, int server_if,
-                            const bt_uuid_t& app_uuid) {
-  LOG_INFO(LOG_TAG, "%s: status:%d server_if:%d app_uuid:%p", __func__, status,
+                            const bluetooth::Uuid& app_uuid) {
+  LOG_INFO("%s: status:%d server_if:%d app_uuid:%p", __func__, status,
            server_if, &app_uuid);
 
   g_internal->server_if = server_if;
-  pending_svc_decl.push_back(
-      {.type = BTGATT_DB_PRIMARY_SERVICE, .uuid = app_uuid});
+
+  pending_svc_decl.push_back({
+      .uuid = app_uuid,
+      .type = BTGATT_DB_PRIMARY_SERVICE,
+  });
 }
 
 void ServiceAddedCallback(int status, int server_if,
                           std::vector<btgatt_db_element_t> service) {
-  LOG_INFO(LOG_TAG, "%s: status:%d server_if:%d count:%zu svc_handle:%d",
-           __func__, status, server_if, service.size(),
-           service[0].attribute_handle);
+  LOG_INFO("%s: status:%d server_if:%d count:%zu svc_handle:%d", __func__,
+           status, server_if, service.size(), service[0].attribute_handle);
 
   std::lock_guard<std::mutex> lock(g_internal->lock);
   g_internal->server_if = server_if;
@@ -155,12 +157,12 @@ void ServiceAddedCallback(int status, int server_if,
   for (size_t i = 1; i < service.size(); i++) {
     const btgatt_db_element_t& el = service[i];
     if (el.type == BTGATT_DB_DESCRIPTOR) {
-      LOG_INFO(LOG_TAG, "%s: descr_handle:%d", __func__, el.attribute_handle);
+      LOG_INFO("%s: descr_handle:%d", __func__, el.attribute_handle);
     } else if (el.type == BTGATT_DB_CHARACTERISTIC) {
-      bluetooth::UUID id(el.uuid);
+      bluetooth::Uuid id(el.uuid);
       uint16_t char_handle = el.attribute_handle;
 
-      LOG_INFO(LOG_TAG, "%s: char_handle:%d", __func__, char_handle);
+      LOG_INFO("%s: char_handle:%d", __func__, char_handle);
 
       g_internal->uuid_to_attribute[id] = char_handle;
       g_internal->characteristics[char_handle].uuid = id;
@@ -192,15 +194,14 @@ void ServiceAddedCallback(int status, int server_if,
   pending_svc_decl.clear();
   blob_index.clear();
 
-  // The UUID provided here is unimportant, and is only used to satisfy
+  // The Uuid provided here is unimportant, and is only used to satisfy
   // BlueDroid.
-  // It must be different than any other registered UUID.
-  bt_uuid_t client_id = service[0].uuid;
-  ++client_id.uu[15];
+  // It must be different than any other registered Uuid.
+  bluetooth::Uuid client_id = bluetooth::Uuid::GetRandom();
 
   bt_status_t btstat = g_internal->gatt->client->register_client(client_id);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: Failed to register client", __func__);
+    LOG_ERROR("%s: Failed to register client", __func__);
   }
 }
 
@@ -225,11 +226,11 @@ void RequestReadCallback(int conn_id, int trans_id, const RawAddress& bda,
   const size_t attribute_size = std::min(kMaxGattAttributeSize, blob_remaining);
 
   std::string addr(BtAddrString(&bda));
-  LOG_INFO(LOG_TAG,
-           "%s: connection:%d (%s) reading attr:%d attribute_offset_octets:%d "
-           "blob_section:%u (is_long:%u)",
-           __func__, conn_id, addr.c_str(), attr_handle,
-           attribute_offset_octets, ch.blob_section, is_long);
+  LOG_INFO(
+      "%s: connection:%d (%s) reading attr:%d attribute_offset_octets:%d "
+      "blob_section:%u (is_long:%u)",
+      __func__, conn_id, addr.c_str(), attr_handle, attribute_offset_octets,
+      ch.blob_section, is_long);
 
   btgatt_response_t response;
   response.attr_value.len = 0;
@@ -251,12 +252,12 @@ void RequestWriteCallback(int conn_id, int trans_id, const RawAddress& bda,
                           int attr_handle, int attribute_offset, bool need_rsp,
                           bool is_prep, std::vector<uint8_t> value) {
   std::string addr(BtAddrString(&bda));
-  LOG_INFO(LOG_TAG,
-           "%s: connection:%d (%s:trans:%d) write attr:%d attribute_offset:%d "
-           "length:%zu "
-           "need_resp:%u is_prep:%u",
-           __func__, conn_id, addr.c_str(), trans_id, attr_handle,
-           attribute_offset, value.size(), need_rsp, is_prep);
+  LOG_INFO(
+      "%s: connection:%d (%s:trans:%d) write attr:%d attribute_offset:%d "
+      "length:%zu "
+      "need_resp:%u is_prep:%u",
+      __func__, conn_id, addr.c_str(), trans_id, attr_handle, attribute_offset,
+      value.size(), need_rsp, is_prep);
 
   std::lock_guard<std::mutex> lock(g_internal->lock);
 
@@ -272,17 +273,17 @@ void RequestWriteCallback(int conn_id, int trans_id, const RawAddress& bda,
   if (target_blob != g_internal->controlled_blobs.end() &&
       ch.blob.size() == 1u) {
     g_internal->characteristics[target_blob->second].blob_section = ch.blob[0];
-    LOG_INFO(LOG_TAG, "%s: updating attribute %d blob_section to %u", __func__,
+    LOG_INFO("%s: updating attribute %d blob_section to %u", __func__,
              target_blob->second, ch.blob[0]);
   } else if (!is_prep) {
     // This is a single frame characteristic write.
     // Notify upwards because we're done now.
-    const bluetooth::UUID::UUID128Bit& attr_uuid = ch.uuid.GetFullBigEndian();
+    const bluetooth::Uuid::UUID128Bit& attr_uuid = ch.uuid.To128BitBE();
     ssize_t status;
     OSI_NO_INTR(status = write(g_internal->pipefd[kPipeWriteEnd],
                                attr_uuid.data(), attr_uuid.size()));
     if (-1 == status)
-      LOG_ERROR(LOG_TAG, "%s: write failed: %s", __func__, strerror(errno));
+      LOG_ERROR("%s: write failed: %s", __func__, strerror(errno));
   } else {
     // This is a multi-frame characteristic write.
     // Wait for an 'RequestExecWriteCallback' to notify completion.
@@ -306,8 +307,8 @@ void RequestWriteCallback(int conn_id, int trans_id, const RawAddress& bda,
 void RequestExecWriteCallback(int conn_id, int trans_id, const RawAddress& bda,
                               int exec_write) {
   std::string addr(BtAddrString(&bda));
-  LOG_INFO(LOG_TAG, "%s: connection:%d (%s:trans:%d) exec_write:%d", __func__,
-           conn_id, addr.c_str(), trans_id, exec_write);
+  LOG_INFO("%s: connection:%d (%s:trans:%d) exec_write:%d", __func__, conn_id,
+           addr.c_str(), trans_id, exec_write);
 
   // This 'response' data is unused for ExecWriteResponses.
   // It is only used to pass BlueDroid argument validation.
@@ -317,21 +318,20 @@ void RequestExecWriteCallback(int conn_id, int trans_id, const RawAddress& bda,
   if (!exec_write) return;
 
   std::lock_guard<std::mutex> lock(g_internal->lock);
-  // Communicate the attribute UUID as notification of a write update.
-  const bluetooth::UUID::UUID128Bit uuid =
-      g_internal->last_write.GetFullBigEndian();
+  // Communicate the attribute Uuid as notification of a write update.
+  const bluetooth::Uuid::UUID128Bit uuid = g_internal->last_write.To128BitBE();
   ssize_t status;
   OSI_NO_INTR(status = write(g_internal->pipefd[kPipeWriteEnd], uuid.data(),
                              uuid.size()));
   if (-1 == status)
-    LOG_ERROR(LOG_TAG, "%s: write failed: %s", __func__, strerror(errno));
+    LOG_ERROR("%s: write failed: %s", __func__, strerror(errno));
 }
 
 void ConnectionCallback(int conn_id, int server_if, int connected,
                         const RawAddress& bda) {
   std::string addr(BtAddrString(&bda));
-  LOG_INFO(LOG_TAG, "%s: connection:%d server_if:%d connected:%d addr:%s",
-           __func__, conn_id, server_if, connected, addr.c_str());
+  LOG_INFO("%s: connection:%d server_if:%d connected:%d addr:%s", __func__,
+           conn_id, server_if, connected, addr.c_str());
   if (connected == 1) {
     g_internal->connections.insert(conn_id);
   } else if (connected == 0) {
@@ -340,31 +340,31 @@ void ConnectionCallback(int conn_id, int server_if, int connected,
 }
 
 void EnableAdvertisingCallback(uint8_t status) {
-  LOG_INFO(LOG_TAG, "%s: status:%d", __func__, status);
+  LOG_INFO("%s: status:%d", __func__, status);
   // This terminates a Start call.
   std::lock_guard<std::mutex> lock(g_internal->lock);
   g_internal->api_synchronize.notify_one();
 }
 
 void RegisterClientCallback(int status, int client_if,
-                            const bt_uuid_t& app_uuid) {
-  LOG_INFO(LOG_TAG, "%s: status:%d client_if:%d uuid[0]:%u", __func__, status,
-           client_if, app_uuid.uu[0]);
+                            const bluetooth::Uuid& app_uuid) {
+  LOG_INFO("%s: status:%d client_if:%d uuid[0]:%s", __func__, status, client_if,
+           app_uuid.ToString().c_str());
   g_internal->client_if = client_if;
 
   // Setup our advertisement. This has no callback.
   g_internal->gatt->advertiser->SetData(0 /* std_inst */, false,
                                         {/*TODO: put inverval 2,2 here*/},
-                                        base::Bind(&DoNothing));
+                                        base::DoNothing());
 
   g_internal->gatt->advertiser->Enable(
       0 /* std_inst */, true, base::Bind(&EnableAdvertisingCallback),
-      0 /* no duration */, 0 /* no maxExtAdvEvent*/, base::Bind(&DoNothing));
+      0 /* no duration */, 0 /* no maxExtAdvEvent*/, base::DoNothing());
 }
 
 void ServiceStoppedCallback(int status, int server_if, int srvc_handle) {
-  LOG_INFO(LOG_TAG, "%s: status:%d server_if:%d srvc_handle:%d", __func__,
-           status, server_if, srvc_handle);
+  LOG_INFO("%s: status:%d server_if:%d srvc_handle:%d", __func__, status,
+           server_if, srvc_handle);
   // This terminates a Stop call.
   // TODO(icoolidge): make this symmetric with start
   std::lock_guard<std::mutex> lock(g_internal->lock);
@@ -385,15 +385,15 @@ void ScanResultCallback(uint16_t ble_evt_type, uint8_t addr_type,
 void ClientConnectCallback(int conn_id, int status, int client_if,
                            const RawAddress& bda) {
   std::string addr(BtAddrString(&bda));
-  LOG_INFO(LOG_TAG, "%s: conn_id:%d status:%d client_if:%d %s", __func__,
-           conn_id, status, client_if, addr.c_str());
+  LOG_INFO("%s: conn_id:%d status:%d client_if:%d %s", __func__, conn_id,
+           status, client_if, addr.c_str());
 }
 
 void ClientDisconnectCallback(int conn_id, int status, int client_if,
                               const RawAddress& bda) {
   std::string addr(BtAddrString(&bda));
-  LOG_INFO(LOG_TAG, "%s: conn_id:%d status:%d client_if:%d %s", __func__,
-           conn_id, status, client_if, addr.c_str());
+  LOG_INFO("%s: conn_id:%d status:%d client_if:%d %s", __func__, conn_id,
+           status, client_if, addr.c_str());
 }
 
 void IndicationSentCallback(UNUSED_ATTR int conn_id, UNUSED_ATTR int status) {
@@ -481,32 +481,30 @@ int ServerInternals::Initialize() {
   gatt = reinterpret_cast<const btgatt_interface_t*>(
       bt_iface->get_profile_interface(BT_PROFILE_GATT_ID));
   if (!gatt) {
-    LOG_ERROR(LOG_TAG, "Error getting GATT interface");
+    LOG_ERROR("Error getting GATT interface");
     return -1;
   }
 
   bt_status_t btstat = gatt->init(&gatt_callbacks);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "Failed to initialize gatt interface");
+    LOG_ERROR("Failed to initialize gatt interface");
     return -1;
   }
 
   int status = pipe(pipefd);
   if (status == -1) {
-    LOG_ERROR(LOG_TAG, "pipe creation failed: %s", strerror(errno));
+    LOG_ERROR("pipe creation failed: %s", strerror(errno));
     return -1;
   }
 
   return 0;
 }
 
-bt_status_t ServerInternals::AddCharacteristic(const UUID& uuid,
+bt_status_t ServerInternals::AddCharacteristic(const Uuid& uuid,
                                                uint8_t properties,
                                                uint16_t permissions) {
-  bt_uuid_t c_uuid = uuid.GetBlueDroid();
-
-  pending_svc_decl.push_back({.type = BTGATT_DB_CHARACTERISTIC,
-                              .uuid = c_uuid,
+  pending_svc_decl.push_back({.uuid = uuid,
+                              .type = BTGATT_DB_CHARACTERISTIC,
                               .properties = properties,
                               .permissions = permissions});
   return BT_STATUS_SUCCESS;
@@ -532,10 +530,10 @@ Server::Server() : internal_(nullptr) {}
 
 Server::~Server() {}
 
-bool Server::Initialize(const UUID& service_id, int* gatt_pipe) {
+bool Server::Initialize(const Uuid& service_id, int* gatt_pipe) {
   internal_.reset(new ServerInternals);
   if (!internal_) {
-    LOG_ERROR(LOG_TAG, "Error creating internals");
+    LOG_ERROR("Error creating internals");
     return false;
   }
   g_internal = internal_.get();
@@ -543,31 +541,29 @@ bool Server::Initialize(const UUID& service_id, int* gatt_pipe) {
   std::unique_lock<std::mutex> lock(internal_->lock);
   int status = internal_->Initialize();
   if (status) {
-    LOG_ERROR(LOG_TAG, "Error initializing internals");
+    LOG_ERROR("Error initializing internals");
     return false;
   }
 
-  bt_uuid_t uuid = service_id.GetBlueDroid();
-
-  bt_status_t btstat = internal_->gatt->server->register_server(uuid);
+  bt_status_t btstat = internal_->gatt->server->register_server(service_id);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "Failed to register server");
+    LOG_ERROR("Failed to register server");
     return false;
   }
 
   internal_->api_synchronize.wait(lock);
   // TODO(icoolidge): Better error handling.
   if (internal_->server_if == 0) {
-    LOG_ERROR(LOG_TAG, "Initialization of server failed");
+    LOG_ERROR("Initialization of server failed");
     return false;
   }
 
   *gatt_pipe = internal_->pipefd[kPipeReadEnd];
-  LOG_INFO(LOG_TAG, "Server Initialize succeeded");
+  LOG_INFO("Server Initialize succeeded");
   return true;
 }
 
-bool Server::SetAdvertisement(const std::vector<UUID>& ids,
+bool Server::SetAdvertisement(const std::vector<Uuid>& ids,
                               const std::vector<uint8_t>& service_data,
                               const std::vector<uint8_t>& manufacturer_data,
                               bool transmit_name) {
@@ -575,8 +571,8 @@ bool Server::SetAdvertisement(const std::vector<UUID>& ids,
   // const auto& mutable_manufacturer_data = manufacturer_data;
   // const auto& mutable_service_data = service_data;
 
-  // for (const UUID &id : ids) {
-  //   const auto le_id = id.GetFullLittleEndian();
+  // for (const Uuid &id : ids) {
+  //   const auto le_id = id.To128BitLE();
   //   id_data.insert(id_data.end(), le_id.begin(), le_id.end());
   // }
 
@@ -584,7 +580,7 @@ bool Server::SetAdvertisement(const std::vector<UUID>& ids,
 
   // Setup our advertisement. This has no callback.
   internal_->gatt->advertiser->SetData(0, false, /* beacon, not scan response */
-                                       {}, base::Bind(&DoNothing));
+                                       {}, base::DoNothing());
   // transmit_name,               /* name */
   // 2, 2,                         interval
   // mutable_manufacturer_data,
@@ -593,7 +589,7 @@ bool Server::SetAdvertisement(const std::vector<UUID>& ids,
   return true;
 }
 
-bool Server::SetScanResponse(const std::vector<UUID>& ids,
+bool Server::SetScanResponse(const std::vector<Uuid>& ids,
                              const std::vector<uint8_t>& service_data,
                              const std::vector<uint8_t>& manufacturer_data,
                              bool transmit_name) {
@@ -601,8 +597,8 @@ bool Server::SetScanResponse(const std::vector<UUID>& ids,
   // const auto& mutable_manufacturer_data = manufacturer_data;
   // const auto& mutable_service_data = service_data;
 
-  // for (const UUID &id : ids) {
-  //   const auto le_id = id.GetFullLittleEndian();
+  // for (const Uuid &id : ids) {
+  //   const auto le_id = id.To128BitLE();
   //   id_data.insert(id_data.end(), le_id.begin(), le_id.end());
   // }
 
@@ -610,7 +606,7 @@ bool Server::SetScanResponse(const std::vector<UUID>& ids,
 
   // Setup our advertisement. This has no callback.
   internal_->gatt->advertiser->SetData(0, true, /* scan response */
-                                       {}, base::Bind(&DoNothing));
+                                       {}, base::DoNothing());
   // transmit_name,              /* name */
   // false,                      /* no txpower */
   // 2, 2,                        interval
@@ -621,13 +617,13 @@ bool Server::SetScanResponse(const std::vector<UUID>& ids,
   return true;
 }
 
-bool Server::AddCharacteristic(const UUID& id, int properties,
+bool Server::AddCharacteristic(const Uuid& id, int properties,
                                int permissions) {
   std::unique_lock<std::mutex> lock(internal_->lock);
   bt_status_t btstat =
       internal_->AddCharacteristic(id, properties, permissions);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "Failed to add characteristic to service: 0x%04x",
+    LOG_ERROR("Failed to add characteristic to service: 0x%04x",
               internal_->service_handle);
     return false;
   }
@@ -637,7 +633,7 @@ bool Server::AddCharacteristic(const UUID& id, int properties,
   return true;
 }
 
-bool Server::AddBlob(const UUID& id, const UUID& control_id, int properties,
+bool Server::AddBlob(const Uuid& id, const Uuid& control_id, int properties,
                      int permissions) {
   std::unique_lock<std::mutex> lock(internal_->lock);
 
@@ -645,7 +641,7 @@ bool Server::AddBlob(const UUID& id, const UUID& control_id, int properties,
   bt_status_t btstat =
       internal_->AddCharacteristic(id, properties, permissions);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "Failed to set scan response data");
+    LOG_ERROR("Failed to set scan response data");
     return false;
   }
 
@@ -665,7 +661,7 @@ bool Server::Start() {
   bt_status_t btstat = internal_->gatt->server->add_service(
       internal_->server_if, pending_svc_decl);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "Failed to start service with handle: 0x%04x",
+    LOG_ERROR("Failed to start service with handle: 0x%04x",
               internal_->service_handle);
     return false;
   }
@@ -678,7 +674,7 @@ bool Server::Stop() {
   bt_status_t btstat = internal_->gatt->server->stop_service(
       internal_->server_if, internal_->service_handle);
   if (btstat != BT_STATUS_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "Failed to stop service with handle: 0x%04x",
+    LOG_ERROR("Failed to stop service with handle: 0x%04x",
               internal_->service_handle);
     return false;
   }
@@ -702,7 +698,7 @@ bool Server::GetScanResults(ScanResults* results) {
   return true;
 }
 
-bool Server::SetCharacteristicValue(const UUID& id,
+bool Server::SetCharacteristicValue(const Uuid& id,
                                     const std::vector<uint8_t>& value) {
   std::lock_guard<std::mutex> lock(internal_->lock);
   const int attribute_id = internal_->uuid_to_attribute[id];
@@ -719,7 +715,7 @@ bool Server::SetCharacteristicValue(const UUID& id,
   return true;
 }
 
-bool Server::GetCharacteristicValue(const UUID& id,
+bool Server::GetCharacteristicValue(const Uuid& id,
                                     std::vector<uint8_t>* value) {
   std::lock_guard<std::mutex> lock(internal_->lock);
   const int attribute_id = internal_->uuid_to_attribute[id];
