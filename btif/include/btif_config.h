@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,36 +23,31 @@
 
 #include "bt_types.h"
 
-#include <list>
-#include <string>
-#include "osi/include/config.h"
-
 static const char BTIF_CONFIG_MODULE[] = "btif_config_module";
 
+typedef struct btif_config_section_iter_t btif_config_section_iter_t;
+
 bool btif_config_has_section(const char* section);
-bool btif_config_exist(const std::string& section, const std::string& key);
-bool btif_config_get_int(const std::string& section, const std::string& key,
-                         int* value);
-bool btif_config_set_int(const std::string& section, const std::string& key,
-                         int value);
-bool btif_config_get_uint64(const std::string& section, const std::string& key,
-                            uint64_t* value);
-bool btif_config_set_uint64(const std::string& section, const std::string& key,
-                            uint64_t value);
-bool btif_config_get_str(const std::string& section, const std::string& key,
-                         char* value, int* size_bytes);
-bool btif_config_set_str(const std::string& section, const std::string& key,
-                         const std::string& value);
-bool btif_config_get_bin(const std::string& section, const std::string& key,
-                         uint8_t* value, size_t* length);
-bool btif_config_set_bin(const std::string& section, const std::string& key,
+bool btif_config_exist(const char* section, const char* key);
+bool btif_config_get_int(const char* section, const char* key, int* value);
+bool btif_config_set_int(const char* section, const char* key, int value);
+bool btif_config_get_str(const char* section, const char* key, char* value,
+                         int* size_bytes);
+bool btif_config_set_str(const char* section, const char* key,
+                         const char* value);
+bool btif_config_get_bin(const char* section, const char* key, uint8_t* value,
+                         size_t* length);
+bool btif_config_set_bin(const char* section, const char* key,
                          const uint8_t* value, size_t length);
-bool btif_config_remove(const std::string& section, const std::string& key);
+bool btif_config_remove(const char* section, const char* key);
 
-size_t btif_config_get_bin_length(const std::string& section,
-                                  const std::string& key);
+size_t btif_config_get_bin_length(const char* section, const char* key);
 
-std::list<section_t>& btif_config_sections();
+const btif_config_section_iter_t* btif_config_section_begin(void);
+const btif_config_section_iter_t* btif_config_section_end(void);
+const btif_config_section_iter_t* btif_config_section_next(
+    const btif_config_section_iter_t* section);
+const char* btif_config_section_name(const btif_config_section_iter_t* section);
 
 void btif_config_save(void);
 void btif_config_flush(void);
@@ -60,43 +55,7 @@ bool btif_config_clear(void);
 
 // TODO(zachoverflow): Eww...we need to move these out. These are peer specific,
 // not config general.
-bool btif_get_address_type(const RawAddress& bd_addr, int* p_addr_type);
-bool btif_get_device_type(const RawAddress& bd_addr, int* p_device_type);
+bool btif_get_address_type(const BD_ADDR bd_addr, int* p_addr_type);
+bool btif_get_device_type(const BD_ADDR bd_addr, int* p_device_type);
 
 void btif_debug_config_dump(int fd);
-
-typedef struct {
-  std::string (*checksum_read)(const char* filename);
-  bool (*checksum_save)(const std::string& checksum,
-                        const std::string& filename);
-  bool (*config_get_bool)(const config_t& config, const std::string& section,
-                          const std::string& key, bool def_value);
-  int (*config_get_int)(const config_t& config, const std::string& section,
-                        const std::string& key, int def_value);
-  const std::string* (*config_get_string)(const config_t& config,
-                                          const std::string& section,
-                                          const std::string& key,
-                                          const std::string* def_value);
-  uint64_t (*config_get_uint64)(const config_t& config,
-                                const std::string& section,
-                                const std::string& key, uint64_t def_value);
-  bool (*config_has_key)(const config_t& config, const std::string& section,
-                         const std::string& key);
-  bool (*config_has_section)(const config_t& config,
-                             const std::string& section);
-  std::unique_ptr<config_t> (*config_new)(const char* filename);
-  std::unique_ptr<config_t> (*config_new_clone)(const config_t& src);
-  std::unique_ptr<config_t> (*config_new_empty)(void);
-  bool (*config_remove_key)(config_t* config, const std::string& section,
-                            const std::string& key);
-  bool (*config_remove_section)(config_t* config, const std::string& section);
-  bool (*config_save)(const config_t& config, const std::string& filename);
-  void (*config_set_bool)(config_t* config, const std::string& section,
-                          const std::string& key, bool value);
-  void (*config_set_int)(config_t* config, const std::string& section,
-                         const std::string& key, int value);
-  void (*config_set_string)(config_t* config, const std::string& section,
-                            const std::string& key, const std::string& value);
-  void (*config_set_uint64)(config_t* config, const std::string& section,
-                            const std::string& key, uint64_t value);
-} storage_config_t;

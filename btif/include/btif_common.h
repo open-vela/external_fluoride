@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,12 +23,11 @@
 #include <stdlib.h>
 
 #include <base/bind.h>
-#include <base/location.h>
-#include <base/message_loop/message_loop.h>
+#include <base/tracked_objects.h>
 #include <hardware/bluetooth.h>
 
 #include "bt_types.h"
-#include "bta/include/bta_api.h"
+#include "bta_api.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -78,14 +77,14 @@
 
 extern bt_callbacks_t* bt_hal_cbacks;
 
-#define HAL_CBACK(P_CB, P_CBACK, ...)                              \
-  do {                                                             \
-    if ((P_CB) && (P_CB)->P_CBACK) {                               \
-      BTIF_TRACE_API("%s: HAL %s->%s", __func__, #P_CB, #P_CBACK); \
-      (P_CB)->P_CBACK(__VA_ARGS__);                                \
-    } else {                                                       \
-      ASSERTC(0, "Callback is NULL", 0);                           \
-    }                                                              \
+#define HAL_CBACK(P_CB, P_CBACK, ...)                \
+  do {                                               \
+    if ((P_CB) && (P_CB)->P_CBACK) {                 \
+      BTIF_TRACE_API("HAL %s->%s", #P_CB, #P_CBACK); \
+      (P_CB)->P_CBACK(__VA_ARGS__);                  \
+    } else {                                         \
+      ASSERTC(0, "Callback is NULL", 0);             \
+    }                                                \
   } while (0)
 
 /**
@@ -149,6 +148,37 @@ enum {
                                          successfully */
 };
 
+/* Macro definitions for BD ADDR persistence */
+
+/**
+ * PROPERTY_BT_BDADDR_PATH
+ * The property key stores the storage location of Bluetooth Device Address
+ */
+#ifndef PROPERTY_BT_BDADDR_PATH
+#define PROPERTY_BT_BDADDR_PATH "ro.bt.bdaddr_path"
+#endif
+
+/**
+ * PERSIST_BDADDR_PROPERTY
+ * If there is no valid bdaddr available from PROPERTY_BT_BDADDR_PATH,
+ * generating a random BDADDR and keeping it in the PERSIST_BDADDR_DROP.
+ */
+#ifndef PERSIST_BDADDR_PROPERTY
+#define PERSIST_BDADDR_PROPERTY "persist.service.bdroid.bdaddr"
+#endif
+
+/**
+ * FACTORY_BT_BDADDR_PROPERTY
+ * If there is no valid bdaddr available from PROPERTY_BT_BDADDR_PATH
+ * and there is no available persistent bdaddr available from
+ * PERSIST_BDADDR_PROPERTY use a factory set address
+ */
+#ifndef FACTORY_BT_ADDR_PROPERTY
+#define FACTORY_BT_ADDR_PROPERTY "ro.boot.btmacaddr"
+#endif
+
+#define FACTORY_BT_BDADDR_STORAGE_LEN 17
+
 /*******************************************************************************
  *  Type definitions for callback functions
  ******************************************************************************/
@@ -174,21 +204,19 @@ typedef struct {
  *  Functions
  ******************************************************************************/
 
-extern bt_status_t do_in_jni_thread(base::OnceClosure task);
-extern bt_status_t do_in_jni_thread(const base::Location& from_here,
-                                    base::OnceClosure task);
-extern bool is_on_jni_thread();
-extern base::MessageLoop* get_jni_message_loop();
+extern bt_status_t do_in_jni_thread(const base::Closure& task);
+extern bt_status_t do_in_jni_thread(const tracked_objects::Location& from_here,
+                                    const base::Closure& task);
 /**
  * This template wraps callback into callback that will be executed on jni
  * thread
  */
 template <typename R, typename... Args>
-base::Callback<R(Args...)> jni_thread_wrapper(const base::Location& from_here,
-                                              base::Callback<R(Args...)> cb) {
+base::Callback<R(Args...)> jni_thread_wrapper(
+    const tracked_objects::Location& from_here, base::Callback<R(Args...)> cb) {
   return base::Bind(
-      [](const base::Location& from_here, base::Callback<R(Args...)> cb,
-         Args... args) {
+      [](const tracked_objects::Location& from_here,
+         base::Callback<R(Args...)> cb, Args... args) {
         do_in_jni_thread(from_here,
                          base::Bind(cb, std::forward<Args>(args)...));
       },
@@ -207,7 +235,7 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status);
 void btif_disable_bluetooth_evt(void);
 void btif_adapter_properties_evt(bt_status_t status, uint32_t num_props,
                                  bt_property_t* p_props);
-void btif_remote_properties_evt(bt_status_t status, RawAddress* remote_addr,
+void btif_remote_properties_evt(bt_status_t status, bt_bdaddr_t* remote_addr,
                                 uint32_t num_props, bt_property_t* p_props);
 
 void bte_load_did_conf(const char* p_path);
