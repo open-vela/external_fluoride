@@ -571,6 +571,7 @@ typedef struct {
   uint8_t shdl;               /* stream handle (hdi + 1) */
   uint8_t lidx;               /* (index+1) to LCB */
   tBTA_AV_FEAT peer_features; /* peer features mask */
+  uint16_t cover_art_psm;     /* BIP PSM for cover art feature */
 } tBTA_AV_RCB;
 #define BTA_AV_NUM_RCB (BTA_AV_NUM_STRS + 2)
 
@@ -664,6 +665,7 @@ extern void bta_av_sink_data_cback(uint8_t handle, BT_HDR* p_pkt,
  ****************************************************************************/
 /* utility functions */
 extern tBTA_AV_SCB* bta_av_hndl_to_scb(uint16_t handle);
+tBTA_AV_SCB* bta_av_addr_to_scb(const RawAddress& bd_addr);
 extern bool bta_av_chk_start(tBTA_AV_SCB* p_scb);
 extern void bta_av_restore_switch(void);
 extern void bta_av_conn_cback(uint8_t handle, const RawAddress& bd_addr,
