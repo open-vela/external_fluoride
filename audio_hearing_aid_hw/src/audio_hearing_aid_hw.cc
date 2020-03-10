@@ -57,12 +57,11 @@
 // sockets
 #define WRITE_POLL_MS 20
 
-#define FNLOG() LOG_VERBOSE(LOG_TAG, "%s", __func__);
-#define DEBUG(fmt, ...) \
-  LOG_VERBOSE(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define INFO(fmt, ...) LOG_INFO(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define WARN(fmt, ...) LOG_WARN(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define ERROR(fmt, ...) LOG_ERROR(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define FNLOG() LOG_VERBOSE("%s", __func__);
+#define DEBUG(fmt, ...) LOG_VERBOSE("%s: " fmt, __func__, ##__VA_ARGS__)
+#define INFO(fmt, ...) LOG_INFO("%s: " fmt, __func__, ##__VA_ARGS__)
+#define WARN(fmt, ...) LOG_WARN("%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERROR(fmt, ...) LOG_ERROR("%s: " fmt, __func__, ##__VA_ARGS__)
 
 #define ASSERTC(cond, msg, val)                                           \
   if (!(cond)) {                                                          \
@@ -693,8 +692,8 @@ static int ha_write_output_audio_config(struct ha_stream_common* common) {
       codec_config.bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_32;
       break;
     case AUDIO_FORMAT_PCM_8_24_BIT:
-    // FALLTHROUGH
-    // All 24-bit audio is expected in AUDIO_FORMAT_PCM_24_BIT_PACKED format
+      // All 24-bit audio is expected in AUDIO_FORMAT_PCM_24_BIT_PACKED format
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     default:
       ERROR("Invalid audio format: 0x%x", common->cfg.format);
       return -1;

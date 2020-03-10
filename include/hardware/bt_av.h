@@ -62,6 +62,7 @@ typedef enum {
   // Add an entry for each sink codec here
   BTAV_A2DP_CODEC_INDEX_SINK_SBC = BTAV_A2DP_CODEC_INDEX_SINK_MIN,
   BTAV_A2DP_CODEC_INDEX_SINK_AAC,
+  BTAV_A2DP_CODEC_INDEX_SINK_LDAC,
 
   BTAV_A2DP_CODEC_INDEX_SINK_MAX,
 
@@ -153,6 +154,9 @@ typedef struct {
         break;
       case BTAV_A2DP_CODEC_INDEX_SINK_AAC:
         codec_name_str = "AAC (Sink)";
+        break;
+      case BTAV_A2DP_CODEC_INDEX_SINK_LDAC:
+        codec_name_str = "LDAC (Sink)";
         break;
       case BTAV_A2DP_CODEC_INDEX_MAX:
         codec_name_str = "Unknown(CODEC_INDEX_MAX)";
@@ -299,15 +303,19 @@ typedef struct {
   /**
    * Register the BtAv callbacks.
    */
-  bt_status_t (*init)(btav_source_callbacks_t* callbacks,
-                      int max_connected_audio_devices,
-                      std::vector<btav_a2dp_codec_config_t> codec_priorities);
+  bt_status_t (*init)(
+      btav_source_callbacks_t* callbacks, int max_connected_audio_devices,
+      const std::vector<btav_a2dp_codec_config_t>& codec_priorities,
+      const std::vector<btav_a2dp_codec_config_t>& offloading_preference);
 
   /** connect to headset */
   bt_status_t (*connect)(const RawAddress& bd_addr);
 
   /** dis-connect from headset */
   bt_status_t (*disconnect)(const RawAddress& bd_addr);
+
+  /** sets the connected device silence state */
+  bt_status_t (*set_silence_device)(const RawAddress& bd_addr, bool silence);
 
   /** sets the connected device as active */
   bt_status_t (*set_active_device)(const RawAddress& bd_addr);
@@ -346,6 +354,9 @@ typedef struct {
 
   /** Sets the audio track gain. */
   void (*set_audio_track_gain)(float gain);
+
+  /** sets the connected device as active */
+  bt_status_t (*set_active_device)(const RawAddress& bd_addr);
 } btav_sink_interface_t;
 
 __END_DECLS
