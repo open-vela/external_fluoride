@@ -34,8 +34,7 @@ class AdvertiseDataParser {
     auto data_start = ad.begin() + position;
 
     // Traxxas - bad name length
-    if ((ad.size() - position) >= 18 &&
-        std::equal(data_start, data_start + 3, trx_quirk.begin()) &&
+    if (std::equal(data_start, data_start + 3, trx_quirk.begin()) &&
         std::equal(data_start + 5, data_start + 11, trx_quirk.begin() + 5) &&
         std::equal(data_start + 12, data_start + 18, trx_quirk.begin() + 12)) {
       return true;
