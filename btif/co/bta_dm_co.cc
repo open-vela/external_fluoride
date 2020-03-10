@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,12 +25,17 @@
 #include "bta_sys.h"
 #include "bte_appl.h"
 #include "btif_dm.h"
+#include "btif_storage.h"
 #include "osi/include/osi.h"
 
+// tBTE_APPL_CFG.ble_io_cap is set to BTM_IO_CAP_UNKNOWN at structure
+// initialization since btif_storage isn't ready yet for data to be fetched.
+// This value is initialized properly during first use by fetching properly
+// from btif_storage.
 tBTE_APPL_CFG bte_appl_cfg = {
     BTA_LE_AUTH_REQ_SC_MITM_BOND,  // Authentication requirements
-    BTM_LOCAL_IO_CAPS_BLE, BTM_BLE_INITIATOR_KEY_SIZE,
-    BTM_BLE_RESPONDER_KEY_SIZE, BTM_BLE_MAX_KEY_SIZE};
+    BTM_IO_CAP_UNKNOWN, BTM_BLE_INITIATOR_KEY_SIZE, BTM_BLE_RESPONDER_KEY_SIZE,
+    BTM_BLE_MAX_KEY_SIZE};
 
 /*******************************************************************************
  *
@@ -132,7 +137,7 @@ void bta_dm_co_lk_upgrade(UNUSED_ATTR const RawAddress& bd_addr,
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_loc_oob(bool valid, BT_OCTET16 c, BT_OCTET16 r) {
+void bta_dm_co_loc_oob(bool valid, const Octet16& c, const Octet16& r) {
   BTIF_TRACE_DEBUG("bta_dm_co_loc_oob, valid = %d", valid);
 #ifdef BTIF_DM_OOB_TEST
   btif_dm_proc_loc_oob(valid, c, r);
@@ -153,110 +158,17 @@ void bta_dm_co_loc_oob(bool valid, BT_OCTET16 c, BT_OCTET16 r) {
  *
  ******************************************************************************/
 void bta_dm_co_rmt_oob(const RawAddress& bd_addr) {
-  BT_OCTET16 p_c;
-  BT_OCTET16 p_r;
+  Octet16 c;
+  Octet16 r;
   bool result = false;
 
 #ifdef BTIF_DM_OOB_TEST
-  result = btif_dm_proc_rmt_oob(bd_addr, p_c, p_r);
+  result = btif_dm_proc_rmt_oob(bd_addr, &c, &r);
 #endif
 
   BTIF_TRACE_DEBUG("bta_dm_co_rmt_oob: result=%d", result);
-  bta_dm_ci_rmt_oob(result, bd_addr, p_c, p_r);
+  bta_dm_ci_rmt_oob(result, bd_addr, c, r);
 }
-
-// REMOVE FOR BLUEDROID ?
-
-#if (BTM_SCO_HCI_INCLUDED == TRUE) && (BTM_SCO_INCLUDED == TRUE)
-
-/*******************************************************************************
- *
- * Function         btui_sco_codec_callback
- *
- * Description      Callback for btui codec.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-static void btui_sco_codec_callback(uint16_t event, uint16_t sco_handle) {
-  bta_dm_sco_ci_data_ready(event, sco_handle);
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_open
- *
- * Description      This function is executed when a SCO connection is open.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_open(uint16_t handle, uint8_t pkt_size, uint16_t event) {
-  tBTUI_SCO_CODEC_CFG cfg;
-
-  if (btui_cb.sco_hci) {
-    BTIF_TRACE_DEBUG("bta_dm_sco_co_open handle:%d pkt_size:%d", handle,
-                     pkt_size);
-    cfg.p_cback = btui_sco_codec_callback;
-    cfg.pkt_size = pkt_size;
-    cfg.cb_event = event;
-    /* open and start the codec */
-    btui_sco_codec_open(&cfg);
-    btui_sco_codec_start(handle);
-  }
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_close
- *
- * Description      This function is called when a SCO connection is closed
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_close(void) {
-  if (btui_cb.sco_hci) {
-    BTIF_TRACE_DEBUG("bta_dm_sco_co_close close codec");
-    /* close sco codec */
-    btui_sco_codec_close();
-
-    btui_cb.sco_hci = false;
-  }
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_in_data
- *
- * Description      This function is called to send incoming SCO data to
- *                  application.
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_in_data(BT_HDR* p_buf) {
-  if (btui_cfg.sco_use_mic)
-    btui_sco_codec_inqdata(p_buf);
-  else
-    osi_free(p_buf);
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_out_data
- *
- * Description      This function is called to send SCO data over HCI.
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_out_data(BT_HDR** p_buf) { btui_sco_codec_readbuf(p_buf); }
-
-#endif /* (BTM_SCO_HCI_INCLUDED == TRUE) && (BTM_SCO_INCLUDED == TRUE)*/
 
 /*******************************************************************************
  *
@@ -300,13 +212,13 @@ void bta_dm_co_le_io_key_req(UNUSED_ATTR const RawAddress& bd_addr,
  *
  ******************************************************************************/
 void bta_dm_co_ble_load_local_keys(tBTA_DM_BLE_LOCAL_KEY_MASK* p_key_mask,
-                                   BT_OCTET16 er,
+                                   Octet16* p_er,
                                    tBTA_BLE_LOCAL_ID_KEYS* p_id_keys) {
   BTIF_TRACE_DEBUG("##################################");
   BTIF_TRACE_DEBUG(
       "bta_dm_co_ble_load_local_keys:  Load local keys if any are persisted");
   BTIF_TRACE_DEBUG("##################################");
-  btif_dm_get_ble_local_keys(p_key_mask, er, p_id_keys);
+  btif_dm_get_ble_local_keys(p_key_mask, p_er, p_id_keys);
 }
 
 /*******************************************************************************
@@ -334,6 +246,8 @@ void bta_dm_co_ble_io_req(const RawAddress& bd_addr, tBTA_IO_CAP* p_io_cap,
                           tBTA_LE_AUTH_REQ* p_auth_req, uint8_t* p_max_key_size,
                           tBTA_LE_KEY_TYPE* p_init_key,
                           tBTA_LE_KEY_TYPE* p_resp_key) {
+  bte_appl_cfg.ble_io_cap = btif_storage_get_local_io_caps_ble();
+
   /* Retrieve the properties from file system if possible */
   tBTE_APPL_CFG nv_config;
   if (btif_dm_get_smp_config(&nv_config)) bte_appl_cfg = nv_config;
