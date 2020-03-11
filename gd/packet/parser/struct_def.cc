@@ -112,7 +112,11 @@ void StructDef::GenParse(std::ostream& s) const {
 
   if (!fields_.HasBody()) {
     s << "size_t end_index = struct_begin_it.NumBytesRemaining();";
-    s << "if (end_index < " << GetSize().bytes() << ")";
+    if (parent_ != nullptr) {
+      s << "if (end_index < " << GetSize().bytes() << " - to_fill->" << parent_->name_ << "::size())";
+    } else {
+      s << "if (end_index < " << GetSize().bytes() << ")";
+    }
     s << "{ return struct_begin_it.Subrange(0,0);}";
   }
 
@@ -154,7 +158,7 @@ void StructDef::GenParse(std::ostream& s) const {
       s << "}";
     }
   }
-  s << "return struct_begin_it + to_fill->size();";
+  s << "return struct_begin_it + to_fill->" << name_ << "::size();";
   s << "}";
 }
 
