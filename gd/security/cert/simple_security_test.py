@@ -20,7 +20,8 @@ import sys
 import logging
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
-from cert.event_stream import EventStream
+from cert.event_callback_stream import EventCallbackStream
+from cert.event_asserts import EventAsserts
 from google.protobuf import empty_pb2 as empty_proto
 from facade import common_pb2 as common
 from facade import rootservice_pb2 as facade_rootservice_pb2
@@ -36,24 +37,30 @@ import bluetooth_packets_python3 as bt_packets
 
 class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
 
-    def setup_class(self):
-        super().setup_class(dut_module='SECURITY', cert_module='L2CAP')
-
     def setup_test(self):
-        super().setup_test()
+        self.device_under_test.rootservice.StartStack(
+            facade_rootservice_pb2.StartStackRequest(
+                module_under_test=facade_rootservice_pb2.BluetoothModule.Value(
+                    'SECURITY'),))
+        self.cert_device.rootservice.StartStack(
+            facade_rootservice_pb2.StartStackRequest(
+                module_under_test=facade_rootservice_pb2.BluetoothModule.Value(
+                    'L2CAP'),))
 
-        self.dut.address = self.dut.controller_read_only_property.ReadLocalAddress(
+        self.device_under_test.address = self.device_under_test.controller_read_only_property.ReadLocalAddress(
             empty_proto.Empty()).address
-        self.cert.address = self.cert.controller_read_only_property.ReadLocalAddress(
+        self.cert_device.address = self.cert_device.controller_read_only_property.ReadLocalAddress(
             empty_proto.Empty()).address
 
-        self.dut.neighbor.EnablePageScan(
+        self.device_under_test.neighbor.EnablePageScan(
             neighbor_facade.EnableMsg(enabled=True))
-        self.cert.neighbor.EnablePageScan(
+        self.cert_device.neighbor.EnablePageScan(
             neighbor_facade.EnableMsg(enabled=True))
 
-        self.dut_address = common.BluetoothAddress(address=self.dut.address)
-        self.cert_address = common.BluetoothAddress(address=self.cert.address)
+        self.dut_address = common.BluetoothAddress(
+            address=self.device_under_test.address)
+        self.cert_address = common.BluetoothAddress(
+            address=self.cert_device.address)
 
         self.dut_address_with_type = common.BluetoothAddressWithType()
         self.dut_address_with_type.address.CopyFrom(self.dut_address)
@@ -63,39 +70,45 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
         self.cert_address_with_type.address.CopyFrom(self.cert_address)
         self.cert_address_with_type.type = common.BluetoothPeerAddressTypeEnum.PUBLIC_DEVICE_OR_IDENTITY_ADDRESS
 
-        self.dut.wait_channel_ready()
-        self.cert.wait_channel_ready()
+        self.device_under_test.wait_channel_ready()
+        self.cert_device.wait_channel_ready()
 
         self.cert_name = b'ImTheCert'
-        self.cert.hci_controller.WriteLocalName(
+        self.cert_device.hci_controller.WriteLocalName(
             controller_facade.NameMsg(name=self.cert_name))
         self.dut_name = b'ImTheDUT'
-        self.dut.hci_controller.WriteLocalName(
+        self.device_under_test.hci_controller.WriteLocalName(
             controller_facade.NameMsg(name=self.dut_name))
+
+    def teardown_test(self):
+        self.device_under_test.rootservice.StopStack(
+            facade_rootservice_pb2.StopStackRequest())
+        self.cert_device.rootservice.StopStack(
+            facade_rootservice_pb2.StopStackRequest())
 
     def tmp_register_for_event(self, event_code):
         msg = hci_facade.EventCodeMsg(code=int(event_code))
-        self.dut.hci.RegisterEventHandler(msg)
+        self.device_under_test.hci.RegisterEventHandler(msg)
 
     def tmp_enqueue_hci_command(self, command, expect_complete):
         cmd_bytes = bytes(command.Serialize())
         cmd = hci_facade.CommandMsg(command=cmd_bytes)
         if (expect_complete):
-            self.dut.hci.EnqueueCommandWithComplete(cmd)
+            self.device_under_test.hci.EnqueueCommandWithComplete(cmd)
         else:
-            self.dut.hci.EnqueueCommandWithStatus(cmd)
+            self.device_under_test.hci.EnqueueCommandWithStatus(cmd)
 
     def register_for_event(self, event_code):
         msg = hci_facade.EventCodeMsg(code=int(event_code))
-        self.cert.hci.RegisterEventHandler(msg)
+        self.cert_device.hci.RegisterEventHandler(msg)
 
     def enqueue_hci_command(self, command, expect_complete):
         cmd_bytes = bytes(command.Serialize())
         cmd = hci_facade.CommandMsg(command=cmd_bytes)
         if (expect_complete):
-            self.cert.hci.EnqueueCommandWithComplete(cmd)
+            self.cert_device.hci.EnqueueCommandWithComplete(cmd)
         else:
-            self.cert.hci.EnqueueCommandWithStatus(cmd)
+            self.cert_device.hci.EnqueueCommandWithStatus(cmd)
 
     def enqueue_acl_data(self, handle, pb_flag, b_flag, acl):
         acl_msg = hci_facade.AclMsg(
@@ -103,7 +116,7 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
             packet_boundary_flag=int(pb_flag),
             broadcast_flag=int(b_flag),
             data=acl)
-        self.cert.hci.SendAclData(acl_msg)
+        self.cert_device.hci.SendAclData(acl_msg)
 
     def pair_justworks(self, cert_iocap_reply, expected_ui_event):
         # Cert event registration
@@ -116,14 +129,19 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
             hci_packets.EventCode.REMOTE_HOST_SUPPORTED_FEATURES_NOTIFICATION)
         self.register_for_event(hci_packets.EventCode.LINK_KEY_NOTIFICATION)
         self.register_for_event(hci_packets.EventCode.SIMPLE_PAIRING_COMPLETE)
-        with EventStream(self.dut.security.FetchUiEvents(empty_proto.Empty())) as dut_ui_stream, \
-            EventStream(self.dut.security.FetchBondEvents(empty_proto.Empty())) as dut_bond_stream, \
-            EventStream(self.dut.neighbor.GetRemoteNameEvents(empty_proto.Empty())) as dut_name_stream, \
-            EventStream(self.cert.hci.FetchEvents(empty_proto.Empty())) as cert_hci_event_stream:
+        with EventCallbackStream(self.device_under_test.security.FetchUiEvents(empty_proto.Empty())) as dut_ui_stream, \
+            EventCallbackStream(self.device_under_test.security.FetchBondEvents(empty_proto.Empty())) as dut_bond_stream, \
+            EventCallbackStream(self.device_under_test.neighbor.GetRemoteNameEvents(empty_proto.Empty())) as name_event_stream, \
+            EventCallbackStream(self.cert_device.hci.FetchEvents(empty_proto.Empty())) as cert_hci_event_stream:
 
-            dut_address = self.dut.hci_controller.GetMacAddress(
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
+            dut_ui_event_asserts = EventAsserts(dut_ui_stream)
+            dut_bond_asserts = EventAsserts(dut_bond_stream)
+            dut_name_asserts = EventAsserts(name_event_stream)
+
+            dut_address = self.device_under_test.hci_controller.GetMacAddress(
                 empty_proto.Empty()).address
-            cert_address = self.cert.hci_controller.GetMacAddress(
+            cert_address = self.cert_device.hci_controller.GetMacAddress(
                 empty_proto.Empty()).address
 
             # Enable Simple Secure Pairing
@@ -131,31 +149,31 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
                 hci_packets.WriteSimplePairingModeBuilder(
                     hci_packets.Enable.ENABLED), True)
 
-            cert_hci_event_stream.assert_event_occurs(
+            cert_hci_event_asserts.assert_event_occurs(
                 lambda msg: b'\x0e\x04\x01\x56\x0c' in msg.event)
 
             # Get the name
-            self.dut.neighbor.ReadRemoteName(
+            self.device_under_test.neighbor.ReadRemoteName(
                 neighbor_facade.RemoteNameRequestMsg(
                     address=cert_address,
                     page_scan_repetition_mode=1,
                     clock_offset=0x6855))
 
-            dut_name_stream.assert_event_occurs(
+            dut_name_asserts.assert_event_occurs(
                 lambda msg: self.cert_name in msg.name)
 
-            self.dut.security.CreateBond(
+            self.device_under_test.security.CreateBond(
                 common.BluetoothAddressWithType(
                     address=common.BluetoothAddress(address=cert_address),
                     type=common.BluetoothAddressTypeEnum.PUBLIC_DEVICE_ADDRESS))
 
-            cert_hci_event_stream.assert_event_occurs(
+            cert_hci_event_asserts.assert_event_occurs(
                 lambda event: logging.debug(event.event) or hci_packets.EventCode.IO_CAPABILITY_REQUEST in event.event
             )
 
             self.enqueue_hci_command(cert_iocap_reply, True)
 
-            cert_hci_event_stream.assert_event_occurs(
+            cert_hci_event_asserts.assert_event_occurs(
                 lambda event: logging.debug(event.event) or hci_packets.EventCode.USER_CONFIRMATION_REQUEST in event.event
             )
             self.enqueue_hci_command(
@@ -172,26 +190,21 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
                     return True
                 return False
 
-            dut_ui_stream.assert_event_occurs(get_unique_id)
+            dut_ui_event_asserts.assert_event_occurs(get_unique_id)
 
             logging.info("Sending UI response")
-            self.dut.security.SendUiCallback(
+            self.device_under_test.security.SendUiCallback(
                 security_facade.UiCallbackMsg(
                     message_type=security_facade.UiCallbackType.YES_NO,
                     boolean=True,
-                    unique_id=ui_id,
-                    address=common.BluetoothAddressWithType(
-                        address=common.BluetoothAddress(address=cert_address),
-                        type=common.BluetoothAddressTypeEnum.
-                        PUBLIC_DEVICE_ADDRESS)))
+                    unique_id=ui_id))
 
-            # TODO: Figure out why this isn't happening anymore, bond event changes were recently introduced
-            # dut_bond_stream.assert_event_occurs(
-            #     lambda bond_event: bond_event.message_type == security_facade.BondMsgType.DEVICE_BONDED
-            # )
+            dut_bond_asserts.assert_event_occurs(
+                lambda bond_event: bond_event.message_type == security_facade.BondMsgType.DEVICE_BONDED
+            )
 
     def test_display_only(self):
-        dut_address = self.dut.hci_controller.GetMacAddress(
+        dut_address = self.device_under_test.hci_controller.GetMacAddress(
             empty_proto.Empty()).address
         self.pair_justworks(
             hci_packets.IoCapabilityRequestReplyBuilder(
@@ -202,7 +215,7 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
             security_facade.UiMsgType.DISPLAY_YES_NO_WITH_VALUE)
 
     def test_no_input_no_output(self):
-        dut_address = self.dut.hci_controller.GetMacAddress(
+        dut_address = self.device_under_test.hci_controller.GetMacAddress(
             empty_proto.Empty()).address
         self.pair_justworks(
             hci_packets.IoCapabilityRequestReplyBuilder(
@@ -213,7 +226,7 @@ class SimpleSecurityTest(GdFacadeOnlyBaseTestClass):
             security_facade.UiMsgType.DISPLAY_YES_NO)
 
     def test_display_yes_no(self):
-        dut_address = self.dut.hci_controller.GetMacAddress(
+        dut_address = self.device_under_test.hci_controller.GetMacAddress(
             empty_proto.Empty()).address
         self.pair_justworks(
             hci_packets.IoCapabilityRequestReplyBuilder(
