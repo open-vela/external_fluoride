@@ -55,12 +55,6 @@ class CertLeL2capChannel(IEventStream):
         assertThat(self._control_channel).emits(
             L2capMatchers.DisconnectionResponse(self._scid, self._dcid))
 
-    def get_scid(self):
-        return self._scid
-
-    def get_dcid(self):
-        return self._dcid
-
 
 class CertLeL2cap(Closable):
 
@@ -94,10 +88,11 @@ class CertLeL2cap(Closable):
             control_channel=None)
         self._get_acl_stream().register_callback(self._handle_control_packet)
 
-    def open_channel(self, signal_id, psm, scid, initial_credit=6):
+    def open_channel(self, signal_id, psm, scid):
+        # TODO(hsz): use credit based
         self.control_channel.send(
             l2cap_packets.LeCreditBasedConnectionRequestBuilder(
-                signal_id, psm, scid, 2000, 1000, initial_credit))
+                signal_id, psm, scid, 2000, 1000, 1000))
 
         response = L2capCaptures.CreditBasedConnectionResponse(scid)
         assertThat(self.control_channel).emits(response)
