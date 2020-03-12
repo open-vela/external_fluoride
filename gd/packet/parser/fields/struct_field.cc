@@ -83,7 +83,3 @@ void StructField::GenInserter(std::ostream& s) const {
 void StructField::GenValidator(std::ostream&) const {
   // Do nothing
 }
-
-void StructField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
-  s << accessor << ".ToString()";
-}
