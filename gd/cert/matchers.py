@@ -54,10 +54,6 @@ class L2capMatchers(object):
         return lambda packet: L2capMatchers._is_control_frame_with_code(packet, CommandCode.COMMAND_REJECT)
 
     @staticmethod
-    def LeCommandReject():
-        return lambda packet: L2capMatchers._is_le_control_frame_with_code(packet, LeCommandCode.COMMAND_REJECT)
-
-    @staticmethod
     def CreditBasedConnectionRequest():
         return lambda packet: L2capMatchers._is_le_control_frame_with_code(packet, LeCommandCode.LE_CREDIT_BASED_CONNECTION_REQUEST)
 
@@ -71,34 +67,21 @@ class L2capMatchers(object):
         return lambda packet: L2capMatchers._is_matching_le_disconnection_request(packet, scid, dcid)
 
     @staticmethod
-    def LeDisconnectionResponse(scid, dcid):
-        return lambda packet: L2capMatchers._is_matching_le_disconnection_response(packet, scid, dcid)
-
-    @staticmethod
     def SFrame(req_seq=None, f=None, s=None, p=None):
         return lambda packet: L2capMatchers._is_matching_supervisory_frame(packet, req_seq, f, s, p)
 
     @staticmethod
-    def IFrame(tx_seq=None, payload=None, f=None):
-        return lambda packet: L2capMatchers._is_matching_information_frame(packet, tx_seq, payload, f)
+    def IFrame(tx_seq=None, payload=None):
+        return lambda packet: L2capMatchers._is_matching_information_frame(packet, tx_seq, payload)
 
     @staticmethod
     def Data(payload):
         return lambda packet: packet.GetPayload().GetBytes() == payload
 
-    @staticmethod
-    def FirstLeIFrame(payload, sdu_size):
-        return lambda packet: L2capMatchers._is_matching_first_le_i_frame(packet, payload, sdu_size)
-
     # this is a hack - should be removed
     @staticmethod
     def PartialData(payload):
         return lambda packet: payload in packet.GetPayload().GetBytes()
-
-    # this is a hack - should be removed
-    @staticmethod
-    def PacketPayloadRawData(payload):
-        return lambda packet: payload in packet.payload
 
     @staticmethod
     def ExtractBasicFrame(scid):
@@ -140,15 +123,13 @@ class L2capMatchers(object):
         return l2cap_packets.EnhancedSupervisoryFrameView(standard_frame)
 
     @staticmethod
-    def _is_matching_information_frame(packet, tx_seq, payload, f):
+    def _is_matching_information_frame(packet, tx_seq, payload):
         frame = L2capMatchers._information_frame(packet)
         if frame is None:
             return False
         if tx_seq is not None and frame.GetTxSeq() != tx_seq:
             return False
         if payload is not None and frame.GetPayload().GetBytes() != payload:
-            return False
-        if f is not None and frame.GetF() != f:
             return False
         return True
 
@@ -166,12 +147,6 @@ class L2capMatchers(object):
         if p is not None and frame.GetP() != p:
             return False
         return True
-
-    @staticmethod
-    def _is_matching_first_le_i_frame(packet, payload, sdu_size):
-        first_le_i_frame = l2cap_packets.FirstLeInformationFrameView(packet)
-        return first_le_i_frame.GetPayload().GetBytes(
-        ) == payload and first_le_i_frame.GetL2capSduLength() == sdu_size
 
     @staticmethod
     def _control_frame(packet):
@@ -226,16 +201,6 @@ class L2capMatchers(object):
         if frame is None:
             return False
         response = l2cap_packets.DisconnectionResponseView(frame)
-        return response.GetSourceCid() == scid and response.GetDestinationCid(
-        ) == dcid
-
-    @staticmethod
-    def _is_matching_le_disconnection_response(packet, scid, dcid):
-        frame = L2capMatchers.le_control_frame_with_code(
-            packet, LeCommandCode.DISCONNECTION_RESPONSE)
-        if frame is None:
-            return False
-        response = l2cap_packets.LeDisconnectionResponseView(frame)
         return response.GetSourceCid() == scid and response.GetDestinationCid(
         ) == dcid
 
