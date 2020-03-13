@@ -224,10 +224,16 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
    public:
     L2capDynamicChannelHelper(L2capClassicModuleFacadeService* service, L2capClassicModule* l2cap_layer,
                               os::Handler* handler, Psm psm, RetransmissionFlowControlMode mode)
-        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm), mode_(mode) {
+        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm) {
       dynamic_channel_manager_ = l2cap_layer_->GetDynamicChannelManager();
       DynamicChannelConfigurationOption configuration_option = {};
-      configuration_option.channel_mode = (DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode)mode;
+      if (mode == RetransmissionFlowControlMode::BASIC) {
+        configuration_option.channel_mode =
+            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC;
+      } else if (mode == RetransmissionFlowControlMode::ERTM) {
+        configuration_option.channel_mode =
+            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION;
+      }
       dynamic_channel_manager_->RegisterService(
           psm, configuration_option, {},
           common::BindOnce(&L2capDynamicChannelHelper::on_l2cap_service_registration_complete,
@@ -243,12 +249,9 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     }
 
     void Connect(hci::Address address) {
-      DynamicChannelConfigurationOption configuration_option = l2cap::classic::DynamicChannelConfigurationOption();
-      configuration_option.channel_mode = (DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode)mode_;
-
+      // TODO: specify channel mode
       dynamic_channel_manager_->ConnectChannel(
-          address, configuration_option, psm_,
-          common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
+          address, {}, psm_, common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
           common::Bind(&L2capDynamicChannelHelper::on_connect_fail, common::Unretained(this)), handler_);
     }
 
@@ -337,7 +340,6 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     std::unique_ptr<DynamicChannelService> service_;
     std::unique_ptr<DynamicChannel> channel_ = nullptr;
     Psm psm_;
-    RetransmissionFlowControlMode mode_ = RetransmissionFlowControlMode::BASIC;
     std::condition_variable channel_open_cv_;
     std::mutex channel_open_cv_mutex_;
   };
