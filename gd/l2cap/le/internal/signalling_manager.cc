@@ -104,10 +104,6 @@ void LeSignallingManager::OnCommandReject(LeCommandRejectView command_reject_vie
     return;
   }
   alarm_.Cancel();
-  if (command_just_sent_.command_code_ == LeCommandCode::LE_CREDIT_BASED_CONNECTION_REQUEST) {
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
-                                           LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
-  }
   handle_send_next_command();
 
   LOG_WARN("Command rejected");
@@ -190,7 +186,7 @@ void LeSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remote_ci
   command_just_sent_.signal_id_ = kInitialSignalId;
   if (result != LeCreditBasedConnectionResponseResult::SUCCESS) {
     LOG_WARN("Connection failed: %s", LeCreditBasedConnectionResponseResultText(result).data());
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_, result);
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
     handle_send_next_command();
     return;
   }
@@ -198,8 +194,7 @@ void LeSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remote_ci
       link_->AllocateReservedDynamicChannel(command_just_sent_.source_cid_, command_just_sent_.psm_, remote_cid, {});
   if (new_channel == nullptr) {
     LOG_WARN("Can't allocate dynamic channel");
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
-                                           LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
     handle_send_next_command();
     return;
   }
@@ -377,8 +372,7 @@ void LeSignallingManager::on_command_timeout() {
   }
   switch (command_just_sent_.command_code_) {
     case LeCommandCode::CONNECTION_PARAMETER_UPDATE_REQUEST: {
-      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
-                                             LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
+      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
       break;
     }
     default:
