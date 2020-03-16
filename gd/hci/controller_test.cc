@@ -123,11 +123,11 @@ class TestHciLayer : public HciLayer {
       case (OpCode::READ_BD_ADDR): {
         event_builder = ReadBdAddrCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, Address::kAny);
       } break;
-      case (OpCode::LE_READ_BUFFER_SIZE_V1): {
+      case (OpCode::LE_READ_BUFFER_SIZE): {
         LeBufferSize le_buffer_size;
         le_buffer_size.le_data_packet_length_ = 0x16;
         le_buffer_size.total_num_le_packets_ = 0x08;
-        event_builder = LeReadBufferSizeV1CompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, le_buffer_size);
+        event_builder = LeReadBufferSizeCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, le_buffer_size);
       } break;
       case (OpCode::LE_READ_LOCAL_SUPPORTED_FEATURES): {
         event_builder =
@@ -459,18 +459,6 @@ TEST_F(ControllerTest, aclCreditCallbacksTest) {
 
   credits1_set.get_future().wait();
   credits2_set.get_future().wait();
-}
-
-TEST_F(ControllerTest, aclCreditCallbackListenerUnregistered) {
-  os::Thread thread("test_thread", os::Thread::Priority::NORMAL);
-  os::Handler handler(&thread);
-  controller_->RegisterCompletedAclPacketsCallback(common::Bind(&CheckReceivedCredits), &handler);
-
-  handler.Clear();
-  handler.WaitUntilStopped(std::chrono::milliseconds(100));
-  controller_->UnregisterCompletedAclPacketsCallback();
-
-  test_hci_layer_->IncomingCredit();
 }
 }  // namespace
 }  // namespace hci
