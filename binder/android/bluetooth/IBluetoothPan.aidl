@@ -32,5 +32,4 @@ interface IBluetoothPan {
     List<BluetoothDevice> getConnectedDevices();
     List<BluetoothDevice> getDevicesMatchingConnectionStates(in int[] states);
     int getConnectionState(in BluetoothDevice device);
-    boolean setConnectionPolicy(in BluetoothDevice device, int connectionPolicy);
 }
