@@ -22,7 +22,6 @@ from hal import facade_pb2_grpc as hal_facade_pb2_grpc
 from hci.facade import facade_pb2 as hci_facade
 from hci.facade import facade_pb2_grpc as hci_facade_pb2_grpc
 from hci.facade import acl_manager_facade_pb2_grpc
-from hci.facade import controller_facade_pb2 as controller_facade
 from hci.facade import controller_facade_pb2_grpc
 from hci.facade import le_acl_manager_facade_pb2_grpc
 from hci.facade import le_advertising_manager_facade_pb2_grpc
@@ -69,17 +68,16 @@ def get_instances_with_configs(configs):
         devices.append(
             GdDevice(config["grpc_port"], config["grpc_root_server_port"],
                      config["signal_port"], resolved_cmd, config["label"],
-                     config.get("serial_number", ""), config.get("name", "")))
+                     config.get("serial_number", "")))
     return devices
 
 
 class GdDevice(GdDeviceBase):
 
     def __init__(self, grpc_port, grpc_root_server_port, signal_port, cmd,
-                 label, serial_number, name):
+                 label, serial_number):
         super().__init__(grpc_port, grpc_root_server_port, signal_port, cmd,
-                         label, ACTS_CONTROLLER_CONFIG_NAME, serial_number,
-                         name)
+                         label, ACTS_CONTROLLER_CONFIG_NAME, serial_number)
 
         # Facade stubs
         self.rootservice = facade_rootservice_pb2_grpc.RootFacadeStub(
