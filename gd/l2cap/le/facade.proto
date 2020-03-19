@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package bluetooth.l2cap.le;
+
+import "google/protobuf/empty.proto";
+import "facade/common.proto";
+
+service L2capLeModuleFacade {
+  rpc FetchL2capData(google.protobuf.Empty) returns (stream L2capPacket) {}
+  rpc FetchDynamicChannelOpenEvent(google.protobuf.Empty) returns (stream DynamicChannelOpenEvent) {}
+  // Initiate a credit based connection request and block until response is received for up to some timeout (2s)
+  rpc OpenDynamicChannel(OpenDynamicChannelRequest) returns (OpenDynamicChannelResponse) {}
+  rpc CloseDynamicChannel(CloseDynamicChannelRequest) returns (google.protobuf.Empty) {}
+  rpc SetDynamicChannel(SetEnableDynamicChannelRequest) returns (google.protobuf.Empty) {}
+  rpc SendDynamicChannelPacket(DynamicChannelPacket) returns (google.protobuf.Empty) {}
+}
+
+message L2capPacket {
+  uint32 psm = 1;
+  bytes payload = 2;
+}
+
+message DynamicChannelOpenEvent {
+  uint32 psm = 1;
+  uint32 connection_response_result = 2;
+}
+
+message OpenDynamicChannelRequest {
+  facade.BluetoothAddressWithType remote = 1;
+  uint32 psm = 2;
+}
+
+message OpenDynamicChannelResponse {
+  uint32 status = 1;
+}
+
+message CloseDynamicChannelRequest {
+  facade.BluetoothAddressWithType remote = 1;
+  uint32 psm = 2;
+}
+
+message SetEnableDynamicChannelRequest {
+  uint32 psm = 1;
+  bool enable = 2;
+}
+
+message DynamicChannelPacket {
+  facade.BluetoothAddressWithType remote = 1;
+  uint32 psm = 2;
+  bytes payload = 3;
+}
