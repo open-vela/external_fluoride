@@ -34,9 +34,7 @@ ErtmController::ErtmController(ILink* link, Cid cid, Cid remote_cid, UpperQueueD
     : link_(link), cid_(cid), remote_cid_(remote_cid), enqueue_buffer_(channel_queue_end), handler_(handler),
       scheduler_(scheduler), pimpl_(std::make_unique<impl>(this, handler)) {}
 
-ErtmController::~ErtmController() {
-  enqueue_buffer_.Clear();
-}
+ErtmController::~ErtmController() = default;
 
 struct ErtmController::impl {
   impl(ErtmController* controller, os::Handler* handler)
@@ -411,7 +409,6 @@ struct ErtmController::impl {
         remote_busy_ = false;
         pass_to_tx(req_seq, f);
         retransmit_requested_i_frame(req_seq, p);
-        send_pending_i_frames();
         if (p_bit_outstanding()) {
           srej_actioned_ = true;
           srej_save_req_seq_ = req_seq;
