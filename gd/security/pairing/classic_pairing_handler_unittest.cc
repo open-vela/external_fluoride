@@ -182,8 +182,8 @@ class ClassicPairingHandlerTest : public ::testing::Test {
 //  <- IoCapabilityResponse
 //  <- UserConfirmationRequest
 //  -> UserConfirmationRequestReply (auto)
-//  <- LinkKeyNotification
 //  <- SimplePairingComplete
+//  <- LinkKeyNotification
 //  <- AuthenticationComplete
 //  -> SetConnectionEncryption
 //  <- EncryptionChange
