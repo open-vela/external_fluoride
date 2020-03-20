@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2014 The Android Open Source Project
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2014 The Android Open Source Project
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,7 +37,9 @@
 #include "bt_types.h"
 #include "bta_api.h"
 #include "bta_mce_api.h"
+#include "btcore/include/bdaddr.h"
 #include "btif_common.h"
+#include "btif_profile_queue.h"
 #include "btif_util.h"
 
 /*****************************************************************************
@@ -49,6 +51,7 @@ static btmce_callbacks_t* bt_mce_callbacks = NULL;
 static void btif_mce_mas_discovery_comp_evt(uint16_t event, char* p_param) {
   tBTA_MCE_MAS_DISCOVERY_COMP* evt_data = (tBTA_MCE_MAS_DISCOVERY_COMP*)p_param;
   btmce_mas_instance_t insts[BTA_MCE_MAX_MAS_INSTANCES];
+  bt_bdaddr_t addr;
   int i;
 
   BTIF_TRACE_EVENT("%s:  event = %d", __func__, event);
@@ -62,7 +65,8 @@ static void btif_mce_mas_discovery_comp_evt(uint16_t event, char* p_param) {
     insts[i].p_name = evt_data->mas[i].p_srv_name;
   }
 
-  RawAddress addr = evt_data->remote_addr;
+  bdcpy(addr.address, evt_data->remote_addr);
+
   HAL_CBACK(bt_mce_callbacks, remote_mas_instances_cb,
             (bt_status_t)evt_data->status, &addr, evt_data->num_mas, insts);
 }
@@ -123,10 +127,13 @@ static bt_status_t init(btmce_callbacks_t* callbacks) {
   return BT_STATUS_SUCCESS;
 }
 
-static bt_status_t get_remote_mas_instances(RawAddress* bd_addr) {
-  VLOG(2) << __func__ << ": remote_addr=" << bd_addr;
+static bt_status_t get_remote_mas_instances(bt_bdaddr_t* bd_addr) {
+  bdstr_t bdstr;
 
-  BTA_MceGetRemoteMasInstances(*bd_addr);
+  BTIF_TRACE_EVENT("%s: remote_addr=%s", __func__,
+                   bdaddr_to_string(bd_addr, bdstr, sizeof(bdstr)));
+
+  BTA_MceGetRemoteMasInstances(bd_addr->address);
 
   return BT_STATUS_SUCCESS;
 }

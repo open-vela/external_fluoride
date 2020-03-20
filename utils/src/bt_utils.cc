@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2012 Broadcom Corporation
+ *  Copyright (C) 2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@
 
 #define A2DP_RT_PRIORITY 1
 #ifndef OS_GENERIC
-#include <processgroup/sched_policy.h>
+#include <cutils/sched_policy.h>
 #endif
 
 #include "bt_types.h"
@@ -135,7 +135,8 @@ void raise_priority_a2dp(tHIGH_PRIORITY_TASK high_task) {
   }
 
   if (rc) {
-    LOG_WARN("failed to change sched policy, tid %d, err: %d", tid, errno);
+    LOG_WARN(LOG_TAG, "failed to change sched policy, tid %d, err: %d", tid,
+             errno);
   }
 
   // make A2DP threads use RT scheduling policy since they are part of the
@@ -146,7 +147,8 @@ void raise_priority_a2dp(tHIGH_PRIORITY_TASK high_task) {
 
     const int rc = sched_setscheduler(tid, SCHED_FIFO, &rt_params);
     if (rc != 0) {
-      LOG_ERROR("%s unable to set SCHED_FIFO priority %d for tid %d, error %s",
+      LOG_ERROR(LOG_TAG,
+                "%s unable to set SCHED_FIFO priority %d for tid %d, error %s",
                 __func__, A2DP_RT_PRIORITY, tid, strerror(errno));
     }
   }

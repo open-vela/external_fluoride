@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,17 +23,27 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
+#include <cutils/log.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_types.h"
+#include "bt_utils.h"
+#include "btu.h"
+
+#include "hcidefs.h"
+#include "hcimsgs.h"
+#include "l2cdefs.h"
 
 #include "osi/include/osi.h"
 #include "sdp_api.h"
 #include "sdpint.h"
 
 #if (SDP_SERVER_ENABLED == TRUE)
+
+extern fixed_queue_t* btu_general_alarm_queue;
 
 /* Maximum number of bytes to reserve out of SDP MTU for response data */
 #define SDP_MAX_SERVICE_RSPHDR_LEN 12
@@ -111,8 +121,8 @@ void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg) {
   uint16_t trans_num, param_len;
 
   /* Start inactivity timer */
-  alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                     sdp_conn_timer_timeout, p_ccb);
+  alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                     sdp_conn_timer_timeout, p_ccb, btu_general_alarm_queue);
 
   if (p_req + sizeof(pdu_id) + sizeof(trans_num) > p_req_end) {
     android_errorWriteLog(0x534e4554, "69384124");
@@ -627,7 +637,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
        p_rec; p_rec = sdp_db_service_search(p_rec, &uid_seq)) {
     /* Allow space for attribute sequence type and length */
     p_seq_start = p_rsp;
-    if (!p_ccb->cont_info.last_attr_seq_desc_sent) {
+    if (p_ccb->cont_info.last_attr_seq_desc_sent == false) {
       /* See if there is enough room to include a new service in the current
        * response */
       rem_len = max_list_len - (int16_t)(p_rsp - &p_ccb->rsp_list[0]);
@@ -709,7 +719,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
     }
 
     /* Go back and put the type and length into the buffer */
-    if (!p_ccb->cont_info.last_attr_seq_desc_sent) {
+    if (p_ccb->cont_info.last_attr_seq_desc_sent == false) {
       seq_len = sdpu_get_attrib_seq_len(p_rec, &attr_seq_sav);
       if (seq_len != 0) {
         UINT8_TO_BE_STREAM(p_seq_start,
