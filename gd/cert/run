@@ -1,0 +1,87 @@
+#! /bin/bash
+
+if [[ -z "${ANDROID_BUILD_TOP}" ]]; then
+  echo "ANDROID_BUILD_TOP is not set"
+fi
+
+if [[ -z "${ANDROID_HOST_OUT}" ]]; then
+  echo "ANDROID_HOST_OUT is not set for host run"
+fi
+
+$ANDROID_BUILD_TOP/build/soong/soong_ui.bash --build-mode --"all-modules" --dir="$(pwd)" dist bluetooth_stack_with_facade
+
+TEST_CONFIG="$ANDROID_BUILD_TOP/system/bt/gd/cert/android_devices_config.json"
+TEST_FILTER="-tf $ANDROID_BUILD_TOP/system/bt/gd/cert/all_cert_testcases"
+REUSE_VENV=false
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+case $key in
+    --test_filter=*)
+    TEST_FILTER="-tc ${key#*=}"
+    shift # past argument=value
+    ;;
+    --host)
+    TEST_CONFIG=$ANDROID_BUILD_TOP/system/bt/gd/cert/host_config.json
+    shift # past argument
+    ;;
+    --test_file=*)
+    TEST_FILTER="-tc ${key#*=}"
+    shift # past argument
+    ;;
+    --test_config=*)
+    TEST_CONFIG="${key#*=}"
+    shift # past argument
+    ;;
+    # This will speed up the test by overwriting existing venv
+    --reuse_venv)
+    REUSE_VENV=true
+    shift # past argument
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+CERT_TEST_VENV=$ANDROID_BUILD_TOP/out/dist/bluetooth_venv
+
+if [ "$REUSE_VENV" != true ] ; then
+  rm -rf $CERT_TEST_VENV
+fi
+
+python3.8 -m virtualenv --python `which python3.8` $CERT_TEST_VENV
+if [[ $? -ne 0 ]] ; then
+    echo "Error setting up virtualenv"
+    return 1
+fi
+
+unzip -o -q $ANDROID_BUILD_TOP/out/dist/bluetooth_cert_tests.zip -d $CERT_TEST_VENV/acts
+if [[ $? -ne 0 ]] ; then
+    echo "Error unzipping bluetooth_cert_tests.zip"
+    return 1
+fi
+
+$CERT_TEST_VENV/bin/python $CERT_TEST_VENV/acts/setup.py install
+if [[ $? -ne 0 ]] ; then
+    echo "Error installing GD libraries"
+    return 1
+fi
+
+$CERT_TEST_VENV/bin/python -c "
+import bluetooth_packets_python3 as bp3
+bp3.BaseStruct
+"
+if [[ $? -ne 0 ]] ; then
+  echo "Setup failed as bluetooth_packets_python3 cannot be imported"
+  return 1
+fi
+
+$CERT_TEST_VENV/bin/python $CERT_TEST_VENV/bin/act.py \
+    -c $TEST_CONFIG \
+    $TEST_FILTER \
+    -tp $CERT_TEST_VENV/acts
