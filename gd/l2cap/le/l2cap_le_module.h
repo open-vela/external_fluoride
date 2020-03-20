@@ -17,7 +17,6 @@
 
 #include <memory>
 
-#include "l2cap/le/dynamic_channel_manager.h"
 #include "l2cap/le/fixed_channel_manager.h"
 #include "module.h"
 
@@ -34,11 +33,6 @@ class L2capLeModule : public bluetooth::Module {
    * Get the api to the LE fixed channel l2cap module
    */
   virtual std::unique_ptr<FixedChannelManager> GetFixedChannelManager();
-
-  /**
-   * Get the api to the LE dynamic channel l2cap module
-   */
-  virtual std::unique_ptr<DynamicChannelManager> GetDynamicChannelManager();
 
   static const ModuleFactory Factory;
 

@@ -75,11 +75,6 @@ class TestController : public Controller {
     acl_cb_handler_ = handler;
   }
 
-  void UnregisterCompletedAclPacketsCallback() override {
-    acl_cb_ = {};
-    acl_cb_handler_ = nullptr;
-  }
-
   uint16_t GetControllerAclPacketLength() const override {
     return acl_buffer_length_;
   }
@@ -529,7 +524,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_complete_success
 
   test_hci_layer_->IncomingLeMetaEvent(
       LeConnectionCompleteBuilder::Create(ErrorCode::SUCCESS, 0x123, Role::SLAVE, AddressType::PUBLIC_DEVICE_ADDRESS,
-                                          remote, 0x0100, 0x0010, 0x0011, ClockAccuracy::PPM_30));
+                                          remote, 0x0100, 0x0010, 0x0011, MasterClockAccuracy::PPM_30));
 
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
@@ -556,7 +551,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_complete_fail) {
               OnLeConnectFail(remote_with_type, ErrorCode::CONNECTION_REJECTED_LIMITED_RESOURCES));
   test_hci_layer_->IncomingLeMetaEvent(LeConnectionCompleteBuilder::Create(
       ErrorCode::CONNECTION_REJECTED_LIMITED_RESOURCES, 0x123, Role::SLAVE, AddressType::PUBLIC_DEVICE_ADDRESS, remote,
-      0x0100, 0x0010, 0x0011, ClockAccuracy::PPM_30));
+      0x0100, 0x0010, 0x0011, MasterClockAccuracy::PPM_30));
 }
 
 TEST_F(AclManagerTest, invoke_registered_callback_le_connection_update_success) {
@@ -577,7 +572,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_update_success) 
 
   test_hci_layer_->IncomingLeMetaEvent(
       LeConnectionCompleteBuilder::Create(ErrorCode::SUCCESS, 0x123, Role::SLAVE, AddressType::PUBLIC_DEVICE_ADDRESS,
-                                          remote, 0x0100, 0x0010, 0x0011, ClockAccuracy::PPM_30));
+                                          remote, 0x0100, 0x0010, 0x0011, MasterClockAccuracy::PPM_30));
 
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
