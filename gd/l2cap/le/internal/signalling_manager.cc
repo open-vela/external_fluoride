@@ -99,15 +99,11 @@ void LeSignallingManager::CancelAlarm() {
 
 void LeSignallingManager::OnCommandReject(LeCommandRejectView command_reject_view) {
   auto signal_id = command_reject_view.GetIdentifier();
-  if (signal_id != command_just_sent_.signal_id_) {
+  if (signal_id != command_just_sent_.signal_id_ || command_just_sent_.command_code_ != command_reject_view.GetCode()) {
     LOG_WARN("Unexpected response: no pending request");
     return;
   }
   alarm_.Cancel();
-  if (command_just_sent_.command_code_ == LeCommandCode::LE_CREDIT_BASED_CONNECTION_REQUEST) {
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
-                                           LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
-  }
   handle_send_next_command();
 
   LOG_WARN("Command rejected");
@@ -165,7 +161,7 @@ void LeSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, Cid r
 
     return;
   }
-  send_connection_response(signal_id, new_channel->GetCid(), local_mtu, local_mps, link_->GetInitialCredit(),
+  send_connection_response(signal_id, remote_cid, local_mtu, local_mps, link_->GetInitialCredit(),
                            LeCreditBasedConnectionResponseResult::SUCCESS);
   auto* data_controller = reinterpret_cast<l2cap::internal::LeCreditBasedDataController*>(
       data_pipeline_manager_->GetDataController(new_channel->GetCid()));
@@ -190,7 +186,7 @@ void LeSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remote_ci
   command_just_sent_.signal_id_ = kInitialSignalId;
   if (result != LeCreditBasedConnectionResponseResult::SUCCESS) {
     LOG_WARN("Connection failed: %s", LeCreditBasedConnectionResponseResultText(result).data());
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_, result);
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
     handle_send_next_command();
     return;
   }
@@ -198,8 +194,7 @@ void LeSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remote_ci
       link_->AllocateReservedDynamicChannel(command_just_sent_.source_cid_, command_just_sent_.psm_, remote_cid, {});
   if (new_channel == nullptr) {
     LOG_WARN("Can't allocate dynamic channel");
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
-                                           LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
     handle_send_next_command();
     return;
   }
@@ -228,7 +223,7 @@ void LeSignallingManager::OnDisconnectionRequest(SignalId signal_id, Cid cid, Ci
   link_->FreeDynamicChannel(cid);
 }
 
-void LeSignallingManager::OnDisconnectionResponse(SignalId signal_id, Cid remote_cid, Cid cid) {
+void LeSignallingManager::OnDisconnectionResponse(SignalId signal_id, Cid cid, Cid remote_cid) {
   if (signal_id != command_just_sent_.signal_id_ ||
       command_just_sent_.command_code_ != LeCommandCode::DISCONNECTION_REQUEST) {
     LOG_WARN("Unexpected response: no pending request");
@@ -377,8 +372,7 @@ void LeSignallingManager::on_command_timeout() {
   }
   switch (command_just_sent_.command_code_) {
     case LeCommandCode::CONNECTION_PARAMETER_UPDATE_REQUEST: {
-      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
-                                             LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
+      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
       break;
     }
     default:
