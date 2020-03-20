@@ -19,7 +19,8 @@ import sys
 import logging
 
 from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
-from cert.event_stream import EventStream
+from cert.event_callback_stream import EventCallbackStream
+from cert.event_asserts import EventAsserts
 from google.protobuf import empty_pb2 as empty_proto
 from facade import rootservice_pb2 as facade_rootservice
 from hci.facade import facade_pb2 as hci_facade
@@ -31,31 +32,50 @@ from facade import common_pb2 as common
 
 class LeAdvertisingManagerTest(GdFacadeOnlyBaseTestClass):
 
-    def setup_class(self):
-        super().setup_class(dut_module='HCI_INTERFACES', cert_module='HCI')
+    def setup_test(self):
+        self.device_under_test.rootservice.StartStack(
+            facade_rootservice.StartStackRequest(
+                module_under_test=facade_rootservice.BluetoothModule.Value(
+                    'HCI_INTERFACES'),))
+        self.cert_device.rootservice.StartStack(
+            facade_rootservice.StartStackRequest(
+                module_under_test=facade_rootservice.BluetoothModule.Value(
+                    'HCI'),))
+
+        self.device_under_test.wait_channel_ready()
+        self.cert_device.wait_channel_ready()
+
+    def teardown_test(self):
+        self.device_under_test.rootservice.StopStack(
+            facade_rootservice.StopStackRequest())
+        self.cert_device.rootservice.StopStack(
+            facade_rootservice.StopStackRequest())
 
     def register_for_event(self, event_code):
         msg = hci_facade.EventCodeMsg(code=int(event_code))
-        self.cert.hci.RegisterEventHandler(msg)
+        self.cert_device.hci.RegisterEventHandler(msg)
 
     def register_for_le_event(self, event_code):
         msg = hci_facade.LeSubeventCodeMsg(code=int(event_code))
-        self.cert.hci.RegisterLeEventHandler(msg)
+        self.cert_device.hci.RegisterLeEventHandler(msg)
 
     def enqueue_hci_command(self, command, expect_complete):
         cmd_bytes = bytes(command.Serialize())
         cmd = hci_facade.CommandMsg(command=cmd_bytes)
         if (expect_complete):
-            self.cert.hci.EnqueueCommandWithComplete(cmd)
+            self.cert_device.hci.EnqueueCommandWithComplete(cmd)
         else:
-            self.cert.hci.EnqueueCommandWithStatus(cmd)
+            self.cert_device.hci.EnqueueCommandWithStatus(cmd)
 
     def test_le_ad_scan_dut_advertises(self):
         self.register_for_le_event(hci_packets.SubeventCode.ADVERTISING_REPORT)
         self.register_for_le_event(
             hci_packets.SubeventCode.EXTENDED_ADVERTISING_REPORT)
-        with EventStream(self.cert.hci.FetchLeSubevents(
-                empty_proto.Empty())) as hci_le_event_stream:
+        with EventCallbackStream(
+                self.cert_device.hci.FetchLeSubevents(
+                    empty_proto.Empty())) as hci_le_event_stream:
+
+            hci_event_asserts = EventAsserts(hci_le_event_stream)
 
             # CERT Scans
             self.enqueue_hci_command(
@@ -98,15 +118,16 @@ class LeAdvertisingManagerTest(GdFacadeOnlyBaseTestClass):
             request = le_advertising_facade.CreateAdvertiserRequest(
                 config=config)
 
-            create_response = self.dut.hci_le_advertising_manager.CreateAdvertiser(
+            create_response = self.device_under_test.hci_le_advertising_manager.CreateAdvertiser(
                 request)
 
-            hci_le_event_stream.assert_event_occurs(
+            hci_event_asserts.assert_event_occurs(
                 lambda packet: b'Im_The_DUT' in packet.event)
 
             remove_request = le_advertising_facade.RemoveAdvertiserRequest(
                 advertiser_id=create_response.advertiser_id)
-            self.dut.hci_le_advertising_manager.RemoveAdvertiser(remove_request)
+            self.device_under_test.hci_le_advertising_manager.RemoveAdvertiser(
+                remove_request)
             self.enqueue_hci_command(
                 hci_packets.LeSetScanEnableBuilder(hci_packets.Enable.DISABLED,
                                                    hci_packets.Enable.DISABLED),
