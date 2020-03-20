@@ -98,18 +98,9 @@ class MetricIdAllocator {
    * Delete the id for a device to be forgotten
    *
    * @param mac_address mac address of Bluetooth device
-   */
-  void ForgetDevice(const RawAddress& mac_address);
-
-  /**
-   * Check if an id is valid.
-   * The id should be less than or equal to kMaxId and bigger than or equal to
-   * kMinId
-   *
-   * @param mac_address mac address of Bluetooth device
    * @return true if delete successfully
    */
-  static bool IsValidId(const int id);
+  bool ForgetDevice(const RawAddress& mac_address);
 
  protected:
   // Singleton
@@ -127,8 +118,6 @@ class MetricIdAllocator {
   bool initialized_{false};
   Callback save_id_callback_;
   Callback forget_device_callback_;
-
-  void ForgetDevicePostprocess(const RawAddress& mac_address, const int id);
 
   // delete copy constructor for singleton
   MetricIdAllocator(MetricIdAllocator const&) = delete;
