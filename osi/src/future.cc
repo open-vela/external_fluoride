@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,8 +40,7 @@ future_t* future_new(void) {
 
   ret->semaphore = semaphore_new(0);
   if (!ret->semaphore) {
-    LOG_ERROR(LOG_TAG, "%s unable to allocate memory for the semaphore.",
-              __func__);
+    LOG_ERROR("%s unable to allocate memory for the semaphore.", __func__);
     goto error;
   }
 

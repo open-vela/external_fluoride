@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2000-2012 Broadcom Corporation
+ *  Copyright 2000-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,10 +26,6 @@
 #include <string.h>
 #include "bt_target.h"
 
-#ifndef BTA_INCLUDED
-#define BTA_INCLUDED FALSE
-#endif
-
 #include "bte.h"
 
 /* Include initialization functions definitions */
@@ -46,17 +42,10 @@
 #endif
 
 #include "avrc_api.h"
-
-#if (A2D_INCLUDED == TRUE)
 #include "a2dp_api.h"
-#endif
 
 #if (HID_HOST_INCLUDED == TRUE)
 #include "hidh_api.h"
-#endif
-
-#if (MCA_INCLUDED == TRUE)
-#include "mca_api.h"
 #endif
 
 #include "gatt_api.h"
@@ -99,9 +88,7 @@ void BTE_InitStack(void) {
 /**************************
  * AVDT and its profiles **
  **************************/
-#if (A2D_INCLUDED == TRUE)
   A2DP_Init();
-#endif /* AADP */
 
   AVRC_Init();
 
@@ -112,9 +99,5 @@ void BTE_InitStack(void) {
 
 #if (HID_HOST_INCLUDED == TRUE)
   HID_HostInit();
-#endif
-
-#if (MCA_INCLUDED == TRUE)
-  MCA_Init();
 #endif
 }
