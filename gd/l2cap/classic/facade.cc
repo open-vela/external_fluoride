@@ -25,7 +25,6 @@
 #include "l2cap/classic/facade.grpc.pb.h"
 #include "l2cap/classic/facade.h"
 #include "l2cap/classic/l2cap_classic_module.h"
-#include "l2cap/l2cap_packets.h"
 #include "os/log.h"
 #include "packet/raw_builder.h"
 
@@ -55,16 +54,6 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
   ::grpc::Status FetchConnectionClose(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
                                       ::grpc::ServerWriter<classic::ConnectionCloseEvent>* writer) override {
     return pending_connection_close_.RunLoop(context, writer);
-  }
-
-  ::grpc::Status Connect(::grpc::ServerContext* context, const facade::BluetoothAddress* request,
-                         ::google::protobuf::Empty* response) override {
-    auto fixed_channel_manager = l2cap_layer_->GetFixedChannelManager();
-    hci::Address peer;
-    ASSERT(hci::Address::FromString(request->address(), peer));
-    fixed_channel_manager->ConnectServices(peer, common::BindOnce([](FixedChannelManager::ConnectionResult) {}),
-                                           facade_handler_);
-    return ::grpc::Status::OK;
   }
 
   ::grpc::Status SendL2capPacket(::grpc::ServerContext* context, const classic::L2capPacket* request,
@@ -121,51 +110,7 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
 
   ::grpc::Status FetchL2capData(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
                                 ::grpc::ServerWriter<classic::L2capPacket>* writer) override {
-    {
-      std::unique_lock<std::mutex> lock(channel_map_mutex_);
-
-      for (auto& connection : fixed_channel_helper_map_) {
-        if (connection.second->channel_ != nullptr) {
-          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
-              facade_handler_,
-              common::Bind(&L2capFixedChannelHelper::on_incoming_packet, common::Unretained(connection.second.get())));
-        }
-      }
-
-      for (auto& connection : dynamic_channel_helper_map_) {
-        if (connection.second->channel_ != nullptr) {
-          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
-              facade_handler_, common::Bind(&L2capDynamicChannelHelper::on_incoming_packet,
-                                            common::Unretained(connection.second.get())));
-        }
-      }
-
-      fetch_l2cap_data_ = true;
-    }
-
     auto status = pending_l2cap_data_.RunLoop(context, writer);
-
-    {
-      std::unique_lock<std::mutex> lock(channel_map_mutex_);
-
-      fetch_l2cap_data_ = false;
-
-      for (auto& connection : fixed_channel_helper_map_) {
-        if (connection.second->channel_ != nullptr) {
-          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
-              facade_handler_,
-              common::Bind(&L2capFixedChannelHelper::on_incoming_packet, common::Unretained(connection.second.get())));
-        }
-      }
-
-      for (auto& connection : dynamic_channel_helper_map_) {
-        if (connection.second->channel_ != nullptr) {
-          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
-              facade_handler_, common::Bind(&L2capDynamicChannelHelper::on_incoming_packet,
-                                            common::Unretained(connection.second.get())));
-        }
-      }
-    }
 
     return status;
   }
@@ -222,6 +167,7 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
         LOG_WARN("Channel is not open");
         return false;
       }
+      std::unique_lock<std::mutex> lock(facade_service_->channel_map_mutex_);
       channel_->GetQueueUpEnd()->RegisterEnqueue(
           handler_, common::Bind(&L2capFixedChannelHelper::enqueue_callback, common::Unretained(this), packet));
       return true;
@@ -295,6 +241,13 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
           common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)), handler_);
     }
 
+    ~L2capDynamicChannelHelper() {
+      if (channel_ != nullptr) {
+        channel_->GetQueueUpEnd()->UnregisterDequeue();
+        channel_ = nullptr;
+      }
+    }
+
     void Connect(hci::Address address) {
       // TODO: specify channel mode
       dynamic_channel_manager_->ConnectChannel(
@@ -309,6 +262,7 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     void on_l2cap_service_registration_complete(DynamicChannelManager::RegistrationResult registration_result,
                                                 std::unique_ptr<DynamicChannelService> service) {}
 
+    // invoked from Facade Handler
     void on_connection_open(std::unique_ptr<DynamicChannel> channel) {
       ConnectionCompleteEvent event;
       event.mutable_remote()->set_address(channel->GetDevice().ToString());
@@ -321,28 +275,21 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
       channel_->RegisterOnCloseCallback(
           facade_service_->facade_handler_,
           common::BindOnce(&L2capDynamicChannelHelper::on_close_callback, common::Unretained(this)));
-      {
-        std::unique_lock<std::mutex> lock(facade_service_->channel_map_mutex_);
-        if (facade_service_->fetch_l2cap_data_) {
-          channel_->GetQueueUpEnd()->RegisterDequeue(
-              facade_service_->facade_handler_,
-              common::Bind(&L2capDynamicChannelHelper::on_incoming_packet, common::Unretained(this)));
-        }
-      }
+      channel_->GetQueueUpEnd()->RegisterDequeue(
+          facade_service_->facade_handler_,
+          common::Bind(&L2capDynamicChannelHelper::on_incoming_packet, common::Unretained(this)));
     }
 
     void on_close_callback(hci::ErrorCode error_code) {
       {
         std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-        if (facade_service_->fetch_l2cap_data_) {
-          channel_->GetQueueUpEnd()->UnregisterDequeue();
-        }
+        channel_->GetQueueUpEnd()->UnregisterDequeue();
       }
       classic::ConnectionCloseEvent event;
       event.mutable_remote()->set_address(channel_->GetDevice().ToString());
-      channel_ = nullptr;
       event.set_reason(static_cast<uint32_t>(error_code));
       facade_service_->pending_connection_close_.OnIncomingEvent(event);
+      channel_ = nullptr;
     }
 
     void on_connect_fail(DynamicChannelManager::ConnectionResult result) {}
@@ -359,20 +306,30 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     bool SendPacket(std::vector<uint8_t> packet) {
       if (channel_ == nullptr) {
         std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-        if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(1), [this] { return channel_ != nullptr; })) {
+        if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(2), [this] { return channel_ != nullptr; })) {
           LOG_WARN("Channel is not open");
           return false;
         }
       }
+      std::promise<void> promise;
+      auto future = promise.get_future();
       channel_->GetQueueUpEnd()->RegisterEnqueue(
-          handler_, common::Bind(&L2capDynamicChannelHelper::enqueue_callback, common::Unretained(this), packet));
+          handler_, common::Bind(&L2capDynamicChannelHelper::enqueue_callback, common::Unretained(this), packet,
+                                 common::Passed(std::move(promise))));
+      auto status = future.wait_for(std::chrono::milliseconds(500));
+      if (status != std::future_status::ready) {
+        LOG_ERROR("Can't send packet");
+        return false;
+      }
       return true;
     }
 
-    std::unique_ptr<packet::BasePacketBuilder> enqueue_callback(std::vector<uint8_t> packet) {
+    std::unique_ptr<packet::BasePacketBuilder> enqueue_callback(std::vector<uint8_t> packet,
+                                                                std::promise<void> promise) {
       auto packet_one = std::make_unique<packet::RawBuilder>(2000);
       packet_one->AddOctets(packet);
       channel_->GetQueueUpEnd()->UnregisterEnqueue();
+      promise.set_value();
       return packet_one;
     };
 
