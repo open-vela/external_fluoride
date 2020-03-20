@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 Google, Inc.
+ *  Copyright 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ int osi_rand(void) {
   int rand_fd = open(RANDOM_PATH, O_RDONLY);
 
   if (rand_fd == INVALID_FD) {
-    LOG_ERROR(LOG_TAG, "%s can't open rand fd %s: %s ", __func__, RANDOM_PATH,
+    LOG_ERROR("%s can't open rand fd %s: %s ", __func__, RANDOM_PATH,
               strerror(errno));
     CHECK(rand_fd != INVALID_FD);
   }

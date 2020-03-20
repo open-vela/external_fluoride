@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #define LOG_TAG "bt_main"
 
 #include <base/logging.h>
+#include <base/threading/thread.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
@@ -52,7 +53,8 @@
 #include "osi/include/future.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "osi/include/thread.h"
+#include "shim/hci_layer.h"
+#include "shim/shim.h"
 #include "stack_config.h"
 
 /*******************************************************************************
@@ -79,13 +81,30 @@
 static const hci_t* hci;
 
 /*******************************************************************************
+ *  Externs
+ ******************************************************************************/
+extern void btu_hci_msg_process(BT_HDR* p_msg);
+
+/*******************************************************************************
  *  Static functions
  ******************************************************************************/
 
-/*******************************************************************************
- *  Externs
- ******************************************************************************/
-fixed_queue_t* btu_hci_msg_queue;
+/******************************************************************************
+ *
+ * Function         post_to_hci_message_loop
+ *
+ * Description      Post an HCI event to the main thread
+ *
+ * Returns          None
+ *
+ *****************************************************************************/
+void post_to_main_message_loop(const base::Location& from_here, BT_HDR* p_msg) {
+  if (do_in_main_thread(from_here, base::Bind(&btu_hci_msg_process, p_msg)) !=
+      BT_STATUS_SUCCESS) {
+    LOG(ERROR) << __func__ << ": do_in_main_thread failed from "
+               << from_here.ToString();
+  }
+}
 
 /******************************************************************************
  *
@@ -101,18 +120,11 @@ void bte_main_boot_entry(void) {
 
   hci = hci_layer_get_interface();
   if (!hci) {
-    LOG_ERROR(LOG_TAG, "%s could not get hci layer interface.", __func__);
+    LOG_ERROR("%s could not get hci layer interface.", __func__);
     return;
   }
 
-  btu_hci_msg_queue = fixed_queue_new(SIZE_MAX);
-  if (btu_hci_msg_queue == NULL) {
-    LOG_ERROR(LOG_TAG, "%s unable to allocate hci message queue.", __func__);
-    return;
-  }
-
-  data_dispatcher_register_default(hci->event_dispatcher, btu_hci_msg_queue);
-  hci->set_data_queue(btu_hci_msg_queue);
+  hci->set_data_cb(base::Bind(&post_to_main_message_loop));
 
   module_init(get_module(STACK_CONFIG_MODULE));
 }
@@ -127,13 +139,6 @@ void bte_main_boot_entry(void) {
  *
  *****************************************************************************/
 void bte_main_cleanup() {
-  data_dispatcher_register_default(hci_layer_get_interface()->event_dispatcher,
-                                   NULL);
-  hci->set_data_queue(NULL);
-  fixed_queue_free(btu_hci_msg_queue, NULL);
-
-  btu_hci_msg_queue = NULL;
-
   module_clean_up(get_module(STACK_CONFIG_MODULE));
 
   module_clean_up(get_module(INTEROP_MODULE));
@@ -152,8 +157,14 @@ void bte_main_cleanup() {
 void bte_main_enable() {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  module_start_up(get_module(BTSNOOP_MODULE));
-  module_start_up(get_module(HCI_MODULE));
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    LOG_INFO("%s Gd shim module enabled", __func__);
+    module_start_up(get_module(GD_SHIM_MODULE));
+    module_start_up(get_module(GD_HCI_MODULE));
+  } else {
+    module_start_up(get_module(BTSNOOP_MODULE));
+    module_start_up(get_module(HCI_MODULE));
+  }
 
   BTU_StartUp();
 }
@@ -171,8 +182,14 @@ void bte_main_enable() {
 void bte_main_disable(void) {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  module_shut_down(get_module(HCI_MODULE));
-  module_shut_down(get_module(BTSNOOP_MODULE));
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    LOG_INFO("%s Gd shim module enabled", __func__);
+    module_shut_down(get_module(GD_HCI_MODULE));
+    module_shut_down(get_module(GD_SHIM_MODULE));
+  } else {
+    module_shut_down(get_module(HCI_MODULE));
+    module_shut_down(get_module(BTSNOOP_MODULE));
+  }
 
   BTU_ShutDown();
 }

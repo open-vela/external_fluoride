@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2010-2012 Broadcom Corporation
+ *  Copyright 2010-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,11 +30,13 @@
 #include <base/bind_helpers.h>
 #include <base/callback.h>
 #include "bt_common.h"
-#include "bta_closure_api.h"
 #include "bta_gatt_api.h"
 #include "bta_gattc_int.h"
 #include "bta_sys.h"
 #include "device/include/controller.h"
+#include "stack/include/btu.h"
+
+using bluetooth::Uuid;
 
 /*****************************************************************************
  *  Constants
@@ -55,24 +57,13 @@ static const tBTA_SYS_REG bta_gattc_reg = {bta_gattc_hdl_event,
  *
  ******************************************************************************/
 void BTA_GATTC_Disable(void) {
-  if (bta_sys_is_register(BTA_ID_GATTC) == false) {
-    APPL_TRACE_WARNING("GATTC Module not enabled/already disabled");
+  if (!bta_sys_is_register(BTA_ID_GATTC)) {
+    LOG(WARNING) << "GATTC Module not enabled/already disabled";
     return;
   }
 
-  BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
-  p_buf->event = BTA_GATTC_API_DISABLE_EVT;
-
-  bta_sys_sendmsg(p_buf);
+  do_in_main_thread(FROM_HERE, base::Bind(&bta_gattc_disable));
   bta_sys_deregister(BTA_ID_GATTC);
-}
-
-static void create_random_uuid(tBT_UUID* uuid) {
-  uuid->len = LEN_UUID_128;
-
-  for (int i = 0; i < 16; ++i) {
-    uuid->uu.uuid128[i] = (uint8_t)(rand() % 256);
-  }
 }
 
 /**
@@ -82,16 +73,17 @@ static void create_random_uuid(tBT_UUID* uuid) {
  */
 void BTA_GATTC_AppRegister(tBTA_GATTC_CBACK* p_client_cb,
                            BtaAppRegisterCallback cb) {
-  if (bta_sys_is_register(BTA_ID_GATTC) == false)
+  if (!bta_sys_is_register(BTA_ID_GATTC))
     bta_sys_register(BTA_ID_GATTC, &bta_gattc_reg);
 
-  // base::Owned will own and free app_uuid
-  tBT_UUID* uuid = new tBT_UUID;
-  create_random_uuid(uuid);
-  do_in_bta_thread(FROM_HERE, base::Bind(&bta_gattc_register, base::Owned(uuid),
-                                         p_client_cb, std::move(cb)));
+  do_in_main_thread(
+      FROM_HERE, base::Bind(&bta_gattc_register, Uuid::GetRandom(), p_client_cb,
+                            std::move(cb)));
 }
 
+static void app_deregister_impl(tGATT_IF client_if) {
+  bta_gattc_deregister(bta_gattc_cl_get_regcb(client_if));
+}
 /*******************************************************************************
  *
  * Function         BTA_GATTC_AppDeregister
@@ -104,14 +96,8 @@ void BTA_GATTC_AppRegister(tBTA_GATTC_CBACK* p_client_cb,
  * Returns          None
  *
  ******************************************************************************/
-void BTA_GATTC_AppDeregister(tBTA_GATTC_IF client_if) {
-  tBTA_GATTC_API_DEREG* p_buf =
-      (tBTA_GATTC_API_DEREG*)osi_malloc(sizeof(tBTA_GATTC_API_DEREG));
-
-  p_buf->hdr.event = BTA_GATTC_API_DEREG_EVT;
-  p_buf->client_if = client_if;
-
-  bta_sys_sendmsg(p_buf);
+void BTA_GATTC_AppDeregister(tGATT_IF client_if) {
+  do_in_main_thread(FROM_HERE, base::Bind(&app_deregister_impl, client_if));
 }
 
 /*******************************************************************************
@@ -131,16 +117,17 @@ void BTA_GATTC_AppDeregister(tBTA_GATTC_IF client_if) {
  *                                 and don't impact the disconnection timer
  *
  ******************************************************************************/
-void BTA_GATTC_Open(tBTA_GATTC_IF client_if, BD_ADDR remote_bda, bool is_direct,
-                    tBTA_GATT_TRANSPORT transport, bool opportunistic) {
+void BTA_GATTC_Open(tGATT_IF client_if, const RawAddress& remote_bda,
+                    bool is_direct, tGATT_TRANSPORT transport,
+                    bool opportunistic) {
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
   BTA_GATTC_Open(client_if, remote_bda, is_direct, transport, opportunistic,
                  phy);
 }
 
-void BTA_GATTC_Open(tBTA_GATTC_IF client_if, BD_ADDR remote_bda, bool is_direct,
-                    tBTA_GATT_TRANSPORT transport, bool opportunistic,
-                    uint8_t initiating_phys) {
+void BTA_GATTC_Open(tGATT_IF client_if, const RawAddress& remote_bda,
+                    bool is_direct, tGATT_TRANSPORT transport,
+                    bool opportunistic, uint8_t initiating_phys) {
   tBTA_GATTC_API_OPEN* p_buf =
       (tBTA_GATTC_API_OPEN*)osi_malloc(sizeof(tBTA_GATTC_API_OPEN));
 
@@ -150,7 +137,7 @@ void BTA_GATTC_Open(tBTA_GATTC_IF client_if, BD_ADDR remote_bda, bool is_direct,
   p_buf->transport = transport;
   p_buf->initiating_phys = initiating_phys;
   p_buf->opportunistic = opportunistic;
-  memcpy(p_buf->remote_bda, remote_bda, BD_ADDR_LEN);
+  p_buf->remote_bda = remote_bda;
 
   bta_sys_sendmsg(p_buf);
 }
@@ -170,7 +157,7 @@ void BTA_GATTC_Open(tBTA_GATTC_IF client_if, BD_ADDR remote_bda, bool is_direct,
  * Returns          void
  *
  ******************************************************************************/
-void BTA_GATTC_CancelOpen(tBTA_GATTC_IF client_if, BD_ADDR remote_bda,
+void BTA_GATTC_CancelOpen(tGATT_IF client_if, const RawAddress& remote_bda,
                           bool is_direct) {
   tBTA_GATTC_API_CANCEL_OPEN* p_buf = (tBTA_GATTC_API_CANCEL_OPEN*)osi_malloc(
       sizeof(tBTA_GATTC_API_CANCEL_OPEN));
@@ -178,7 +165,7 @@ void BTA_GATTC_CancelOpen(tBTA_GATTC_IF client_if, BD_ADDR remote_bda,
   p_buf->hdr.event = BTA_GATTC_API_CANCEL_OPEN_EVT;
   p_buf->client_if = client_if;
   p_buf->is_direct = is_direct;
-  memcpy(p_buf->remote_bda, remote_bda, BD_ADDR_LEN);
+  p_buf->remote_bda = remote_bda;
 
   bta_sys_sendmsg(p_buf);
 }
@@ -244,15 +231,15 @@ void BTA_GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu) {
  * Returns          None
  *
  ******************************************************************************/
-void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, tBT_UUID* p_srvc_uuid) {
-  const size_t len = sizeof(tBTA_GATTC_API_SEARCH) + sizeof(tBT_UUID);
+void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, Uuid* p_srvc_uuid) {
+  const size_t len = sizeof(tBTA_GATTC_API_SEARCH) + sizeof(Uuid);
   tBTA_GATTC_API_SEARCH* p_buf = (tBTA_GATTC_API_SEARCH*)osi_calloc(len);
 
   p_buf->hdr.event = BTA_GATTC_API_SEARCH_EVT;
   p_buf->hdr.layer_specific = conn_id;
   if (p_srvc_uuid) {
-    p_buf->p_srvc_uuid = (tBT_UUID*)(p_buf + 1);
-    memcpy(p_buf->p_srvc_uuid, p_srvc_uuid, sizeof(tBT_UUID));
+    p_buf->p_srvc_uuid = (Uuid*)(p_buf + 1);
+    *p_buf->p_srvc_uuid = *p_srvc_uuid;
   } else {
     p_buf->p_srvc_uuid = NULL;
   }
@@ -260,14 +247,14 @@ void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, tBT_UUID* p_srvc_uuid) {
   bta_sys_sendmsg(p_buf);
 }
 
-void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, tBT_UUID* p_srvc_uuid) {
-  tGATT_DISC_PARAM* param = new tGATT_DISC_PARAM;
-  param->s_handle = 0x0001;
-  param->e_handle = 0xFFFF;
-  param->service = *p_srvc_uuid;
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(base::IgnoreResult(&GATTC_Discover), conn_id,
-                              GATT_DISC_SRVC_BY_UUID, base::Owned(param)));
+void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, const Uuid& srvc_uuid) {
+  do_in_main_thread(
+      FROM_HERE,
+      base::Bind(
+          base::IgnoreResult<tGATT_STATUS (*)(uint16_t, tGATT_DISC_TYPE,
+                                              uint16_t, uint16_t, const Uuid&)>(
+              &GATTC_Discover),
+          conn_id, GATT_DISC_SRVC_BY_UUID, 0x0001, 0xFFFF, srvc_uuid));
 }
 
 /*******************************************************************************
@@ -279,10 +266,10 @@ void BTA_GATTC_DiscoverServiceByUuid(uint16_t conn_id, tBT_UUID* p_srvc_uuid) {
  *
  * Parameters       conn_id: connection ID which identify the server.
  *
- * Returns          returns list_t of tBTA_GATTC_SERVICE or NULL.
+ * Returns          returns list of gatt::Service or NULL.
  *
  ******************************************************************************/
-const list_t* BTA_GATTC_GetServices(uint16_t conn_id) {
+const std::list<gatt::Service>* BTA_GATTC_GetServices(uint16_t conn_id) {
   return bta_gattc_get_services(conn_id);
 }
 
@@ -296,11 +283,11 @@ const list_t* BTA_GATTC_GetServices(uint16_t conn_id) {
  * Parameters       conn_id - connection ID which identify the server.
  *                  handle - characteristic handle
  *
- * Returns          returns pointer to tBTA_GATTC_CHARACTERISTIC or NULL.
+ * Returns          returns pointer to gatt::Characteristic or NULL.
  *
  ******************************************************************************/
-const tBTA_GATTC_CHARACTERISTIC* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
-                                                             uint16_t handle) {
+const gatt::Characteristic* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
+                                                        uint16_t handle) {
   return bta_gattc_get_characteristic(conn_id, handle);
 }
 
@@ -314,12 +301,26 @@ const tBTA_GATTC_CHARACTERISTIC* BTA_GATTC_GetCharacteristic(uint16_t conn_id,
  * Parameters       conn_id - connection ID which identify the server.
  *                  handle - descriptor handle
  *
- * Returns          returns pointer to tBTA_GATTC_DESCRIPTOR or NULL.
+ * Returns          returns pointer to gatt::Descriptor or NULL.
  *
  ******************************************************************************/
-const tBTA_GATTC_DESCRIPTOR* BTA_GATTC_GetDescriptor(uint16_t conn_id,
-                                                     uint16_t handle) {
+const gatt::Descriptor* BTA_GATTC_GetDescriptor(uint16_t conn_id,
+                                                uint16_t handle) {
   return bta_gattc_get_descriptor(conn_id, handle);
+}
+
+/* Return characteristic that owns descriptor with handle equal to |handle|, or
+ * NULL */
+const gatt::Characteristic* BTA_GATTC_GetOwningCharacteristic(uint16_t conn_id,
+                                                              uint16_t handle) {
+  return bta_gattc_get_owning_characteristic(conn_id, handle);
+}
+
+/* Return service that owns descriptor or characteristic with handle equal to
+ * |handle|, or NULL */
+const gatt::Service* BTA_GATTC_GetOwningService(uint16_t conn_id,
+                                                uint16_t handle) {
+  return bta_gattc_get_service_for_handle(conn_id, handle);
 }
 
 /*******************************************************************************
@@ -353,7 +354,7 @@ void BTA_GATTC_GetGattDb(uint16_t conn_id, uint16_t start_handle,
  *
  ******************************************************************************/
 void BTA_GATTC_ReadCharacteristic(uint16_t conn_id, uint16_t handle,
-                                  tBTA_GATT_AUTH_REQ auth_req,
+                                  tGATT_AUTH_REQ auth_req,
                                   GATT_READ_OP_CB callback, void* cb_data) {
   tBTA_GATTC_API_READ* p_buf =
       (tBTA_GATTC_API_READ*)osi_calloc(sizeof(tBTA_GATTC_API_READ));
@@ -372,9 +373,9 @@ void BTA_GATTC_ReadCharacteristic(uint16_t conn_id, uint16_t handle,
  * This function is called to read a value of characteristic with uuid equal to
  * |uuid|
  */
-void BTA_GATTC_ReadUsingCharUuid(uint16_t conn_id, tBT_UUID uuid,
+void BTA_GATTC_ReadUsingCharUuid(uint16_t conn_id, const Uuid& uuid,
                                  uint16_t s_handle, uint16_t e_handle,
-                                 tBTA_GATT_AUTH_REQ auth_req,
+                                 tGATT_AUTH_REQ auth_req,
                                  GATT_READ_OP_CB callback, void* cb_data) {
   tBTA_GATTC_API_READ* p_buf =
       (tBTA_GATTC_API_READ*)osi_calloc(sizeof(tBTA_GATTC_API_READ));
@@ -405,8 +406,8 @@ void BTA_GATTC_ReadUsingCharUuid(uint16_t conn_id, tBT_UUID uuid,
  *
  ******************************************************************************/
 void BTA_GATTC_ReadCharDescr(uint16_t conn_id, uint16_t handle,
-                             tBTA_GATT_AUTH_REQ auth_req,
-                             GATT_READ_OP_CB callback, void* cb_data) {
+                             tGATT_AUTH_REQ auth_req, GATT_READ_OP_CB callback,
+                             void* cb_data) {
   tBTA_GATTC_API_READ* p_buf =
       (tBTA_GATTC_API_READ*)osi_calloc(sizeof(tBTA_GATTC_API_READ));
 
@@ -434,7 +435,7 @@ void BTA_GATTC_ReadCharDescr(uint16_t conn_id, uint16_t handle,
  *
  ******************************************************************************/
 void BTA_GATTC_ReadMultiple(uint16_t conn_id, tBTA_GATTC_MULTI* p_read_multi,
-                            tBTA_GATT_AUTH_REQ auth_req) {
+                            tGATT_AUTH_REQ auth_req) {
   tBTA_GATTC_API_READ_MULTI* p_buf =
       (tBTA_GATTC_API_READ_MULTI*)osi_calloc(sizeof(tBTA_GATTC_API_READ_MULTI));
 
@@ -465,9 +466,9 @@ void BTA_GATTC_ReadMultiple(uint16_t conn_id, tBTA_GATTC_MULTI* p_read_multi,
  *
  ******************************************************************************/
 void BTA_GATTC_WriteCharValue(uint16_t conn_id, uint16_t handle,
-                              tBTA_GATTC_WRITE_TYPE write_type,
+                              tGATT_WRITE_TYPE write_type,
                               std::vector<uint8_t> value,
-                              tBTA_GATT_AUTH_REQ auth_req,
+                              tGATT_AUTH_REQ auth_req,
                               GATT_WRITE_OP_CB callback, void* cb_data) {
   tBTA_GATTC_API_WRITE* p_buf = (tBTA_GATTC_API_WRITE*)osi_calloc(
       sizeof(tBTA_GATTC_API_WRITE) + value.size());
@@ -504,7 +505,7 @@ void BTA_GATTC_WriteCharValue(uint16_t conn_id, uint16_t handle,
  ******************************************************************************/
 void BTA_GATTC_WriteCharDescr(uint16_t conn_id, uint16_t handle,
                               std::vector<uint8_t> value,
-                              tBTA_GATT_AUTH_REQ auth_req,
+                              tGATT_AUTH_REQ auth_req,
                               GATT_WRITE_OP_CB callback, void* cb_data) {
   tBTA_GATTC_API_WRITE* p_buf = (tBTA_GATTC_API_WRITE*)osi_calloc(
       sizeof(tBTA_GATTC_API_WRITE) + value.size());
@@ -513,7 +514,7 @@ void BTA_GATTC_WriteCharDescr(uint16_t conn_id, uint16_t handle,
   p_buf->hdr.layer_specific = conn_id;
   p_buf->auth_req = auth_req;
   p_buf->handle = handle;
-  p_buf->write_type = BTA_GATTC_TYPE_WRITE;
+  p_buf->write_type = GATT_WRITE;
   p_buf->write_cb = callback;
   p_buf->write_cb_data = cb_data;
 
@@ -542,8 +543,7 @@ void BTA_GATTC_WriteCharDescr(uint16_t conn_id, uint16_t handle,
  *
  ******************************************************************************/
 void BTA_GATTC_PrepareWrite(uint16_t conn_id, uint16_t handle, uint16_t offset,
-                            std::vector<uint8_t> value,
-                            tBTA_GATT_AUTH_REQ auth_req,
+                            std::vector<uint8_t> value, tGATT_AUTH_REQ auth_req,
                             GATT_WRITE_OP_CB callback, void* cb_data) {
   tBTA_GATTC_API_WRITE* p_buf = (tBTA_GATTC_API_WRITE*)osi_calloc(
       sizeof(tBTA_GATTC_API_WRITE) + value.size());
@@ -607,7 +607,8 @@ void BTA_GATTC_SendIndConfirm(uint16_t conn_id, uint16_t handle) {
   tBTA_GATTC_API_CONFIRM* p_buf =
       (tBTA_GATTC_API_CONFIRM*)osi_calloc(sizeof(tBTA_GATTC_API_CONFIRM));
 
-  APPL_TRACE_API("%s conn_id=%d handle=0x%04x", __func__, conn_id, handle);
+  VLOG(1) << __func__ << ": conn_id=" << +conn_id << " handle=0x" << std::hex
+          << +handle;
 
   p_buf->hdr.event = BTA_GATTC_API_CONFIRM_EVT;
   p_buf->hdr.layer_specific = conn_id;
@@ -630,15 +631,15 @@ void BTA_GATTC_SendIndConfirm(uint16_t conn_id, uint16_t handle) {
  * Returns          OK if registration succeed, otherwise failed.
  *
  ******************************************************************************/
-tBTA_GATT_STATUS BTA_GATTC_RegisterForNotifications(tBTA_GATTC_IF client_if,
-                                                    const BD_ADDR bda,
-                                                    uint16_t handle) {
+tGATT_STATUS BTA_GATTC_RegisterForNotifications(tGATT_IF client_if,
+                                                const RawAddress& bda,
+                                                uint16_t handle) {
   tBTA_GATTC_RCB* p_clreg;
-  tBTA_GATT_STATUS status = BTA_GATT_ILLEGAL_PARAMETER;
+  tGATT_STATUS status = GATT_ILLEGAL_PARAMETER;
   uint8_t i;
 
   if (!handle) {
-    APPL_TRACE_ERROR("deregistration failed, handle is 0");
+    LOG(ERROR) << __func__ << ": registration failed, handle is 0";
     return status;
   }
 
@@ -646,34 +647,34 @@ tBTA_GATT_STATUS BTA_GATTC_RegisterForNotifications(tBTA_GATTC_IF client_if,
   if (p_clreg != NULL) {
     for (i = 0; i < BTA_GATTC_NOTIF_REG_MAX; i++) {
       if (p_clreg->notif_reg[i].in_use &&
-          !memcmp(p_clreg->notif_reg[i].remote_bda, bda, BD_ADDR_LEN) &&
+          p_clreg->notif_reg[i].remote_bda == bda &&
           p_clreg->notif_reg[i].handle == handle) {
-        APPL_TRACE_WARNING("notification already registered");
-        status = BTA_GATT_OK;
+        LOG(WARNING) << "notification already registered";
+        status = GATT_SUCCESS;
         break;
       }
     }
-    if (status != BTA_GATT_OK) {
+    if (status != GATT_SUCCESS) {
       for (i = 0; i < BTA_GATTC_NOTIF_REG_MAX; i++) {
         if (!p_clreg->notif_reg[i].in_use) {
           memset((void*)&p_clreg->notif_reg[i], 0,
                  sizeof(tBTA_GATTC_NOTIF_REG));
 
           p_clreg->notif_reg[i].in_use = true;
-          memcpy(p_clreg->notif_reg[i].remote_bda, bda, BD_ADDR_LEN);
+          p_clreg->notif_reg[i].remote_bda = bda;
 
           p_clreg->notif_reg[i].handle = handle;
-          status = BTA_GATT_OK;
+          status = GATT_SUCCESS;
           break;
         }
       }
       if (i == BTA_GATTC_NOTIF_REG_MAX) {
-        status = BTA_GATT_NO_RESOURCES;
-        APPL_TRACE_ERROR("Max Notification Reached, registration failed.");
+        status = GATT_NO_RESOURCES;
+        LOG(ERROR) << "Max Notification Reached, registration failed.";
       }
     }
   } else {
-    APPL_TRACE_ERROR("Client_if: %d Not Registered", client_if);
+    LOG(ERROR) << "client_if=" << +client_if << " Not Registered";
   }
 
   return status;
@@ -693,38 +694,33 @@ tBTA_GATT_STATUS BTA_GATTC_RegisterForNotifications(tBTA_GATTC_IF client_if,
  * Returns          OK if deregistration succeed, otherwise failed.
  *
  ******************************************************************************/
-tBTA_GATT_STATUS BTA_GATTC_DeregisterForNotifications(tBTA_GATTC_IF client_if,
-                                                      const BD_ADDR bda,
-                                                      uint16_t handle) {
+tGATT_STATUS BTA_GATTC_DeregisterForNotifications(tGATT_IF client_if,
+                                                  const RawAddress& bda,
+                                                  uint16_t handle) {
   if (!handle) {
-    APPL_TRACE_ERROR("%s: deregistration failed, handle is 0", __func__);
-    return BTA_GATT_ILLEGAL_PARAMETER;
+    LOG(ERROR) << __func__ << ": deregistration failed, handle is 0";
+    return GATT_ILLEGAL_PARAMETER;
   }
 
   tBTA_GATTC_RCB* p_clreg = bta_gattc_cl_get_regcb(client_if);
   if (p_clreg == NULL) {
-    APPL_TRACE_ERROR(
-        "%s client_if: %d not registered bd_addr:%02x:%02x:%02x:%02x:%02x:%02x",
-        __func__, client_if, bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
-    return BTA_GATT_ILLEGAL_PARAMETER;
+    LOG(ERROR) << __func__ << " client_if=" << +client_if
+               << " not registered bd_addr=" << bda;
+    return GATT_ILLEGAL_PARAMETER;
   }
 
   for (int i = 0; i < BTA_GATTC_NOTIF_REG_MAX; i++) {
     if (p_clreg->notif_reg[i].in_use &&
-        !memcmp(p_clreg->notif_reg[i].remote_bda, bda, BD_ADDR_LEN) &&
+        p_clreg->notif_reg[i].remote_bda == bda &&
         p_clreg->notif_reg[i].handle == handle) {
-      APPL_TRACE_DEBUG("%s deregistered bd_addr:%02x:%02x:%02x:%02x:%02x:%02x",
-                       __func__, bda[0], bda[1], bda[2], bda[3], bda[4],
-                       bda[5]);
+      VLOG(1) << __func__ << " deregistered bd_addr=" << bda;
       memset(&p_clreg->notif_reg[i], 0, sizeof(tBTA_GATTC_NOTIF_REG));
-      return BTA_GATT_OK;
+      return GATT_SUCCESS;
     }
   }
 
-  APPL_TRACE_ERROR(
-      "%s registration not found bd_addr:%02x:%02x:%02x:%02x:%02x:%02x",
-      __func__, bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
-  return BTA_GATT_ERROR;
+  LOG(ERROR) << __func__ << " registration not found bd_addr=" << bda;
+  return GATT_ERROR;
 }
 
 /*******************************************************************************
@@ -738,12 +734,7 @@ tBTA_GATT_STATUS BTA_GATTC_DeregisterForNotifications(tBTA_GATTC_IF client_if,
  * Returns          void
  *
  ******************************************************************************/
-void BTA_GATTC_Refresh(const BD_ADDR remote_bda) {
-  tBTA_GATTC_API_OPEN* p_buf =
-      (tBTA_GATTC_API_OPEN*)osi_malloc(sizeof(tBTA_GATTC_API_OPEN));
-
-  p_buf->hdr.event = BTA_GATTC_API_REFRESH_EVT;
-  memcpy(p_buf->remote_bda, remote_bda, BD_ADDR_LEN);
-
-  bta_sys_sendmsg(p_buf);
+void BTA_GATTC_Refresh(const RawAddress& remote_bda) {
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(&bta_gattc_process_api_refresh, remote_bda));
 }

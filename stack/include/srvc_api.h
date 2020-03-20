@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2013 Broadcom Corporation
+ *  Copyright 1999-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -75,13 +75,13 @@ typedef struct {
   uint8_t* data_string[DIS_MAX_STRING_DATA];
 } tDIS_VALUE;
 
-typedef void(tDIS_READ_CBACK)(BD_ADDR addr, tDIS_VALUE* p_dis_value);
+typedef void(tDIS_READ_CBACK)(const RawAddress& addr, tDIS_VALUE* p_dis_value);
 
 /*****************************************************************************
  *  Data structure used by Battery Service
  ****************************************************************************/
 typedef struct {
-  BD_ADDR remote_bda;
+  RawAddress remote_bda;
   bool need_rsp;
   uint16_t clt_cfg;
 } tBA_WRITE_DATA;
@@ -162,38 +162,7 @@ extern tDIS_STATUS DIS_SrUpdate(tDIS_ATTR_BIT dis_attr_bit, tDIS_ATTR* p_info);
  * Returns          void
  *
  ******************************************************************************/
-extern bool DIS_ReadDISInfo(BD_ADDR peer_bda, tDIS_READ_CBACK* p_cback,
-                            tDIS_ATTR_MASK mask);
-
-/*******************************************************************************
- *      BATTERY SERVICE API
- ******************************************************************************/
-/*******************************************************************************
- *
- * Function         Battery_Instantiate
- *
- * Description      Instantiate a Battery service
- *
- ******************************************************************************/
-extern uint16_t Battery_Instantiate(uint8_t app_id, tBA_REG_INFO* p_reg_info);
-
-/*******************************************************************************
- *
- * Function         Battery_Rsp
- *
- * Description      Respond to a battery service request
- *
- ******************************************************************************/
-extern void Battery_Rsp(uint8_t app_id, tGATT_STATUS st, uint8_t event,
-                        tBA_RSP_DATA* p_rsp);
-/*******************************************************************************
- *
- * Function         Battery_Notify
- *
- * Description      Send battery level notification
- *
- ******************************************************************************/
-extern void Battery_Notify(uint8_t app_id, BD_ADDR remote_bda,
-                           uint8_t battery_level);
+extern bool DIS_ReadDISInfo(const RawAddress& peer_bda,
+                            tDIS_READ_CBACK* p_cback, tDIS_ATTR_MASK mask);
 
 #endif
