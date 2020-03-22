@@ -70,7 +70,6 @@ filegroup {
     name: "BluetoothFacade_l2cap_layer",
     srcs: [
         "classic/facade.cc",
-        "le/facade.cc",
     ],
 }
 
