@@ -469,9 +469,10 @@ typedef struct {
    * The |start_restricted| flag inits the adapter in restricted mode. In
    * restricted mode, bonds that are created are marked as restricted in the
    * config file. These devices are deleted upon leaving restricted mode.
-   * The |is_niap_mode| flag inits the adapter in NIAP mode.
+   * The |is_single_user_mode| flag inits the adapter in NIAP mode.
    */
-  int (*init)(bt_callbacks_t* callbacks, bool guest_mode, bool is_niap_mode);
+  int (*init)(bt_callbacks_t* callbacks, bool guest_mode,
+              bool is_single_user_mode);
 
   /** Enable Bluetooth. */
   int (*enable)();
@@ -624,6 +625,14 @@ typedef struct {
    * @return a string of uint8_t that is unique to this MAC address
    */
   std::string (*obfuscate_address)(const RawAddress& address);
+
+  /**
+   * Get an incremental id for as primary key for Bluetooth metric and log
+   *
+   * @param address Bluetooth MAC address of Bluetooth device
+   * @return int incremental Bluetooth id
+   */
+  int (*get_metric_id)(const RawAddress& address);
 } bt_interface_t;
 
 #define BLUETOOTH_INTERFACE_STRING "bluetoothInterface"
