@@ -15,21 +15,16 @@
 #   limitations under the License.
 
 from distutils import log
+import logging
 import os
 from setuptools import setup, find_packages
 from setuptools.command.install import install
 from setuptools.command.develop import develop
-import stat
 import subprocess
 import sys
 
 install_requires = [
     'grpcio',
-]
-
-host_executables = [
-    'root-canal',
-    'bluetooth_stack_with_facade',
 ]
 
 
@@ -40,17 +35,6 @@ def setup_acts_for_cmd_or_die(cmd_str):
     subprocess.check_call(cmd, cwd=acts_framework_dir)
 
 
-def set_permssions_for_host_executables(outputs):
-    for file in outputs:
-        if os.path.basename(file) in host_executables:
-            current_mode = os.stat(file).st_mode
-            new_mode = current_mode | stat.S_IEXEC
-            os.chmod(file, new_mode)
-            log.log(
-                log.INFO, "Changed file mode of %s from %s to %s" %
-                (file, oct(current_mode), oct(new_mode)))
-
-
 class InstallLocalPackagesForInstallation(install):
 
     def run(self):
@@ -58,17 +42,15 @@ class InstallLocalPackagesForInstallation(install):
         setup_acts_for_cmd_or_die("install")
         self.announce('ACTS installed for installation.', log.INFO)
         install.run(self)
-        set_permssions_for_host_executables(self.get_outputs())
 
 
 class InstallLocalPackagesForDevelopment(develop):
 
     def run(self):
-        log.log(log.INFO, 'Installing ACTS for development')
+        logging.info('Installing ACTS for development')
         setup_acts_for_cmd_or_die("develop")
-        log.log(log.INFO, 'ACTS installed for development')
+        logging.info('ACTS installed for development')
         develop.run(self)
-        set_permssions_for_host_executables(self.get_outputs())
 
 
 def main():
@@ -88,7 +70,10 @@ def main():
         packages=[''] + find_packages(exclude='acts_framework'),
         install_requires=install_requires,
         package_data={
-            '': host_executables + ['*.so', 'lib64/*.so', 'target/*'],
+            '': [
+                'root-canal', 'bluetooth_stack_with_facade', '*.so',
+                'lib64/*.so', 'target/*'
+            ],
             'cert': ['all_test_cases'],
         },
         cmdclass={
