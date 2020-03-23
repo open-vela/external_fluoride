@@ -18,6 +18,7 @@ import logging
 import os
 from builtins import open
 import json
+from pathlib import Path
 import signal
 import socket
 import subprocess
@@ -29,10 +30,13 @@ from acts.controllers.adb import AdbProxy, AdbError
 
 import grpc
 
-from cert.os_utils import get_gd_root, is_subprocess_alive
+from cert.gd_base_test_facade_only import is_subprocess_alive
 
 WAIT_CHANNEL_READY_TIMEOUT = 10
 WAIT_FOR_DEVICE_TIMEOUT = 180
+
+# GD root is the parent directory of cert
+GD_ROOT = str(Path(__file__).absolute().parents[1])
 
 
 def replace_vars(string, config):
@@ -44,7 +48,7 @@ def replace_vars(string, config):
         rootcanal_port = ""
     if serial_number == "DUT" or serial_number == "CERT":
         raise Exception("Did you forget to configure the serial number?")
-    return string.replace("$GD_ROOT", get_gd_root()) \
+    return string.replace("$GD_ROOT", GD_ROOT) \
                  .replace("$(grpc_port)", config.get("grpc_port")) \
                  .replace("$(grpc_root_server_port)", config.get("grpc_root_server_port")) \
                  .replace("$(rootcanal_port)", rootcanal_port) \
@@ -86,13 +90,13 @@ class GdDeviceBase:
                 int(grpc_root_server_port), int(grpc_root_server_port))
             self.adb.reverse("tcp:%s tcp:%s" % (signal_port, signal_port))
             self.push_or_die(
-                os.path.join(get_gd_root(), "target",
-                             "bluetooth_stack_with_facade"), "system/bin")
+                os.path.join(GD_ROOT, "target", "bluetooth_stack_with_facade"),
+                "system/bin")
             self.push_or_die(
-                os.path.join(get_gd_root(), "target", "libbluetooth_gd.so"),
+                os.path.join(GD_ROOT, "target", "libbluetooth_gd.so"),
                 "system/lib64")
             self.push_or_die(
-                os.path.join(get_gd_root(), "target", "libgrpc++_unsecure.so"),
+                os.path.join(GD_ROOT, "target", "libgrpc++_unsecure.so"),
                 "system/lib64")
             self.ensure_no_output(self.adb.shell("logcat -c"))
             self.adb.shell("rm /data/misc/bluetooth/logs/btsnoop_hci.log")
@@ -109,7 +113,7 @@ class GdDeviceBase:
 
         self.backing_process = subprocess.Popen(
             cmd,
-            cwd=get_gd_root(),
+            cwd=GD_ROOT,
             env=os.environ.copy(),
             stdout=self.backing_process_logs,
             stderr=self.backing_process_logs)

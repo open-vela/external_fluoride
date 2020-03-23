@@ -17,10 +17,10 @@
 import os
 import sys
 
-from cert.gd_base_test import GdBaseTestClass
+from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
 
 
-class StackTest(GdBaseTestClass):
+class StackTest(GdFacadeOnlyBaseTestClass):
 
     def setup_class(self):
         super().setup_class(dut_module='SHIM', cert_module='SHIM')

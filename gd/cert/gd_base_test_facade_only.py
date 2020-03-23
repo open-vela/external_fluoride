@@ -14,19 +14,30 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+from acts import asserts
+from acts.base_test import BaseTestClass
+from facade import rootservice_pb2 as facade_rootservice
+
 import importlib
 import logging
 import os
+from pathlib import Path
 import signal
 import subprocess
 
-from acts import asserts
-from acts.base_test import BaseTestClass
-from cert.os_utils import get_gd_root, is_subprocess_alive
-from facade import rootservice_pb2 as facade_rootservice
+# GD root is the parent directory of cert
+GD_ROOT = str(Path(__file__).absolute().parents[1])
 
 
-class GdBaseTestClass(BaseTestClass):
+def is_subprocess_alive(process, timeout_seconds=1):
+    try:
+        process.wait(timeout=timeout_seconds)
+        return False
+    except subprocess.TimeoutExpired as exp:
+        return True
+
+
+class GdFacadeOnlyBaseTestClass(BaseTestClass):
 
     def setup_class(self, dut_module, cert_module):
         self.dut_module = dut_module
@@ -42,7 +53,7 @@ class GdBaseTestClass(BaseTestClass):
             self.rootcanal_logs = open(rootcanal_logpath, 'w')
             rootcanal_config = self.controller_configs['rootcanal']
             rootcanal_hci_port = str(rootcanal_config.get("hci_port", "6402"))
-            rootcanal = os.path.join(get_gd_root(), "root-canal")
+            rootcanal = os.path.join(GD_ROOT, "root-canal")
             self.rootcanal_process = subprocess.Popen(
                 [
                     rootcanal,
@@ -50,7 +61,7 @@ class GdBaseTestClass(BaseTestClass):
                     rootcanal_hci_port,
                     str(rootcanal_config.get("link_layer_port", "6403"))
                 ],
-                cwd=get_gd_root(),
+                cwd=GD_ROOT,
                 env=os.environ.copy(),
                 stdout=self.rootcanal_logs,
                 stderr=self.rootcanal_logs)
