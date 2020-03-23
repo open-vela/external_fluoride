@@ -14,8 +14,6 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import logging
 from queue import SimpleQueue, Empty
@@ -23,8 +21,10 @@ from queue import SimpleQueue, Empty
 from mobly import asserts
 
 from google.protobuf import text_format
-
+from concurrent.futures import ThreadPoolExecutor
 from grpc import RpcError
+
+from abc import ABC, abstractmethod
 
 from cert.closable import Closable
 
