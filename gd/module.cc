@@ -21,7 +21,7 @@ using ::bluetooth::os::Thread;
 
 namespace bluetooth {
 
-constexpr std::chrono::milliseconds kModuleStopTimeout = std::chrono::milliseconds(20);
+constexpr std::chrono::milliseconds kModuleStopTimeout = std::chrono::milliseconds(2000);
 
 ModuleFactory::ModuleFactory(std::function<Module*()> ctor) : ctor_(ctor) {
 }
@@ -95,10 +95,15 @@ void ModuleRegistry::StopAll() {
     ASSERT(instance != started_modules_.end());
 
     // Clear the handler before stopping the module to allow it to shut down gracefully.
+    LOG_INFO("Stopping Handler of Module %s", instance->second->ToString().c_str());
     instance->second->handler_->Clear();
     instance->second->handler_->WaitUntilStopped(kModuleStopTimeout);
+    LOG_INFO("Stopping Module %s", instance->second->ToString().c_str());
     instance->second->Stop();
-
+  }
+  for (auto it = start_order_.rbegin(); it != start_order_.rend(); it++) {
+    auto instance = started_modules_.find(*it);
+    ASSERT(instance != started_modules_.end());
     delete instance->second->handler_;
     delete instance->second;
     started_modules_.erase(instance);
