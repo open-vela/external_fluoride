@@ -1427,10 +1427,9 @@ struct AclManager::impl {
   }
 
   void handle_le_connection_update(uint16_t handle, uint16_t conn_interval_min, uint16_t conn_interval_max,
-                                   uint16_t conn_latency, uint16_t supervision_timeout, uint16_t min_ce_length,
-                                   uint16_t max_ce_length) {
+                                   uint16_t conn_latency, uint16_t supervision_timeout) {
     auto packet = LeConnectionUpdateBuilder::Create(handle, conn_interval_min, conn_interval_max, conn_latency,
-                                                    supervision_timeout, min_ce_length, max_ce_length);
+                                                    supervision_timeout, kMinimumCeLength, kMaximumCeLength);
     hci_layer_->EnqueueCommand(std::move(packet), common::BindOnce([](CommandStatusView status) {
                                  ASSERT(status.IsValid());
                                  ASSERT(status.GetCommandOpCode() == OpCode::LE_CREATE_CONNECTION);
@@ -1870,9 +1869,8 @@ struct AclManager::impl {
   }
 
   bool LeConnectionUpdate(uint16_t handle, uint16_t conn_interval_min, uint16_t conn_interval_max,
-                          uint16_t conn_latency, uint16_t supervision_timeout, uint16_t min_ce_length,
-                          uint16_t max_ce_length, common::OnceCallback<void(ErrorCode)> done_callback,
-                          os::Handler* handler) {
+                          uint16_t conn_latency, uint16_t supervision_timeout,
+                          common::OnceCallback<void(ErrorCode)> done_callback, os::Handler* handler) {
     auto& connection = check_and_get_connection(handle);
     if (connection.is_disconnected_) {
       LOG_INFO("Already disconnected");
@@ -1891,7 +1889,7 @@ struct AclManager::impl {
       return false;
     }
     handler_->Post(BindOnce(&impl::handle_le_connection_update, common::Unretained(this), handle, conn_interval_min,
-                            conn_interval_max, conn_latency, supervision_timeout, min_ce_length, max_ce_length));
+                            conn_interval_max, conn_latency, supervision_timeout));
     return true;
   }
 
@@ -2076,11 +2074,10 @@ bool AclConnection::ReadClock(WhichClock which_clock) {
 }
 
 bool AclConnection::LeConnectionUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max, uint16_t conn_latency,
-                                       uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length,
+                                       uint16_t supervision_timeout,
                                        common::OnceCallback<void(ErrorCode)> done_callback, os::Handler* handler) {
   return manager_->pimpl_->LeConnectionUpdate(handle_, conn_interval_min, conn_interval_max, conn_latency,
-                                              supervision_timeout, min_ce_length, max_ce_length,
-                                              std::move(done_callback), handler);
+                                              supervision_timeout, std::move(done_callback), handler);
 }
 
 void AclConnection::Finish() {
