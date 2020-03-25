@@ -55,5 +55,7 @@ interface IBluetoothManager
     int updateBleAppCount(IBinder b, boolean enable, String packageName);
     boolean isBleAppPresent();
     boolean isHearingAidProfileSupported();
+
+    List<String> getSystemConfigEnabledProfilesForPackage(String packageName);
 }
 
