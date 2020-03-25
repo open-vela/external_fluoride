@@ -28,11 +28,6 @@
 #include "os/handler.h"
 
 namespace bluetooth {
-
-namespace security {
-class SecurityModule;
-}
-
 namespace hci {
 
 class AclManager;
@@ -243,9 +238,6 @@ class AclManager : public Module {
   virtual void SwitchRole(Address address, Role role);
   virtual void ReadDefaultLinkPolicySettings();
   virtual void WriteDefaultLinkPolicySettings(uint16_t default_link_policy_settings);
-
-  // In order to avoid circular dependency use setter rather than module dependency.
-  virtual void SetSecurityModule(security::SecurityModule* security_module);
 
   static const ModuleFactory Factory;
 
