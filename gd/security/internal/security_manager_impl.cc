@@ -159,13 +159,6 @@ void SecurityManagerImpl::NotifyDeviceUnbonded(hci::AddressWithType device) {
   }
 }
 
-void SecurityManagerImpl::NotifyEncryptionStateChanged(hci::EncryptionChangeView encryption_change_view) {
-  for (auto& iter : listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnEncryptionStateChanged, common::Unretained(iter.first),
-                                   encryption_change_view));
-  }
-}
-
 template <class T>
 void SecurityManagerImpl::HandleEvent(T packet) {
   ASSERT(packet.IsValid());
@@ -236,16 +229,15 @@ void SecurityManagerImpl::OnHciEventReceived(hci::EventPacketView packet) {
       break;
 
     case hci::EventCode::ENCRYPTION_CHANGE: {
-      EncryptionChangeView encryption_change_view = EncryptionChangeView::Create(event);
-      if (!encryption_change_view.IsValid()) {
+      EncryptionChangeView enc_chg_packet = EncryptionChangeView::Create(event);
+      if (!enc_chg_packet.IsValid()) {
         LOG_ERROR("Invalid EncryptionChange packet received");
         return;
       }
-      if (encryption_change_view.GetConnectionHandle() == pending_le_pairing_.connection_handle_) {
+      if (enc_chg_packet.GetConnectionHandle() == pending_le_pairing_.connection_handle_) {
         pending_le_pairing_.handler_->OnHciEvent(event);
         return;
       }
-      NotifyEncryptionStateChanged(encryption_change_view);
       break;
     }
 
