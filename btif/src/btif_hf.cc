@@ -1360,18 +1360,14 @@ void HeadsetInterface::Cleanup() {
   BTIF_TRACE_EVENT("%s", __func__);
 
   btif_queue_cleanup(UUID_SERVCLASS_AG_HANDSFREE);
-
-  tBTA_SERVICE_MASK mask = btif_get_enabled_services_mask();
+  if (bt_hf_callbacks) {
 #if (defined(BTIF_HF_SERVICES) && (BTIF_HF_SERVICES & BTA_HFP_SERVICE_MASK))
-  if ((mask & (1 << BTA_HFP_SERVICE_ID)) != 0) {
     btif_disable_service(BTA_HFP_SERVICE_ID);
-  }
 #else
-  if ((mask & (1 << BTA_HSP_SERVICE_ID)) != 0) {
     btif_disable_service(BTA_HSP_SERVICE_ID);
-  }
 #endif
-  do_in_jni_thread(FROM_HERE, base::Bind([]() { bt_hf_callbacks = nullptr; }));
+    bt_hf_callbacks = nullptr;
+  }
 }
 
 bt_status_t HeadsetInterface::SetScoAllowed(bool value) {
