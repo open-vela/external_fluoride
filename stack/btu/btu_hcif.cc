@@ -58,6 +58,7 @@
 using base::Location;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
+extern void btm_process_inq_results2(uint8_t* p, uint8_t inq_res_mode);
 extern void btm_ble_test_command_complete(uint8_t* p);
 extern void smp_cancel_start_encryption_attempt();
 
@@ -1664,6 +1665,12 @@ static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command,
  ******************************************************************************/
 static void btu_hcif_hardware_error_evt(uint8_t* p) {
   HCI_TRACE_ERROR("Ctlr H/w error event - code:0x%x", *p);
+  if (hci_is_root_inflammation_event_received()) {
+    // Ignore the hardware error event here as we have already received
+    // root inflammation event earlier.
+    HCI_TRACE_ERROR(LOG_TAG, "H/w error event after root inflammation event!");
+    return;
+  }
 
   /* If anyone wants device status notifications, give him one. */
   btm_report_device_status(BTM_DEV_STATUS_DOWN);
