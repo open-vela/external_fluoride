@@ -104,7 +104,7 @@ class PyLeAclManager(Closable):
                                            remote_addr, None)
 
     def accept_connection(self):
-        connection_complete = LeConnectionCompleteCapture()
+        connection_complete = ConnectionCompleteCapture()
         assertThat(self.incoming_connection_stream).emits(connection_complete)
         handle = connection_complete.get().GetConnectionHandle()
         return PyLeAclManagerAclConnection(self.device, self.le_acl_stream,
