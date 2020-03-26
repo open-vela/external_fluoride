@@ -32,7 +32,7 @@ hci::Role FixedChannelImpl::GetRole() const {
   return link_->GetRole();
 }
 
-hci::LeAclConnection* FixedChannelImpl::GetAclConnection() const {
+hci::AclConnection* FixedChannelImpl::GetAclConnection() const {
   return link_->GetAclConnection();
 }
 
@@ -108,10 +108,6 @@ Cid FixedChannelImpl::GetCid() const {
 
 Cid FixedChannelImpl::GetRemoteCid() const {
   return cid_;
-}
-
-LinkOptions* FixedChannelImpl::GetLinkOptions() {
-  return link_->GetLinkOptions();
 }
 
 }  // namespace internal
