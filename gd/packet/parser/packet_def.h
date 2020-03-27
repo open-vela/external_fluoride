@@ -39,8 +39,6 @@ class PacketDef : public ParentDef {
 
   void GenValidator(std::ostream& s) const;
 
-  void GenParserToString(std::ostream& s) const;
-
   TypeDef::Type GetDefinitionType() const;
 
   void GenBuilderDefinition(std::ostream& s) const;
