@@ -846,7 +846,7 @@ void LinkLayerController::HandleLeConnection(AddressWithType address,
       ErrorCode::SUCCESS, handle, static_cast<bluetooth::hci::Role>(role),
       address.GetAddressType(), address.GetAddress(), connection_interval,
       connection_latency, supervision_timeout,
-      static_cast<bluetooth::hci::MasterClockAccuracy>(0x00));
+      static_cast<bluetooth::hci::ClockAccuracy>(0x00));
   send_event_(std::move(packet));
 }
 
@@ -1643,6 +1643,46 @@ ErrorCode LinkLayerController::WriteLinkSupervisionTimeout(uint16_t handle,
   if (!connections_.HasHandle(handle)) {
     return ErrorCode::UNKNOWN_CONNECTION;
   }
+  return ErrorCode::SUCCESS;
+}
+
+void LinkLayerController::LeConnectionUpdateComplete(
+    bluetooth::hci::LeConnectionUpdateView connection_update) {
+  uint16_t handle = connection_update.GetConnectionHandle();
+  ErrorCode status = ErrorCode::SUCCESS;
+  if (!connections_.HasHandle(handle)) {
+    status = ErrorCode::UNKNOWN_CONNECTION;
+  }
+  uint16_t interval_min = connection_update.GetConnIntervalMin();
+  uint16_t interval_max = connection_update.GetConnIntervalMax();
+  uint16_t latency = connection_update.GetConnLatency();
+  uint16_t supervision_timeout = connection_update.GetSupervisionTimeout();
+
+  if (interval_min < 6 || interval_max > 0xC80 || interval_min > interval_max ||
+      interval_max < interval_min || latency > 0x1F3 ||
+      supervision_timeout < 0xA || supervision_timeout > 0xC80 ||
+      // The Supervision_Timeout in milliseconds (*10) shall be larger than (1 +
+      // Connection_Latency) * Connection_Interval_Max (* 5/4) * 2
+      supervision_timeout <= ((((1 + latency) * interval_max * 10) / 4) / 10)) {
+    status = ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+  }
+  uint16_t interval = (interval_min + interval_max) / 2;
+  send_event_(bluetooth::hci::LeConnectionUpdateCompleteBuilder::Create(
+      status, handle, interval, latency, supervision_timeout));
+}
+
+ErrorCode LinkLayerController::LeConnectionUpdate(
+    bluetooth::hci::LeConnectionUpdateView connection_update) {
+  uint16_t handle = connection_update.GetConnectionHandle();
+  if (!connections_.HasHandle(handle)) {
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
+
+  // This could negotiate with the remote device in the future
+  ScheduleTask(milliseconds(25), [this, connection_update]() {
+    LeConnectionUpdateComplete(connection_update);
+  });
+
   return ErrorCode::SUCCESS;
 }
 
