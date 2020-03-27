@@ -13,15 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include "hci/address_with_type.h"
 
+#include "stack/include/bt_types.h"
+
 namespace bluetooth {
 
-hci::AddressWithType ToAddressWithType(const RawAddress& legacy_address,
+inline RawAddress ToRawAddress(const hci::Address& address) {
+  RawAddress ret;
+  ret.address[0] = address.address[5];
+  ret.address[1] = address.address[4];
+  ret.address[2] = address.address[3];
+  ret.address[3] = address.address[2];
+  ret.address[4] = address.address[1];
+  ret.address[5] = address.address[0];
+  return ret;
+}
+
+inline hci::Address ToGdAddress(const RawAddress& address) {
+  hci::Address ret;
+  ret.address[0] = address.address[5];
+  ret.address[1] = address.address[4];
+  ret.address[2] = address.address[3];
+  ret.address[3] = address.address[2];
+  ret.address[4] = address.address[1];
+  ret.address[5] = address.address[0];
+  return ret;
+}
+
+inline hci::AddressWithType ToAddressWithType(const RawAddress& legacy_address,
                                        tBLE_ADDR_TYPE legacy_type) {
-  // Address and RawAddress are binary equivalent;
-  hci::Address address(legacy_address.address);
+  hci::Address address = ToGdAddress(legacy_address);
 
   hci::AddressType type;
   if (legacy_type == BLE_ADDR_PUBLIC)
@@ -33,7 +57,7 @@ hci::AddressWithType ToAddressWithType(const RawAddress& legacy_address,
   else if (legacy_type == BLE_ADDR_RANDOM_ID)
     type = hci::AddressType::RANDOM_IDENTITY_ADDRESS;
   else {
-    LOG_ALWAYS_FATAL("Bad address type");
+    LOG_ALWAYS_FATAL("Bad address type %02x", legacy_type);
     return hci::AddressWithType{address,
                                 hci::AddressType::PUBLIC_DEVICE_ADDRESS};
   }
