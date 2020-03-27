@@ -146,26 +146,6 @@ class LeL2capTest(GdBaseTestClass):
         dut_channel = response_future.get_channel()
         return (dut_channel, cert_channel)
 
-    def _open_fixed_channel(self, cid=4):
-        dut_channel = self.dut_l2cap.get_fixed_channel(cid)
-        cert_channel = self.cert_l2cap.open_fixed_channel(cid)
-        return (dut_channel, cert_channel)
-
-    def test_fixed_channel_send(self):
-        self.dut_l2cap.enable_fixed_channel(4)
-        self._setup_link_from_cert()
-        (dut_channel, cert_channel) = self._open_fixed_channel(4)
-        dut_channel.send(b'hello' * 40)
-        assertThat(cert_channel).emits(L2capMatchers.Data(b'hello' * 40))
-
-    def test_fixed_channel_receive(self):
-        self.dut_l2cap.enable_fixed_channel(4)
-        self._setup_link_from_cert()
-        (dut_channel, cert_channel) = self._open_fixed_channel(4)
-        cert_channel.send(SAMPLE_PACKET)
-        assertThat(dut_channel).emits(
-            L2capMatchers.PacketPayloadRawData(b'\x01\x01\x02\x00\x00\x00'))
-
     def test_connect_from_dut_and_open_dynamic_channel(self):
         """
         Internal test for GD stack only
@@ -387,6 +367,7 @@ class LeL2capTest(GdBaseTestClass):
                 1, 0x34, 0x0101, 2000, 1000, 1000))
         assertThat(self.cert_l2cap.get_control_channel()).emits(
             L2capMatchers.CreditBasedConnectionResponse(
+                0x0101,
                 result=LeCreditBasedConnectionResponseResult.
                 LE_PSM_NOT_SUPPORTED))
 
@@ -479,35 +460,6 @@ class LeL2capTest(GdBaseTestClass):
             result=LeCreditBasedConnectionResponseResult.INVALID_SOURCE_CID)
         assertThat(response_future.get_status()).isEqualTo(
             LeCreditBasedConnectionResponseResult.INVALID_SOURCE_CID)
-
-    def test_request_refused_due_to_source_cid_already_allocated_initiator(
-            self):
-        """
-        L2CAP/LE/CFC/BV-19-C
-        """
-        self._setup_link_from_cert()
-        response_future = self.dut_l2cap.connect_coc_to_cert(psm=0x33)
-        self.cert_l2cap.verify_and_respond_open_channel_from_remote(
-            psm=0x33,
-            result=LeCreditBasedConnectionResponseResult.
-            SOURCE_CID_ALREADY_ALLOCATED)
-        assertThat(response_future.get_status()).isEqualTo(
-            LeCreditBasedConnectionResponseResult.SOURCE_CID_ALREADY_ALLOCATED)
-
-    def test_request_refused_due_to_source_cid_already_allocated_responder(
-            self):
-        """
-        L2CAP/LE/CFC/BV-20-C
-        """
-        self._setup_link_from_cert()
-        (dut_channel, cert_channel) = self._open_channel_from_cert(
-            psm=0x33, scid=0x0101)
-        self.dut_l2cap.register_coc(psm=0x35)
-        self.cert_l2cap.get_control_channel().send(
-            l2cap_packets.LeCreditBasedConnectionRequestBuilder(
-                2, 0x35, 0x0101, 1000, 1000, 1000))
-        assertThat(self.cert_l2cap.get_control_channel()).emits(
-            L2capMatchers.CreditBasedConnectionResponseUsedCid())
 
     def test_request_refused_due_to_unacceptable_parameters_initiator(self):
         """

@@ -192,9 +192,8 @@ void LeSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, Cid r
   auto new_channel = link_->AllocateDynamicChannel(psm, remote_cid, {});
   if (new_channel == nullptr) {
     LOG_WARN("Can't allocate dynamic channel");
-    // TODO: We need to respond with the correct reason
     send_connection_response(signal_id, kInvalidCid, 0, 0, 0,
-                             LeCreditBasedConnectionResponseResult::SOURCE_CID_ALREADY_ALLOCATED);
+                             LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
 
     return;
   }
