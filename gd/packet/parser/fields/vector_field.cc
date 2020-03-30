@@ -89,15 +89,15 @@ Size VectorField::GetStructSize() const {
 
   // size_field_ is of type SIZE
   if (size_field_->GetFieldType() == SizeField::kFieldType) {
-    std::string ret = "(static_cast<size_t>(" + size_field_->GetName() + "_extracted) * 8)";
+    std::string ret = "(static_cast<size_t>(to_fill->" + size_field_->GetName() + "_extracted_) * 8)";
     if (!size_modifier_.empty()) ret += "-" + size_modifier_;
     return ret;
   }
 
   // size_field_ is of type COUNT and elements have a fixed size
   if (!element_size_.empty() && !element_size_.has_dynamic()) {
-    return "(static_cast<size_t>(" + size_field_->GetName() + "_extracted) * " + std::to_string(element_size_.bits()) +
-           ")";
+    return "(static_cast<size_t>(to_fill->" + size_field_->GetName() + "_extracted_) * " +
+           std::to_string(element_size_.bits()) + ")";
   }
 
   return Size();
@@ -112,7 +112,7 @@ void VectorField::GenExtractor(std::ostream& s, int num_leading_bits, bool for_s
   if (size_field_ != nullptr && size_field_->GetFieldType() == CountField::kFieldType) {
     s << "size_t " << element_field_->GetName() << "_count = ";
     if (for_struct) {
-      s << size_field_->GetName() << "_extracted;";
+      s << "to_fill->" << size_field_->GetName() << "_extracted_;";
     } else {
       s << "Get" << util::UnderscoreToCamelCase(size_field_->GetName()) << "();";
     }
@@ -229,4 +229,23 @@ bool VectorField::IsContainerField() const {
 
 const PacketField* VectorField::GetElementField() const {
   return element_field_;
+}
+
+void VectorField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
+  s << "\"VECTOR[\";";
+
+  std::string arr_idx = "arridx_" + accessor;
+  std::string vec_size = accessor + ".size()";
+  s << "for (size_t index = 0; index < " << vec_size << "; index++) {";
+  std::string element_accessor = "(" + accessor + "[index])";
+  s << "ss << ((index == 0) ? \"\" : \", \") << ";
+
+  if (element_field_->GetFieldType() == CustomField::kFieldType) {
+    s << element_accessor << ".ToString()";
+  } else {
+    element_field_->GenStringRepresentation(s, element_accessor);
+  }
+
+  s << ";}";
+  s << "ss << \"]\"";
 }
