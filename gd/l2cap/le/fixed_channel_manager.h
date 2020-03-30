@@ -17,6 +17,7 @@
 
 #include <string>
 
+#include "hci/acl_manager.h"
 #include "hci/address_with_type.h"
 #include "l2cap/cid.h"
 #include "l2cap/le/fixed_channel.h"
