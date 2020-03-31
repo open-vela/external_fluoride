@@ -14,19 +14,18 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from datetime import datetime, timedelta
 import logging
 import time
 
 from mobly import asserts
+from datetime import datetime, timedelta
+from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
+from cert.event_callback_stream import EventCallbackStream
+from cert.event_asserts import EventAsserts
 
-from acts.base_test import BaseTestClass
-
+# Test packet nesting
 from bluetooth_packets_python3 import hci_packets
 from bluetooth_packets_python3 import l2cap_packets
-from cert.event_stream import EventStream, FilteringEventStream
-from cert.truth import assertThat
-from cert.metadata import metadata, MetadataKey
 
 
 class BogusProto:
@@ -87,7 +86,7 @@ class FetchEvents:
         return None
 
 
-class CertSelfTest(BaseTestClass):
+class CertSelfTest(GdFacadeOnlyBaseTestClass):
 
     def setup_test(self):
         return True
@@ -96,40 +95,48 @@ class CertSelfTest(BaseTestClass):
         return True
 
     def test_assert_none_passes(self):
-        with EventStream(FetchEvents(events=[], delay_ms=50)) as event_stream:
-            event_stream.assert_none(timeout=timedelta(milliseconds=10))
+        with EventCallbackStream(FetchEvents(events=[],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none(timeout=timedelta(milliseconds=10))
 
     def test_assert_none_passes_after_one_second(self):
-        with EventStream(FetchEvents([1], delay_ms=1500)) as event_stream:
-            event_stream.assert_none(timeout=timedelta(seconds=1.0))
+        with EventCallbackStream(FetchEvents([1],
+                                             delay_ms=1500)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none(timeout=timedelta(seconds=1.0))
 
     def test_assert_none_fails(self):
         try:
-            with EventStream(FetchEvents(events=[17],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_none(timeout=timedelta(seconds=1))
+            with EventCallbackStream(FetchEvents(events=[17],
+                                                 delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_none(timeout=timedelta(seconds=1))
         except Exception as e:
             logging.debug(e)
             return True  # Failed as expected
         return False
 
     def test_assert_none_matching_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            event_stream.assert_none_matching(
+        with EventCallbackStream(FetchEvents(events=[1, 2, 3],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none_matching(
                 lambda data: data.value_ == 4, timeout=timedelta(seconds=0.15))
 
     def test_assert_none_matching_passes_after_1_second(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                     delay_ms=400)) as event_stream:
-            event_stream.assert_none_matching(
+        with EventCallbackStream(
+                FetchEvents(events=[1, 2, 3, 4], delay_ms=400)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_none_matching(
                 lambda data: data.value_ == 4, timeout=timedelta(seconds=1))
 
     def test_assert_none_matching_fails(self):
         try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_none_matching(
+            with EventCallbackStream(
+                    FetchEvents(events=[1, 2, 3], delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_none_matching(
                     lambda data: data.value_ == 2, timeout=timedelta(seconds=1))
         except Exception as e:
             logging.debug(e)
@@ -137,24 +144,28 @@ class CertSelfTest(BaseTestClass):
         return False
 
     def test_assert_occurs_at_least_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 1, 2, 3],
-                                     delay_ms=40)) as event_stream:
-            event_stream.assert_event_occurs(
+        with EventCallbackStream(
+                FetchEvents(events=[1, 2, 3, 1, 2, 3],
+                            delay_ms=40)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_event_occurs(
                 lambda data: data.value_ == 1,
                 timeout=timedelta(milliseconds=300),
                 at_least_times=2)
 
     def test_assert_occurs_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            event_stream.assert_event_occurs(
+        with EventCallbackStream(FetchEvents(events=[1, 2, 3],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_event_occurs(
                 lambda data: data.value_ == 1, timeout=timedelta(seconds=1))
 
     def test_assert_occurs_fails(self):
         try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_event_occurs(
+            with EventCallbackStream(
+                    FetchEvents(events=[1, 2, 3], delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_event_occurs(
                     lambda data: data.value_ == 4, timeout=timedelta(seconds=1))
         except Exception as e:
             logging.debug(e)
@@ -162,18 +173,21 @@ class CertSelfTest(BaseTestClass):
         return False
 
     def test_assert_occurs_at_most_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                     delay_ms=50)) as event_stream:
-            event_stream.assert_event_occurs_at_most(
+        with EventCallbackStream(FetchEvents(events=[1, 2, 3, 4],
+                                             delay_ms=50)) as event_stream:
+            event_asserts = EventAsserts(event_stream)
+            event_asserts.assert_event_occurs_at_most(
                 lambda data: data.value_ < 4,
                 timeout=timedelta(seconds=1),
                 at_most_times=3)
 
     def test_assert_occurs_at_most_fails(self):
         try:
-            with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                         delay_ms=50)) as event_stream:
-                event_stream.assert_event_occurs_at_most(
+            with EventCallbackStream(
+                    FetchEvents(events=[1, 2, 3, 4],
+                                delay_ms=50)) as event_stream:
+                event_asserts = EventAsserts(event_stream)
+                event_asserts.assert_event_occurs_at_most(
                     lambda data: data.value_ > 1,
                     timeout=timedelta(seconds=1),
                     at_most_times=2)
@@ -208,292 +222,11 @@ class CertSelfTest(BaseTestClass):
             0xc1d,  # Channel ID
             l2cap_packets.Continuation.END,
             [mtu_opt, fcs_opt])
-        request_b_frame = l2cap_packets.BasicFrameBuilder(0x01, request)
+        request.Serialize()
         handle = 123
         wrapped = hci_packets.AclPacketBuilder(
             handle,
             hci_packets.PacketBoundaryFlag.FIRST_NON_AUTOMATICALLY_FLUSHABLE,
-            hci_packets.BroadcastFlag.POINT_TO_POINT, request_b_frame)
-        # Size is ACL (4) + L2CAP (4) + Configure (8) + MTU (4) + FCS (3)
+            hci_packets.BroadcastFlag.POINT_TO_POINT, request)
         asserts.assert_true(
-            len(wrapped.Serialize()) == 23, "Packet serialized incorrectly")
-
-    def test_assertThat_boolean_success(self):
-        assertThat(True).isTrue()
-        assertThat(False).isFalse()
-
-    def test_assertThat_boolean_falseIsTrue(self):
-        try:
-            assertThat(False).isTrue()
-        except Exception as e:
-            return True
-        return False
-
-    def test_assertThat_boolean_trueIsFalse(self):
-        try:
-            assertThat(True).isFalse()
-        except Exception as e:
-            return True
-        return False
-
-    def test_assertThat_object_success(self):
-        assertThat("this").isEqualTo("this")
-        assertThat("this").isNotEqualTo("that")
-        assertThat(None).isNone()
-        assertThat("this").isNotNone()
-
-    def test_assertThat_object_isEqualToFails(self):
-        try:
-            assertThat("this").isEqualTo("that")
-        except Exception as e:
-            return True
-        return False
-
-    def test_assertThat_object_isNotEqualToFails(self):
-        try:
-            assertThat("this").isNotEqualTo("this")
-        except Exception as e:
-            return True
-        return False
-
-    def test_assertThat_object_isNoneFails(self):
-        try:
-            assertThat("this").isNone()
-        except Exception as e:
-            return True
-        return False
-
-    def test_assertThat_object_isNotNoneFails(self):
-        try:
-            assertThat(None).isNotNone()
-        except Exception as e:
-            return True
-        return False
-
-    def test_assertThat_eventStream_emits_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(lambda data: data.value_ == 1)
-
-    def test_assertThat_eventStream_emits_then_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(lambda data: data.value_ == 1).then(
-                lambda data: data.value_ == 3)
-
-    def test_assertThat_eventStream_emits_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(lambda data: data.value_ == 4)
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_eventStream_emits_then_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(
-                    lambda data: data.value_ == 1).emits(
-                        lambda data: data.value_ == 4)
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_eventStream_emitsInOrder_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(
-                lambda data: data.value_ == 1,
-                lambda data: data.value_ == 2).inOrder()
-
-    def test_assertThat_eventStream_emitsInAnyOrder_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emits(
-                lambda data: data.value_ == 2,
-                lambda data: data.value_ == 1).inAnyOrder().then(
-                    lambda data: data.value_ == 3)
-
-    def test_assertThat_eventStream_emitsInOrder_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(
-                    lambda data: data.value_ == 2,
-                    lambda data: data.value_ == 1).inOrder()
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_eventStream_emitsInAnyOrder_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emits(
-                    lambda data: data.value_ == 4,
-                    lambda data: data.value_ == 1).inAnyOrder()
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_emitsNone_passes(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            assertThat(event_stream).emitsNone(
-                lambda data: data.value_ == 4,
-                timeout=timedelta(seconds=0.15)).thenNone(
-                    lambda data: data.value_ == 5,
-                    timeout=timedelta(seconds=0.15))
-
-    def test_assertThat_emitsNone_passes_after_1_second(self):
-        with EventStream(FetchEvents(events=[1, 2, 3, 4],
-                                     delay_ms=400)) as event_stream:
-            assertThat(event_stream).emitsNone(
-                lambda data: data.value_ == 4, timeout=timedelta(seconds=1))
-
-    def test_assertThat_emitsNone_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[1, 2, 3],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emitsNone(
-                    lambda data: data.value_ == 2, timeout=timedelta(seconds=1))
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_assertThat_emitsNone_zero_passes(self):
-        with EventStream(FetchEvents(events=[], delay_ms=50)) as event_stream:
-            assertThat(event_stream).emitsNone(
-                timeout=timedelta(milliseconds=10)).thenNone(
-                    timeout=timedelta(milliseconds=10))
-
-    def test_assertThat_emitsNone_zero_passes_after_one_second(self):
-        with EventStream(FetchEvents([1], delay_ms=1500)) as event_stream:
-            assertThat(event_stream).emitsNone(timeout=timedelta(seconds=1.0))
-
-    def test_assertThat_emitsNone_zero_fails(self):
-        try:
-            with EventStream(FetchEvents(events=[17],
-                                         delay_ms=50)) as event_stream:
-                assertThat(event_stream).emitsNone(timeout=timedelta(seconds=1))
-        except Exception as e:
-            logging.debug(e)
-            return True  # Failed as expected
-        return False
-
-    def test_filtering_event_stream_none_filter_function(self):
-        with EventStream(FetchEvents(events=[1, 2, 3],
-                                     delay_ms=50)) as event_stream:
-            filtered_event_stream = FilteringEventStream(event_stream, None)
-            assertThat(filtered_event_stream)\
-                .emits(lambda data: data.value_ == 1)\
-                .then(lambda data: data.value_ == 3)
-
-    def test_metadata_empty(self):
-        my_content = [{}]
-
-        class TestClass:
-
-            def record_data(self, content):
-                my_content[0] = content
-
-            @metadata()
-            def sample_pass_test(self):
-                pass
-
-            @metadata()
-            def sample_skipped_test(self):
-                asserts.skip("SKIP")
-
-            @metadata()
-            def sample_failed_test(self):
-                asserts.fail("FAIL")
-
-        test_class = TestClass()
-
-        try:
-            test_class.sample_pass_test()
-        except Exception:
-            asserts.fail("Should not raise exception")
-        finally:
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_NAME)],
-                                 "sample_pass_test")
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_CLASS)],
-                                 "TestClass")
-
-        try:
-            test_class.sample_skipped_test()
-        except Exception:
-            pass
-        finally:
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_NAME)],
-                                 "sample_skipped_test")
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_CLASS)],
-                                 "TestClass")
-
-        try:
-            test_class.sample_failed_test()
-        except Exception:
-            pass
-        finally:
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_NAME)],
-                                 "sample_failed_test")
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_CLASS)],
-                                 "TestClass")
-
-    def test_metadata_empty_no_function_call(self):
-        my_content = [{}]
-
-        class TestClass:
-
-            def record_data(self, content):
-                my_content[0] = content
-
-            @metadata()
-            def sample_pass_test(self):
-                pass
-
-        test_class = TestClass()
-
-        try:
-            test_class.sample_pass_test()
-        except Exception:
-            asserts.fail("Should not raise exception")
-        finally:
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_NAME)],
-                                 "sample_pass_test")
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_CLASS)],
-                                 "TestClass")
-
-    def test_metadata_pts_test_id(self):
-        my_content = [{}]
-
-        class TestClass:
-
-            def record_data(self, content):
-                my_content[0] = content
-
-            @metadata(pts_test_id="Hello World")
-            def sample_pass_test(self):
-                pass
-
-        test_class = TestClass()
-
-        try:
-            test_class.sample_pass_test()
-        except Exception:
-            asserts.fail("Should not raise exception")
-        finally:
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_NAME)],
-                                 "sample_pass_test")
-            asserts.assert_equal(my_content[0][str(MetadataKey.TEST_CLASS)],
-                                 "TestClass")
-            asserts.assert_equal(my_content[0][str(MetadataKey.PTS_TEST_ID)],
-                                 "Hello World")
+            len(wrapped.Serialize()) == 16, "Packet serialized incorrectly")
