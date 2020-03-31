@@ -1028,7 +1028,8 @@ void LinkLayerController::IncomingPageResponsePacket(
 }
 
 void LinkLayerController::TimerTick() {
-  if (inquiry_timer_task_id_ != kInvalidTaskId) Inquiry();
+  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) Inquiry();
+  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) PageScan();
   LeAdvertising();
   Connections();
 }
@@ -1126,6 +1127,11 @@ void LinkLayerController::CancelScheduledTask(AsyncTaskId task_id) {
 void LinkLayerController::RegisterTaskCancel(
     std::function<void(AsyncTaskId)> task_cancel) {
   cancel_task_ = task_cancel;
+}
+
+void LinkLayerController::AddControllerEvent(milliseconds delay,
+                                             const TaskCallback& task) {
+  controller_events_.push_back(ScheduleTask(delay, task));
 }
 
 void LinkLayerController::WriteSimplePairingMode(bool enabled) {
@@ -1774,31 +1780,29 @@ bool LinkLayerController::LeResolvingListFull() {
 }
 
 void LinkLayerController::Reset() {
-  if (inquiry_timer_task_id_ != kInvalidTaskId) {
-    CancelScheduledTask(inquiry_timer_task_id_);
-    inquiry_timer_task_id_ = kInvalidTaskId;
-  }
+  inquiry_state_ = Inquiry::InquiryState::STANDBY;
   last_inquiry_ = steady_clock::now();
   le_scan_enable_ = bluetooth::hci::OpCode::NONE;
   le_advertising_enable_ = 0;
   le_connect_ = 0;
 }
 
+void LinkLayerController::PageScan() {}
+
 void LinkLayerController::StartInquiry(milliseconds timeout) {
-  inquiry_timer_task_id_ = ScheduleTask(milliseconds(timeout), [this]() {
-    LinkLayerController::InquiryTimeout();
-  });
+  ScheduleTask(milliseconds(timeout),
+               [this]() { LinkLayerController::InquiryTimeout(); });
+  inquiry_state_ = Inquiry::InquiryState::INQUIRY;
 }
 
 void LinkLayerController::InquiryCancel() {
-  ASSERT(inquiry_timer_task_id_ != kInvalidTaskId);
-  CancelScheduledTask(inquiry_timer_task_id_);
-  inquiry_timer_task_id_ = kInvalidTaskId;
+  ASSERT(inquiry_state_ == Inquiry::InquiryState::INQUIRY);
+  inquiry_state_ = Inquiry::InquiryState::STANDBY;
 }
 
 void LinkLayerController::InquiryTimeout() {
-  if (inquiry_timer_task_id_ != kInvalidTaskId) {
-    inquiry_timer_task_id_ = kInvalidTaskId;
+  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) {
+    inquiry_state_ = Inquiry::InquiryState::STANDBY;
     auto packet =
         bluetooth::hci::InquiryCompleteBuilder::Create(ErrorCode::SUCCESS);
     send_event_(std::move(packet));
