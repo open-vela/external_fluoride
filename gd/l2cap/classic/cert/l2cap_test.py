@@ -15,29 +15,34 @@
 
 import time
 from datetime import timedelta
-
 from mobly import asserts
 
-from bluetooth_packets_python3 import l2cap_packets
-from bluetooth_packets_python3 import RawBuilder
-from bluetooth_packets_python3.l2cap_packets import Final
-from bluetooth_packets_python3.l2cap_packets import Poll
-from bluetooth_packets_python3.l2cap_packets import SegmentationAndReassembly
-from bluetooth_packets_python3.l2cap_packets import SupervisoryFunction
 from cert.gd_base_test import GdBaseTestClass
-from cert.matchers import L2capMatchers
-from cert.metadata import metadata
-from cert.py_l2cap import PyL2cap
+from cert.event_stream import EventStream
 from cert.truth import assertThat
+from cert.closable import safeClose
+from cert.py_l2cap import PyL2cap
+from cert.py_acl_manager import PyAclManager
+from cert.matchers import L2capMatchers
 from facade import common_pb2
+from facade import rootservice_pb2 as facade_rootservice
 from google.protobuf import empty_pb2 as empty_proto
 from l2cap.classic import facade_pb2 as l2cap_facade_pb2
+from neighbor.facade import facade_pb2 as neighbor_facade
+from hci.facade import acl_manager_facade_pb2 as acl_manager_facade
+import bluetooth_packets_python3 as bt_packets
+from bluetooth_packets_python3 import hci_packets, l2cap_packets
+from bluetooth_packets_python3.l2cap_packets import SegmentationAndReassembly
+from bluetooth_packets_python3.l2cap_packets import Final
+from bluetooth_packets_python3.l2cap_packets import CommandCode
+from bluetooth_packets_python3.l2cap_packets import SupervisoryFunction
+from bluetooth_packets_python3.l2cap_packets import Poll
+from bluetooth_packets_python3.l2cap_packets import InformationRequestInfoType
 from l2cap.classic.cert.cert_l2cap import CertL2cap
 from l2cap.classic.facade_pb2 import RetransmissionFlowControlMode
-from neighbor.facade import facade_pb2 as neighbor_facade
 
 # Assemble a sample packet.
-SAMPLE_PACKET = RawBuilder([0x19, 0x26, 0x08, 0x17])
+SAMPLE_PACKET = bt_packets.RawBuilder([0x19, 0x26, 0x08, 0x17])
 
 
 class L2capTest(GdBaseTestClass):
@@ -103,10 +108,6 @@ class L2capTest(GdBaseTestClass):
             psm)
         dut_channel = dut_channel_future.get_channel()
 
-        assertThat(self.cert_l2cap.get_control_channel()).emits(
-            L2capMatchers.ConfigurationResponse(),
-            L2capMatchers.ConfigurationRequest()).inAnyOrder()
-
         return (dut_channel, cert_channel)
 
     def test_connect_dynamic_channel_and_send_data(self):
@@ -149,20 +150,18 @@ class L2capTest(GdBaseTestClass):
         cert_channel.send_i_frame(tx_seq=0, req_seq=1, payload=SAMPLE_PACKET)
         # todo verify received?
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CED/BV-01-C", pts_test_name="Request Connection")
     def test_basic_operation_request_connection(self):
         """
-        Verify that the IUT is able to request the connection establishment for
-        an L2CAP data channel and initiate the configuration procedure.
+        L2CAP/COS/CED/BV-01-C [Request Connection]
+        Verify that the IUT is able to request the connection establishment for an L2CAP data channel and
+        initiate the configuration procedure.
         """
         self._setup_link_from_cert()
         (dut_channel, cert_channel) = self._open_channel_from_dut(psm=0x33)
 
-    @metadata(pts_test_id="L2CAP/COS/CED/BV-03-C", pts_test_name="Send data")
     def test_send_data(self):
         """
-        Verify that the IUT is able to send DATA
+        L2CAP/COS/CED/BV-03-C [Send data]
         """
         self._setup_link_from_cert()
 
@@ -170,10 +169,9 @@ class L2capTest(GdBaseTestClass):
         dut_channel.send(b'hello')
         assertThat(cert_channel).emits(L2capMatchers.Data(b'hello'))
 
-    @metadata(pts_test_id="L2CAP/COS/CED/BV-04-C", pts_test_name="Disconnect")
     def test_disconnect(self):
         """
-        Verify that the IUT is able to disconnect the data channel
+        L2CAP/COS/CED/BV-04-C [Disconnect]
         """
         self._setup_link_from_cert()
 
@@ -181,10 +179,9 @@ class L2capTest(GdBaseTestClass):
         dut_channel.close_channel()
         cert_channel.verify_disconnect_request()
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CED/BV-05-C", pts_test_name="Accept connection")
     def test_accept_connection(self):
         """
+        L2CAP/COS/CED/BV-05-C [Accept connection]
         Also verify that DUT can send 48 bytes PDU (minimal MTU)
         """
         self._setup_link_from_cert()
@@ -193,25 +190,18 @@ class L2capTest(GdBaseTestClass):
         dut_channel.send(b'a' * 48)
         assertThat(cert_channel).emits(L2capMatchers.Data(b'a' * 48))
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CED/BV-07-C", pts_test_name="Accept Disconnect")
     def test_accept_disconnect(self):
         """
-        Verify that the IUT is able to respond to the request to disconnect the
-        data channel
+        L2CAP/COS/CED/BV-07-C
         """
         self._setup_link_from_cert()
 
         (dut_channel, cert_channel) = self._open_channel(scid=0x41, psm=0x33)
         cert_channel.disconnect_and_verify()
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CED/BV-08-C",
-        pts_test_name="Disconnect on Timeout")
     def test_disconnect_on_timeout(self):
         """
-        Verify that the IUT disconnects the data channel and shuts down this
-        channel if no response occurs
+        L2CAP/COS/CED/BV-08-C
         """
         self._setup_link_from_cert()
         self.cert_l2cap.ignore_config_and_connections()
@@ -221,12 +211,10 @@ class L2capTest(GdBaseTestClass):
         assertThat(self.cert_l2cap.get_control_channel()).emitsNone(
             L2capMatchers.ConfigurationResponse())
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CFD/BV-01-C", pts_test_name="Continuation Flag")
     def test_continuation_flag(self):
         """
-        Verify the IUT is able to receive configuration requests that have the
-        continuation flag set
+        L2CAP/COS/CFD/BV-01-C [Continuation Flag]
+        Verify the IUT is able to receive configuration requests that have the continuation flag set.
         """
         cert_acl_handle = self._setup_link_from_cert()
 
@@ -239,13 +227,9 @@ class L2capTest(GdBaseTestClass):
         assertThat(self.cert_l2cap.get_control_channel()).emits(
             L2capMatchers.ConfigurationResponse(), at_least_times=2)
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CFD/BV-02-C",
-        pts_test_name="Negotiation with Reject")
     def test_retry_config_after_rejection(self):
         """
-        Verify that the IUT is able to perform negotiation while the Lower
-        Tester rejects the proposed configuration parameter values
+        L2CAP/COS/CFD/BV-02-C
         """
         self._setup_link_from_cert()
 
@@ -255,28 +239,19 @@ class L2capTest(GdBaseTestClass):
 
         assertThat(self.cert_l2cap.get_control_channel()).emits(
             L2capMatchers.ConfigurationResponse(),
+            L2capMatchers.ConfigurationRequest(),
             L2capMatchers.ConfigurationRequest()).inAnyOrder()
-        assertThat(self.cert_l2cap.get_control_channel()).emits(
-            L2capMatchers.ConfigurationRequest())
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CFD/BV-03-C",
-        pts_test_name="Send Requested Options")
     def test_send_requested_options(self):
         """
-        Verify that the IUT can receive a configuration request with no options
-        and send the requested options to the Lower Tester
+        L2CAP/COS/CFD/BV-03-C
         """
         self._setup_link_from_cert()
         (dut_channel, cert_channel) = self._open_channel(scid=0x41, psm=0x33)
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CFD/BV-08-C",
-        pts_test_name="Non-blocking Config Response")
     def test_non_blocking_config_response(self):
         """
-        Verify that the IUT does not block transmitting L2CAP_ConfigRsp while
-        waiting for L2CAP_ConfigRsp from the Lower Tester
+        L2CAP/COS/CFD/BV-08-C
         """
         self._setup_link_from_cert()
 
@@ -288,13 +263,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.ConfigurationResponse(),
             L2capMatchers.ConfigurationRequest()).inAnyOrder()
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CFD/BV-12-C",
-        pts_test_name="Unknown Option Response")
     def test_config_unknown_options_with_hint(self):
         """
-        Verify that the IUT can give the appropriate error code when the Lower
-        Tester proposes any number of unknown options that are optional
+        L2CAP/COS/CFD/BV-12-C
         """
         self._setup_link_from_cert()
         self.cert_l2cap.reply_with_unknown_options_and_hint()
@@ -304,44 +275,36 @@ class L2capTest(GdBaseTestClass):
         assertThat(self.cert_l2cap.get_control_channel()).emits(
             L2capMatchers.ConfigurationResponse())
 
-    @metadata(
-        pts_test_id="L2CAP/COS/ECH/BV-01-C",
-        pts_test_name="Respond to Echo Request")
     def test_respond_to_echo_request(self):
         """
+        L2CAP/COS/ECH/BV-01-C [Respond to Echo Request]
         Verify that the IUT responds to an echo request.
         """
         self._setup_link_from_cert()
-        echo_request = l2cap_packets.EchoRequestBuilder(100,
-                                                        RawBuilder([1, 2, 3]))
+
+        echo_request = l2cap_packets.EchoRequestBuilder(
+            100, l2cap_packets.DisconnectionRequestBuilder(1, 2, 3))
         self.cert_l2cap.get_control_channel().send(echo_request)
 
         assertThat(self.cert_l2cap.get_control_channel()).emits(
-            L2capMatchers.PartialData(b"\x01\x02\x03"))
+            L2capMatchers.PartialData(b"\x06\x01\x04\x00\x02\x00\x03\x00"))
 
-    @metadata(
-        pts_test_id="L2CAP/COS/CED/BI-01-C",
-        pts_test_name="Reject Unknown Command")
     def test_reject_unknown_command(self):
         """
-        Verify that the IUT rejects an unknown signaling command
+        L2CAP/COS/CED/BI-01-C
         """
         self._setup_link_from_cert()
 
         # Command code ff, Signal id 01, size 0000
-        invalid_command_packet = RawBuilder([0xff, 0x01, 0x00, 0x00])
+        invalid_command_packet = bt_packets.RawBuilder([0xff, 0x01, 0x00, 0x00])
         self.cert_l2cap.get_control_channel().send(invalid_command_packet)
 
         assertThat(self.cert_l2cap.get_control_channel()).emits(
             L2capMatchers.CommandReject())
 
-    @metadata(
-        pts_test_id="L2CAP/COS/IEX/BV-02-C",
-        pts_test_name="Respond with 1.2 Features")
     def test_respond_with_1_2_features(self):
         """
-        Verify that the IUT responds to an information request command
-        soliciting for Specification 1.2 features
+        L2CAP/COS/IEX/BV-02-C [Respond with 1.2 Features]
         """
         self._setup_link_from_cert()
         control_channel = self.cert_l2cap.get_control_channel()
@@ -351,15 +314,10 @@ class L2capTest(GdBaseTestClass):
         assertThat(control_channel).emits(
             L2capMatchers.InformationResponseExtendedFeatures())
 
-    @metadata(
-        pts_test_id="L2CAP/EXF/BV-01-C",
-        pts_test_name="Extended Features Information Response for "
-        "Enhanced Retransmission Mode")
     def test_extended_feature_info_response_ertm(self):
         """
-        Verify the IUT can format an Information Response for the information
-        type of Extended Features that correctly identifies that Enhanced
-        Retransmission Mode is locally supported
+        L2CAP/EXF/BV-01-C [Extended Features Information Response for Enhanced
+        Retransmission Mode]
         """
         self._setup_link_from_cert()
         control_channel = self.cert_l2cap.get_control_channel()
@@ -370,15 +328,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.InformationResponseExtendedFeatures(
                 supports_ertm=True))
 
-    @metadata(
-        pts_test_id="L2CAP/EXF/BV-02-C",
-        pts_test_name="Extended Features Information Response for "
-        "Streaming Mode")
     def test_extended_feature_info_response_streaming(self):
         """
-        Verify the IUT can format an Information Response for the information
-        type of Extended Features that correctly identifies that Streaming Mode
-        is locally supported
+        L2CAP/EXF/BV-02-C
         """
         asserts.skip("Streaming not supported")
         self._setup_link_from_cert()
@@ -390,16 +342,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.InformationResponseExtendedFeatures(
                 supports_streaming=True))
 
-    @metadata(
-        pts_test_id="L2CAP/EXF/BV-03-C",
-        pts_test_name="Extended Features Information Response for FCS "
-        "Option")
     def test_extended_feature_info_response_fcs(self):
         """
-        Verify the IUT can format an Information Response for the information
-        type of Extended Features that correctly identifies that the FCS Option
-        is locally supported.
-
+        L2CAP/EXF/BV-03-C [Extended Features Information Response for FCS Option]
         Note: This is not mandated by L2CAP Spec
         """
         self._setup_link_from_cert()
@@ -411,18 +356,10 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.InformationResponseExtendedFeatures(
                 supports_fcs=True))
 
-    @metadata(
-        pts_test_id="L2CAP/EXF/BV-05-C",
-        pts_test_name="Extended Features Information Response for Fixed "
-        "Channels")
     def test_extended_feature_info_response_fixed_channels(self):
         """
-        Verify the IUT can format an Information Response for the information
-        type of Extended Features that correctly identifies that the Fixed
-        Channels option is locally supported
+        L2CAP/EXF/BV-05-C
         """
-        asserts.skip("Fixed channel is not supported")
-
         self._setup_link_from_cert()
         control_channel = self.cert_l2cap.get_control_channel()
 
@@ -432,11 +369,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.InformationResponseExtendedFeatures(
                 supports_fixed_channels=True))
 
-    @metadata(
-        pts_test_id="L2CAP/FOC/BV-01-C",
-        pts_test_name="IUT Initiated Configuration of the FCS Option")
     def test_config_channel_not_use_FCS(self):
         """
+        L2CAP/FOC/BV-01-C [IUT Initiated Configuration of the FCS Option]
         Verify the IUT can configure a channel to not use FCS in I/S-frames.
         """
         self._setup_link_from_cert()
@@ -449,14 +384,11 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emits(
             L2capMatchers.IFrame(tx_seq=0, payload=b'abc'))
 
-    @metadata(
-        pts_test_id="L2CAP/FOC/BV-02-C",
-        pts_test_name="Lower Tester Explicitly Requests FCS should be "
-        "Used")
     def test_explicitly_request_use_FCS(self):
         """
-        Verify the IUT will include the FCS in I/S-frames if the Lower Tester
-        explicitly requests that FCS should be used
+        L2CAP/FOC/BV-02-C [Lower Tester Explicitly Requests FCS should be Used]
+        Verify the IUT will include the FCS in I/S-frames if the Lower Tester explicitly requests that FCS
+        should be used.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -470,17 +402,10 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.PartialData(
                 b"abc\x4f\xa3"))  # TODO: Use packet parser
 
-    @metadata(
-        pts_test_id="L2CAP/FOC/BV-03-C",
-        pts_test_name="Lower Tester Implicitly Requests FCS should be "
-        "Used")
     def test_implicitly_request_use_FCS(self):
         """
-        Verify the IUT will include the FCS in I/S-frames if the Lower Tester
-        implicitly requests that FCS should be used.
-
-        TODO: Update this test case. What's the difference between this one and
-        TODO: test_explicitly_request_use_FCS?
+        L2CAP/FOC/BV-03-C [Lower Tester Implicitly Requests FCS should be Used]
+        TODO: Update this test case. What's the difference between this one and test_explicitly_request_use_FCS?
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -494,13 +419,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.PartialData(
                 b"abc\x4f\xa3"))  # TODO: Use packet parser
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-01-C", pts_test_name="Transmit I-frames")
     def test_transmit_i_frames(self):
         """
-        Verify the IUT can send correctly formatted sequential I-frames with
-        valid values for the enhanced control fields (SAR, F-bit, ReqSeq,
-        TxSeq)
+        L2CAP/ERM/BV-01-C [Transmit I-frames]
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -526,11 +447,10 @@ class L2capTest(GdBaseTestClass):
 
         cert_channel.send_i_frame(tx_seq=2, req_seq=3, payload=SAMPLE_PACKET)
 
-    @metadata(pts_test_id="L2CAP/ERM/BV-02-C", pts_test_name="Receive I-Frames")
     def test_receive_i_frames(self):
         """
-        Verify the IUT can receive in-sequence valid I-frames and deliver L2CAP
-        SDUs to the Upper Tester
+        L2CAP/ERM/BV-02-C [Receive I-Frames]
+        Verify the IUT can receive in-sequence valid I-frames and deliver L2CAP SDUs to the Upper Tester
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -564,13 +484,11 @@ class L2capTest(GdBaseTestClass):
             payload=SAMPLE_PACKET)
         assertThat(cert_channel).emits(L2capMatchers.SFrame(req_seq=6))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-03-C",
-        pts_test_name="Acknowledging Received I-Frames")
     def test_acknowledging_received_i_frames(self):
         """
-        Verify the IUT sends S-frame [RR] with the Poll bit not set to
-        acknowledge data received from the Lower Tester
+        L2CAP/ERM/BV-03-C [Acknowledging Received I-Frames]
+        Verify the IUT sends S-frame [RR] with the Poll bit not set to acknowledge data received from the
+        Lower Tester
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -586,16 +504,12 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emitsNone(
             L2capMatchers.SFrame(req_seq=4), timeout=timedelta(seconds=1))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-05-C",
-        pts_test_name="Resume Transmitting I-Frames when an S-Frame [RR] "
-        "is Received")
     def test_resume_transmitting_when_received_rr(self):
         """
-        Verify the IUT will cease transmission of I-frames when the negotiated
-        TxWindow is full. Verify the IUT will resume transmission of I-frames
-        when an S-frame [RR] is received that acknowledges previously sent
-        I-frames
+        L2CAP/ERM/BV-05-C [Resume Transmitting I-Frames when an S-Frame [RR] is Received]
+        Verify the IUT will cease transmission of I-frames when the negotiated TxWindow is full. Verify the
+        IUT will resume transmission of I-frames when an S-frame [RR] is received that acknowledges
+        previously sent I-frames.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(tx_window_size=1)
@@ -614,15 +528,12 @@ class L2capTest(GdBaseTestClass):
         cert_channel.send_s_frame(req_seq=1, f=Final.POLL_RESPONSE)
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=1))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-06-C",
-        pts_test_name="Resume Transmitting I-Frames when an I-Frame is "
-        "Received")
     def test_resume_transmitting_when_acknowledge_previously_sent(self):
         """
-        Verify the IUT will cease transmission of I-frames when the negotiated
-        TxWindow is full. Verify the IUT will resume transmission of I-frames
-        when an I-frame is received that acknowledges previously sent I-frames
+        L2CAP/ERM/BV-06-C [Resume Transmitting I-Frames when an I-Frame is Received]
+        Verify the IUT will cease transmission of I-frames when the negotiated TxWindow is full. Verify the
+        IUT will resume transmission of I-frames when an I-frame is received that acknowledges previously
+        sent I-frames.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(tx_window_size=1)
@@ -647,13 +558,10 @@ class L2capTest(GdBaseTestClass):
 
         cert_channel.send_i_frame(tx_seq=1, req_seq=2, payload=SAMPLE_PACKET)
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-08-C",
-        pts_test_name="Send S-Frame [RR] with Poll Bit Set")
     def test_transmit_s_frame_rr_with_poll_bit_set(self):
         """
-        Verify the IUT sends an S-frame [RR] with the Poll bit set when its
-        retransmission timer expires.
+        L2CAP/ERM/BV-08-C [Send S-Frame [RR] with Poll Bit Set]
+        Verify the IUT sends an S-frame [RR] with the Poll bit set when its retransmission timer expires.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -667,13 +575,11 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emits(
             L2capMatchers.SFrame(p=l2cap_packets.Poll.POLL))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-09-C",
-        pts_test_name="Send S-Frame [RR] with Final Bit Set")
     def test_transmit_s_frame_rr_with_final_bit_set(self):
         """
-        Verify the IUT responds with an S-frame [RR] with the Final bit set
-        after receiving an S-frame [RR] with the Poll bit set
+        L2CAP/ERM/BV-09-C [Send S-Frame [RR] with Final Bit Set]
+        Verify the IUT responds with an S-frame [RR] with the Final bit set after receiving an S-frame [RR]
+        with the Poll bit set.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -685,13 +591,11 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emits(
             L2capMatchers.SFrame(f=Final.POLL_RESPONSE))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-10-C",
-        pts_test_name="Retransmit S-Frame [RR] with Final Bit Set")
     def test_retransmit_s_frame_rr_with_poll_bit_set(self):
         """
-        Verify the IUT will retransmit the S-frame [RR] with the Poll bit set
-        when the Monitor Timer expires
+        L2CAP/ERM/BV-10-C [Send S-Frame [RR] with Final Bit Set]
+        Verify the IUT responds with an S-frame [RR] with the Final bit set after receiving an S-frame [RR]
+        with the Poll bit set.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(max_transmit=3)
@@ -706,11 +610,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.SFrame(req_seq=0, p=Poll.POLL, f=Final.NOT_SET))
         cert_channel.send_s_frame(req_seq=1, f=Final.POLL_RESPONSE)
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-11-C",
-        pts_test_name="S-Frame Transmissions Exceed MaxTransmit")
     def test_s_frame_transmissions_exceed_max_transmit(self):
         """
+        L2CAP/ERM/BV-11-C [S-Frame Transmissions Exceed MaxTransmit]
         Verify the IUT will close the channel when the Monitor Timer expires.
         """
         self._setup_link_from_cert()
@@ -724,14 +626,9 @@ class L2capTest(GdBaseTestClass):
 
         cert_channel.verify_disconnect_request()
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-12-C",
-        pts_test_name="I-Frame Transmissions Exceed MaxTransmit")
     def test_i_frame_transmissions_exceed_max_transmit(self):
         """
-        Verify the IUT will close the channel when it receives an S-frame [RR]
-        with the final bit set that does not acknowledge the previous I-frame
-        sent by the IUT
+        L2CAP/ERM/BV-12-C [I-Frame Transmissions Exceed MaxTransmit]
         """
         self._setup_link_from_cert()
         self.cert_l2cap.reply_ertm_with_max_transmit_one()
@@ -748,13 +645,10 @@ class L2capTest(GdBaseTestClass):
         cert_channel.send_s_frame(req_seq=0, f=Final.POLL_RESPONSE)
         cert_channel.verify_disconnect_request()
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-13-C",
-        pts_test_name="Respond to S-Frame [REJ]")
     def test_respond_to_rej(self):
         """
-        Verify the IUT retransmits I-frames starting from the sequence number
-        specified in the S-frame [REJ]
+        L2CAP/ERM/BV-13-C [Respond to S-Frame [REJ]]
+        Verify the IUT retransmits I-frames starting from the sequence number specified in the S-frame [REJ].
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(tx_window_size=2, max_transmit=2)
@@ -774,14 +668,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.IFrame(tx_seq=0, payload=b'abc'),
             L2capMatchers.IFrame(tx_seq=1, payload=b'abc')).inOrder()
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-14-C",
-        pts_test_name="Respond to S-Frame [SREJ] POLL Bit Set")
     def test_respond_to_srej_p_set(self):
         """
-        Verify the IUT responds with the correct I-frame when sent an SREJ
-        frame. Verify that the IUT processes the acknowledgment of previously
-        unacknowledged I-frames
+        L2CAP/ERM/BV-14-C [Respond to S-Frame [SREJ] POLL Bit Set]
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(tx_window_size=3, max_transmit=2)
@@ -804,12 +693,9 @@ class L2capTest(GdBaseTestClass):
                 tx_seq=1, payload=b'abc', f=Final.POLL_RESPONSE),
             L2capMatchers.IFrame(tx_seq=3, payload=b'abc')).inOrder()
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-15-C",
-        pts_test_name="Respond to S-Frame [SREJ] POLL Bit Clear")
     def test_respond_to_srej_p_clear(self):
         """
-        Verify the IUT responds with the correct I-frame when sent an SREJ frame
+        L2CAP/ERM/BV-15-C [Respond to S-Frame [SREJ] POLL Bit Clear]
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(tx_window_size=3, max_transmit=2)
@@ -833,13 +719,11 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emits(
             L2capMatchers.IFrame(tx_seq=3, payload=b'abc', f=Final.NOT_SET))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-18-C",
-        pts_test_name="Receive S-Frame [RR] Final Bit = 1")
     def test_receive_s_frame_rr_final_bit_set(self):
         """
-        Verify the IUT will retransmit any previously sent I-frames
-        unacknowledged by receipt of an S-Frame [RR] with the Final Bit set
+        L2CAP/ERM/BV-18-C [Receive S-Frame [RR] Final Bit = 1]
+        Verify the IUT will retransmit any previously sent I-frames unacknowledged by receipt of an S-Frame
+        [RR] with the Final Bit set.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -857,13 +741,11 @@ class L2capTest(GdBaseTestClass):
         cert_channel.send_s_frame(req_seq=0, f=Final.POLL_RESPONSE)
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=0))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-19-C",
-        pts_test_name="Receive I-Frame Final Bit = 1")
     def test_receive_i_frame_final_bit_set(self):
         """
-        Verify the IUT will retransmit any previously sent I-frames
-        unacknowledged by receipt of an I-frame with the final bit set
+        L2CAP/ERM/BV-19-C [Receive I-Frame Final Bit = 1]
+        Verify the IUT will retransmit any previously sent I-frames unacknowledged by receipt of an I-frame
+        with the final bit set.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -882,13 +764,11 @@ class L2capTest(GdBaseTestClass):
 
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=0))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BV-20-C",
-        pts_test_name="Enter Remote Busy Condition")
-    def test_receive_rnr(self):
+    def test_recieve_rnr(self):
         """
-        Verify the IUT will not retransmit any I-frames when it receives a
-        remote busy indication from the Lower Tester (S-frame [RNR])
+        L2CAP/ERM/BV-20-C [Enter Remote Busy Condition]
+        Verify the IUT will not retransmit any I-frames when it receives a remote busy indication from the
+        Lower Tester (S-frame [RNR]).
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -942,13 +822,11 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.IFrame(tx_seq=4, payload=b'def'),
             L2capMatchers.IFrame(tx_seq=5, payload=b'def')).inOrder()
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BI-01-C",
-        pts_test_name="S-Frame [REJ] Lost or Corrupted")
     def test_sent_rej_lost(self):
         """
-        Verify the IUT can handle receipt of an S-=frame [RR] Poll = 1 if the
-        S-frame [REJ] sent from the IUT is lost
+        L2CAP/ERM/BI-01-C [S-Frame [REJ] Lost or Corrupted]
+        Verify the IUT can handle receipt of an S-=frame [RR] Poll = 1 if the S-frame [REJ] sent from the IUT
+        is lost.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm(tx_window_size=5)
@@ -975,13 +853,10 @@ class L2capTest(GdBaseTestClass):
                 tx_seq=i, req_seq=0, payload=SAMPLE_PACKET)
             assertThat(cert_channel).emits(L2capMatchers.SFrame(req_seq=i + 1))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BI-03-C",
-        pts_test_name="Handle Duplicate S-Frame [SREJ]")
     def test_handle_duplicate_srej(self):
         """
-        Verify the IUT will only retransmit the requested I-frame once after
-        receiving a duplicate SREJ
+        L2CAP/ERM/BI-03-C [Handle Duplicate S-Frame [SREJ]]
+        Verify the IUT will only retransmit the requested I-frame once after receiving a duplicate SREJ.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -1006,16 +881,12 @@ class L2capTest(GdBaseTestClass):
             f=Final.POLL_RESPONSE)
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=0))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BI-04-C",
-        pts_test_name="Handle Receipt of S-Frame [REJ] and S-Frame "
-        "[RR, F=1] that Both Require Retransmission of the "
-        "Same I-Frames")
     def test_handle_receipt_rej_and_rr_with_f_set(self):
         """
-        Verify the IUT will only retransmit the requested I-frames once after
-        receiving an S-frame [REJ] followed by an S-frame [RR] with the Final
-        bit set that indicates the same I-frames should be retransmitted
+        L2CAP/ERM/BI-04-C [Handle Receipt of S-Frame [REJ] and S-Frame [RR, F=1] that Both Require Retransmission of the Same I-Frames]
+        Verify the IUT will only retransmit the requested I-frames once after receiving an S-frame [REJ]
+        followed by an S-frame [RR] with the Final bit set that indicates the same I-frames should be
+        retransmitted.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -1039,16 +910,11 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=0))
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=1))
 
-    @metadata(
-        pts_test_id="L2CAP/ERM/BI-05-C",
-        pts_test_name="Handle receipt of S-Frame [REJ] and I-Frame [F=1] "
-        "that Both Require Retransmission of the Same "
-        "I-Frames")
     def test_handle_rej_and_i_frame_with_f_set(self):
         """
-        Verify the IUT will only retransmit the requested I-frames once after
-        receiving an S-frame [REJ] followed by an I-frame with the Final bit
-        set that indicates the same I-frames should be retransmitted
+        L2CAP/ERM/BI-05-C [Handle receipt of S-Frame [REJ] and I-Frame [F=1] that Both Require Retransmission of the Same I-Frames]
+        Verify the IUT will only retransmit the requested I-frames once after receiving an S-frame [REJ]
+        followed by an I-frame with the Final bit set that indicates the same I-frames should be retransmitted.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -1074,14 +940,11 @@ class L2capTest(GdBaseTestClass):
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=0))
         assertThat(cert_channel).emits(L2capMatchers.IFrame(tx_seq=1))
 
-    @metadata(
-        pts_test_id="L2CAP/CMC/BV-01-C",
-        pts_test_name="IUT Initiated Configuration of Enhanced "
-        "Retransmission Mode")
     def test_initiated_configuration_request_ertm(self):
         """
-        Verify the IUT can send a Configuration Request command containing the
-        F&EC option that specifies Enhanced Retransmission Mode
+        L2CAP/CMC/BV-01-C [IUT Initiated Configuration of Enhanced Retransmission Mode]
+        Verify the IUT can send a Configuration Request command containing the F&EC option that specifies
+        Enhanced Retransmission Mode.
         """
         self._setup_link_from_cert()
         self.cert_l2cap.turn_on_ertm()
@@ -1095,14 +958,11 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.ConfigurationRequest())
         asserts.skip("Struct not working")
 
-    @metadata(
-        pts_test_id="L2CAP/CMC/BV-02-C",
-        pts_test_name="Lower Tester Initiated Configuration of Enhanced "
-        "Retransmission Mode")
     def test_respond_configuration_request_ertm(self):
         """
-        Verify the IUT can accept a Configuration Request from the Lower Tester
-        containing an F&EC option that specifies Enhanced Retransmission Mode
+        L2CAP/CMC/BV-02-C [Lower Tester Initiated Configuration of Enhanced Retransmission Mode]
+        Verify the IUT can accept a Configuration Request from the Lower Tester containing an F&EC option
+        that specifies Enhanced Retransmission Mode.
         """
         asserts.skip("ConfigurationResponseView Not working")
         self._setup_link_from_cert()
@@ -1121,16 +981,9 @@ class L2capTest(GdBaseTestClass):
         assertThat(self.cert_l2cap.get_control_channel()).emits(
             L2capMatchers.ConfigurationResponse())
 
-    @metadata(
-        pts_test_id="L2CAP/CMC/BV-12-C",
-        pts_test_name="ERTM Not Supported by Lower Tester for Mandatory "
-        "ERTM channel")
     def test_respond_not_support_ertm_when_using_mandatory_ertm(self):
         """
-        The IUT is initiating connection of an L2CAP channel that mandates use
-        of ERTM. Verify the IUT will not attempt to configure the connection to
-        ERTM if the Lower Tester has not indicated support for ERTM in the
-        Information Response [Extended Features]
+        L2CAP/CMC/BV-12-C
         """
         self._setup_link_from_cert()
         dut_channel_future = self.dut_l2cap.connect_dynamic_channel_to_cert(
@@ -1138,17 +991,9 @@ class L2capTest(GdBaseTestClass):
         assertThat(self.cert_l2cap.get_control_channel()).emitsNone(
             L2capMatchers.ConnectionRequest(0x33))
 
-    @metadata(
-        pts_test_id="L2CAP/CMC/BI-01-C",
-        pts_test_name="Failed Configuration of Enhanced Retransmission "
-        "Mode when use of the Mode is Mandatory]")
     def test_config_respond_basic_mode_when_using_mandatory_ertm(self):
         """
-        When creating a connection for a PSM that mandates the use of ERTM
-        verify the IUT can handle receipt (close the channel in accordance with
-        the specification) of a Configure Response indicating the peer L2CAP
-        entity doesn’t wish to use Enhanced Retransmission Mode (Configure
-        Response Result = Reject Unacceptable Parameters)
+        L2CAP/CMC/BI-01-C
         """
         self._setup_link_from_cert()
         self.cert_l2cap.reply_with_basic_mode()
@@ -1158,15 +1003,9 @@ class L2capTest(GdBaseTestClass):
             L2capMatchers.ConfigurationRequest())
         cert_channel.verify_disconnect_request()
 
-    @metadata(
-        pts_test_id="L2CAP/CMC/BI-02-C",
-        pts_test_name="Configuration Mode mismatch when use of Enhanced "
-        "Retransmission Mode is Mandatory")
     def test_config_request_basic_mode_when_using_mandatory_ertm(self):
         """
-        When creating a connection for a PSM that mandates the use of ERTM,
-        verify the IUT will close the channel if the Lower Tester attempts to
-        configure Basic Mode.
+        L2CAP/CMC/BI-02-C
         """
         self._setup_link_from_cert()
         self.cert_l2cap.reply_with_nothing()
