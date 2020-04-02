@@ -19,8 +19,9 @@ import os
 import sys
 import logging
 
-from cert.gd_base_test import GdBaseTestClass
-from cert.event_stream import EventStream
+from cert.gd_base_test_facade_only import GdFacadeOnlyBaseTestClass
+from cert.event_callback_stream import EventCallbackStream
+from cert.event_asserts import EventAsserts
 from google.protobuf import empty_pb2 as empty_proto
 from facade import rootservice_pb2 as facade_rootservice
 from hal import facade_pb2 as hal_facade
@@ -29,36 +30,49 @@ from bluetooth_packets_python3 import hci_packets
 import bluetooth_packets_python3 as bt_packets
 
 
-class DirectHciTest(GdBaseTestClass):
-
-    def setup_class(self):
-        super().setup_class(dut_module='HCI', cert_module='HAL')
+class DirectHciTest(GdFacadeOnlyBaseTestClass):
 
     def setup_test(self):
-        super().setup_test()
+        self.device_under_test.rootservice.StartStack(
+            facade_rootservice.StartStackRequest(
+                module_under_test=facade_rootservice.BluetoothModule.Value(
+                    'HCI'),))
+        self.cert_device.rootservice.StartStack(
+            facade_rootservice.StartStackRequest(
+                module_under_test=facade_rootservice.BluetoothModule.Value(
+                    'HAL'),))
 
-        self.cert.hal.SendHciCommand(
+        self.device_under_test.wait_channel_ready()
+        self.cert_device.wait_channel_ready()
+
+        self.cert_device.hal.SendHciCommand(
             hal_facade.HciCommandPacket(
                 payload=bytes(hci_packets.ResetBuilder().Serialize())))
 
+    def teardown_test(self):
+        self.device_under_test.rootservice.StopStack(
+            facade_rootservice.StopStackRequest())
+        self.cert_device.rootservice.StopStack(
+            facade_rootservice.StopStackRequest())
+
     def register_for_event(self, event_code):
         msg = hci_facade.EventCodeMsg(code=int(event_code))
-        self.dut.hci.RegisterEventHandler(msg)
+        self.device_under_test.hci.RegisterEventHandler(msg)
 
     def register_for_le_event(self, event_code):
         msg = hci_facade.LeSubeventCodeMsg(code=int(event_code))
-        self.dut.hci.RegisterLeEventHandler(msg)
+        self.device_under_test.hci.RegisterLeEventHandler(msg)
 
     def enqueue_hci_command(self, command, expect_complete):
         cmd_bytes = bytes(command.Serialize())
         cmd = hci_facade.CommandMsg(command=cmd_bytes)
         if (expect_complete):
-            self.dut.hci.EnqueueCommandWithComplete(cmd)
+            self.device_under_test.hci.EnqueueCommandWithComplete(cmd)
         else:
-            self.dut.hci.EnqueueCommandWithStatus(cmd)
+            self.device_under_test.hci.EnqueueCommandWithStatus(cmd)
 
     def send_hal_hci_command(self, command):
-        self.cert.hal.SendHciCommand(
+        self.cert_device.hal.SendHciCommand(
             hal_facade.HciCommandPacket(payload=bytes(command.Serialize())))
 
     def enqueue_acl_data(self, handle, pb_flag, b_flag, acl):
@@ -67,7 +81,7 @@ class DirectHciTest(GdBaseTestClass):
             packet_boundary_flag=int(pb_flag),
             broadcast_flag=int(b_flag),
             data=acl)
-        self.dut.hci.SendAclData(acl_msg)
+        self.device_under_test.hci.SendAclData(acl_msg)
 
     def send_hal_acl_data(self, handle, pb_flag, b_flag, acl):
         lower = handle & 0xff
@@ -78,7 +92,8 @@ class DirectHciTest(GdBaseTestClass):
         upper_length = (len(acl) & 0xff00) >> 8
         concatenated = bytes([lower, upper, lower_length, upper_length] +
                              list(acl))
-        self.cert.hal.SendHciAcl(hal_facade.HciAclPacket(payload=concatenated))
+        self.cert_device.hal.SendHciAcl(
+            hal_facade.HciAclPacket(payload=concatenated))
 
     def test_local_hci_cmd_and_event(self):
         # Loopback mode responds with ACL and SCO connection complete
@@ -86,8 +101,10 @@ class DirectHciTest(GdBaseTestClass):
         self.register_for_event(hci_packets.EventCode.LOOPBACK_COMMAND)
         self.register_for_event(
             hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
-        with EventStream(self.dut.hci.FetchEvents(
-                empty_proto.Empty())) as hci_event_stream:
+        with EventCallbackStream(
+                self.device_under_test.hci.FetchEvents(
+                    empty_proto.Empty())) as hci_event_stream:
+            hci_event_asserts = EventAsserts(hci_event_stream)
 
             self.enqueue_hci_command(
                 hci_packets.WriteLoopbackModeBuilder(
@@ -97,13 +114,16 @@ class DirectHciTest(GdBaseTestClass):
             self.enqueue_hci_command(cmd2loop, True)
 
             looped_bytes = bytes(cmd2loop.Serialize())
-            hci_event_stream.assert_event_occurs(
+            hci_event_asserts.assert_event_occurs(
                 lambda packet: looped_bytes in packet.event)
 
     def test_inquiry_from_dut(self):
         self.register_for_event(hci_packets.EventCode.INQUIRY_RESULT)
-        with EventStream(self.dut.hci.FetchEvents(
-                empty_proto.Empty())) as hci_event_stream:
+        with EventCallbackStream(
+                self.device_under_test.hci.FetchEvents(
+                    empty_proto.Empty())) as hci_event_stream:
+
+            hci_event_asserts = EventAsserts(hci_event_stream)
 
             self.send_hal_hci_command(
                 hci_packets.WriteScanEnableBuilder(
@@ -112,7 +132,7 @@ class DirectHciTest(GdBaseTestClass):
             lap.lap = 0x33
             self.enqueue_hci_command(
                 hci_packets.InquiryBuilder(lap, 0x30, 0xff), False)
-            hci_event_stream.assert_event_occurs(
+            hci_event_asserts.assert_event_occurs(
                 lambda packet: b'\x02\x0f' in packet.event
                 # Expecting an HCI Event (code 0x02, length 0x0f)
             )
@@ -121,8 +141,11 @@ class DirectHciTest(GdBaseTestClass):
         self.register_for_le_event(
             hci_packets.SubeventCode.EXTENDED_ADVERTISING_REPORT)
         self.register_for_le_event(hci_packets.SubeventCode.ADVERTISING_REPORT)
-        with EventStream(self.dut.hci.FetchLeSubevents(
-                empty_proto.Empty())) as hci_le_event_stream:
+        with EventCallbackStream(
+                self.device_under_test.hci.FetchLeSubevents(
+                    empty_proto.Empty())) as hci_le_event_stream:
+
+            hci_event_asserts = EventAsserts(hci_le_event_stream)
 
             # DUT Scans
             self.enqueue_hci_command(
@@ -195,7 +218,7 @@ class DirectHciTest(GdBaseTestClass):
                 hci_packets.LeSetExtendedAdvertisingEnableBuilder(
                     hci_packets.Enable.ENABLED, [enabled_set]))
 
-            hci_le_event_stream.assert_event_occurs(
+            hci_event_asserts.assert_event_occurs(
                 lambda packet: b'Im_A_Cert' in packet.event)
 
             self.send_hal_hci_command(
@@ -208,11 +231,17 @@ class DirectHciTest(GdBaseTestClass):
 
     def test_le_connection_dut_advertises(self):
         self.register_for_le_event(hci_packets.SubeventCode.CONNECTION_COMPLETE)
-        with EventStream(self.dut.hci.FetchLeSubevents(empty_proto.Empty())) as le_event_stream, \
-            EventStream(self.dut.hci.FetchEvents(empty_proto.Empty())) as event_stream, \
-            EventStream(self.dut.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
-            EventStream(self.cert.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
-            EventStream(self.cert.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
+        with EventCallbackStream(self.device_under_test.hci.FetchLeSubevents(empty_proto.Empty())) as le_event_stream, \
+            EventCallbackStream(self.device_under_test.hci.FetchEvents(empty_proto.Empty())) as event_stream, \
+            EventCallbackStream(self.device_under_test.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
+            EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
+            EventCallbackStream(self.cert_device.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
+
+            le_event_asserts = EventAsserts(le_event_stream)
+            event_asserts = EventAsserts(event_stream)
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
+            acl_data_asserts = EventAsserts(acl_data_stream)
+            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
 
             # Cert Connects
             self.send_hal_hci_command(
@@ -289,7 +318,7 @@ class DirectHciTest(GdBaseTestClass):
                     hci_packets.Enable.ENABLED, [enabled_set]), True)
 
             # Check for success of Enable
-            event_stream.assert_event_occurs(
+            event_asserts.assert_event_occurs(
                 lambda packet: b'\x0e\x04\x01\x39\x20\x00' in packet.event)
 
             conn_handle = 0xfff
@@ -320,10 +349,10 @@ class DirectHciTest(GdBaseTestClass):
                     return True
                 return False
 
-            cert_hci_event_stream.assert_event_occurs(payload_handle)
+            cert_hci_event_asserts.assert_event_occurs(payload_handle)
             cert_handle = conn_handle
             conn_handle = 0xfff
-            le_event_stream.assert_event_occurs(event_handle)
+            le_event_asserts.assert_event_occurs(event_handle)
             dut_handle = conn_handle
             if dut_handle == 0xfff:
                 logging.warning("Failed to get the DUT handle")
@@ -344,17 +373,19 @@ class DirectHciTest(GdBaseTestClass):
                 hci_packets.BroadcastFlag.POINT_TO_POINT,
                 bytes(b'Just SomeMoreAclData'))
 
-            cert_acl_data_stream.assert_event_occurs(
+            cert_acl_data_asserts.assert_event_occurs(
                 lambda packet: logging.debug(packet.payload) or b'SomeAclData' in packet.payload
             )
-            acl_data_stream.assert_event_occurs(
+            acl_data_asserts.assert_event_occurs(
                 lambda packet: logging.debug(packet.data) or b'SomeMoreAclData' in packet.data
             )
 
     def test_le_white_list_connection_cert_advertises(self):
         self.register_for_le_event(hci_packets.SubeventCode.CONNECTION_COMPLETE)
-        with EventStream(self.dut.hci.FetchLeSubevents(empty_proto.Empty())) as le_event_stream, \
-                EventStream(self.cert.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream:
+        with EventCallbackStream(self.device_under_test.hci.FetchLeSubevents(empty_proto.Empty())) as le_event_stream, \
+                EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream:
+            le_event_asserts = EventAsserts(le_event_stream)
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
 
             # DUT Connects
             self.enqueue_hci_command(
@@ -422,10 +453,10 @@ class DirectHciTest(GdBaseTestClass):
                     hci_packets.Enable.ENABLED, [enabled_set]))
 
             # LeConnectionComplete
-            cert_hci_event_stream.assert_event_occurs(
+            cert_hci_event_asserts.assert_event_occurs(
                 lambda packet: b'\x3e\x13\x01\x00' in packet.payload,
                 timeout=timedelta(seconds=20))
-            le_event_stream.assert_event_occurs(
+            le_event_asserts.assert_event_occurs(
                 lambda packet: b'\x3e\x13\x01\x00' in packet.event)
 
     def test_connection_dut_connects(self):
@@ -434,10 +465,15 @@ class DirectHciTest(GdBaseTestClass):
             hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
         self.enqueue_hci_command(
             hci_packets.WritePageTimeoutBuilder(0x4000), True)
-        with EventStream(self.dut.hci.FetchEvents(empty_proto.Empty())) as hci_event_stream, \
-            EventStream(self.dut.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
-            EventStream(self.cert.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
-            EventStream(self.cert.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
+        with EventCallbackStream(self.device_under_test.hci.FetchEvents(empty_proto.Empty())) as hci_event_stream, \
+            EventCallbackStream(self.device_under_test.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
+            EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
+            EventCallbackStream(self.cert_device.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
+
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
+            hci_event_asserts = EventAsserts(hci_event_stream)
+            acl_data_asserts = EventAsserts(acl_data_stream)
+            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
 
             address = hci_packets.Address()
 
@@ -457,7 +493,8 @@ class DirectHciTest(GdBaseTestClass):
             # CERT Enables scans and gets its address
             self.send_hal_hci_command(hci_packets.ReadBdAddrBuilder())
 
-            cert_hci_event_stream.assert_event_occurs(get_address_from_complete)
+            cert_hci_event_asserts.assert_event_occurs(
+                get_address_from_complete)
             self.send_hal_hci_command(
                 hci_packets.WriteScanEnableBuilder(
                     hci_packets.ScanEnable.INQUIRY_AND_PAGE_SCAN))
@@ -487,7 +524,7 @@ class DirectHciTest(GdBaseTestClass):
                 return False
 
             # Cert Accepts
-            cert_hci_event_stream.assert_event_occurs(
+            cert_hci_event_asserts.assert_event_occurs(
                 get_connect_request, timeout=timedelta(seconds=20))
             self.send_hal_hci_command(
                 hci_packets.AcceptConnectionRequestBuilder(
@@ -515,10 +552,10 @@ class DirectHciTest(GdBaseTestClass):
                 packet_bytes = packet.payload
                 return get_handle(packet_bytes)
 
-            cert_hci_event_stream.assert_event_occurs(payload_handle)
+            cert_hci_event_asserts.assert_event_occurs(payload_handle)
             cert_handle = conn_handle
             conn_handle = 0xfff
-            hci_event_stream.assert_event_occurs(event_handle)
+            hci_event_asserts.assert_event_occurs(event_handle)
             dut_handle = conn_handle
             if dut_handle == 0xfff:
                 logging.warning("Failed to get the DUT handle")
@@ -539,9 +576,9 @@ class DirectHciTest(GdBaseTestClass):
                 hci_packets.BroadcastFlag.POINT_TO_POINT,
                 bytes(b'Just SomeMoreAclData'))
 
-            cert_acl_data_stream.assert_event_occurs(
+            cert_acl_data_asserts.assert_event_occurs(
                 lambda packet: b'SomeAclData' in packet.payload)
-            acl_data_stream.assert_event_occurs(
+            acl_data_asserts.assert_event_occurs(
                 lambda packet: b'SomeMoreAclData' in packet.data)
 
     def test_connection_cert_connects(self):
@@ -550,10 +587,15 @@ class DirectHciTest(GdBaseTestClass):
             hci_packets.EventCode.CONNECTION_PACKET_TYPE_CHANGED)
         self.register_for_event(hci_packets.EventCode.CONNECTION_REQUEST)
         self.send_hal_hci_command(hci_packets.WritePageTimeoutBuilder(0x4000))
-        with EventStream(self.dut.hci.FetchEvents(empty_proto.Empty())) as hci_event_stream, \
-            EventStream(self.dut.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
-            EventStream(self.cert.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
-            EventStream(self.cert.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
+        with EventCallbackStream(self.device_under_test.hci.FetchEvents(empty_proto.Empty())) as hci_event_stream, \
+            EventCallbackStream(self.device_under_test.hci.FetchAclPackets(empty_proto.Empty())) as acl_data_stream, \
+            EventCallbackStream(self.cert_device.hal.FetchHciEvent(empty_proto.Empty())) as cert_hci_event_stream, \
+            EventCallbackStream(self.cert_device.hal.FetchHciAcl(empty_proto.Empty())) as cert_acl_data_stream:
+
+            hci_event_asserts = EventAsserts(hci_event_stream)
+            cert_hci_event_asserts = EventAsserts(cert_hci_event_stream)
+            acl_data_asserts = EventAsserts(acl_data_stream)
+            cert_acl_data_asserts = EventAsserts(cert_acl_data_stream)
 
             address = hci_packets.Address()
 
@@ -576,7 +618,7 @@ class DirectHciTest(GdBaseTestClass):
                     hci_packets.ScanEnable.INQUIRY_AND_PAGE_SCAN), True)
             self.enqueue_hci_command(hci_packets.ReadBdAddrBuilder(), True)
 
-            hci_event_stream.assert_event_occurs(get_address_from_complete)
+            hci_event_asserts.assert_event_occurs(get_address_from_complete)
 
             # Cert Connects
             self.send_hal_hci_command(
@@ -601,7 +643,7 @@ class DirectHciTest(GdBaseTestClass):
                     return True
                 return False
 
-            hci_event_stream.assert_event_occurs(
+            hci_event_asserts.assert_event_occurs(
                 get_connect_request, timeout=timedelta(seconds=20))
             self.enqueue_hci_command(
                 hci_packets.AcceptConnectionRequestBuilder(
@@ -630,10 +672,10 @@ class DirectHciTest(GdBaseTestClass):
                 packet_bytes = packet.payload
                 return get_handle(packet_bytes)
 
-            cert_hci_event_stream.assert_event_occurs(payload_handle)
+            cert_hci_event_asserts.assert_event_occurs(payload_handle)
             cert_handle = conn_handle
             conn_handle = 0xfff
-            hci_event_stream.assert_event_occurs(event_handle)
+            hci_event_asserts.assert_event_occurs(event_handle)
             dut_handle = conn_handle
             if dut_handle == 0xfff:
                 logging.warning("Failed to get the DUT handle")
@@ -654,7 +696,7 @@ class DirectHciTest(GdBaseTestClass):
                 hci_packets.BroadcastFlag.POINT_TO_POINT,
                 bytes(b'This is just SomeMoreAclData'))
 
-            cert_acl_data_stream.assert_event_occurs(
+            cert_acl_data_asserts.assert_event_occurs(
                 lambda packet: b'SomeAclData' in packet.payload)
-            acl_data_stream.assert_event_occurs(
+            acl_data_asserts.assert_event_occurs(
                 lambda packet: b'SomeMoreAclData' in packet.data)
