@@ -42,7 +42,7 @@ class DynamicChannel {
     ASSERT(l2cap_handler_ != nullptr);
   }
 
-  hci::AddressWithType GetDevice() const;
+  hci::Address GetDevice() const;
 
   /**
    * Register close callback. If close callback is registered, when a channel is closed, the channel's resource will
