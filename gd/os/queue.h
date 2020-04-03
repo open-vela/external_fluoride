@@ -106,23 +106,17 @@ class EnqueueBuffer {
  public:
   EnqueueBuffer(IQueueEnqueue<T>* queue) : queue_(queue) {}
 
-  ~EnqueueBuffer() {
-    if (enqueue_registered_.exchange(false)) {
-      queue_->UnregisterEnqueue();
-    }
-  }
-
   void Enqueue(std::unique_ptr<T> t, os::Handler* handler) {
     std::lock_guard<std::mutex> lock(mutex_);
     buffer_.push(std::move(t));
-    if (!enqueue_registered_.exchange(true)) {
+    if (buffer_.size() == 1) {
       queue_->RegisterEnqueue(handler, common::Bind(&EnqueueBuffer<T>::enqueue_callback, common::Unretained(this)));
     }
   }
 
   void Clear() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (enqueue_registered_.exchange(false)) {
+    if (!buffer_.empty()) {
       queue_->UnregisterEnqueue();
       std::queue<std::unique_ptr<T>> empty;
       std::swap(buffer_, empty);
@@ -134,7 +128,7 @@ class EnqueueBuffer {
     std::lock_guard<std::mutex> lock(mutex_);
     std::unique_ptr<T> enqueued_t = std::move(buffer_.front());
     buffer_.pop();
-    if (buffer_.empty() && enqueue_registered_.exchange(false)) {
+    if (buffer_.empty()) {
       queue_->UnregisterEnqueue();
     }
     return enqueued_t;
@@ -142,7 +136,6 @@ class EnqueueBuffer {
 
   mutable std::mutex mutex_;
   IQueueEnqueue<T>* queue_;
-  std::atomic_bool enqueue_registered_ = false;
   std::queue<std::unique_ptr<T>> buffer_;
 };
 

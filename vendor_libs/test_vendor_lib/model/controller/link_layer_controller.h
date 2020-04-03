@@ -124,15 +124,12 @@ class LinkLayerController {
 
   void RegisterTaskCancel(std::function<void(AsyncTaskId)> cancel);
   void Reset();
+  void AddControllerEvent(std::chrono::milliseconds delay, const TaskCallback& task);
 
+  void PageScan();
   void Connections();
 
   void LeAdvertising();
-
-  void LeConnectionUpdateComplete(
-      bluetooth::hci::LeConnectionUpdateView connection_update_view);
-  ErrorCode LeConnectionUpdate(
-      bluetooth::hci::LeConnectionUpdateView connection_update_view);
 
   void HandleLeConnection(AddressWithType addr, AddressWithType own_addr,
                           uint8_t role, uint16_t connection_interval,
@@ -365,7 +362,7 @@ class LinkLayerController {
   SecurityManager security_manager_{10};
   std::chrono::steady_clock::time_point last_inquiry_;
   model::packets::InquiryType inquiry_mode_;
-  AsyncTaskId inquiry_timer_task_id_ = kInvalidTaskId;
+  Inquiry::InquiryState inquiry_state_;
   uint64_t inquiry_lap_;
   uint8_t inquiry_max_responses_;
 
