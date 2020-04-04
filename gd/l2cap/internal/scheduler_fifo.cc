@@ -30,15 +30,12 @@ Fifo::Fifo(DataPipelineManager* data_pipeline_manager, LowerQueueUpEnd* link_que
   ASSERT(link_queue_up_end_ != nullptr && handler_ != nullptr);
 }
 
-// Invoked from some external Handler context
 Fifo::~Fifo() {
-  // TODO(hsz): notify Sender don't send callback to me
-  if (link_queue_enqueue_registered_.exchange(false)) {
+  if (link_queue_enqueue_registered_) {
     link_queue_up_end_->UnregisterEnqueue();
   }
 }
 
-// Invoked within L2CAP Handler context
 void Fifo::OnPacketsReady(Cid cid, int number_packets) {
   if (number_packets == 0) {
     return;
@@ -47,7 +44,6 @@ void Fifo::OnPacketsReady(Cid cid, int number_packets) {
   try_register_link_queue_enqueue();
 }
 
-// Invoked from some external Queue Reactable context
 std::unique_ptr<Fifo::UpperDequeue> Fifo::link_queue_enqueue_callback() {
   ASSERT(!next_to_dequeue_and_num_packets.empty());
   auto& channel_id_and_number_packets = next_to_dequeue_and_num_packets.front();
@@ -59,18 +55,20 @@ std::unique_ptr<Fifo::UpperDequeue> Fifo::link_queue_enqueue_callback() {
   auto packet = data_pipeline_manager_->GetDataController(channel_id)->GetNextPacket();
 
   data_pipeline_manager_->OnPacketSent(channel_id);
-  if (next_to_dequeue_and_num_packets.empty() && link_queue_enqueue_registered_.exchange(false)) {
+  if (next_to_dequeue_and_num_packets.empty()) {
     link_queue_up_end_->UnregisterEnqueue();
+    link_queue_enqueue_registered_ = false;
   }
   return packet;
 }
 
 void Fifo::try_register_link_queue_enqueue() {
-  if (link_queue_enqueue_registered_.exchange(true)) {
+  if (link_queue_enqueue_registered_) {
     return;
   }
   link_queue_up_end_->RegisterEnqueue(handler_,
                                       common::Bind(&Fifo::link_queue_enqueue_callback, common::Unretained(this)));
+  link_queue_enqueue_registered_ = true;
 }
 
 }  // namespace internal
