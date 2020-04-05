@@ -28,11 +28,6 @@
 #include "os/handler.h"
 
 namespace bluetooth {
-
-namespace security {
-class SecurityModule;
-}
-
 namespace hci {
 
 class AclManager;
@@ -154,8 +149,8 @@ class AclConnection {
 
   // LE ACL Method
   virtual bool LeConnectionUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max, uint16_t conn_latency,
-                                  uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length,
-                                  common::OnceCallback<void(ErrorCode)> done_callback, os::Handler* handler);
+                                  uint16_t supervision_timeout, common::OnceCallback<void(ErrorCode)> done_callback,
+                                  os::Handler* handler);
 
   // Ask AclManager to clean me up. Must invoke after on_disconnect is called
   virtual void Finish();
@@ -243,9 +238,6 @@ class AclManager : public Module {
   virtual void SwitchRole(Address address, Role role);
   virtual void ReadDefaultLinkPolicySettings();
   virtual void WriteDefaultLinkPolicySettings(uint16_t default_link_policy_settings);
-
-  // In order to avoid circular dependency use setter rather than module dependency.
-  virtual void SetSecurityModule(security::SecurityModule* security_module);
 
   static const ModuleFactory Factory;
 

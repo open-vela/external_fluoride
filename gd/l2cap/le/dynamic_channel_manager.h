@@ -50,8 +50,7 @@ class DynamicChannelManager {
   struct ConnectionResult {
     ConnectionResultCode connection_result_code = ConnectionResultCode::SUCCESS;
     hci::ErrorCode hci_error = hci::ErrorCode::SUCCESS;
-    LeCreditBasedConnectionResponseResult l2cap_connection_response_result =
-        LeCreditBasedConnectionResponseResult::SUCCESS;
+    ConnectionResponseResult l2cap_connection_response_result = ConnectionResponseResult::SUCCESS;
   };
   /**
    * OnConnectionFailureCallback(std::string failure_reason);
