@@ -110,10 +110,6 @@ Cid FixedChannelImpl::GetRemoteCid() const {
   return cid_;
 }
 
-LinkOptions* FixedChannelImpl::GetLinkOptions() {
-  return link_->GetLinkOptions();
-}
-
 }  // namespace internal
 }  // namespace le
 }  // namespace l2cap
