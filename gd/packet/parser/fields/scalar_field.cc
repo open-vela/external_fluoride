@@ -99,7 +99,7 @@ void ScalarField::GenGetter(std::ostream& s, Size start_offset, Size end_offset)
   s << "ASSERT(was_validated_);";
   s << "auto to_bound = begin();";
   int num_leading_bits = GenBounds(s, start_offset, end_offset, GetSize());
-  s << GetDataType() << " " << GetName() << "_value{};";
+  s << GetDataType() << " " << GetName() << "_value;";
   s << GetDataType() << "* " << GetName() << "_ptr = &" << GetName() << "_value;";
   GenExtractor(s, num_leading_bits, false);
   s << "return " << GetName() << "_value;";
@@ -128,8 +128,4 @@ void ScalarField::GenInserter(std::ostream& s) const {
 
 void ScalarField::GenValidator(std::ostream&) const {
   // Do nothing
-}
-
-void ScalarField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
-  s << "+" << accessor;
 }
