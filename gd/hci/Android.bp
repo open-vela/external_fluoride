@@ -11,6 +11,7 @@ filegroup {
         "hci_layer.cc",
         "le_advertising_manager.cc",
         "le_scanning_manager.cc",
+        "round_robin_scheduler.cc",
     ],
 }
 
@@ -30,6 +31,7 @@ filegroup {
         "hci_packets_test.cc",
         "le_advertising_manager_test.cc",
         "le_scanning_manager_test.cc",
+        "round_robin_scheduler_test.cc",
     ],
 }
 
@@ -51,3 +53,13 @@ filegroup {
         "hci_packets_fuzz_test.cc",
     ],
 }
+
+filegroup {
+    name: "BluetoothHciFuzzHelperSources",
+    srcs: [
+        "fuzz/status_vs_complete_commands.cc",
+        "fuzz/hci_layer_fuzz_client.cc",
+        "fuzz/fuzz_hci_layer.cc",
+    ],
+}
+
