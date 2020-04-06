@@ -19,7 +19,6 @@ from bluetooth_packets_python3 import hci_packets
 from bluetooth_packets_python3.hci_packets import EventCode
 from bluetooth_packets_python3 import l2cap_packets
 from bluetooth_packets_python3.l2cap_packets import CommandCode, LeCommandCode
-from bluetooth_packets_python3.l2cap_packets import ConfigurationResponseResult
 from bluetooth_packets_python3.l2cap_packets import ConnectionResponseResult
 from bluetooth_packets_python3.l2cap_packets import InformationRequestInfoType
 from bluetooth_packets_python3.l2cap_packets import LeCreditBasedConnectionResponseResult
@@ -118,16 +117,12 @@ class L2capMatchers(object):
         return lambda packet: L2capMatchers._is_matching_connection_response(packet, scid)
 
     @staticmethod
-    def ConfigurationResponse(result=ConfigurationResponseResult.SUCCESS):
-        return lambda packet: L2capMatchers._is_matching_configuration_response(packet, result)
+    def ConfigurationResponse():
+        return lambda packet: L2capMatchers._is_control_frame_with_code(packet, CommandCode.CONFIGURATION_RESPONSE)
 
     @staticmethod
     def ConfigurationRequest():
         return lambda packet: L2capMatchers._is_control_frame_with_code(packet, CommandCode.CONFIGURATION_REQUEST)
-
-    @staticmethod
-    def ConfigurationRequestWithErtm():
-        return lambda packet: L2capMatchers._is_matching_configuration_request_with_ertm(packet)
 
     @staticmethod
     def DisconnectionRequest(scid, dcid):
@@ -419,27 +414,6 @@ class L2capMatchers(object):
         return response.GetSourceCid() == scid and response.GetResult(
         ) == ConnectionResponseResult.SUCCESS and response.GetDestinationCid(
         ) != 0
-
-    @staticmethod
-    def _is_matching_configuration_request_with_ertm(packet):
-        frame = L2capMatchers.control_frame_with_code(
-            packet, CommandCode.CONFIGURATION_REQUEST)
-        if frame is None:
-            return False
-        request = l2cap_packets.ConfigurationRequestView(frame)
-        config_bytes = request.GetBytes()
-        # TODO(b/153189503): Use packet struct parser.
-        return b"\x04\x09\x03" in config_bytes
-
-    @staticmethod
-    def _is_matching_configuration_response(
-            packet, result=ConfigurationResponseResult.SUCCESS):
-        frame = L2capMatchers.control_frame_with_code(
-            packet, CommandCode.CONFIGURATION_RESPONSE)
-        if frame is None:
-            return False
-        response = l2cap_packets.ConfigurationResponseView(frame)
-        return response.GetResult() == result
 
     @staticmethod
     def _is_matching_disconnection_request(packet, scid, dcid):
