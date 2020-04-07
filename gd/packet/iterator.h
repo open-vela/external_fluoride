@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <forward_list>
+#include <memory>
 
 #include "packet/view.h"
 
@@ -60,11 +61,13 @@ class Iterator : public std::iterator<std::random_access_iterator_tag, uint8_t> 
 
   size_t NumBytesRemaining() const;
 
+  Iterator Subrange(size_t index, size_t length) const;
+
   // Get the next sizeof(FixedWidthPODType) bytes and return the filled type
   template <typename FixedWidthPODType>
   FixedWidthPODType extract() {
-    static_assert(std::is_pod<FixedWidthPODType>::value, "Iterator::extract requires an fixed type.");
-    FixedWidthPODType extracted_value;
+    static_assert(std::is_pod<FixedWidthPODType>::value, "Iterator::extract requires a fixed-width type.");
+    FixedWidthPODType extracted_value{};
     uint8_t* value_ptr = (uint8_t*)&extracted_value;
 
     for (size_t i = 0; i < sizeof(FixedWidthPODType); i++) {
@@ -77,7 +80,8 @@ class Iterator : public std::iterator<std::random_access_iterator_tag, uint8_t> 
  private:
   std::forward_list<View> data_;
   size_t index_;
-  size_t length_;
+  size_t begin_;
+  size_t end_;
 };
 
 }  // namespace packet
