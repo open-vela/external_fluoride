@@ -243,9 +243,7 @@ static void bta_av_api_enable(tBTA_AV_DATA* p_data) {
   enable.features = bta_av_cb.features;
 
   /* Register for SCO change event */
-  if (!(bta_av_cb.features & BTA_AV_FEAT_NO_SCO_SSPD)) {
-    bta_sys_sco_register(bta_av_sco_chg_cback);
-  }
+  bta_sys_sco_register(bta_av_sco_chg_cback);
 
   /* call callback with enable event */
   tBTA_AV bta_av_data;
@@ -262,7 +260,7 @@ static void bta_av_api_enable(tBTA_AV_DATA* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-static tBTA_AV_SCB* bta_av_addr_to_scb(const RawAddress& bd_addr) {
+tBTA_AV_SCB* bta_av_addr_to_scb(const RawAddress& bd_addr) {
   tBTA_AV_SCB* p_scb = NULL;
   int xx;
 
@@ -429,7 +427,7 @@ void bta_av_conn_cback(UNUSED_ATTR uint8_t handle, const RawAddress& bd_addr,
     p_msg->bd_addr = bd_addr;
     p_msg->scb_index = scb_index;
     if (p_scb) {
-      APPL_TRACE_DEBUG("%s: scb hndl x%x, role x%x", __func__, p_scb->hndl,
+      APPL_TRACE_DEBUG("%s: bta_handle x%x, role x%x", __func__, p_scb->hndl,
                        p_scb->role);
     }
     LOG_INFO(LOG_TAG, "%s: conn_cback bd_addr: %s", __func__,
@@ -635,6 +633,9 @@ static void bta_av_api_register(tBTA_AV_DATA* p_data) {
     for (int i = codec_index_min; i < codec_index_max; i++) {
       btav_a2dp_codec_index_t codec_index =
           static_cast<btav_a2dp_codec_index_t>(i);
+      if (!bta_av_co_is_supported_codec(codec_index)) {
+        continue;
+      }
       if (!(*bta_av_a2dp_cos.init)(codec_index, &avdtp_stream_config.cfg)) {
         continue;
       }
@@ -909,8 +910,8 @@ static void bta_av_sys_rs_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
       tBTA_AV_ROLE_RES* p_buf =
           (tBTA_AV_ROLE_RES*)osi_malloc(sizeof(tBTA_AV_ROLE_RES));
       APPL_TRACE_DEBUG(
-          "%s: peer %s found: new_role:%d, hci_status:0x%x hndl:0x%x", __func__,
-          peer_addr.ToString().c_str(), id, app_id, p_scb->hndl);
+          "%s: peer %s found: new_role:%d, hci_status:0x%x bta_handle:0x%x",
+          __func__, peer_addr.ToString().c_str(), id, app_id, p_scb->hndl);
       /*
       if ((id != BTM_ROLE_MASTER) && (app_id != HCI_SUCCESS))
       {
@@ -942,8 +943,8 @@ static void bta_av_sys_rs_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
       p_scb = bta_av_cb.p_scb[bta_av_cb.rs_idx - 1];
     }
     if (p_scb && p_scb->q_tag == BTA_AV_Q_TAG_OPEN) {
-      APPL_TRACE_DEBUG("%s: peer %s rs_idx:%d, hndl:0x%x q_tag:%d", __func__,
-                       p_scb->PeerAddress().ToString().c_str(),
+      APPL_TRACE_DEBUG("%s: peer %s rs_idx:%d, bta_handle:0x%x q_tag:%d",
+                       __func__, p_scb->PeerAddress().ToString().c_str(),
                        bta_av_cb.rs_idx, p_scb->hndl, p_scb->q_tag);
 
       if (HCI_SUCCESS == app_id || HCI_ERR_NO_CONNECTION == app_id) {
@@ -983,16 +984,20 @@ static void bta_av_sco_chg_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
   int i;
   tBTA_AV_API_STOP stop;
 
-  APPL_TRACE_DEBUG("%s: id:%d status:%d", __func__, id, status);
+  LOG(INFO) << __func__ << ": status=" << +status << ", num_links=" << +id;
   if (id) {
     bta_av_cb.sco_occupied = true;
+
+    if (bta_av_cb.features & BTA_AV_FEAT_NO_SCO_SSPD) {
+      return;
+    }
 
     /* either BTA_SYS_SCO_OPEN or BTA_SYS_SCO_CLOSE with remaining active SCO */
     for (i = 0; i < BTA_AV_NUM_STRS; i++) {
       p_scb = bta_av_cb.p_scb[i];
 
       if (p_scb && p_scb->co_started && (!p_scb->sco_suspend)) {
-        APPL_TRACE_DEBUG("%s: suspending scb:%d", __func__, i);
+        VLOG(1) << __func__ << ": suspending scb:" << i;
         /* scb is used and started, not suspended automatically */
         p_scb->sco_suspend = true;
         stop.flush = false;
@@ -1004,12 +1009,16 @@ static void bta_av_sco_chg_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
   } else {
     bta_av_cb.sco_occupied = false;
 
+    if (bta_av_cb.features & BTA_AV_FEAT_NO_SCO_SSPD) {
+      return;
+    }
+
     for (i = 0; i < BTA_AV_NUM_STRS; i++) {
       p_scb = bta_av_cb.p_scb[i];
 
       if (p_scb && p_scb->sco_suspend) /* scb is used and suspended for SCO */
       {
-        APPL_TRACE_DEBUG("%s: starting scb:%d", __func__, i);
+        VLOG(1) << __func__ << ": starting scb:" << i;
         bta_av_ssm_execute(p_scb, BTA_AV_AP_START_EVT, NULL);
       }
     }
@@ -1085,11 +1094,11 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
   bool is_ok = true;
 
   if (BTM_GetRole(p_scb->PeerAddress(), &role) == BTM_SUCCESS) {
-    LOG_INFO(
-        LOG_TAG,
-        "%s: peer %s hndl:0x%x role:%d conn_audio:0x%x bits:%d features:0x%x",
-        __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->hndl, role,
-        bta_av_cb.conn_audio, bits, bta_av_cb.features);
+    LOG_INFO(LOG_TAG,
+             "%s: peer %s bta_handle:0x%x role:%d conn_audio:0x%x bits:%d "
+             "features:0x%x",
+             __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->hndl,
+             role, bta_av_cb.conn_audio, bits, bta_av_cb.features);
     if (BTM_ROLE_MASTER != role &&
         (A2DP_BitsSet(bta_av_cb.conn_audio) > bits ||
          (bta_av_cb.features & BTA_AV_FEAT_MASTER))) {
@@ -1105,8 +1114,10 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
                   "%s: peer %s BTM_SwitchRole(BTM_ROLE_MASTER) error: %d",
                   __func__, p_scb->PeerAddress().ToString().c_str(), status);
       }
-      is_ok = false;
-      p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
+      if (status != BTM_MODE_UNSUPPORTED && status != BTM_DEV_BLACKLISTED) {
+        is_ok = false;
+        p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
+      }
     }
   }
 
@@ -1215,7 +1226,7 @@ bool bta_av_hdl_event(BT_HDR* p_msg) {
     /* state machine events */
     bta_av_sm_execute(&bta_av_cb, p_msg->event, (tBTA_AV_DATA*)p_msg);
   } else {
-    APPL_TRACE_VERBOSE("%s: handle=0x%x", __func__, p_msg->layer_specific);
+    APPL_TRACE_VERBOSE("%s: bta_handle=0x%x", __func__, p_msg->layer_specific);
     /* stream state machine events */
     bta_av_ssm_execute(bta_av_hndl_to_scb(p_msg->layer_specific), p_msg->event,
                        (tBTA_AV_DATA*)p_msg);
@@ -1343,6 +1354,10 @@ const char* bta_av_evt_code(uint16_t evt_code) {
       return "AVDT_DELAY_RPT";
     case BTA_AV_ACP_CONNECT_EVT:
       return "ACP_CONNECT";
+    case BTA_AV_API_OFFLOAD_START_EVT:
+      return "OFFLOAD_START";
+    case BTA_AV_API_OFFLOAD_START_RSP_EVT:
+      return "OFFLOAD_START_RSP";
 
     case BTA_AV_API_ENABLE_EVT:
       return "API_ENABLE";
@@ -1382,6 +1397,8 @@ const char* bta_av_evt_code(uint16_t evt_code) {
 }
 
 void bta_debug_av_dump(int fd) {
+  if (appl_trace_level < BT_TRACE_LEVEL_DEBUG) return;
+
   dprintf(fd, "\nBTA AV State:\n");
   dprintf(fd, "  State Machine State: %s\n", bta_av_st_code(bta_av_cb.state));
   dprintf(fd, "  Link signalling timer: %s\n",
@@ -1410,6 +1427,9 @@ void bta_debug_av_dump(int fd) {
   for (size_t i = 0; i < sizeof(bta_av_cb.lcb) / sizeof(bta_av_cb.lcb[0]);
        i++) {
     const tBTA_AV_LCB& lcb = bta_av_cb.lcb[i];
+    if (lcb.addr.IsEmpty()) {
+      continue;
+    }
     dprintf(fd, "\n  Link control block: %zu peer: %s\n", i,
             lcb.addr.ToString().c_str());
     dprintf(fd, "    Connected stream handle mask: 0x%x\n", lcb.conn_msk);
@@ -1420,12 +1440,18 @@ void bta_debug_av_dump(int fd) {
     if (p_scb == nullptr) {
       continue;
     }
+    if (p_scb->PeerAddress().IsEmpty()) {
+      continue;
+    }
     dprintf(fd, "\n  BTA ID: %zu peer: %s\n", i,
             p_scb->PeerAddress().ToString().c_str());
     dprintf(fd, "    SDP discovery started: %s\n",
             p_scb->sdp_discovery_started ? "true" : "false");
     for (size_t j = 0; j < BTAV_A2DP_CODEC_INDEX_MAX; j++) {
       const tBTA_AV_SEP& sep = p_scb->seps[j];
+      if (sep.av_handle == 0) {
+        continue;
+      }
       dprintf(fd, "    SEP ID: %zu\n", j);
       dprintf(fd, "      SEP AVDTP handle: %d\n", sep.av_handle);
       dprintf(fd, "      Local SEP type: %d\n", sep.tsep);
