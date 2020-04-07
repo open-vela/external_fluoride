@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,12 +36,10 @@ typedef uint8_t tBTM_BLE_CHNL_MAP[CHNL_MAP_LEN];
 #define BTM_BLE_NON_CONNECT_EVT 0x03
 /* Connectable low duty cycle directed advertising  */
 #define BTM_BLE_CONNECT_LO_DUTY_DIR_EVT 0x04
-/* 0x00 - 0x04 can be received on adv event type */
-#define BTM_BLE_ADV_IND_EVT  0x00
-#define BTM_BLE_ADV_DIRECT_IND_EVT  0x01
-#define BTM_BLE_ADV_SCAN_IND_EVT  0x02
-#define BTM_BLE_ADV_NONCONN_IND_EVT  0x03
+/* 0x00 - 0x05 can be received on adv event type */
 #define BTM_BLE_SCAN_RSP_EVT 0x04
+#define BTM_BLE_SCAN_REQ_EVT 0x05
+#define BTM_BLE_UNKNOWN_EVT 0xff
 
 #define BTM_BLE_UNKNOWN_EVT 0xff
 
@@ -137,7 +135,7 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_CONN_SUP_TOUT_MAX 0x0C80
 /* use this value when a specific value not to be overwritten */
 #define BTM_BLE_CONN_PARAM_UNDEF 0xffff
-#define BTM_BLE_SCAN_PARAM_UNDEF 0xffff
+#define BTM_BLE_SCAN_PARAM_UNDEF 0xffffffff
 
 /* default connection parameters if not configured, use GAP recommended value
  * for auto/selective connection */
@@ -199,10 +197,11 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_CONN_INT_MIN_LIMIT 0x0009
 #endif
 
-/* minimum acceptable connection interval when there is bonded Hearing Aid
- * device */
-#ifndef BTM_BLE_CONN_INT_MIN_HEARINGAID
-#define BTM_BLE_CONN_INT_MIN_HEARINGAID 0x0010
+#define BTM_BLE_DIR_CONN_FALLBACK_UNDIR 1
+#define BTM_BLE_DIR_CONN_FALLBACK_NO_ADV 2
+
+#ifndef BTM_BLE_DIR_CONN_FALLBACK
+#define BTM_BLE_DIR_CONN_FALLBACK BTM_BLE_DIR_CONN_FALLBACK_UNDIR
 #endif
 
 #define BTM_CMAC_TLEN_SIZE 8 /* 64 bits */
@@ -274,7 +273,7 @@ typedef struct {
   uint8_t status;
   uint8_t param_len;
   uint16_t opcode;
-  uint8_t param_buf[OCTET16_LEN];
+  uint8_t param_buf[BT_OCTET16_LEN];
 } tBTM_RAND_ENC;
 
 /* General callback function for notifying an application that a synchronous
@@ -330,8 +329,15 @@ typedef void(tBTM_RAND_ENC_CB)(tBTM_RAND_ENC* p1);
 /*  Preferred maximum number of microseconds that the local Controller
     should use to transmit a single Link Layer Data Channel PDU. */
 #define BTM_BLE_DATA_TX_TIME_MIN 0x0148
-#define BTM_BLE_DATA_TX_TIME_MAX_LEGACY  0x0848
-#define BTM_BLE_DATA_TX_TIME_MAX         0x4290
+#define BTM_BLE_DATA_TX_TIME_MAX 0x0848
+
+/* adv tx power level */
+#define BTM_BLE_ADV_TX_POWER_MIN 0   /* minimum tx power */
+#define BTM_BLE_ADV_TX_POWER_LOW 1   /* low tx power     */
+#define BTM_BLE_ADV_TX_POWER_MID 2   /* middle tx power  */
+#define BTM_BLE_ADV_TX_POWER_UPPER 3 /* upper tx power   */
+#define BTM_BLE_ADV_TX_POWER_MAX 4   /* maximum tx power */
+typedef uint8_t tBTM_BLE_ADV_TX_POWER;
 
 /* adv tx power in dBm */
 typedef struct {
@@ -453,6 +459,12 @@ using tBTM_BLE_PF_STATUS_CBACK =
 using tBTM_BLE_PF_PARAM_CB = base::Callback<void(
     uint8_t /* avbl_space */, uint8_t /* action */, uint8_t /* status */)>;
 
+typedef union {
+  uint16_t uuid16_mask;
+  uint32_t uuid32_mask;
+  uint8_t uuid128_mask[LEN_UUID_128];
+} tBTM_BLE_PF_COND_MASK;
+
 /* per device filter + one generic filter indexed by 0 */
 #define BTM_BLE_MAX_FILTER_COUNTER (BTM_BLE_MAX_ADDR_FILTER + 1)
 
@@ -462,7 +474,7 @@ using tBTM_BLE_PF_PARAM_CB = base::Callback<void(
 
 typedef struct {
   bool in_use;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint8_t pf_counter[BTM_BLE_PF_TYPE_MAX]; /* number of filter indexed by
                                               tBTM_BLE_PF_COND_TYPE */
 } tBTM_BLE_PF_COUNT;
@@ -489,6 +501,9 @@ typedef uint8_t BTM_BLE_ADV_STATE;
 typedef uint8_t BTM_BLE_ADV_INFO_PRESENT;
 typedef uint8_t BTM_BLE_RSSI_VALUE;
 typedef uint16_t BTM_BLE_ADV_INFO_TIMESTAMP;
+
+enum { BTM_BLE_CONN_NONE, BTM_BLE_CONN_AUTO };
+typedef uint8_t tBTM_BLE_CONN_TYPE;
 
 #define ADV_INFO_PRESENT 0x00
 #define NO_ADV_INFO_PRESENT 0x01
@@ -526,8 +541,19 @@ typedef struct {
   tBTM_BLE_ENERGY_INFO_CBACK* p_ener_cback;
 } tBTM_BLE_ENERGY_INFO_CB;
 
+typedef bool(tBTM_BLE_SEL_CBACK)(BD_ADDR random_bda, uint8_t* p_remote_name);
 typedef void(tBTM_BLE_CTRL_FEATURES_CBACK)(tBTM_STATUS status);
 
+/* callback function for SMP signing algorithm, signed data in little endian
+ * order with tlen bits long */
+typedef void(tBTM_BLE_SIGN_CBACK)(void* p_ref_data, uint8_t* p_signing_data);
+typedef void(tBTM_BLE_VERIFY_CBACK)(void* p_ref_data, bool match);
+/* random address set complete callback */
+typedef void(tBTM_BLE_RANDOM_SET_CBACK)(BD_ADDR random_bda);
+
+typedef void(tBTM_BLE_SCAN_REQ_CBACK)(BD_ADDR remote_bda,
+                                      tBLE_ADDR_TYPE addr_type,
+                                      uint8_t adv_evt);
 typedef void (*tBLE_SCAN_PARAM_SETUP_CBACK)(tGATT_IF client_if,
                                             tBTM_STATUS status);
 
