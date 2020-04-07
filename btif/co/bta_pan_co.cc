@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -231,29 +231,6 @@ void bta_pan_co_tx_write(UNUSED_ATTR uint16_t handle,
                          UNUSED_ATTR uint8_t* p_data, UNUSED_ATTR uint16_t len,
                          UNUSED_ATTR bool ext, UNUSED_ATTR bool forward) {
   BTIF_TRACE_API("bta_pan_co_tx_write not used");
-}
-
-/*******************************************************************************
- *
- * Function         bta_pan_co_tx_writebuf
- *
- * Description      This function is called by PAN to send data to the phone
- *                  when the TX path is configured to use a push interface with
- *                  zero copy.  The phone must free the buffer using function
- *                  osi_free() when it is through processing the buffer.
- *
- *
- * Returns          true if flow enabled
- *
- ******************************************************************************/
-void bta_pan_co_tx_writebuf(UNUSED_ATTR uint16_t handle,
-                            UNUSED_ATTR uint8_t app_id,
-                            UNUSED_ATTR const RawAddress& src,
-                            UNUSED_ATTR const RawAddress& dst,
-                            UNUSED_ATTR uint16_t protocol,
-                            UNUSED_ATTR BT_HDR* p_buf, UNUSED_ATTR bool ext,
-                            UNUSED_ATTR bool forward) {
-  BTIF_TRACE_API("bta_pan_co_tx_writebuf not used");
 }
 
 /*******************************************************************************
