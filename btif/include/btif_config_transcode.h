@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,6 @@
 
 #pragma once
 
-#include "osi/include/config.h"
+typedef struct config_t config_t;
 
-std::unique_ptr<config_t> btif_config_transcode(const char* xml_filename);
+config_t* btif_config_transcode(const char* xml_filename);

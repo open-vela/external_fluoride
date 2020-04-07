@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
+ *  Copyright (C) 2016 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@
 #ifndef BLE_ADVERTISER_HCI_INTERFACE_H
 #define BLE_ADVERTISER_HCI_INTERFACE_H
 
+#include <base/bind.h>
 #include <vector>
 #include "stack/include/bt_types.h"
-
-#include <base/callback.h>
 
 /* This class is an abstraction of HCI commands used for managing
  * advertisements. Please see VSC HCI SPEC at

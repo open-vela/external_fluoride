@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <hardware/bt_gatt.h>
 #include <hardware/bt_pan.h>
 #include <hardware/bt_sock.h>
+#include <hardware/hardware.h>
 #include <signal.h>
 #include <time.h>
 #include <map>
