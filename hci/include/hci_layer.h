@@ -18,8 +18,8 @@
 
 #pragma once
 
-#include <base/callback.h>
-#include <base/location.h>
+#include <base/bind.h>
+#include <base/tracked_objects.h>
 #include <stdbool.h>
 
 #include "bt_types.h"
@@ -37,17 +37,15 @@ static const char HCI_MODULE[] = "hci_module";
 #define MSG_SUB_EVT_MASK 0x00FF /* eq. BT_SUB_EVT_MASK */
 
 /* Message event ID passed from Host/Controller lib to stack */
+#define MSG_HC_TO_STACK_HCI_ERR 0x1300      /* eq. BT_EVT_TO_BTU_HCIT_ERR */
 #define MSG_HC_TO_STACK_HCI_ACL 0x1100      /* eq. BT_EVT_TO_BTU_HCI_ACL */
 #define MSG_HC_TO_STACK_HCI_SCO 0x1200      /* eq. BT_EVT_TO_BTU_HCI_SCO */
-#define MSG_HC_TO_STACK_HCI_ERR 0x1300      /* eq. BT_EVT_TO_BTU_HCIT_ERR */
-#define MSG_HC_TO_STACK_HCI_ISO 0x1700      /* eq. BT_EVT_TO_BTU_HCI_ISO */
 #define MSG_HC_TO_STACK_HCI_EVT 0x1000      /* eq. BT_EVT_TO_BTU_HCI_EVT */
 #define MSG_HC_TO_STACK_L2C_SEG_XMIT 0x1900 /* BT_EVT_TO_BTU_L2C_SEG_XMIT */
 
 /* Message event ID passed from stack to vendor lib */
 #define MSG_STACK_TO_HC_HCI_ACL 0x2100 /* eq. BT_EVT_TO_LM_HCI_ACL */
 #define MSG_STACK_TO_HC_HCI_SCO 0x2200 /* eq. BT_EVT_TO_LM_HCI_SCO */
-#define MSG_STACK_TO_HC_HCI_ISO 0x2d00 /* eq. BT_EVT_TO_LM_HCI_ISO */
 #define MSG_STACK_TO_HC_HCI_CMD 0x2000 /* eq. BT_EVT_TO_LM_HCI_CMD */
 
 /* Local Bluetooth Controller ID for BR/EDR */
@@ -72,7 +70,8 @@ typedef void (*command_status_cb)(uint8_t status, BT_HDR* command,
 typedef struct hci_t {
   // Set the callback that the HCI layer uses to send data upwards
   void (*set_data_cb)(
-      base::Callback<void(const base::Location&, BT_HDR*)> send_data_cb);
+      base::Callback<void(const tracked_objects::Location&, BT_HDR*)>
+          send_data_cb);
 
   // Send a command through the HCI layer
   void (*transmit_command)(BT_HDR* command,
@@ -85,11 +84,6 @@ typedef struct hci_t {
   void (*transmit_downward)(uint16_t type, void* data);
 } hci_t;
 
-namespace bluetooth {
-namespace legacy {
-const hci_t* hci_layer_get_interface();
-}  // namespace legacy
-}  // namespace bluetooth
 const hci_t* hci_layer_get_interface();
 
 const hci_t* hci_layer_get_test_interface(
@@ -97,7 +91,7 @@ const hci_t* hci_layer_get_test_interface(
     const btsnoop_t* btsnoop_interface,
     const packet_fragmenter_t* packet_fragmenter_interface);
 
-void post_to_main_message_loop(const base::Location& from_here, BT_HDR* p_msg);
+void post_to_hci_message_loop(const tracked_objects::Location& from_here,
+                              BT_HDR* p_msg);
 
 void hci_layer_cleanup_interface();
-bool hci_is_root_inflammation_event_received();
