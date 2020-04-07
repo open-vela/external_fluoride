@@ -17,6 +17,7 @@
 #include "os/queue.h"
 
 #include <sys/eventfd.h>
+#include <atomic>
 #include <future>
 #include <unordered_map>
 
@@ -721,6 +722,68 @@ TEST_F(QueueTest, pass_smart_pointer_and_unregister) {
   future.wait();
 }
 
+std::unique_ptr<std::string> sleep_and_enqueue_callback(int* to_increase) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  (*to_increase)++;
+  return std::make_unique<std::string>("Hello");
+}
+
+TEST_F(QueueTest, unregister_enqueue_and_wait) {
+  Queue<std::string> queue(10);
+  int* indicator = new int(100);
+  queue.RegisterEnqueue(enqueue_handler_, common::Bind(&sleep_and_enqueue_callback, common::Unretained(indicator)));
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  queue.UnregisterEnqueue();
+  EXPECT_EQ(*indicator, 101);
+  delete indicator;
+}
+
+std::unique_ptr<std::string> sleep_and_enqueue_callback_and_unregister(int* to_increase, Queue<std::string>* queue,
+                                                                       std::atomic_bool* is_registered) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  (*to_increase)++;
+  if (is_registered->exchange(false)) {
+    queue->UnregisterEnqueue();
+  }
+  return std::make_unique<std::string>("Hello");
+}
+
+TEST_F(QueueTest, unregister_enqueue_and_wait_maybe_unregistered) {
+  Queue<std::string> queue(10);
+  int* indicator = new int(100);
+  std::atomic_bool is_registered = true;
+  queue.RegisterEnqueue(enqueue_handler_,
+                        common::Bind(&sleep_and_enqueue_callback_and_unregister, common::Unretained(indicator),
+                                     common::Unretained(&queue), common::Unretained(&is_registered)));
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  if (is_registered.exchange(false)) {
+    queue.UnregisterEnqueue();
+  }
+  EXPECT_EQ(*indicator, 101);
+  delete indicator;
+}
+
+void sleep_and_dequeue_callback(int* to_increase) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  (*to_increase)++;
+}
+
+TEST_F(QueueTest, unregister_dequeue_and_wait) {
+  int* indicator = new int(100);
+  Queue<std::string> queue(10);
+  queue.RegisterEnqueue(enqueue_handler_, common::Bind(
+                                              [](Queue<std::string>* queue) {
+                                                queue->UnregisterEnqueue();
+                                                return std::make_unique<std::string>("Hello");
+                                              },
+                                              common::Unretained(&queue)));
+  queue.RegisterDequeue(enqueue_handler_, common::Bind(&sleep_and_dequeue_callback, common::Unretained(indicator)));
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  queue.UnregisterDequeue();
+  EXPECT_EQ(*indicator, 101);
+  delete indicator;
+}
+
 // Create all threads for death tests in the function that dies
 class QueueDeathTest : public ::testing::Test {
  public:
@@ -827,6 +890,18 @@ TEST_F(EnqueueBufferTest, clear) {
   ASSERT_TRUE(enqueue_.registered_);
   enqueue_buffer_.Clear();
   ASSERT_FALSE(enqueue_.registered_);
+}
+
+TEST_F(EnqueueBufferTest, delete_when_in_callback) {
+  Queue<int>* queue = new Queue<int>(kQueueSize);
+  EnqueueBuffer<int>* enqueue_buffer = new EnqueueBuffer<int>(queue);
+  int num_items = 10;
+  for (int i = 0; i < num_items; i++) {
+    enqueue_buffer->Enqueue(std::make_unique<int>(i), handler_);
+  }
+
+  delete enqueue_buffer;
+  delete queue;
 }
 
 }  // namespace
