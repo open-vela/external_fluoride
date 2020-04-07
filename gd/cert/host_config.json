@@ -7,9 +7,9 @@
             "name": "HostOnlyCert",
             "rootcanal":
             {
-                "test_port": 6401,
-                "hci_port": 6402,
-                "link_layer_port": 6403
+                "test_port": "6401",
+                "hci_port": "6402",
+                "link_layer_port": "6403"
             },
             "GdDevice":
             [
@@ -18,9 +18,10 @@
                     "grpc_root_server_port": "8996",
                     "signal_port": "8994",
                     "label": "cert_stack",
+                    "name": "Cert Device",
                     "cmd":
                     [
-                        "$ANDROID_HOST_OUT/bin/bluetooth_stack_with_facade",
+                        "$GD_ROOT/bluetooth_stack_with_facade",
                         "--grpc-port=$(grpc_port)",
                         "--root-server-port=$(grpc_root_server_port)",
                         "--rootcanal-port=$(rootcanal_port)",
@@ -32,9 +33,10 @@
                     "grpc_root_server_port": "8997",
                     "signal_port": "8995",
                     "label": "stack_under_test",
+                    "name": "DUT Device",
                     "cmd":
                     [
-                        "$ANDROID_HOST_OUT/bin/bluetooth_stack_with_facade",
+                        "$GD_ROOT/bluetooth_stack_with_facade",
                         "--grpc-port=$(grpc_port)",
                         "--root-server-port=$(grpc_root_server_port)",
                         "--rootcanal-port=$(rootcanal_port)",
