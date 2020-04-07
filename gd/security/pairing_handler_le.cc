@@ -161,14 +161,6 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     return;
   }
 
-  // If it's secure connections pairing, do cross-transport key derivation
-  DistributedKeys distributed_keys = std::get<DistributedKeys>(keyExchangeStatus);
-  if ((pairing_response.GetAuthReq() & AuthReqMaskSc) && distributed_keys.ltk.has_value()) {
-    bool use_h7 = (pairing_response.GetAuthReq() & AuthReqMaskCt2);
-    Octet16 link_key = crypto_toolbox::ltk_to_link_key(*(distributed_keys.ltk), use_h7);
-    distributed_keys.link_key = link_key;
-  }
-
   // bool bonding = pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskBondingFlag;
 
   i.OnPairingFinished(PairingResult{
@@ -331,7 +323,8 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
   std::optional<Octet16> ltk;                 /* Legacy only */
   std::optional<uint16_t> ediv;               /* Legacy only */
   std::optional<std::array<uint8_t, 8>> rand; /* Legacy only */
-  std::optional<hci::AddressWithType> identity_address;
+  std::optional<Address> identity_address;
+  AddrType identity_address_type;
   std::optional<Octet16> irk;
   std::optional<Octet16> signature_key;
 
@@ -374,10 +367,8 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
       return std::get<PairingFailure>(iapacket);
     }
     LOG_INFO("Received Identity Address Information");
-    auto iapacketview = std::get<IdentityAddressInformationView>(iapacket);
-    identity_address = hci::AddressWithType(iapacketview.GetBdAddr(), iapacketview.GetAddrType() == AddrType::PUBLIC
-                                                                          ? hci::AddressType::PUBLIC_DEVICE_ADDRESS
-                                                                          : hci::AddressType::RANDOM_DEVICE_ADDRESS);
+    identity_address = std::get<IdentityAddressInformationView>(iapacket).GetBdAddr();
+    identity_address_type = std::get<IdentityAddressInformationView>(iapacket).GetAddrType();
   }
 
   if (keys_i_receive & KeyMaskSign) {
@@ -391,12 +382,7 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
     signature_key = std::get<SigningInformationView>(packet).GetSignatureKey();
   }
 
-  return DistributedKeys{.ltk = ltk,
-                         .ediv = ediv,
-                         .rand = rand,
-                         .identity_address = identity_address,
-                         .irk = irk,
-                         .signature_key = signature_key};
+  return DistributedKeys{ltk, ediv, rand, identity_address, identity_address_type, irk, signature_key};
 }
 
 void PairingHandlerLe::SendKeys(const InitialInformations& i, const uint8_t& keys_i_send, Octet16 ltk, uint16_t ediv,
