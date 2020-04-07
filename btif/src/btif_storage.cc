@@ -72,6 +72,9 @@ using bluetooth::Uuid;
 #define BTIF_STORAGE_PATH_REMOTE_DEVCLASS "DevClass"
 #define BTIF_STORAGE_PATH_REMOTE_DEVTYPE "DevType"
 #define BTIF_STORAGE_PATH_REMOTE_NAME "Name"
+#define BTIF_STORAGE_PATH_REMOTE_VER_MFCT "Manufacturer"
+#define BTIF_STORAGE_PATH_REMOTE_VER_VER "LmpVer"
+#define BTIF_STORAGE_PATH_REMOTE_VER_SUBVER "LmpSubVer"
 
 //#define BTIF_STORAGE_PATH_REMOTE_LINKKEYS "remote_linkkeys"
 #define BTIF_STORAGE_PATH_REMOTE_ALIASE "Aliase"
@@ -257,10 +260,11 @@ static int prop2cfg(const RawAddress* remote_bd_addr, bt_property_t* prop) {
 
       if (!info) return false;
 
-      btif_config_set_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_MFCT,
+      btif_config_set_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_MFCT,
                           info->manufacturer);
-      btif_config_set_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_VER, info->version);
-      btif_config_set_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_SUBVER,
+      btif_config_set_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_VER,
+                          info->version);
+      btif_config_set_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_SUBVER,
                           info->sub_ver);
     } break;
 
@@ -378,15 +382,15 @@ static int cfg2prop(const RawAddress* remote_bd_addr, bt_property_t* prop) {
       bt_remote_version_t* info = (bt_remote_version_t*)prop->val;
 
       if (prop->len >= (int)sizeof(bt_remote_version_t)) {
-        ret = btif_config_get_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_MFCT,
+        ret = btif_config_get_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_MFCT,
                                   &info->manufacturer);
 
         if (ret)
-          ret = btif_config_get_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_VER,
+          ret = btif_config_get_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_VER,
                                     &info->version);
 
         if (ret)
-          ret = btif_config_get_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_SUBVER,
+          ret = btif_config_get_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_SUBVER,
                                     &info->sub_ver);
       }
     } break;
@@ -632,12 +636,13 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
     /* Fetch the local BD ADDR */
     const controller_t* controller = controller_get_interface();
     if (!controller->get_is_ready()) {
-      LOG_ERROR("%s: Controller not ready! Unable to return Bluetooth Address",
+      LOG_ERROR(LOG_TAG,
+                "%s: Controller not ready! Unable to return Bluetooth Address",
                 __func__);
       *bd_addr = RawAddress::kEmpty;
       return BT_STATUS_FAIL;
     } else {
-      LOG_ERROR("%s: Controller ready!", __func__);
+      LOG_ERROR(LOG_TAG, "%s: Controller ready!", __func__);
       *bd_addr = *controller->get_address();
     }
     property->len = RawAddress::kLength;
@@ -666,7 +671,7 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
     uint32_t i;
 
     tBTA_SERVICE_MASK service_mask = btif_get_enabled_services_mask();
-    LOG_INFO("%s service_mask:0x%x", __func__, service_mask);
+    LOG_INFO(LOG_TAG, "%s service_mask:0x%x", __func__, service_mask);
     for (i = 0; i < BTA_MAX_SERVICE_ID; i++) {
       /* This should eventually become a function when more services are enabled
        */
