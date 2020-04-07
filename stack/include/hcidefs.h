@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2014 Broadcom Corporation
+ *  Copyright (C) 1999-2014 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -358,7 +358,6 @@
 #define HCI_BLE_READ_RESOLVABLE_ADDR_LOCAL (0x002C | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_SET_ADDR_RESOLUTION_ENABLE (0x002D | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_SET_RAND_PRIV_ADDR_TIMOUT (0x002E | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_READ_MAXIMUM_DATA_LENGTH (0x002F | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_READ_PHY (0x0030 | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_SET_DEFAULT_PHY (0x0031 | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_SET_PHY (0x0032 | HCI_GRP_BLE_CMDS)
@@ -380,51 +379,31 @@
 #define HCI_LE_SET_EXTENDED_SCAN_PARAMETERS (0x0041 | HCI_GRP_BLE_CMDS)
 #define HCI_LE_SET_EXTENDED_SCAN_ENABLE (0x0042 | HCI_GRP_BLE_CMDS)
 #define HCI_LE_EXTENDED_CREATE_CONNECTION (0x0043 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_PERIODIC_ADVERTISING_CREATE_SYNC (0x0044 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_PERIODIC_ADVERTISING_CREATE_SYNC_CANCEL \
-  (0x0045 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_PERIODIC_ADVERTISING_TERMINATE_SYNC \
-  (0x0046 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_ADD_DEVICE_TO_PERIODIC_ADVERTISING_LIST \
-  (0x0047 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_RM_DEVICE_FROM_PERIODIC_ADVERTISING_LIST \
-  (0x0048 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_CLEAR_PERIODIC_ADVERTISING_LIST (0x0049 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_READ_PERIODIC_ADVERTISING_LIST_SIZE (0x004A | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_READ_TRANSMIT_POWER (0x004B | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_READ_RF_COMPENS_POWER (0x004C | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_WRITE_RF_COMPENS_POWER (0x004D | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_SET_PRIVACY_MODE (0x004E | HCI_GRP_BLE_CMDS)
 
-/* LE Get Vendor Capabilities Command opcode */
-#define HCI_BLE_VENDOR_CAP (0x0153 | HCI_GRP_VENDOR_SPECIFIC)
+/* LE Get Vendor Capabilities Command OCF */
+#define HCI_BLE_VENDOR_CAP_OCF (0x0153 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Multi adv opcode */
-#define HCI_BLE_MULTI_ADV (0x0154 | HCI_GRP_VENDOR_SPECIFIC)
+/* Multi adv OCF */
+#define HCI_BLE_MULTI_ADV_OCF (0x0154 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Batch scan opcode */
-#define HCI_BLE_BATCH_SCAN (0x0156 | HCI_GRP_VENDOR_SPECIFIC)
+/* Batch scan OCF */
+#define HCI_BLE_BATCH_SCAN_OCF (0x0156 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* ADV filter opcode */
-#define HCI_BLE_ADV_FILTER (0x0157 | HCI_GRP_VENDOR_SPECIFIC)
+/* ADV filter OCF */
+#define HCI_BLE_ADV_FILTER_OCF (0x0157 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Tracking opcode */
-#define HCI_BLE_TRACK_ADV (0x0158 | HCI_GRP_VENDOR_SPECIFIC)
+/* Tracking OCF */
+#define HCI_BLE_TRACK_ADV_OCF (0x0158 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Energy info opcode */
-#define HCI_BLE_ENERGY_INFO (0x0159 | HCI_GRP_VENDOR_SPECIFIC)
+/* Energy info OCF */
+#define HCI_BLE_ENERGY_INFO_OCF (0x0159 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Extended BLE Scan parameters opcode */
-#define HCI_BLE_EXTENDED_SCAN_PARAMS (0x015A | HCI_GRP_VENDOR_SPECIFIC)
+/* Extended BLE Scan parameters OCF */
+#define HCI_BLE_EXTENDED_SCAN_PARAMS_OCF (0x015A | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Controller debug info opcode */
-#define HCI_CONTROLLER_DEBUG_INFO (0x015B | HCI_GRP_VENDOR_SPECIFIC)
-
-/* A2DP offload opcode */
-#define HCI_CONTROLLER_A2DP (0x015D | HCI_GRP_VENDOR_SPECIFIC)
-
-/* Bluetooth Quality Report opcode */
-#define HCI_CONTROLLER_BQR (0x015E | HCI_GRP_VENDOR_SPECIFIC)
+/* Controller debug info OCF */
+#define HCI_CONTROLLER_DEBUG_INFO_OCF (0x015B | HCI_GRP_VENDOR_SPECIFIC)
 
 /* subcode for multi adv feature */
 #define BTM_BLE_MULTI_ADV_SET_PARAM 0x01
@@ -451,9 +430,6 @@
 
 /* debug info sub event */
 #define HCI_VSE_SUBCODE_DEBUG_INFO_SUB_EVT 0x57
-
-/* Bluetooth Quality Report sub event */
-#define HCI_VSE_SUBCODE_BQR_SUB_EVT 0x58
 
 /* LE supported states definition */
 #define HCI_LE_ADV_STATE 0x00000001
@@ -596,12 +572,7 @@ constexpr uint8_t HCI_LE_STATES_INIT_MASTER_SLAVE_BIT = 41;
 #define HCI_BLE_DIRECT_ADV_EVT 0x0b
 #define HCI_BLE_PHY_UPDATE_COMPLETE_EVT 0x0c
 #define HCI_LE_EXTENDED_ADVERTISING_REPORT_EVT 0x0D
-#define HCI_BLE_PERIODIC_ADV_SYNC_EST_EVT      0x0E
-#define HCI_BLE_PERIODIC_ADV_REPORT_EVT        0x0F
-#define HCI_BLE_PERIODIC_ADV_SYNC_LOST_EVT     0x10
-#define HCI_BLE_SCAN_TIMEOUT_EVT               0x11
 #define HCI_LE_ADVERTISING_SET_TERMINATED_EVT 0x12
-#define HCI_BLE_SCAN_REQ_RX_EVT                0x13
 
 /* Definitions for LE Channel Map */
 #define HCI_BLE_CHNL_MAP_SIZE 5
@@ -676,10 +647,9 @@ constexpr uint8_t HCI_LE_STATES_INIT_MASTER_SLAVE_BIT = 41;
 #define HCI_ERR_REJ_NO_SUITABLE_CHANNEL 0x39
 #define HCI_ERR_CONTROLLER_BUSY 0x3A
 #define HCI_ERR_UNACCEPT_CONN_INTERVAL 0x3B
-#define HCI_ERR_ADVERTISING_TIMEOUT 0x3C
+#define HCI_ERR_DIRECTED_ADVERTISING_TIMEOUT 0x3C
 #define HCI_ERR_CONN_TOUT_DUE_TO_MIC_FAILURE 0x3D
 #define HCI_ERR_CONN_FAILED_ESTABLISHMENT 0x3E
-#define HCI_ERR_LIMIT_REACHED 0x43
 #define HCI_ERR_MAC_CONNECTION_FAILED 0x3F
 
 /* ConnectionLess Broadcast errors */
@@ -794,7 +764,12 @@ constexpr uint8_t HCI_LE_STATES_INIT_MASTER_SLAVE_BIT = 41;
     0x0000000000200000 Connectionless Broadcast Channel Map Change Event
     0x0000000000400000 Inquiry Response Notification Event
 */
-
+#if (BLE_PRIVACY_SPT == TRUE)
+/* BLE event mask */
+#define HCI_BLE_EVENT_MASK_DEF "\x00\x00\x00\x00\x00\x00\x07\xff"
+#else
+#define HCI_BLE_EVENT_MASK_DEF "\x00\x00\x00\x00\x00\x00\x00\x7f"
+#endif
 /*
  * Definitions for packet type masks (BT1.2 and BT2.0 definitions)
 */
@@ -1266,8 +1241,6 @@ typedef struct {
 
 #define LMP_TESTCTL_POWCTL_FIXEDTX_OP 0
 #define LMP_TESTCTL_POWCTL_ADAPTIVE 1
-
-#define LMP_COMPID_GOOGLE 0xE0
 
 // TODO(zachoverflow): remove this once broadcom specific hacks are removed
 #define LMP_COMPID_BROADCOM 15
