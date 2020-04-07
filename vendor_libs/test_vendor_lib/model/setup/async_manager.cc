@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "async_manager"
+
 #include "async_manager.h"
+
+#include "osi/include/log.h"
 
 #include <algorithm>
 #include <atomic>
@@ -22,9 +26,7 @@
 #include <mutex>
 #include <thread>
 #include <vector>
-
 #include "fcntl.h"
-#include "os/log.h"
 #include "sys/select.h"
 #include "unistd.h"
 
@@ -103,7 +105,7 @@ class AsyncManager::AsyncFdWatcher {
     // start the thread if not started yet
     int started = tryStartThread();
     if (started != 0) {
-      LOG_ERROR("%s: Unable to start thread", __func__);
+      LOG_ERROR(LOG_TAG, "%s: Unable to start thread", __func__);
       return started;
     }
 
@@ -132,7 +134,7 @@ class AsyncManager::AsyncFdWatcher {
     if (std::this_thread::get_id() != thread_.get_id()) {
       thread_.join();
     } else {
-      LOG_WARN("%s: Starting thread stop from inside the reading thread itself", __func__);
+      LOG_WARN(LOG_TAG, "%s: Starting thread stop from inside the reading thread itself", __func__);
     }
 
     {
@@ -156,10 +158,10 @@ class AsyncManager::AsyncFdWatcher {
     // set up the communication channel
     int pipe_fds[2];
     if (pipe2(pipe_fds, O_NONBLOCK)) {
-      LOG_ERROR(
-          "%s:Unable to establish a communication channel to the reading "
-          "thread",
-          __func__);
+      LOG_ERROR(LOG_TAG,
+                "%s:Unable to establish a communication channel to the reading "
+                "thread",
+                __func__);
       return -1;
     }
     notification_listen_fd_ = pipe_fds[0];
@@ -167,7 +169,7 @@ class AsyncManager::AsyncFdWatcher {
 
     thread_ = std::thread([this]() { ThreadRoutine(); });
     if (!thread_.joinable()) {
-      LOG_ERROR("%s: Unable to start reading thread", __func__);
+      LOG_ERROR(LOG_TAG, "%s: Unable to start reading thread", __func__);
       return -1;
     }
     return 0;
@@ -176,7 +178,7 @@ class AsyncManager::AsyncFdWatcher {
   int notifyThread() {
     char buffer = '0';
     if (TEMP_FAILURE_RETRY(write(notification_write_fd_, &buffer, 1)) < 0) {
-      LOG_ERROR("%s: Unable to send message to reading thread", __func__);
+      LOG_ERROR(LOG_TAG, "%s: Unable to send message to reading thread", __func__);
       return -1;
     }
     return 0;
@@ -237,10 +239,10 @@ class AsyncManager::AsyncFdWatcher {
       // wait until there is data available to read on some FD
       int retval = select(nfds + 1, &read_fds, NULL, NULL, NULL);
       if (retval <= 0) {  // there was some error or a timeout
-        LOG_ERROR(
-            "%s: There was an error while waiting for data on the file "
-            "descriptors: %s",
-            __func__, strerror(errno));
+        LOG_ERROR(LOG_TAG,
+                  "%s: There was an error while waiting for data on the file "
+                  "descriptors: %s",
+                  __func__, strerror(errno));
         continue;
       }
 
@@ -262,8 +264,8 @@ class AsyncManager::AsyncFdWatcher {
   std::map<int, ReadCallback> watched_shared_fds_;
 
   // A pair of FD to send information to the reading thread
-  int notification_listen_fd_{};
-  int notification_write_fd_{};
+  int notification_listen_fd_;
+  int notification_write_fd_;
 };
 
 // Async task manager implementation
@@ -308,7 +310,7 @@ class AsyncManager::AsyncTaskManager {
     if (std::this_thread::get_id() != thread_.get_id()) {
       thread_.join();
     } else {
-      LOG_WARN("%s: Starting thread stop from inside the task thread itself", __func__);
+      LOG_WARN(LOG_TAG, "%s: Starting thread stop from inside the task thread itself", __func__);
     }
     return 0;
   }
@@ -335,7 +337,7 @@ class AsyncManager::AsyncTaskManager {
     // public or gets more complex
     std::chrono::steady_clock::time_point time;
     bool periodic;
-    std::chrono::milliseconds period{};
+    std::chrono::milliseconds period;
     TaskCallback callback;
     AsyncTaskId task_id;
   };
@@ -369,7 +371,7 @@ class AsyncManager::AsyncTaskManager {
     // start thread if necessary
     int started = tryStartThread();
     if (started != 0) {
-      LOG_ERROR("%s: Unable to start thread", __func__);
+      LOG_ERROR(LOG_TAG, "%s: Unable to start thread", __func__);
       return kInvalidTaskId;
     }
     // notify the thread so that it knows of the new task
@@ -393,7 +395,7 @@ class AsyncManager::AsyncTaskManager {
     running_ = true;
     thread_ = std::thread([this]() { ThreadRoutine(); });
     if (!thread_.joinable()) {
-      LOG_ERROR("%s: Unable to start task thread", __func__);
+      LOG_ERROR(LOG_TAG, "%s: Unable to start task thread", __func__);
       return -1;
     }
     return 0;
