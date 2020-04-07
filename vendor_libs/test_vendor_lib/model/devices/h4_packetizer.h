@@ -26,11 +26,12 @@ namespace test_vendor_lib {
 namespace hci {
 
 using HciPacketReadyCallback = std::function<void(void)>;
+using ClientDisconnectCallback = std::function<void()>;
 
 class H4Packetizer : public HciProtocol {
  public:
   H4Packetizer(int fd, PacketReadCallback command_cb, PacketReadCallback event_cb, PacketReadCallback acl_cb,
-               PacketReadCallback sco_cb);
+               PacketReadCallback sco_cb, ClientDisconnectCallback disconnect_cb);
 
   size_t Send(uint8_t type, const uint8_t* data, size_t length);
 
@@ -45,6 +46,8 @@ class H4Packetizer : public HciProtocol {
   PacketReadCallback event_cb_;
   PacketReadCallback acl_cb_;
   PacketReadCallback sco_cb_;
+
+  ClientDisconnectCallback disconnect_cb_;
 
   hci::PacketType hci_packet_type_{hci::PacketType::UNKNOWN};
 
@@ -71,7 +74,7 @@ class H4Packetizer : public HciProtocol {
 
   enum State { HCI_PREAMBLE, HCI_PAYLOAD };
   State state_{HCI_PREAMBLE};
-  uint8_t preamble_[PREAMBLE_SIZE_MAX];
+  uint8_t preamble_[PREAMBLE_SIZE_MAX]{};
   std::vector<uint8_t> packet_;
   size_t bytes_remaining_{0};
   size_t bytes_read_{0};
