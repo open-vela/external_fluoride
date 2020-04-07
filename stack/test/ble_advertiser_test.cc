@@ -68,8 +68,6 @@ alarm_t* alarm_new(const char* name) { return nullptr; }
 void alarm_free(alarm_t* alarm) {}
 const controller_t* controller_get_interface() { return nullptr; }
 
-uint64_t btm_get_next_private_addrress_interval_ms() { return 15 * 60 * 1000; }
-
 namespace {
 void DoNothing(uint8_t) {}
 
@@ -133,7 +131,7 @@ class AdvertiserHciMock : public BleAdvertiserHciInterface {
                    cmd_complete);
   };
 
-  bool QuirkAdvertiserZeroHandle() override { return false; }
+  bool QuirkAdvertiserZeroHandle() { return false; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(AdvertiserHciMock);
@@ -155,7 +153,7 @@ class BleAdvertisingManagerTest : public testing::Test {
 
   std::unique_ptr<AdvertiserHciMock> hci_mock;
 
-  void SetUp() override {
+  virtual void SetUp() {
     hci_mock.reset(new AdvertiserHciMock());
 
     base::Callback<void(uint8_t)> inst_cnt_Cb;
@@ -170,7 +168,7 @@ class BleAdvertisingManagerTest : public testing::Test {
     inst_cnt_Cb.Run(num_adv_instances);
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     BleAdvertisingManager::CleanUp();
     hci_mock.reset();
   }
