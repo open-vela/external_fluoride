@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <base/logging.h>
 
 #include "service/adapter.h"
+#include "service/common/bluetooth/util/address_helper.h"
 #include "service/logging_helpers.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hcidefs.h"
@@ -31,7 +32,7 @@ namespace bluetooth {
 // LowEnergyClient implementation
 // ========================================================
 
-LowEnergyClient::LowEnergyClient(Adapter& adapter, const Uuid& uuid,
+LowEnergyClient::LowEnergyClient(Adapter& adapter, const UUID& uuid,
                                  int client_id)
     : adapter_(adapter),
       app_identifier_(uuid),
@@ -53,12 +54,12 @@ LowEnergyClient::~LowEnergyClient() {
 bool LowEnergyClient::Connect(const std::string& address, bool is_direct) {
   VLOG(2) << __func__ << "Address: " << address << " is_direct: " << is_direct;
 
-  RawAddress bda;
-  RawAddress::FromString(address, bda);
+  bt_bdaddr_t bda;
+  util::BdAddrFromString(address, &bda);
 
   bt_status_t status =
       hal::BluetoothGattInterface::Get()->GetClientHALInterface()->connect(
-          client_id_, bda, is_direct, BT_TRANSPORT_LE, false, PHY_LE_1M_MASK);
+          client_id_, &bda, is_direct, BT_TRANSPORT_LE, false, PHY_LE_1M_MASK);
   if (status != BT_STATUS_SUCCESS) {
     LOG(ERROR) << "HAL call to connect failed";
     return false;
@@ -70,10 +71,10 @@ bool LowEnergyClient::Connect(const std::string& address, bool is_direct) {
 bool LowEnergyClient::Disconnect(const std::string& address) {
   VLOG(2) << __func__ << "Address: " << address;
 
-  RawAddress bda;
-  RawAddress::FromString(address, bda);
+  bt_bdaddr_t bda;
+  util::BdAddrFromString(address, &bda);
 
-  std::map<const RawAddress, int>::iterator conn_id;
+  std::map<const bt_bdaddr_t, int>::iterator conn_id;
   {
     lock_guard<mutex> lock(connection_fields_lock_);
     conn_id = connection_ids_.find(bda);
@@ -85,7 +86,7 @@ bool LowEnergyClient::Disconnect(const std::string& address) {
 
   bt_status_t status =
       hal::BluetoothGattInterface::Get()->GetClientHALInterface()->disconnect(
-          client_id_, bda, conn_id->second);
+          client_id_, &bda, conn_id->second);
   if (status != BT_STATUS_SUCCESS) {
     LOG(ERROR) << "HAL call to disconnect failed";
     return false;
@@ -97,10 +98,10 @@ bool LowEnergyClient::Disconnect(const std::string& address) {
 bool LowEnergyClient::SetMtu(const std::string& address, int mtu) {
   VLOG(2) << __func__ << "Address: " << address << " MTU: " << mtu;
 
-  RawAddress bda;
-  RawAddress::FromString(address, bda);
+  bt_bdaddr_t bda;
+  util::BdAddrFromString(address, &bda);
 
-  std::map<const RawAddress, int>::iterator conn_id;
+  std::map<const bt_bdaddr_t, int>::iterator conn_id;
   {
     lock_guard<mutex> lock(connection_fields_lock_);
     conn_id = connection_ids_.find(bda);
@@ -126,7 +127,7 @@ void LowEnergyClient::SetDelegate(Delegate* delegate) {
   delegate_ = delegate;
 }
 
-const Uuid& LowEnergyClient::GetAppIdentifier() const {
+const UUID& LowEnergyClient::GetAppIdentifier() const {
   return app_identifier_;
 }
 
@@ -134,7 +135,7 @@ int LowEnergyClient::GetInstanceId() const { return client_id_; }
 
 void LowEnergyClient::ConnectCallback(hal::BluetoothGattInterface* gatt_iface,
                                       int conn_id, int status, int client_id,
-                                      const RawAddress& bda) {
+                                      const bt_bdaddr_t& bda) {
   if (client_id != client_id_) return;
 
   VLOG(1) << __func__ << "client_id: " << client_id << " status: " << status;
@@ -154,7 +155,7 @@ void LowEnergyClient::ConnectCallback(hal::BluetoothGattInterface* gatt_iface,
 
 void LowEnergyClient::DisconnectCallback(
     hal::BluetoothGattInterface* gatt_iface, int conn_id, int status,
-    int client_id, const RawAddress& bda) {
+    int client_id, const bt_bdaddr_t& bda) {
   if (client_id != client_id_) return;
 
   VLOG(1) << __func__ << " client_id: " << client_id << " status: " << status;
@@ -175,7 +176,7 @@ void LowEnergyClient::MtuChangedCallback(
   VLOG(1) << __func__ << " conn_id: " << conn_id << " status: " << status
           << " mtu: " << mtu;
 
-  const RawAddress* bda = nullptr;
+  const bt_bdaddr_t* bda = nullptr;
   {
     lock_guard<mutex> lock(connection_fields_lock_);
     for (auto& connection : connection_ids_) {
@@ -205,20 +206,21 @@ LowEnergyClientFactory::~LowEnergyClientFactory() {
 }
 
 bool LowEnergyClientFactory::RegisterInstance(
-    const Uuid& uuid, const RegisterCallback& callback) {
-  VLOG(1) << __func__ << " - Uuid: " << uuid.ToString();
+    const UUID& uuid, const RegisterCallback& callback) {
+  VLOG(1) << __func__ << " - UUID: " << uuid.ToString();
   lock_guard<mutex> lock(pending_calls_lock_);
 
   if (pending_calls_.find(uuid) != pending_calls_.end()) {
-    LOG(ERROR) << "Low-Energy client with given Uuid already registered - "
-               << "Uuid: " << uuid.ToString();
+    LOG(ERROR) << "Low-Energy client with given UUID already registered - "
+               << "UUID: " << uuid.ToString();
     return false;
   }
 
   const btgatt_client_interface_t* hal_iface =
       hal::BluetoothGattInterface::Get()->GetClientHALInterface();
+  bt_uuid_t app_uuid = uuid.GetBlueDroid();
 
-  if (hal_iface->register_client(uuid) != BT_STATUS_SUCCESS) return false;
+  if (hal_iface->register_client(&app_uuid) != BT_STATUS_SUCCESS) return false;
 
   pending_calls_[uuid] = callback;
 
@@ -227,10 +229,10 @@ bool LowEnergyClientFactory::RegisterInstance(
 
 void LowEnergyClientFactory::RegisterClientCallback(
     hal::BluetoothGattInterface* gatt_iface, int status, int client_id,
-    const bluetooth::Uuid& app_uuid) {
-  Uuid uuid(app_uuid);
+    const bt_uuid_t& app_uuid) {
+  UUID uuid(app_uuid);
 
-  VLOG(1) << __func__ << " - Uuid: " << uuid.ToString();
+  VLOG(1) << __func__ << " - UUID: " << uuid.ToString();
   lock_guard<mutex> lock(pending_calls_lock_);
 
   auto iter = pending_calls_.find(uuid);

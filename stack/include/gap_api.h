@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2013 Broadcom Corporation
+ *  Copyright (C) 2009-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -77,12 +77,12 @@
 #define GAP_EVT_CONN_CONGESTED 0x0103
 #define GAP_EVT_CONN_UNCONGESTED 0x0104
 #define GAP_EVT_TX_EMPTY 0x0105
-#define GAP_EVT_LE_COC_CREDITS 0x0106
 
 /* Values for 'chan_mode_mask' field */
 /* GAP_ConnOpen() - optional channels to negotiate */
 #define GAP_FCR_CHAN_OPT_BASIC L2CAP_FCR_CHAN_OPT_BASIC
 #define GAP_FCR_CHAN_OPT_ERTM L2CAP_FCR_CHAN_OPT_ERTM
+#define GAP_FCR_CHAN_OPT_STREAM L2CAP_FCR_CHAN_OPT_STREAM
 /*** used in connection variables and functions ***/
 #define GAP_INVALID_HANDLE 0xFFFF
 
@@ -105,24 +105,13 @@
 #define GAP_PREFER_CONN_SP_TOUT 2000
 #endif
 
-struct tGAP_COC_CREDITS {
-  uint16_t gap_handle;
-  uint16_t credits_received;
-  uint16_t credit_count;
-};
-
-union tGAP_CB_DATA {
-  tGAP_COC_CREDITS coc_credits;
-};
-
 /*****************************************************************************
  *  Type Definitions
  ****************************************************************************/
 /*
  * Callback function for connection services
 */
-typedef void(tGAP_CONN_CALLBACK)(uint16_t gap_handle, uint16_t event,
-                                 tGAP_CB_DATA* data);
+typedef void(tGAP_CONN_CALLBACK)(uint16_t gap_handle, uint16_t event);
 
 /*
  * Define the callback function prototypes.  Parameters are specific
@@ -133,7 +122,7 @@ typedef void(tGAP_CALLBACK)(uint16_t event, void* p_data);
 /* Definition of the GAP_FindAddrByName results structure */
 typedef struct {
   uint16_t status;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   tBTM_BD_NAME devname;
 } tGAP_FINDADDR_RESULTS;
 
@@ -146,15 +135,15 @@ typedef struct {
 
 typedef union {
   tGAP_BLE_PREF_PARAM conn_param;
-  RawAddress reconn_bda;
+  BD_ADDR reconn_bda;
   uint16_t icon;
   uint8_t* p_dev_name;
   uint8_t addr_resolution;
 
 } tGAP_BLE_ATTR_VALUE;
 
-typedef void(tGAP_BLE_CMPL_CBACK)(bool status, const RawAddress& addr,
-                                  uint16_t length, char* p_name);
+typedef void(tGAP_BLE_CMPL_CBACK)(bool status, BD_ADDR addr, uint16_t length,
+                                  char* p_name);
 
 /*****************************************************************************
  *  External Function Declarations
@@ -173,8 +162,7 @@ typedef void(tGAP_BLE_CMPL_CBACK)(bool status, const RawAddress& addr,
  *
  ******************************************************************************/
 extern uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
-                             bool is_server, const RawAddress* p_rem_bda,
-                             uint16_t psm, uint16_t le_mps,
+                             bool is_server, BD_ADDR p_rem_bda, uint16_t psm,
                              tL2CAP_CFG_INFO* p_cfg,
                              tL2CAP_ERTM_INFO* ertm_info, uint16_t security,
                              uint8_t chan_mode_mask, tGAP_CONN_CALLBACK* p_cb,
@@ -250,7 +238,8 @@ extern uint16_t GAP_ConnBTRead(uint16_t gap_handle, BT_HDR** pp_buf);
  *                  GAP_CONGESTION          - system is congested
  *
  ******************************************************************************/
-extern uint16_t GAP_ConnWriteData(uint16_t gap_handle, BT_HDR* msg);
+extern uint16_t GAP_ConnWriteData(uint16_t gap_handle, uint8_t* p_data,
+                                  uint16_t max_len, uint16_t* p_len);
 
 /*******************************************************************************
  *
@@ -294,7 +283,7 @@ extern uint16_t GAP_ConnSetIdleTimeout(uint16_t gap_handle, uint16_t timeout);
  *                  GAP_ERR_BAD_HANDLE  - invalid handle
  *
  ******************************************************************************/
-extern const RawAddress* GAP_ConnGetRemoteAddr(uint16_t gap_handle);
+extern uint8_t* GAP_ConnGetRemoteAddr(uint16_t gap_handle);
 
 /*******************************************************************************
  *
@@ -357,7 +346,7 @@ extern void GAP_BleAttrDBUpdate(uint16_t attr_uuid,
  * Returns          true if read started, else false if GAP is busy
  *
  ******************************************************************************/
-extern bool GAP_BleReadPeerPrefConnParams(const RawAddress& peer_bda);
+extern bool GAP_BleReadPeerPrefConnParams(BD_ADDR peer_bda);
 
 /*******************************************************************************
  *
@@ -369,7 +358,7 @@ extern bool GAP_BleReadPeerPrefConnParams(const RawAddress& peer_bda);
  * Returns          true if request accepted
  *
  ******************************************************************************/
-extern bool GAP_BleReadPeerDevName(const RawAddress& peer_bda,
+extern bool GAP_BleReadPeerDevName(BD_ADDR peer_bda,
                                    tGAP_BLE_CMPL_CBACK* p_cback);
 
 /*******************************************************************************
@@ -381,7 +370,7 @@ extern bool GAP_BleReadPeerDevName(const RawAddress& peer_bda,
  * Returns          true if request accepted
  *
  ******************************************************************************/
-extern bool GAP_BleReadPeerAddressResolutionCap(const RawAddress& peer_bda,
+extern bool GAP_BleReadPeerAddressResolutionCap(BD_ADDR peer_bda,
                                                 tGAP_BLE_CMPL_CBACK* p_cback);
 
 /*******************************************************************************
@@ -393,6 +382,6 @@ extern bool GAP_BleReadPeerAddressResolutionCap(const RawAddress& peer_bda,
  * Returns          true if request accepted
  *
  ******************************************************************************/
-extern bool GAP_BleCancelReadPeerDevName(const RawAddress& peer_bda);
+extern bool GAP_BleCancelReadPeerDevName(BD_ADDR peer_bda);
 
 #endif /* GAP_API_H */
