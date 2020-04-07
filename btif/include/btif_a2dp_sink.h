@@ -22,6 +22,7 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <future>
 
 #include "bt_types.h"
 #include "bta_av_api.h"
@@ -52,7 +53,8 @@ bool btif_a2dp_sink_startup(void);
 // Start the A2DP Sink session.
 // This function should be called by the BTIF state machine after
 // btif_a2dp_sink_startup() to start the streaming session for |peer_address|.
-bool btif_a2dp_sink_start_session(const RawAddress& peer_address);
+bool btif_a2dp_sink_start_session(const RawAddress& peer_address,
+                                  std::promise<void> peer_ready_promise);
 
 // Restart the A2DP Sink session.
 // This function should be called by the BTIF state machine after
@@ -62,7 +64,8 @@ bool btif_a2dp_sink_start_session(const RawAddress& peer_address);
 // |new_peer_address| is the peer address of the new session. This address
 // cannot be empty.
 bool btif_a2dp_sink_restart_session(const RawAddress& old_peer_address,
-                                    const RawAddress& new_peer_address);
+                                    const RawAddress& new_peer_address,
+                                    std::promise<void> peer_ready_promise);
 
 // End the A2DP Sink session.
 // This function should be called by the BTIF state machine to end the
@@ -85,6 +88,9 @@ tA2DP_SAMPLE_RATE btif_a2dp_sink_get_sample_rate(void);
 // Get the audio channel count for the A2DP Sink module.
 tA2DP_CHANNEL_COUNT btif_a2dp_sink_get_channel_count(void);
 
+// Get the audio bits per sample for the A2DP Sink module.
+tA2DP_BITS_PER_SAMPLE btif_a2dp_sink_get_bits_per_sample(void);
+
 // Update the decoder for the A2DP Sink module.
 // |p_codec_info| contains the new codec information.
 void btif_a2dp_sink_update_decoder(const uint8_t* p_codec_info);
@@ -102,6 +108,9 @@ void btif_a2dp_sink_on_stopped(tBTA_AV_SUSPEND* p_av_suspend);
 // |p_av_suspend| is the data associated with the request - see
 // |tBTA_AV_SUSPEND|.
 void btif_a2dp_sink_on_suspended(tBTA_AV_SUSPEND* p_av_suspend);
+
+// Start the decoder for the A2DP Sink module.
+bool btif_a2dp_sink_on_start(void);
 
 // Enable/disable discarding of received A2DP frames.
 // If |enable| is true, the discarding is enabled, otherwise is disabled.
