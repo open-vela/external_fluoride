@@ -40,6 +40,7 @@
 
 #include "bt_common.h"
 #include "bta_api.h"
+#include "bta_closure_api.h"
 #include "bta_gatt_api.h"
 #include "btif_config.h"
 #include "btif_dm.h"
@@ -47,7 +48,6 @@
 #include "btif_gatt_util.h"
 #include "btif_storage.h"
 #include "osi/include/log.h"
-#include "stack/include/btu.h"
 
 using base::Bind;
 using base::Owned;
@@ -58,14 +58,14 @@ using std::vector;
  *  Constants & Macros
  ******************************************************************************/
 
-#define CHECK_BTGATT_INIT()                             \
-  do {                                                  \
-    if (bt_gatt_callbacks == NULL) {                    \
-      LOG_WARN("%s: BTGATT not initialized", __func__); \
-      return BT_STATUS_NOT_READY;                       \
-    } else {                                            \
-      LOG_VERBOSE("%s", __func__);                      \
-    }                                                   \
+#define CHECK_BTGATT_INIT()                                      \
+  do {                                                           \
+    if (bt_gatt_callbacks == NULL) {                             \
+      LOG_WARN(LOG_TAG, "%s: BTGATT not initialized", __func__); \
+      return BT_STATUS_NOT_READY;                                \
+    } else {                                                     \
+      LOG_VERBOSE(LOG_TAG, "%s", __func__);                      \
+    }                                                            \
   } while (0)
 
 /*******************************************************************************
@@ -124,7 +124,7 @@ static void btapp_gatts_free_req_data(uint16_t event, tBTA_GATTS* p_data) {
 }
 
 static void btapp_gatts_handle_cback(uint16_t event, char* p_param) {
-  LOG_VERBOSE("%s: Event %d", __func__, event);
+  LOG_VERBOSE(LOG_TAG, "%s: Event %d", __func__, event);
 
   tBTA_GATTS* p_data = (tBTA_GATTS*)p_param;
   switch (event) {
@@ -231,7 +231,7 @@ static void btapp_gatts_handle_cback(uint16_t event, char* p_param) {
     case BTA_GATTS_OPEN_EVT:
     case BTA_GATTS_CANCEL_OPEN_EVT:
     case BTA_GATTS_CLOSE_EVT:
-      LOG_DEBUG("%s: Empty event (%d)!", __func__, event);
+      LOG_DEBUG(LOG_TAG, "%s: Empty event (%d)!", __func__, event);
       break;
 
     case BTA_GATTS_PHY_UPDATE_EVT:
@@ -248,7 +248,7 @@ static void btapp_gatts_handle_cback(uint16_t event, char* p_param) {
       break;
 
     default:
-      LOG_ERROR("%s: Unhandled event (%d)!", __func__, event);
+      LOG_ERROR(LOG_TAG, "%s: Unhandled event (%d)!", __func__, event);
       break;
   }
 
@@ -290,6 +290,9 @@ static void btif_gatts_open_impl(int server_if, const RawAddress& address,
       device_type != BT_DEVICE_TYPE_BREDR) {
     BTA_DmAddBleDevice(address, addr_type, device_type);
   }
+
+  // Mark background connections
+  if (!is_direct) BTA_DmBleStartAutoConn();
 
   // Determine transport
   if (transport_param != GATT_TRANSPORT_AUTO) {
@@ -356,7 +359,7 @@ static void add_service_impl(int server_if,
   // refactored, and one can distinguish stack-internal aps from external apps
   if (service[0].uuid == Uuid::From16Bit(UUID_SERVCLASS_GATT_SERVER) ||
       service[0].uuid == Uuid::From16Bit(UUID_SERVCLASS_GAP_SERVER)) {
-    LOG_ERROR("%s: Attept to register restricted service", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Attept to register restricted service", __func__);
     HAL_CBACK(bt_gatt_callbacks, server->service_added_cb, BT_STATUS_FAIL,
               server_if, std::move(service));
     return;
@@ -422,8 +425,8 @@ static bt_status_t btif_gatts_set_preferred_phy(const RawAddress& bd_addr,
                                                 uint8_t tx_phy, uint8_t rx_phy,
                                                 uint16_t phy_options) {
   CHECK_BTGATT_INIT();
-  do_in_main_thread(FROM_HERE,
-                    Bind(&BTM_BleSetPhy, bd_addr, tx_phy, rx_phy, phy_options));
+  do_in_bta_thread(FROM_HERE,
+                   Bind(&BTM_BleSetPhy, bd_addr, tx_phy, rx_phy, phy_options));
   return BT_STATUS_SUCCESS;
 }
 
@@ -431,8 +434,8 @@ static bt_status_t btif_gatts_read_phy(
     const RawAddress& bd_addr,
     base::Callback<void(uint8_t tx_phy, uint8_t rx_phy, uint8_t status)> cb) {
   CHECK_BTGATT_INIT();
-  do_in_main_thread(FROM_HERE, Bind(&BTM_BleReadPhy, bd_addr,
-                                    jni_thread_wrapper(FROM_HERE, cb)));
+  do_in_bta_thread(FROM_HERE, Bind(&BTM_BleReadPhy, bd_addr,
+                                   jni_thread_wrapper(FROM_HERE, cb)));
   return BT_STATUS_SUCCESS;
 }
 

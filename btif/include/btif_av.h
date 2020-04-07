@@ -92,6 +92,27 @@ uint8_t btif_av_get_peer_sep(void);
 void btif_av_clear_remote_suspend_flag(void);
 
 /**
+ * Process AVRCP Open event.
+ *
+ * @param peer_address the peer address
+ */
+void btif_av_avrcp_event_open(const RawAddress& peer_address);
+
+/**
+ * Process AVRCP Close event.
+ *
+ * @param peer_address the peer address
+ */
+void btif_av_avrcp_event_close(const RawAddress& peer_address);
+
+/**
+ * Process AVRCP Remote Play event.
+ *
+ * @param peer_address the peer address
+ */
+void btif_av_avrcp_event_remote_play(const RawAddress& peer_address);
+
+/**
  * Check whether the connected A2DP peer supports EDR.
  *
  * The value can be provided only if the remote peer is connected.
@@ -163,16 +184,9 @@ void btif_debug_av_dump(int fd);
 /**
  * Set the audio delay for the stream.
  *
- * @param peer_address the address of the peer to report
  * @param delay the delay to set in units of 1/10ms
  */
-void btif_av_set_audio_delay(const RawAddress& peer_address, uint16_t delay);
-
-/**
- * Get the audio delay for the stream.
- *  @param  none
- */
-uint16_t btif_av_get_audio_delay(void);
+void btif_av_set_audio_delay(uint16_t delay);
 
 /**
  * Reset the audio delay and count of audio bytes sent to zero.
@@ -193,19 +207,4 @@ void btif_av_src_disconnect_sink(const RawAddress& peer_address);
  *  @param  none
  */
 bool btif_av_is_a2dp_offload_enabled(void);
-
-/**
- *  check A2DP offload enabled and running
- *  @param  none
- */
-bool btif_av_is_a2dp_offload_running(void);
-
-/**
- * Check whether peer device is silenced
- *
- * @param peer_address to check
- *
- */
-bool btif_av_is_peer_silenced(const RawAddress& peer_address);
-
 #endif /* BTIF_AV_H */

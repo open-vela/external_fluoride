@@ -53,8 +53,7 @@
 #include "osi/include/future.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "shim/hci_layer.h"
-#include "shim/shim.h"
+#include "osi/include/thread.h"
 #include "stack_config.h"
 
 /*******************************************************************************
@@ -93,17 +92,22 @@ extern void btu_hci_msg_process(BT_HDR* p_msg);
  *
  * Function         post_to_hci_message_loop
  *
- * Description      Post an HCI event to the main thread
+ * Description      Post an HCI event to the hci message queue
  *
  * Returns          None
  *
  *****************************************************************************/
-void post_to_main_message_loop(const base::Location& from_here, BT_HDR* p_msg) {
-  if (do_in_main_thread(from_here, base::Bind(&btu_hci_msg_process, p_msg)) !=
-      BT_STATUS_SUCCESS) {
-    LOG(ERROR) << __func__ << ": do_in_main_thread failed from "
-               << from_here.ToString();
+void post_to_hci_message_loop(const tracked_objects::Location& from_here,
+                              BT_HDR* p_msg) {
+  base::MessageLoop* hci_message_loop = get_message_loop();
+  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
+    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
+              __func__, from_here.ToString().c_str());
+    return;
   }
+
+  hci_message_loop->task_runner()->PostTask(
+      from_here, base::Bind(&btu_hci_msg_process, p_msg));
 }
 
 /******************************************************************************
@@ -120,11 +124,11 @@ void bte_main_boot_entry(void) {
 
   hci = hci_layer_get_interface();
   if (!hci) {
-    LOG_ERROR("%s could not get hci layer interface.", __func__);
+    LOG_ERROR(LOG_TAG, "%s could not get hci layer interface.", __func__);
     return;
   }
 
-  hci->set_data_cb(base::Bind(&post_to_main_message_loop));
+  hci->set_data_cb(base::Bind(&post_to_hci_message_loop));
 
   module_init(get_module(STACK_CONFIG_MODULE));
 }
@@ -157,14 +161,8 @@ void bte_main_cleanup() {
 void bte_main_enable() {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO("%s Gd shim module enabled", __func__);
-    module_start_up(get_module(GD_SHIM_MODULE));
-    module_start_up(get_module(GD_HCI_MODULE));
-  } else {
-    module_start_up(get_module(BTSNOOP_MODULE));
-    module_start_up(get_module(HCI_MODULE));
-  }
+  module_start_up(get_module(BTSNOOP_MODULE));
+  module_start_up(get_module(HCI_MODULE));
 
   BTU_StartUp();
 }
@@ -182,14 +180,8 @@ void bte_main_enable() {
 void bte_main_disable(void) {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO("%s Gd shim module enabled", __func__);
-    module_shut_down(get_module(GD_HCI_MODULE));
-    module_shut_down(get_module(GD_SHIM_MODULE));
-  } else {
-    module_shut_down(get_module(HCI_MODULE));
-    module_shut_down(get_module(BTSNOOP_MODULE));
-  }
+  module_shut_down(get_module(HCI_MODULE));
+  module_shut_down(get_module(BTSNOOP_MODULE));
 
   BTU_ShutDown();
 }
