@@ -29,18 +29,23 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <functional>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 #include "bt_types.h"
 #include "btcore/include/module.h"
 #include "btif_api.h"
 #include "btif_common.h"
 #include "btif_config_transcode.h"
-#include "btif_keystore.h"
+//#include "btif_keystore.h"
 #include "btif_util.h"
 #include "common/address_obfuscator.h"
+#include "common/metric_id_allocator.h"
+#include "main/shim/config.h"
+#include "main/shim/shim.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocator.h"
 #include "osi/include/compat.h"
@@ -48,6 +53,7 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
+#include "raw_address.h"
 
 #define BT_CONFIG_SOURCE_TAG_NUM 1010001
 
@@ -58,16 +64,19 @@
 #define DISABLED "disabled"
 static const char* TIME_STRING_FORMAT = "%Y-%m-%d %H:%M:%S";
 
-constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
+// constexpr int kBufferSize = 400 * 10;  // initial file is ~400B
 
-static bool use_key_attestation() {
+/*static bool use_key_attestation() {
   return getuid() == AID_BLUETOOTH && is_single_user_mode();
-}
+}*/
 
 #define BT_CONFIG_METRICS_SECTION "Metrics"
 #define BT_CONFIG_METRICS_SALT_256BIT "Salt256Bit"
-using bluetooth::BtifKeystore;
+#define BT_CONFIG_METRICS_ID_KEY "MetricsId"
+
+// using bluetooth::BtifKeystore;
 using bluetooth::common::AddressObfuscator;
+using bluetooth::common::MetricIdAllocator;
 
 // TODO(armansito): Find a better way than searching by a hardcoded path.
 #if defined(OS_GENERIC)
@@ -93,9 +102,10 @@ static void btif_config_remove_restricted(config_t* config);
 static std::unique_ptr<config_t> btif_config_open(const char* filename, const char* checksum_filename);
 
 // Key attestation
-static std::string hash_file(const char* filename);
-static std::string read_checksum_file(const char* filename);
-static void write_checksum_file(const char* filename, const std::string& hash);
+// static std::string hash_file(const char* filename);
+// static std::string read_checksum_file(const char* filename);
+// static void write_checksum_file(const char* filename, const std::string&
+// hash);
 
 static enum ConfigSource {
   NOT_LOADED,
@@ -109,6 +119,23 @@ static enum ConfigSource {
 static int btif_config_devices_loaded = -1;
 static char btif_config_time_created[TIME_STRING_LENGTH];
 
+static const storage_config_t interface = {
+    checksum_read,         checksum_save,      config_get_bool,
+    config_get_int,        config_get_string,  config_get_uint64,
+    config_has_key,        config_has_section, config_new,
+    config_new_clone,      config_new_empty,   config_remove_key,
+    config_remove_section, config_save,        config_set_bool,
+    config_set_int,        config_set_string,  config_set_uint64,
+};
+
+static const storage_config_t* storage_config_get_interface() {
+  if (bluetooth::shim::is_gd_stack_started_up()) {
+    return bluetooth::shim::storage_config_get_interface();
+  } else {
+    return &interface;
+  }
+}
+
 // TODO(zachoverflow): Move these two functions out, because they are too
 // specific for this file
 // {grumpy-cat/no, monty-python/you-make-me-sad}
@@ -120,8 +147,7 @@ bool btif_get_device_type(const RawAddress& bda, int* p_device_type) {
 
   if (!btif_config_get_int(bd_addr_str, "DevType", p_device_type)) return false;
 
-  LOG_DEBUG(LOG_TAG, "%s: Device [%s] type %d", __func__, bd_addr_str,
-            *p_device_type);
+  LOG_DEBUG("%s: Device [%s] type %d", __func__, bd_addr_str, *p_device_type);
   return true;
 }
 
@@ -133,7 +159,7 @@ bool btif_get_address_type(const RawAddress& bda, int* p_addr_type) {
 
   if (!btif_config_get_int(bd_addr_str, "AddrType", p_addr_type)) return false;
 
-  LOG_DEBUG(LOG_TAG, "%s: Device [%s] address type %d", __func__, bd_addr_str,
+  LOG_DEBUG("%s: Device [%s] address type %d", __func__, bd_addr_str,
             *p_addr_type);
   return true;
 }
@@ -172,36 +198,93 @@ static void read_or_set_metrics_salt() {
   AddressObfuscator::GetInstance()->Initialize(metrics_salt);
 }
 
+/**
+ * Initialize metric id allocator by reading metric_id from config by mac
+ * address. If there is no metric id for a mac address, then allocate it a new
+ * metric id.
+ */
+static void init_metric_id_allocator() {
+  std::unordered_map<RawAddress, int> paired_device_map;
+
+  // When user update the system, there will be devices paired with older
+  // version of android without a metric id.
+  std::vector<RawAddress> addresses_without_id;
+
+  for (auto& section : btif_config_sections()) {
+    auto& section_name = section.name;
+    RawAddress mac_address;
+    if (!RawAddress::FromString(section_name, mac_address)) {
+      continue;
+    }
+    // if the section name is a mac address
+    bool is_valid_id_found = false;
+    if (btif_config_exist(section_name, BT_CONFIG_METRICS_ID_KEY)) {
+      // there is one metric id under this mac_address
+      int id = 0;
+      btif_config_get_int(section_name, BT_CONFIG_METRICS_ID_KEY, &id);
+      if (MetricIdAllocator::IsValidId(id)) {
+        paired_device_map[mac_address] = id;
+        is_valid_id_found = true;
+      }
+    }
+    if (!is_valid_id_found) {
+      addresses_without_id.push_back(mac_address);
+    }
+  }
+
+  // Initialize MetricIdAllocator
+  MetricIdAllocator::Callback save_device_callback =
+      [](const RawAddress& address, const int id) {
+        return btif_config_set_int(address.ToString(), BT_CONFIG_METRICS_ID_KEY,
+                                   id);
+      };
+  MetricIdAllocator::Callback forget_device_callback =
+      [](const RawAddress& address, const int id) {
+        return btif_config_remove(address.ToString(), BT_CONFIG_METRICS_ID_KEY);
+      };
+  if (!MetricIdAllocator::GetInstance().Init(
+          paired_device_map, std::move(save_device_callback),
+          std::move(forget_device_callback))) {
+    LOG(FATAL) << __func__ << "Failed to initialize MetricIdAllocator";
+  }
+
+  // Add device_without_id
+  for (auto& address : addresses_without_id) {
+    MetricIdAllocator::GetInstance().AllocateId(address);
+    MetricIdAllocator::GetInstance().SaveDevice(address);
+  }
+}
+
 static std::recursive_mutex config_lock;  // protects operations on |config|.
 static std::unique_ptr<config_t> config;
 static alarm_t* config_timer;
 
-static BtifKeystore btif_keystore(new keystore::KeystoreClientImpl);
+// static BtifKeystore btif_keystore(new keystore::KeystoreClientImpl);
 
 // Module lifecycle functions
 
 static future_t* init(void) {
   std::unique_lock<std::recursive_mutex> lock(config_lock);
 
-  if (is_factory_reset() ||
+  if (is_factory_reset()) delete_config_files();
+  /*if (is_factory_reset() ||
       (use_key_attestation() && !btif_keystore.DoesKeyExist()))
-    delete_config_files();
+    delete_config_files();*/
 
   std::string file_source;
 
   config = btif_config_open(CONFIG_FILE_PATH, CONFIG_FILE_CHECKSUM_PATH);
   btif_config_source = ORIGINAL;
   if (!config) {
-    LOG_WARN(LOG_TAG, "%s unable to load config file: %s; using backup.",
-             __func__, CONFIG_FILE_PATH);
+    LOG_WARN("%s unable to load config file: %s; using backup.", __func__,
+             CONFIG_FILE_PATH);
     remove(CONFIG_FILE_CHECKSUM_PATH);
     config = btif_config_open(CONFIG_BACKUP_PATH, CONFIG_BACKUP_CHECKSUM_PATH);
     btif_config_source = BACKUP;
     file_source = "Backup";
   }
   if (!config) {
-    LOG_WARN(LOG_TAG,
-             "%s unable to load backup; attempting to transcode legacy file.",
+    LOG_WARN("%s unable to load backup; attempting to transcode legacy file.",
              __func__);
     remove(CONFIG_BACKUP_CHECKSUM_PATH);
     config = btif_config_transcode(CONFIG_LEGACY_FILE_PATH);
@@ -209,16 +292,16 @@ static future_t* init(void) {
     file_source = "Legacy";
   }
   if (!config) {
-    LOG_ERROR(LOG_TAG,
-              "%s unable to transcode legacy file; creating empty config.",
+    LOG_ERROR("%s unable to transcode legacy file; creating empty config.",
               __func__);
-    config = config_new_empty();
+    config = storage_config_get_interface()->config_new_empty();
     btif_config_source = NEW_FILE;
     file_source = "Empty";
   }
 
   if (!file_source.empty())
-    config_set_string(config.get(), INFO_SECTION, FILE_SOURCE, file_source);
+    storage_config_get_interface()->config_set_string(
+        config.get(), INFO_SECTION, FILE_SOURCE, file_source);
 
   btif_config_remove_unpaired(config.get());
 
@@ -227,7 +310,8 @@ static future_t* init(void) {
 
   // Read or set config file creation timestamp
   const std::string* time_str;
-  time_str = config_get_string(*config, INFO_SECTION, FILE_TIMESTAMP, NULL);
+  time_str = storage_config_get_interface()->config_get_string(
+      *config, INFO_SECTION, FILE_TIMESTAMP, NULL);
   if (time_str != NULL) {
     strlcpy(btif_config_time_created, time_str->c_str(), TIME_STRING_LENGTH);
   } else {
@@ -235,19 +319,22 @@ static future_t* init(void) {
     struct tm* time_created = localtime(&current_time);
     strftime(btif_config_time_created, TIME_STRING_LENGTH, TIME_STRING_FORMAT,
              time_created);
-    config_set_string(config.get(), INFO_SECTION, FILE_TIMESTAMP,
-                      btif_config_time_created);
+    storage_config_get_interface()->config_set_string(
+        config.get(), INFO_SECTION, FILE_TIMESTAMP, btif_config_time_created);
   }
 
   // Read or set metrics 256 bit hashing salt
   read_or_set_metrics_salt();
+
+  // Initialize MetricIdAllocator
+  init_metric_id_allocator();
 
   // TODO(sharvil): use a non-wake alarm for this once we have
   // API support for it. There's no need to wake the system to
   // write back to disk.
   config_timer = alarm_new("btif.config");
   if (!config_timer) {
-    LOG_ERROR(LOG_TAG, "%s unable to create alarm.", __func__);
+    LOG_ERROR("%s unable to create alarm.", __func__);
     goto error;
   }
 
@@ -264,7 +351,7 @@ error:
 }
 
 static std::unique_ptr<config_t> btif_config_open(const char* filename, const char* checksum_filename) {
-  // START KEY ATTESTATION
+  /*// START KEY ATTESTATION
   // Get hash of current file
   std::string current_hash = hash_file(filename);
   // Get stored hash
@@ -280,13 +367,14 @@ static std::unique_ptr<config_t> btif_config_open(const char* filename, const ch
   if (current_hash != stored_hash) {
     return nullptr;
   }
-  // END KEY ATTESTATION
+  // END KEY ATTESTATION*/
 
-  std::unique_ptr<config_t> config = config_new(filename);
+  std::unique_ptr<config_t> config =
+      storage_config_get_interface()->config_new(filename);
   if (!config) return nullptr;
 
   if (!config_has_section(*config, "Adapter")) {
-    LOG_ERROR(LOG_TAG, "Config is missing adapter section");
+    LOG_ERROR("Config is missing adapter section");
     return nullptr;
   }
 
@@ -305,6 +393,7 @@ static future_t* clean_up(void) {
   config_timer = NULL;
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
+  MetricIdAllocator::GetInstance().Close();
   config.reset();
   return future_new_immediate(FUTURE_SUCCESS);
 }
@@ -320,14 +409,14 @@ bool btif_config_has_section(const char* section) {
   CHECK(section != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  return config_has_section(*config, section);
+  return storage_config_get_interface()->config_has_section(*config, section);
 }
 
 bool btif_config_exist(const std::string& section, const std::string& key) {
   CHECK(config != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  return config_has_key(*config, section, key);
+  return storage_config_get_interface()->config_has_key(*config, section, key);
 }
 
 bool btif_config_get_int(const std::string& section, const std::string& key,
@@ -336,8 +425,11 @@ bool btif_config_get_int(const std::string& section, const std::string& key,
   CHECK(value != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  bool ret = config_has_key(*config, section, key);
-  if (ret) *value = config_get_int(*config, section, key, *value);
+  bool ret =
+      storage_config_get_interface()->config_has_key(*config, section, key);
+  if (ret)
+    *value = storage_config_get_interface()->config_get_int(*config, section,
+                                                            key, *value);
 
   return ret;
 }
@@ -347,7 +439,8 @@ bool btif_config_set_int(const std::string& section, const std::string& key,
   CHECK(config != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  config_set_int(config.get(), section, key, value);
+  storage_config_get_interface()->config_set_int(config.get(), section, key,
+                                                 value);
 
   return true;
 }
@@ -358,8 +451,11 @@ bool btif_config_get_uint64(const std::string& section, const std::string& key,
   CHECK(value != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  bool ret = config_has_key(*config, section, key);
-  if (ret) *value = config_get_uint64(*config, section, key, *value);
+  bool ret =
+      storage_config_get_interface()->config_has_key(*config, section, key);
+  if (ret)
+    *value = storage_config_get_interface()->config_get_uint64(*config, section,
+                                                               key, *value);
 
   return ret;
 }
@@ -369,7 +465,8 @@ bool btif_config_set_uint64(const std::string& section, const std::string& key,
   CHECK(config != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  config_set_uint64(config.get(), section, key, value);
+  storage_config_get_interface()->config_set_uint64(config.get(), section, key,
+                                                    value);
 
   return true;
 }
@@ -383,7 +480,8 @@ bool btif_config_get_str(const std::string& section, const std::string& key,
   {
     std::unique_lock<std::recursive_mutex> lock(config_lock);
     const std::string* stored_value =
-        config_get_string(*config, section, key, NULL);
+        storage_config_get_interface()->config_get_string(*config, section, key,
+                                                          NULL);
     if (!stored_value) return false;
     strlcpy(value, stored_value->c_str(), *size_bytes);
   }
@@ -397,7 +495,8 @@ bool btif_config_set_str(const std::string& section, const std::string& key,
   CHECK(config != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  config_set_string(config.get(), section, key, value);
+  storage_config_get_interface()->config_set_string(config.get(), section, key,
+                                                    value);
   return true;
 }
 
@@ -408,7 +507,9 @@ bool btif_config_get_bin(const std::string& section, const std::string& key,
   CHECK(length != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  const std::string* value_str = config_get_string(*config, section, key, NULL);
+  const std::string* value_str =
+      storage_config_get_interface()->config_get_string(*config, section, key,
+                                                        NULL);
 
   if (!value_str) {
     VLOG(1) << __func__ << ": cannot find string for section " << section
@@ -440,7 +541,9 @@ size_t btif_config_get_bin_length(const std::string& section,
   CHECK(config != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  const std::string* value_str = config_get_string(*config, section, key, NULL);
+  const std::string* value_str =
+      storage_config_get_interface()->config_get_string(*config, section, key,
+                                                        NULL);
   if (!value_str) return 0;
 
   size_t value_len = value_str->length();
@@ -470,7 +573,8 @@ bool btif_config_set_bin(const std::string& section, const std::string& key,
 
   {
     std::unique_lock<std::recursive_mutex> lock(config_lock);
-    config_set_string(config.get(), section, key, str);
+    storage_config_get_interface()->config_set_string(config.get(), section,
+                                                      key, str);
   }
 
   osi_free(str);
@@ -483,7 +587,8 @@ bool btif_config_remove(const std::string& section, const std::string& key) {
   CHECK(config != NULL);
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
-  return config_remove_key(config.get(), section, key);
+  return storage_config_get_interface()->config_remove_key(config.get(),
+                                                           section, key);
 }
 
 void btif_config_save(void) {
@@ -509,16 +614,17 @@ bool btif_config_clear(void) {
 
   std::unique_lock<std::recursive_mutex> lock(config_lock);
 
-  config = config_new_empty();
+  config = storage_config_get_interface()->config_new_empty();
 
-  bool ret = config_save(*config, CONFIG_FILE_PATH);
+  bool ret =
+      storage_config_get_interface()->config_save(*config, CONFIG_FILE_PATH);
   btif_config_source = RESET;
 
-  // Save encrypted hash
+  /*// Save encrypted hash
   std::string current_hash = hash_file(CONFIG_FILE_PATH);
   if (!current_hash.empty()) {
     write_checksum_file(CONFIG_FILE_CHECKSUM_PATH, current_hash);
-  }
+  }*/
 
   return ret;
 }
@@ -538,14 +644,15 @@ static void btif_config_write(UNUSED_ATTR uint16_t event,
   std::unique_lock<std::recursive_mutex> lock(config_lock);
   rename(CONFIG_FILE_PATH, CONFIG_BACKUP_PATH);
   rename(CONFIG_FILE_CHECKSUM_PATH, CONFIG_BACKUP_CHECKSUM_PATH);
-  std::unique_ptr<config_t> config_paired = config_new_clone(*config);
+  std::unique_ptr<config_t> config_paired =
+      storage_config_get_interface()->config_new_clone(*config);
   btif_config_remove_unpaired(config_paired.get());
-  config_save(*config_paired, CONFIG_FILE_PATH);
-  // Save hash
+  storage_config_get_interface()->config_save(*config_paired, CONFIG_FILE_PATH);
+  /*// Save hash
   std::string current_hash = hash_file(CONFIG_FILE_PATH);
   if (!current_hash.empty()) {
     write_checksum_file(CONFIG_FILE_CHECKSUM_PATH, current_hash);
-  }
+  }*/
 }
 
 static void btif_config_remove_unpaired(config_t* conf) {
@@ -608,7 +715,8 @@ void btif_debug_config_dump(int fd) {
   dprintf(fd, "  Devices loaded: %d\n", btif_config_devices_loaded);
   dprintf(fd, "  File created/tagged: %s\n", btif_config_time_created);
   dprintf(fd, "  File source: %s\n",
-          config_get_string(*config, INFO_SECTION, FILE_SOURCE, &original)
+          storage_config_get_interface()
+              ->config_get_string(*config, INFO_SECTION, FILE_SOURCE, &original)
               ->c_str());
 }
 
@@ -618,7 +726,8 @@ static void btif_config_remove_restricted(config_t* config) {
   for (auto it = config->sections.begin(); it != config->sections.end();) {
     const std::string& section = it->name;
     if (RawAddress::IsValidAddress(section) &&
-        config_has_key(*config, section, "Restricted")) {
+        storage_config_get_interface()->config_has_key(*config, section,
+                                                       "Restricted")) {
       BTIF_TRACE_DEBUG("%s: Removing restricted device %s", __func__,
                        section.c_str());
       it = config->sections.erase(it);
@@ -637,12 +746,12 @@ static bool is_factory_reset(void) {
 static void delete_config_files(void) {
   remove(CONFIG_FILE_PATH);
   remove(CONFIG_BACKUP_PATH);
-  remove(CONFIG_FILE_CHECKSUM_PATH);
-  remove(CONFIG_BACKUP_CHECKSUM_PATH);
+  // remove(CONFIG_FILE_CHECKSUM_PATH);
+  // remove(CONFIG_BACKUP_CHECKSUM_PATH);
   osi_property_set("persist.bluetooth.factoryreset", "false");
 }
 
-static std::string hash_file(const char* filename) {
+/*static std::string hash_file(const char* filename) {
   if (!use_key_attestation()) {
     LOG(INFO) << __func__ << ": Disabled for multi-user";
     return DISABLED;
@@ -698,4 +807,4 @@ static void write_checksum_file(const char* checksum_filename,
       << __func__ << ": Failed encrypting checksum";
   CHECK(checksum_save(encrypted_checksum, checksum_filename))
       << __func__ << ": Failed to save checksum!";
-}
+}*/
