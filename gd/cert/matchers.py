@@ -19,6 +19,7 @@ from bluetooth_packets_python3 import hci_packets
 from bluetooth_packets_python3.hci_packets import EventCode
 from bluetooth_packets_python3 import l2cap_packets
 from bluetooth_packets_python3.l2cap_packets import CommandCode, LeCommandCode
+from bluetooth_packets_python3.l2cap_packets import ConfigurationResponseResult
 from bluetooth_packets_python3.l2cap_packets import ConnectionResponseResult
 from bluetooth_packets_python3.l2cap_packets import InformationRequestInfoType
 from bluetooth_packets_python3.l2cap_packets import LeCreditBasedConnectionResponseResult
@@ -40,6 +41,10 @@ class HciMatchers(object):
         frame = hci_packets.CommandCompleteView(hci_event)
         return (opcode is None or frame.GetCommandOpCode() == opcode) and\
                frame.GetNumHciCommandPackets() == num_complete
+
+    @staticmethod
+    def EventWithCode(event_code):
+        return lambda msg: HciMatchers.extract_hci_event_with_code(msg.event, event_code)
 
     @staticmethod
     def extract_hci_event_with_code(packet_bytes, event_code=None):
@@ -113,12 +118,16 @@ class L2capMatchers(object):
         return lambda packet: L2capMatchers._is_matching_connection_response(packet, scid)
 
     @staticmethod
-    def ConfigurationResponse():
-        return lambda packet: L2capMatchers._is_control_frame_with_code(packet, CommandCode.CONFIGURATION_RESPONSE)
+    def ConfigurationResponse(result=ConfigurationResponseResult.SUCCESS):
+        return lambda packet: L2capMatchers._is_matching_configuration_response(packet, result)
 
     @staticmethod
     def ConfigurationRequest():
         return lambda packet: L2capMatchers._is_control_frame_with_code(packet, CommandCode.CONFIGURATION_REQUEST)
+
+    @staticmethod
+    def ConfigurationRequestWithErtm():
+        return lambda packet: L2capMatchers._is_matching_configuration_request_with_ertm(packet)
 
     @staticmethod
     def DisconnectionRequest(scid, dcid):
@@ -222,6 +231,10 @@ class L2capMatchers(object):
     @staticmethod
     def ExtractBasicFrameWithFcs(scid):
         return lambda packet: L2capMatchers._basic_frame_with_fcs_for(packet, scid)
+
+    @staticmethod
+    def InformationRequestWithType(info_type):
+        return lambda packet: L2capMatchers._information_request_with_type(packet, info_type)
 
     @staticmethod
     def InformationResponseExtendedFeatures(supports_ertm=None,
@@ -412,6 +425,27 @@ class L2capMatchers(object):
         ) != 0
 
     @staticmethod
+    def _is_matching_configuration_request_with_ertm(packet):
+        frame = L2capMatchers.control_frame_with_code(
+            packet, CommandCode.CONFIGURATION_REQUEST)
+        if frame is None:
+            return False
+        request = l2cap_packets.ConfigurationRequestView(frame)
+        config_bytes = request.GetBytes()
+        # TODO(b/153189503): Use packet struct parser.
+        return b"\x04\x09\x03" in config_bytes
+
+    @staticmethod
+    def _is_matching_configuration_response(
+            packet, result=ConfigurationResponseResult.SUCCESS):
+        frame = L2capMatchers.control_frame_with_code(
+            packet, CommandCode.CONFIGURATION_RESPONSE)
+        if frame is None:
+            return False
+        response = l2cap_packets.ConfigurationResponseView(frame)
+        return response.GetResult() == result
+
+    @staticmethod
     def _is_matching_disconnection_request(packet, scid, dcid):
         frame = L2capMatchers.control_frame_with_code(
             packet, CommandCode.DISCONNECTION_REQUEST)
@@ -459,6 +493,17 @@ class L2capMatchers(object):
             return False
         request = l2cap_packets.LeFlowControlCreditView(frame)
         return request.GetCid() == cid
+
+    @staticmethod
+    def _information_request_with_type(packet, info_type):
+        frame = L2capMatchers.control_frame_with_code(
+            packet, CommandCode.INFORMATION_REQUEST)
+        if frame is None:
+            return None
+        request = l2cap_packets.InformationRequestView(frame)
+        if request.GetInfoType() != info_type:
+            return None
+        return request
 
     @staticmethod
     def _information_response_with_type(packet, info_type):
