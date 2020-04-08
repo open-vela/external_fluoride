@@ -1902,13 +1902,13 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     /* Make sure service type is not a reserved value; otherwise let upper
        layer decide if acceptable
     */
-    if (p_cfg->qos.service_type <= SVC_TYPE_GUARANTEED) {
+    if (p_cfg->qos.service_type <= GUARANTEED) {
       p_ccb->peer_cfg.qos = p_cfg->qos;
       p_ccb->peer_cfg.qos_present = true;
       p_ccb->peer_cfg_bits |= L2CAP_CH_CFG_MASK_QOS;
     } else /* Illegal service type value */
     {
-      p_cfg->qos.service_type = SVC_TYPE_BEST_EFFORT;
+      p_cfg->qos.service_type = BEST_EFFORT;
       qos_type_ok = false;
     }
   }
@@ -2016,6 +2016,9 @@ void l2cu_process_our_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
       /*                 timer value in config response shall be greater than
        * received processing time */
       p_cfg->fcr.mon_tout = p_cfg->fcr.rtrans_tout = 0;
+
+      if (p_cfg->fcr.mode == L2CAP_FCR_STREAM_MODE)
+        p_cfg->fcr.max_transmit = p_cfg->fcr.tx_win_sz = 0;
     }
 
     /* Set the threshold to send acks (may be updated in the cfg response) */
