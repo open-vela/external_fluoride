@@ -30,7 +30,7 @@
 typedef struct {
   HANDLE_AACDECODER aac_handle;
   bool has_aac_handle;  // True if aac_handle is valid
-  INT_PCM* decode_buf = nullptr;
+  INT_PCM* decode_buf;
   decoded_data_callback_t decode_callback;
 } tA2DP_AAC_DECODER_CB;
 
@@ -58,7 +58,7 @@ bool a2dp_aac_decoder_init(decoded_data_callback_t decode_callback) {
 void a2dp_aac_decoder_cleanup(void) {
   if (a2dp_aac_decoder_cb.has_aac_handle)
     aacDecoder_Close(a2dp_aac_decoder_cb.aac_handle);
-  osi_free(a2dp_aac_decoder_cb.decode_buf);
+  free(a2dp_aac_decoder_cb.decode_buf);
   memset(&a2dp_aac_decoder_cb, 0, sizeof(a2dp_aac_decoder_cb));
 }
 
@@ -70,7 +70,7 @@ bool a2dp_aac_decoder_decode_packet(BT_HDR* p_buf) {
     AAC_DECODER_ERROR err = aacDecoder_Fill(a2dp_aac_decoder_cb.aac_handle,
                                             &pBuffer, &bufferSize, &bytesValid);
     if (err != AAC_DEC_OK) {
-      LOG_ERROR(LOG_TAG, "%s: aacDecoder_Fill failed: 0x%x", __func__,
+      LOG_ERROR("%s: aacDecoder_Fill failed: 0x%x", __func__,
                 static_cast<unsigned>(err));
       return false;
     }
@@ -83,7 +83,7 @@ bool a2dp_aac_decoder_decode_packet(BT_HDR* p_buf) {
         break;
       }
       if (err != AAC_DEC_OK) {
-        LOG_ERROR(LOG_TAG, "%s: aacDecoder_DecodeFrame failed: 0x%x", __func__,
+        LOG_ERROR("%s: aacDecoder_DecodeFrame failed: 0x%x", __func__,
                   static_cast<int>(err));
         break;
       }
@@ -91,7 +91,7 @@ bool a2dp_aac_decoder_decode_packet(BT_HDR* p_buf) {
       CStreamInfo* info =
           aacDecoder_GetStreamInfo(a2dp_aac_decoder_cb.aac_handle);
       if (!info || info->sampleRate <= 0) {
-        LOG_ERROR(LOG_TAG, "%s: Invalid stream info", __func__);
+        LOG_ERROR("%s: Invalid stream info", __func__);
         break;
       }
 
