@@ -34,8 +34,6 @@ class Controller : public Module {
   virtual void RegisterCompletedAclPacketsCallback(
       common::Callback<void(uint16_t /* handle */, uint16_t /* num_packets */)> cb, os::Handler* handler);
 
-  virtual void UnregisterCompletedAclPacketsCallback();
-
   virtual std::string GetControllerLocalName() const;
 
   virtual LocalVersionInformation GetControllerLocalVersionInformation() const;
