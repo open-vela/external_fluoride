@@ -62,10 +62,6 @@ void ClassicSignallingManager::OnCommandReject(CommandRejectView command_reject_
     LOG_WARN("Unexpected command reject: no pending request");
     return;
   }
-  if (command_just_sent_.command_code_ == CommandCode::INFORMATION_REQUEST &&
-      command_just_sent_.info_type_ == InformationRequestInfoType::EXTENDED_FEATURES_SUPPORTED) {
-    link_->OnRemoteExtendedFeatureReceived(false, false);
-  }
   alarm_.Cancel();
   handle_send_next_command();
 
@@ -639,7 +635,8 @@ void ClassicSignallingManager::OnInformationResponse(SignalId signal_id, const I
         LOG_WARN("Invalid InformationResponseExtendedFeatures received");
         return;
       }
-      link_->OnRemoteExtendedFeatureReceived(view.GetEnhancedRetransmissionMode(), view.GetFcsOption());
+      link_->SetRemoteSupportsErtm((view.GetEnhancedRetransmissionMode()));
+      link_->SetRemoteSupportsFcs(view.GetFcsOption());
       // We don't care about other parameters
       break;
     }
@@ -795,12 +792,6 @@ void ClassicSignallingManager::on_command_timeout() {
       auto channel = channel_allocator_->FindChannelByRemoteCid(command_just_sent_.destination_cid_);
       SendDisconnectionRequest(channel->GetCid(), channel->GetRemoteCid());
       return;
-    }
-    case CommandCode::INFORMATION_REQUEST: {
-      if (command_just_sent_.info_type_ == InformationRequestInfoType::EXTENDED_FEATURES_SUPPORTED) {
-        link_->OnRemoteExtendedFeatureReceived(false, false);
-      }
-      break;
     }
     default:
       break;
