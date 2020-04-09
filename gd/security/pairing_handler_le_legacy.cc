@@ -18,10 +18,6 @@
 
 #include "security/pairing_handler_le.h"
 
-#include "os/rand.h"
-
-using bluetooth::os::GenerateRandom;
-
 namespace bluetooth {
 namespace security {
 

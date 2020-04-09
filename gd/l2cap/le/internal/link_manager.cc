@@ -128,7 +128,13 @@ void LinkManager::OnLeConnectSuccess(hci::AddressWithType connecting_address_wit
   }
 
   // Remove device from pending links list, if any
-  pending_links_.erase(connecting_address_with_type);
+  auto pending_link = pending_links_.find(connecting_address_with_type);
+  if (pending_link == pending_links_.end()) {
+    // This an incoming connection, exit
+    return;
+  }
+  // This is an outgoing connection, remove entry in pending link list
+  pending_links_.erase(pending_link);
 }
 
 void LinkManager::OnLeConnectFail(hci::AddressWithType address_with_type, hci::ErrorCode reason) {
