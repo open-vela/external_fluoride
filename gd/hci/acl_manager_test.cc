@@ -150,7 +150,7 @@ class TestHciLayer : public HciLayer {
       auto result = command_future_->wait_for(std::chrono::milliseconds(1000));
       EXPECT_NE(std::future_status::timeout, result);
     }
-    ASSERT(!command_queue_.empty());
+    ASSERT(command_queue_.size() > 0);
     auto packet_view = GetPacketView(GetLastCommand());
     CommandPacketView command_packet_view = CommandPacketView::Create(packet_view);
     ConnectionManagementCommandView command = ConnectionManagementCommandView::Create(command_packet_view);
@@ -174,7 +174,7 @@ class TestHciLayer : public HciLayer {
     registered_le_events_[subevent_code] = event_handler;
   }
 
-  void UnregisterLeEventHandler(SubeventCode subevent_code) override {
+  void UnregisterLeEventHandler(SubeventCode subevent_code) {
     registered_le_events_.erase(subevent_code);
   }
 
@@ -282,12 +282,6 @@ class AclManagerNoCallbacksTest : public ::testing::Test {
     EXPECT_NE(client_handler_, nullptr);
     fake_registry_.Start<AclManager>(&thread_);
     acl_manager_ = static_cast<AclManager*>(fake_registry_.GetModuleUnderTest(&AclManager::Factory));
-    auto packet = test_hci_layer_->GetCommandPacket(OpCode::READ_DEFAULT_LINK_POLICY_SETTINGS);
-    EXPECT_TRUE(ReadDefaultLinkPolicySettingsView::Create(packet).IsValid());
-    uint8_t num_packets = 1;
-    uint16_t default_settings = 5;
-    test_hci_layer_->IncomingEvent(
-        ReadDefaultLinkPolicySettingsCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, default_settings));
     Address::FromString("A1:A2:A3:A4:A5:A6", remote);
   }
 
@@ -317,15 +311,16 @@ class AclManagerNoCallbacksTest : public ::testing::Test {
     return mock_le_connection_callbacks_.le_connection_promise_->get_future();
   }
 
-  std::shared_ptr<ClassicAclConnection> GetLastConnection() {
+  std::shared_ptr<AclConnection> GetLastConnection() {
     return mock_connection_callback_.connections_.back();
   }
 
-  std::shared_ptr<LeAclConnection> GetLastLeConnection() {
+  std::shared_ptr<AclConnection> GetLastLeConnection() {
     return mock_le_connection_callbacks_.le_connections_.back();
   }
 
-  void SendAclData(uint16_t handle, AclConnection::QueueUpEnd* queue_end) {
+  void SendAclData(uint16_t handle, std::shared_ptr<AclConnection> connection) {
+    auto queue_end = connection->GetAclQueueEnd();
     std::promise<void> promise;
     auto future = promise.get_future();
     queue_end->RegisterEnqueue(client_handler_,
@@ -342,7 +337,7 @@ class AclManagerNoCallbacksTest : public ::testing::Test {
 
   class MockConnectionCallback : public ConnectionCallbacks {
    public:
-    void OnConnectSuccess(std::unique_ptr<ClassicAclConnection> connection) override {
+    void OnConnectSuccess(std::unique_ptr<AclConnection> connection) override {
       // Convert to std::shared_ptr during push_back()
       connections_.push_back(std::move(connection));
       if (connection_promise_ != nullptr) {
@@ -352,13 +347,13 @@ class AclManagerNoCallbacksTest : public ::testing::Test {
     }
     MOCK_METHOD(void, OnConnectFail, (Address, ErrorCode reason), (override));
 
-    std::list<std::shared_ptr<ClassicAclConnection>> connections_;
+    std::list<std::shared_ptr<AclConnection>> connections_;
     std::unique_ptr<std::promise<void>> connection_promise_;
   } mock_connection_callback_;
 
   class MockLeConnectionCallbacks : public LeConnectionCallbacks {
    public:
-    void OnLeConnectSuccess(AddressWithType address_with_type, std::unique_ptr<LeAclConnection> connection) override {
+    void OnLeConnectSuccess(AddressWithType address_with_type, std::unique_ptr<AclConnection> connection) override {
       le_connections_.push_back(std::move(connection));
       if (le_connection_promise_ != nullptr) {
         le_connection_promise_->set_value();
@@ -367,9 +362,16 @@ class AclManagerNoCallbacksTest : public ::testing::Test {
     }
     MOCK_METHOD(void, OnLeConnectFail, (AddressWithType, ErrorCode reason), (override));
 
-    std::list<std::shared_ptr<LeAclConnection>> le_connections_;
+    std::list<std::shared_ptr<AclConnection>> le_connections_;
     std::unique_ptr<std::promise<void>> le_connection_promise_;
   } mock_le_connection_callbacks_;
+
+  class MockAclManagerCallbacks : public AclManagerCallbacks {
+   public:
+    MOCK_METHOD(void, OnMasterLinkKeyComplete, (uint16_t connection_handle, KeyFlag key_flag), (override));
+    MOCK_METHOD(void, OnRoleChange, (Address bd_addr, Role new_role), (override));
+    MOCK_METHOD(void, OnReadDefaultLinkPolicySettingsComplete, (uint16_t default_link_policy_settings), (override));
+  } mock_acl_manager_callbacks_;
 };
 
 class AclManagerTest : public AclManagerNoCallbacksTest {
@@ -378,6 +380,7 @@ class AclManagerTest : public AclManagerNoCallbacksTest {
     AclManagerNoCallbacksTest::SetUp();
     acl_manager_->RegisterCallbacks(&mock_connection_callback_, client_handler_);
     acl_manager_->RegisterLeCallbacks(&mock_le_connection_callbacks_, client_handler_);
+    acl_manager_->RegisterAclManagerCallbacks(&mock_acl_manager_callbacks_, client_handler_);
   }
 };
 
@@ -415,7 +418,7 @@ class AclManagerWithConnectionTest : public AclManagerTest {
   }
 
   uint16_t handle_;
-  std::shared_ptr<ClassicAclConnection> connection_;
+  std::shared_ptr<AclConnection> connection_;
 
   class MockConnectionManagementCallbacks : public ConnectionManagementCallbacks {
    public:
@@ -441,8 +444,6 @@ class AclManagerWithConnectionTest : public AclManagerTest {
     MOCK_METHOD2(OnReadAfhChannelMapComplete, void(AfhMode afh_mode, std::array<uint8_t, 10> afh_channel_map));
     MOCK_METHOD1(OnReadRssiComplete, void(uint8_t rssi));
     MOCK_METHOD2(OnReadClockComplete, void(uint32_t clock, uint16_t accuracy));
-    MOCK_METHOD1(OnMasterLinkKeyComplete, void(KeyFlag flag));
-    MOCK_METHOD1(OnRoleChange, void(Role new_role));
   } mock_connection_management_callbacks_;
 };
 
@@ -484,7 +485,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_connection_complete_success) {
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastConnection();
+  std::shared_ptr<AclConnection> connection = GetLastConnection();
   ASSERT_EQ(connection->GetAddress(), remote);
 }
 
@@ -533,8 +534,8 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_complete_success
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastLeConnection();
-  ASSERT_EQ(connection->GetAddressWithType(), remote_with_type);
+  std::shared_ptr<AclConnection> connection = GetLastLeConnection();
+  ASSERT_EQ(connection->GetAddress(), remote);
 }
 
 TEST_F(AclManagerTest, invoke_registered_callback_le_connection_complete_fail) {
@@ -581,8 +582,8 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_update_success) 
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastLeConnection();
-  ASSERT_EQ(connection->GetAddressWithType(), remote_with_type);
+  std::shared_ptr<AclConnection> connection = GetLastLeConnection();
+  ASSERT_EQ(connection->GetAddress(), remote);
 
   std::promise<ErrorCode> promise;
   auto future = promise.get_future();
@@ -617,7 +618,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_disconnection_complete) {
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastConnection();
+  std::shared_ptr<AclConnection> connection = GetLastConnection();
 
   // Register the disconnect handler
   std::promise<ErrorCode> promise;
@@ -657,7 +658,7 @@ TEST_F(AclManagerTest, acl_connection_finish_after_disconnected) {
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastConnection();
+  std::shared_ptr<AclConnection> connection = GetLastConnection();
 
   // Register the disconnect handler
   std::promise<ErrorCode> promise;
@@ -696,7 +697,7 @@ TEST_F(AclManagerTest, acl_send_data_one_connection) {
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastConnection();
+  std::shared_ptr<AclConnection> connection = GetLastConnection();
 
   // Register the disconnect handler
   connection->RegisterDisconnectCallback(
@@ -715,12 +716,12 @@ TEST_F(AclManagerTest, acl_send_data_one_connection) {
   PacketView<kLittleEndian> received_packet = *received;
 
   // Send a packet from the connection
-  SendAclData(handle, connection->GetAclQueueEnd());
+  SendAclData(handle, connection);
 
   auto sent_packet = test_hci_layer_->OutgoingAclData();
 
   // Send another packet from the connection
-  SendAclData(handle, connection->GetAclQueueEnd());
+  SendAclData(handle, connection);
 
   sent_packet = test_hci_layer_->OutgoingAclData();
   connection->Disconnect(DisconnectReason::AUTHENTICATION_FAILURE);
@@ -744,7 +745,7 @@ TEST_F(AclManagerTest, acl_send_data_credits) {
   auto first_connection_status = first_connection.wait_for(kTimeout);
   ASSERT_EQ(first_connection_status, std::future_status::ready);
 
-  auto connection = GetLastConnection();
+  std::shared_ptr<AclConnection> connection = GetLastConnection();
 
   // Register the disconnect handler
   connection->RegisterDisconnectCallback(
@@ -754,13 +755,13 @@ TEST_F(AclManagerTest, acl_send_data_credits) {
   // Use all the credits
   for (uint16_t credits = 0; credits < test_controller_->total_acl_buffers_; credits++) {
     // Send a packet from the connection
-    SendAclData(handle, connection->GetAclQueueEnd());
+    SendAclData(handle, connection);
 
     auto sent_packet = test_hci_layer_->OutgoingAclData();
   }
 
   // Send another packet from the connection
-  SendAclData(handle, connection->GetAclQueueEnd());
+  SendAclData(handle, connection);
 
   test_hci_layer_->AssertNoOutgoingAclData();
 
@@ -780,14 +781,27 @@ TEST_F(AclManagerWithConnectionTest, send_switch_role) {
   EXPECT_EQ(command_view.GetBdAddr(), connection_->GetAddress());
   EXPECT_EQ(command_view.GetRole(), Role::SLAVE);
 
-  EXPECT_CALL(mock_connection_management_callbacks_, OnRoleChange(Role::SLAVE));
+  EXPECT_CALL(mock_acl_manager_callbacks_, OnRoleChange(connection_->GetAddress(), Role::SLAVE));
   test_hci_layer_->IncomingEvent(RoleChangeBuilder::Create(ErrorCode::SUCCESS, connection_->GetAddress(), Role::SLAVE));
+}
+
+TEST_F(AclManagerWithConnectionTest, send_read_default_link_policy_settings) {
+  test_hci_layer_->SetCommandFuture();
+  acl_manager_->ReadDefaultLinkPolicySettings();
+  auto packet = test_hci_layer_->GetCommandPacket(OpCode::READ_DEFAULT_LINK_POLICY_SETTINGS);
+  auto command_view = ReadDefaultLinkPolicySettingsView::Create(packet);
+  ASSERT(command_view.IsValid());
+
+  test_hci_layer_->SetCommandFuture();
+  EXPECT_CALL(mock_acl_manager_callbacks_, OnReadDefaultLinkPolicySettingsComplete(0x07));
+  uint8_t num_packets = 1;
+  test_hci_layer_->IncomingEvent(
+      ReadDefaultLinkPolicySettingsCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, 0x07));
 }
 
 TEST_F(AclManagerWithConnectionTest, send_write_default_link_policy_settings) {
   test_hci_layer_->SetCommandFuture();
-  uint16_t link_policy_settings = 0x05;
-  acl_manager_->WriteDefaultLinkPolicySettings(link_policy_settings);
+  acl_manager_->WriteDefaultLinkPolicySettings(0x05);
   auto packet = test_hci_layer_->GetCommandPacket(OpCode::WRITE_DEFAULT_LINK_POLICY_SETTINGS);
   auto command_view = WriteDefaultLinkPolicySettingsView::Create(packet);
   ASSERT(command_view.IsValid());
@@ -796,8 +810,6 @@ TEST_F(AclManagerWithConnectionTest, send_write_default_link_policy_settings) {
   uint8_t num_packets = 1;
   test_hci_layer_->IncomingEvent(
       WriteDefaultLinkPolicySettingsCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS));
-
-  ASSERT_EQ(link_policy_settings, acl_manager_->ReadDefaultLinkPolicySettings());
 }
 
 TEST_F(AclManagerWithConnectionTest, send_change_connection_packet_type) {
