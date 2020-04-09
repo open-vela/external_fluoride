@@ -71,35 +71,6 @@ cc_defaults {
     },
 }
 
-cc_defaults {
-    name: "gd_clang_tidy",
-    tidy: true,
-    tidy_checks: [
-        "cppcoreguidelines-pro-type-member-init",
-        "clang-analyzer-core.CallAndMessage",
-        "clang-analyzer-optin.cplusplus.UninitializedObject",
-        "-google*",
-        "-performance*",
-        "-bugprone*",
-    ],
-    tidy_checks_as_errors: [
-        "cppcoreguidelines-pro-type-member-init",
-        "clang-analyzer-core.CallAndMessage",
-        "clang-analyzer-optin.cplusplus.UninitializedObject",
-    ],
-    tidy_flags: [
-        "--header-filter=^.*system/bt/.*.h$",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=-analyzer-config",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=optin.cplusplus.UninitializedObject:Pedantic=true",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=-analyzer-config",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=optin.cplusplus.UninitializedObject:CheckPointeeInitialization=true",
-    ],
-}
-
 cc_library {
     name: "libbluetooth_gd",
     defaults: [
@@ -149,7 +120,6 @@ cc_library {
     ],
     shared_libs: [
         "libchrome",
-        "libcrypto",
     ],
 }
 
@@ -157,7 +127,6 @@ cc_binary {
     name: "bluetooth_stack_with_facade",
     defaults: [
         "gd_defaults",
-        "gd_clang_coverage_bin",
     ],
     host_supported: true,
     srcs: [
@@ -174,9 +143,6 @@ cc_binary {
     generated_headers: [
         "BluetoothGeneratedPackets_h",
         "BluetoothFacadeGeneratedStub_h",
-        // Needed here to guarantee that generated zip file is created before
-        // bluetooth_cert_tests.zip is packaged
-        "BluetoothFacadeAndCertGeneratedStub_py",
     ],
     generated_sources: [
         "BluetoothFacadeGeneratedStub_cc",
@@ -186,7 +152,6 @@ cc_binary {
     ],
     shared_libs: [
         "libchrome",
-        "libcrypto",
         "libgrpc++_unsecure",
         "libprotobuf-cpp-full",
     ],
@@ -262,7 +227,6 @@ cc_test {
     ],
     shared_libs: [
         "libchrome",
-        "libcrypto",
     ],
     sanitize: {
         address: true,
@@ -307,9 +271,6 @@ cc_fuzz {
   host_supported: true,
   generated_headers: [
     "BluetoothGeneratedPackets_h",
-  ],
-  shared_libs: [
-    "libcrypto",
   ],
   target: {
     android: {
@@ -411,7 +372,6 @@ filegroup {
         "hci/facade/le_scanning_manager_facade.proto",
         "neighbor/facade/facade.proto",
         "l2cap/classic/facade.proto",
-        "l2cap/le/facade.proto",
         "security/facade.proto",
     ],
 }
@@ -447,8 +407,6 @@ genrule {
         "hci/facade/le_scanning_manager_facade.pb.h",
         "l2cap/classic/facade.grpc.pb.h",
         "l2cap/classic/facade.pb.h",
-        "l2cap/le/facade.grpc.pb.h",
-        "l2cap/le/facade.pb.h",
         "neighbor/facade/facade.grpc.pb.h",
         "neighbor/facade/facade.pb.h",
         "security/facade.grpc.pb.h",
@@ -487,8 +445,6 @@ genrule {
         "hci/facade/le_scanning_manager_facade.pb.cc",
         "l2cap/classic/facade.grpc.pb.cc",
         "l2cap/classic/facade.pb.cc",
-        "l2cap/le/facade.grpc.pb.cc",
-        "l2cap/le/facade.pb.cc",
         "neighbor/facade/facade.grpc.pb.cc",
         "neighbor/facade/facade.pb.cc",
         "security/facade.grpc.pb.cc",
@@ -503,23 +459,23 @@ genrule {
         "protoc-gen-grpc-python-plugin",
         "soong_zip",
     ],
-    cmd: "mkdir -p $(genDir)/files && " +
-        "$(location aprotoc) -Isystem/bt/gd -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-python-plugin) $(in) --grpc_out=$(genDir)/files --python_out=$(genDir)/files && " +
-        "mkdir -p $(genDir)/files/cert && " +
-        "touch $(genDir)/files/cert/__init__.py && " +
-        "touch $(genDir)/files/facade/__init__.py && " +
-        "touch $(genDir)/files/hal/__init__.py && " +
-        "touch $(genDir)/files/hci/__init__.py && " +
-        "touch $(genDir)/files/hci/facade/__init__.py && " +
-        "touch $(genDir)/files/l2cap/classic/__init__.py && " +
-        "touch $(genDir)/files/l2cap/le/__init__.py && " +
-        "touch $(genDir)/files/neighbor/facade/__init__.py && " +
-        "touch $(genDir)/files/security/__init__.py && " +
-        "$(location soong_zip) -C $(genDir)/files -D $(genDir)/files -o $(out)",
+    cmd: "$(location aprotoc) -Isystem/bt/gd -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-python-plugin) $(in) --grpc_out=$(genDir) --python_out=$(genDir); " +
+        "touch $(genDir)/facade/__init__.py; " +
+        "touch $(genDir)/hal/__init__.py; " +
+        "touch $(genDir)/hci/__init__.py; " +
+        "touch $(genDir)/hci/facade/__init__.py; " +
+        "touch $(genDir)/l2cap/classic/__init__.py; " +
+        "touch $(genDir)/neighbor/facade/__init__.py; " +
+        "touch $(genDir)/security/__init__.py; " +
+        "$(location soong_zip) -C $(genDir) -D $(genDir) -o $(out)",
     srcs: [
         ":BluetoothFacadeProto",
     ],
     out: ["bluetooth_cert_generated_py.zip"],
+    dist: {
+        targets: ["bluetooth_stack_with_facade"],
+    },
+
 }
 
 cc_defaults {
