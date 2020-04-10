@@ -20,7 +20,7 @@
 
 namespace bluetooth {
 namespace os {
-namespace fuzz {
+namespace fuzzing {
 
 // Drops stuff you send it, and banishes it into the void.
 template <typename T>
@@ -46,6 +46,6 @@ class DevNullQueue {
   Handler* handler_;
 };
 
-}  // namespace fuzz
+}  // namespace fuzzing
 }  // namespace os
 }  // namespace bluetooth
