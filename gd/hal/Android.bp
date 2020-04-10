@@ -39,10 +39,3 @@ filegroup {
         "facade.cc",
     ],
 }
-
-filegroup {
-    name: "BluetoothHalFuzzingSources",
-    srcs: [
-        "fuzzing/fuzzing_hci_hal.cc",
-    ],
-}
