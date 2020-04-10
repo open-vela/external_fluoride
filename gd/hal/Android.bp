@@ -41,8 +41,8 @@ filegroup {
 }
 
 filegroup {
-    name: "BluetoothHalFuzzSources",
+    name: "BluetoothHalFuzzingSources",
     srcs: [
-        "fuzz/fuzz_hci_hal.cc",
+        "fuzzing/fuzzing_hci_hal.cc",
     ],
 }
