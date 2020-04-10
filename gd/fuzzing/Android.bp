@@ -1,6 +1,0 @@
-filegroup {
-    name: "BluetoothFuzzingHelperSources",
-    srcs: [
-        "helpers.cc",
-    ],
-}
