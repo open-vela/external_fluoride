@@ -290,11 +290,13 @@ cc_test {
     },
 }
 
-cc_defaults {
-  name: "gd_fuzz_defaults",
+cc_fuzz {
+  name: "bluetooth_gd_fuzz_test",
   defaults: ["gd_defaults"],
   srcs: [
-    ":BluetoothFuzzingHelperSources",
+    "fuzz_test.cc",
+    ":BluetoothHciFuzzTestSources",
+    ":BluetoothL2capFuzzTestSources",
   ],
   static_libs: [
     "libbluetooth_gd",
@@ -318,25 +320,6 @@ cc_defaults {
         ],
     },
   },
-}
-
-cc_fuzz {
-  name: "bluetooth_gd_fuzz_test",
-  defaults: ["gd_fuzz_defaults"],
-  srcs: [
-    "fuzz_test.cc",
-    ":BluetoothHciFuzzTestSources",
-    ":BluetoothL2capFuzzTestSources",
-  ],
-}
-
-cc_fuzz {
-  name: "bluetooth_gd_hci_fuzz_test",
-  defaults: ["gd_fuzz_defaults"],
-  srcs: [
-    "hci/fuzzing/hci_layer_fuzz_test.cc",
-    ":BluetoothHalFuzzingSources",
-  ],
 }
 
 cc_benchmark {
