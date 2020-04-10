@@ -1,5 +1,5 @@
 filegroup {
-    name: "BluetoothFuzzHelperSources",
+    name: "BluetoothFuzzingHelperSources",
     srcs: [
         "helpers.cc",
     ],
