@@ -43,11 +43,13 @@
 #include "bt_common.h"
 #include "bt_types.h"
 #include "bt_utils.h"
+#include "btif_config.h"
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btu.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
+#include "hci_evt_length.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
@@ -191,6 +193,44 @@ void btu_hcif_log_event_metrics(uint8_t evt_code, uint8_t* p_event) {
       bluetooth::common::LogLinkLayerConnectionEvent(
           &bda, handle, android::bluetooth::DIRECTION_UNKNOWN, link_type, cmd,
           evt_code, android::bluetooth::hci::BLE_EVT_UNKNOWN, status, reason);
+
+      // Read SDP_DI manufacturer, model, HW version from config,
+      // and log them
+      int sdp_di_manufacturer_id = 0;
+      int sdp_di_model_id = 0;
+      int sdp_di_hw_version = 0;
+      int sdp_di_vendor_id_source = 0;
+      std::string bda_string = bda.ToString();
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_SDP_DI_MANUFACTURER,
+                          &sdp_di_manufacturer_id);
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_SDP_DI_MODEL,
+                          &sdp_di_model_id);
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_SDP_DI_HW_VERSION,
+                          &sdp_di_hw_version);
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_SDP_DI_VENDOR_ID_SRC,
+                          &sdp_di_vendor_id_source);
+
+      std::stringstream ss;
+      // [N - native]::SDP::[DIP - Device ID Profile]
+      ss << "N:SDP::DIP::" << loghex(sdp_di_vendor_id_source);
+      bluetooth::common::LogManufacturerInfo(
+          bda, android::bluetooth::DeviceInfoSrcEnum::DEVICE_INFO_INTERNAL,
+          ss.str(), loghex(sdp_di_manufacturer_id), loghex(sdp_di_model_id),
+          loghex(sdp_di_hw_version), "");
+
+      // Read LMP version, subversion and  manufacturer from config,
+      // and log them
+      int lmp_version = -1;
+      int lmp_subversion = -1;
+      int lmp_manufacturer_id = -1;
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_REMOTE_VER_VER,
+                          &lmp_version);
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_REMOTE_VER_SUBVER,
+                          &lmp_subversion);
+      btif_config_get_int(bda_string, BT_CONFIG_KEY_REMOTE_VER_MFCT,
+                          &lmp_manufacturer_id);
+      bluetooth::common::LogRemoteVersionInfo(
+          handle, status, lmp_version, lmp_manufacturer_id, lmp_subversion);
       break;
     }
     case HCI_CONNECTION_REQUEST_EVT: {
@@ -257,6 +297,13 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
   uint8_t ble_sub_code;
   STREAM_TO_UINT8(hci_evt_code, p);
   STREAM_TO_UINT8(hci_evt_len, p);
+
+  // validate event size
+  if (hci_evt_len < hci_event_parameters_minimum_length[hci_evt_code]) {
+    HCI_TRACE_WARNING("%s: evt:0x%2X, malformed event of size %hhd", __func__,
+                      hci_evt_code, hci_evt_len);
+    return;
+  }
 
   btu_hcif_log_event_metrics(hci_evt_code, p);
 
