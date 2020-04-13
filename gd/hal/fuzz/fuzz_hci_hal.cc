@@ -41,46 +41,49 @@ void FuzzHciHal::sendHciCommand(HciPacket packet) {
   waiting_for_status_ = waiting_opcode_ == hci::OpCode::RESET;
 }
 
-void FuzzHciHal::injectHciEvent(std::vector<uint8_t> data) {
-  auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(data));
+bool FuzzHciHal::is_currently_valid_event(packet::PacketView<packet::kLittleEndian> packet) {
   hci::EventPacketView event = hci::EventPacketView::Create(packet);
   if (!event.IsValid()) {
-    return;
+    return false;
   }
 
   hci::CommandCompleteView complete = hci::CommandCompleteView::Create(event);
   if (complete.IsValid()) {
     if (waiting_for_status_ || complete.GetCommandOpCode() != waiting_opcode_) {
-      return;
+      return false;
     }
   } else if (!waiting_for_status_) {
-    return;
+    return false;
   }
 
   hci::CommandStatusView status = hci::CommandStatusView::Create(event);
   if (status.IsValid()) {
     if (!waiting_for_status_ || status.GetCommandOpCode() != waiting_opcode_) {
-      return;
+      return false;
     }
   } else if (waiting_for_status_) {
-    return;
+    return false;
   }
 
-  callbacks_->hciEventReceived(data);
+  return true;
 }
 
-void FuzzHciHal::injectAcl(std::vector<uint8_t> data) {
-  auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(data));
-  hci::AclPacketView aclPacket = hci::AclPacketView::Create(packet);
-  if (!aclPacket.IsValid()) {
-    return;
+int FuzzHciHal::injectFuzzInput(const uint8_t* data, size_t size) {
+  const uint8_t separator[] = {0xDE, 0xAD, 0xBE, 0xEF};
+  auto inputs = ::bluetooth::fuzz::SplitInput(data, size, separator, sizeof(separator));
+  for (auto const& sdata : inputs) {
+    auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(sdata));
+    hci::AclPacketView aclPacket = hci::AclPacketView::Create(packet);
+    if (aclPacket.IsValid()) {
+      callbacks_->aclDataReceived(sdata);
+    }
+    if (is_currently_valid_event(packet)) {
+      callbacks_->hciEventReceived(sdata);
+    }
+
+    sentinel_work_item_.WaitUntilFinishedOn(GetHandler());
   }
-
-  callbacks_->aclDataReceived(data);
-}
-
-void FuzzHciHal::waitForHandler() {
-  sentinel_work_item_.WaitUntilFinishedOn(GetHandler());
+  return 0;
 }
 
 }  // namespace fuzz
