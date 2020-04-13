@@ -37,7 +37,7 @@ class FacadeConfigurationApi {
   friend class internal::SecurityManagerImpl;
   friend class SecurityModule;
 
-  void SetIoCapability(hci::IoCapability io_capability);
+  void SetIoCapabilities(hci::IoCapability io_capability);
   void SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirement);
   void SetOobData(hci::OobDataPresent oob_present);
 
