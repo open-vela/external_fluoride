@@ -28,9 +28,6 @@ from hci.facade import controller_facade_pb2 as controller_facade
 from hci.facade import facade_pb2 as hci_facade
 import bluetooth_packets_python3 as bt_packets
 from bluetooth_packets_python3 import hci_packets
-from cert.captures import ReadBdAddrCompleteCapture
-from cert.captures import ConnectionCompleteCapture
-from cert.captures import ConnectionRequestCapture
 from cert.py_hci import PyHci
 from cert.py_acl_manager import PyAclManager
 
@@ -79,10 +76,12 @@ class AclManagerTest(GdBaseTestClass):
         self.cert_hci.initiate_connection(dut_address)
 
         dut_acl = self.dut_acl_manager.accept_connection()
+
+        cert_acl = self.cert_hci.complete_connection()
+
         dut_acl.send(
             b'\x29\x00\x07\x00This is just SomeMoreAclData from the DUT')
 
-        cert_acl = self.cert_hci.complete_connection()
         cert_acl.send_first(
             b'\x26\x00\x07\x00This is just SomeAclData from the Cert')
 
