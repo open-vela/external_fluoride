@@ -20,7 +20,6 @@
 #include "hci/fuzz/dev_null_hci.h"
 #include "hci/hci_layer.h"
 #include "module.h"
-#include "os/log.h"
 
 #include <fuzzer/FuzzedDataProvider.h>
 
@@ -50,9 +49,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     }
   }
 
-  if (!moduleRegistry.GetTestThread().GetReactor()->WaitForIdle(std::chrono::milliseconds(100))) {
-    LOG_ERROR("idle timed out");
-  }
+  // TODO replace with something more general in thread/reactor
+  fuzzHal->waitForHandler();
+
   moduleRegistry.StopAll();
   return 0;
 }
