@@ -35,11 +35,6 @@ namespace security {
 
 class ISecurityManagerListener;
 
-static constexpr hci::IoCapability kDefaultIoCapability = hci::IoCapability::DISPLAY_YES_NO;
-static constexpr hci::OobDataPresent kDefaultOobDataPresent = hci::OobDataPresent::NOT_PRESENT;
-static constexpr hci::AuthenticationRequirements kDefaultAuthenticationRequirements =
-    hci::AuthenticationRequirements::GENERAL_BONDING;
-
 namespace internal {
 
 class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, public UICallbacks {
@@ -146,11 +141,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
   void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
 
-  // Facade Configuration API functions
-  void SetIoCapability(hci::IoCapability io_capability);
-  void SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements);
-  void SetOobDataPresent(hci::OobDataPresent data_present);
-
  protected:
   std::vector<std::pair<ISecurityManagerListener*, os::Handler*>> listeners_;
   UI* user_interface_ = nullptr;
@@ -165,7 +155,8 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   template <class T>
   void HandleEvent(T packet);
 
-  void DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated);
+  void DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated,
+                              hci::AuthenticationRequirements authentication_requirements);
   void OnL2capRegistrationCompleteLe(l2cap::le::FixedChannelManager::RegistrationResult result,
                                      std::unique_ptr<l2cap::le::FixedChannelService> le_smp_service);
   void OnSmpCommandLe();
@@ -182,9 +173,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   channel::SecurityManagerChannel* security_manager_channel_;
   SecurityRecordDatabase security_database_;
   std::unordered_map<hci::Address, std::shared_ptr<pairing::PairingHandler>> pairing_handler_map_;
-  hci::IoCapability local_io_capability_ = kDefaultIoCapability;
-  hci::AuthenticationRequirements local_authentication_requirements_ = kDefaultAuthenticationRequirements;
-  hci::OobDataPresent local_oob_data_present_ = kDefaultOobDataPresent;
 
   struct {
     hci::AddressWithType address_;

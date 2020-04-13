@@ -33,7 +33,8 @@ namespace bluetooth {
 namespace security {
 namespace internal {
 
-void SecurityManagerImpl::DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated) {
+void SecurityManagerImpl::DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated,
+                                                 hci::AuthenticationRequirements authentication_requirements) {
   common::OnceCallback<void(hci::Address, PairingResultOrFailure)> callback =
       common::BindOnce(&SecurityManagerImpl::OnPairingHandlerComplete, common::Unretained(this));
   auto entry = pairing_handler_map_.find(record.GetPseudoAddress().GetAddress());
@@ -57,8 +58,8 @@ void SecurityManagerImpl::DispatchPairingHandler(record::SecurityRecord& record,
   auto new_entry = std::pair<hci::Address, std::shared_ptr<pairing::PairingHandler>>(
       record.GetPseudoAddress().GetAddress(), pairing_handler);
   pairing_handler_map_.insert(std::move(new_entry));
-  pairing_handler->Initiate(locally_initiated, this->local_io_capability_, this->local_oob_data_present_,
-                            this->local_authentication_requirements_);
+  pairing_handler->Initiate(locally_initiated, pairing::kDefaultIoCapability, pairing::kDefaultOobDataPresent,
+                            authentication_requirements);
 }
 
 void SecurityManagerImpl::Init() {
@@ -74,7 +75,7 @@ void SecurityManagerImpl::CreateBond(hci::AddressWithType device) {
     NotifyDeviceBonded(device);
   } else {
     // Dispatch pairing handler, if we are calling create we are the initiator
-    DispatchPairingHandler(record, true);
+    DispatchPairingHandler(record, true, pairing::kDefaultAuthenticationRequirements);
   }
 }
 
@@ -182,7 +183,8 @@ void SecurityManagerImpl::HandleEvent(T packet) {
 
     auto record =
         security_database_.FindOrCreate(hci::AddressWithType{bd_addr, hci::AddressType::PUBLIC_DEVICE_ADDRESS});
-    DispatchPairingHandler(record, true);
+    auto authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
+    DispatchPairingHandler(record, true, authentication_requirements);
     entry = pairing_handler_map_.find(bd_addr);
   }
   entry->second->OnReceive(packet);
@@ -433,19 +435,6 @@ void SecurityManagerImpl::OnPairingFinished(security::PairingResultOrFailure pai
 
   LOG_INFO("Pairing with %s was successfull",
            std::get<PairingResult>(pairing_result).connection_address.ToString().c_str());
-}
-
-// Facade Configuration API functions
-void SecurityManagerImpl::SetIoCapability(hci::IoCapability io_capability) {
-  this->local_io_capability_ = io_capability;
-}
-
-void SecurityManagerImpl::SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements) {
-  this->local_authentication_requirements_ = authentication_requirements;
-}
-
-void SecurityManagerImpl::SetOobDataPresent(hci::OobDataPresent data_present) {
-  this->local_oob_data_present_ = data_present;
 }
 
 }  // namespace internal
