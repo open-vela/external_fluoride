@@ -62,8 +62,3 @@ void CustomFieldFixedSize::GenInserter(std::ostream& s) const {
 void CustomFieldFixedSize::GenValidator(std::ostream&) const {
   // Do nothing.
 }
-
-void CustomFieldFixedSize::GenStringRepresentation(std::ostream& s, std::string accessor) const {
-  // We assume that custom fields will have a ToString() method
-  s << accessor << ".ToString()";
-}
