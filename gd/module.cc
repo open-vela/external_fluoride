@@ -21,9 +21,13 @@ using ::bluetooth::os::Thread;
 
 namespace bluetooth {
 
-constexpr std::chrono::milliseconds kModuleStopTimeout = std::chrono::milliseconds(20);
+constexpr std::chrono::milliseconds kModuleStopTimeout = std::chrono::milliseconds(2000);
 
 ModuleFactory::ModuleFactory(std::function<Module*()> ctor) : ctor_(ctor) {
+}
+
+std::unique_ptr<google::protobuf::Message> Module::DumpState() const {
+  return nullptr;
 }
 
 std::string Module::ToString() const {
@@ -95,10 +99,15 @@ void ModuleRegistry::StopAll() {
     ASSERT(instance != started_modules_.end());
 
     // Clear the handler before stopping the module to allow it to shut down gracefully.
+    LOG_INFO("Stopping Handler of Module %s", instance->second->ToString().c_str());
     instance->second->handler_->Clear();
     instance->second->handler_->WaitUntilStopped(kModuleStopTimeout);
+    LOG_INFO("Stopping Module %s", instance->second->ToString().c_str());
     instance->second->Stop();
-
+  }
+  for (auto it = start_order_.rbegin(); it != start_order_.rend(); it++) {
+    auto instance = started_modules_.find(*it);
+    ASSERT(instance != started_modules_.end());
     delete instance->second->handler_;
     delete instance->second;
     started_modules_.erase(instance);
@@ -115,4 +124,17 @@ os::Handler* ModuleRegistry::GetModuleHandler(const ModuleFactory* module) const
   }
   return nullptr;
 }
+
+void ModuleDumper::DumpState() const {
+  for (auto it = module_registry_.start_order_.rbegin(); it != module_registry_.start_order_.rend(); it++) {
+    auto instance = module_registry_.started_modules_.find(*it);
+    ASSERT(instance != module_registry_.started_modules_.end());
+    std::unique_ptr<google::protobuf::Message> message = instance->second->DumpState();
+    if (message == nullptr) {
+      continue;
+    }
+    // TODO(cmanton) Process module message into master proto
+  }
+}
+
 }  // namespace bluetooth
