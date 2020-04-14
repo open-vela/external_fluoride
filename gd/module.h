@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <google/protobuf/message.h>
 #include <functional>
 #include <future>
 #include <map>
@@ -31,7 +30,6 @@
 namespace bluetooth {
 
 class Module;
-class ModuleDumper;
 class ModuleRegistry;
 
 class ModuleFactory {
@@ -44,14 +42,13 @@ class ModuleFactory {
 };
 
 class ModuleList {
- friend Module;
  friend ModuleRegistry;
-
-public:
- template <class T>
- void add() {
-   list_.push_back(&T::Factory);
- }
+ friend Module;
+ public:
+  template <class T>
+  void add() {
+    list_.push_back(&T::Factory);
+  }
 
  private:
   std::vector<const ModuleFactory*> list_;
@@ -65,9 +62,7 @@ public:
 // The module registry will also use the factory as the identifier
 // for that module.
 class Module {
-  friend ModuleDumper;
-  friend ModuleRegistry;
-
+ friend ModuleRegistry;
  public:
   virtual ~Module() = default;
  protected:
@@ -80,9 +75,6 @@ class Module {
 
   // Release all resources, you're about to be deleted
   virtual void Stop() = 0;
-
-  // Get relevant state data from the module
-  virtual std::unique_ptr<google::protobuf::Message> DumpState() const;
 
   virtual std::string ToString() const;
 
@@ -105,7 +97,6 @@ class Module {
 
 class ModuleRegistry {
  friend Module;
- friend ModuleDumper;
  friend class StackManager;
  public:
   template <class T>
@@ -138,15 +129,6 @@ class ModuleRegistry {
 
   std::map<const ModuleFactory*, Module*> started_modules_;
   std::vector<const ModuleFactory*> start_order_;
-};
-
-class ModuleDumper {
- public:
-  ModuleDumper(ModuleRegistry& module_registry) : module_registry_(module_registry) {}
-  void DumpState() const;
-
- private:
-  ModuleRegistry& module_registry_;
 };
 
 class TestModuleRegistry : public ModuleRegistry {
