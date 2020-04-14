@@ -14,36 +14,38 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from acts.base_test import BaseTestClass
-
 import importlib
 import logging
 import os
 import signal
 import subprocess
 
-ANDROID_BUILD_TOP = os.environ.get('ANDROID_BUILD_TOP')
+from acts import asserts
+from acts.context import get_current_context
+from acts.base_test import BaseTestClass
+from cert.os_utils import get_gd_root, is_subprocess_alive
+from facade import rootservice_pb2 as facade_rootservice
 
 
 class GdBaseTestClass(BaseTestClass):
 
-    def __init__(self, configs):
-        BaseTestClass.__init__(self, configs)
+    SUBPROCESS_WAIT_TIMEOUT_SECONDS = 10
 
-        log_path_base = getattr(configs, "log_path", "/tmp/logs")
-        gd_devices = self.controller_configs.get("GdDevice")
-        gd_cert_devices = self.controller_configs.get("GdCertDevice")
+    def setup_class(self, dut_module, cert_module):
+        self.dut_module = dut_module
+        self.cert_module = cert_module
+        self.log_path_base = get_current_context().get_full_output_path()
 
+        # Start root-canal if needed
         self.rootcanal_running = False
         if 'rootcanal' in self.controller_configs:
             self.rootcanal_running = True
-            rootcanal_logpath = os.path.join(log_path_base,
+            rootcanal_logpath = os.path.join(self.log_path_base,
                                              'rootcanal_logs.txt')
             self.rootcanal_logs = open(rootcanal_logpath, 'w')
             rootcanal_config = self.controller_configs['rootcanal']
             rootcanal_hci_port = str(rootcanal_config.get("hci_port", "6402"))
-            android_host_out = os.environ.get('ANDROID_HOST_OUT')
-            rootcanal = android_host_out + "/nativetest64/root-canal/root-canal"
+            rootcanal = os.path.join(get_gd_root(), "root-canal")
             self.rootcanal_process = subprocess.Popen(
                 [
                     rootcanal,
@@ -51,27 +53,62 @@ class GdBaseTestClass(BaseTestClass):
                     rootcanal_hci_port,
                     str(rootcanal_config.get("link_layer_port", "6403"))
                 ],
-                cwd=ANDROID_BUILD_TOP,
+                cwd=get_gd_root(),
                 env=os.environ.copy(),
                 stdout=self.rootcanal_logs,
                 stderr=self.rootcanal_logs)
-            for gd_device in gd_devices:
-                gd_device["rootcanal_port"] = rootcanal_hci_port
-            for gd_cert_device in gd_cert_devices:
-                gd_cert_device["rootcanal_port"] = rootcanal_hci_port
+            asserts.assert_true(
+                self.rootcanal_process,
+                msg="Cannot start root-canal at " + str(rootcanal))
+            asserts.assert_true(
+                is_subprocess_alive(self.rootcanal_process),
+                msg="root-canal stopped immediately after running")
+            # Modify the device config to include the correct root-canal port
+            for gd_device_config in self.controller_configs.get("GdDevice"):
+                gd_device_config["rootcanal_port"] = rootcanal_hci_port
 
+        # Parse and construct GD device objects
         self.register_controller(
             importlib.import_module('cert.gd_device'), builtin=True)
-        self.register_controller(
-            importlib.import_module('cert.gd_cert_device'), builtin=True)
+        self.dut = self.gd_devices[1]
+        self.cert = self.gd_devices[0]
 
     def teardown_class(self):
         if self.rootcanal_running:
-            self.rootcanal_process.send_signal(signal.SIGINT)
-            rootcanal_return_code = self.rootcanal_process.wait()
-            self.rootcanal_logs.close()
-            if rootcanal_return_code != 0 and\
-                rootcanal_return_code != -signal.SIGINT:
+            stop_signal = signal.SIGINT
+            self.rootcanal_process.send_signal(stop_signal)
+            try:
+                return_code = self.rootcanal_process.wait(
+                    timeout=self.SUBPROCESS_WAIT_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
                 logging.error(
-                    "rootcanal stopped with code: %d" % rootcanal_return_code)
-                return False
+                    "Failed to interrupt root canal via SIGINT, sending SIGKILL"
+                )
+                stop_signal = signal.SIGKILL
+                self.rootcanal_process.kill()
+                try:
+                    return_code = self.rootcanal_process.wait(
+                        timeout=self.SUBPROCESS_WAIT_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    logging.error("Failed to kill root canal")
+                    return_code = -65536
+            if return_code != 0 and return_code != -stop_signal:
+                logging.error("rootcanal stopped with code: %d" % return_code)
+            self.rootcanal_logs.close()
+
+    def setup_test(self):
+        self.dut.rootservice.StartStack(
+            facade_rootservice.StartStackRequest(
+                module_under_test=facade_rootservice.BluetoothModule.Value(
+                    self.dut_module),))
+        self.cert.rootservice.StartStack(
+            facade_rootservice.StartStackRequest(
+                module_under_test=facade_rootservice.BluetoothModule.Value(
+                    self.cert_module),))
+
+        self.dut.wait_channel_ready()
+        self.cert.wait_channel_ready()
+
+    def teardown_test(self):
+        self.cert.rootservice.StopStack(facade_rootservice.StopStackRequest())
+        self.dut.rootservice.StopStack(facade_rootservice.StopStackRequest())
