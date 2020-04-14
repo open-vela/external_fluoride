@@ -71,37 +71,8 @@ cc_defaults {
     },
 }
 
-cc_defaults {
-    name: "gd_clang_tidy",
-    tidy: true,
-    tidy_checks: [
-        "cppcoreguidelines-pro-type-member-init",
-        "clang-analyzer-core.CallAndMessage",
-        "clang-analyzer-optin.cplusplus.UninitializedObject",
-        "-google*",
-        "-performance*",
-        "-bugprone*",
-    ],
-    tidy_checks_as_errors: [
-        "cppcoreguidelines-pro-type-member-init",
-        "clang-analyzer-core.CallAndMessage",
-        "clang-analyzer-optin.cplusplus.UninitializedObject",
-    ],
-    tidy_flags: [
-        "--header-filter=^.*system/bt/.*.h$",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=-analyzer-config",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=optin.cplusplus.UninitializedObject:Pedantic=true",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=-analyzer-config",
-        "--extra-arg-before=-Xclang",
-        "--extra-arg-before=optin.cplusplus.UninitializedObject:CheckPointeeInitialization=true",
-    ],
-}
-
-cc_defaults {
-    name: "libbluetooth_gd_defaults",
+cc_library {
+    name: "libbluetooth_gd",
     defaults: [
         "gd_defaults",
         "gd_clang_file_coverage",
@@ -149,24 +120,6 @@ cc_defaults {
     ],
     shared_libs: [
         "libchrome",
-        "libcrypto",
-    ],
-}
-
-cc_library {
-    name: "libbluetooth_gd",
-    defaults: [
-        "libbluetooth_gd_defaults",
-    ],
-}
-
-cc_library {
-    name: "libbluetooth_gd_fuzzing",
-    defaults: [
-        "libbluetooth_gd_defaults",
-    ],
-    cflags: [
-        "-DFUZZ_TARGET",
     ],
 }
 
@@ -174,7 +127,6 @@ cc_binary {
     name: "bluetooth_stack_with_facade",
     defaults: [
         "gd_defaults",
-        "gd_clang_coverage_bin",
     ],
     host_supported: true,
     srcs: [
@@ -191,9 +143,6 @@ cc_binary {
     generated_headers: [
         "BluetoothGeneratedPackets_h",
         "BluetoothFacadeGeneratedStub_h",
-        // Needed here to guarantee that generated zip file is created before
-        // bluetooth_cert_tests.zip is packaged
-        "BluetoothFacadeAndCertGeneratedStub_py",
     ],
     generated_sources: [
         "BluetoothFacadeGeneratedStub_cc",
@@ -203,7 +152,6 @@ cc_binary {
     ],
     shared_libs: [
         "libchrome",
-        "libcrypto",
         "libgrpc++_unsecure",
         "libprotobuf-cpp-full",
     ],
@@ -279,7 +227,6 @@ cc_test {
     ],
     shared_libs: [
         "libchrome",
-        "libcrypto",
     ],
     sanitize: {
         address: true,
@@ -307,56 +254,33 @@ cc_test {
     },
 }
 
-cc_defaults {
-    name: "gd_fuzz_defaults",
-    defaults: ["gd_defaults"],
-    srcs: [
-        ":BluetoothFuzzHelperSources",
-    ],
-    static_libs: [
-        "libbluetooth_gd_fuzzing",
-        "libchrome",
-        "libgmock",
-        "libgtest",
-    ],
-    host_supported: true,
-    generated_headers: [
-        "BluetoothGeneratedPackets_h",
-    ],
-    shared_libs: [
-        "libcrypto",
-    ],
-    cflags: [
-        "-DFUZZ_TARGET",
-    ],
-    target: {
-        android: {
-            shared_libs: [
-                "android.hardware.bluetooth@1.0",
-                "libhidlbase",
-                "libutils",
-            ],
-        },
+cc_fuzz {
+  name: "bluetooth_gd_fuzz_test",
+  defaults: ["gd_defaults"],
+  srcs: [
+    "fuzz_test.cc",
+    ":BluetoothHciFuzzTestSources",
+    ":BluetoothL2capFuzzTestSources",
+  ],
+  static_libs: [
+    "libbluetooth_gd",
+    "libchrome",
+    "libgmock",
+    "libgtest",
+  ],
+  host_supported: true,
+  generated_headers: [
+    "BluetoothGeneratedPackets_h",
+  ],
+  target: {
+    android: {
+        shared_libs: [
+            "android.hardware.bluetooth@1.0",
+            "libhidlbase",
+            "libutils",
+        ],
     },
-}
-
-cc_fuzz {
-    name: "bluetooth_gd_fuzz_test",
-    defaults: ["gd_fuzz_defaults"],
-    srcs: [
-        "fuzz_test.cc",
-        ":BluetoothHciFuzzTestSources",
-        ":BluetoothL2capFuzzTestSources",
-    ],
-}
-
-cc_fuzz {
-    name: "bluetooth_gd_hci_fuzz_test",
-    defaults: ["gd_fuzz_defaults"],
-    srcs: [
-        "hci/fuzz/hci_layer_fuzz_test.cc",
-        ":BluetoothHalFuzzSources",
-    ],
+  },
 }
 
 cc_benchmark {
@@ -380,7 +304,7 @@ filegroup {
     srcs: [
         "hci/address.cc",
         "hci/class_of_device.cc",
-    ],
+        ],
 }
 
 genrule {
@@ -448,7 +372,6 @@ filegroup {
         "hci/facade/le_scanning_manager_facade.proto",
         "neighbor/facade/facade.proto",
         "l2cap/classic/facade.proto",
-        "l2cap/le/facade.proto",
         "security/facade.proto",
     ],
 }
@@ -484,8 +407,6 @@ genrule {
         "hci/facade/le_scanning_manager_facade.pb.h",
         "l2cap/classic/facade.grpc.pb.h",
         "l2cap/classic/facade.pb.h",
-        "l2cap/le/facade.grpc.pb.h",
-        "l2cap/le/facade.pb.h",
         "neighbor/facade/facade.grpc.pb.h",
         "neighbor/facade/facade.pb.h",
         "security/facade.grpc.pb.h",
@@ -524,8 +445,6 @@ genrule {
         "hci/facade/le_scanning_manager_facade.pb.cc",
         "l2cap/classic/facade.grpc.pb.cc",
         "l2cap/classic/facade.pb.cc",
-        "l2cap/le/facade.grpc.pb.cc",
-        "l2cap/le/facade.pb.cc",
         "neighbor/facade/facade.grpc.pb.cc",
         "neighbor/facade/facade.pb.cc",
         "security/facade.grpc.pb.cc",
@@ -540,110 +459,110 @@ genrule {
         "protoc-gen-grpc-python-plugin",
         "soong_zip",
     ],
-    cmd: "mkdir -p $(genDir)/files && " +
-        "$(location aprotoc) -Isystem/bt/gd -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-python-plugin) $(in) --grpc_out=$(genDir)/files --python_out=$(genDir)/files && " +
-        "mkdir -p $(genDir)/files/cert && " +
-        "touch $(genDir)/files/cert/__init__.py && " +
-        "touch $(genDir)/files/facade/__init__.py && " +
-        "touch $(genDir)/files/hal/__init__.py && " +
-        "touch $(genDir)/files/hci/__init__.py && " +
-        "touch $(genDir)/files/hci/facade/__init__.py && " +
-        "touch $(genDir)/files/l2cap/classic/__init__.py && " +
-        "touch $(genDir)/files/l2cap/le/__init__.py && " +
-        "touch $(genDir)/files/neighbor/facade/__init__.py && " +
-        "touch $(genDir)/files/security/__init__.py && " +
-        "$(location soong_zip) -C $(genDir)/files -D $(genDir)/files -o $(out)",
+    cmd: "$(location aprotoc) -Isystem/bt/gd -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-python-plugin) $(in) --grpc_out=$(genDir) --python_out=$(genDir); " +
+        "touch $(genDir)/facade/__init__.py; " +
+        "touch $(genDir)/hal/__init__.py; " +
+        "touch $(genDir)/hci/__init__.py; " +
+        "touch $(genDir)/hci/facade/__init__.py; " +
+        "touch $(genDir)/l2cap/classic/__init__.py; " +
+        "touch $(genDir)/neighbor/facade/__init__.py; " +
+        "touch $(genDir)/security/__init__.py; " +
+        "$(location soong_zip) -C $(genDir) -D $(genDir) -o $(out)",
     srcs: [
         ":BluetoothFacadeProto",
     ],
     out: ["bluetooth_cert_generated_py.zip"],
+    dist: {
+        targets: ["bluetooth_stack_with_facade"],
+    },
+
 }
 
 cc_defaults {
-    name: "bluetooth_py3_native_extension_defaults",
-    include_dirs: [
-        "external/python/cpython3/Include",
-    ],
-    target: {
-        android: {
-            include_dirs: ["external/python/cpython3/android/bionic/pyconfig"],
-        },
-        android_arm: {
-            cflags: ["-DSOABI=\"cpython-38android-arm-android-bionic\""],
-            suffix: ".cpython-38android-arm-android-bionic",
-        },
-        android_arm64: {
-            cflags: ["-DSOABI=\"cpython-38android-arm64-android-bionic\""],
-            suffix: ".cpython-38android-arm64-android-bionic",
-        },
-        android_x86: {
-            cflags: ["-DSOABI=\"cpython-38android-x86-android-bionic\""],
-            suffix: ".cpython-38android-x86-android-bionic",
-        },
-        android_x86_64: {
-            cflags: ["-DSOABI=\"cpython-38android-x86_64-android-bionic\""],
-            suffix: ".cpython-38android-x86_64-android-bionic",
-        },
-        // Regenerate include dirs with android_regen.sh
-        darwin_x86_64: {
-            include_dirs: ["external/python/cpython3/android/darwin_x86_64/pyconfig"],
-            cflags: [
-                "-Wno-deprecated-declarations",
-                "-Wno-pointer-arith",
-                "-DSOABI=\"cpython-38android-x86_64-darwin\"",
-            ],
-            suffix: ".cpython-38android-x86_64-darwin",
-        },
-        linux_bionic: {
-            // NB linux_bionic is a 'host' architecture but it uses the bionic libc like 'android'
-            // targets so use the android pyconfig.
-            include_dirs: ["external/python/cpython3/android/bionic/pyconfig"],
-            cflags: ["-DSOABI=\"cpython-38android-x86_64-linux-bionic\""],
-            suffix: ".cpython-38android-x86_64-linux-bionic",
-        },
-        linux_glibc_x86: {
-            enabled: false,
-        },
-        linux_glibc_x86_64: {
-            include_dirs: ["external/python/cpython3/android/linux_x86_64/pyconfig"],
-            cflags: ["-DSOABI=\"cpython-38android-x86_64-linux-gnu\""],
-            // Commenting out the Linux suffix so that cpython-38-x86_64-linux-gnu
-            // Python 3.8 can also import the untagged .so library per PEP 3149
-            // Keep this change until Android py3-cmd can run ACTS, gRPC and can
-            // Export Python native symbols such as PyType_Type
-            // suffix: ".cpython-38android-x86_64-linux-gnu",
-        },
-        windows: {
-            enabled: false,
-        },
-    },
-    allow_undefined_symbols: true,
+  name: "bluetooth_py3_native_extension_defaults",
+  include_dirs: [
+    "external/python/cpython3/Include",
+  ],
+  target: {
+      android: {
+          include_dirs: ["external/python/cpython3/android/bionic/pyconfig"],
+      },
+      android_arm: {
+          cflags: ["-DSOABI=\"cpython-38android-arm-android-bionic\""],
+          suffix: ".cpython-38android-arm-android-bionic",
+      },
+      android_arm64: {
+          cflags: ["-DSOABI=\"cpython-38android-arm64-android-bionic\""],
+          suffix: ".cpython-38android-arm64-android-bionic",
+      },
+      android_x86: {
+          cflags: ["-DSOABI=\"cpython-38android-x86-android-bionic\""],
+          suffix: ".cpython-38android-x86-android-bionic",
+      },
+      android_x86_64: {
+          cflags: ["-DSOABI=\"cpython-38android-x86_64-android-bionic\""],
+          suffix: ".cpython-38android-x86_64-android-bionic",
+      },
+      // Regenerate include dirs with android_regen.sh
+      darwin_x86_64: {
+          include_dirs: ["external/python/cpython3/android/darwin_x86_64/pyconfig"],
+          cflags: [
+              "-Wno-deprecated-declarations",
+              "-Wno-pointer-arith",
+              "-DSOABI=\"cpython-38android-x86_64-darwin\"",
+          ],
+          suffix: ".cpython-38android-x86_64-darwin",
+      },
+      linux_bionic: {
+          // NB linux_bionic is a 'host' architecture but it uses the bionic libc like 'android'
+          // targets so use the android pyconfig.
+          include_dirs: ["external/python/cpython3/android/bionic/pyconfig"],
+          cflags: ["-DSOABI=\"cpython-38android-x86_64-linux-bionic\""],
+          suffix: ".cpython-38android-x86_64-linux-bionic",
+      },
+      linux_glibc_x86: {
+          enabled: false,
+      },
+      linux_glibc_x86_64: {
+          include_dirs: ["external/python/cpython3/android/linux_x86_64/pyconfig"],
+          cflags: ["-DSOABI=\"cpython-38android-x86_64-linux-gnu\""],
+          // Commenting out the Linux suffix so that cpython-38-x86_64-linux-gnu
+          // Python 3.8 can also import the untagged .so library per PEP 3149
+          // Keep this change until Android py3-cmd can run ACTS, gRPC and can
+          // Export Python native symbols such as PyType_Type
+          // suffix: ".cpython-38android-x86_64-linux-gnu",
+      },
+      windows: {
+          enabled: false,
+      },
+  },
+  allow_undefined_symbols: true,
 }
 
 cc_library_host_shared {
-    name: "bluetooth_packets_python3",
-    defaults: [
-        "gd_defaults",
-        "bluetooth_py3_native_extension_defaults",
-    ],
-    srcs: [
-        "packet/python3_module.cc",
-        "l2cap/fcs.cc",
-        ":BluetoothPacketSources",
-        "hci/address.cc",
-        "hci/class_of_device.cc",
-    ],
-    generated_headers: [
-        "BluetoothGeneratedPackets_h",
-    ],
-    generated_sources: [
-        "BluetoothGeneratedPackets_python3_cc",
-    ],
-    header_libs: [
-        "pybind11_headers",
-    ],
-    cflags: [
-        "-fexceptions",
-    ],
-    rtti: true,
+  name: "bluetooth_packets_python3",
+  defaults: [
+    "gd_defaults",
+    "bluetooth_py3_native_extension_defaults"
+  ],
+  srcs: [
+    "packet/python3_module.cc",
+    "l2cap/fcs.cc",
+    ":BluetoothPacketSources",
+    "hci/address.cc",
+    "hci/class_of_device.cc",
+  ],
+  generated_headers: [
+    "BluetoothGeneratedPackets_h",
+  ],
+  generated_sources: [
+    "BluetoothGeneratedPackets_python3_cc",
+  ],
+  header_libs: [
+    "pybind11_headers",
+  ],
+  cflags: [
+    "-fexceptions",
+  ],
+  rtti: true,
 }
