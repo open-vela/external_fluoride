@@ -40,8 +40,8 @@ DynamicChannelImpl::DynamicChannelImpl(Psm psm, Cid cid, Cid remote_cid, l2cap::
   ASSERT(l2cap_handler_ != nullptr);
 }
 
-hci::AddressWithType DynamicChannelImpl::GetDevice() const {
-  return device_;
+hci::Address DynamicChannelImpl::GetDevice() const {
+  return device_.GetAddress();
 }
 
 void DynamicChannelImpl::RegisterOnCloseCallback(os::Handler* user_handler,
