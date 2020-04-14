@@ -34,9 +34,7 @@ ErtmController::ErtmController(ILink* link, Cid cid, Cid remote_cid, UpperQueueD
     : link_(link), cid_(cid), remote_cid_(remote_cid), enqueue_buffer_(channel_queue_end), handler_(handler),
       scheduler_(scheduler), pimpl_(std::make_unique<impl>(this, handler)) {}
 
-ErtmController::~ErtmController() {
-  enqueue_buffer_.Clear();
-}
+ErtmController::~ErtmController() = default;
 
 struct ErtmController::impl {
   impl(ErtmController* controller, os::Handler* handler)
@@ -245,7 +243,7 @@ struct ErtmController::impl {
 
   void recv_rr(uint8_t req_seq, Poll p = Poll::NOT_SET, Final f = Final::NOT_SET) {
     if (rx_state_ == RxState::RECV) {
-      if (p == Poll::NOT_SET && f == Final::NOT_SET && with_valid_req_seq(req_seq) && with_valid_f_bit(f)) {
+      if (p == Poll::NOT_SET && f == Final::NOT_SET && with_valid_req_seq_rr(req_seq) && with_valid_f_bit(f)) {
         pass_to_tx(req_seq, f);
         if (remote_busy() && unacked_frames_ > 0) {
           start_retrans_timer();
@@ -264,7 +262,7 @@ struct ErtmController::impl {
       } else if (p == Poll::POLL && with_valid_req_seq(req_seq) && with_valid_f_bit(f)) {
         pass_to_tx(req_seq, f);
         send_i_or_rr_or_rnr(Final::POLL_RESPONSE);
-      } else if (with_invalid_req_seq(req_seq)) {
+      } else if (with_invalid_req_seq_rr(req_seq)) {
         CloseChannel();
       }
     } else if (rx_state_ == RxState::REJ_SENT) {
@@ -277,7 +275,7 @@ struct ErtmController::impl {
           rej_actioned_ = false;
         }
         send_pending_i_frames();
-      } else if (p == Poll::NOT_SET && f == Final::NOT_SET && with_valid_req_seq(req_seq) && with_valid_f_bit(f)) {
+      } else if (p == Poll::NOT_SET && f == Final::NOT_SET && with_valid_req_seq_rr(req_seq) && with_valid_f_bit(f)) {
         pass_to_tx(req_seq, f);
         if (remote_busy() and unacked_frames_ > 0) {
           start_retrans_timer();
@@ -291,7 +289,7 @@ struct ErtmController::impl {
         }
         remote_busy_ = false;
         send_rr(Final::POLL_RESPONSE);
-      } else if (with_invalid_req_seq(req_seq)) {
+      } else if (with_invalid_req_seq_rr(req_seq)) {
         CloseChannel();
       }
     } else if (rx_state_ == RxState::SREJ_SENT) {
@@ -411,7 +409,6 @@ struct ErtmController::impl {
         remote_busy_ = false;
         pass_to_tx(req_seq, f);
         retransmit_requested_i_frame(req_seq, p);
-        send_pending_i_frames();
         if (p_bit_outstanding()) {
           srej_actioned_ = true;
           srej_save_req_seq_ = req_seq;
@@ -523,11 +520,19 @@ struct ErtmController::impl {
   }
 
   bool with_invalid_req_seq_retrans(uint8_t req_seq) {
-    return req_seq < expected_ack_seq_ || req_seq > next_tx_seq_;
+    return req_seq < expected_ack_seq_ || req_seq >= next_tx_seq_;
   }
 
   bool not_with_expected_tx_seq(uint8_t tx_seq) {
     return !with_invalid_tx_seq(tx_seq) && !with_expected_tx_seq(tx_seq);
+  }
+
+  bool with_valid_req_seq_rr(uint8_t req_seq) {
+    return expected_ack_seq_ < req_seq && req_seq <= next_tx_seq_;
+  }
+
+  bool with_invalid_req_seq_rr(uint8_t req_seq) {
+    return req_seq <= expected_ack_seq_ || req_seq > next_tx_seq_;
   }
 
   bool with_expected_tx_seq_srej() {
@@ -606,7 +611,6 @@ struct ErtmController::impl {
       retry_i_frames_[i] = 0;
     }
     unacked_frames_ -= ((req_seq - expected_ack_seq_) + kMaxTxWin) % kMaxTxWin;
-    expected_ack_seq_ = req_seq;
     if (unacked_frames_ == 0) {
       stop_retrans_timer();
     }
@@ -795,9 +799,7 @@ struct ErtmController::impl {
 void ErtmController::OnSdu(std::unique_ptr<packet::BasePacketBuilder> sdu) {
   auto sdu_size = sdu->size();
   std::vector<std::unique_ptr<packet::RawBuilder>> segments;
-  auto size_each_packet = (remote_mps_ - 4 /* basic L2CAP header */ - 2 /* SDU length */ - 2 /* Enhanced control */ -
-                           (fcs_enabled_ ? 2 : 0));
-  packet::FragmentingInserter fragmenting_inserter(size_each_packet, std::back_insert_iterator(segments));
+  packet::FragmentingInserter fragmenting_inserter(size_each_packet_, std::back_insert_iterator(segments));
   sdu->Serialize(fragmenting_inserter);
   fragmenting_inserter.finalize();
   if (segments.size() == 1) {
@@ -1013,7 +1015,6 @@ void ErtmController::SetRetransmissionAndFlowControlOptions(
   local_max_transmit_ = option.max_transmit_;
   local_retransmit_timeout_ms_ = option.retransmission_time_out_;
   local_monitor_timeout_ms_ = option.monitor_time_out_;
-  remote_mps_ = option.maximum_pdu_size_;
 }
 
 void ErtmController::close_channel() {
