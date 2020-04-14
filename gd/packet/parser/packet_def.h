@@ -60,6 +60,4 @@ class PacketDef : public ParentDef {
   void GenBuilderParameterChecker(std::ostream& s) const;
 
   void GenBuilderConstructor(std::ostream& s) const;
-
-  void GenTestingFromView(std::ostream& s) const;
 };

@@ -317,7 +317,6 @@ cc_defaults {
     defaults: ["gd_defaults"],
     srcs: [
         ":BluetoothFuzzHelperSources",
-        ":BluetoothHciFuzzHelperSources",
     ],
     static_libs: [
         "libbluetooth_gd_fuzzing",
