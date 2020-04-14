@@ -166,9 +166,6 @@ cc_library {
     defaults: [
         "libbluetooth_gd_defaults",
     ],
-    srcs: [
-        ":BluetoothOsSources_fuzz",
-    ],
     cflags: [
         "-DFUZZ_TARGET",
     ],
