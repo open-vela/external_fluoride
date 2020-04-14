@@ -20,7 +20,6 @@
 #include "hci/fuzz/dev_null_hci.h"
 #include "hci/hci_layer.h"
 #include "module.h"
-#include "os/fuzz/fake_timerfd.h"
 #include "os/log.h"
 
 #include <fuzzer/FuzzedDataProvider.h>
@@ -29,8 +28,6 @@ using bluetooth::TestModuleRegistry;
 using bluetooth::hal::HciHal;
 using bluetooth::hal::fuzz::FuzzHciHal;
 using bluetooth::hci::fuzz::DevNullHci;
-using bluetooth::os::fuzz::fake_timerfd_advance;
-using bluetooth::os::fuzz::fake_timerfd_reset;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   FuzzedDataProvider dataProvider(data, size);
@@ -42,19 +39,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   moduleRegistry.Start<DevNullHci>(&moduleRegistry.GetTestThread());
 
   while (dataProvider.remaining_bytes() > 0) {
-    const uint8_t action = dataProvider.ConsumeIntegralInRange(0, 4);
+    const uint8_t action = dataProvider.ConsumeIntegralInRange(0, 2);
     switch (action) {
       case 1:
-        fake_timerfd_advance(dataProvider.ConsumeIntegral<uint64_t>());
+        fuzzHal->injectAcl(dataProvider.ConsumeBytes<uint8_t>(dataProvider.ConsumeIntegral<size_t>()));
         break;
       case 2:
-        fuzzHal->injectAclData(dataProvider.ConsumeBytes<uint8_t>(dataProvider.ConsumeIntegral<size_t>()));
-        break;
-      case 3:
         fuzzHal->injectHciEvent(dataProvider.ConsumeBytes<uint8_t>(dataProvider.ConsumeIntegral<size_t>()));
-        break;
-      case 4:
-        fuzzHal->injectScoData(dataProvider.ConsumeBytes<uint8_t>(dataProvider.ConsumeIntegral<size_t>()));
         break;
     }
   }
@@ -63,6 +54,5 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     LOG_ERROR("idle timed out");
   }
   moduleRegistry.StopAll();
-  fake_timerfd_reset();
   return 0;
 }
