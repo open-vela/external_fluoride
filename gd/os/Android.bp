@@ -23,17 +23,10 @@ filegroup {
 }
 
 filegroup {
-name: "BluetoothOsBenchmarkSources",
-     srcs: [
-         "alarm_benchmark.cc",
-         "thread_benchmark.cc",
-         "queue_benchmark.cc",
-    ],
-}
-
-filegroup {
-    name: "BluetoothOsSources_fuzz",
+    name: "BluetoothOsBenchmarkSources",
     srcs: [
-        "fuzz/fake_timerfd.cc",
+        "alarm_benchmark.cc",
+        "thread_benchmark.cc",
+        "queue_benchmark.cc",
     ],
 }
