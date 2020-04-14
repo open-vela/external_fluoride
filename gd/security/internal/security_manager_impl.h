@@ -19,8 +19,8 @@
 #include <unordered_map>
 #include <utility>
 
-#include "hci/acl_manager.h"
 #include "hci/classic_device.h"
+#include "l2cap/classic/l2cap_classic_module.h"
 #include "l2cap/le/l2cap_le_module.h"
 #include "os/handler.h"
 #include "security/channel/security_manager_channel.h"
@@ -35,16 +35,12 @@ namespace security {
 
 class ISecurityManagerListener;
 
-static constexpr hci::IoCapability kDefaultIoCapability = hci::IoCapability::DISPLAY_YES_NO;
-static constexpr hci::OobDataPresent kDefaultOobDataPresent = hci::OobDataPresent::NOT_PRESENT;
-static constexpr hci::AuthenticationRequirements kDefaultAuthenticationRequirements =
-    hci::AuthenticationRequirements::GENERAL_BONDING;
-
 namespace internal {
 
 class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, public UICallbacks {
  public:
   explicit SecurityManagerImpl(os::Handler* security_handler, l2cap::le::L2capLeModule* l2cap_le_module,
+                               l2cap::classic::L2capClassicModule* l2cap_classic_module,
                                channel::SecurityManagerChannel* security_manager_channel, hci::HciLayer* hci_layer);
   ~SecurityManagerImpl() = default;
 
@@ -117,23 +113,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void OnHciEventReceived(hci::EventPacketView packet) override;
 
   /**
-   * When a conncetion closes we should clean up the pairing handler
-   *
-   * @param address Remote address
-   * @param error_code HCI error
-   */
-  void OnConnectionClosed(hci::Address address, bluetooth::hci::ErrorCode error_code) override;
-
-  /**
-   * This can occur when a remote device isn't in range or doesn't agree with local device
-   *
-   * @param address Remote address
-   * @param result holds hci error and connection error code
-   */
-  void OnConnectionFailed(hci::Address address,
-                          bluetooth::l2cap::classic::FixedChannelManager::ConnectionResult result) override;
-
-  /**
    * Pairing handler has finished or cancelled
    *
    * @param address address for pairing handler
@@ -146,11 +125,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
   void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
 
-  // Facade Configuration API functions
-  void SetIoCapability(hci::IoCapability io_capability);
-  void SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements);
-  void SetOobDataPresent(hci::OobDataPresent data_present);
-
  protected:
   std::vector<std::pair<ISecurityManagerListener*, os::Handler*>> listeners_;
   UI* user_interface_ = nullptr;
@@ -159,13 +133,13 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void NotifyDeviceBonded(hci::AddressWithType device);
   void NotifyDeviceBondFailed(hci::AddressWithType device, PairingResultOrFailure status);
   void NotifyDeviceUnbonded(hci::AddressWithType device);
-  void NotifyEncryptionStateChanged(hci::EncryptionChangeView encryption_change_view);
 
  private:
   template <class T>
   void HandleEvent(T packet);
 
-  void DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated);
+  void DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated,
+                              hci::AuthenticationRequirements authentication_requirements);
   void OnL2capRegistrationCompleteLe(l2cap::le::FixedChannelManager::RegistrationResult result,
                                      std::unique_ptr<l2cap::le::FixedChannelService> le_smp_service);
   void OnSmpCommandLe();
@@ -177,14 +151,12 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
 
   os::Handler* security_handler_ __attribute__((unused));
   l2cap::le::L2capLeModule* l2cap_le_module_ __attribute__((unused));
+  l2cap::classic::L2capClassicModule* l2cap_classic_module_ __attribute__((unused));
   std::unique_ptr<l2cap::le::FixedChannelManager> l2cap_manager_le_;
   hci::LeSecurityInterface* hci_security_interface_le_ __attribute__((unused));
   channel::SecurityManagerChannel* security_manager_channel_;
   SecurityRecordDatabase security_database_;
   std::unordered_map<hci::Address, std::shared_ptr<pairing::PairingHandler>> pairing_handler_map_;
-  hci::IoCapability local_io_capability_ = kDefaultIoCapability;
-  hci::AuthenticationRequirements local_authentication_requirements_ = kDefaultAuthenticationRequirements;
-  hci::OobDataPresent local_oob_data_present_ = kDefaultOobDataPresent;
 
   struct {
     hci::AddressWithType address_;
