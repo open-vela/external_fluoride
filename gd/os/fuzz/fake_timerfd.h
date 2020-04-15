@@ -33,8 +33,6 @@ void fake_timerfd_reset();
 
 void fake_timerfd_advance(uint64_t ms);
 
-void fake_timerfd_cap_at(uint64_t ms);
-
 }  // namespace fuzz
 }  // namespace os
 }  // namespace bluetooth
