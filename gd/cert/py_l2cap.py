@@ -119,9 +119,8 @@ class PyLeL2capFixedChannel(IEventStream):
 
 class PyLeL2capDynamicChannel(IEventStream):
 
-    def __init__(self, device, cert_address, psm, l2cap_stream):
+    def __init__(self, device, psm, l2cap_stream):
         self._device = device
-        self._cert_address = cert_address
         self._psm = psm
         self._le_l2cap_stream = l2cap_stream
         self._our_le_l2cap_view = FilteringEventStream(
@@ -139,7 +138,10 @@ class PyLeL2capDynamicChannel(IEventStream):
     def close_channel(self):
         self._device.l2cap_le.CloseDynamicChannel(
             l2cap_le_facade_pb2.CloseDynamicChannelRequest(
-                remote=self._cert_address, psm=self._psm))
+                remote=common.BluetoothAddressWithType(
+                    address=common.BluetoothAddress(
+                        address=b"22:33:ff:ff:11:00")),
+                psm=self._psm))
 
 
 class _CreditBasedConnectionResponseFutureWrapper(object):
@@ -148,10 +150,9 @@ class _CreditBasedConnectionResponseFutureWrapper(object):
     create the corresponding PyLeL2capDynamicChannel object later
     """
 
-    def __init__(self, grpc_response_future, device, cert_address, psm, le_l2cap_stream):
+    def __init__(self, grpc_response_future, device, psm, le_l2cap_stream):
         self._grpc_response_future = grpc_response_future
         self._device = device
-        self._cert_address = cert_address
         self._psm = psm
         self._le_l2cap_stream = le_l2cap_stream
 
@@ -162,7 +163,7 @@ class _CreditBasedConnectionResponseFutureWrapper(object):
     def get_channel(self):
         assertThat(self.get_status()).isEqualTo(
             l2cap_packets.LeCreditBasedConnectionResponseResult.SUCCESS)
-        return PyLeL2capDynamicChannel(self._device, self._cert_address, self._psm,
+        return PyLeL2capDynamicChannel(self._device, self._psm,
                                        self._le_l2cap_stream)
 
 
@@ -184,22 +185,27 @@ class PyLeL2cap(Closable):
     def get_fixed_channel(self, cid=4):
         return PyLeL2capFixedChannel(self._device, cid, self._le_l2cap_stream)
 
-    def register_coc(self, cert_address, psm=0x33):
+    def register_coc(self, psm=0x33):
         self._device.l2cap_le.SetDynamicChannel(
             l2cap_le_facade_pb2.SetEnableDynamicChannelRequest(
                 psm=psm, enable=True))
-        return PyLeL2capDynamicChannel(self._device, cert_address, psm, self._le_l2cap_stream)
+        return PyLeL2capDynamicChannel(self._device, psm, self._le_l2cap_stream)
 
-    def connect_coc_to_cert(self, cert_address, psm=0x33):
+    def connect_coc_to_cert(self, psm=0x33):
         """
         Send open LE COC request to CERT. Get a future for connection result, to be used after CERT accepts request
         """
-        self.register_coc(cert_address, psm)
+        self.register_coc(psm)
+        # TODO: Update CERT device random address in ACL manager
         response_future = self._device.l2cap_le.OpenDynamicChannel.future(
-            l2cap_le_facade_pb2.OpenDynamicChannelRequest(psm=psm, remote=cert_address))
+            l2cap_le_facade_pb2.OpenDynamicChannelRequest(
+                psm=psm,
+                remote=common.BluetoothAddressWithType(
+                    address=common.BluetoothAddress(
+                        address=b"22:33:ff:ff:11:00"))))
 
         return _CreditBasedConnectionResponseFutureWrapper(
-            response_future, self._device, cert_address, psm, self._le_l2cap_stream)
+            response_future, self._device, psm, self._le_l2cap_stream)
 
     def update_connection_parameter(self,
                                     conn_interval_min=0x10,
