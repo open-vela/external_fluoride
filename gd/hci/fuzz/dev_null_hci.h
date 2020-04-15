@@ -37,13 +37,8 @@ class DevNullHci : public Module {
   void Stop() override;
 
   void injectAclData(std::vector<uint8_t> data);
+
   void injectHciCommand(std::vector<uint8_t> data);
-  void injectSecurityCommand(std::vector<uint8_t> data);
-  void injectLeSecurityCommand(std::vector<uint8_t> data);
-  void injectAclConnectionCommand(std::vector<uint8_t> data);
-  void injectLeAclConnectionCommand(std::vector<uint8_t> data);
-  void injectLeAdvertisingCommand(std::vector<uint8_t> data);
-  void injectLeScanningCommand(std::vector<uint8_t> data);
 
   void ListDependencies(ModuleList* list) override {
     list->add<hci::HciLayer>();
@@ -58,7 +53,8 @@ class DevNullHci : public Module {
  private:
   template <typename TVIEW, typename TBUILDER>
   void inject_command(std::vector<uint8_t> data, CommandInterface<TBUILDER>* interface) {
-    TVIEW commandPacket = TVIEW::FromBytes(data);
+    auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(data));
+    TVIEW commandPacket = TVIEW::Create(packet);
     if (!commandPacket.IsValid()) {
       return;
     }
@@ -75,13 +71,6 @@ class DevNullHci : public Module {
   hci::HciLayer* hci_ = nullptr;
   os::fuzz::DevNullQueue<AclPacketView>* aclDevNull_;
   os::fuzz::FuzzInjectQueue<AclPacketBuilder>* aclInject_;
-
-  SecurityInterface* security_interface_;
-  LeSecurityInterface* le_security_interface_;
-  AclConnectionInterface* acl_connection_interface_;
-  LeAclConnectionInterface* le_acl_connection_interface_;
-  LeAdvertisingInterface* le_advertising_interface_;
-  LeScanningInterface* le_scanning_interface_;
 };
 
 }  // namespace fuzz
