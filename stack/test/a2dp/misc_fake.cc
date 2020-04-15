@@ -14,33 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include "os/queue.h"
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-namespace bluetooth {
-namespace os {
-namespace fuzz {
-
-template <typename T>
-class FuzzInjectQueue {
- public:
-  FuzzInjectQueue(IQueueEnqueue<T>* queue, Handler* handler) : handler_(handler) {
-    buffer_ = new EnqueueBuffer<T>(queue);
-  }
-  ~FuzzInjectQueue() {
-    delete buffer_;
-  }
-
-  void Inject(std::unique_ptr<T> data) {
-    buffer_->Enqueue(std::move(data), handler_);
-  }
-
- private:
-  EnqueueBuffer<T>* buffer_;
-  Handler* handler_;
-};
-
-}  // namespace fuzz
-}  // namespace os
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }

@@ -16,7 +16,6 @@
 
 #include "hal/fuzz/fuzz_hci_hal.h"
 #include "fuzz/helpers.h"
-#include "hci/fuzz/status_vs_complete_commands.h"
 
 namespace bluetooth {
 namespace hal {
@@ -31,17 +30,20 @@ void FuzzHciHal::unregisterIncomingPacketCallback() {
 }
 
 void FuzzHciHal::sendHciCommand(HciPacket packet) {
-  hci::CommandPacketView command = hci::CommandPacketView::FromBytes(packet);
+  auto packetView = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(packet));
+  hci::CommandPacketView command = hci::CommandPacketView::Create(packetView);
   if (!command.IsValid()) {
     return;
   }
 
   waiting_opcode_ = command.GetOpCode();
-  waiting_for_status_ = hci::fuzz::uses_command_status(waiting_opcode_);
+  // TODO: expand list or find better way to associate opcodes needing status vs complete
+  waiting_for_status_ = waiting_opcode_ == hci::OpCode::RESET;
 }
 
 void FuzzHciHal::injectHciEvent(std::vector<uint8_t> data) {
-  hci::EventPacketView event = hci::EventPacketView::FromBytes(data);
+  auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(data));
+  hci::EventPacketView event = hci::EventPacketView::Create(packet);
   if (!event.IsValid()) {
     return;
   }
@@ -68,7 +70,8 @@ void FuzzHciHal::injectHciEvent(std::vector<uint8_t> data) {
 }
 
 void FuzzHciHal::injectAclData(std::vector<uint8_t> data) {
-  hci::AclPacketView aclPacket = hci::AclPacketView::FromBytes(data);
+  auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(data));
+  hci::AclPacketView aclPacket = hci::AclPacketView::Create(packet);
   if (!aclPacket.IsValid()) {
     return;
   }
@@ -77,7 +80,8 @@ void FuzzHciHal::injectAclData(std::vector<uint8_t> data) {
 }
 
 void FuzzHciHal::injectScoData(std::vector<uint8_t> data) {
-  hci::ScoPacketView scoPacket = hci::ScoPacketView::FromBytes(data);
+  auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(data));
+  hci::ScoPacketView scoPacket = hci::ScoPacketView::Create(packet);
   if (!scoPacket.IsValid()) {
     return;
   }
