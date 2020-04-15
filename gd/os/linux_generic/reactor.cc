@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <algorithm>
 #include <cerrno>
-#include <cinttypes>
 #include <cstring>
 
 #include "os/log.h"
@@ -117,9 +116,6 @@ void Reactor::Run() {
         } else if ((value & kWaitForIdle) != 0) {
           timeout_ms = 30;
           waiting_for_idle = true;
-          continue;
-        } else {
-          LOG_ERROR("Unknown control_fd value %" PRIu64 "x", value);
           continue;
         }
       }
