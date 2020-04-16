@@ -29,9 +29,9 @@ namespace bluetooth {
 namespace hci {
 namespace fuzz {
 
-class HciLayerFuzzClient : public Module {
+class DevNullHci : public Module {
  public:
-  HciLayerFuzzClient() : Module() {}
+  DevNullHci() : Module() {}
 
   void Start() override;
   void Stop() override;

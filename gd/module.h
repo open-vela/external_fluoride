@@ -33,17 +33,14 @@ namespace bluetooth {
 class Module;
 class ModuleDumper;
 class ModuleRegistry;
-class FuzzTestModuleRegistry;
 
 class ModuleFactory {
  friend ModuleRegistry;
- friend FuzzTestModuleRegistry;
+ public:
+  ModuleFactory(std::function<Module*()> ctor);
 
-public:
- ModuleFactory(std::function<Module*()> ctor);
-
-private:
- std::function<Module*()> ctor_;
+ private:
+  std::function<Module*()> ctor_;
 };
 
 class ModuleList {
@@ -70,7 +67,6 @@ public:
 class Module {
   friend ModuleDumper;
   friend ModuleRegistry;
-  friend FuzzTestModuleRegistry;
 
  public:
   virtual ~Module() = default;
@@ -188,29 +184,6 @@ class TestModuleRegistry : public ModuleRegistry {
 
  private:
   os::Thread test_thread{"test_thread", os::Thread::Priority::NORMAL};
-};
-
-class FuzzTestModuleRegistry : public TestModuleRegistry {
- public:
-  template <class T>
-  T* Inject(const ModuleFactory* overriding) {
-    Module* instance = T::Factory.ctor_();
-    InjectTestModule(overriding, instance);
-    instance->Start();
-    return static_cast<T*>(instance);
-  }
-
-  template <class T>
-  T* Start() {
-    return ModuleRegistry::Start<T>(&GetTestThread());
-  }
-
-  void WaitForIdleAndStopAll() {
-    if (!GetTestThread().GetReactor()->WaitForIdle(std::chrono::milliseconds(100))) {
-      LOG_ERROR("idle timed out");
-    }
-    StopAll();
-  }
 };
 
 }  // namespace bluetooth
