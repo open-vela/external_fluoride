@@ -16,9 +16,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "fuzz/helpers.h"
 #include "hal/fuzz/fuzz_hci_hal.h"
-#include "hci/fuzz/hci_layer_fuzz_client.h"
+#include "hci/fuzz/dev_null_hci.h"
 #include "hci/hci_layer.h"
 #include "module.h"
 #include "os/fuzz/fake_timerfd.h"
@@ -27,13 +26,16 @@
 #include <fuzzer/FuzzedDataProvider.h>
 
 using bluetooth::TestModuleRegistry;
-using bluetooth::fuzz::GetArbitraryBytes;
 using bluetooth::hal::HciHal;
 using bluetooth::hal::fuzz::FuzzHciHal;
-using bluetooth::hci::fuzz::HciLayerFuzzClient;
+using bluetooth::hci::fuzz::DevNullHci;
 using bluetooth::os::fuzz::fake_timerfd_advance;
 using bluetooth::os::fuzz::fake_timerfd_cap_at;
 using bluetooth::os::fuzz::fake_timerfd_reset;
+
+static std::vector<uint8_t> GetArbitraryBytes(FuzzedDataProvider* fdp) {
+  return fdp->ConsumeBytes<uint8_t>(fdp->ConsumeIntegral<size_t>());
+}
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   FuzzedDataProvider dataProvider(data, size);
@@ -43,8 +45,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   FuzzHciHal* fuzzHal = new FuzzHciHal();
 
   moduleRegistry.InjectTestModule(&HciHal::Factory, fuzzHal);
-  moduleRegistry.Start<HciLayerFuzzClient>(&moduleRegistry.GetTestThread());
-  HciLayerFuzzClient* fuzzClient = moduleRegistry.GetModuleUnderTest<HciLayerFuzzClient>();
+  moduleRegistry.Start<DevNullHci>(&moduleRegistry.GetTestThread());
+  DevNullHci* devNullHci = moduleRegistry.GetModuleUnderTest<DevNullHci>();
 
   while (dataProvider.remaining_bytes() > 0) {
     const uint8_t action = dataProvider.ConsumeIntegralInRange(0, 12);
@@ -62,28 +64,28 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         fuzzHal->injectScoData(GetArbitraryBytes(&dataProvider));
         break;
       case 5:
-        fuzzClient->injectAclData(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectAclData(GetArbitraryBytes(&dataProvider));
         break;
       case 6:
-        fuzzClient->injectHciCommand(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectHciCommand(GetArbitraryBytes(&dataProvider));
         break;
       case 7:
-        // TODO: fuzzClient->injectSecurityCommand(GetArbitraryBytes(&dataProvider));
+        // TODO: devNullHci->injectSecurityCommand(GetArbitraryBytes(&dataProvider));
         break;
       case 8:
-        fuzzClient->injectLeSecurityCommand(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectLeSecurityCommand(GetArbitraryBytes(&dataProvider));
         break;
       case 9:
-        fuzzClient->injectAclConnectionCommand(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectAclConnectionCommand(GetArbitraryBytes(&dataProvider));
         break;
       case 10:
-        fuzzClient->injectLeAclConnectionCommand(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectLeAclConnectionCommand(GetArbitraryBytes(&dataProvider));
         break;
       case 11:
-        fuzzClient->injectLeAdvertisingCommand(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectLeAdvertisingCommand(GetArbitraryBytes(&dataProvider));
         break;
       case 12:
-        fuzzClient->injectLeScanningCommand(GetArbitraryBytes(&dataProvider));
+        devNullHci->injectLeScanningCommand(GetArbitraryBytes(&dataProvider));
         break;
     }
   }
