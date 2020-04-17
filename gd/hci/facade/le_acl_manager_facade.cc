@@ -40,13 +40,11 @@ namespace facade {
 
 class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
                                   public ::bluetooth::hci::LeConnectionCallbacks,
-                                  public ::bluetooth::hci::ConnectionManagementCallbacks,
-                                  public ::bluetooth::hci::AclManagerCallbacks {
+                                  public ::bluetooth::hci::LeConnectionManagementCallbacks {
  public:
   LeAclManagerFacadeService(AclManager* acl_manager, ::bluetooth::os::Handler* facade_handler)
       : acl_manager_(acl_manager), facade_handler_(facade_handler) {
     acl_manager_->RegisterLeCallbacks(this, facade_handler_);
-    acl_manager_->RegisterLeAclManagerCallbacks(this, facade_handler_);
   }
 
   ~LeAclManagerFacadeService() override {
@@ -83,19 +81,6 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
     }
   }
 
-  ::grpc::Status AuthenticationRequested(::grpc::ServerContext* context, const LeHandleMsg* request,
-                                         ::google::protobuf::Empty* response) override {
-    std::unique_lock<std::mutex> lock(acl_connections_mutex_);
-    auto connection = acl_connections_.find(request->handle());
-    if (connection == acl_connections_.end()) {
-      LOG_ERROR("Invalid handle");
-      return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid handle");
-    } else {
-      connection->second->AuthenticationRequested();
-      return ::grpc::Status::OK;
-    }
-  };
-
   ::grpc::Status FetchIncomingConnection(::grpc::ServerContext* context, const google::protobuf::Empty* request,
                                          ::grpc::ServerWriter<LeConnectionEvent>* writer) override {
     if (per_connection_events_.size() > current_connection_request_) {
@@ -126,6 +111,15 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
     return ::grpc::Status::OK;
   }
 
+  ::grpc::Status SetInitiatorAddress(::grpc::ServerContext* context,
+                                     const ::bluetooth::facade::BluetoothAddressWithType* request,
+                                     ::google::protobuf::Empty* writer) override {
+    Address address;
+    ASSERT(Address::FromString(request->address().address(), address));
+    acl_manager_->SetLeInitiatorAddress(AddressWithType(address, static_cast<AddressType>(request->type())));
+    return ::grpc::Status::OK;
+  }
+
   std::unique_ptr<BasePacketBuilder> enqueue_packet(const LeAclData* request, std::promise<void> promise) {
     acl_connections_[request->handle()]->GetAclQueueEnd()->UnregisterEnqueue();
     std::unique_ptr<RawBuilder> packet =
@@ -150,7 +144,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
     return std::string(bytes.begin(), bytes.end());
   }
 
-  void on_incoming_acl(std::shared_ptr<AclConnection> connection, uint16_t handle) {
+  void on_incoming_acl(std::shared_ptr<LeAclConnection> connection, uint16_t handle) {
     auto packet = connection->GetAclQueueEnd()->TryDequeue();
     LeAclData acl_data;
     acl_data.set_handle(handle);
@@ -158,7 +152,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
     pending_acl_data_.OnIncomingEvent(acl_data);
   }
 
-  void on_disconnect(std::shared_ptr<AclConnection> connection, uint32_t entry, ErrorCode code) {
+  void on_disconnect(std::shared_ptr<LeAclConnection> connection, uint32_t entry, ErrorCode code) {
     connection->GetAclQueueEnd()->UnregisterDequeue();
     connection->Finish();
     std::unique_ptr<BasePacketBuilder> builder =
@@ -169,14 +163,13 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
   }
 
   void OnLeConnectSuccess(AddressWithType address_with_type,
-                          std::unique_ptr<::bluetooth::hci::AclConnection> connection) override {
+                          std::unique_ptr<::bluetooth::hci::LeAclConnection> connection) override {
     LOG_DEBUG("%s", address_with_type.ToString().c_str());
 
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
     auto addr = address_with_type.GetAddress();
-    std::shared_ptr<::bluetooth::hci::AclConnection> shared_connection = std::move(connection);
+    std::shared_ptr<::bluetooth::hci::LeAclConnection> shared_connection = std::move(connection);
     acl_connections_.emplace(to_handle(current_connection_request_), shared_connection);
-    auto remote_address = shared_connection->GetAddress().ToString();
     shared_connection->GetAclQueueEnd()->RegisterDequeue(
         facade_handler_, common::Bind(&LeAclManagerFacadeService::on_incoming_acl, common::Unretained(this),
                                       shared_connection, to_handle(current_connection_request_)));
@@ -186,9 +179,9 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
         facade_handler_);
     shared_connection->RegisterCallbacks(this, facade_handler_);
     {
-      std::unique_ptr<BasePacketBuilder> builder = LeConnectionCompleteBuilder::Create(
-          ErrorCode::SUCCESS, to_handle(current_connection_request_), Role::MASTER, address_with_type.GetAddressType(),
-          addr, 1, 2, 3, MasterClockAccuracy::PPM_20);
+      std::unique_ptr<BasePacketBuilder> builder =
+          LeConnectionCompleteBuilder::Create(ErrorCode::SUCCESS, to_handle(current_connection_request_), Role::MASTER,
+                                              address_with_type.GetAddressType(), addr, 1, 2, 3, ClockAccuracy::PPM_20);
       LeConnectionEvent success;
       success.set_event(builder_to_string(std::move(builder)));
       per_connection_events_[current_connection_request_]->OnIncomingEvent(success);
@@ -196,115 +189,26 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
     current_connection_request_++;
   }
 
-  void OnMasterLinkKeyComplete(uint16_t connection_handle, KeyFlag key_flag) override {
-    LOG_DEBUG("OnMasterLinkKeyComplete connection_handle:%d", connection_handle);
-  }
-
-  void OnRoleChange(Address bd_addr, Role new_role) override {
-    LOG_DEBUG("OnRoleChange bd_addr:%s, new_role:%d", bd_addr.ToString().c_str(), (uint8_t)new_role);
-  }
-
-  void OnReadDefaultLinkPolicySettingsComplete(uint16_t default_link_policy_settings) override {
-    LOG_DEBUG("OnReadDefaultLinkPolicySettingsComplete default_link_policy_settings:%d", default_link_policy_settings);
-  }
-
   void OnLeConnectFail(AddressWithType address, ErrorCode reason) override {
     std::unique_ptr<BasePacketBuilder> builder = LeConnectionCompleteBuilder::Create(
-        reason, 0, Role::MASTER, address.GetAddressType(), address.GetAddress(), 0, 0, 0, MasterClockAccuracy::PPM_20);
+        reason, 0, Role::MASTER, address.GetAddressType(), address.GetAddress(), 0, 0, 0, ClockAccuracy::PPM_20);
     LeConnectionEvent fail;
     fail.set_event(builder_to_string(std::move(builder)));
     per_connection_events_[current_connection_request_]->OnIncomingEvent(fail);
     current_connection_request_++;
   }
 
-  void OnConnectionPacketTypeChanged(uint16_t packet_type) override {
-    LOG_DEBUG("OnConnectionPacketTypeChanged packet_type:%d", packet_type);
-  }
-
-  void OnAuthenticationComplete() override {
-    LOG_DEBUG("OnAuthenticationComplete");
-  }
-
-  void OnEncryptionChange(EncryptionEnabled enabled) override {
-    LOG_DEBUG("OnConnectionPacketTypeChanged enabled:%d", (uint8_t)enabled);
-  }
-
-  void OnChangeConnectionLinkKeyComplete() override {
-    LOG_DEBUG("OnChangeConnectionLinkKeyComplete");
-  };
-
-  void OnReadClockOffsetComplete(uint16_t clock_offset) override {
-    LOG_DEBUG("OnReadClockOffsetComplete clock_offset:%d", clock_offset);
-  };
-
-  void OnModeChange(Mode current_mode, uint16_t interval) override {
-    LOG_DEBUG("OnModeChange Mode:%d, interval:%d", (uint8_t)current_mode, interval);
-  };
-
-  void OnQosSetupComplete(ServiceType service_type, uint32_t token_rate, uint32_t peak_bandwidth, uint32_t latency,
-                          uint32_t delay_variation) override {
-    LOG_DEBUG("OnQosSetupComplete service_type:%d, token_rate:%d, peak_bandwidth:%d, latency:%d, delay_variation:%d",
-              (uint8_t)service_type, token_rate, peak_bandwidth, latency, delay_variation);
-  }
-
-  void OnFlowSpecificationComplete(FlowDirection flow_direction, ServiceType service_type, uint32_t token_rate,
-                                   uint32_t token_bucket_size, uint32_t peak_bandwidth,
-                                   uint32_t access_latency) override {
-    LOG_DEBUG(
-        "OnFlowSpecificationComplete flow_direction:%d. service_type:%d, token_rate:%d, token_bucket_size:%d, "
-        "peak_bandwidth:%d, access_latency:%d",
-        (uint8_t)flow_direction, (uint8_t)service_type, token_rate, token_bucket_size, peak_bandwidth, access_latency);
-  }
-
-  void OnFlushOccurred() override {
-    LOG_DEBUG("OnFlushOccurred");
-  }
-
-  void OnRoleDiscoveryComplete(Role current_role) override {
-    LOG_DEBUG("OnRoleDiscoveryComplete current_role:%d", (uint8_t)current_role);
-  }
-
-  void OnReadLinkPolicySettingsComplete(uint16_t link_policy_settings) override {
-    LOG_DEBUG("OnReadLinkPolicySettingsComplete link_policy_settings:%d", link_policy_settings);
-  }
-
-  void OnReadAutomaticFlushTimeoutComplete(uint16_t flush_timeout) override {
-    LOG_DEBUG("OnReadAutomaticFlushTimeoutComplete flush_timeout:%d", flush_timeout);
-  }
-
-  void OnReadTransmitPowerLevelComplete(uint8_t transmit_power_level) override {
-    LOG_DEBUG("OnReadTransmitPowerLevelComplete transmit_power_level:%d", transmit_power_level);
-  }
-
-  void OnReadLinkSupervisionTimeoutComplete(uint16_t link_supervision_timeout) override {
-    LOG_DEBUG("OnReadLinkSupervisionTimeoutComplete link_supervision_timeout:%d", link_supervision_timeout);
-  }
-
-  void OnReadFailedContactCounterComplete(uint16_t failed_contact_counter) override {
-    LOG_DEBUG("OnReadFailedContactCounterComplete failed_contact_counter:%d", failed_contact_counter);
-  }
-
-  void OnReadLinkQualityComplete(uint8_t link_quality) override {
-    LOG_DEBUG("OnReadLinkQualityComplete link_quality:%d", link_quality);
-  }
-
-  void OnReadAfhChannelMapComplete(AfhMode afh_mode, std::array<uint8_t, 10> afh_channel_map) override {
-    LOG_DEBUG("OnReadAfhChannelMapComplete afh_mode:%d", (uint8_t)afh_mode);
-  }
-
-  void OnReadRssiComplete(uint8_t rssi) override {
-    LOG_DEBUG("OnReadRssiComplete rssi:%d", rssi);
-  }
-
-  void OnReadClockComplete(uint32_t clock, uint16_t accuracy) override {
-    LOG_DEBUG("OnReadClockComplete clock:%d, accuracy:%d", clock, accuracy);
+  void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
+                          uint16_t supervision_timeout) override {
+    LOG_DEBUG("interval: 0x%hx, latency: 0x%hx, timeout 0x%hx", connection_interval, connection_latency,
+              supervision_timeout);
   }
 
  private:
   AclManager* acl_manager_;
   ::bluetooth::os::Handler* facade_handler_;
   mutable std::mutex acl_connections_mutex_;
-  std::map<uint16_t, std::shared_ptr<AclConnection>> acl_connections_;
+  std::map<uint16_t, std::shared_ptr<LeAclConnection>> acl_connections_;
   ::bluetooth::grpc::GrpcEventQueue<LeAclData> pending_acl_data_{"FetchAclData"};
   std::vector<std::unique_ptr<::bluetooth::grpc::GrpcEventQueue<LeConnectionEvent>>> per_connection_events_;
   uint32_t current_connection_request_{0};
