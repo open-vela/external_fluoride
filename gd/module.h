@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <google/protobuf/message.h>
 #include <functional>
 #include <future>
 #include <map>
@@ -31,30 +30,25 @@
 namespace bluetooth {
 
 class Module;
-class ModuleDumper;
 class ModuleRegistry;
-class FuzzTestModuleRegistry;
 
 class ModuleFactory {
  friend ModuleRegistry;
- friend FuzzTestModuleRegistry;
+ public:
+  ModuleFactory(std::function<Module*()> ctor);
 
-public:
- ModuleFactory(std::function<Module*()> ctor);
-
-private:
- std::function<Module*()> ctor_;
+ private:
+  std::function<Module*()> ctor_;
 };
 
 class ModuleList {
- friend Module;
  friend ModuleRegistry;
-
-public:
- template <class T>
- void add() {
-   list_.push_back(&T::Factory);
- }
+ friend Module;
+ public:
+  template <class T>
+  void add() {
+    list_.push_back(&T::Factory);
+  }
 
  private:
   std::vector<const ModuleFactory*> list_;
@@ -68,10 +62,7 @@ public:
 // The module registry will also use the factory as the identifier
 // for that module.
 class Module {
-  friend ModuleDumper;
-  friend ModuleRegistry;
-  friend FuzzTestModuleRegistry;
-
+ friend ModuleRegistry;
  public:
   virtual ~Module() = default;
  protected:
@@ -84,9 +75,6 @@ class Module {
 
   // Release all resources, you're about to be deleted
   virtual void Stop() = 0;
-
-  // Get relevant state data from the module
-  virtual std::unique_ptr<google::protobuf::Message> DumpState() const;
 
   virtual std::string ToString() const;
 
@@ -109,7 +97,6 @@ class Module {
 
 class ModuleRegistry {
  friend Module;
- friend ModuleDumper;
  friend class StackManager;
  public:
   template <class T>
@@ -144,15 +131,6 @@ class ModuleRegistry {
   std::vector<const ModuleFactory*> start_order_;
 };
 
-class ModuleDumper {
- public:
-  ModuleDumper(ModuleRegistry& module_registry) : module_registry_(module_registry) {}
-  void DumpState() const;
-
- private:
-  ModuleRegistry& module_registry_;
-};
-
 class TestModuleRegistry : public ModuleRegistry {
  public:
   void InjectTestModule(const ModuleFactory* module, Module* instance) {
@@ -163,11 +141,6 @@ class TestModuleRegistry : public ModuleRegistry {
 
   Module* GetModuleUnderTest(const ModuleFactory* module) const {
     return Get(module);
-  }
-
-  template <class T>
-  T* GetModuleUnderTest() const {
-    return static_cast<T*>(GetModuleUnderTest(&T::Factory));
   }
 
   os::Handler* GetTestModuleHandler(const ModuleFactory* module) const {
@@ -188,29 +161,6 @@ class TestModuleRegistry : public ModuleRegistry {
 
  private:
   os::Thread test_thread{"test_thread", os::Thread::Priority::NORMAL};
-};
-
-class FuzzTestModuleRegistry : public TestModuleRegistry {
- public:
-  template <class T>
-  T* Inject(const ModuleFactory* overriding) {
-    Module* instance = T::Factory.ctor_();
-    InjectTestModule(overriding, instance);
-    instance->Start();
-    return static_cast<T*>(instance);
-  }
-
-  template <class T>
-  T* Start() {
-    return ModuleRegistry::Start<T>(&GetTestThread());
-  }
-
-  void WaitForIdleAndStopAll() {
-    if (!GetTestThread().GetReactor()->WaitForIdle(std::chrono::milliseconds(100))) {
-      LOG_ERROR("idle timed out");
-    }
-    StopAll();
-  }
 };
 
 }  // namespace bluetooth
