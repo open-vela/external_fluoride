@@ -97,19 +97,73 @@ void on_hci_timeout(OpCode op_code) {
 }
 }  // namespace
 
-template <typename T>
-class CommandInterfaceImpl : public CommandInterface<T> {
+class SecurityInterfaceImpl : public SecurityInterface {
  public:
-  explicit CommandInterfaceImpl(HciLayer& hci) : hci_(hci) {}
-  ~CommandInterfaceImpl() override = default;
+  SecurityInterfaceImpl(HciLayer& hci) : hci_(hci) {}
+  virtual ~SecurityInterfaceImpl() = default;
 
-  void EnqueueCommand(std::unique_ptr<T> command, common::OnceCallback<void(CommandCompleteView)> on_complete,
-                      os::Handler* handler) override {
+  virtual void EnqueueCommand(std::unique_ptr<SecurityCommandBuilder> command,
+                              common::OnceCallback<void(CommandCompleteView)> on_complete,
+                              os::Handler* handler) override {
     hci_.EnqueueCommand(std::move(command), std::move(on_complete), handler);
   }
 
-  void EnqueueCommand(std::unique_ptr<T> command, common::OnceCallback<void(CommandStatusView)> on_status,
-                      os::Handler* handler) override {
+  virtual void EnqueueCommand(std::unique_ptr<SecurityCommandBuilder> command,
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_status), handler);
+  }
+  HciLayer& hci_;
+};
+
+class LeSecurityInterfaceImpl : public LeSecurityInterface {
+ public:
+  LeSecurityInterfaceImpl(HciLayer& hci) : hci_(hci) {}
+  virtual ~LeSecurityInterfaceImpl() = default;
+
+  virtual void EnqueueCommand(std::unique_ptr<LeSecurityCommandBuilder> command,
+                              common::OnceCallback<void(CommandCompleteView)> on_complete,
+                              os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_complete), handler);
+  }
+
+  virtual void EnqueueCommand(std::unique_ptr<LeSecurityCommandBuilder> command,
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_status), handler);
+  }
+  HciLayer& hci_;
+};
+
+class LeAdvertisingInterfaceImpl : public LeAdvertisingInterface {
+ public:
+  LeAdvertisingInterfaceImpl(HciLayer& hci) : hci_(hci) {}
+  virtual ~LeAdvertisingInterfaceImpl() = default;
+
+  virtual void EnqueueCommand(std::unique_ptr<LeAdvertisingCommandBuilder> command,
+                              common::OnceCallback<void(CommandCompleteView)> on_complete,
+                              os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_complete), handler);
+  }
+
+  virtual void EnqueueCommand(std::unique_ptr<LeAdvertisingCommandBuilder> command,
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_status), handler);
+  }
+  HciLayer& hci_;
+};
+
+class LeScanningInterfaceImpl : public LeScanningInterface {
+ public:
+  LeScanningInterfaceImpl(HciLayer& hci) : hci_(hci) {}
+  virtual ~LeScanningInterfaceImpl() = default;
+
+  virtual void EnqueueCommand(std::unique_ptr<LeScanningCommandBuilder> command,
+                              common::OnceCallback<void(CommandCompleteView)> on_complete,
+                              os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_complete), handler);
+  }
+
+  virtual void EnqueueCommand(std::unique_ptr<LeScanningCommandBuilder> command,
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
     hci_.EnqueueCommand(std::move(command), std::move(on_status), handler);
   }
   HciLayer& hci_;
@@ -117,6 +171,8 @@ class CommandInterfaceImpl : public CommandInterface<T> {
 
 struct HciLayer::impl : public hal::HciHalCallbacks {
   impl(HciLayer& module) : hal_(nullptr), module_(module) {}
+
+  ~impl() {}
 
   void Start(hal::HciHal* hal) {
     hal_ = hal;
@@ -150,6 +206,12 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
 
   void Stop() {
     hal_->unregisterIncomingPacketCallback();
+    UnregisterEventHandler(EventCode::COMMAND_COMPLETE);
+    UnregisterEventHandler(EventCode::COMMAND_STATUS);
+    UnregisterEventHandler(EventCode::LE_META_EVENT);
+    UnregisterEventHandler(EventCode::PAGE_SCAN_REPETITION_MODE_CHANGE);
+    UnregisterEventHandler(EventCode::MAX_SLOTS_CHANGE);
+    UnregisterEventHandler(EventCode::VENDOR_SPECIFIC);
 
     acl_queue_.GetDownEnd()->UnregisterDequeue();
     incoming_acl_packet_buffer_.Clear();
@@ -226,16 +288,10 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
     SubeventCode subevent_code = meta_event_view.GetSubeventCode();
     ASSERT_LOG(subevent_handlers_.find(subevent_code) != subevent_handlers_.end(),
                "Unhandled le event of type 0x%02hhx (%s)", subevent_code, SubeventCodeText(subevent_code).c_str());
-    auto& registered = subevent_handlers_[subevent_code];
-    if (registered.handler != nullptr) {
-      registered.handler->Post(BindOnce(registered.subevent_handler, meta_event_view));
-    } else {
-      LOG_DEBUG("Dropping unregistered le event of type 0x%02hhx (%s)", subevent_code,
-                SubeventCodeText(subevent_code).c_str());
-    }
+    auto& registered_handler = subevent_handlers_[subevent_code].subevent_handler;
+    subevent_handlers_[subevent_code].handler->Post(BindOnce(registered_handler, meta_event_view));
   }
 
-  // Invoked from HAL thread
   void hciEventReceived(hal::HciPacket event_bytes) override {
     auto packet = packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(event_bytes));
     EventPacketView event = EventPacketView::Create(packet);
@@ -246,17 +302,12 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
 
   void hci_event_received_handler(EventPacketView event) {
     EventCode event_code = event.GetEventCode();
-    if (event_handlers_.find(event_code) == event_handlers_.end()) {
-      LOG_DEBUG("Dropping unregistered event of type 0x%02hhx (%s)", event_code, EventCodeText(event_code).c_str());
-      return;
-    }
-    auto& registered = event_handlers_[event_code];
-    if (registered.handler != nullptr) {
-      registered.handler->Post(BindOnce(registered.event_handler, event));
-    }
+    ASSERT_LOG(event_handlers_.find(event_code) != event_handlers_.end(), "Unhandled event of type 0x%02hhx (%s)",
+               event_code, EventCodeText(event_code).c_str());
+    auto& registered_handler = event_handlers_[event_code].event_handler;
+    event_handlers_[event_code].handler->Post(BindOnce(registered_handler, std::move(event)));
   }
 
-  // From HAL thread
   void aclDataReceived(hal::HciPacket data_bytes) override {
     auto packet =
         packet::PacketView<packet::kLittleEndian>(std::make_shared<std::vector<uint8_t>>(std::move(data_bytes)));
@@ -331,7 +382,8 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
                                      os::Handler* handler) {
     ASSERT_LOG(event_handlers_.count(event_code) == 0, "Can not register a second handler for event_code %02hhx (%s)",
                event_code, EventCodeText(event_code).c_str());
-    event_handlers_[event_code] = EventHandler(event_handler, handler);
+    EventHandler to_save(event_handler, handler);
+    event_handlers_[event_code] = to_save;
   }
 
   void UnregisterEventHandler(EventCode event_code) {
@@ -340,7 +392,7 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
   }
 
   void handle_unregister_event_handler(EventCode event_code) {
-    event_handlers_[event_code] = EventHandler();
+    event_handlers_.erase(event_code);
   }
 
   void RegisterLeEventHandler(SubeventCode subevent_code, Callback<void(LeMetaEventView)> event_handler,
@@ -354,7 +406,8 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
     ASSERT_LOG(subevent_handlers_.count(subevent_code) == 0,
                "Can not register a second handler for subevent_code %02hhx (%s)", subevent_code,
                SubeventCodeText(subevent_code).c_str());
-    subevent_handlers_[subevent_code] = SubeventHandler(subevent_handler, handler);
+    SubeventHandler to_save(subevent_handler, handler);
+    subevent_handlers_[subevent_code] = to_save;
   }
 
   void UnregisterLeEventHandler(SubeventCode subevent_code) {
@@ -363,7 +416,7 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
   }
 
   void handle_unregister_le_event_handler(SubeventCode subevent_code) {
-    subevent_handlers_[subevent_code] = SubeventHandler();
+    subevent_handlers_.erase(subevent_code);
   }
 
   // The HAL
@@ -373,12 +426,10 @@ struct HciLayer::impl : public hal::HciHalCallbacks {
   HciLayer& module_;
 
   // Interfaces
-  CommandInterfaceImpl<ConnectionManagementCommandBuilder> acl_connection_manager_interface_{module_};
-  CommandInterfaceImpl<LeConnectionManagementCommandBuilder> le_acl_connection_manager_interface_{module_};
-  CommandInterfaceImpl<SecurityCommandBuilder> security_interface{module_};
-  CommandInterfaceImpl<LeSecurityCommandBuilder> le_security_interface{module_};
-  CommandInterfaceImpl<LeAdvertisingCommandBuilder> le_advertising_interface{module_};
-  CommandInterfaceImpl<LeScanningCommandBuilder> le_scanning_interface{module_};
+  SecurityInterfaceImpl security_interface{module_};
+  LeSecurityInterfaceImpl le_security_interface{module_};
+  LeAdvertisingInterfaceImpl le_advertising_interface{module_};
+  LeScanningInterfaceImpl le_scanning_interface{module_};
 
   // Command Handling
   std::list<CommandQueueEntry> command_queue_;
@@ -432,27 +483,9 @@ void HciLayer::UnregisterLeEventHandler(SubeventCode subevent_code) {
   impl_->UnregisterLeEventHandler(subevent_code);
 }
 
-AclConnectionInterface* HciLayer::GetAclConnectionInterface(common::Callback<void(EventPacketView)> event_handler,
-                                                            common::Callback<void(uint16_t, ErrorCode)> on_disconnect,
-                                                            os::Handler* handler) {
-  for (const auto event : AclConnectionEvents) {
-    RegisterEventHandler(event, event_handler, handler);
-  }
-  return &impl_->acl_connection_manager_interface_;
-}
-
-LeAclConnectionInterface* HciLayer::GetLeAclConnectionInterface(
-    common::Callback<void(LeMetaEventView)> event_handler, common::Callback<void(uint16_t, ErrorCode)> on_disconnect,
-    os::Handler* handler) {
-  for (const auto event : LeConnectionManagementEvents) {
-    RegisterLeEventHandler(event, event_handler, handler);
-  }
-  return &impl_->le_acl_connection_manager_interface_;
-}
-
 SecurityInterface* HciLayer::GetSecurityInterface(common::Callback<void(EventPacketView)> event_handler,
                                                   os::Handler* handler) {
-  for (const auto event : SecurityEvents) {
+  for (const auto event : SecurityInterface::SecurityEvents) {
     RegisterEventHandler(event, event_handler, handler);
   }
   return &impl_->security_interface;
@@ -460,7 +493,7 @@ SecurityInterface* HciLayer::GetSecurityInterface(common::Callback<void(EventPac
 
 LeSecurityInterface* HciLayer::GetLeSecurityInterface(common::Callback<void(LeMetaEventView)> event_handler,
                                                       os::Handler* handler) {
-  for (const auto subevent : LeSecurityEvents) {
+  for (const auto subevent : LeSecurityInterface::LeSecurityEvents) {
     RegisterLeEventHandler(subevent, event_handler, handler);
   }
   return &impl_->le_security_interface;
@@ -468,7 +501,7 @@ LeSecurityInterface* HciLayer::GetLeSecurityInterface(common::Callback<void(LeMe
 
 LeAdvertisingInterface* HciLayer::GetLeAdvertisingInterface(common::Callback<void(LeMetaEventView)> event_handler,
                                                             os::Handler* handler) {
-  for (const auto subevent : LeAdvertisingEvents) {
+  for (const auto subevent : LeAdvertisingInterface::LeAdvertisingEvents) {
     RegisterLeEventHandler(subevent, event_handler, handler);
   }
   return &impl_->le_advertising_interface;
@@ -476,7 +509,7 @@ LeAdvertisingInterface* HciLayer::GetLeAdvertisingInterface(common::Callback<voi
 
 LeScanningInterface* HciLayer::GetLeScanningInterface(common::Callback<void(LeMetaEventView)> event_handler,
                                                       os::Handler* handler) {
-  for (const auto subevent : LeScanningEvents) {
+  for (const auto subevent : LeScanningInterface::LeScanningEvents) {
     RegisterLeEventHandler(subevent, event_handler, handler);
   }
   return &impl_->le_scanning_interface;
@@ -486,10 +519,6 @@ const ModuleFactory HciLayer::Factory = ModuleFactory([]() { return new HciLayer
 
 void HciLayer::ListDependencies(ModuleList* list) {
   list->add<hal::HciHal>();
-}
-
-os::Handler* HciLayer::GetHciHandler() {
-  return GetHandler();
 }
 
 void HciLayer::Start() {
