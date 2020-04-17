@@ -32,10 +32,17 @@
  * get rid of legacy stack. */
 #ifndef LOG_VERBOSE
 
+#ifdef FUZZ_TARGET
+#define LOG_VERBOSE(...)
+#define LOG_DEBUG(...)
+#define LOG_INFO(...)
+#define LOG_WARN(...)
+#else
 #define LOG_VERBOSE(fmt, args...) ALOGV("%s:%d %s: " fmt, __FILE__, __LINE__, __func__, ##args)
 #define LOG_DEBUG(fmt, args...) ALOGD("%s:%d %s: " fmt, __FILE__, __LINE__, __func__, ##args)
 #define LOG_INFO(fmt, args...) ALOGI("%s:%d %s: " fmt, __FILE__, __LINE__, __func__, ##args)
 #define LOG_WARN(fmt, args...) ALOGW("%s:%d %s: " fmt, __FILE__, __LINE__, __func__, ##args)
+#endif /* FUZZ_TARGET */
 #define LOG_ERROR(fmt, args...) ALOGE("%s:%d %s: " fmt, __FILE__, __LINE__, __func__, ##args)
 
 #endif /* LOG_VERBOSE*/
@@ -63,10 +70,17 @@
     fprintf(stderr, "%s %s - %s:%d - %s: " fmt "\n", buf, LOG_TAG, __FILE__, __LINE__, __func__, ##args);             \
   } while (false)
 
+#ifdef FUZZ_TARGET
+#define LOG_VERBOSE(...)
+#define LOG_DEBUG(...)
+#define LOG_INFO(...)
+#define LOG_WARN(...)
+#else
 #define LOG_VERBOSE(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_DEBUG(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_INFO(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_WARN(...) LOGWRAPPER(__VA_ARGS__)
+#endif /* FUZZ_TARGET */
 #define LOG_ERROR(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_ALWAYS_FATAL(...) \
   do {                        \
