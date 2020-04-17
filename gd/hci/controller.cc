@@ -74,7 +74,7 @@ struct Controller::impl {
                          BindOnce(&Controller::impl::read_buffer_size_complete_handler, common::Unretained(this)),
                          module_.GetHandler());
 
-    hci_->EnqueueCommand(LeReadBufferSizeBuilder::Create(),
+    hci_->EnqueueCommand(LeReadBufferSizeV1Builder::Create(),
                          BindOnce(&Controller::impl::le_read_buffer_size_handler, common::Unretained(this)),
                          module_.GetHandler());
 
@@ -125,7 +125,10 @@ struct Controller::impl {
   }
 
   void NumberOfCompletedPackets(EventPacketView event) {
-    ASSERT(acl_credits_handler_ != nullptr);
+    if (acl_credits_handler_ == nullptr) {
+      LOG_WARN("Received event when AclManager is not listening");
+      return;
+    }
     auto complete_view = NumberOfCompletedPacketsView::Create(event);
     ASSERT(complete_view.IsValid());
     for (auto completed_packets : complete_view.GetCompletedPackets()) {
@@ -137,9 +140,26 @@ struct Controller::impl {
 
   void RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
                                            Handler* handler) {
+    module_.GetHandler()->Post(common::BindOnce(&impl::register_completed_acl_packets_callback,
+                                                common::Unretained(this), cb, common::Unretained(handler)));
+  }
+
+  void register_completed_acl_packets_callback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
+                                               Handler* handler) {
     ASSERT(acl_credits_handler_ == nullptr);
     acl_credits_callback_ = cb;
     acl_credits_handler_ = handler;
+  }
+
+  void UnregisterCompletedAclPacketsCallback() {
+    module_.GetHandler()->Post(
+        common::BindOnce(&impl::unregister_completed_acl_packets_callback, common::Unretained(this)));
+  }
+
+  void unregister_completed_acl_packets_callback() {
+    ASSERT(acl_credits_handler_ != nullptr);
+    acl_credits_callback_ = {};
+    acl_credits_handler_ = nullptr;
   }
 
   void read_local_name_complete_handler(CommandCompleteView view) {
@@ -222,11 +242,19 @@ struct Controller::impl {
   }
 
   void le_read_buffer_size_handler(CommandCompleteView view) {
-    auto complete_view = LeReadBufferSizeCompleteView::Create(view);
+    auto complete_view = LeReadBufferSizeV1CompleteView::Create(view);
     ASSERT(complete_view.IsValid());
     ErrorCode status = complete_view.GetStatus();
     ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
     le_buffer_size_ = complete_view.GetLeBufferSize();
+
+    // If LE buffer size is zero, then buffers returned by Read_Buffer_Size are shared between BR/EDR and LE.
+    if (le_buffer_size_.total_num_le_packets_ == 0) {
+      ASSERT(acl_buffers_ != 0);
+      le_buffer_size_.total_num_le_packets_ = acl_buffers_ / 2;
+      acl_buffers_ -= le_buffer_size_.total_num_le_packets_;
+      le_buffer_size_.le_data_packet_length_ = acl_buffer_length_;
+    }
   }
 
   void le_read_local_supported_features_handler(CommandCompleteView view) {
@@ -549,7 +577,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(READ_LE_HOST_SUPPORT)
       OP_CODE_MAPPING(WRITE_LE_HOST_SUPPORT)
       OP_CODE_MAPPING(LE_SET_EVENT_MASK)
-      OP_CODE_MAPPING(LE_READ_BUFFER_SIZE)
+      OP_CODE_MAPPING(LE_READ_BUFFER_SIZE_V1)
       OP_CODE_MAPPING(LE_READ_LOCAL_SUPPORTED_FEATURES)
       OP_CODE_MAPPING(LE_SET_RANDOM_ADDRESS)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_PARAMETERS)
@@ -580,7 +608,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_TEST_END)
       OP_CODE_MAPPING(ENHANCED_SETUP_SYNCHRONOUS_CONNECTION)
       OP_CODE_MAPPING(ENHANCED_ACCEPT_SYNCHRONOUS_CONNECTION)
-      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODECS)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODECS_V1)
       OP_CODE_MAPPING(READ_SECURE_CONNECTIONS_HOST_SUPPORT)
       OP_CODE_MAPPING(WRITE_SECURE_CONNECTIONS_HOST_SUPPORT)
       OP_CODE_MAPPING(READ_LOCAL_OOB_EXTENDED_DATA)
@@ -632,7 +660,40 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_READ_RF_PATH_COMPENSATION_POWER)
       OP_CODE_MAPPING(LE_WRITE_RF_PATH_COMPENSATION_POWER)
       OP_CODE_MAPPING(LE_SET_PRIVACY_MODE)
+      OP_CODE_MAPPING(LE_SET_PERIODIC_ADVERTISING_RECEIVE_ENABLE)
+      OP_CODE_MAPPING(LE_PERIODIC_ADVERTISING_SYNC_TRANSFER)
+      OP_CODE_MAPPING(LE_PERIODIC_ADVERTISING_SET_INFO_TRANSFER)
+      OP_CODE_MAPPING(LE_SET_PERIODIC_ADVERTISING_SYNC_TRANSFER_PARAMETERS)
+      OP_CODE_MAPPING(LE_SET_DEFAULT_PERIODIC_ADVERTISING_SYNC_TRANSFER_PARAMETERS)
       OP_CODE_MAPPING(LE_GENERATE_DHKEY_COMMAND)
+      OP_CODE_MAPPING(LE_MODIFY_SLEEP_CLOCK_ACCURACY)
+      OP_CODE_MAPPING(LE_READ_BUFFER_SIZE_V2)
+      OP_CODE_MAPPING(LE_READ_ISO_TX_SYNC)
+      OP_CODE_MAPPING(LE_SET_CIG_PARAMETERS)
+      OP_CODE_MAPPING(LE_CREATE_CIS)
+      OP_CODE_MAPPING(LE_REMOVE_CIG)
+      OP_CODE_MAPPING(LE_ACCEPT_CIS_REQUEST)
+      OP_CODE_MAPPING(LE_REJECT_CIS_REQUEST)
+      OP_CODE_MAPPING(LE_CREATE_BIG)
+      OP_CODE_MAPPING(LE_TERMINATE_BIG)
+      OP_CODE_MAPPING(LE_BIG_CREATE_SYNC)
+      OP_CODE_MAPPING(LE_BIG_TERMINATE_SYNC)
+      OP_CODE_MAPPING(LE_REQUEST_PEER_SCA)
+      OP_CODE_MAPPING(LE_SETUP_ISO_DATA_PATH)
+      OP_CODE_MAPPING(LE_REMOVE_ISO_DATA_PATH)
+      OP_CODE_MAPPING(LE_SET_HOST_FEATURE)
+      OP_CODE_MAPPING(LE_READ_ISO_LINK_QUALITY)
+      OP_CODE_MAPPING(LE_ENHANCED_READ_TRANSMIT_POWER_LEVEL)
+      OP_CODE_MAPPING(LE_READ_REMOTE_TRANSMIT_POWER_LEVEL)
+      OP_CODE_MAPPING(LE_SET_PATH_LOSS_REPORTING_PARAMETERS)
+      OP_CODE_MAPPING(LE_SET_PATH_LOSS_REPORTING_ENABLE)
+      OP_CODE_MAPPING(LE_SET_TRANSMIT_POWER_REPORTING_ENABLE)
+      OP_CODE_MAPPING(SET_ECOSYSTEM_BASE_INTERVAL)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODECS_V2)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODEC_CAPABILITIES)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CONTROLLER_DELAY)
+      OP_CODE_MAPPING(CONFIGURE_DATA_PATH)
+
       // vendor specific
       case OpCode::LE_GET_VENDOR_CAPABILITIES:
         return vendor_capabilities_.is_supported_ == 0x01;
@@ -698,6 +759,10 @@ Controller::~Controller() = default;
 void Controller::RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
                                                      Handler* handler) {
   impl_->RegisterCompletedAclPacketsCallback(cb, handler);  // TODO hsz: why here?
+}
+
+void Controller::UnregisterCompletedAclPacketsCallback() {
+  impl_->UnregisterCompletedAclPacketsCallback();  // TODO hsz: why here?
 }
 
 std::string Controller::GetControllerLocalName() const {
