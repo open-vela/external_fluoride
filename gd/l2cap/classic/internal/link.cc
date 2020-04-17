@@ -29,11 +29,7 @@ namespace l2cap {
 namespace classic {
 namespace internal {
 
-using RetransmissionAndFlowControlMode = DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode;
-using ConnectionResult = DynamicChannelManager::ConnectionResult;
-using ConnectionResultCode = DynamicChannelManager::ConnectionResultCode;
-
-Link::Link(os::Handler* l2cap_handler, std::unique_ptr<hci::ClassicAclConnection> acl_connection,
+Link::Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_connection,
            l2cap::internal::ParameterProvider* parameter_provider,
            DynamicChannelServiceManagerImpl* dynamic_service_manager,
            FixedChannelServiceManagerImpl* fixed_service_manager)
@@ -59,8 +55,8 @@ void Link::OnAclDisconnected(hci::ErrorCode status) {
   signalling_manager_.CancelAlarm();
   fixed_channel_allocator_.OnAclDisconnected(status);
   dynamic_channel_allocator_.OnAclDisconnected(status);
-  ConnectionResult result{
-      .connection_result_code = ConnectionResultCode::FAIL_HCI_ERROR,
+  DynamicChannelManager::ConnectionResult result{
+      .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_HCI_ERROR,
       .hci_error = status,
       .l2cap_connection_response_result = ConnectionResponseResult::SUCCESS,
   };
@@ -68,7 +64,6 @@ void Link::OnAclDisconnected(hci::ErrorCode status) {
     auto entry = local_cid_to_pending_dynamic_channel_connection_map_.begin();
     NotifyChannelFail(entry->first, result);
   }
-  acl_connection_->Finish();
 }
 
 void Link::Disconnect() {
@@ -123,53 +118,15 @@ void Link::SendConnectionRequest(Psm psm, Cid local_cid) {
 
 void Link::SendConnectionRequest(Psm psm, Cid local_cid,
                                  PendingDynamicChannelConnection pending_dynamic_channel_connection) {
-  if (pending_dynamic_channel_connection.configuration_.channel_mode ==
-          RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION &&
-      !remote_extended_feature_received_) {
-    pending_dynamic_psm_list_.push_back(psm);
-    pending_dynamic_channel_callback_list_.push_back(std::move(pending_dynamic_channel_connection));
-    LOG_INFO("Will connect after information response ERTM feature support is received");
-    dynamic_channel_allocator_.FreeChannel(local_cid);
-    return;
-  } else if (pending_dynamic_channel_connection.configuration_.channel_mode ==
-                 RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION &&
-             !GetRemoteSupportsErtm()) {
-    LOG_WARN("Remote doesn't support ERTM. Dropping connection request");
-    ConnectionResult result{
-        .connection_result_code = ConnectionResultCode::FAIL_REMOTE_NOT_SUPPORT,
-    };
-    pending_dynamic_channel_connection.handler_->Post(
-        common::BindOnce(std::move(pending_dynamic_channel_connection.on_fail_callback_), result));
-    dynamic_channel_allocator_.FreeChannel(local_cid);
-    return;
-  } else {
-    local_cid_to_pending_dynamic_channel_connection_map_[local_cid] = std::move(pending_dynamic_channel_connection);
-    signalling_manager_.SendConnectionRequest(psm, local_cid);
-  }
-}
-
-void Link::SetPendingDynamicChannels(std::list<Psm> psm_list,
-                                     std::list<Link::PendingDynamicChannelConnection> callback_list) {
-  ASSERT(psm_list.size() == callback_list.size());
-  pending_dynamic_psm_list_ = std::move(psm_list);
-  pending_dynamic_channel_callback_list_ = std::move(callback_list);
-}
-
-void Link::connect_to_pending_dynamic_channels() {
-  auto psm = pending_dynamic_psm_list_.begin();
-  auto callback = pending_dynamic_channel_callback_list_.begin();
-  while (psm != pending_dynamic_psm_list_.end()) {
-    SendConnectionRequest(*psm, ReserveDynamicChannel(), std::move(*callback));
-    psm++;
-    callback++;
-  }
+  local_cid_to_pending_dynamic_channel_connection_map_[local_cid] = std::move(pending_dynamic_channel_connection);
+  signalling_manager_.SendConnectionRequest(psm, local_cid);
 }
 
 void Link::OnOutgoingConnectionRequestFail(Cid local_cid) {
   if (local_cid_to_pending_dynamic_channel_connection_map_.find(local_cid) !=
       local_cid_to_pending_dynamic_channel_connection_map_.end()) {
-    ConnectionResult result{
-        .connection_result_code = ConnectionResultCode::FAIL_HCI_ERROR,
+    DynamicChannelManager::ConnectionResult result{
+        .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_HCI_ERROR,
         .hci_error = hci::ErrorCode::CONNECTION_TIMEOUT,
         .l2cap_connection_response_result = ConnectionResponseResult::SUCCESS,
     };
@@ -190,6 +147,8 @@ std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateDynamicChanne
                                                                                   SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateChannel(psm, remote_cid, security_policy);
   if (channel != nullptr) {
+    data_pipeline_manager_.AttachChannel(channel->GetCid(), channel,
+                                         l2cap::internal::DataPipelineManager::ChannelMode::BASIC);
     RefreshRefCount();
   }
   channel->local_initiated_ = false;
@@ -200,6 +159,8 @@ std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateReservedDynam
     Cid reserved_cid, Psm psm, Cid remote_cid, SecurityPolicy security_policy) {
   auto channel = dynamic_channel_allocator_.AllocateReservedChannel(reserved_cid, psm, remote_cid, security_policy);
   if (channel != nullptr) {
+    data_pipeline_manager_.AttachChannel(channel->GetCid(), channel,
+                                         l2cap::internal::DataPipelineManager::ChannelMode::BASIC);
     RefreshRefCount();
   }
   channel->local_initiated_ = true;
@@ -216,6 +177,7 @@ void Link::FreeDynamicChannel(Cid cid) {
   if (dynamic_channel_allocator_.FindChannelByCid(cid) == nullptr) {
     return;
   }
+  data_pipeline_manager_.DetachChannel(cid);
   dynamic_channel_allocator_.FreeChannel(cid);
   RefreshRefCount();
 }
@@ -242,7 +204,7 @@ void Link::NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> user_c
   local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
 }
 
-void Link::NotifyChannelFail(Cid cid, ConnectionResult result) {
+void Link::NotifyChannelFail(Cid cid, DynamicChannelManager::ConnectionResult result) {
   ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
          local_cid_to_pending_dynamic_channel_connection_map_.end());
   auto& pending_dynamic_channel_connection = local_cid_to_pending_dynamic_channel_connection_map_[cid];
@@ -259,19 +221,20 @@ Mtu Link::GetRemoteConnectionlessMtu() const {
   return remote_connectionless_mtu_;
 }
 
+void Link::SetRemoteSupportsErtm(bool supported) {
+  remote_supports_ertm_ = supported;
+}
+
 bool Link::GetRemoteSupportsErtm() const {
   return remote_supports_ertm_;
 }
 
-bool Link::GetRemoteSupportsFcs() const {
-  return remote_supports_fcs_;
+void Link::SetRemoteSupportsFcs(bool supported) {
+  remote_supports_fcs_ = supported;
 }
 
-void Link::OnRemoteExtendedFeatureReceived(bool ertm_supported, bool fcs_supported) {
-  remote_supports_ertm_ = ertm_supported;
-  remote_supports_fcs_ = fcs_supported;
-  remote_extended_feature_received_ = true;
-  connect_to_pending_dynamic_channels();
+bool Link::GetRemoteSupportsFcs() const {
+  return remote_supports_fcs_;
 }
 
 void Link::AddChannelPendingingAuthentication(PendingAuthenticateDynamicChannelConnection pending_channel) {
@@ -362,12 +325,6 @@ void Link::OnReadRssiComplete(uint8_t rssi) {
 }
 void Link::OnReadClockComplete(uint32_t clock, uint16_t accuracy) {
   LOG_DEBUG("UNIMPLEMENTED %s clock:%u accuracy:%hu", __func__, clock, accuracy);
-}
-void Link::OnMasterLinkKeyComplete(hci::KeyFlag key_flag) {
-  LOG_DEBUG("UNIMPLEMENTED key_flag:%s", hci::KeyFlagText(key_flag).c_str());
-}
-void Link::OnRoleChange(hci::Role new_role) {
-  LOG_DEBUG("UNIMPLEMENTED role:%s", hci::RoleText(new_role).c_str());
 }
 
 }  // namespace internal
