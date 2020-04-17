@@ -38,7 +38,9 @@ namespace bluetooth {
 namespace hci {
 namespace facade {
 
-class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::bluetooth::hci::LeConnectionCallbacks {
+class LeAclManagerFacadeService : public LeAclManagerFacade::Service,
+                                  public ::bluetooth::hci::LeConnectionCallbacks,
+                                  public ::bluetooth::hci::LeConnectionManagementCallbacks {
  public:
   LeAclManagerFacadeService(AclManager* acl_manager, ::bluetooth::os::Handler* facade_handler)
       : acl_manager_(acl_manager), facade_handler_(facade_handler) {
@@ -47,8 +49,8 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
 
   ~LeAclManagerFacadeService() override {
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
-    for (auto& conn : acl_connections_) {
-      conn.second.connection_->GetAclQueueEnd()->UnregisterDequeue();
+    for (auto connection : acl_connections_) {
+      connection.second->GetAclQueueEnd()->UnregisterDequeue();
     }
   }
 
@@ -74,7 +76,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
       LOG_ERROR("Invalid handle");
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid handle");
     } else {
-      connection->second.connection_->Disconnect(DisconnectReason::REMOTE_USER_TERMINATED_CONNECTION);
+      connection->second->Disconnect(DisconnectReason::REMOTE_USER_TERMINATED_CONNECTION);
       return ::grpc::Status::OK;
     }
   }
@@ -100,7 +102,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
         LOG_ERROR("Invalid handle");
         return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid handle");
       } else {
-        connection->second.connection_->GetAclQueueEnd()->RegisterEnqueue(
+        connection->second->GetAclQueueEnd()->RegisterEnqueue(
             facade_handler_, common::Bind(&LeAclManagerFacadeService::enqueue_packet, common::Unretained(this),
                                           common::Unretained(request), common::Passed(std::move(promise))));
       }
@@ -119,9 +121,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
   }
 
   std::unique_ptr<BasePacketBuilder> enqueue_packet(const LeAclData* request, std::promise<void> promise) {
-    auto connection = acl_connections_.find(request->handle());
-    ASSERT_LOG(connection != acl_connections_.end(), "handle %d", request->handle());
-    connection->second.connection_->GetAclQueueEnd()->UnregisterEnqueue();
+    acl_connections_[request->handle()]->GetAclQueueEnd()->UnregisterEnqueue();
     std::unique_ptr<RawBuilder> packet =
         std::make_unique<RawBuilder>(std::vector<uint8_t>(request->payload().begin(), request->payload().end()));
     promise.set_value();
@@ -169,13 +169,15 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
     auto addr = address_with_type.GetAddress();
     std::shared_ptr<::bluetooth::hci::LeAclConnection> shared_connection = std::move(connection);
-    uint16_t handle = to_handle(current_connection_request_);
-    acl_connections_.emplace(std::pair(handle, Connection(handle, shared_connection)));
+    acl_connections_.emplace(to_handle(current_connection_request_), shared_connection);
     shared_connection->GetAclQueueEnd()->RegisterDequeue(
         facade_handler_, common::Bind(&LeAclManagerFacadeService::on_incoming_acl, common::Unretained(this),
                                       shared_connection, to_handle(current_connection_request_)));
-    auto callbacks = acl_connections_.find(handle)->second.GetCallbacks();
-    shared_connection->RegisterCallbacks(callbacks, facade_handler_);
+    shared_connection->RegisterDisconnectCallback(
+        common::BindOnce(&LeAclManagerFacadeService::on_disconnect, common::Unretained(this), shared_connection,
+                         current_connection_request_),
+        facade_handler_);
+    shared_connection->RegisterCallbacks(this, facade_handler_);
     {
       std::unique_ptr<BasePacketBuilder> builder =
           LeConnectionCompleteBuilder::Create(ErrorCode::SUCCESS, to_handle(current_connection_request_), Role::MASTER,
@@ -196,29 +198,17 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
     current_connection_request_++;
   }
 
-  class Connection : public ::bluetooth::hci::LeConnectionManagementCallbacks {
-   public:
-    Connection(uint16_t handle, std::shared_ptr<LeAclConnection> connection)
-        : handle_(handle), connection_(std::move(connection)) {}
-    void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
-                            uint16_t supervision_timeout) override {
-      LOG_DEBUG("interval: 0x%hx, latency: 0x%hx, timeout 0x%hx", connection_interval, connection_latency,
-                supervision_timeout);
-    }
-
-    LeConnectionManagementCallbacks* GetCallbacks() {
-      return this;
-    }
-
-    uint16_t handle_;
-    std::shared_ptr<LeAclConnection> connection_;
-  };
+  void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
+                          uint16_t supervision_timeout) override {
+    LOG_DEBUG("interval: 0x%hx, latency: 0x%hx, timeout 0x%hx", connection_interval, connection_latency,
+              supervision_timeout);
+  }
 
  private:
   AclManager* acl_manager_;
   ::bluetooth::os::Handler* facade_handler_;
   mutable std::mutex acl_connections_mutex_;
-  std::map<uint16_t, Connection> acl_connections_;
+  std::map<uint16_t, std::shared_ptr<LeAclConnection>> acl_connections_;
   ::bluetooth::grpc::GrpcEventQueue<LeAclData> pending_acl_data_{"FetchAclData"};
   std::vector<std::unique_ptr<::bluetooth::grpc::GrpcEventQueue<LeConnectionEvent>>> per_connection_events_;
   uint32_t current_connection_request_{0};
