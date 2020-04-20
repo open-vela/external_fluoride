@@ -24,9 +24,7 @@
 #include "common/bidi_queue.h"
 #include "common/callback.h"
 #include "hal/hci_hal.h"
-#include "hci/acl_connection_interface.h"
 #include "hci/hci_packets.h"
-#include "hci/le_acl_connection_interface.h"
 #include "hci/le_advertising_interface.h"
 #include "hci/le_scanning_interface.h"
 #include "hci/le_security_interface.h"
@@ -37,18 +35,17 @@
 namespace bluetooth {
 namespace hci {
 
-class HciLayer : public Module, public CommandInterface<CommandPacketBuilder> {
+class HciLayer : public Module {
  public:
   HciLayer();
   virtual ~HciLayer();
   DISALLOW_COPY_AND_ASSIGN(HciLayer);
 
   virtual void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::OnceCallback<void(CommandCompleteView)> on_complete,
-                              os::Handler* handler) override;
+                              common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler);
 
   virtual void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override;
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler);
 
   virtual common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* GetAclQueueEnd();
 
@@ -62,50 +59,31 @@ class HciLayer : public Module, public CommandInterface<CommandPacketBuilder> {
 
   virtual void UnregisterLeEventHandler(SubeventCode subevent_code);
 
-  virtual SecurityInterface* GetSecurityInterface(common::Callback<void(EventPacketView)> event_handler,
-                                                  os::Handler* handler);
+  SecurityInterface* GetSecurityInterface(common::Callback<void(EventPacketView)> event_handler, os::Handler* handler);
 
-  virtual LeSecurityInterface* GetLeSecurityInterface(common::Callback<void(LeMetaEventView)> event_handler,
-                                                      os::Handler* handler);
+  LeSecurityInterface* GetLeSecurityInterface(common::Callback<void(LeMetaEventView)> event_handler,
+                                              os::Handler* handler);
 
-  virtual AclConnectionInterface* GetAclConnectionInterface(
-      common::Callback<void(EventPacketView)> event_handler,
-      common::Callback<void(uint16_t, hci::ErrorCode)> on_disconnect, os::Handler* handler);
+  LeAdvertisingInterface* GetLeAdvertisingInterface(common::Callback<void(LeMetaEventView)> event_handler,
+                                                    os::Handler* handler);
 
-  virtual LeAclConnectionInterface* GetLeAclConnectionInterface(
-      common::Callback<void(LeMetaEventView)> event_handler,
-      common::Callback<void(uint16_t, hci::ErrorCode)> on_disconnect, os::Handler* handler);
-
-  virtual LeAdvertisingInterface* GetLeAdvertisingInterface(common::Callback<void(LeMetaEventView)> event_handler,
-                                                            os::Handler* handler);
-
-  virtual LeScanningInterface* GetLeScanningInterface(common::Callback<void(LeMetaEventView)> event_handler,
-                                                      os::Handler* handler);
-
-  os::Handler* GetHciHandler() {
-    return GetHandler();
-  }
-
-  std::string ToString() const override {
-    return "Hci Layer";
-  }
-
-  static constexpr std::chrono::milliseconds kHciTimeoutMs = std::chrono::milliseconds(2000);
+  LeScanningInterface* GetLeScanningInterface(common::Callback<void(LeMetaEventView)> event_handler,
+                                              os::Handler* handler);
 
   static const ModuleFactory Factory;
 
- protected:
   void ListDependencies(ModuleList* list) override;
 
   void Start() override;
 
   void Stop() override;
 
+  std::string ToString() const override;
+  static constexpr std::chrono::milliseconds kHciTimeoutMs = std::chrono::milliseconds(2000);
+
  private:
   struct impl;
-  struct hal_callbacks;
-  impl* impl_;
-  hal_callbacks* hal_callbacks_;
+  std::unique_ptr<impl> impl_;
 };
 }  // namespace hci
 }  // namespace bluetooth
