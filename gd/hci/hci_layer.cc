@@ -29,7 +29,6 @@ using bluetooth::common::BindOn;
 using bluetooth::common::BindOnce;
 using bluetooth::common::Callback;
 using bluetooth::common::Closure;
-using bluetooth::common::ContextualOnceCallback;
 using bluetooth::common::OnceCallback;
 using bluetooth::common::OnceClosure;
 using bluetooth::hci::CommandCompleteView;
@@ -74,17 +73,20 @@ class EventHandler {
 class CommandQueueEntry {
  public:
   CommandQueueEntry(std::unique_ptr<CommandPacketBuilder> command_packet,
-                    ContextualOnceCallback<void(CommandCompleteView)> on_complete_function)
-      : command(std::move(command_packet)), waiting_for_status_(false), on_complete(std::move(on_complete_function)) {}
+                    OnceCallback<void(CommandCompleteView)> on_complete_function, Handler* handler)
+      : command(std::move(command_packet)), waiting_for_status_(false), on_complete(std::move(on_complete_function)),
+        caller_handler(handler) {}
 
   CommandQueueEntry(std::unique_ptr<CommandPacketBuilder> command_packet,
-                    ContextualOnceCallback<void(CommandStatusView)> on_status_function)
-      : command(std::move(command_packet)), waiting_for_status_(true), on_status(std::move(on_status_function)) {}
+                    OnceCallback<void(CommandStatusView)> on_status_function, Handler* handler)
+      : command(std::move(command_packet)), waiting_for_status_(true), on_status(std::move(on_status_function)),
+        caller_handler(handler) {}
 
   std::unique_ptr<CommandPacketBuilder> command;
   bool waiting_for_status_;
-  ContextualOnceCallback<void(CommandStatusView)> on_status;
-  ContextualOnceCallback<void(CommandCompleteView)> on_complete;
+  OnceCallback<void(CommandStatusView)> on_status;
+  OnceCallback<void(CommandCompleteView)> on_complete;
+  Handler* caller_handler;
 };
 
 template <typename T>
@@ -93,13 +95,14 @@ class CommandInterfaceImpl : public CommandInterface<T> {
   explicit CommandInterfaceImpl(HciLayer& hci) : hci_(hci) {}
   ~CommandInterfaceImpl() override = default;
 
-  void EnqueueCommand(std::unique_ptr<T> command,
-                      ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
-    hci_.EnqueueCommand(std::move(command), std::move(on_complete));
+  void EnqueueCommand(std::unique_ptr<T> command, common::OnceCallback<void(CommandCompleteView)> on_complete,
+                      os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_complete), handler);
   }
 
-  void EnqueueCommand(std::unique_ptr<T> command, ContextualOnceCallback<void(CommandStatusView)> on_status) override {
-    hci_.EnqueueCommand(std::move(command), std::move(on_status));
+  void EnqueueCommand(std::unique_ptr<T> command, common::OnceCallback<void(CommandStatusView)> on_status,
+                      os::Handler* handler) override {
+    hci_.EnqueueCommand(std::move(command), std::move(on_status), handler);
   }
   HciLayer& hci_;
 };
@@ -122,7 +125,7 @@ struct HciLayer::impl {
     module_.RegisterEventHandler(EventCode::MAX_SLOTS_CHANGE, BindOn(this, &impl::drop), handler);
     module_.RegisterEventHandler(EventCode::VENDOR_SPECIFIC, BindOn(this, &impl::drop), handler);
 
-    module_.EnqueueCommand(ResetBuilder::Create(), handler->BindOnce(&fail_if_reset_complete_not_success));
+    module_.EnqueueCommand(ResetBuilder::Create(), BindOnce(&fail_if_reset_complete_not_success), handler);
   }
 
   void drop(EventPacketView) {}
@@ -159,7 +162,8 @@ struct HciLayer::impl {
     ASSERT_LOG(command_queue_.front().waiting_for_status_,
                "Waiting for command complete 0x%02hx (%s), got command status for 0x%02hx (%s)", waiting_command_,
                OpCodeText(waiting_command_).c_str(), op_code, OpCodeText(op_code).c_str());
-    command_queue_.front().on_status.Invoke(std::move(status_view));
+    auto caller_handler = command_queue_.front().caller_handler;
+    caller_handler->Post(BindOnce(std::move(command_queue_.front().on_status), std::move(status_view)));
     command_queue_.pop_front();
     waiting_command_ = OpCode::NONE;
     hci_timeout_alarm_->Cancel();
@@ -182,7 +186,8 @@ struct HciLayer::impl {
     ASSERT_LOG(!command_queue_.front().waiting_for_status_,
                "Waiting for command status 0x%02hx (%s), got command complete for 0x%02hx (%s)", waiting_command_,
                OpCodeText(waiting_command_).c_str(), op_code, OpCodeText(op_code).c_str());
-    command_queue_.front().on_complete.Invoke(std::move(complete_view));
+    auto caller_handler = command_queue_.front().caller_handler;
+    caller_handler->Post(BindOnce(std::move(command_queue_.front().on_complete), complete_view));
     command_queue_.pop_front();
     waiting_command_ = OpCode::NONE;
     hci_timeout_alarm_->Cancel();
@@ -208,15 +213,15 @@ struct HciLayer::impl {
   }
 
   void handle_enqueue_command_with_complete(std::unique_ptr<CommandPacketBuilder> command,
-                                            ContextualOnceCallback<void(CommandCompleteView)> on_complete) {
-    command_queue_.emplace_back(std::move(command), std::move(on_complete));
+                                            OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) {
+    command_queue_.emplace_back(std::move(command), std::move(on_complete), handler);
 
     send_next_command();
   }
 
   void handle_enqueue_command_with_status(std::unique_ptr<CommandPacketBuilder> command,
-                                          ContextualOnceCallback<void(CommandStatusView)> on_status) {
-    command_queue_.emplace_back(std::move(command), std::move(on_status));
+                                          OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) {
+    command_queue_.emplace_back(std::move(command), std::move(on_status), handler);
 
     send_next_command();
   }
@@ -327,13 +332,15 @@ HciLayer::~HciLayer() {
 }
 
 void HciLayer::EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) {
-  CallOn(impl_, &impl::handle_enqueue_command_with_complete, std::move(command), std::move(on_complete));
+                              common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) {
+  CallOn(impl_, &impl::handle_enqueue_command_with_complete, std::move(command), std::move(on_complete),
+         common::Unretained(handler));
 }
 
 void HciLayer::EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::ContextualOnceCallback<void(CommandStatusView)> on_status) {
-  CallOn(impl_, &impl::handle_enqueue_command_with_status, std::move(command), std::move(on_status));
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) {
+  CallOn(impl_, &impl::handle_enqueue_command_with_status, std::move(command), std::move(on_status),
+         common::Unretained(handler));
 }
 
 common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* HciLayer::GetAclQueueEnd() {

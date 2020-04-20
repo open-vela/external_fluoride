@@ -76,11 +76,13 @@ const ModuleFactory neighbor::NameModule::Factory = ModuleFactory([]() { return 
 neighbor::NameModule::impl::impl(const neighbor::NameModule& module) : module_(module) {}
 
 void neighbor::NameModule::impl::EnqueueCommandComplete(std::unique_ptr<hci::CommandPacketBuilder> command) {
-  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandComplete));
+  hci_layer_->EnqueueCommand(std::move(command), common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)),
+                             handler_);
 }
 
 void neighbor::NameModule::impl::EnqueueCommandStatus(std::unique_ptr<hci::CommandPacketBuilder> command) {
-  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandStatus));
+  hci_layer_->EnqueueCommand(std::move(command), common::BindOnce(&impl::OnCommandStatus, common::Unretained(this)),
+                             handler_);
 }
 
 void neighbor::NameModule::impl::OnCommandComplete(hci::CommandCompleteView view) {

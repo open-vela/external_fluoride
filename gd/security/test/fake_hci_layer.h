@@ -22,7 +22,7 @@
 namespace bluetooth {
 namespace security {
 
-using common::ContextualOnceCallback;
+using common::OnceCallback;
 using hci::CommandCompleteView;
 using hci::CommandPacketBuilder;
 using hci::CommandStatusView;
@@ -45,32 +45,35 @@ PacketView<kLittleEndian> GetPacketView(std::unique_ptr<packet::BasePacketBuilde
 class CommandQueueEntry {
  public:
   CommandQueueEntry(std::unique_ptr<CommandPacketBuilder> command_packet,
-                    ContextualOnceCallback<void(CommandCompleteView)> on_complete_function)
-      : command(std::move(command_packet)), waiting_for_status_(false), on_complete(std::move(on_complete_function)) {}
+                    OnceCallback<void(CommandCompleteView)> on_complete_function, Handler* handler)
+      : command(std::move(command_packet)), waiting_for_status_(false), on_complete(std::move(on_complete_function)),
+        caller_handler(handler) {}
 
   CommandQueueEntry(std::unique_ptr<CommandPacketBuilder> command_packet,
-                    ContextualOnceCallback<void(CommandStatusView)> on_status_function)
-      : command(std::move(command_packet)), waiting_for_status_(true), on_status(std::move(on_status_function)) {}
+                    OnceCallback<void(CommandStatusView)> on_status_function, Handler* handler)
+      : command(std::move(command_packet)), waiting_for_status_(true), on_status(std::move(on_status_function)),
+        caller_handler(handler) {}
 
   std::unique_ptr<CommandPacketBuilder> command;
   bool waiting_for_status_;
-  ContextualOnceCallback<void(CommandStatusView)> on_status;
-  ContextualOnceCallback<void(CommandCompleteView)> on_complete;
+  OnceCallback<void(CommandStatusView)> on_status;
+  OnceCallback<void(CommandCompleteView)> on_complete;
+  Handler* caller_handler;
 };
 
 }  // namespace
 
 class FakeHciLayer : public HciLayer {
  public:
-  void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      ContextualOnceCallback<void(CommandStatusView)> on_status) override {
-    auto command_queue_entry = std::make_unique<CommandQueueEntry>(std::move(command), std::move(on_status));
+  void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command, OnceCallback<void(CommandStatusView)> on_status,
+                      Handler* handler) override {
+    auto command_queue_entry = std::make_unique<CommandQueueEntry>(std::move(command), std::move(on_status), handler);
     command_queue_.push(std::move(command_queue_entry));
   }
 
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
-    auto command_queue_entry = std::make_unique<CommandQueueEntry>(std::move(command), std::move(on_complete));
+                      OnceCallback<void(CommandCompleteView)> on_complete, Handler* handler) override {
+    auto command_queue_entry = std::make_unique<CommandQueueEntry>(std::move(command), std::move(on_complete), handler);
     command_queue_.push(std::move(command_queue_entry));
   }
 

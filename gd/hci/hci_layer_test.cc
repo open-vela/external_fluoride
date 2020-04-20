@@ -148,12 +148,14 @@ class DependsOnHci : public Module {
 
   void SendHciCommandExpectingStatus(std::unique_ptr<CommandPacketBuilder> command) {
     hci_->EnqueueCommand(std::move(command),
-                         GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandStatusView>));
+                         common::Bind(&DependsOnHci::handle_event<CommandStatusView>, common::Unretained(this)),
+                         GetHandler());
   }
 
   void SendHciCommandExpectingComplete(std::unique_ptr<CommandPacketBuilder> command) {
     hci_->EnqueueCommand(std::move(command),
-                         GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
+                         common::Bind(&DependsOnHci::handle_event<CommandCompleteView>, common::Unretained(this)),
+                         GetHandler());
   }
 
   void SendSecurityCommandExpectingComplete(std::unique_ptr<SecurityCommandBuilder> command) {
@@ -162,7 +164,8 @@ class DependsOnHci : public Module {
           common::Bind(&DependsOnHci::handle_event<EventPacketView>, common::Unretained(this)), GetHandler());
     }
     hci_->EnqueueCommand(std::move(command),
-                         GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
+                         common::Bind(&DependsOnHci::handle_event<CommandCompleteView>, common::Unretained(this)),
+                         GetHandler());
   }
 
   void SendLeSecurityCommandExpectingComplete(std::unique_ptr<LeSecurityCommandBuilder> command) {
@@ -171,7 +174,8 @@ class DependsOnHci : public Module {
           common::Bind(&DependsOnHci::handle_event<LeMetaEventView>, common::Unretained(this)), GetHandler());
     }
     hci_->EnqueueCommand(std::move(command),
-                         GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
+                         common::Bind(&DependsOnHci::handle_event<CommandCompleteView>, common::Unretained(this)),
+                         GetHandler());
   }
 
   void SendAclData(std::unique_ptr<AclPacketBuilder> acl) {
