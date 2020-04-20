@@ -86,19 +86,19 @@ hci::PacketView<hci::kLittleEndian> GetPacketView(std::unique_ptr<packet::BasePa
 class TestHciLayer : public hci::HciLayer {
  public:
   void EnqueueCommand(std::unique_ptr<hci::CommandPacketBuilder> command,
-                      common::ContextualOnceCallback<void(hci::CommandCompleteView)> on_complete) override {
+                      common::OnceCallback<void(hci::CommandCompleteView)> on_complete, os::Handler* handler) override {
     GetHandler()->Post(common::BindOnce(&TestHciLayer::HandleCommand, common::Unretained(this), std::move(command),
-                                        std::move(on_complete)));
+                                        std::move(on_complete), common::Unretained(handler)));
   }
 
   void EnqueueCommand(std::unique_ptr<hci::CommandPacketBuilder> command,
-                      common::ContextualOnceCallback<void(hci::CommandStatusView)> on_status) override {
+                      common::OnceCallback<void(hci::CommandStatusView)> on_status, os::Handler* handler) override {
     GetHandler()->Post(common::BindOnce(&TestHciLayer::HandleStatus, common::Unretained(this), std::move(command),
-                                        std::move(on_status)));
+                                        std::move(on_status), common::Unretained(handler)));
   }
 
   void HandleCommand(std::unique_ptr<hci::CommandPacketBuilder> command_builder,
-                     common::ContextualOnceCallback<void(hci::CommandCompleteView)> on_complete) {
+                     common::OnceCallback<void(hci::CommandCompleteView)> on_complete, os::Handler* handler) {
     hci::CommandPacketView command = hci::CommandPacketView::Create(GetPacketView(std::move(command_builder)));
     ASSERT(command.IsValid());
 
@@ -188,7 +188,7 @@ class TestHciLayer : public hci::HciLayer {
     ASSERT(event.IsValid());
     hci::CommandCompleteView command_complete = hci::CommandCompleteView::Create(event);
     ASSERT(command_complete.IsValid());
-    on_complete.Invoke(std::move(command_complete));
+    handler->Post(common::BindOnce(std::move(on_complete), std::move(command_complete)));
 
     if (promise_sync_complete_ != nullptr) {
       promise_sync_complete_->set_value(command.GetOpCode());
@@ -196,7 +196,7 @@ class TestHciLayer : public hci::HciLayer {
   }
 
   void HandleStatus(std::unique_ptr<hci::CommandPacketBuilder> command_builder,
-                    common::ContextualOnceCallback<void(hci::CommandStatusView)> on_status) {
+                    common::OnceCallback<void(hci::CommandStatusView)> on_status, os::Handler* handler) {
     hci::CommandPacketView command = hci::CommandPacketView::Create(GetPacketView(std::move(command_builder)));
     ASSERT(command.IsValid());
 
@@ -218,7 +218,7 @@ class TestHciLayer : public hci::HciLayer {
     ASSERT(event.IsValid());
     hci::CommandStatusView command_status = hci::CommandStatusView::Create(event);
     ASSERT(command_status.IsValid());
-    on_status.Invoke(std::move(command_status));
+    handler->Post(common::BindOnce(std::move(on_status), std::move(command_status)));
 
     if (promise_sync_complete_ != nullptr) {
       promise_sync_complete_->set_value(command.GetOpCode());
