@@ -206,10 +206,6 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::b
                 supervision_timeout);
     }
 
-    void OnDisconnection(ErrorCode reason) override {
-      LOG_DEBUG("reason: %s", ErrorCodeText(reason).c_str());
-    }
-
     LeConnectionManagementCallbacks* GetCallbacks() {
       return this;
     }
