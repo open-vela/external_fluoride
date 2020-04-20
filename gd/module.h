@@ -33,7 +33,6 @@ namespace bluetooth {
 class Module;
 class ModuleDumper;
 class ModuleRegistry;
-class TestModuleRegistry;
 class FuzzTestModuleRegistry;
 
 class ModuleFactory {
@@ -71,7 +70,7 @@ public:
 class Module {
   friend ModuleDumper;
   friend ModuleRegistry;
-  friend TestModuleRegistry;
+  friend FuzzTestModuleRegistry;
 
  public:
   virtual ~Module() = default;
@@ -171,7 +170,6 @@ class TestModuleRegistry : public ModuleRegistry {
     start_order_.push_back(module);
     started_modules_[module] = instance;
     set_registry_and_handler(instance, &test_thread);
-    instance->Start();
   }
 
   Module* GetModuleUnderTest(const ModuleFactory* module) const {
@@ -192,12 +190,9 @@ class TestModuleRegistry : public ModuleRegistry {
   }
 
   bool SynchronizeModuleHandler(const ModuleFactory* module, std::chrono::milliseconds timeout) const {
-    return SynchronizeHandler(GetTestModuleHandler(module), timeout);
-  }
-
-  bool SynchronizeHandler(os::Handler* handler, std::chrono::milliseconds timeout) const {
     std::promise<void> promise;
     auto future = promise.get_future();
+    os::Handler* handler = GetTestModuleHandler(module);
     handler->Post(common::BindOnce(&std::promise<void>::set_value, common::Unretained(&promise)));
     return future.wait_for(timeout) == std::future_status::ready;
   }
@@ -212,6 +207,7 @@ class FuzzTestModuleRegistry : public TestModuleRegistry {
   T* Inject(const ModuleFactory* overriding) {
     Module* instance = T::Factory.ctor_();
     InjectTestModule(overriding, instance);
+    instance->Start();
     return static_cast<T*>(instance);
   }
 
