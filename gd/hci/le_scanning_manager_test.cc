@@ -23,7 +23,6 @@
 #include <map>
 
 #include "common/bind.h"
-#include "hci/acl_manager.h"
 #include "hci/address.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
@@ -68,8 +67,15 @@ class TestController : public Controller {
 
 class TestHciLayer : public HciLayer {
  public:
+  TestHciLayer() {
+    RegisterEventHandler(EventCode::COMMAND_COMPLETE,
+                         base::Bind(&TestHciLayer::CommandCompleteCallback, common::Unretained(this)), nullptr);
+    RegisterEventHandler(EventCode::COMMAND_STATUS,
+                         base::Bind(&TestHciLayer::CommandStatusCallback, common::Unretained(this)), nullptr);
+  }
+
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
+                      common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
     command_queue_.push(std::move(command));
     command_status_callbacks.push_front(std::move(on_status));
     if (command_promise_ != nullptr) {
@@ -79,7 +85,7 @@ class TestHciLayer : public HciLayer {
   }
 
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
+                      common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) override {
     command_queue_.push(std::move(command));
     command_complete_callbacks.push_front(std::move(on_complete));
     if (command_promise_ != nullptr) {
@@ -111,13 +117,13 @@ class TestHciLayer : public HciLayer {
     return command;
   }
 
-  void RegisterEventHandler(EventCode event_code,
-                            common::ContextualCallback<void(EventPacketView)> event_handler) override {
+  void RegisterEventHandler(EventCode event_code, common::Callback<void(EventPacketView)> event_handler,
+                            os::Handler* handler) override {
     registered_events_[event_code] = event_handler;
   }
 
-  void RegisterLeEventHandler(SubeventCode subevent_code,
-                              common::ContextualCallback<void(LeMetaEventView)> event_handler) override {
+  void RegisterLeEventHandler(SubeventCode subevent_code, common::Callback<void(LeMetaEventView)> event_handler,
+                              os::Handler* handler) override {
     registered_le_events_[subevent_code] = event_handler;
   }
 
@@ -127,7 +133,7 @@ class TestHciLayer : public HciLayer {
     ASSERT_TRUE(event.IsValid());
     EventCode event_code = event.GetEventCode();
     ASSERT_TRUE(registered_events_.find(event_code) != registered_events_.end()) << EventCodeText(event_code);
-    registered_events_[event_code].Invoke(event);
+    registered_events_[event_code].Run(event);
   }
 
   void IncomingLeMetaEvent(std::unique_ptr<LeMetaEventBuilder> event_builder) {
@@ -138,71 +144,36 @@ class TestHciLayer : public HciLayer {
     SubeventCode subevent_code = meta_event_view.GetSubeventCode();
     ASSERT_TRUE(registered_le_events_.find(subevent_code) != registered_le_events_.end())
         << SubeventCodeText(subevent_code);
-    registered_le_events_[subevent_code].Invoke(meta_event_view);
+    registered_le_events_[subevent_code].Run(meta_event_view);
   }
 
   void CommandCompleteCallback(EventPacketView event) {
     CommandCompleteView complete_view = CommandCompleteView::Create(event);
     ASSERT(complete_view.IsValid());
-    std::move(command_complete_callbacks.front()).Invoke(complete_view);
+    std::move(command_complete_callbacks.front()).Run(complete_view);
     command_complete_callbacks.pop_front();
   }
 
   void CommandStatusCallback(EventPacketView event) {
     CommandStatusView status_view = CommandStatusView::Create(event);
     ASSERT(status_view.IsValid());
-    std::move(command_status_callbacks.front()).Invoke(status_view);
+    std::move(command_status_callbacks.front()).Run(status_view);
     command_status_callbacks.pop_front();
   }
 
   void ListDependencies(ModuleList* list) override {}
-  void Start() override {
-    RegisterEventHandler(EventCode::COMMAND_COMPLETE,
-                         GetHandler()->BindOn(this, &TestHciLayer::CommandCompleteCallback));
-    RegisterEventHandler(EventCode::COMMAND_STATUS, GetHandler()->BindOn(this, &TestHciLayer::CommandStatusCallback));
-  }
+  void Start() override {}
   void Stop() override {}
 
  private:
-  std::map<EventCode, common::ContextualCallback<void(EventPacketView)>> registered_events_;
-  std::map<SubeventCode, common::ContextualCallback<void(LeMetaEventView)>> registered_le_events_;
-  std::list<common::ContextualOnceCallback<void(CommandCompleteView)>> command_complete_callbacks;
-  std::list<common::ContextualOnceCallback<void(CommandStatusView)>> command_status_callbacks;
+  std::map<EventCode, common::Callback<void(EventPacketView)>> registered_events_;
+  std::map<SubeventCode, common::Callback<void(LeMetaEventView)>> registered_le_events_;
+  std::list<base::OnceCallback<void(CommandCompleteView)>> command_complete_callbacks;
+  std::list<base::OnceCallback<void(CommandStatusView)>> command_status_callbacks;
 
   std::queue<std::unique_ptr<CommandPacketBuilder>> command_queue_;
   mutable std::mutex mutex_;
   std::unique_ptr<std::promise<void>> command_promise_{};
-};
-
-class TestAclManager : public AclManager {
- public:
-  LeAddressRotator* GetLeAddressRotator() override {
-    return le_address_rotator_;
-  }
-
- protected:
-  void Start() override {
-    thread_ = new os::Thread("thread", os::Thread::Priority::NORMAL);
-    handler_ = new os::Handler(thread_);
-    Address address({0x01, 0x02, 0x03, 0x04, 0x05, 0x06});
-    le_address_rotator_ = new LeAddressRotator(
-        common::Bind(&TestAclManager::SetRandomAddress, common::Unretained(this)), handler_, address);
-  }
-
-  void Stop() override {
-    delete le_address_rotator_;
-    handler_->Clear();
-    delete handler_;
-    delete thread_;
-  }
-
-  void ListDependencies(ModuleList* list) override {}
-
-  void SetRandomAddress(Address address) {}
-
-  os::Thread* thread_;
-  os::Handler* handler_;
-  LeAddressRotator* le_address_rotator_;
 };
 
 class LeScanningManagerTest : public ::testing::Test {
@@ -211,10 +182,8 @@ class LeScanningManagerTest : public ::testing::Test {
     test_hci_layer_ = new TestHciLayer;  // Ownership is transferred to registry
     test_controller_ = new TestController;
     test_controller_->AddSupported(param_opcode_);
-    test_acl_manager_ = new TestAclManager;
     fake_registry_.InjectTestModule(&HciLayer::Factory, test_hci_layer_);
     fake_registry_.InjectTestModule(&Controller::Factory, test_controller_);
-    fake_registry_.InjectTestModule(&AclManager::Factory, test_acl_manager_);
     client_handler_ = fake_registry_.GetTestModuleHandler(&HciLayer::Factory);
     ASSERT_NE(client_handler_, nullptr);
     mock_callbacks_.handler_ = client_handler_;
@@ -240,7 +209,6 @@ class LeScanningManagerTest : public ::testing::Test {
   TestModuleRegistry fake_registry_;
   TestHciLayer* test_hci_layer_ = nullptr;
   TestController* test_controller_ = nullptr;
-  TestAclManager* test_acl_manager_ = nullptr;
   os::Thread& thread_ = fake_registry_.GetTestThread();
   LeScanningManager* le_scanning_manager = nullptr;
   os::Handler* client_handler_ = nullptr;
