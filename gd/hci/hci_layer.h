@@ -24,7 +24,9 @@
 #include "common/bidi_queue.h"
 #include "common/callback.h"
 #include "hal/hci_hal.h"
+#include "hci/acl_connection_interface.h"
 #include "hci/hci_packets.h"
+#include "hci/le_acl_connection_interface.h"
 #include "hci/le_advertising_interface.h"
 #include "hci/le_scanning_interface.h"
 #include "hci/le_security_interface.h"
@@ -35,17 +37,18 @@
 namespace bluetooth {
 namespace hci {
 
-class HciLayer : public Module {
+class HciLayer : public Module, public CommandInterface<CommandPacketBuilder> {
  public:
   HciLayer();
   virtual ~HciLayer();
   DISALLOW_COPY_AND_ASSIGN(HciLayer);
 
   virtual void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler);
+                              common::OnceCallback<void(CommandCompleteView)> on_complete,
+                              os::Handler* handler) override;
 
   virtual void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler);
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override;
 
   virtual common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* GetAclQueueEnd();
 
@@ -59,16 +62,25 @@ class HciLayer : public Module {
 
   virtual void UnregisterLeEventHandler(SubeventCode subevent_code);
 
-  SecurityInterface* GetSecurityInterface(common::Callback<void(EventPacketView)> event_handler, os::Handler* handler);
+  virtual SecurityInterface* GetSecurityInterface(common::Callback<void(EventPacketView)> event_handler,
+                                                  os::Handler* handler);
 
-  LeSecurityInterface* GetLeSecurityInterface(common::Callback<void(LeMetaEventView)> event_handler,
-                                              os::Handler* handler);
+  virtual LeSecurityInterface* GetLeSecurityInterface(common::Callback<void(LeMetaEventView)> event_handler,
+                                                      os::Handler* handler);
 
-  LeAdvertisingInterface* GetLeAdvertisingInterface(common::Callback<void(LeMetaEventView)> event_handler,
-                                                    os::Handler* handler);
+  virtual AclConnectionInterface* GetAclConnectionInterface(
+      common::Callback<void(EventPacketView)> event_handler,
+      common::Callback<void(uint16_t, hci::ErrorCode)> on_disconnect, os::Handler* handler);
 
-  LeScanningInterface* GetLeScanningInterface(common::Callback<void(LeMetaEventView)> event_handler,
-                                              os::Handler* handler);
+  virtual LeAclConnectionInterface* GetLeAclConnectionInterface(
+      common::Callback<void(LeMetaEventView)> event_handler,
+      common::Callback<void(uint16_t, hci::ErrorCode)> on_disconnect, os::Handler* handler);
+
+  virtual LeAdvertisingInterface* GetLeAdvertisingInterface(common::Callback<void(LeMetaEventView)> event_handler,
+                                                            os::Handler* handler);
+
+  virtual LeScanningInterface* GetLeScanningInterface(common::Callback<void(LeMetaEventView)> event_handler,
+                                                      os::Handler* handler);
 
   static const ModuleFactory Factory;
 
@@ -77,6 +89,8 @@ class HciLayer : public Module {
   void Start() override;
 
   void Stop() override;
+
+  os::Handler* GetHciHandler();
 
   std::string ToString() const override;
   static constexpr std::chrono::milliseconds kHciTimeoutMs = std::chrono::milliseconds(2000);
