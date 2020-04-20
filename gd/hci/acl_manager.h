@@ -95,7 +95,6 @@ class LeConnectionManagementCallbacks {
   virtual ~LeConnectionManagementCallbacks() = default;
   virtual void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
                                   uint16_t supervision_timeout) = 0;
-  virtual void OnDisconnection(ErrorCode reason) = 0;
 };
 
 class AclConnection {
@@ -122,6 +121,7 @@ class AclConnection {
   // TODO: API to change link settings ... ?
 
  protected:
+  friend AclManager;
   AclConnection(const AclManager* acl_manager, QueueUpEnd* queue_up_end, uint16_t handle, Role role)
       : manager_(acl_manager), queue_up_end_(queue_up_end), handle_(handle), role_(role) {}
   const AclManager* manager_;
@@ -133,7 +133,7 @@ class AclConnection {
 
 class ClassicAclConnection : public AclConnection {
  public:
-  ClassicAclConnection() : AclConnection(), acl_connection_interface_(nullptr), address_(Address::kEmpty) {}
+  ClassicAclConnection() : AclConnection(), address_(Address::kEmpty) {}
 
   virtual Address GetAddress() const {
     return address_;
@@ -189,12 +189,10 @@ class ClassicAclConnection : public AclConnection {
 
 class LeAclConnection : public AclConnection {
  public:
-  LeAclConnection();
-  LeAclConnection(const AclManager* acl_manager, QueueUpEnd* queue_up_end,
-                  LeAclConnectionInterface* le_acl_connection_interface,
-                  common::OnceCallback<void(DisconnectReason)> disconnect, uint16_t handle,
-                  AddressWithType local_address, AddressWithType remote_address, Role role);
-  ~LeAclConnection() override;
+  LeAclConnection()
+      : AclConnection(), le_acl_connection_interface_(nullptr),
+        local_address_(Address::kEmpty, AddressType::PUBLIC_DEVICE_ADDRESS),
+        remote_address_(Address::kEmpty, AddressType::PUBLIC_DEVICE_ADDRESS){};
 
   virtual AddressWithType GetLocalAddress() const {
     return local_address_;
@@ -205,19 +203,24 @@ class LeAclConnection : public AclConnection {
   }
 
   virtual void RegisterCallbacks(LeConnectionManagementCallbacks* callbacks, os::Handler* handler);
-  virtual void Disconnect(DisconnectReason reason);
+  virtual void RegisterDisconnectCallback(common::OnceCallback<void(ErrorCode)> on_disconnect, os::Handler* handler);
+  virtual bool Disconnect(DisconnectReason reason);
 
   virtual bool LeConnectionUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max, uint16_t conn_latency,
-                                  uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length);
-
-  // Called once before passing the connection to the client
-  virtual LeConnectionManagementCallbacks* GetEventCallbacks();
+                                  uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length,
+                                  common::OnceCallback<void(ErrorCode)> done_callback, os::Handler* handler);
 
   // TODO: API to change link settings ... ?
 
  private:
-  struct impl;
-  struct impl* pimpl_{};
+  friend AclManager;
+  LeAclConnection(const AclManager* acl_manager, QueueUpEnd* queue_up_end,
+                  LeAclConnectionInterface* le_acl_connection_interface, uint16_t handle, AddressWithType local_address,
+                  AddressWithType remote_address, Role role)
+      : AclConnection(acl_manager, queue_up_end, handle, role),
+        le_acl_connection_interface_(le_acl_connection_interface), local_address_(local_address),
+        remote_address_(remote_address) {}
+  LeAclConnectionInterface* le_acl_connection_interface_;
   AddressWithType local_address_;
   AddressWithType remote_address_;
   DISALLOW_COPY_AND_ASSIGN(LeAclConnection);
@@ -292,11 +295,11 @@ class AclManager : public Module {
  private:
   friend AclConnection;
   friend ClassicAclConnection;
+  friend LeAclConnection;
   struct impl;
   std::unique_ptr<impl> pimpl_;
 
   struct acl_connection;
-  struct le_acl_connection;
   DISALLOW_COPY_AND_ASSIGN(AclManager);
 };
 
