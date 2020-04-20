@@ -94,12 +94,14 @@ void neighbor::ScanModule::impl::WriteScanEnable() {
 
   {
     std::unique_ptr<hci::WriteScanEnableBuilder> packet = hci::WriteScanEnableBuilder::Create(scan_enable);
-    hci_layer_->EnqueueCommand(std::move(packet), handler_->BindOnceOn(this, &impl::OnCommandComplete));
+    hci_layer_->EnqueueCommand(std::move(packet), common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)),
+                               handler_);
   }
 
   {
     std::unique_ptr<hci::ReadScanEnableBuilder> packet = hci::ReadScanEnableBuilder::Create();
-    hci_layer_->EnqueueCommand(std::move(packet), handler_->BindOnceOn(this, &impl::OnCommandComplete));
+    hci_layer_->EnqueueCommand(std::move(packet), common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)),
+                               handler_);
   }
 }
 
@@ -150,7 +152,8 @@ void neighbor::ScanModule::impl::Start() {
   handler_ = module_.GetHandler();
 
   std::unique_ptr<hci::ReadScanEnableBuilder> packet = hci::ReadScanEnableBuilder::Create();
-  hci_layer_->EnqueueCommand(std::move(packet), handler_->BindOnceOn(this, &impl::OnCommandComplete));
+  hci_layer_->EnqueueCommand(std::move(packet), common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)),
+                             handler_);
 }
 
 void neighbor::ScanModule::impl::Stop() {
