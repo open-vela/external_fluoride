@@ -25,14 +25,13 @@ using base::Bind;
 using base::BindOnce;
 using base::ConstRef;
 using base::IgnoreResult;
-using base::MakeUnboundRunType;
 using base::Owned;
 using base::Passed;
 using base::RetainedRef;
 using base::Unretained;
 
 template <typename T, typename Functor, typename... Args>
-inline base::Callback<MakeUnboundRunType<Functor, T, Args...>> BindOn(T* obj, Functor&& functor, Args&&... args) {
+inline base::Callback<base::MakeUnboundRunType<Functor, T, Args...>> BindOn(T* obj, Functor&& functor, Args&&... args) {
   return common::Bind(std::forward<Functor>(functor), common::Unretained(obj), std::forward<Args>(args)...);
 }
 
