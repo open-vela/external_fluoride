@@ -15,7 +15,6 @@
  */
 
 #include "module.h"
-#include "bluetooth/dumpmod.pb.h"
 
 using ::bluetooth::os::Handler;
 using ::bluetooth::os::Thread;
@@ -127,8 +126,6 @@ os::Handler* ModuleRegistry::GetModuleHandler(const ModuleFactory* module) const
 }
 
 void ModuleDumper::DumpState() const {
-  Dumpmod dumpmod;
-
   for (auto it = module_registry_.start_order_.rbegin(); it != module_registry_.start_order_.rend(); it++) {
     auto instance = module_registry_.started_modules_.find(*it);
     ASSERT(instance != module_registry_.started_modules_.end());
@@ -136,10 +133,7 @@ void ModuleDumper::DumpState() const {
     if (message == nullptr) {
       continue;
     }
-    ModuleDumpState dump_state;
-    dump_state.set_name(instance->second->ToString());
-    dump_state.mutable_data()->PackFrom(*message);
-    dumpmod.mutable_module_dump_states()->insert({dump_state.name(), dump_state});
+    // TODO(cmanton) Process module message into master proto
   }
 }
 
