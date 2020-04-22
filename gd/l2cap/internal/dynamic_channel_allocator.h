@@ -54,7 +54,7 @@ class DynamicChannelAllocator {
   // longer needed, use FreeChannel.
   Cid ReserveChannel();
 
-  // Frees a channel (existing or reserved)
+  // Frees a channel. If psm doesn't exist, it will crash
   void FreeChannel(Cid cid);
 
   bool IsPsmUsed(Psm psm) const;
