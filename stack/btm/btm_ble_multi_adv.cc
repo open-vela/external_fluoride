@@ -430,8 +430,7 @@ class BleAdvertisingManagerImpl
             c->self->adv_inst[c->inst_id].tx_power = tx_power;
 
             if (c->self->adv_inst[c->inst_id].own_address_type == BLE_ADDR_PUBLIC) {
-              auto self = c->self;
-              self->StartAdvertisingSetAfterAddressPart(std::move(c));
+              c->self->StartAdvertisingSetAfterAddressPart(std::move(c));
               return;
             }
 
@@ -451,8 +450,7 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                auto self = c->self;
-                self->StartAdvertisingSetAfterAddressPart(std::move(c));
+                c->self->StartAdvertisingSetAfterAddressPart(std::move(c));
           }, base::Passed(&c)));
         }, base::Passed(&c)));
     }, base::Passed(&c)));
@@ -495,11 +493,11 @@ class BleAdvertisingManagerImpl
                           return;
                         }
 
-                        auto self = c->self;
                         if (c->periodic_params.enable) {
-                          self->StartAdvertisingSetPeriodicPart(std::move(c));
+                          c->self->StartAdvertisingSetPeriodicPart(
+                              std::move(c));
                         } else {
-                          self->StartAdvertisingSetFinish(std::move(c));
+                          c->self->StartAdvertisingSetFinish(std::move(c));
                         }
                       },
                       base::Passed(&c)));
@@ -553,8 +551,7 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                auto self = c->self;
-                self->StartAdvertisingSetFinish(std::move(c));
+                c->self->StartAdvertisingSetFinish(std::move(c));
 
               }, base::Passed(&c)));
         }, base::Passed(&c)));
@@ -792,9 +789,8 @@ class BleAdvertisingManagerImpl
     int length = moreThanOnePacket ? ADV_DATA_LEN_MAX : dataSize - offset;
     int newOffset = offset + length;
 
-    auto dataData = data.data();
     sender.Run(
-        inst_id, operation, length, dataData + offset,
+        inst_id, operation, length, data.data() + offset,
         Bind(&BleAdvertisingManagerImpl::DivideAndSendDataRecursively, false,
              inst_id, std::move(data), newOffset, std::move(done_cb), sender));
   }
