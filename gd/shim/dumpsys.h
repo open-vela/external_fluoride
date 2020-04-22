@@ -27,8 +27,7 @@ using DumpsysFunction = std::function<void(int fd)>;
 
 class Dumpsys : public bluetooth::Module {
  public:
-  void Dump(int fd, const char** args);
-
+  void Dump(int fd);
   void RegisterDumpsysFunction(const void* token, DumpsysFunction func);
   void UnregisterDumpsysFunction(const void* token);
 
