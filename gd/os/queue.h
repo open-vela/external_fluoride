@@ -106,21 +106,37 @@ class EnqueueBuffer {
  public:
   EnqueueBuffer(IQueueEnqueue<T>* queue) : queue_(queue) {}
 
+  ~EnqueueBuffer() {
+    if (enqueue_registered_.exchange(false)) {
+      queue_->UnregisterEnqueue();
+    }
+  }
+
   void Enqueue(std::unique_ptr<T> t, os::Handler* handler) {
     std::lock_guard<std::mutex> lock(mutex_);
     buffer_.push(std::move(t));
-    if (buffer_.size() == 1) {
+    if (!enqueue_registered_.exchange(true)) {
       queue_->RegisterEnqueue(handler, common::Bind(&EnqueueBuffer<T>::enqueue_callback, common::Unretained(this)));
     }
   }
 
   void Clear() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!buffer_.empty()) {
+    if (enqueue_registered_.exchange(false)) {
       queue_->UnregisterEnqueue();
       std::queue<std::unique_ptr<T>> empty;
       std::swap(buffer_, empty);
     }
+  }
+
+  auto Size() const {
+    return buffer_.size();
+  }
+
+  void NotifyOnEmpty(common::OnceClosure callback) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ASSERT(callback_on_empty_.is_null());
+    callback_on_empty_ = std::move(callback);
   }
 
  private:
@@ -128,15 +144,20 @@ class EnqueueBuffer {
     std::lock_guard<std::mutex> lock(mutex_);
     std::unique_ptr<T> enqueued_t = std::move(buffer_.front());
     buffer_.pop();
-    if (buffer_.empty()) {
+    if (buffer_.empty() && enqueue_registered_.exchange(false)) {
       queue_->UnregisterEnqueue();
+      if (!callback_on_empty_.is_null()) {
+        std::move(callback_on_empty_).Run();
+      }
     }
     return enqueued_t;
   }
 
   mutable std::mutex mutex_;
   IQueueEnqueue<T>* queue_;
+  std::atomic_bool enqueue_registered_ = false;
   std::queue<std::unique_ptr<T>> buffer_;
+  common::OnceClosure callback_on_empty_;
 };
 
 #ifdef OS_LINUX_GENERIC
