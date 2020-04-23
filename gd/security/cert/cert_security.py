@@ -19,10 +19,8 @@ import logging
 from bluetooth_packets_python3 import hci_packets
 from cert.closable import safeClose
 from cert.event_stream import EventStream
-from cert.matchers import HciMatchers
 from cert.py_hci import PyHci
 from cert.py_security import PySecurity
-from cert.truth import assertThat
 from datetime import datetime
 from google.protobuf import empty_pb2 as empty_proto
 from hci.facade import facade_pb2 as hci_facade
@@ -166,7 +164,7 @@ class CertSecurity(PySecurity):
             hci_packets.WriteSimplePairingModeBuilder(
                 hci_packets.Enable.ENABLED), True)
         logging.info("Cert: Waiting for controller response")
-        assertThat(self._hci_event_stream).emits(
+        self._hci_event_stream.assert_event_occurs(
             lambda msg: b'\x0e\x04\x01\x56\x0c' in msg.event)
 
     def accept_pairing(self, dut_address, reply_boolean):
@@ -174,22 +172,28 @@ class CertSecurity(PySecurity):
             Here we handle the pairing events at the HCI level
         """
         logging.info("Cert: Waiting for LINK_KEY_REQUEST")
-        assertThat(self._hci_event_stream).emits(HciMatchers.LinkKeyRequest())
+        self._hci_event_stream.assert_event_occurs(
+            lambda event: logging.debug(event.event) or hci_packets.EventCode.LINK_KEY_REQUEST in event.event
+        )
         logging.info("Cert: Sending LINK_KEY_REQUEST_NEGATIVE_REPLY")
         self._enqueue_hci_command(
             hci_packets.LinkKeyRequestNegativeReplyBuilder(
                 dut_address.decode('utf8')), True)
         logging.info("Cert: Waiting for IO_CAPABILITY_REQUEST")
-        assertThat(self._hci_event_stream).emits(
-            HciMatchers.IoCapabilityRequest())
+        self._hci_event_stream.assert_event_occurs(
+            lambda event: logging.debug(event.event) or hci_packets.EventCode.IO_CAPABILITY_REQUEST in event.event
+        )
         logging.info("Cert: Sending IO_CAPABILITY_REQUEST_REPLY")
+
         self._enqueue_hci_command(
             hci_packets.IoCapabilityRequestReplyBuilder(
                 dut_address.decode('utf8'), self._io_caps, self._oob_data,
                 self._auth_reqs), True)
+
         logging.info("Cert: Waiting for USER_CONFIRMATION_REQUEST")
-        assertThat(self._hci_event_stream).emits(
-            HciMatchers.UserConfirmationRequest())
+        self._hci_event_stream.assert_event_occurs(
+            lambda event: logging.debug(event.event) or hci_packets.EventCode.USER_CONFIRMATION_REQUEST in event.event
+        )
         logging.info(
             "Cert: Sending Simulated User Response '%s'" % reply_boolean)
         if reply_boolean:
@@ -198,11 +202,13 @@ class CertSecurity(PySecurity):
                 hci_packets.UserConfirmationRequestReplyBuilder(
                     dut_address.decode('utf8')), True)
             logging.info("Cert: Waiting for LINK_KEY_NOTIFICATION")
-            assertThat(self._hci_event_stream).emits(
-                HciMatchers.LinkKeyNotification())
+            self._hci_event_stream.assert_event_occurs(
+                lambda event: logging.debug(event.event) or hci_packets.EventCode.LINK_KEY_NOTIFICATION in event.event
+            )
             logging.info("Cert: Waiting for SIMPLE_PAIRING_COMPLETE")
-            assertThat(self._hci_event_stream).emits(
-                HciMatchers.SimplePairingComplete())
+            self._hci_event_stream.assert_event_occurs(
+                lambda event: logging.debug(event.event) or hci_packets.EventCode.SIMPLE_PAIRING_COMPLETE in event.event
+            )
         else:
             logging.info(
                 "Cert: Sending USER_CONFIRMATION_REQUEST_NEGATIVE_REPLY")
@@ -210,8 +216,9 @@ class CertSecurity(PySecurity):
                 hci_packets.UserConfirmationRequestNegativeReplyBuilder(
                     dut_address.decode('utf8')), True)
             logging.info("Cert: Waiting for SIMPLE_PAIRING_COMPLETE")
-            assertThat(self._hci_event_stream).emits(
-                HciMatchers.SimplePairingComplete())
+            self._hci_event_stream.assert_event_occurs(
+                lambda event: logging.debug(event.event) or hci_packets.EventCode.SIMPLE_PAIRING_COMPLETE in event.event
+            )
 
     def on_user_input(self, dut_address, reply_boolean, expected_ui_event):
         """
