@@ -38,11 +38,7 @@ namespace bluetooth {
 namespace hci {
 namespace facade {
 
-using acl_manager::LeAclConnection;
-using acl_manager::LeConnectionCallbacks;
-using acl_manager::LeConnectionManagementCallbacks;
-
-class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeConnectionCallbacks {
+class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public ::bluetooth::hci::LeConnectionCallbacks {
  public:
   LeAclManagerFacadeService(AclManager* acl_manager, ::bluetooth::os::Handler* facade_handler)
       : acl_manager_(acl_manager), facade_handler_(facade_handler) {
@@ -52,10 +48,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
   ~LeAclManagerFacadeService() override {
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
     for (auto& conn : acl_connections_) {
-      if (conn.second.connection_ != nullptr) {
-        conn.second.connection_->GetAclQueueEnd()->UnregisterDequeue();
-        conn.second.connection_.reset();
-      }
+      conn.second.connection_->GetAclQueueEnd()->UnregisterDequeue();
     }
   }
 
@@ -159,23 +152,25 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
     pending_acl_data_.OnIncomingEvent(acl_data);
   }
 
-  void OnDisconnection(uint32_t entry, ErrorCode code) {
+  void on_disconnect(std::shared_ptr<LeAclConnection> connection, uint32_t entry, ErrorCode code) {
+    connection->GetAclQueueEnd()->UnregisterDequeue();
+    connection->Finish();
     std::unique_ptr<BasePacketBuilder> builder =
-        DisconnectionCompleteBuilder::Create(ErrorCode::SUCCESS, to_handle(entry), code);
+        DisconnectBuilder::Create(to_handle(entry), static_cast<DisconnectReason>(code));
     LeConnectionEvent disconnection;
     disconnection.set_event(builder_to_string(std::move(builder)));
     per_connection_events_[entry]->OnIncomingEvent(disconnection);
   }
 
-  void OnLeConnectSuccess(AddressWithType address_with_type, std::unique_ptr<LeAclConnection> connection) override {
+  void OnLeConnectSuccess(AddressWithType address_with_type,
+                          std::unique_ptr<::bluetooth::hci::LeAclConnection> connection) override {
     LOG_DEBUG("%s", address_with_type.ToString().c_str());
 
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
     auto addr = address_with_type.GetAddress();
-    std::shared_ptr<LeAclConnection> shared_connection = std::move(connection);
+    std::shared_ptr<::bluetooth::hci::LeAclConnection> shared_connection = std::move(connection);
     uint16_t handle = to_handle(current_connection_request_);
-    acl_connections_.emplace(
-        std::pair(handle, Connection(current_connection_request_, handle, shared_connection, this)));
+    acl_connections_.emplace(std::pair(handle, Connection(handle, shared_connection)));
     shared_connection->GetAclQueueEnd()->RegisterDequeue(
         facade_handler_, common::Bind(&LeAclManagerFacadeService::on_incoming_acl, common::Unretained(this),
                                       shared_connection, to_handle(current_connection_request_)));
@@ -201,11 +196,10 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
     current_connection_request_++;
   }
 
-  class Connection : public LeConnectionManagementCallbacks {
+  class Connection : public ::bluetooth::hci::LeConnectionManagementCallbacks {
    public:
-    Connection(uint32_t entry, uint16_t handle, std::shared_ptr<LeAclConnection> connection,
-               LeAclManagerFacadeService* facade)
-        : entry_(entry), handle_(handle), connection_(std::move(connection)), facade_(facade) {}
+    Connection(uint16_t handle, std::shared_ptr<LeAclConnection> connection)
+        : handle_(handle), connection_(std::move(connection)) {}
     void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
                             uint16_t supervision_timeout) override {
       LOG_DEBUG("interval: 0x%hx, latency: 0x%hx, timeout 0x%hx", connection_interval, connection_latency,
@@ -213,19 +207,15 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
     }
 
     void OnDisconnection(ErrorCode reason) override {
-      connection_->GetAclQueueEnd()->UnregisterDequeue();
-      connection_.reset();
-      facade_->OnDisconnection(entry_, reason);
+      LOG_DEBUG("reason: %s", ErrorCodeText(reason).c_str());
     }
 
     LeConnectionManagementCallbacks* GetCallbacks() {
       return this;
     }
 
-    uint32_t entry_;
     uint16_t handle_;
     std::shared_ptr<LeAclConnection> connection_;
-    LeAclManagerFacadeService* facade_;
   };
 
  private:

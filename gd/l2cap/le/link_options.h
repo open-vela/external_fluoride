@@ -18,7 +18,7 @@
 
 #include <cstdint>
 
-#include "hci/acl_manager/le_acl_connection.h"
+#include "hci/acl_manager.h"
 #include "hci/hci_packets.h"
 #include "os/handler.h"
 
@@ -73,10 +73,10 @@ class LinkOptions {
    */
   bool SetPhy(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys, uint16_t phy_options);
 
-  LinkOptions(hci::acl_manager::LeAclConnection* acl_connection, internal::Link* link, os::Handler* l2cap_handler);
+  LinkOptions(hci::LeAclConnection* acl_connection, internal::Link* link, os::Handler* l2cap_handler);
 
  private:
-  hci::acl_manager::LeAclConnection* acl_connection_ = nullptr;
+  hci::LeAclConnection* acl_connection_ = nullptr;
   internal::Link* link_ = nullptr;
   os::Handler* l2cap_handler_ = nullptr;
 };

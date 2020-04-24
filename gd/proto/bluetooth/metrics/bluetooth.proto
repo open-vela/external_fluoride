@@ -16,6 +16,8 @@
 
 syntax = "proto2";
 
+option optimize_for = LITE_RUNTIME;
+
 // C++ namespace: bluetooth::metrics::BluetoothMetricsProto
 package bluetooth.metrics.BluetoothMetricsProto;
 
