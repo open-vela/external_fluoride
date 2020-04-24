@@ -33,7 +33,9 @@ class FuzzHciHal : public HciHal {
   void sendAclData(HciPacket packet) override {}
   void sendScoData(HciPacket packet) override {}
 
-  void injectArbitrary(FuzzedDataProvider& fdp);
+  void injectAclData(std::vector<uint8_t> data);
+  void injectHciEvent(std::vector<uint8_t> data);
+  void injectScoData(std::vector<uint8_t> data);
 
   std::string ToString() const override {
     return "HciHalFuzz";
@@ -47,10 +49,6 @@ class FuzzHciHal : public HciHal {
   void Stop() override {}
 
  private:
-  void injectAclData(std::vector<uint8_t> data);
-  void injectHciEvent(std::vector<uint8_t> data);
-  void injectScoData(std::vector<uint8_t> data);
-
   HciHalCallbacks* callbacks_;
   hci::OpCode waiting_opcode_;
   bool waiting_for_status_;

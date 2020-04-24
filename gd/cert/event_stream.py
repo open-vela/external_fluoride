@@ -81,33 +81,34 @@ class EventStream(IEventStream, Closable):
         self.event_queue = SimpleQueue()
         self.handlers = []
         self.executor = ThreadPoolExecutor()
-        self.future = self.executor.submit(EventStream.__event_loop, self)
+        self.future = self.executor.submit(EventStream._event_loop, self)
 
     def get_event_queue(self):
         return self.event_queue
 
     def close(self):
         """
-        Stop the gRPC lambda so that event_callback will not be invoked after
-        the method returns.
+        Stop the gRPC lambda so that event_callback will not be invoked after th
+        method returns.
 
-        This object will be useless after this call as there is no way to
-        restart the gRPC callback. You would have to create a new EventStream
+        This object will be useless after this call as there is no way to restart
+        the gRPC callback. You would have to create a new EventStream
 
-        :raise None on success, or the same exception as __event_loop(), or
-               concurrent.futures.TimeoutError if underlying stream failed to
-               terminate within DEFAULT_TIMEOUT_SECONDS
+        :return: None on success, exception object on failure
         """
-        # Try to cancel the execution, don't care the result, non-blocking
-        self.server_stream_call.cancel()
+        while not self.server_stream_call.done():
+            self.server_stream_call.cancel()
+        exception_for_return = None
         try:
-            # cancelling gRPC stream should cause __event_loop() to quit
-            # same exception will be raised by future.result() or
-            # concurrent.futures.TimeoutError will be raised after timeout
-            self.future.result(timeout=DEFAULT_TIMEOUT_SECONDS)
-        finally:
-            # Make sure we force shutdown the executor regardless of the result
-            self.executor.shutdown(wait=False)
+            result = self.future.result()
+            if result:
+                logging.warning("Inner loop error %s" % result)
+                raise result
+        except Exception as exp:
+            logging.warning("Exception: %s" % (exp))
+            exception_for_return = exp
+        self.executor.shutdown()
+        return exception_for_return
 
     def register_callback(self, callback, matcher_fn=None):
         """
@@ -144,11 +145,11 @@ class EventStream(IEventStream, Closable):
             raise ValueError("callback must not be None")
         self.handlers.remove((callback, matcher_fn))
 
-    def __event_loop(self):
+    def _event_loop(self):
         """
         Main loop for consuming the gRPC stream events.
         Blocks until computation is cancelled
-        :raise grpc.Error on failure
+        :return: None on success, exception object on failure
         """
         try:
             for event in self.server_stream_call:
@@ -156,13 +157,14 @@ class EventStream(IEventStream, Closable):
                 for (callback, matcher_fn) in self.handlers:
                     if not matcher_fn or matcher_fn(event):
                         callback(event)
+            return None
         except RpcError as exp:
-            # Underlying gRPC stream should run indefinitely until cancelled
-            # Hence any other reason besides CANCELLED is raised as an error
             if self.server_stream_call.cancelled():
                 logging.debug("Cancelled")
+                return None
             else:
-                raise exp
+                logging.warning("Some RPC error not due to cancellation")
+            return exp
 
     def assert_none(self, timeout=timedelta(seconds=DEFAULT_TIMEOUT_SECONDS)):
         """
