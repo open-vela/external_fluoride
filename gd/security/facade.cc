@@ -21,6 +21,7 @@
 #include "security/facade.grpc.pb.h"
 #include "security/security_manager_listener.h"
 #include "security/security_module.h"
+#include "security/ui.h"
 
 namespace bluetooth {
 namespace security {
@@ -30,6 +31,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
   SecurityModuleFacadeService(SecurityModule* security_module, ::bluetooth::os::Handler* security_handler)
       : security_module_(security_module), security_handler_(security_handler) {
     security_module_->GetSecurityManager()->RegisterCallbackListener(this, security_handler_);
+    security_module_->GetSecurityManager()->SetUserInterfaceHandler(this, security_handler_);
   }
 
   ::grpc::Status CreateBond(::grpc::ServerContext* context, const facade::BluetoothAddressWithType* request,
@@ -66,12 +68,17 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
 
   ::grpc::Status SendUiCallback(::grpc::ServerContext* context, const UiCallbackMsg* request,
                                 ::google::protobuf::Empty* response) override {
+    hci::Address peer;
+    ASSERT(hci::Address::FromString(request->address().address().address(), peer));
+    hci::AddressType remote_type = hci::AddressType::PUBLIC_DEVICE_ADDRESS;
+
     switch (request->message_type()) {
       case UiCallbackType::PASSKEY:
         // TODO: security_module_->GetSecurityManager()->OnPasskeyEntry();
         break;
       case UiCallbackType::YES_NO:
-        // TODO: security_module_->GetSecurityManager()->OnConfirmYesNo(request->boolean());
+        security_module_->GetSecurityManager()->OnConfirmYesNo(hci::AddressWithType(peer, remote_type),
+                                                               request->boolean());
         break;
       default:
         LOG_ERROR("Unknown UiCallbackType %d", static_cast<int>(request->message_type()));
@@ -85,6 +92,28 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     return bond_events_.RunLoop(context, writer);
   }
 
+  ::grpc::Status SetIoCapability(::grpc::ServerContext* context, const IoCapabilityMessage* request,
+                                 ::google::protobuf::Empty* response) override {
+    security_module_->GetFacadeConfigurationApi()->SetIoCapability(
+        static_cast<hci::IoCapability>(request->capability()));
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status SetAuthenticationRequirements(::grpc::ServerContext* context,
+                                               const AuthenticationRequirementsMessage* request,
+                                               ::google::protobuf::Empty* response) override {
+    security_module_->GetFacadeConfigurationApi()->SetAuthenticationRequirements(
+        static_cast<hci::AuthenticationRequirements>(request->requirement()));
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status SetOobDataPresent(::grpc::ServerContext* context, const OobDataMessage* request,
+                                   ::google::protobuf::Empty* response) override {
+    security_module_->GetFacadeConfigurationApi()->SetOobData(
+        static_cast<hci::OobDataPresent>(request->data_present()));
+    return ::grpc::Status::OK;
+  }
+
   void DisplayPairingPrompt(const bluetooth::hci::AddressWithType& peer, std::string name) {
     LOG_INFO("%s", peer.ToString().c_str());
     UiMsg display_yes_no;
@@ -92,6 +121,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     display_yes_no.mutable_peer()->set_type(facade::BluetoothAddressTypeEnum::PUBLIC_DEVICE_ADDRESS);
     display_yes_no.set_message_type(UiMsgType::DISPLAY_YES_NO);
     display_yes_no.set_unique_id(unique_id++);
+    ui_events_.OnIncomingEvent(display_yes_no);
   }
 
   virtual void DisplayConfirmValue(const bluetooth::hci::AddressWithType& peer, std::string name,
@@ -113,6 +143,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     display_yes_no.mutable_peer()->set_type(facade::BluetoothAddressTypeEnum::PUBLIC_DEVICE_ADDRESS);
     display_yes_no.set_message_type(UiMsgType::DISPLAY_YES_NO);
     display_yes_no.set_unique_id(unique_id++);
+    ui_events_.OnIncomingEvent(display_yes_no);
   }
 
   void DisplayPasskey(const bluetooth::hci::AddressWithType& peer, std::string name, uint32_t passkey) override {
@@ -154,6 +185,8 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     bonded.set_message_type(BondMsgType::DEVICE_BONDED);
     bond_events_.OnIncomingEvent(bonded);
   }
+
+  void OnEncryptionStateChanged(hci::EncryptionChangeView encryption_change_view) override {}
 
   void OnDeviceUnbonded(hci::AddressWithType peer) override {
     LOG_INFO("%s", peer.ToString().c_str());
