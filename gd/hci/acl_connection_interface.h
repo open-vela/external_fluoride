@@ -28,6 +28,7 @@ constexpr EventCode AclConnectionEvents[] = {
     EventCode::CONNECTION_PACKET_TYPE_CHANGED,
     EventCode::ROLE_CHANGE,
     EventCode::CONNECTION_COMPLETE,
+    EventCode::DISCONNECTION_COMPLETE,
     EventCode::CONNECTION_REQUEST,
     EventCode::AUTHENTICATION_COMPLETE,
     EventCode::READ_CLOCK_OFFSET_COMPLETE,
