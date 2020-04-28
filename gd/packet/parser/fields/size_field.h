@@ -46,8 +46,6 @@ class SizeField : public ScalarField {
 
   virtual std::string GetSizedFieldName() const;
 
-  virtual void GenStringRepresentation(std::ostream& s, std::string accessor) const override;
-
  private:
   int size_;
   std::string sized_field_name_;
