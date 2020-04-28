@@ -57,18 +57,18 @@ PacketView<kLittleEndian> GetPacketView(std::unique_ptr<packet::BasePacketBuilde
 class TestHciLayer : public HciLayer {
  public:
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
+                      common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) override {
     GetHandler()->Post(common::BindOnce(&TestHciLayer::HandleCommand, common::Unretained(this), std::move(command),
-                                        std::move(on_complete)));
+                                        std::move(on_complete), common::Unretained(handler)));
   }
 
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
+                      common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
     EXPECT_TRUE(false) << "Controller properties should not generate Command Status";
   }
 
   void HandleCommand(std::unique_ptr<CommandPacketBuilder> command_builder,
-                     common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) {
+                     common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) {
     auto packet_view = GetPacketView(std::move(command_builder));
     CommandPacketView command = CommandPacketView::Create(packet_view);
     ASSERT(command.IsValid());
@@ -123,11 +123,11 @@ class TestHciLayer : public HciLayer {
       case (OpCode::READ_BD_ADDR): {
         event_builder = ReadBdAddrCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, Address::kAny);
       } break;
-      case (OpCode::LE_READ_BUFFER_SIZE_V1): {
+      case (OpCode::LE_READ_BUFFER_SIZE): {
         LeBufferSize le_buffer_size;
         le_buffer_size.le_data_packet_length_ = 0x16;
         le_buffer_size.total_num_le_packets_ = 0x08;
-        event_builder = LeReadBufferSizeV1CompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, le_buffer_size);
+        event_builder = LeReadBufferSizeCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, le_buffer_size);
       } break;
       case (OpCode::LE_READ_LOCAL_SUPPORTED_FEATURES): {
         event_builder =
@@ -195,18 +195,20 @@ class TestHciLayer : public HciLayer {
     ASSERT(event.IsValid());
     CommandCompleteView command_complete = CommandCompleteView::Create(event);
     ASSERT(command_complete.IsValid());
-    on_complete.Invoke(std::move(command_complete));
+    handler->Post(common::BindOnce(std::move(on_complete), std::move(command_complete)));
   }
 
-  void RegisterEventHandler(EventCode event_code,
-                            common::ContextualCallback<void(EventPacketView)> event_handler) override {
+  void RegisterEventHandler(EventCode event_code, common::Callback<void(EventPacketView)> event_handler,
+                            os::Handler* handler) override {
     EXPECT_EQ(event_code, EventCode::NUMBER_OF_COMPLETED_PACKETS) << "Only NUMBER_OF_COMPLETED_PACKETS is needed";
     number_of_completed_packets_callback_ = event_handler;
+    client_handler_ = handler;
   }
 
   void UnregisterEventHandler(EventCode event_code) override {
     EXPECT_EQ(event_code, EventCode::NUMBER_OF_COMPLETED_PACKETS) << "Only NUMBER_OF_COMPLETED_PACKETS is needed";
     number_of_completed_packets_callback_ = {};
+    client_handler_ = nullptr;
   }
 
   void IncomingCredit() {
@@ -222,7 +224,7 @@ class TestHciLayer : public HciLayer {
     auto packet = GetPacketView(std::move(event_builder));
     EventPacketView event = EventPacketView::Create(packet);
     ASSERT(event.IsValid());
-    number_of_completed_packets_callback_.Invoke(event);
+    client_handler_->Post(common::BindOnce(number_of_completed_packets_callback_, event));
   }
 
   CommandPacketView GetCommand(OpCode op_code) {
@@ -253,7 +255,8 @@ class TestHciLayer : public HciLayer {
   uint64_t event_mask = 0;
 
  private:
-  common::ContextualCallback<void(EventPacketView)> number_of_completed_packets_callback_;
+  common::Callback<void(EventPacketView)> number_of_completed_packets_callback_;
+  os::Handler* client_handler_;
   std::queue<CommandPacketView> command_queue_;
   mutable std::mutex mutex_;
   std::condition_variable not_empty_;
@@ -456,18 +459,6 @@ TEST_F(ControllerTest, aclCreditCallbacksTest) {
 
   credits1_set.get_future().wait();
   credits2_set.get_future().wait();
-}
-
-TEST_F(ControllerTest, aclCreditCallbackListenerUnregistered) {
-  os::Thread thread("test_thread", os::Thread::Priority::NORMAL);
-  os::Handler handler(&thread);
-  controller_->RegisterCompletedAclPacketsCallback(common::Bind(&CheckReceivedCredits), &handler);
-
-  handler.Clear();
-  handler.WaitUntilStopped(std::chrono::milliseconds(100));
-  controller_->UnregisterCompletedAclPacketsCallback();
-
-  test_hci_layer_->IncomingCredit();
 }
 }  // namespace
 }  // namespace hci
