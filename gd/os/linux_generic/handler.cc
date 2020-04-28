@@ -32,7 +32,6 @@
 
 namespace bluetooth {
 namespace os {
-using common::OnceClosure;
 
 Handler::Handler(Thread* thread)
     : tasks_(new std::queue<OnceClosure>()), thread_(thread), fd_(eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK)) {

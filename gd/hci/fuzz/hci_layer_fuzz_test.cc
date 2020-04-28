@@ -44,16 +44,43 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   HciLayerFuzzClient* fuzzClient = moduleRegistry.Start<HciLayerFuzzClient>();
 
   while (dataProvider.remaining_bytes() > 0) {
-    const uint8_t action = dataProvider.ConsumeIntegralInRange(0, 5);
+    const uint8_t action = dataProvider.ConsumeIntegralInRange(0, 12);
     switch (action) {
       case 1:
         fake_timerfd_advance(dataProvider.ConsumeIntegral<uint64_t>());
         break;
       case 2:
-        fuzzHal->injectArbitrary(dataProvider);
+        fuzzHal->injectAclData(GetArbitraryBytes(&dataProvider));
         break;
       case 3:
-        fuzzClient->injectArbitrary(dataProvider);
+        fuzzHal->injectHciEvent(GetArbitraryBytes(&dataProvider));
+        break;
+      case 4:
+        fuzzHal->injectScoData(GetArbitraryBytes(&dataProvider));
+        break;
+      case 5:
+        fuzzClient->injectAclData(GetArbitraryBytes(&dataProvider));
+        break;
+      case 6:
+        fuzzClient->injectHciCommand(GetArbitraryBytes(&dataProvider));
+        break;
+      case 7:
+        // TODO: fuzzClient->injectSecurityCommand(GetArbitraryBytes(&dataProvider));
+        break;
+      case 8:
+        fuzzClient->injectLeSecurityCommand(GetArbitraryBytes(&dataProvider));
+        break;
+      case 9:
+        fuzzClient->injectAclConnectionCommand(GetArbitraryBytes(&dataProvider));
+        break;
+      case 10:
+        fuzzClient->injectLeAclConnectionCommand(GetArbitraryBytes(&dataProvider));
+        break;
+      case 11:
+        fuzzClient->injectLeAdvertisingCommand(GetArbitraryBytes(&dataProvider));
+        break;
+      case 12:
+        fuzzClient->injectLeScanningCommand(GetArbitraryBytes(&dataProvider));
         break;
     }
   }
