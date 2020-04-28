@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
+#include "l2cap/le/internal/link.h"
+
 #include <chrono>
 #include <memory>
 
-#include "hci/acl_manager.h"
+#include "hci/acl_manager/le_acl_connection.h"
 #include "l2cap/internal/dynamic_channel_impl.h"
 #include "l2cap/internal/parameter_provider.h"
 #include "l2cap/le/dynamic_channel_manager.h"
 #include "l2cap/le/internal/fixed_channel_impl.h"
-#include "l2cap/le/internal/link.h"
+#include "l2cap/le/internal/link_manager.h"
 #include "os/alarm.h"
 
 namespace bluetooth {
@@ -30,40 +32,83 @@ namespace l2cap {
 namespace le {
 namespace internal {
 
-Link::Link(os::Handler* l2cap_handler, std::unique_ptr<hci::AclConnection> acl_connection,
+static constexpr uint16_t kDefaultMinimumCeLength = 0x0002;
+static constexpr uint16_t kDefaultMaximumCeLength = 0x0C00;
+
+Link::Link(os::Handler* l2cap_handler, std::unique_ptr<hci::acl_manager::LeAclConnection> acl_connection,
            l2cap::internal::ParameterProvider* parameter_provider,
            DynamicChannelServiceManagerImpl* dynamic_service_manager,
-           FixedChannelServiceManagerImpl* fixed_service_manager)
+           FixedChannelServiceManagerImpl* fixed_service_manager, LinkManager* link_manager)
     : l2cap_handler_(l2cap_handler), acl_connection_(std::move(acl_connection)),
       data_pipeline_manager_(l2cap_handler, this, acl_connection_->GetAclQueueEnd()),
       parameter_provider_(parameter_provider), dynamic_service_manager_(dynamic_service_manager),
       signalling_manager_(l2cap_handler_, this, &data_pipeline_manager_, dynamic_service_manager_,
-                          &dynamic_channel_allocator_) {
+                          &dynamic_channel_allocator_),
+      link_manager_(link_manager) {
   ASSERT(l2cap_handler_ != nullptr);
   ASSERT(acl_connection_ != nullptr);
   ASSERT(parameter_provider_ != nullptr);
   link_idle_disconnect_alarm_.Schedule(common::BindOnce(&Link::Disconnect, common::Unretained(this)),
                                        parameter_provider_->GetLeLinkIdleDisconnectTimeout());
+  acl_connection_->RegisterCallbacks(this, l2cap_handler_);
 }
 
-void Link::OnAclDisconnected(hci::ErrorCode status) {
-  fixed_channel_allocator_.OnAclDisconnected(status);
-  dynamic_channel_allocator_.OnAclDisconnected(status);
+void Link::OnAclDisconnected(hci::ErrorCode reason) {
+  fixed_channel_allocator_.OnAclDisconnected(static_cast<hci::ErrorCode>(reason));
+  dynamic_channel_allocator_.OnAclDisconnected(static_cast<hci::ErrorCode>(reason));
+}
+
+void Link::OnDisconnection(hci::ErrorCode status) {
+  OnAclDisconnected(status);
+
+  link_manager_->OnDisconnect(GetAclConnection()->GetRemoteAddress());
+}
+
+void Link::OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency, uint16_t supervision_timeout) {
+  LOG_DEBUG("interval %hx latency %hx supervision_timeout %hx", connection_interval, connection_latency,
+            supervision_timeout);
+  if (update_request_signal_id_ != kInvalidSignalId) {
+    hci::ErrorCode result = hci::ErrorCode::SUCCESS;
+    if (connection_interval > update_request_interval_max_ || connection_interval < update_request_interval_min_ ||
+        connection_latency != update_request_latency_ || supervision_timeout != update_request_supervision_timeout_) {
+      result = hci::ErrorCode::UNSPECIFIED_ERROR;
+    }
+    on_connection_update_complete(update_request_signal_id_, result);
+    update_request_signal_id_ = kInvalidSignalId;
+  }
 }
 
 void Link::Disconnect() {
   acl_connection_->Disconnect(hci::DisconnectReason::REMOTE_USER_TERMINATED_CONNECTION);
 }
 
-void Link::UpdateConnectionParameter(SignalId signal_id, uint16_t conn_interval_min, uint16_t conn_interval_max,
-                                     uint16_t conn_latency, uint16_t supervision_timeout) {
-  acl_connection_->LeConnectionUpdate(
-      conn_interval_min, conn_interval_max, conn_latency, supervision_timeout,
-      common::BindOnce(&Link::on_connection_update_complete, common::Unretained(this), signal_id), l2cap_handler_);
+void Link::UpdateConnectionParameterFromRemote(SignalId signal_id, uint16_t conn_interval_min,
+                                               uint16_t conn_interval_max, uint16_t conn_latency,
+                                               uint16_t supervision_timeout) {
+  acl_connection_->LeConnectionUpdate(conn_interval_min, conn_interval_max, conn_latency, supervision_timeout,
+                                      kDefaultMinimumCeLength, kDefaultMaximumCeLength);
+  update_request_signal_id_ = signal_id;
+  update_request_interval_min_ = conn_interval_min;
+  update_request_interval_max_ = conn_interval_max;
+  update_request_latency_ = conn_latency;
+  update_request_supervision_timeout_ = supervision_timeout;
+}
+
+void Link::SendConnectionParameterUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max, uint16_t conn_latency,
+                                         uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length) {
+  if (acl_connection_->GetRole() == hci::Role::SLAVE) {
+    // TODO: If both LL master and slave support 4.1, use HCI command directly
+    signalling_manager_.SendConnectionParameterUpdateRequest(conn_interval_min, conn_interval_max, conn_latency,
+                                                             supervision_timeout);
+    return;
+  }
+  acl_connection_->LeConnectionUpdate(conn_interval_min, conn_interval_max, conn_latency, supervision_timeout,
+                                      min_ce_length, max_ce_length);
+  update_request_signal_id_ = kInvalidSignalId;
 }
 
 std::shared_ptr<FixedChannelImpl> Link::AllocateFixedChannel(Cid cid, SecurityPolicy security_policy) {
-  auto channel = fixed_channel_allocator_.AllocateChannel(cid, security_policy);
+  auto channel = fixed_channel_allocator_.AllocateChannel(cid);
   data_pipeline_manager_.AttachChannel(cid, channel, l2cap::internal::DataPipelineManager::ChannelMode::BASIC);
   return channel;
 }
@@ -82,7 +127,9 @@ void Link::SendConnectionRequest(Psm psm, PendingDynamicChannelConnection pendin
     return;
   }
   auto reserved_cid = ReserveDynamicChannel();
-  signalling_manager_.SendConnectionRequest(psm, reserved_cid, pending_dynamic_channel_connection.configuration_.mtu);
+  auto mtu = pending_dynamic_channel_connection.configuration_.mtu;
+  local_cid_to_pending_dynamic_channel_connection_map_[reserved_cid] = std::move(pending_dynamic_channel_connection);
+  signalling_manager_.SendConnectionRequest(psm, reserved_cid, mtu);
 }
 
 void Link::SendDisconnectionRequest(Cid local_cid, Cid remote_cid) {
@@ -93,14 +140,24 @@ void Link::SendDisconnectionRequest(Cid local_cid, Cid remote_cid) {
   signalling_manager_.SendDisconnectRequest(local_cid, remote_cid);
 }
 
-void Link::OnOutgoingConnectionRequestFail(Cid local_cid) {
-  local_cid_to_pending_dynamic_channel_connection_map_.erase(local_cid);
+void Link::OnOutgoingConnectionRequestFail(Cid local_cid, LeCreditBasedConnectionResponseResult response_result) {
+  if (local_cid_to_pending_dynamic_channel_connection_map_.find(local_cid) !=
+      local_cid_to_pending_dynamic_channel_connection_map_.end()) {
+    // TODO(hsz): Currently we only notify the client when the remote didn't send connection response SUCCESS.
+    //  Should we notify the client when the link failed to establish?
+    DynamicChannelManager::ConnectionResult result{
+        .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_L2CAP_ERROR,
+        .hci_error = hci::ErrorCode::SUCCESS,
+        .l2cap_connection_response_result = response_result,
+    };
+    NotifyChannelFail(local_cid, result);
+  }
   dynamic_channel_allocator_.FreeChannel(local_cid);
 }
 
 std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateDynamicChannel(Psm psm, Cid remote_cid,
                                                                                   SecurityPolicy security_policy) {
-  auto channel = dynamic_channel_allocator_.AllocateChannel(psm, remote_cid, security_policy);
+  auto channel = dynamic_channel_allocator_.AllocateChannel(psm, remote_cid);
   if (channel != nullptr) {
     data_pipeline_manager_.AttachChannel(channel->GetCid(), channel,
                                          l2cap::internal::DataPipelineManager::ChannelMode::LE_CREDIT_BASED);
@@ -112,7 +169,7 @@ std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateDynamicChanne
 
 std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateReservedDynamicChannel(
     Cid reserved_cid, Psm psm, Cid remote_cid, SecurityPolicy security_policy) {
-  auto channel = dynamic_channel_allocator_.AllocateReservedChannel(reserved_cid, psm, remote_cid, security_policy);
+  auto channel = dynamic_channel_allocator_.AllocateReservedChannel(reserved_cid, psm, remote_cid);
   if (channel != nullptr) {
     data_pipeline_manager_.AttachChannel(channel->GetCid(), channel,
                                          l2cap::internal::DataPipelineManager::ChannelMode::LE_CREDIT_BASED);
@@ -120,12 +177,6 @@ std::shared_ptr<l2cap::internal::DynamicChannelImpl> Link::AllocateReservedDynam
     channel->local_initiated_ = true;
   }
   return channel;
-}
-
-DynamicChannelConfigurationOption Link::GetConfigurationForInitialConfiguration(Cid cid) {
-  ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
-         local_cid_to_pending_dynamic_channel_connection_map_.end());
-  return local_cid_to_pending_dynamic_channel_connection_map_[cid].configuration_;
 }
 
 void Link::FreeDynamicChannel(Cid cid) {
@@ -159,12 +210,11 @@ void Link::NotifyChannelCreation(Cid cid, std::unique_ptr<DynamicChannel> user_c
   local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
 }
 
-void Link::NotifyChannelFail(Cid cid) {
+void Link::NotifyChannelFail(Cid cid, DynamicChannelManager::ConnectionResult result) {
   ASSERT(local_cid_to_pending_dynamic_channel_connection_map_.find(cid) !=
          local_cid_to_pending_dynamic_channel_connection_map_.end());
   auto& pending_dynamic_channel_connection = local_cid_to_pending_dynamic_channel_connection_map_[cid];
   // TODO(cmanton) Pass proper connection falure result to user
-  DynamicChannelManager::ConnectionResult result;
   pending_dynamic_channel_connection.handler_->Post(
       common::BindOnce(std::move(pending_dynamic_channel_connection.on_fail_callback_), result));
   local_cid_to_pending_dynamic_channel_connection_map_.erase(cid);
@@ -183,6 +233,10 @@ void Link::SendLeCredit(Cid local_cid, uint16_t credit) {
 }
 
 void Link::on_connection_update_complete(SignalId signal_id, hci::ErrorCode error_code) {
+  if (!signal_id.IsValid()) {
+    LOG_INFO("Invalid signal_id");
+    return;
+  }
   ConnectionParameterUpdateResponseResult result = (error_code == hci::ErrorCode::SUCCESS)
                                                        ? ConnectionParameterUpdateResponseResult::ACCEPTED
                                                        : ConnectionParameterUpdateResponseResult::REJECTED;
