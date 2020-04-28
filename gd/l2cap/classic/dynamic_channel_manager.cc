@@ -41,7 +41,7 @@ bool DynamicChannelManager::ConnectChannel(hci::Address device, DynamicChannelCo
 }
 
 bool DynamicChannelManager::RegisterService(Psm psm, DynamicChannelConfigurationOption configuration_option,
-                                            const classic::SecurityPolicy& security_policy,
+                                            const SecurityPolicy& security_policy,
                                             OnRegistrationCompleteCallback on_registration_complete,
                                             OnConnectionOpenCallback on_connection_open, os::Handler* handler) {
   internal::DynamicChannelServiceImpl::PendingRegistration pending_registration{
