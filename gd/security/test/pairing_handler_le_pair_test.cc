@@ -252,10 +252,10 @@ class PairingHandlerPairTest : public testing::Test {
     // For now, all tests are succeeding to go through Encryption. Record that in the setup.
     //  Once we test failure cases, move this to each test
     EXPECT_CALL(master_le_security_mock,
-                EnqueueCommand(_, Matcher<common::ContextualOnceCallback<void(CommandStatusView)>>(_)))
+                EnqueueCommand(_, Matcher<common::OnceCallback<void(CommandStatusView)>>(_), _))
         .Times(1)
         .WillOnce([](std::unique_ptr<LeSecurityCommandBuilder> command,
-                     common::ContextualOnceCallback<void(CommandStatusView)> on_status) {
+                     common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) {
           // TODO: on_status.Run();
 
           pairing_handler_a->OnHciEvent(EventBuilderToView(

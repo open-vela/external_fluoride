@@ -19,6 +19,7 @@
 #include "l2cap/cid.h"
 #include "l2cap/le/internal/fixed_channel_impl.h"
 #include "l2cap/le/internal/link.h"
+#include "l2cap/security_policy.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -31,7 +32,7 @@ hci::Role FixedChannelImpl::GetRole() const {
   return link_->GetRole();
 }
 
-hci::LeAclConnection* FixedChannelImpl::GetAclConnection() const {
+hci::AclConnection* FixedChannelImpl::GetAclConnection() const {
   return link_->GetAclConnection();
 }
 
@@ -107,10 +108,6 @@ Cid FixedChannelImpl::GetCid() const {
 
 Cid FixedChannelImpl::GetRemoteCid() const {
   return cid_;
-}
-
-LinkOptions* FixedChannelImpl::GetLinkOptions() {
-  return link_->GetLinkOptions();
 }
 
 }  // namespace internal
