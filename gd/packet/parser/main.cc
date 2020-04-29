@@ -121,6 +121,7 @@ bool generate_cpp_headers_one_file(const Declarations& decls, const std::filesys
   out_file << "#pragma once\n";
   out_file << "\n\n";
   out_file << "#include <stdint.h>\n";
+  out_file << "#include <sstream>\n";
   out_file << "#include <string>\n";
   out_file << "#include <functional>\n";
   out_file << "\n\n";
@@ -131,6 +132,9 @@ bool generate_cpp_headers_one_file(const Declarations& decls, const std::filesys
   out_file << "#include \"packet/packet_builder.h\"\n";
   out_file << "#include \"packet/packet_struct.h\"\n";
   out_file << "#include \"packet/packet_view.h\"\n";
+  out_file << "\n#if defined(PACKET_FUZZ_TESTING) || defined(PACKET_TESTING) || defined(FUZZ_TARGET)\n";
+  out_file << "#include \"packet/raw_builder.h\"\n";
+  out_file << "\n#endif\n";
   out_file << "#include \"packet/parser/checksum_type_checker.h\"\n";
   out_file << "#include \"packet/parser/custom_type_checker.h\"\n";
   out_file << "\n\n";
@@ -164,6 +168,9 @@ bool generate_cpp_headers_one_file(const Declarations& decls, const std::filesys
   out_file << "using ::bluetooth::packet::PacketBuilder;";
   out_file << "using ::bluetooth::packet::PacketStruct;";
   out_file << "using ::bluetooth::packet::PacketView;";
+  out_file << "\n#if defined(PACKET_FUZZ_TESTING) || defined(PACKET_TESTING) || defined(FUZZ_TARGET)\n";
+  out_file << "using ::bluetooth::packet::RawBuilder;";
+  out_file << "\n#endif\n";
   out_file << "using ::bluetooth::packet::parser::ChecksumTypeChecker;";
   out_file << "\n\n";
 
