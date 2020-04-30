@@ -26,7 +26,6 @@
 
 namespace bluetooth {
 namespace hci {
-namespace acl_manager {
 
 class RoundRobinScheduler {
  public:
@@ -75,6 +74,5 @@ class RoundRobinScheduler {
   std::map<uint16_t, acl_queue_handler>::iterator starting_point_;
 };
 
-}  // namespace acl_manager
 }  // namespace hci
 }  // namespace bluetooth
