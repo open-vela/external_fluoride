@@ -118,7 +118,7 @@ queues:
 :   Same as non-blocking queue, but it will flush when it’s full and user tries
     to enqueue. This is useful for audio encoding.
 
-![Threading Model](./data_flow_diagram.png)
+![Threading Model](./data_flow_diagram.svg)
 
 ## Building blocks
 
