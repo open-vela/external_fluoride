@@ -23,9 +23,7 @@ PYTHONPATH_KEY = 'PYTHONPATH'
 COMMIT_ID_ENV_KEY = 'PREUPLOAD_COMMIT'
 ANDROID_BUILD_TOP_KEY = 'ANDROID_BUILD_TOP'
 DEFAULT_YAPF_DIR = 'external/yapf'
-GIT_COMMAND = [
-    'git', 'diff-tree', '--no-commit-id', '--name-only', '--diff-filter=d'
-]
+GIT_COMMAND = ['git', 'diff-tree', '--no-commit-id', '--name-only']
 
 
 def main():
