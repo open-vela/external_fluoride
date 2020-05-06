@@ -16,10 +16,10 @@
 
 #include <unordered_map>
 
+#include "hci/acl_manager/le_acl_connection.h"
 #include "l2cap/cid.h"
 #include "l2cap/le/internal/fixed_channel_impl.h"
 #include "l2cap/le/internal/link.h"
-#include "l2cap/security_policy.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -32,7 +32,7 @@ hci::Role FixedChannelImpl::GetRole() const {
   return link_->GetRole();
 }
 
-hci::AclConnection* FixedChannelImpl::GetAclConnection() const {
+hci::acl_manager::LeAclConnection* FixedChannelImpl::GetAclConnection() const {
   return link_->GetAclConnection();
 }
 
@@ -108,6 +108,10 @@ Cid FixedChannelImpl::GetCid() const {
 
 Cid FixedChannelImpl::GetRemoteCid() const {
   return cid_;
+}
+
+LinkOptions* FixedChannelImpl::GetLinkOptions() {
+  return link_->GetLinkOptions();
 }
 
 }  // namespace internal
