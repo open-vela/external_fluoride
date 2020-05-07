@@ -79,10 +79,6 @@ class HciLayer : public Module, public CommandInterface<CommandPacketBuilder> {
 
   virtual LeScanningInterface* GetLeScanningInterface(common::ContextualCallback<void(LeMetaEventView)> event_handler);
 
-  os::Handler* GetHciHandler() {
-    return GetHandler();
-  }
-
   std::string ToString() const override {
     return "Hci Layer";
   }
@@ -97,6 +93,8 @@ class HciLayer : public Module, public CommandInterface<CommandPacketBuilder> {
   void Start() override;
 
   void Stop() override;
+
+  virtual void Disconnect(uint16_t handle, ErrorCode reason);
 
  private:
   struct impl;
@@ -121,6 +119,9 @@ class HciLayer : public Module, public CommandInterface<CommandPacketBuilder> {
     }
     HciLayer& hci_;
   };
+
+  std::list<common::ContextualCallback<void(uint16_t, ErrorCode)>> disconnect_handlers_;
+  void on_disconnection_complete(EventPacketView event_view);
 
   // Interfaces
   CommandInterfaceImpl<ConnectionManagementCommandBuilder> acl_connection_manager_interface_{*this};

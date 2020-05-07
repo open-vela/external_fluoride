@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include "hci/round_robin_scheduler.h"
-#include "hci/acl_fragmenter.h"
+#include "hci/acl_manager/round_robin_scheduler.h"
+#include "hci/acl_manager/acl_fragmenter.h"
 
 namespace bluetooth {
 namespace hci {
+namespace acl_manager {
 
 RoundRobinScheduler::RoundRobinScheduler(os::Handler* handler, Controller* controller,
                                          common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* hci_queue_end)
@@ -40,8 +41,8 @@ RoundRobinScheduler::~RoundRobinScheduler() {
 }
 
 void RoundRobinScheduler::Register(ConnectionType connection_type, uint16_t handle,
-                                   AclConnection::QueueDownEnd* queue_down_end) {
-  acl_queue_handler acl_queue_handler = {connection_type, queue_down_end, false, 0, false};
+                                   std::shared_ptr<acl_manager::AclConnection::Queue> queue) {
+  acl_queue_handler acl_queue_handler = {connection_type, std::move(queue), false, 0};
   acl_queue_handlers_.insert(std::pair<uint16_t, RoundRobinScheduler::acl_queue_handler>(handle, acl_queue_handler));
   if (fragments_to_send_.size() == 0) {
     start_round_robin();
@@ -51,17 +52,6 @@ void RoundRobinScheduler::Register(ConnectionType connection_type, uint16_t hand
 void RoundRobinScheduler::Unregister(uint16_t handle) {
   ASSERT(acl_queue_handlers_.count(handle) == 1);
   auto acl_queue_handler = acl_queue_handlers_.find(handle)->second;
-  if (acl_queue_handler.dequeue_is_registered_) {
-    acl_queue_handler.dequeue_is_registered_ = false;
-    acl_queue_handler.queue_down_end_->UnregisterDequeue();
-  }
-  acl_queue_handlers_.erase(handle);
-  starting_point_ = acl_queue_handlers_.begin();
-}
-
-void RoundRobinScheduler::SetDisconnect(uint16_t handle) {
-  auto acl_queue_handler = acl_queue_handlers_.find(handle)->second;
-  acl_queue_handler.is_disconnected_ = true;
   // Reclaim outstanding packets
   if (acl_queue_handler.connection_type_ == ConnectionType::CLASSIC) {
     acl_packet_credits_ += acl_queue_handler.number_of_sent_packets_;
@@ -69,6 +59,13 @@ void RoundRobinScheduler::SetDisconnect(uint16_t handle) {
     le_acl_packet_credits_ += acl_queue_handler.number_of_sent_packets_;
   }
   acl_queue_handler.number_of_sent_packets_ = 0;
+
+  if (acl_queue_handler.dequeue_is_registered_) {
+    acl_queue_handler.dequeue_is_registered_ = false;
+    acl_queue_handler.queue_->GetDownEnd()->UnregisterDequeue();
+  }
+  acl_queue_handlers_.erase(handle);
+  starting_point_ = acl_queue_handlers_.begin();
 }
 
 uint16_t RoundRobinScheduler::GetCredits() {
@@ -101,7 +98,7 @@ void RoundRobinScheduler::start_round_robin() {
         le_acl_packet_credits_ == 0 && acl_queue_handler->second.connection_type_ == ConnectionType::LE;
     if (!acl_queue_handler->second.dequeue_is_registered_ && !classic_buffer_full && !le_buffer_full) {
       acl_queue_handler->second.dequeue_is_registered_ = true;
-      acl_queue_handler->second.queue_down_end_->RegisterDequeue(
+      acl_queue_handler->second.queue_->GetDownEnd()->RegisterDequeue(
           handler_, common::Bind(&RoundRobinScheduler::buffer_packet, common::Unretained(this), acl_queue_handler));
     }
     acl_queue_handler = std::next(acl_queue_handler);
@@ -117,7 +114,7 @@ void RoundRobinScheduler::buffer_packet(std::map<uint16_t, acl_queue_handler>::i
   BroadcastFlag broadcast_flag = BroadcastFlag::POINT_TO_POINT;
   // Wrap packet and enqueue it
   uint16_t handle = acl_queue_handler->first;
-  auto packet = acl_queue_handler->second.queue_down_end_->TryDequeue();
+  auto packet = acl_queue_handler->second.queue_->GetDownEnd()->TryDequeue();
   ASSERT(packet != nullptr);
 
   ConnectionType connection_type = acl_queue_handler->second.connection_type_;
@@ -148,7 +145,7 @@ void RoundRobinScheduler::unregister_all_connections() {
        acl_queue_handler = std::next(acl_queue_handler)) {
     if (acl_queue_handler->second.dequeue_is_registered_) {
       acl_queue_handler->second.dequeue_is_registered_ = false;
-      acl_queue_handler->second.queue_down_end_->UnregisterDequeue();
+      acl_queue_handler->second.queue_->GetDownEnd()->UnregisterDequeue();
     }
   }
 }
@@ -195,10 +192,6 @@ void RoundRobinScheduler::incoming_acl_credits(uint16_t handle, uint16_t credits
     LOG_INFO("Dropping %hx received credits to unknown connection 0x%0hx", credits, handle);
     return;
   }
-  if (acl_queue_handler->second.is_disconnected_) {
-    LOG_INFO("Dropping %hx received credits to disconnected connection 0x%0hx", credits, handle);
-    return;
-  }
   acl_queue_handler->second.number_of_sent_packets_ -= credits;
   if (acl_queue_handler->second.connection_type_ == ConnectionType::CLASSIC) {
     acl_packet_credits_ += credits;
@@ -212,5 +205,6 @@ void RoundRobinScheduler::incoming_acl_credits(uint16_t handle, uint16_t credits
   }
 }
 
+}  // namespace acl_manager
 }  // namespace hci
 }  // namespace bluetooth

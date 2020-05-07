@@ -26,6 +26,7 @@
 
 namespace bluetooth {
 namespace hci {
+namespace acl_manager {
 
 class RoundRobinScheduler {
  public:
@@ -37,15 +38,14 @@ class RoundRobinScheduler {
 
   struct acl_queue_handler {
     ConnectionType connection_type_;
-    AclConnection::QueueDownEnd* queue_down_end_;
+    std::shared_ptr<acl_manager::AclConnection::Queue> queue_;
     bool dequeue_is_registered_ = false;
     uint16_t number_of_sent_packets_ = 0;  // Track credits
-    bool is_disconnected_ = false;
   };
 
-  void Register(ConnectionType connection_type, uint16_t handle, AclConnection::QueueDownEnd* queue_down_end);
+  void Register(ConnectionType connection_type, uint16_t handle,
+                std::shared_ptr<acl_manager::AclConnection::Queue> queue);
   void Unregister(uint16_t handle);
-  void SetDisconnect(uint16_t handle);
   uint16_t GetCredits();
   uint16_t GetLeCredits();
 
@@ -73,5 +73,6 @@ class RoundRobinScheduler {
   std::map<uint16_t, acl_queue_handler>::iterator starting_point_;
 };
 
+}  // namespace acl_manager
 }  // namespace hci
 }  // namespace bluetooth

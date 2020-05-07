@@ -19,7 +19,7 @@
 #include <chrono>
 #include <memory>
 
-#include "hci/acl_manager.h"
+#include "hci/acl_manager/le_acl_connection.h"
 #include "l2cap/internal/data_pipeline_manager.h"
 #include "l2cap/internal/dynamic_channel_allocator.h"
 #include "l2cap/internal/fixed_channel_allocator.h"
@@ -40,9 +40,9 @@ namespace internal {
 
 class LinkManager;
 
-class Link : public l2cap::internal::ILink, public hci::LeConnectionManagementCallbacks {
+class Link : public l2cap::internal::ILink, public hci::acl_manager::LeConnectionManagementCallbacks {
  public:
-  Link(os::Handler* l2cap_handler, std::unique_ptr<hci::LeAclConnection> acl_connection,
+  Link(os::Handler* l2cap_handler, std::unique_ptr<hci::acl_manager::LeAclConnection> acl_connection,
        l2cap::internal::ParameterProvider* parameter_provider,
        DynamicChannelServiceManagerImpl* dynamic_service_manager, FixedChannelServiceManagerImpl* fixed_service_manager,
        LinkManager* link_manager);
@@ -64,15 +64,15 @@ class Link : public l2cap::internal::ILink, public hci::LeConnectionManagementCa
     return acl_connection_->GetRole();
   }
 
-  inline virtual hci::LeAclConnection* GetAclConnection() {
+  inline virtual hci::acl_manager::LeAclConnection* GetAclConnection() {
     return acl_connection_.get();
   }
 
   // ACL methods
 
-  virtual void OnAclDisconnected(hci::ErrorCode status);
+  virtual void OnAclDisconnected(hci::ErrorCode reason);
 
-  void OnDisconnection(hci::ErrorCode status) override;
+  void OnDisconnection(hci::ErrorCode reason) override;
 
   void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
                           uint16_t supervision_timeout) override;
@@ -105,11 +105,10 @@ class Link : public l2cap::internal::ILink, public hci::LeConnectionManagementCa
   // Invoked by signalling manager to indicate an outgoing connection request failed and link shall free resources
   virtual void OnOutgoingConnectionRequestFail(Cid local_cid, LeCreditBasedConnectionResponseResult result);
 
-  virtual std::shared_ptr<l2cap::internal::DynamicChannelImpl> AllocateDynamicChannel(Psm psm, Cid remote_cid,
-                                                                                      SecurityPolicy security_policy);
+  virtual std::shared_ptr<l2cap::internal::DynamicChannelImpl> AllocateDynamicChannel(Psm psm, Cid remote_cid);
 
-  virtual std::shared_ptr<l2cap::internal::DynamicChannelImpl> AllocateReservedDynamicChannel(
-      Cid reserved_cid, Psm psm, Cid remote_cid, SecurityPolicy security_policy);
+  virtual std::shared_ptr<l2cap::internal::DynamicChannelImpl> AllocateReservedDynamicChannel(Cid reserved_cid, Psm psm,
+                                                                                              Cid remote_cid);
 
   virtual void FreeDynamicChannel(Cid cid);
 
@@ -137,7 +136,7 @@ class Link : public l2cap::internal::ILink, public hci::LeConnectionManagementCa
   os::Handler* l2cap_handler_;
   l2cap::internal::FixedChannelAllocator<FixedChannelImpl, Link> fixed_channel_allocator_{this, l2cap_handler_};
   l2cap::internal::DynamicChannelAllocator dynamic_channel_allocator_{this, l2cap_handler_};
-  std::unique_ptr<hci::LeAclConnection> acl_connection_;
+  std::unique_ptr<hci::acl_manager::LeAclConnection> acl_connection_;
   l2cap::internal::DataPipelineManager data_pipeline_manager_;
   l2cap::internal::ParameterProvider* parameter_provider_;
   DynamicChannelServiceManagerImpl* dynamic_service_manager_;
