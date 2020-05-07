@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "hci/acl_fragmenter.h"
+#include "hci/acl_manager/acl_fragmenter.h"
 
 #include "os/log.h"
 #include "packet/fragmenting_inserter.h"
 
 namespace bluetooth {
 namespace hci {
+namespace acl_manager {
 
 AclFragmenter::AclFragmenter(size_t mtu, std::unique_ptr<packet::BasePacketBuilder> packet)
     : mtu_(mtu), packet_(std::move(packet)) {}
@@ -33,5 +34,6 @@ std::vector<std::unique_ptr<packet::RawBuilder>> AclFragmenter::GetFragments() {
   return to_return;
 }
 
+}  // namespace acl_manager
 }  // namespace hci
 }  // namespace bluetooth
