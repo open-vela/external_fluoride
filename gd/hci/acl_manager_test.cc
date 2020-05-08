@@ -441,12 +441,6 @@ class AclManagerWithConnectionTest : public AclManagerTest {
     connection_->RegisterCallbacks(&mock_connection_management_callbacks_, client_handler_);
   }
 
-  void TearDown() override {
-    fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
-    fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
-    fake_registry_.StopAll();
-  }
-
   void sync_client_handler() {
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -580,12 +574,6 @@ class AclManagerWithLeConnectionTest : public AclManagerTest {
     connection_ = GetLastLeConnection();
   }
 
-  void TearDown() override {
-    fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
-    fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
-    fake_registry_.StopAll();
-  }
-
   void sync_client_handler() {
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -683,6 +671,8 @@ TEST_F(AclManagerWithLeConnectionTest, invoke_registered_callback_le_connection_
               OnConnectionUpdate(connection_interval, connection_latency, supervision_timeout));
   test_hci_layer_->IncomingLeMetaEvent(LeConnectionUpdateCompleteBuilder::Create(
       ErrorCode::SUCCESS, handle_, connection_interval, connection_latency, supervision_timeout));
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithLeConnectionTest, invoke_registered_callback_le_disconnect) {
@@ -693,6 +683,8 @@ TEST_F(AclManagerWithLeConnectionTest, invoke_registered_callback_le_disconnect)
   auto reason = ErrorCode::REMOTE_USER_TERMINATED_CONNECTION;
   EXPECT_CALL(mock_le_connection_management_callbacks_, OnDisconnection(reason));
   test_hci_layer_->Disconnect(handle_, reason);
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithLeConnectionTest, DISABLED_invoke_registered_callback_le_disconnect_data_race) {
@@ -704,6 +696,8 @@ TEST_F(AclManagerWithLeConnectionTest, DISABLED_invoke_registered_callback_le_di
   auto reason = ErrorCode::REMOTE_USER_TERMINATED_CONNECTION;
   EXPECT_CALL(mock_le_connection_management_callbacks_, OnDisconnection(reason));
   test_hci_layer_->Disconnect(handle_, reason);
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithLeConnectionTest, invoke_registered_callback_le_queue_disconnect) {
@@ -714,13 +708,17 @@ TEST_F(AclManagerWithLeConnectionTest, invoke_registered_callback_le_queue_disco
 
   EXPECT_CALL(mock_le_connection_management_callbacks_, OnDisconnection(reason));
   connection_->RegisterCallbacks(&mock_le_connection_management_callbacks_, client_handler_);
-  sync_client_handler();
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithConnectionTest, invoke_registered_callback_disconnection_complete) {
   auto reason = ErrorCode::REMOTE_USER_TERMINATED_CONNECTION;
   EXPECT_CALL(mock_connection_management_callbacks_, OnDisconnection(reason));
   test_hci_layer_->Disconnect(handle_, reason);
+
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithConnectionTest, acl_send_data_one_connection) {
@@ -753,6 +751,8 @@ TEST_F(AclManagerWithConnectionTest, acl_send_data_one_connection) {
   ASSERT(command_view.IsValid());
   ASSERT_EQ(command_view.GetConnectionHandle(), handle_);
   test_hci_layer_->Disconnect(handle_, reason);
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithConnectionTest, acl_send_data_credits) {
@@ -772,6 +772,9 @@ TEST_F(AclManagerWithConnectionTest, acl_send_data_credits) {
   test_controller_->CompletePackets(handle_, 1);
 
   auto after_credits_sent_packet = test_hci_layer_->OutgoingAclData();
+
+  fake_registry_.SynchronizeModuleHandler(&HciLayer::Factory, std::chrono::milliseconds(20));
+  fake_registry_.SynchronizeModuleHandler(&AclManager::Factory, std::chrono::milliseconds(20));
 }
 
 TEST_F(AclManagerWithConnectionTest, send_switch_role) {
