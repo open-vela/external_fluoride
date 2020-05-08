@@ -500,7 +500,8 @@ void BTA_AgDisable();
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AgRegister(tBTA_SERVICE_MASK services, tBTA_AG_FEAT features,
+void BTA_AgRegister(tBTA_SERVICE_MASK services, tBTA_SEC sec_mask,
+                    tBTA_AG_FEAT features,
                     const std::vector<std::string>& service_names,
                     uint8_t app_id);
 
@@ -529,7 +530,7 @@ void BTA_AgDeregister(uint16_t handle);
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AgOpen(uint16_t handle, const RawAddress& bd_addr);
+void BTA_AgOpen(uint16_t handle, const RawAddress& bd_addr, tBTA_SEC sec_mask);
 
 /*******************************************************************************
  *

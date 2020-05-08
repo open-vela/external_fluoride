@@ -32,7 +32,6 @@
 #include "bta_hf_client_int.h"
 #include "osi/include/osi.h"
 #include "port_api.h"
-#include "stack/btm/btm_sec.h"
 
 /*******************************************************************************
  *
@@ -182,10 +181,14 @@ void bta_hf_client_start_server() {
     return;
   }
 
-  port_status = RFCOMM_CreateConnectionWithSecurity(
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_HF_HANDSFREE,
+                       bta_hf_client_cb_arr.serv_sec_mask, BT_PSM_RFCOMM,
+                       BTM_SEC_PROTO_RFCOMM, bta_hf_client_cb_arr.scn);
+
+  port_status = RFCOMM_CreateConnection(
       UUID_SERVCLASS_HF_HANDSFREE, bta_hf_client_cb_arr.scn, true,
       BTA_HF_CLIENT_MTU, RawAddress::kAny, &(bta_hf_client_cb_arr.serv_handle),
-      bta_hf_client_mgmt_cback, BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT);
+      bta_hf_client_mgmt_cback);
 
   APPL_TRACE_DEBUG("%s: started rfcomm server with handle %d", __func__,
                    bta_hf_client_cb_arr.serv_handle);
@@ -239,11 +242,13 @@ void bta_hf_client_rfc_do_open(tBTA_HF_CLIENT_DATA* p_data) {
     return;
   }
 
-  if (RFCOMM_CreateConnectionWithSecurity(
-          UUID_SERVCLASS_HF_HANDSFREE, client_cb->peer_scn, false,
-          BTA_HF_CLIENT_MTU, client_cb->peer_addr, &(client_cb->conn_handle),
-          bta_hf_client_mgmt_cback,
-          BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT) == PORT_SUCCESS) {
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_HF_HANDSFREE,
+                       client_cb->cli_sec_mask, BT_PSM_RFCOMM,
+                       BTM_SEC_PROTO_RFCOMM, client_cb->peer_scn);
+  if (RFCOMM_CreateConnection(UUID_SERVCLASS_HF_HANDSFREE, client_cb->peer_scn,
+                              false, BTA_HF_CLIENT_MTU, client_cb->peer_addr,
+                              &(client_cb->conn_handle),
+                              bta_hf_client_mgmt_cback) == PORT_SUCCESS) {
     bta_hf_client_setup_port(client_cb->conn_handle);
     APPL_TRACE_DEBUG("bta_hf_client_rfc_do_open : conn_handle = %d",
                      client_cb->conn_handle);
