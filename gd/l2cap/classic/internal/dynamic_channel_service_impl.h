@@ -44,11 +44,11 @@ class DynamicChannelServiceImpl {
     user_handler_->Post(common::BindOnce(on_connection_open_callback_, std::move(channel)));
   }
 
-  virtual DynamicChannelConfigurationOption GetConfigOption() const {
+  DynamicChannelConfigurationOption GetConfigOption() const {
     return config_option_;
   }
 
-  virtual SecurityPolicy GetSecurityPolicy() const {
+  classic::SecurityPolicy GetSecurityPolicy() const {
     return security_policy_;
   }
 
