@@ -270,8 +270,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_display_only_t
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // display_only + display_yes_no is JustWorks no confirmation
@@ -308,8 +306,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_display_yes_no
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // display_only + no_input_no_output is JustWorks no confirmation
@@ -346,8 +342,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_no_input_no_ou
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // keyboard_only + no_input_no_output is JustWorks no confirmation
@@ -384,8 +378,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_keyboard_only_no_input_no_o
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // no_input_no_output + display_only is JustWorks no confirmation
@@ -422,8 +414,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_display_
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // no_input_no_output + display_yes_no is JustWorks no confirmation
@@ -460,8 +450,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_display_
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // no_input_no_output + keyboard_only is JustWorks no confirmation
@@ -498,8 +486,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_keyboard
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 // no_input_no_output + no_input_no_output is JustWorks no confirmation
@@ -536,8 +522,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input
   ReceiveLinkKeyNotification(device_, link_key, key_type);
   ASSERT_EQ(link_key, security_record_->GetLinkKey());
   ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
 /*** Numeric Comparison ***/
