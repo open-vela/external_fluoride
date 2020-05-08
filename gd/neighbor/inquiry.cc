@@ -238,13 +238,13 @@ void neighbor::InquiryModule::impl::RegisterCallbacks(InquiryCallbacks callbacks
   inquiry_callbacks_ = callbacks;
 
   hci_layer_->RegisterEventHandler(hci::EventCode::INQUIRY_RESULT,
-                                   handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
   hci_layer_->RegisterEventHandler(hci::EventCode::INQUIRY_RESULT_WITH_RSSI,
-                                   handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
   hci_layer_->RegisterEventHandler(hci::EventCode::EXTENDED_INQUIRY_RESULT,
-                                   handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
   hci_layer_->RegisterEventHandler(hci::EventCode::INQUIRY_COMPLETE,
-                                   handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
 }
 
 void neighbor::InquiryModule::impl::UnregisterCallbacks() {
@@ -257,18 +257,21 @@ void neighbor::InquiryModule::impl::UnregisterCallbacks() {
 }
 
 void neighbor::InquiryModule::impl::EnqueueCommandComplete(std::unique_ptr<hci::CommandPacketBuilder> command) {
-  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandComplete));
+  hci_layer_->EnqueueCommand(std::move(command), common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)),
+                             handler_);
 }
 
 void neighbor::InquiryModule::impl::EnqueueCommandStatus(std::unique_ptr<hci::CommandPacketBuilder> command) {
-  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandStatus));
+  hci_layer_->EnqueueCommand(std::move(command), common::BindOnce(&impl::OnCommandStatus, common::Unretained(this)),
+                             handler_);
 }
 
 void neighbor::InquiryModule::impl::EnqueueCommandCompleteSync(std::unique_ptr<hci::CommandPacketBuilder> command) {
   ASSERT(command_sync_ == nullptr);
   command_sync_ = new std::promise<void>();
   auto command_received = command_sync_->get_future();
-  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandCompleteSync));
+  hci_layer_->EnqueueCommand(std::move(command),
+                             common::BindOnce(&impl::OnCommandCompleteSync, common::Unretained(this)), handler_);
   command_received.wait();
   delete command_sync_;
   command_sync_ = nullptr;

@@ -100,7 +100,3 @@ bool PacketField::IsContainerField() const {
 const PacketField* PacketField::GetElementField() const {
   return nullptr;
 }
-
-void PacketField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
-  s << "\"REPRESENTATION_UNIMPLEMENTED " << GetFieldType() << " " << accessor << "\"";
-}
