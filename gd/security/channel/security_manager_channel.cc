@@ -46,7 +46,7 @@ SecurityManagerChannel::SecurityManagerChannel(
   ASSERT_LOG(fixed_channel_manager_ != nullptr, "No channel manager!");
   LOG_DEBUG("Registering for a fixed channel service");
   fixed_channel_manager_->RegisterService(
-      l2cap::kClassicPairingTriggerCid,
+      l2cap::kClassicPairingTriggerCid, security_policy_,
       common::BindOnce(&SecurityManagerChannel::OnRegistrationComplete, common::Unretained(this)),
       common::Bind(&SecurityManagerChannel::OnConnectionOpen, common::Unretained(this)), handler_);
 }
