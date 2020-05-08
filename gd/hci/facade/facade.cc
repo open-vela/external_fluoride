@@ -72,7 +72,8 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     auto packet = std::make_unique<TestCommandBuilder>(
         std::vector<uint8_t>(command->command().begin(), command->command().end()));
     hci_layer_->EnqueueCommand(std::move(packet),
-                               facade_handler_->BindOnceOn(this, &HciLayerFacadeService::on_complete));
+                               common::BindOnce(&HciLayerFacadeService::on_complete, common::Unretained(this)),
+                               facade_handler_);
     return ::grpc::Status::OK;
   }
 
@@ -80,14 +81,17 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
                                           ::google::protobuf::Empty* response) override {
     auto packet = std::make_unique<TestCommandBuilder>(
         std::vector<uint8_t>(command->command().begin(), command->command().end()));
-    hci_layer_->EnqueueCommand(std::move(packet), facade_handler_->BindOnceOn(this, &HciLayerFacadeService::on_status));
+    hci_layer_->EnqueueCommand(std::move(packet),
+                               common::BindOnce(&HciLayerFacadeService::on_status, common::Unretained(this)),
+                               facade_handler_);
     return ::grpc::Status::OK;
   }
 
   ::grpc::Status RegisterEventHandler(::grpc::ServerContext* context, const ::bluetooth::hci::EventCodeMsg* event,
                                       ::google::protobuf::Empty* response) override {
     hci_layer_->RegisterEventHandler(static_cast<EventCode>(event->code()),
-                                     facade_handler_->BindOn(this, &HciLayerFacadeService::on_event));
+                                     common::Bind(&HciLayerFacadeService::on_event, common::Unretained(this)),
+                                     facade_handler_);
     return ::grpc::Status::OK;
   }
 
@@ -95,7 +99,8 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
                                         const ::bluetooth::hci::LeSubeventCodeMsg* event,
                                         ::google::protobuf::Empty* response) override {
     hci_layer_->RegisterLeEventHandler(static_cast<SubeventCode>(event->code()),
-                                       facade_handler_->BindOn(this, &HciLayerFacadeService::on_le_subevent));
+                                       common::Bind(&HciLayerFacadeService::on_le_subevent, common::Unretained(this)),
+                                       facade_handler_);
     return ::grpc::Status::OK;
   }
 
