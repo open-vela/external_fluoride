@@ -152,37 +152,6 @@ void ClassicPairingHandler::OnReceive(hci::IoCapabilityResponseView packet) {
 
   // Using local variable until device database pointer is ready
   remote_io_capability_ = packet.GetIoCapability();
-  remote_authentication_requirements_ = packet.GetAuthenticationRequirements();
-  remote_oob_present_ = packet.GetOobDataPresent();
-  switch (remote_authentication_requirements_) {
-    case hci::AuthenticationRequirements::NO_BONDING:
-      GetRecord()->SetIsEncryptionRequired(false);
-      GetRecord()->SetRequiresMitmProtection(false);
-      break;
-    case hci::AuthenticationRequirements::NO_BONDING_MITM_PROTECTION:
-      GetRecord()->SetIsEncryptionRequired(false);
-      GetRecord()->SetRequiresMitmProtection(true);
-      break;
-    case hci::AuthenticationRequirements::DEDICATED_BONDING:
-      GetRecord()->SetIsEncryptionRequired(true);
-      GetRecord()->SetRequiresMitmProtection(false);
-      break;
-    case hci::AuthenticationRequirements::DEDICATED_BONDING_MITM_PROTECTION:
-      GetRecord()->SetIsEncryptionRequired(true);
-      GetRecord()->SetRequiresMitmProtection(true);
-      break;
-    case hci::AuthenticationRequirements::GENERAL_BONDING:
-      GetRecord()->SetIsEncryptionRequired(true);
-      GetRecord()->SetRequiresMitmProtection(false);
-      break;
-    case hci::AuthenticationRequirements::GENERAL_BONDING_MITM_PROTECTION:
-      GetRecord()->SetIsEncryptionRequired(true);
-      GetRecord()->SetRequiresMitmProtection(true);
-      break;
-    default:
-      GetRecord()->SetRequiresMitmProtection(false);
-      break;
-  }
 }
 
 void ClassicPairingHandler::OnReceive(hci::SimplePairingCompleteView packet) {
@@ -269,7 +238,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
         case hci::IoCapability::DISPLAY_YES_NO:
           // NumericComparison, Initiator auto confirm, Responder display
@@ -277,14 +245,12 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           LOG_INFO("Numeric Comparison: A auto confirm");
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // PassKey Entry, Initiator display, Responder input
           NotifyUiDisplayPasskey(packet.GetNumericValue());
           LOG_INFO("Passkey Entry: A display, B input");
           // Authenticated
-          GetRecord()->SetAuthenticated(true);
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
           // NumericComparison, Both auto confirm
@@ -292,7 +258,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
       }
       break;
@@ -303,28 +268,24 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           LOG_INFO("Numeric Comparison: A DisplayYesNo, B auto confirm");
           NotifyUiDisplayYesNo(packet.GetNumericValue());
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
         case hci::IoCapability::DISPLAY_YES_NO:
           // NumericComparison Both Display, Both confirm
           LOG_INFO("Numeric Comparison: A and B DisplayYesNo");
           NotifyUiDisplayYesNo(packet.GetNumericValue());
           // Authenticated
-          GetRecord()->SetAuthenticated(true);
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // PassKey Entry, Initiator display, Responder input
           NotifyUiDisplayPasskey(packet.GetNumericValue());
           LOG_INFO("Passkey Entry: A display, B input");
           // Authenticated
-          GetRecord()->SetAuthenticated(true);
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
           // NumericComparison, auto confirm Responder, Yes/No confirm Initiator. Don't show confirmation value
           NotifyUiDisplayYesNo();
           LOG_INFO("Numeric Comparison: A DisplayYesNo, B auto confirm, no show value");
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
       }
       break;
@@ -335,21 +296,18 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           NotifyUiDisplayPasskeyInput();
           LOG_INFO("Passkey Entry: A input, B display");
           // Authenticated
-          GetRecord()->SetAuthenticated(true);
           break;
         case hci::IoCapability::DISPLAY_YES_NO:
           // PassKey Entry, Responder display, Initiator input
           NotifyUiDisplayPasskeyInput();
           LOG_INFO("Passkey Entry: A input, B display");
           // Authenticated
-          GetRecord()->SetAuthenticated(true);
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // PassKey Entry, both input
           NotifyUiDisplayPasskeyInput();
           LOG_INFO("Passkey Entry: A input, B input");
           // Authenticated
-          GetRecord()->SetAuthenticated(true);
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
           // NumericComparison, both auto confirm
@@ -357,7 +315,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
       }
       break;
@@ -369,7 +326,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
         case hci::IoCapability::DISPLAY_YES_NO:
           // NumericComparison, Initiator auto confirm, Responder Yes/No confirm, no show conf val
@@ -377,7 +333,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
         case hci::IoCapability::KEYBOARD_ONLY:
           // NumericComparison, both auto confirm
@@ -385,7 +340,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
         case hci::IoCapability::NO_INPUT_NO_OUTPUT:
           // NumericComparison, both auto confirm
@@ -393,7 +347,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           GetChannel()->SendCommand(
               hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress().GetAddress()));
           // Unauthenticated
-          GetRecord()->SetAuthenticated(false);
           break;
       }
       break;
