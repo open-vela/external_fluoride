@@ -38,7 +38,7 @@ class DynamicChannelImpl : public l2cap::internal::ChannelImpl {
 
   virtual ~DynamicChannelImpl() = default;
 
-  hci::AddressWithType GetDevice() const;
+  hci::Address GetDevice() const;
 
   virtual void RegisterOnCloseCallback(os::Handler* user_handler, DynamicChannel::OnCloseCallback on_close_callback);
 
@@ -84,7 +84,7 @@ class DynamicChannelImpl : public l2cap::internal::ChannelImpl {
   // Internal states
   bool closed_ = false;
   hci::ErrorCode close_reason_ = hci::ErrorCode::SUCCESS;
-  static constexpr size_t kChannelQueueSize = 5;
+  static constexpr size_t kChannelQueueSize = 10;
   common::BidiQueue<packet::PacketView<packet::kLittleEndian>, packet::BasePacketBuilder> channel_queue_{
       kChannelQueueSize};
 
