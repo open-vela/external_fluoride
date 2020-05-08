@@ -18,10 +18,10 @@
 
 #include "l2cap/cid.h"
 #include "l2cap/classic/internal/link.h"
+#include "l2cap/classic/security_policy.h"
 #include "l2cap/internal/dynamic_channel_impl.h"
 #include "l2cap/internal/sender.h"
 #include "l2cap/psm.h"
-#include "l2cap/security_policy.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -40,8 +40,8 @@ DynamicChannelImpl::DynamicChannelImpl(Psm psm, Cid cid, Cid remote_cid, l2cap::
   ASSERT(l2cap_handler_ != nullptr);
 }
 
-hci::Address DynamicChannelImpl::GetDevice() const {
-  return device_.GetAddress();
+hci::AddressWithType DynamicChannelImpl::GetDevice() const {
+  return device_;
 }
 
 void DynamicChannelImpl::RegisterOnCloseCallback(os::Handler* user_handler,
