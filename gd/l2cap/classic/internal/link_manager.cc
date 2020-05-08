@@ -56,7 +56,7 @@ void LinkManager::ConnectFixedChannelServices(hci::Address device,
         this->TriggerPairing(link);
       }
       // Allocate channel for newly registered fixed channels
-      auto fixed_channel_impl = link->AllocateFixedChannel(fixed_channel_service.first);
+      auto fixed_channel_impl = link->AllocateFixedChannel(fixed_channel_service.first, classic::SecurityPolicy());
       fixed_channel_service.second->NotifyChannelCreation(
           std::make_unique<FixedChannel>(fixed_channel_impl, l2cap_handler_));
       num_new_channels++;
@@ -98,8 +98,7 @@ void LinkManager::ConnectDynamicChannelServices(
     }
     return;
   }
-  if (dynamic_channel_service_manager_->GetService(psm)->GetSecurityPolicy() !=
-          SecurityPolicy::_SDP_ONLY_NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK &&
+  if (dynamic_channel_service_manager_->GetService(psm)->GetSecurityPolicy().RequiresAuthentication() &&
       !link->IsAuthenticated()) {
     link->AddChannelPendingingAuthentication(
         {psm, link->ReserveDynamicChannel(), std::move(pending_dynamic_channel_connection)});
@@ -141,7 +140,7 @@ void LinkManager::OnConnectSuccess(std::unique_ptr<hci::acl_manager::ClassicAclC
   // Allocate and distribute channels for all registered fixed channel services
   auto fixed_channel_services = fixed_channel_service_manager_->GetRegisteredServices();
   for (auto& fixed_channel_service : fixed_channel_services) {
-    auto fixed_channel_impl = link->AllocateFixedChannel(fixed_channel_service.first);
+    auto fixed_channel_impl = link->AllocateFixedChannel(fixed_channel_service.first, classic::SecurityPolicy());
     fixed_channel_service.second->NotifyChannelCreation(
         std::make_unique<FixedChannel>(fixed_channel_impl, l2cap_handler_));
     if (fixed_channel_service.first == kClassicPairingTriggerCid) {
