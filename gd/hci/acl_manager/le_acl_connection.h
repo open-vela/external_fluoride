@@ -42,10 +42,6 @@ class LeAclConnection : public AclConnection {
     return remote_address_;
   }
 
-  virtual Role GetRole() const {
-    return role_;
-  }
-
   virtual void RegisterCallbacks(LeConnectionManagementCallbacks* callbacks, os::Handler* handler);
   virtual void Disconnect(DisconnectReason reason);
 
@@ -60,7 +56,6 @@ class LeAclConnection : public AclConnection {
   struct impl* pimpl_ = nullptr;
   AddressWithType local_address_;
   AddressWithType remote_address_;
-  Role role_;
   DISALLOW_COPY_AND_ASSIGN(LeAclConnection);
 };
 
