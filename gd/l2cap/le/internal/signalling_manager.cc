@@ -56,9 +56,8 @@ LeSignallingManager::~LeSignallingManager() {
 }
 
 void LeSignallingManager::SendConnectionRequest(Psm psm, Cid local_cid, Mtu mtu) {
-  PendingCommand pending_command = {
-      next_signal_id_, LeCommandCode::LE_CREDIT_BASED_CONNECTION_REQUEST, psm, local_cid, {}, mtu, link_->GetMps(),
-      link_->GetInitialCredit()};
+  PendingCommand pending_command = PendingCommand::CreditBasedConnectionRequest(
+      next_signal_id_, psm, local_cid, mtu, link_->GetMps(), link_->GetInitialCredit());
   next_signal_id_++;
   pending_commands_.push(pending_command);
   if (pending_commands_.size() == 1) {
@@ -66,9 +65,8 @@ void LeSignallingManager::SendConnectionRequest(Psm psm, Cid local_cid, Mtu mtu)
   }
 }
 
-void LeSignallingManager::SendDisconnectRequest(Cid local_cid, Cid remote_cid) {
-  PendingCommand pending_command = {
-      next_signal_id_, LeCommandCode::DISCONNECTION_REQUEST, {}, local_cid, remote_cid, {}, {}, {}};
+void LeSignallingManager::SendDisconnectRequest(Cid scid, Cid dcid) {
+  PendingCommand pending_command = PendingCommand::DisconnectionRequest(next_signal_id_, scid, dcid);
   next_signal_id_++;
   pending_commands_.push(pending_command);
   if (pending_commands_.size() == 1) {
@@ -78,7 +76,13 @@ void LeSignallingManager::SendDisconnectRequest(Cid local_cid, Cid remote_cid) {
 
 void LeSignallingManager::SendConnectionParameterUpdateRequest(uint16_t interval_min, uint16_t interval_max,
                                                                uint16_t slave_latency, uint16_t timeout_multiplier) {
-  LOG_ERROR("Not implemented");
+  PendingCommand pending_command = PendingCommand::ConnectionParameterUpdate(
+      next_signal_id_, interval_min, interval_max, slave_latency, timeout_multiplier);
+  next_signal_id_++;
+  pending_commands_.push(pending_command);
+  if (pending_commands_.size() == 1) {
+    handle_send_next_command();
+  }
 }
 
 void LeSignallingManager::SendConnectionParameterUpdateResponse(SignalId signal_id,
@@ -99,23 +103,55 @@ void LeSignallingManager::CancelAlarm() {
 
 void LeSignallingManager::OnCommandReject(LeCommandRejectView command_reject_view) {
   auto signal_id = command_reject_view.GetIdentifier();
-  if (signal_id != command_just_sent_.signal_id_ || command_just_sent_.command_code_ != command_reject_view.GetCode()) {
+  if (signal_id != command_just_sent_.signal_id_) {
     LOG_WARN("Unexpected response: no pending request");
     return;
   }
   alarm_.Cancel();
+  if (command_just_sent_.command_code_ == LeCommandCode::LE_CREDIT_BASED_CONNECTION_REQUEST) {
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
+                                           LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
+  }
   handle_send_next_command();
 
   LOG_WARN("Command rejected");
 }
 
-void LeSignallingManager::OnConnectionParameterUpdateRequest(uint16_t interval_min, uint16_t interval_max,
-                                                             uint16_t slave_latency, uint16_t timeout_multiplier) {
-  LOG_ERROR("Not implemented");
+void LeSignallingManager::OnConnectionParameterUpdateRequest(SignalId signal_id, uint16_t interval_min,
+                                                             uint16_t interval_max, uint16_t slave_latency,
+                                                             uint16_t timeout_multiplier) {
+  if (link_->GetRole() == hci::Role::SLAVE) {
+    LOG_WARN("Received request from LL master");
+    auto builder = LeCommandRejectNotUnderstoodBuilder::Create(signal_id.Value());
+    enqueue_buffer_->Enqueue(std::move(builder), handler_);
+    return;
+  }
+  if (interval_min < 6 || interval_min > 3200 || interval_max < 6 || interval_max > 3200 || slave_latency >= 500 ||
+      timeout_multiplier < 10 || timeout_multiplier > 3200) {
+    LOG_WARN("Received invalid connection parameter update request from LL master");
+    auto builder = ConnectionParameterUpdateResponseBuilder::Create(signal_id.Value(),
+                                                                    ConnectionParameterUpdateResponseResult::REJECTED);
+    enqueue_buffer_->Enqueue(std::move(builder), handler_);
+    return;
+  }
+  link_->UpdateConnectionParameterFromRemote(signal_id, interval_min, interval_max, slave_latency, timeout_multiplier);
 }
 
-void LeSignallingManager::OnConnectionParameterUpdateResponse(ConnectionParameterUpdateResponseResult result) {
-  LOG_ERROR("Not implemented");
+void LeSignallingManager::OnConnectionParameterUpdateResponse(SignalId signal_id,
+                                                              ConnectionParameterUpdateResponseResult result) {
+  if (signal_id != command_just_sent_.signal_id_) {
+    LOG_WARN("Unexpected response: no pending request");
+    return;
+  }
+  if (command_just_sent_.command_code_ != LeCommandCode::CONNECTION_PARAMETER_UPDATE_REQUEST) {
+    LOG_WARN("Unexpected response: no pending request");
+    return;
+  }
+  alarm_.Cancel();
+  command_just_sent_.signal_id_ = kInitialSignalId;
+  if (result != ConnectionParameterUpdateResponseResult::ACCEPTED) {
+    LOG_ERROR("Connection parameter update is not accepted");
+  }
 }
 
 void LeSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, Cid remote_cid, Mtu mtu, uint16_t mps,
@@ -149,26 +185,49 @@ void LeSignallingManager::OnConnectionRequest(SignalId signal_id, Psm psm, Cid r
   }
 
   auto* service = dynamic_service_manager_->GetService(psm);
+  auto security_policy = service->GetSecurityPolicy();
+  switch (security_policy.security_level_) {
+    case SecurityPolicy::Level::NO_SECURITY:
+      break;
+    // Security module is not integrated so far. Other levels are not supported
+    case SecurityPolicy::Level::UNAUTHENTICATED_PAIRING_WITH_ENCRYPTION:
+      send_connection_response(signal_id, kInvalidCid, 0, 0, 0,
+                               LeCreditBasedConnectionResponseResult::INSUFFICIENT_AUTHENTICATION);
+      return;
+    case SecurityPolicy::Level::AUTHENTICATED_PAIRING_WITH_ENCRYPTION:
+      send_connection_response(signal_id, kInvalidCid, 0, 0, 0,
+                               LeCreditBasedConnectionResponseResult::INSUFFICIENT_AUTHENTICATION);
+      return;
+    case SecurityPolicy::Level::AUTHENTICATED_PAIRING_WITH_128_BIT_KEY:
+      send_connection_response(signal_id, kInvalidCid, 0, 0, 0,
+                               LeCreditBasedConnectionResponseResult::INSUFFICIENT_ENCRYPTION_KEY_SIZE);
+      return;
+    case SecurityPolicy::Level::AUTHORIZATION:
+      send_connection_response(signal_id, kInvalidCid, 0, 0, 0,
+                               LeCreditBasedConnectionResponseResult::INSUFFICIENT_AUTHORIZATION);
+      return;
+  }
   auto config = service->GetConfigOption();
   auto local_mtu = config.mtu;
   auto local_mps = link_->GetMps();
 
-  auto new_channel = link_->AllocateDynamicChannel(psm, remote_cid, {});
+  auto new_channel = link_->AllocateDynamicChannel(psm, remote_cid);
   if (new_channel == nullptr) {
     LOG_WARN("Can't allocate dynamic channel");
+    // TODO: We need to respond with the correct reason
     send_connection_response(signal_id, kInvalidCid, 0, 0, 0,
-                             LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
+                             LeCreditBasedConnectionResponseResult::SOURCE_CID_ALREADY_ALLOCATED);
 
     return;
   }
-  send_connection_response(signal_id, remote_cid, local_mtu, local_mps, link_->GetInitialCredit(),
+  send_connection_response(signal_id, new_channel->GetCid(), local_mtu, local_mps, link_->GetInitialCredit(),
                            LeCreditBasedConnectionResponseResult::SUCCESS);
   auto* data_controller = reinterpret_cast<l2cap::internal::LeCreditBasedDataController*>(
       data_pipeline_manager_->GetDataController(new_channel->GetCid()));
   data_controller->SetMtu(std::min(mtu, local_mtu));
   data_controller->SetMps(std::min(mps, local_mps));
   data_controller->OnCredit(initial_credits);
-  auto user_channel = std::make_unique<DynamicChannel>(new_channel, handler_);
+  auto user_channel = std::make_unique<DynamicChannel>(new_channel, handler_, link_);
   dynamic_service_manager_->GetService(psm)->NotifyChannelCreation(std::move(user_channel));
 }
 
@@ -186,15 +245,16 @@ void LeSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remote_ci
   command_just_sent_.signal_id_ = kInitialSignalId;
   if (result != LeCreditBasedConnectionResponseResult::SUCCESS) {
     LOG_WARN("Connection failed: %s", LeCreditBasedConnectionResponseResultText(result).data());
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_, result);
     handle_send_next_command();
     return;
   }
   auto new_channel =
-      link_->AllocateReservedDynamicChannel(command_just_sent_.source_cid_, command_just_sent_.psm_, remote_cid, {});
+      link_->AllocateReservedDynamicChannel(command_just_sent_.source_cid_, command_just_sent_.psm_, remote_cid);
   if (new_channel == nullptr) {
     LOG_WARN("Can't allocate dynamic channel");
-    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
+    link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
+                                           LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
     handle_send_next_command();
     return;
   }
@@ -203,7 +263,7 @@ void LeSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remote_ci
   data_controller->SetMtu(std::min(mtu, command_just_sent_.mtu_));
   data_controller->SetMps(std::min(mps, command_just_sent_.mps_));
   data_controller->OnCredit(initial_credits);
-  std::unique_ptr<DynamicChannel> user_channel = std::make_unique<DynamicChannel>(new_channel, handler_);
+  std::unique_ptr<DynamicChannel> user_channel = std::make_unique<DynamicChannel>(new_channel, handler_, link_);
   dynamic_service_manager_->GetService(command_just_sent_.psm_)->NotifyChannelCreation(std::move(user_channel));
 }
 
@@ -223,7 +283,7 @@ void LeSignallingManager::OnDisconnectionRequest(SignalId signal_id, Cid cid, Ci
   link_->FreeDynamicChannel(cid);
 }
 
-void LeSignallingManager::OnDisconnectionResponse(SignalId signal_id, Cid cid, Cid remote_cid) {
+void LeSignallingManager::OnDisconnectionResponse(SignalId signal_id, Cid remote_cid, Cid cid) {
   if (signal_id != command_just_sent_.signal_id_ ||
       command_just_sent_.command_code_ != LeCommandCode::DISCONNECTION_REQUEST) {
     LOG_WARN("Unexpected response: no pending request");
@@ -285,8 +345,9 @@ void LeSignallingManager::on_incoming_packet() {
         return;
       }
       OnConnectionParameterUpdateRequest(
-          parameter_update_req_view.GetIntervalMin(), parameter_update_req_view.GetIntervalMax(),
-          parameter_update_req_view.GetSlaveLatency(), parameter_update_req_view.GetTimeoutMultiplier());
+          parameter_update_req_view.GetIdentifier(), parameter_update_req_view.GetIntervalMin(),
+          parameter_update_req_view.GetIntervalMax(), parameter_update_req_view.GetSlaveLatency(),
+          parameter_update_req_view.GetTimeoutMultiplier());
       return;
     }
     case LeCommandCode::CONNECTION_PARAMETER_UPDATE_RESPONSE: {
@@ -295,7 +356,8 @@ void LeSignallingManager::on_incoming_packet() {
       if (!parameter_update_rsp_view.IsValid()) {
         return;
       }
-      OnConnectionParameterUpdateResponse(parameter_update_rsp_view.GetResult());
+      OnConnectionParameterUpdateResponse(parameter_update_rsp_view.GetIdentifier(),
+                                          parameter_update_rsp_view.GetResult());
       return;
     }
     case LeCommandCode::LE_CREDIT_BASED_CONNECTION_REQUEST: {
@@ -372,7 +434,8 @@ void LeSignallingManager::on_command_timeout() {
   }
   switch (command_just_sent_.command_code_) {
     case LeCommandCode::CONNECTION_PARAMETER_UPDATE_REQUEST: {
-      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
+      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_,
+                                             LeCreditBasedConnectionResponseResult::NO_RESOURCES_AVAILABLE);
       break;
     }
     default:
@@ -401,6 +464,14 @@ void LeSignallingManager::handle_send_next_command() {
     case LeCommandCode::DISCONNECTION_REQUEST: {
       auto builder = LeDisconnectionRequestBuilder::Create(
           command_just_sent_.signal_id_.Value(), command_just_sent_.destination_cid_, command_just_sent_.source_cid_);
+      enqueue_buffer_->Enqueue(std::move(builder), handler_);
+      alarm_.Schedule(common::BindOnce(&LeSignallingManager::on_command_timeout, common::Unretained(this)), kTimeout);
+      break;
+    }
+    case LeCommandCode::CONNECTION_PARAMETER_UPDATE_REQUEST: {
+      auto builder = ConnectionParameterUpdateRequestBuilder::Create(
+          command_just_sent_.signal_id_.Value(), command_just_sent_.interval_min_, command_just_sent_.interval_max_,
+          command_just_sent_.slave_latency_, command_just_sent_.timeout_multiplier_);
       enqueue_buffer_->Enqueue(std::move(builder), handler_);
       alarm_.Schedule(common::BindOnce(&LeSignallingManager::on_command_timeout, common::Unretained(this)), kTimeout);
       break;
