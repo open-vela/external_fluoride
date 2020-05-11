@@ -1,8 +1,12 @@
 filegroup {
     name: "BluetoothHciSources",
     srcs: [
+        "acl_manager/acl_connection.cc",
+        "acl_manager/classic_acl_connection.cc",
+        "acl_manager/le_acl_connection.cc",
+        "acl_manager/round_robin_scheduler.cc",
+        "acl_manager/acl_fragmenter.cc",
         "acl_manager.cc",
-        "acl_fragmenter.cc",
         "address.cc",
         "class_of_device.cc",
         "controller.cc",
@@ -18,6 +22,7 @@ filegroup {
     name: "BluetoothHciTestSources",
     srcs: [
         "acl_builder_test.cc",
+        "acl_manager/round_robin_scheduler_test.cc",
         "acl_manager_test.cc",
         "address_unittest.cc",
         "address_with_type_test.cc",
@@ -51,3 +56,13 @@ filegroup {
         "hci_packets_fuzz_test.cc",
     ],
 }
+
+filegroup {
+    name: "BluetoothHciFuzzHelperSources",
+    srcs: [
+        "fuzz/status_vs_complete_commands.cc",
+        "fuzz/hci_layer_fuzz_client.cc",
+        "fuzz/fuzz_hci_layer.cc",
+    ],
+}
+
