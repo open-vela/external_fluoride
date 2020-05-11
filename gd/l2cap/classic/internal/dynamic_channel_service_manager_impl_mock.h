@@ -16,7 +16,6 @@
 #pragma once
 
 #include "l2cap/classic/internal/dynamic_channel_service_manager_impl.h"
-#include "l2cap/classic/security_module_interface.h"
 #include "l2cap/internal/dynamic_channel_impl.h"
 
 #include <gmock/gmock.h>
@@ -38,7 +37,6 @@ class MockDynamicChannelServiceManagerImpl : public DynamicChannelServiceManager
   MOCK_METHOD(bool, IsServiceRegistered, (Psm psm), (const, override));
   MOCK_METHOD(DynamicChannelServiceImpl*, GetService, (Psm psm), (override));
   MOCK_METHOD((std::vector<std::pair<Psm, DynamicChannelServiceImpl*>>), GetRegisteredServices, (), (override));
-  MOCK_METHOD(SecurityModuleInterface*, GetSecurityModuleInterface, (), (override));
 };
 
 }  // namespace testing
