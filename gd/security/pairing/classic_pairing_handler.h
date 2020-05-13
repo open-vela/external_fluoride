@@ -33,25 +33,19 @@ class ISecurityManagerListener;
 
 namespace pairing {
 
-static constexpr hci::IoCapability kDefaultIoCapability = hci::IoCapability::DISPLAY_YES_NO;
-static constexpr hci::OobDataPresent kDefaultOobDataPresent = hci::OobDataPresent::NOT_PRESENT;
-static constexpr hci::AuthenticationRequirements kDefaultAuthenticationRequirements =
-    hci::AuthenticationRequirements::DEDICATED_BONDING_MITM_PROTECTION;
-
 class ClassicPairingHandler : public PairingHandler {
  public:
-  ClassicPairingHandler(std::shared_ptr<l2cap::classic::FixedChannelManager> fixed_channel_manager,
-                        channel::SecurityManagerChannel* security_manager_channel,
+  ClassicPairingHandler(channel::SecurityManagerChannel* security_manager_channel,
                         std::shared_ptr<record::SecurityRecord> record, os::Handler* security_handler,
                         common::OnceCallback<void(hci::Address, PairingResultOrFailure)> complete_callback,
                         UI* user_interface, os::Handler* user_interface_handler, std::string device_name)
-      : PairingHandler(security_manager_channel, std::move(record)),
-        fixed_channel_manager_(std::move(fixed_channel_manager)), security_policy_(),
-        security_handler_(security_handler), remote_io_capability_(kDefaultIoCapability),
-        local_io_capability_(kDefaultIoCapability), local_oob_present_(kDefaultOobDataPresent),
-        local_authentication_requirements_(kDefaultAuthenticationRequirements),
+      : PairingHandler(security_manager_channel, std::move(record)), security_handler_(security_handler),
+        remote_io_capability_(hci::IoCapability::DISPLAY_YES_NO), remote_oob_present_(hci::OobDataPresent::NOT_PRESENT),
+        remote_authentication_requirements_(hci::AuthenticationRequirements::DEDICATED_BONDING_MITM_PROTECTION),
+        local_io_capability_(hci::IoCapability::DISPLAY_YES_NO), local_oob_present_(hci::OobDataPresent::NOT_PRESENT),
+        local_authentication_requirements_(hci::AuthenticationRequirements::DEDICATED_BONDING_MITM_PROTECTION),
         complete_callback_(std::move(complete_callback)), user_interface_(user_interface),
-        user_interface_handler_(user_interface_handler), device_name_(device_name) {}
+        user_interface_handler_(user_interface_handler), device_name_(std::move(device_name)) {}
 
   ~ClassicPairingHandler() override = default;
 
@@ -81,12 +75,6 @@ class ClassicPairingHandler : public PairingHandler {
   void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
 
  private:
-  void OnRegistrationComplete(l2cap::classic::FixedChannelManager::RegistrationResult result,
-                              std::unique_ptr<l2cap::classic::FixedChannelService> fixed_channel_service);
-  void OnUnregistered();
-  void OnConnectionOpen(std::unique_ptr<l2cap::classic::FixedChannel> fixed_channel);
-  void OnConnectionFail(l2cap::classic::FixedChannelManager::ConnectionResult result);
-  void OnConnectionClose(hci::ErrorCode error_code);
   void OnUserInput(bool user_input);
   void OnPasskeyInput(uint32_t passkey);
   void NotifyUiDisplayYesNo(uint32_t numeric_value);
@@ -97,21 +85,20 @@ class ClassicPairingHandler : public PairingHandler {
   void UserClickedYes();
   void UserClickedNo();
 
-  std::shared_ptr<l2cap::classic::FixedChannelManager> fixed_channel_manager_;
-  std::unique_ptr<l2cap::classic::FixedChannelService> fixed_channel_service_{nullptr};
-  l2cap::SecurityPolicy security_policy_ __attribute__((unused));
   os::Handler* security_handler_ __attribute__((unused));
-  hci::IoCapability remote_io_capability_ __attribute__((unused));
-  hci::IoCapability local_io_capability_ __attribute__((unused));
+  hci::IoCapability remote_io_capability_;
+  hci::OobDataPresent remote_oob_present_ __attribute__((unused));
+  hci::AuthenticationRequirements remote_authentication_requirements_ __attribute__((unused));
+  hci::IoCapability local_io_capability_;
   hci::OobDataPresent local_oob_present_ __attribute__((unused));
   hci::AuthenticationRequirements local_authentication_requirements_ __attribute__((unused));
-  std::unique_ptr<l2cap::classic::FixedChannel> fixed_channel_{nullptr};
   common::OnceCallback<void(hci::Address, PairingResultOrFailure)> complete_callback_;
   UI* user_interface_;
   os::Handler* user_interface_handler_;
   std::string device_name_;
+  bool is_cancelled_ = false;
 
-  hci::ErrorCode last_status_;
+  hci::ErrorCode last_status_ = hci::ErrorCode::UNKNOWN_HCI_COMMAND;
   bool locally_initiated_ = false;
   uint32_t passkey_ = 0;
 };
