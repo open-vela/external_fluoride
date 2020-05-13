@@ -1912,12 +1912,6 @@ static bt_status_t get_element_attr_rsp(const RawAddress& bd_addr,
   BTIF_TRACE_DEBUG("%s", __func__);
   CHECK_RC_CONNECTED(p_dev);
 
-  if (num_attr > BTRC_MAX_ELEM_ATTR_SIZE) {
-    LOG(WARNING) << __func__
-                 << " Exceeded number attributes:" << static_cast<int>(num_attr)
-                 << " max:" << BTRC_MAX_ELEM_ATTR_SIZE;
-    num_attr = BTRC_MAX_ELEM_ATTR_SIZE;
-  }
   memset(element_attrs, 0, sizeof(tAVRC_ATTR_ENTRY) * num_attr);
 
   if (num_attr == 0) {
@@ -1926,8 +1920,7 @@ static bt_status_t get_element_attr_rsp(const RawAddress& bd_addr,
     for (i = 0; i < num_attr; i++) {
       element_attrs[i].attr_id = p_attrs[i].attr_id;
       element_attrs[i].name.charset_id = AVRC_CHARSET_ID_UTF8;
-      element_attrs[i].name.str_len =
-          (uint16_t)strnlen((char*)p_attrs[i].text, BTRC_MAX_ATTR_STR_LEN);
+      element_attrs[i].name.str_len = (uint16_t)strlen((char*)p_attrs[i].text);
       element_attrs[i].name.p_str = p_attrs[i].text;
       BTIF_TRACE_DEBUG(
           "%s: attr_id: 0x%x, charset_id: 0x%x, str_len: %d, str: %s", __func__,
@@ -4637,6 +4630,28 @@ static bt_status_t get_player_app_setting_cmd(uint8_t num_attrib,
 
 /***************************************************************************
  *
+ * Function         get_current_metadata_cmd
+ *
+ * Description      Fetch the current track metadata for the device
+ *
+ * Returns          BT_STATUS_SUCCESS if command issued successfully otherwise
+ *                  BT_STATUS_FAIL.
+ *
+ **************************************************************************/
+static bt_status_t get_current_metadata_cmd(const RawAddress& bd_addr) {
+  BTIF_TRACE_DEBUG("%s", __func__);
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_bda(bd_addr);
+  if (p_dev == NULL) {
+    BTIF_TRACE_ERROR("%s: p_dev NULL", __func__);
+    return BT_STATUS_FAIL;
+  }
+  const uint32_t* attr_list = get_requested_attributes_list(p_dev);
+  const uint8_t attr_list_size = get_requested_attributes_list_size(p_dev);
+  return get_metadata_attribute_cmd(attr_list_size, attr_list, p_dev);
+}
+
+/***************************************************************************
+ *
  * Function         get_playback_state_cmd
  *
  * Description      Fetch the current playback state for the device
@@ -5313,6 +5328,7 @@ static const btrc_ctrl_interface_t bt_rc_ctrl_interface = {
     send_groupnavigation_cmd,
     change_player_app_setting,
     play_item_cmd,
+    get_current_metadata_cmd,
     get_playback_state_cmd,
     get_now_playing_list_cmd,
     get_folder_list_cmd,
