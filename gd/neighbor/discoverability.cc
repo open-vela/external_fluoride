@@ -92,9 +92,9 @@ void neighbor::DiscoverabilityModule::impl::OnCommandComplete(hci::CommandComple
 void neighbor::DiscoverabilityModule::impl::StartDiscoverability(std::vector<hci::Lap>& laps) {
   ASSERT(laps.size() <= num_supported_iac_);
   hci_layer_->EnqueueCommand(hci::WriteCurrentIacLapBuilder::Create(laps),
-                             handler_->BindOnceOn(this, &impl::OnCommandComplete));
+                             common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)), handler_);
   hci_layer_->EnqueueCommand(hci::ReadCurrentIacLapBuilder::Create(),
-                             handler_->BindOnceOn(this, &impl::OnCommandComplete));
+                             common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)), handler_);
   scan_module_->SetInquiryScan();
 }
 
@@ -116,10 +116,10 @@ void neighbor::DiscoverabilityModule::impl::Start() {
   handler_ = module_.GetHandler();
 
   hci_layer_->EnqueueCommand(hci::ReadCurrentIacLapBuilder::Create(),
-                             handler_->BindOnceOn(this, &impl::OnCommandComplete));
+                             common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)), handler_);
 
   hci_layer_->EnqueueCommand(hci::ReadNumberOfSupportedIacBuilder::Create(),
-                             handler_->BindOnceOn(this, &impl::OnCommandComplete));
+                             common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)), handler_);
   LOG_DEBUG("Started discoverability module");
 }
 
