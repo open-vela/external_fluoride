@@ -17,7 +17,6 @@
 #include <mutex>
 #include <set>
 
-#include "hci/acl_manager.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
@@ -41,20 +40,13 @@ enum class ScanApiType {
   LE_5_0 = 3,
 };
 
-struct LeScanningManager::impl : public bluetooth::hci::LeAddressRotatorCallback {
+struct LeScanningManager::impl {
   impl(Module* module) : module_(module), le_scanning_interface_(nullptr) {}
 
-  ~impl() {
-    le_address_rotator_->Unregister(this);
-  }
-
-  void start(os::Handler* handler, hci::HciLayer* hci_layer, hci::Controller* controller,
-             hci::AclManager* acl_manager) {
+  void start(os::Handler* handler, hci::HciLayer* hci_layer, hci::Controller* controller) {
     module_handler_ = handler;
     hci_layer_ = hci_layer;
     controller_ = controller;
-    le_address_rotator_ = acl_manager->GetLeAddressRotator();
-    le_address_rotator_->Register(this);
     le_scanning_interface_ = hci_layer_->GetLeScanningInterface(
         module_handler_->BindOn(this, &LeScanningManager::impl::handle_scan_results));
     if (controller_->IsSupported(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS)) {
@@ -189,34 +181,14 @@ struct LeScanningManager::impl : public bluetooth::hci::LeAddressRotatorCallback
     }
   }
 
-  void OnPause() override {
-    if (registered_callback_ == nullptr) {
-      le_address_rotator_->AckPause(this);
-    } else {
-      stop_scan(common::Bind(&impl::ack_pause, common::Unretained(this)));
-    }
-  }
-
-  void ack_pause() {
-    le_address_rotator_->AckPause(this);
-  }
-
-  void OnResume() override {
-    if (registered_callback_ != nullptr) {
-      start_scan(registered_callback_);
-    }
-    le_address_rotator_->AckResume(this);
-  }
-
   ScanApiType api_type_;
 
-  LeScanningManagerCallbacks* registered_callback_ = nullptr;
+  LeScanningManagerCallbacks* registered_callback_;
   Module* module_;
   os::Handler* module_handler_;
   hci::HciLayer* hci_layer_;
   hci::Controller* controller_;
   hci::LeScanningInterface* le_scanning_interface_;
-  hci::LeAddressRotator* le_address_rotator_;
 
   uint32_t interval_ms_{1000};
   uint16_t window_ms_{1000};
@@ -263,12 +235,10 @@ LeScanningManager::LeScanningManager() {
 void LeScanningManager::ListDependencies(ModuleList* list) {
   list->add<hci::HciLayer>();
   list->add<hci::Controller>();
-  list->add<hci::AclManager>();
 }
 
 void LeScanningManager::Start() {
-  pimpl_->start(GetHandler(), GetDependency<hci::HciLayer>(), GetDependency<hci::Controller>(),
-                GetDependency<AclManager>());
+  pimpl_->start(GetHandler(), GetDependency<hci::HciLayer>(), GetDependency<hci::Controller>());
 }
 
 void LeScanningManager::Stop() {
