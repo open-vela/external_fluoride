@@ -17,7 +17,6 @@
 #pragma once
 
 #include <unistd.h>
-
 #include <functional>
 #include <mutex>
 #include <queue>
