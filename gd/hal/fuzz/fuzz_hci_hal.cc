@@ -15,7 +15,6 @@
  */
 
 #include "hal/fuzz/fuzz_hci_hal.h"
-
 #include "fuzz/helpers.h"
 #include "hci/fuzz/status_vs_complete_commands.h"
 
