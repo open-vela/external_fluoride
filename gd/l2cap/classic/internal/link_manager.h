@@ -26,7 +26,6 @@
 #include "l2cap/classic/internal/dynamic_channel_service_manager_impl.h"
 #include "l2cap/classic/internal/fixed_channel_service_manager_impl.h"
 #include "l2cap/classic/internal/link.h"
-#include "l2cap/classic/link_security_interface.h"
 #include "l2cap/internal/parameter_provider.h"
 #include "l2cap/internal/scheduler.h"
 #include "os/handler.h"
@@ -73,12 +72,6 @@ class LinkManager : public hci::acl_manager::ConnectionCallbacks {
   void ConnectDynamicChannelServices(hci::Address device,
                                      Link::PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm);
 
-  // For SecurityModule to initiate an ACL link
-  void InitiateConnectionForSecurity(hci::Address remote);
-
-  // LinkManager will handle sending OnLinkConnected() callback and construct a LinkSecurityInterface proxy.
-  void RegisterLinkSecurityInterfaceListener(os::Handler* handler, LinkSecurityInterfaceListener* listener);
-
  private:
   void TriggerPairing(Link* link);
 
@@ -95,8 +88,6 @@ class LinkManager : public hci::acl_manager::ConnectionCallbacks {
   std::unordered_map<hci::Address, std::list<Psm>> pending_dynamic_channels_;
   std::unordered_map<hci::Address, std::list<Link::PendingDynamicChannelConnection>>
       pending_dynamic_channels_callbacks_;
-  os::Handler* link_security_interface_listener_handler_ = nullptr;
-  LinkSecurityInterfaceListener* link_security_interface_listener_ = nullptr;
   DISALLOW_COPY_AND_ASSIGN(LinkManager);
 };
 
