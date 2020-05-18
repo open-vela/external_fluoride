@@ -15,8 +15,6 @@
  */
 #define LOG_TAG "bt_gd_shim"
 
-#include "shim/dumpsys.h"
-
 #include <algorithm>
 #include <functional>
 #include <future>
@@ -28,6 +26,7 @@
 #include "module.h"
 #include "os/handler.h"
 #include "os/log.h"
+#include "shim/dumpsys.h"
 
 namespace bluetooth {
 namespace shim {
@@ -86,10 +85,8 @@ void Dumpsys::impl::DumpWithArgs(int fd, const char** args, std::promise<void> p
     // TODO(cmanton) Create typical Dumper
   }
 
-  std::for_each(
-      dumpsys_functions_.begin(), dumpsys_functions_.end(), [fd](std::pair<const void*, DumpsysFunction> element) {
-        element.second(fd);
-      });
+  std::for_each(dumpsys_functions_.begin(), dumpsys_functions_.end(),
+                [fd](std::pair<const void*, DumpsysFunction> element) { element.second(fd); });
   promise.set_value();
 }
 
