@@ -53,15 +53,23 @@ class TestController : public Controller {
     return le_buffer_size;
   }
 
-  void RegisterCompletedAclPacketsCallback(CompletedAclPacketsCallback cb) {
+  void RegisterCompletedAclPacketsCallback(common::Callback<void(uint16_t /* handle */, uint16_t /* num_packets */)> cb,
+                                           os::Handler* handler) {
+    acl_credits_handler_ = handler;
     acl_credits_callback_ = cb;
   }
 
-  void SendCompletedAclPacketsCallback(uint16_t handle, uint16_t credits) {
-    acl_credits_callback_.Invoke(handle, credits);
+  std::future<void> SendCompletedAclPacketsCallback(uint16_t handle, uint16_t credits) {
+    auto promise = std::make_unique<std::promise<void>>();
+    auto future = promise->get_future();
+    acl_credits_handler_->Post(Bind(acl_credits_callback_, handle, credits));
+    acl_credits_handler_->Post(common::BindOnce(
+        [](std::unique_ptr<std::promise<void>> promise) mutable { promise->set_value(); }, std::move(promise)));
+    return future;
   }
 
   void UnregisterCompletedAclPacketsCallback() {
+    acl_credits_handler_ = nullptr;
     acl_credits_callback_ = {};
   }
 
@@ -71,7 +79,8 @@ class TestController : public Controller {
   const uint16_t le_hci_mtu_ = 27;
 
  private:
-  CompletedAclPacketsCallback acl_credits_callback_;
+  Handler* acl_credits_handler_;
+  Callback<void(uint16_t, uint16_t)> acl_credits_callback_;
 };
 
 class RoundRobinSchedulerTest : public ::testing::Test {
@@ -92,14 +101,6 @@ class RoundRobinSchedulerTest : public ::testing::Test {
     handler_->Clear();
     delete handler_;
     delete thread_;
-  }
-
-  void sync_handler() {
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    handler_->BindOnceOn(&promise, &std::promise<void>::set_value).Invoke();
-    auto status = future.wait_for(std::chrono::milliseconds(3));
-    EXPECT_EQ(status, std::future_status::ready);
   }
 
   void EnqueueAclUpEnd(AclConnection::QueueUpEnd* queue_up_end, std::vector<uint8_t> packet) {
@@ -247,8 +248,8 @@ TEST_F(RoundRobinSchedulerTest, do_not_register_when_credits_is_zero) {
   ASSERT_EQ(round_robin_scheduler_->GetCredits(), 0);
 
   SetPacketFuture(5);
-  controller_->SendCompletedAclPacketsCallback(0x01, 10);
-  sync_handler();
+  auto future = controller_->SendCompletedAclPacketsCallback(0x01, 10);
+  future.wait();
   packet_future_->wait();
   for (uint8_t i = 10; i < 15; i++) {
     std::vector<uint8_t> packet = {0x01, 0x02, 0x03, i};
@@ -260,8 +261,8 @@ TEST_F(RoundRobinSchedulerTest, do_not_register_when_credits_is_zero) {
 }
 
 TEST_F(RoundRobinSchedulerTest, reveived_completed_callback_with_unknown_handle) {
-  controller_->SendCompletedAclPacketsCallback(0x00, 1);
-  sync_handler();
+  auto future = controller_->SendCompletedAclPacketsCallback(0x00, 1);
+  future.wait();
   EXPECT_EQ(round_robin_scheduler_->GetCredits(), controller_->max_acl_packet_credits_);
   EXPECT_EQ(round_robin_scheduler_->GetLeCredits(), controller_->le_max_acl_packet_credits_);
 }

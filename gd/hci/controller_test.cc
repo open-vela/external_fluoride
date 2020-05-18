@@ -450,7 +450,7 @@ void CheckReceivedCredits(uint16_t handle, uint16_t credits) {
 }
 
 TEST_F(ControllerTest, aclCreditCallbacksTest) {
-  controller_->RegisterCompletedAclPacketsCallback(client_handler_->Bind(&CheckReceivedCredits));
+  controller_->RegisterCompletedAclPacketsCallback(common::Bind(&CheckReceivedCredits), client_handler_);
 
   test_hci_layer_->IncomingCredit();
 
@@ -461,7 +461,7 @@ TEST_F(ControllerTest, aclCreditCallbacksTest) {
 TEST_F(ControllerTest, aclCreditCallbackListenerUnregistered) {
   os::Thread thread("test_thread", os::Thread::Priority::NORMAL);
   os::Handler handler(&thread);
-  controller_->RegisterCompletedAclPacketsCallback(handler.Bind(&CheckReceivedCredits));
+  controller_->RegisterCompletedAclPacketsCallback(common::Bind(&CheckReceivedCredits), &handler);
 
   handler.Clear();
   handler.WaitUntilStopped(std::chrono::milliseconds(100));
