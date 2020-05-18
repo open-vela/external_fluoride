@@ -34,19 +34,26 @@ class ObjectSubject(object):
 
     def isEqualTo(self, other):
         if self._value != other:
-            raise signals.TestFailure("Expected \"%s\" to be equal to \"%s\"" % (self._value, other), extras=None)
+            raise signals.TestFailure(
+                "Expected \"%s\" to be equal to \"%s\"" % (self._value, other),
+                extras=None)
 
     def isNotEqualTo(self, other):
         if self._value == other:
-            raise signals.TestFailure("Expected \"%s\" to not be equal to \"%s\"" % (self._value, other), extras=None)
+            raise signals.TestFailure(
+                "Expected \"%s\" to not be equal to \"%s\"" % (self._value,
+                                                               other),
+                extras=None)
 
     def isNone(self):
         if self._value is not None:
-            raise signals.TestFailure("Expected \"%s\" to be None" % self._value, extras=None)
+            raise signals.TestFailure(
+                "Expected \"%s\" to be None" % self._value, extras=None)
 
     def isNotNone(self):
         if self._value is None:
-            raise signals.TestFailure("Expected \"%s\" to not be None" % self._value, extras=None)
+            raise signals.TestFailure(
+                "Expected \"%s\" to not be None" % self._value, extras=None)
 
 
 DEFAULT_TIMEOUT = timedelta(seconds=3)
@@ -61,7 +68,11 @@ class EventStreamSubject(ObjectSubject):
         if len(match_fns) == 0:
             raise signals.TestFailure("Must specify a match function")
         elif len(match_fns) == 1:
-            NOT_FOR_YOU_assert_event_occurs(self._value, match_fns[0], at_least_times=at_least_times, timeout=timeout)
+            NOT_FOR_YOU_assert_event_occurs(
+                self._value,
+                match_fns[0],
+                at_least_times=at_least_times,
+                timeout=timeout)
             return EventStreamContinuationSubject(self._value)
         else:
             return MultiMatchStreamSubject(self._value, match_fns, timeout)
@@ -71,7 +82,8 @@ class EventStreamSubject(ObjectSubject):
             NOT_FOR_YOU_assert_none(self._value, timeout=timeout)
             return EventStreamContinuationSubject(self._value)
         elif len(match_fns) == 1:
-            NOT_FOR_YOU_assert_none_matching(self._value, match_fns[0], timeout=timeout)
+            NOT_FOR_YOU_assert_none_matching(
+                self._value, match_fns[0], timeout=timeout)
             return EventStreamContinuationSubject(self._value)
         else:
             raise signals.TestFailure("Cannot specify multiple match functions")
@@ -85,11 +97,19 @@ class MultiMatchStreamSubject(object):
         self._timeout = timeout
 
     def inAnyOrder(self):
-        NOT_FOR_YOU_assert_all_events_occur(self._stream, self._match_fns, order_matters=False, timeout=self._timeout)
+        NOT_FOR_YOU_assert_all_events_occur(
+            self._stream,
+            self._match_fns,
+            order_matters=False,
+            timeout=self._timeout)
         return EventStreamContinuationSubject(self._stream)
 
     def inOrder(self):
-        NOT_FOR_YOU_assert_all_events_occur(self._stream, self._match_fns, order_matters=True, timeout=self._timeout)
+        NOT_FOR_YOU_assert_all_events_occur(
+            self._stream,
+            self._match_fns,
+            order_matters=True,
+            timeout=self._timeout)
         return EventStreamContinuationSubject(self._stream)
 
 
@@ -102,7 +122,11 @@ class EventStreamContinuationSubject(ObjectSubject):
         if len(match_fns) == 0:
             raise signals.TestFailure("Must specify a match function")
         elif len(match_fns) == 1:
-            NOT_FOR_YOU_assert_event_occurs(self._value, match_fns[0], at_least_times=at_least_times, timeout=timeout)
+            NOT_FOR_YOU_assert_event_occurs(
+                self._value,
+                match_fns[0],
+                at_least_times=at_least_times,
+                timeout=timeout)
             return EventStreamContinuationSubject(self._value)
         else:
             return MultiMatchStreamSubject(self._value, match_fns, timeout)
@@ -112,7 +136,8 @@ class EventStreamContinuationSubject(ObjectSubject):
             NOT_FOR_YOU_assert_none(self._value, timeout=timeout)
             return EventStreamContinuationSubject(self._value)
         elif len(match_fns) == 1:
-            NOT_FOR_YOU_assert_none_matching(self._value, match_fns[0], timeout=timeout)
+            NOT_FOR_YOU_assert_none_matching(
+                self._value, match_fns[0], timeout=timeout)
             return EventStreamContinuationSubject(self._value)
         else:
             raise signals.TestFailure("Cannot specify multiple match functions")

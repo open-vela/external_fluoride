@@ -79,7 +79,8 @@ class SingleArgumentBehavior(object):
             self.__obj_invoked(obj)
         else:
             raise signals.TestFailure(
-                "%s: behavior for %s went unhandled" % (self._reply_stage_factory().__class__.__name__, obj),
+                "%s: behavior for %s went unhandled" %
+                (self._reply_stage_factory().__class__.__name__, obj),
                 extras=None)
 
     def __obj_invoked(self, obj):
@@ -124,7 +125,8 @@ class ReplyStage(object):
         self._persistence = persistence
 
     def _commit(self, fn):
-        self._behavior.append(BehaviorInstance(self._matcher, self._persistence, fn))
+        self._behavior.append(
+            BehaviorInstance(self._matcher, self._persistence, fn))
 
 
 class BehaviorInstance(object):
@@ -154,7 +156,8 @@ class BoundVerificationStage(object):
         self._timeout = timeout
 
     def times(self, times=1):
-        return self._behavior.wait_until_invoked(self._matcher, times, self._timeout)
+        return self._behavior.wait_until_invoked(self._matcher, times,
+                                                 self._timeout)
 
 
 class WaitForBehaviorSubject(object):
