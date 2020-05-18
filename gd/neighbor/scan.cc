@@ -16,9 +16,7 @@
 #define LOG_TAG "bt_gd_neigh"
 
 #include "neighbor/scan.h"
-
 #include <memory>
-
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
 #include "module.h"
