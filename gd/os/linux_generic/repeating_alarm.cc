@@ -17,9 +17,8 @@
 #include "os/repeating_alarm.h"
 
 #include <sys/timerfd.h>
-#include <unistd.h>
-
 #include <cstring>
+#include <unistd.h>
 
 #include "common/bind.h"
 #include "os/linux_generic/linux.h"
@@ -54,8 +53,10 @@ RepeatingAlarm::~RepeatingAlarm() {
 void RepeatingAlarm::Schedule(Closure task, std::chrono::milliseconds period) {
   std::lock_guard<std::mutex> lock(mutex_);
   long period_ms = period.count();
-  itimerspec timer_itimerspec{{period_ms / 1000, period_ms % 1000 * 1000000},
-                              {period_ms / 1000, period_ms % 1000 * 1000000}};
+  itimerspec timer_itimerspec{
+    {period_ms / 1000, period_ms % 1000 * 1000000},
+    {period_ms / 1000, period_ms % 1000 * 1000000}
+  };
   int result = TIMERFD_SETTIME(fd_, 0, &timer_itimerspec, nullptr);
   ASSERT(result == 0);
 
