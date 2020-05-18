@@ -20,11 +20,19 @@
 #include <memory>
 #include <utility>
 
+#include "common/bind.h"
+#include "common/callback.h"
 #include "hci/hci_layer.h"
 
 namespace bluetooth {
 namespace hci {
 
+using common::Bind;
+using common::BindOnce;
+using common::Callback;
+using common::Closure;
+using common::OnceCallback;
+using common::OnceClosure;
 using os::Handler;
 
 struct Controller::impl {
@@ -99,7 +107,7 @@ struct Controller::impl {
   }
 
   void NumberOfCompletedPackets(EventPacketView event) {
-    if (acl_credits_callback_.IsEmpty()) {
+    if (acl_credits_handler_ == nullptr) {
       LOG_WARN("Received event when AclManager is not listening");
       return;
     }
@@ -108,18 +116,32 @@ struct Controller::impl {
     for (auto completed_packets : complete_view.GetCompletedPackets()) {
       uint16_t handle = completed_packets.connection_handle_;
       uint16_t credits = completed_packets.host_num_of_completed_packets_;
-      acl_credits_callback_.Invoke(handle, credits);
+      acl_credits_handler_->Post(Bind(acl_credits_callback_, handle, credits));
     }
   }
 
-  void register_completed_acl_packets_callback(CompletedAclPacketsCallback callback) {
-    ASSERT(acl_credits_callback_.IsEmpty());
-    acl_credits_callback_ = callback;
+  void RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
+                                           Handler* handler) {
+    module_.GetHandler()->Post(common::BindOnce(&impl::register_completed_acl_packets_callback,
+                                                common::Unretained(this), cb, common::Unretained(handler)));
+  }
+
+  void register_completed_acl_packets_callback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
+                                               Handler* handler) {
+    ASSERT(acl_credits_handler_ == nullptr);
+    acl_credits_callback_ = cb;
+    acl_credits_handler_ = handler;
+  }
+
+  void UnregisterCompletedAclPacketsCallback() {
+    module_.GetHandler()->Post(
+        common::BindOnce(&impl::unregister_completed_acl_packets_callback, common::Unretained(this)));
   }
 
   void unregister_completed_acl_packets_callback() {
-    ASSERT(!acl_credits_callback_.IsEmpty());
+    ASSERT(acl_credits_handler_ != nullptr);
     acl_credits_callback_ = {};
+    acl_credits_handler_ = nullptr;
   }
 
   void read_local_name_complete_handler(CommandCompleteView view) {
@@ -680,7 +702,8 @@ struct Controller::impl {
 
   HciLayer* hci_;
 
-  CompletedAclPacketsCallback acl_credits_callback_{};
+  Callback<void(uint16_t, uint16_t)> acl_credits_callback_;
+  Handler* acl_credits_handler_ = nullptr;
   LocalVersionInformation local_version_information_;
   std::array<uint8_t, 64> local_supported_commands_;
   uint64_t local_supported_features_;
@@ -705,12 +728,13 @@ Controller::Controller() : impl_(std::make_unique<impl>(*this)) {}
 
 Controller::~Controller() = default;
 
-void Controller::RegisterCompletedAclPacketsCallback(CompletedAclPacketsCallback cb) {
-  CallOn(impl_.get(), &impl::register_completed_acl_packets_callback, cb);
+void Controller::RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
+                                                     Handler* handler) {
+  impl_->RegisterCompletedAclPacketsCallback(cb, handler);  // TODO hsz: why here?
 }
 
 void Controller::UnregisterCompletedAclPacketsCallback() {
-  CallOn(impl_.get(), &impl::unregister_completed_acl_packets_callback);
+  impl_->UnregisterCompletedAclPacketsCallback();  // TODO hsz: why here?
 }
 
 std::string Controller::GetControllerLocalName() const {
@@ -761,41 +785,41 @@ Address Controller::GetControllerMacAddress() const {
 }
 
 void Controller::SetEventMask(uint64_t event_mask) {
-  CallOn(impl_.get(), &impl::set_event_mask, event_mask);
+  GetHandler()->Post(common::BindOnce(&impl::set_event_mask, common::Unretained(impl_.get()), event_mask));
 }
 
 void Controller::Reset() {
-  CallOn(impl_.get(), &impl::reset);
+  GetHandler()->Post(common::BindOnce(&impl::reset, common::Unretained(impl_.get())));
 }
 
 void Controller::SetEventFilterClearAll() {
   std::unique_ptr<SetEventFilterClearAllBuilder> packet = SetEventFilterClearAllBuilder::Create();
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::SetEventFilterInquiryResultAllDevices() {
   std::unique_ptr<SetEventFilterInquiryResultAllDevicesBuilder> packet =
       SetEventFilterInquiryResultAllDevicesBuilder::Create();
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::SetEventFilterInquiryResultClassOfDevice(ClassOfDevice class_of_device,
                                                           ClassOfDevice class_of_device_mask) {
   std::unique_ptr<SetEventFilterInquiryResultClassOfDeviceBuilder> packet =
       SetEventFilterInquiryResultClassOfDeviceBuilder::Create(class_of_device, class_of_device_mask);
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::SetEventFilterInquiryResultAddress(Address address) {
   std::unique_ptr<SetEventFilterInquiryResultAddressBuilder> packet =
       SetEventFilterInquiryResultAddressBuilder::Create(address);
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::SetEventFilterConnectionSetupAllDevices(AutoAcceptFlag auto_accept_flag) {
   std::unique_ptr<SetEventFilterConnectionSetupAllDevicesBuilder> packet =
       SetEventFilterConnectionSetupAllDevicesBuilder::Create(auto_accept_flag);
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::SetEventFilterConnectionSetupClassOfDevice(ClassOfDevice class_of_device,
@@ -804,34 +828,30 @@ void Controller::SetEventFilterConnectionSetupClassOfDevice(ClassOfDevice class_
   std::unique_ptr<SetEventFilterConnectionSetupClassOfDeviceBuilder> packet =
       SetEventFilterConnectionSetupClassOfDeviceBuilder::Create(class_of_device, class_of_device_mask,
                                                                 auto_accept_flag);
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::SetEventFilterConnectionSetupAddress(Address address, AutoAcceptFlag auto_accept_flag) {
   std::unique_ptr<SetEventFilterConnectionSetupAddressBuilder> packet =
       SetEventFilterConnectionSetupAddressBuilder::Create(address, auto_accept_flag);
-  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
+  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
 }
 
 void Controller::WriteLocalName(std::string local_name) {
   impl_->local_name_ = local_name;
-  CallOn(impl_.get(), &impl::write_local_name, local_name);
+  GetHandler()->Post(common::BindOnce(&impl::write_local_name, common::Unretained(impl_.get()), local_name));
 }
 
 void Controller::HostBufferSize(uint16_t host_acl_data_packet_length, uint8_t host_synchronous_data_packet_length,
                                 uint16_t host_total_num_acl_data_packets,
                                 uint16_t host_total_num_synchronous_data_packets) {
-  CallOn(
-      impl_.get(),
-      &impl::host_buffer_size,
-      host_acl_data_packet_length,
-      host_synchronous_data_packet_length,
-      host_total_num_acl_data_packets,
-      host_total_num_synchronous_data_packets);
+  GetHandler()->Post(common::BindOnce(&impl::host_buffer_size, common::Unretained(impl_.get()),
+                                      host_acl_data_packet_length, host_synchronous_data_packet_length,
+                                      host_total_num_acl_data_packets, host_total_num_synchronous_data_packets));
 }
 
 void Controller::LeSetEventMask(uint64_t le_event_mask) {
-  CallOn(impl_.get(), &impl::le_set_event_mask, le_event_mask);
+  GetHandler()->Post(common::BindOnce(&impl::le_set_event_mask, common::Unretained(impl_.get()), le_event_mask));
 }
 
 LeBufferSize Controller::GetControllerLeBufferSize() const {
