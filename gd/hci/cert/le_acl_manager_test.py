@@ -21,7 +21,6 @@ from facade import rootservice_pb2 as facade_rootservice
 from facade import common_pb2 as common
 from hci.facade import le_acl_manager_facade_pb2 as le_acl_manager_facade
 from hci.facade import le_advertising_manager_facade_pb2 as le_advertising_facade
-from hci.facade import le_initiator_address_facade_pb2 as le_initiator_address_facade
 from hci.facade import facade_pb2 as hci_facade
 import bluetooth_packets_python3 as bt_packets
 from bluetooth_packets_python3 import hci_packets
@@ -34,15 +33,18 @@ class LeAclManagerTest(GdBaseTestClass):
 
     def setup_test(self):
         super().setup_test()
-        private_policy = le_initiator_address_facade.PrivacyPolicy(
-            address_policy=le_initiator_address_facade.AddressPolicy.USE_STATIC_ADDRESS,
+        dut_address = common.BluetoothAddressWithType(
+            address=common.BluetoothAddress(address=bytes(b'0D:05:04:03:02:01')), type=common.RANDOM_DEVICE_ADDRESS)
+        self.dut.hci_le_acl_manager.SetInitiatorAddress(dut_address)
+        private_policy = le_acl_manager_facade.PrivacyPolicy(
+            address_policy=le_acl_manager_facade.AddressPolicy.USE_RESOLVABLE_ADDRESS,
             address_with_type=common.BluetoothAddressWithType(
-                address=common.BluetoothAddress(address=bytes(b'0D:05:04:03:02:01')),
+                address=common.BluetoothAddress(address=bytes(b'00:00:00:00:00:00')),
                 type=common.RANDOM_DEVICE_ADDRESS),
             rotation_irk=b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
             minimum_rotation_time=(7 * 60 * 1000),
             maximum_rotation_time=(15 * 60 * 1000))
-        self.dut.hci_le_initiator_address.SetPrivacyPolicyForInitiatorAddress(private_policy)
+        self.dut.hci_le_acl_manager.SetPrivacyPolicyForInitiatorAddress(private_policy)
 
     def register_for_event(self, event_code):
         msg = hci_facade.EventCodeMsg(code=int(event_code))
@@ -187,7 +189,7 @@ class LeAclManagerTest(GdBaseTestClass):
                 filter_policy=le_advertising_facade.AdvertisingFilterPolicy.ALL_DEVICES)
             request = le_advertising_facade.CreateAdvertiserRequest(config=config)
 
-            self.dut.hci_le_advertising_manager.CreateAdvertiser(request)
+            create_response = self.dut.hci_le_advertising_manager.CreateAdvertiser(request)
 
             # Cert Connects
             self.enqueue_hci_command(hci_packets.LeSetRandomAddressBuilder('0C:05:04:03:02:01'), True)
