@@ -91,12 +91,6 @@ void ClassicSignallingManager::on_security_result_for_outgoing(Psm psm, bool res
 
   if (!result) {
     LOG_WARN("Security requirement can't be satisfied. Dropping connection request");
-    DynamicChannelManager::ConnectionResult connection_result{
-        .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_SECURITY_BLOCK,
-        .hci_error = hci::ErrorCode::SUCCESS,
-        .l2cap_connection_response_result = ConnectionResponseResult::NO_RESOURCES_AVAILABLE,
-    };
-    link_->OnOutgoingConnectionRequestFail(request.local_cid, connection_result);
     return;
   }
 
@@ -195,12 +189,6 @@ void ClassicSignallingManager::on_security_result_for_incoming(Psm psm, bool res
   if (!result) {
     send_connection_response(signal_id, request.remote_cid, request.local_cid, ConnectionResponseResult::SECURITY_BLOCK,
                              ConnectionResponseStatus::NO_FURTHER_INFORMATION_AVAILABLE);
-    DynamicChannelManager::ConnectionResult connection_result{
-        .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_SECURITY_BLOCK,
-        .hci_error = hci::ErrorCode::SUCCESS,
-        .l2cap_connection_response_result = ConnectionResponseResult::NO_RESOURCES_AVAILABLE,
-    };
-    link_->OnOutgoingConnectionRequestFail(request.local_cid, connection_result);
   }
 
   auto new_channel = link_->AllocateDynamicChannel(psm, request.remote_cid);
@@ -237,12 +225,7 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
   command_just_sent_.signal_id_ = kInvalidSignalId;
   alarm_.Cancel();
   if (result != ConnectionResponseResult::SUCCESS) {
-    DynamicChannelManager::ConnectionResult connection_result{
-        .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_L2CAP_ERROR,
-        .hci_error = hci::ErrorCode::SUCCESS,
-        .l2cap_connection_response_result = result,
-    };
-    link_->OnOutgoingConnectionRequestFail(cid, connection_result);
+    link_->OnOutgoingConnectionRequestFail(cid);
     handle_send_next_command();
     return;
   }
@@ -250,12 +233,7 @@ void ClassicSignallingManager::OnConnectionResponse(SignalId signal_id, Cid remo
   auto new_channel = link_->AllocateReservedDynamicChannel(cid, pending_psm, remote_cid);
   if (new_channel == nullptr) {
     LOG_WARN("Can't allocate dynamic channel");
-    DynamicChannelManager::ConnectionResult connection_result{
-        .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_L2CAP_ERROR,
-        .hci_error = hci::ErrorCode::SUCCESS,
-        .l2cap_connection_response_result = ConnectionResponseResult::NO_RESOURCES_AVAILABLE,
-    };
-    link_->OnOutgoingConnectionRequestFail(cid, connection_result);
+    link_->OnOutgoingConnectionRequestFail(cid);
     handle_send_next_command();
     return;
   }
@@ -828,12 +806,7 @@ void ClassicSignallingManager::on_command_timeout() {
   LOG_WARN("Response time out for %s", CommandCodeText(command_just_sent_.command_code_).c_str());
   switch (command_just_sent_.command_code_) {
     case CommandCode::CONNECTION_REQUEST: {
-      DynamicChannelManager::ConnectionResult connection_result{
-          .connection_result_code = DynamicChannelManager::ConnectionResultCode::FAIL_L2CAP_ERROR,
-          .hci_error = hci::ErrorCode::SUCCESS,
-          .l2cap_connection_response_result = ConnectionResponseResult::NO_RESOURCES_AVAILABLE,
-      };
-      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_, connection_result);
+      link_->OnOutgoingConnectionRequestFail(command_just_sent_.source_cid_);
       break;
     }
     case CommandCode::CONFIGURATION_REQUEST: {

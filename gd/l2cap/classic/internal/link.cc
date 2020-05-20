@@ -178,9 +178,14 @@ void Link::send_pending_configuration_requests() {
   pending_outgoing_configuration_request_list_.clear();
 }
 
-void Link::OnOutgoingConnectionRequestFail(Cid local_cid, ConnectionResult result) {
+void Link::OnOutgoingConnectionRequestFail(Cid local_cid) {
   if (local_cid_to_pending_dynamic_channel_connection_map_.find(local_cid) !=
       local_cid_to_pending_dynamic_channel_connection_map_.end()) {
+    ConnectionResult result{
+        .connection_result_code = ConnectionResultCode::FAIL_HCI_ERROR,
+        .hci_error = hci::ErrorCode::CONNECTION_TIMEOUT,
+        .l2cap_connection_response_result = ConnectionResponseResult::SUCCESS,
+    };
     NotifyChannelFail(local_cid, result);
   }
   dynamic_channel_allocator_.FreeChannel(local_cid);
