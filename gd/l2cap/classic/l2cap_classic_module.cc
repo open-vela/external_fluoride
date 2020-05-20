@@ -59,7 +59,6 @@ struct L2capClassicModule::impl {
     void RegisterLinkSecurityInterfaceListener(os::Handler* handler, LinkSecurityInterfaceListener* listener) {
       ASSERT(!registered_);
       module_impl_->link_manager_.RegisterLinkSecurityInterfaceListener(handler, listener);
-      registered_ = true;
     }
 
     void InitiateConnectionForSecurity(hci::Address remote) override {
@@ -70,7 +69,6 @@ struct L2capClassicModule::impl {
     void Unregister() override {
       ASSERT(registered_);
       module_impl_->link_manager_.RegisterLinkSecurityInterfaceListener(nullptr, nullptr);
-      registered_ = false;
     }
     impl* module_impl_;
     bool registered_ = false;
