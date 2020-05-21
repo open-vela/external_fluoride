@@ -30,6 +30,7 @@ using hci::EventCode;
 using hci::EventPacketBuilder;
 using hci::EventPacketView;
 using hci::HciLayer;
+using os::Handler;
 
 namespace {
 

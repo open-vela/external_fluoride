@@ -22,12 +22,13 @@
 #include <utility>
 
 #include "hci/hci_packets.h"
+#include "l2cap/classic/fixed_channel.h"
+#include "l2cap/classic/fixed_channel_manager_mock.h"
 #include "packet/raw_builder.h"
 #include "security/channel/security_manager_channel.h"
 #include "security/initial_informations.h"
 #include "security/smp_packets.h"
 #include "security/test/fake_hci_layer.h"
-#include "security/test/fake_security_interface.h"
 
 namespace bluetooth {
 namespace security {
@@ -52,11 +53,7 @@ class FakeSecurityManagerChannel : public channel::SecurityManagerChannel {
       : channel::SecurityManagerChannel(handler, hci_layer) {}
   ~FakeSecurityManagerChannel() {}
 
-  void OnLinkConnected(std::unique_ptr<l2cap::classic::LinkSecurityInterface> link) override {
-    LOG_ERROR("CALLED");
-  }
-
-  void OnLinkDisconnected(hci::Address address) override {
+  void OnConnectionOpen(std::unique_ptr<l2cap::classic::FixedChannel> fixed_channel) override {
     LOG_ERROR("CALLED");
   }
 };
@@ -112,8 +109,13 @@ class SecurityManagerChannelCallback : public ISecurityManagerChannelListener {
     }
   }
 
-  void OnConnectionClosed(hci::Address address) override {
+  void OnConnectionClosed(hci::Address address, bluetooth::hci::ErrorCode error_code) override {
     LOG_DEBUG("Called");
+  }
+
+  void OnConnectionFailed(hci::Address address,
+                          bluetooth::l2cap::classic::FixedChannelManager::ConnectionResult result) override {
+    LOG_DEBUG("Shouldn't be called");
   }
 
  private:
@@ -137,8 +139,6 @@ class ClassicPairingHandlerTest : public ::testing::Test {
                                                           user_interface_handler_, "Fake name");
     channel_callback_ = new SecurityManagerChannelCallback(pairing_handler_);
     channel_->SetChannelListener(channel_callback_);
-    security_interface_ = new FakeSecurityInterface(handler_, channel_);
-    channel_->SetSecurityInterface(security_interface_);
   }
 
   void TearDown() override {
@@ -148,7 +148,6 @@ class ClassicPairingHandlerTest : public ::testing::Test {
     delete pairing_handler_;
     delete channel_;
     delete channel_callback_;
-    delete security_interface_;
   }
 
   void synchronize() {
@@ -199,7 +198,6 @@ class ClassicPairingHandlerTest : public ::testing::Test {
   std::shared_ptr<record::SecurityRecord> security_record_ = nullptr;
   UI* user_interface_;
   os::Handler* user_interface_handler_;
-  l2cap::classic::SecurityInterface* security_interface_ = nullptr;
 };
 
 // Security Manager Boot Sequence (Required for SSP, these are already set at boot time)
