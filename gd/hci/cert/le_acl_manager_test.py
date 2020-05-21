@@ -37,7 +37,7 @@ class LeAclManagerTest(GdBaseTestClass):
         private_policy = le_initiator_address_facade.PrivacyPolicy(
             address_policy=le_initiator_address_facade.AddressPolicy.USE_STATIC_ADDRESS,
             address_with_type=common.BluetoothAddressWithType(
-                address=common.BluetoothAddress(address=bytes(b'D0:05:04:03:02:01')),
+                address=common.BluetoothAddress(address=bytes(b'0D:05:04:03:02:01')),
                 type=common.RANDOM_DEVICE_ADDRESS),
             rotation_irk=b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
             minimum_rotation_time=(7 * 60 * 1000),
@@ -176,6 +176,7 @@ class LeAclManagerTest(GdBaseTestClass):
             gap_data = le_advertising_facade.GapDataMsg(data=bytes(gap_name.Serialize()))
             config = le_advertising_facade.AdvertisingConfig(
                 advertisement=[gap_data],
+                random_address=common.BluetoothAddress(address=bytes(b'0D:05:04:03:02:01')),
                 interval_min=512,
                 interval_max=768,
                 event_type=le_advertising_facade.AdvertisingEventType.ADV_IND,
@@ -203,7 +204,7 @@ class LeAclManagerTest(GdBaseTestClass):
                 hci_packets.LeExtendedCreateConnectionBuilder(hci_packets.InitiatorFilterPolicy.USE_PEER_ADDRESS,
                                                               hci_packets.OwnAddressType.RANDOM_DEVICE_ADDRESS,
                                                               hci_packets.AddressType.RANDOM_DEVICE_ADDRESS,
-                                                              'D0:05:04:03:02:01', 1, [phy_scan_params]), False)
+                                                              '0D:05:04:03:02:01', 1, [phy_scan_params]), False)
 
             # Cert gets ConnectionComplete with a handle and sends ACL data
             handle = 0xfff
