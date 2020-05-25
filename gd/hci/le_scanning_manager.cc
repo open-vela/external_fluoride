@@ -17,7 +17,6 @@
 #include <mutex>
 #include <set>
 
-#include "hci/acl_manager.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
@@ -41,23 +40,15 @@ enum class ScanApiType {
   LE_5_0 = 3,
 };
 
-struct LeScanningManager::impl : public bluetooth::hci::LeAddressRotatorCallback {
+struct LeScanningManager::impl {
   impl(Module* module) : module_(module), le_scanning_interface_(nullptr) {}
 
-  ~impl() {
-    if (address_rotator_registered) {
-      le_address_rotator_->Unregister(this);
-    }
-  }
-
-  void start(os::Handler* handler, hci::HciLayer* hci_layer, hci::Controller* controller,
-             hci::AclManager* acl_manager) {
+  void start(os::Handler* handler, hci::HciLayer* hci_layer, hci::Controller* controller) {
     module_handler_ = handler;
     hci_layer_ = hci_layer;
     controller_ = controller;
-    le_address_rotator_ = acl_manager->GetLeAddressRotator();
     le_scanning_interface_ = hci_layer_->GetLeScanningInterface(
-        module_handler_->BindOn(this, &LeScanningManager::impl::handle_scan_results));
+        common::Bind(&LeScanningManager::impl::handle_scan_results, common::Unretained(this)), module_handler_);
     if (controller_->IsSupported(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS)) {
       api_type_ = ScanApiType::LE_5_0;
     } else if (controller_->IsSupported(OpCode::LE_EXTENDED_SCAN_PARAMS)) {
@@ -131,42 +122,38 @@ struct LeScanningManager::impl : public bluetooth::hci::LeAddressRotatorCallback
       case ScanApiType::LE_5_0:
         le_scanning_interface_->EnqueueCommand(hci::LeSetExtendedScanParametersBuilder::Create(
                                                    own_address_type_, filter_policy_, phys_in_use, parameter_vector),
-                                               module_handler_->BindOnce(impl::check_status));
+                                               common::BindOnce(impl::check_status), module_handler_);
         break;
       case ScanApiType::ANDROID_HCI:
         le_scanning_interface_->EnqueueCommand(
             hci::LeExtendedScanParamsBuilder::Create(LeScanType::ACTIVE, interval_ms_, window_ms_, own_address_type_,
                                                      filter_policy_),
-            module_handler_->BindOnce(impl::check_status));
+            common::BindOnce(impl::check_status), module_handler_);
 
         break;
       case ScanApiType::LE_4_0:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetScanParametersBuilder::Create(LeScanType::ACTIVE, interval_ms_, window_ms_, own_address_type_,
                                                     filter_policy_),
-            module_handler_->BindOnce(impl::check_status));
+            common::BindOnce(impl::check_status), module_handler_);
         break;
     }
   }
 
   void start_scan(LeScanningManagerCallbacks* le_scanning_manager_callbacks) {
-    if (!address_rotator_registered) {
-      le_address_rotator_->Register(this);
-    }
-
     registered_callback_ = le_scanning_manager_callbacks;
     switch (api_type_) {
       case ScanApiType::LE_5_0:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetExtendedScanEnableBuilder::Create(Enable::ENABLED,
                                                         FilterDuplicates::DISABLED /* filter duplicates */, 0, 0),
-            module_handler_->BindOnce(impl::check_status));
+            common::BindOnce(impl::check_status), module_handler_);
         break;
       case ScanApiType::ANDROID_HCI:
       case ScanApiType::LE_4_0:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetScanEnableBuilder::Create(Enable::ENABLED, Enable::DISABLED /* filter duplicates */),
-            module_handler_->BindOnce(impl::check_status));
+            common::BindOnce(impl::check_status), module_handler_);
         break;
     }
   }
@@ -181,48 +168,27 @@ struct LeScanningManager::impl : public bluetooth::hci::LeAddressRotatorCallback
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetExtendedScanEnableBuilder::Create(Enable::DISABLED,
                                                         FilterDuplicates::DISABLED /* filter duplicates */, 0, 0),
-            module_handler_->BindOnce(impl::check_status));
+            common::BindOnce(impl::check_status), module_handler_);
         registered_callback_ = nullptr;
         break;
       case ScanApiType::ANDROID_HCI:
       case ScanApiType::LE_4_0:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetScanEnableBuilder::Create(Enable::DISABLED, Enable::DISABLED /* filter duplicates */),
-            module_handler_->BindOnce(impl::check_status));
+            common::BindOnce(impl::check_status), module_handler_);
         registered_callback_ = nullptr;
         break;
     }
   }
 
-  void OnPause() override {
-    if (registered_callback_ == nullptr) {
-      le_address_rotator_->AckPause(this);
-    } else {
-      stop_scan(common::Bind(&impl::ack_pause, common::Unretained(this)));
-    }
-  }
-
-  void ack_pause() {
-    le_address_rotator_->AckPause(this);
-  }
-
-  void OnResume() override {
-    if (registered_callback_ != nullptr) {
-      start_scan(registered_callback_);
-    }
-    le_address_rotator_->AckResume(this);
-  }
-
   ScanApiType api_type_;
 
-  LeScanningManagerCallbacks* registered_callback_ = nullptr;
+  LeScanningManagerCallbacks* registered_callback_;
   Module* module_;
   os::Handler* module_handler_;
   hci::HciLayer* hci_layer_;
   hci::Controller* controller_;
   hci::LeScanningInterface* le_scanning_interface_;
-  hci::LeAddressRotator* le_address_rotator_;
-  bool address_rotator_registered = false;
 
   uint32_t interval_ms_{1000};
   uint16_t window_ms_{1000};
@@ -269,12 +235,10 @@ LeScanningManager::LeScanningManager() {
 void LeScanningManager::ListDependencies(ModuleList* list) {
   list->add<hci::HciLayer>();
   list->add<hci::Controller>();
-  list->add<hci::AclManager>();
 }
 
 void LeScanningManager::Start() {
-  pimpl_->start(GetHandler(), GetDependency<hci::HciLayer>(), GetDependency<hci::Controller>(),
-                GetDependency<AclManager>());
+  pimpl_->start(GetHandler(), GetDependency<hci::HciLayer>(), GetDependency<hci::Controller>());
 }
 
 void LeScanningManager::Stop() {

@@ -16,7 +16,6 @@
 #pragma once
 
 #include <stdbool.h>
-
 #include <array>
 #include <cstdint>
 #include <list>
@@ -40,14 +39,11 @@ using LegacyWriteChecksumCallback = common::OnceCallback<void(const std::string,
 class LegacyModule : public bluetooth::Module {
  public:
   void ConfigRead(const std::string filename, LegacyReadConfigCallback callback, os::Handler* handler);
-  void ConfigWrite(
-      const std::string filename, const config_t& config, LegacyWriteConfigCallback callback, os::Handler* handler);
+  void ConfigWrite(const std::string filename, const config_t& config, LegacyWriteConfigCallback callback,
+                   os::Handler* handler);
   void ChecksumRead(const std::string filename, LegacyReadChecksumCallback callback, os::Handler* handler);
-  void ChecksumWrite(
-      const std::string filename,
-      const std::string checksum,
-      LegacyWriteChecksumCallback callback,
-      os::Handler* handler);
+  void ChecksumWrite(const std::string filename, const std::string checksum, LegacyWriteChecksumCallback callback,
+                     os::Handler* handler);
 
   static const ModuleFactory Factory;
 
