@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -81,10 +81,10 @@ bool array_append_ptr(array_t* array, void* data) {
   CHECK(data != NULL);
 
   if (array->length == array->capacity && !grow(array)) {
-    LOG_ERROR(LOG_TAG,
-              "%s unable to grow array past current capacity of %zu elements "
-              "of size %zu.",
-              __func__, array->capacity, array->element_size);
+    LOG_ERROR(
+        "%s unable to grow array past current capacity of %zu elements "
+        "of size %zu.",
+        __func__, array->capacity, array->element_size);
     return false;
   }
 

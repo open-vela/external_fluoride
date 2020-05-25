@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -154,14 +154,19 @@ void rfc_send_buf_uih(tRFC_MCB* p_mcb, uint8_t dlci, BT_HDR* p_buf) {
   uint8_t credits;
 
   p_buf->offset -= RFCOMM_CTRL_FRAME_LEN;
-  if (p_buf->len > 127) p_buf->offset--;
+  if (p_buf->len > 127) {
+    p_buf->offset--;
+  }
 
-  if (dlci)
+  if (dlci) {
     credits = (uint8_t)p_buf->layer_specific;
-  else
+  } else {
     credits = 0;
+  }
 
-  if (credits) p_buf->offset--;
+  if (credits) {
+    p_buf->offset--;
+  }
 
   p_data = (uint8_t*)(p_buf + 1) + p_buf->offset;
 
@@ -219,11 +224,11 @@ void rfc_send_pn(tRFC_MCB* p_mcb, uint8_t dlci, bool is_command, uint16_t mtu,
   ** We will use the fact that we reply in the same context so rx_frame can
   *still be used.
   */
-  if (is_command)
+  if (is_command) {
     *p_data++ = RFCOMM_PN_PRIORITY_0;
-  else
+  } else {
     *p_data++ = rfc_cb.rfc.rx_frame.u.pn.priority;
-
+  }
   *p_data++ = RFCOMM_T1_DSEC;
   *p_data++ = mtu & 0xFF;
   *p_data++ = mtu >> 8;
@@ -528,17 +533,27 @@ uint8_t rfc_parse_data(tRFC_MCB* p_mcb, MX_FRAME* p_frame, BT_HDR* p_buf) {
     return RFC_EVENT_BAD_FRAME;
   }
 
+  if (p_buf->len < (3 + !ead + !eal + 1)) {
+    android_errorWriteLog(0x534e4554, "120255805");
+    RFCOMM_TRACE_ERROR("Bad Length: %d", p_buf->len);
+    return RFC_EVENT_BAD_FRAME;
+  }
   p_buf->len -= (3 + !ead + !eal + 1); /* Additional 1 for FCS */
   p_buf->offset += (3 + !ead + !eal);
 
   /* handle credit if credit based flow control */
   if ((p_mcb->flow == PORT_FC_CREDIT) && (p_frame->type == RFCOMM_UIH) &&
       (p_frame->dlci != RFCOMM_MX_DLCI) && (p_frame->pf == 1)) {
+    if (p_buf->len < sizeof(uint8_t)) {
+      RFCOMM_TRACE_ERROR("Bad Length in flow control: %d", p_buf->len);
+      return RFC_EVENT_BAD_FRAME;
+    }
     p_frame->credit = *p_data++;
     p_buf->len--;
     p_buf->offset++;
-  } else
+  } else {
     p_frame->credit = 0;
+  }
 
   if (p_buf->len != len) {
     RFCOMM_TRACE_ERROR("Bad Length2 %d %d", p_buf->len, len);
@@ -599,8 +614,9 @@ uint8_t rfc_parse_data(tRFC_MCB* p_mcb, MX_FRAME* p_frame, BT_HDR* p_buf) {
         /* we assume that this is ok to allow bad implementations to work */
         RFCOMM_TRACE_ERROR("Bad UIH - response");
         return (RFC_EVENT_UIH);
-      } else
+      } else {
         return (RFC_EVENT_UIH);
+      }
   }
 
   return (RFC_EVENT_BAD_FRAME);
@@ -619,7 +635,6 @@ void rfc_process_mx_message(tRFC_MCB* p_mcb, BT_HDR* p_buf) {
   MX_FRAME* p_rx_frame = &rfc_cb.rfc.rx_frame;
   uint16_t length = p_buf->len;
   uint8_t ea, cr, mx_len;
-  bool is_command;
 
   if (length < 2) {
     RFCOMM_TRACE_ERROR(
@@ -634,14 +649,16 @@ void rfc_process_mx_message(tRFC_MCB* p_mcb, BT_HDR* p_buf) {
   p_rx_frame->type = *p_data++ & ~(RFCOMM_CR_MASK | RFCOMM_EA_MASK);
 
   if (!p_rx_frame->ea || !length) {
-    RFCOMM_TRACE_ERROR("Illegal MX Frame ea:%d len:%d", p_rx_frame->ea, length);
+    LOG(ERROR) << __func__
+               << ": Invalid MX frame ea=" << std::to_string(p_rx_frame->ea)
+               << ", len=" << length << ", bd_addr=" << p_mcb->bd_addr;
     osi_free(p_buf);
     return;
   }
 
   length--;
 
-  is_command = p_rx_frame->cr;
+  bool is_command = p_rx_frame->cr;
 
   ea = *p_data & RFCOMM_EA;
 
@@ -661,14 +678,21 @@ void rfc_process_mx_message(tRFC_MCB* p_mcb, BT_HDR* p_buf) {
   }
 
   if (mx_len != length) {
-    RFCOMM_TRACE_ERROR("Bad MX frame");
+    LOG(ERROR) << __func__ << ": Bad MX frame, p_mcb=" << p_mcb
+               << ", bd_addr=" << p_mcb->bd_addr;
     osi_free(p_buf);
     return;
   }
 
+  RFCOMM_TRACE_DEBUG("%s: type=0x%02x, bd_addr=%s", __func__, p_rx_frame->type,
+                     p_mcb->bd_addr.ToString().c_str());
   switch (p_rx_frame->type) {
     case RFCOMM_MX_PN:
-      if (length != RFCOMM_MX_PN_LEN) break;
+      if (length != RFCOMM_MX_PN_LEN) {
+        LOG(ERROR) << __func__ << ": Invalid PN length, p_mcb=" << p_mcb
+                   << ", bd_addr=" << p_mcb->bd_addr;
+        break;
+      }
 
       p_rx_frame->dlci = *p_data++ & RFCOMM_PN_DLCI_MASK;
       p_rx_frame->u.pn.frame_type = *p_data & RFCOMM_PN_FRAME_TYPE_MASK;
@@ -683,7 +707,8 @@ void rfc_process_mx_message(tRFC_MCB* p_mcb, BT_HDR* p_buf) {
       if (!p_rx_frame->dlci || !RFCOMM_VALID_DLCI(p_rx_frame->dlci) ||
           (p_rx_frame->u.pn.mtu < RFCOMM_MIN_MTU) ||
           (p_rx_frame->u.pn.mtu > RFCOMM_MAX_MTU)) {
-        RFCOMM_TRACE_ERROR("Bad PN frame");
+        LOG(ERROR) << __func__ << ": Bad PN frame, p_mcb=" << p_mcb
+                   << ", bd_addr=" << p_mcb->bd_addr;
         break;
       }
 
