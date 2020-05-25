@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 The Android Open Source Project
+ *  Copyright (C) 2014 The Android Open Source Project
  *  Copyright 2003 - 2004 Open Interface North America, Inc. All rights
  *                        reserved.
  *
@@ -78,18 +78,17 @@ PRIVATE void OI_BITSTREAM_Write2xUINT4Aligned(OI_BITSTREAM* bs, uint8_t datum1,
 #define OI_BITSTREAM_READUINT(result, bits, ptr, value, bitPtr) \
   do {                                                          \
     OI_ASSERT((bits) <= 16);                                    \
-    OI_ASSERT((bitPtr) < 32);                                   \
-    OI_ASSERT((bitPtr) >= 0);                                   \
-                                                                \
-    while ((bitPtr + bits) > 32) {                              \
-      (value) = ((value) << 8) | *(ptr)++;                      \
-      (bitPtr) -= 8;                                            \
-    }                                                           \
+    OI_ASSERT((bitPtr) < 16);                                   \
+    OI_ASSERT((bitPtr) >= 8);                                   \
                                                                 \
     (result) = (value) << (bitPtr);                             \
     (result) >>= 32 - (bits);                                   \
                                                                 \
     (bitPtr) += (bits);                                         \
+    while ((bitPtr) >= 16) {                                    \
+      (value) = ((value) << 8) | *(ptr)++;                      \
+      (bitPtr) -= 8;                                            \
+    }                                                           \
     OI_ASSERT(((bits) == 0) || ((result) < (1u << (bits))));    \
   } while (0)
 
