@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #ifndef SDP_INT_H
 #define SDP_INT_H
 
-#include "bluetooth/uuid.h"
 #include "bt_target.h"
 #include "l2c_api.h"
 #include "osi/include/alarm.h"
@@ -38,8 +37,35 @@
 /* Timeout definitions. */
 #define SDP_INACT_TIMEOUT_MS (30 * 1000) /* Inactivity timeout (in ms) */
 
+/* Define the Out-Flow default values. */
+#define SDP_OFLOW_QOS_FLAG 0
+#define SDP_OFLOW_SERV_TYPE 0
+#define SDP_OFLOW_TOKEN_RATE 0
+#define SDP_OFLOW_TOKEN_BUCKET_SIZE 0
+#define SDP_OFLOW_PEAK_BANDWIDTH 0
+#define SDP_OFLOW_LATENCY 0
+#define SDP_OFLOW_DELAY_VARIATION 0
+
+/* Define the In-Flow default values. */
+#define SDP_IFLOW_QOS_FLAG 0
+#define SDP_IFLOW_SERV_TYPE 0
+#define SDP_IFLOW_TOKEN_RATE 0
+#define SDP_IFLOW_TOKEN_BUCKET_SIZE 0
+#define SDP_IFLOW_PEAK_BANDWIDTH 0
+#define SDP_IFLOW_LATENCY 0
+#define SDP_IFLOW_DELAY_VARIATION 0
+
+#define SDP_LINK_TO 0
+
+/* Define the type of device notification. */
+/* (Inquiry Scan and Page Scan)            */
+#define SDP_DEVICE_NOTI_LEN \
+  (sizeof(BT_HDR) + HCIC_PREAMBLE_SIZE + HCIC_PARAM_SIZE_WRITE_PARAM1)
+
+#define SDP_DEVICE_NOTI_FLAG 0x03
+
 /* Define the Protocol Data Unit (PDU) types.
- */
+*/
 #define SDP_PDU_ERROR_RESPONSE 0x01
 #define SDP_PDU_SERVICE_SEARCH_REQ 0x02
 #define SDP_PDU_SERVICE_SEARCH_RSP 0x03
@@ -62,7 +88,7 @@
 /* Internal UUID sequence representation */
 typedef struct {
   uint16_t len;
-  uint8_t value[bluetooth::Uuid::kNumBytes128];
+  uint8_t value[MAX_UUID_SIZE];
 } tUID_ENT;
 
 typedef struct {
@@ -106,6 +132,11 @@ typedef struct {
   tSDP_RECORD record[SDP_MAX_RECORDS];
 } tSDP_DB;
 
+enum {
+  SDP_IS_SEARCH,
+  SDP_IS_ATTR_SEARCH,
+};
+
 #if (SDP_SERVER_ENABLED == TRUE)
 /* Continuation information for the SDP server response */
 typedef struct {
@@ -134,7 +165,7 @@ typedef struct {
 #define SDP_FLAGS_MY_CFG_DONE 0x04
   uint8_t con_flags;
 
-  RawAddress device_address;
+  BD_ADDR device_address;
   alarm_t* sdp_conn_timer;
   uint16_t rem_mtu_size;
   uint16_t connection_id;
@@ -194,14 +225,27 @@ extern void sdp_init(void);
 extern void sdp_free(void);
 extern void sdp_disconnect(tCONN_CB* p_ccb, uint16_t reason);
 
+#if (SDP_DEBUG == TRUE)
+extern uint16_t sdp_set_max_attr_list_size(uint16_t max_size);
+#endif
+
+/* Functions provided by sdp_conn.cc
+*/
+extern void sdp_conn_rcv_l2e_conn_ind(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_conn_cfm(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_disc(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_config_ind(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_config_cfm(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_conn_failed(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_connected(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_conn_failed(BT_HDR* p_msg);
+extern void sdp_conn_rcv_l2e_data(BT_HDR* p_msg);
 extern void sdp_conn_timer_timeout(void* data);
 
-extern tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr);
+extern tCONN_CB* sdp_conn_originate(uint8_t* p_bd_addr);
 
 /* Functions provided by sdp_utils.cc
- */
-extern void sdpu_log_attribute_metrics(const RawAddress& bda,
-                                       tSDP_DISCOVERY_DB* p_db);
+*/
 extern tCONN_CB* sdpu_find_ccb_by_cid(uint16_t cid);
 extern tCONN_CB* sdpu_find_ccb_by_db(tSDP_DISCOVERY_DB* p_db);
 extern tCONN_CB* sdpu_allocate_ccb(void);
@@ -223,7 +267,8 @@ extern uint8_t* sdpu_get_len_from_type(uint8_t* p, uint8_t* p_end, uint8_t type,
 extern bool sdpu_is_base_uuid(uint8_t* p_uuid);
 extern bool sdpu_compare_uuid_arrays(uint8_t* p_uuid1, uint32_t len1,
                                      uint8_t* p_uuid2, uint16_t len2);
-extern bool sdpu_compare_uuid_with_attr(const bluetooth::Uuid& uuid,
+extern bool sdpu_compare_bt_uuids(tBT_UUID* p_uuid1, tBT_UUID* p_uuid2);
+extern bool sdpu_compare_uuid_with_attr(tBT_UUID* p_btuuid,
                                         tSDP_DISC_ATTR* p_attr);
 
 extern void sdpu_sort_attr_list(uint16_t num_attr, tSDP_DISCOVERY_DB* p_db);
@@ -237,7 +282,7 @@ extern uint8_t* sdpu_build_partial_attrib_entry(uint8_t* p_out,
                                                 uint16_t len, uint16_t* offset);
 
 /* Functions provided by sdp_db.cc
- */
+*/
 extern tSDP_RECORD* sdp_db_service_search(tSDP_RECORD* p_rec,
                                           tSDP_UUID_SEQ* p_seq);
 extern tSDP_RECORD* sdp_db_find_record(uint32_t handle);
@@ -246,7 +291,7 @@ extern tSDP_ATTRIBUTE* sdp_db_find_attr_in_rec(tSDP_RECORD* p_rec,
                                                uint16_t end_attr);
 
 /* Functions provided by sdp_server.cc
- */
+*/
 #if (SDP_SERVER_ENABLED == TRUE)
 extern void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg);
 #else
@@ -254,7 +299,7 @@ extern void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg);
 #endif
 
 /* Functions provided by sdp_discovery.cc
- */
+*/
 extern void sdp_disc_connected(tCONN_CB* p_ccb);
 extern void sdp_disc_server_rsp(tCONN_CB* p_ccb, BT_HDR* p_msg);
 
