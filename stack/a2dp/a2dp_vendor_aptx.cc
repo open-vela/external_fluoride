@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include "a2dp_vendor.h"
 #include "a2dp_vendor_aptx_encoder.h"
 #include "bt_utils.h"
+#include "btif_av_co.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -48,7 +49,7 @@ typedef struct {
 } tA2DP_APTX_CIE;
 
 /* aptX Source codec capabilities */
-static const tA2DP_APTX_CIE a2dp_aptx_caps = {
+static const tA2DP_APTX_CIE a2dp_aptx_source_caps = {
     A2DP_APTX_VENDOR_ID,                                       /* vendorId */
     A2DP_APTX_CODEC_ID_BLUETOOTH,                              /* codecId */
     (A2DP_APTX_SAMPLERATE_44100 | A2DP_APTX_SAMPLERATE_48000), /* sampleRate */
@@ -62,7 +63,7 @@ static const tA2DP_APTX_CIE a2dp_aptx_caps = {
 static const tA2DP_APTX_CIE a2dp_aptx_default_config = {
     A2DP_APTX_VENDOR_ID,               /* vendorId */
     A2DP_APTX_CODEC_ID_BLUETOOTH,      /* codecId */
-    A2DP_APTX_SAMPLERATE_44100,        /* sampleRate */
+    A2DP_APTX_SAMPLERATE_48000,        /* sampleRate */
     A2DP_APTX_CHANNELS_STEREO,         /* channelMode */
     A2DP_APTX_FUTURE_1,                /* future1 */
     A2DP_APTX_FUTURE_2,                /* future2 */
@@ -154,7 +155,16 @@ static tA2DP_STATUS A2DP_ParseInfoAptx(tA2DP_APTX_CIE* p_ie,
   p_ie->sampleRate = *p_codec_info & 0xF0;
   p_codec_info++;
 
-  if (is_capability) return A2DP_SUCCESS;
+  if (is_capability) {
+    // NOTE: The checks here are very liberal. We should be using more
+    // pedantic checks specific to the SRC or SNK as specified in the spec.
+    if (A2DP_BitsSet(p_ie->sampleRate) == A2DP_SET_ZERO_BIT)
+      return A2DP_BAD_SAMP_FREQ;
+    if (A2DP_BitsSet(p_ie->channelMode) == A2DP_SET_ZERO_BIT)
+      return A2DP_BAD_CH_MODE;
+
+    return A2DP_SUCCESS;
+  }
 
   if (A2DP_BitsSet(p_ie->sampleRate) != A2DP_SET_ONE_BIT)
     return A2DP_BAD_SAMP_FREQ;
@@ -198,16 +208,16 @@ static tA2DP_STATUS A2DP_CodecInfoMatchesCapabilityAptx(
   /* parse configuration */
   status = A2DP_ParseInfoAptx(&cfg_cie, p_codec_info, is_capability);
   if (status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: parsing failed %d", __func__, status);
+    LOG_ERROR("%s: parsing failed %d", __func__, status);
     return status;
   }
 
   /* verify that each parameter is in range */
 
-  LOG_DEBUG(LOG_TAG, "%s: FREQ peer: 0x%x, capability 0x%x", __func__,
-            cfg_cie.sampleRate, p_cap->sampleRate);
-  LOG_DEBUG(LOG_TAG, "%s: CH_MODE peer: 0x%x, capability 0x%x", __func__,
-            cfg_cie.channelMode, p_cap->channelMode);
+  LOG_VERBOSE("%s: FREQ peer: 0x%x, capability 0x%x", __func__,
+              cfg_cie.sampleRate, p_cap->sampleRate);
+  LOG_VERBOSE("%s: CH_MODE peer: 0x%x, capability 0x%x", __func__,
+              cfg_cie.channelMode, p_cap->channelMode);
 
   /* sampling frequency */
   if ((cfg_cie.sampleRate & p_cap->sampleRate) == 0) return A2DP_NS_SAMP_FREQ;
@@ -241,14 +251,12 @@ bool A2DP_VendorCodecTypeEqualsAptx(const uint8_t* p_codec_info_a,
   tA2DP_STATUS a2dp_status =
       A2DP_ParseInfoAptx(&aptx_cie_a, p_codec_info_a, true);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return false;
   }
   a2dp_status = A2DP_ParseInfoAptx(&aptx_cie_b, p_codec_info_b, true);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return false;
   }
 
@@ -264,19 +272,24 @@ bool A2DP_VendorCodecEqualsAptx(const uint8_t* p_codec_info_a,
   tA2DP_STATUS a2dp_status =
       A2DP_ParseInfoAptx(&aptx_cie_a, p_codec_info_a, true);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return false;
   }
   a2dp_status = A2DP_ParseInfoAptx(&aptx_cie_b, p_codec_info_b, true);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return false;
   }
 
   return (aptx_cie_a.sampleRate == aptx_cie_b.sampleRate) &&
          (aptx_cie_a.channelMode == aptx_cie_b.channelMode);
+}
+
+int A2DP_VendorGetBitRateAptx(const uint8_t* p_codec_info) {
+  A2dpCodecConfig* CodecConfig = bta_av_get_a2dp_current_codec();
+  tA2DP_BITS_PER_SAMPLE bits_per_sample = CodecConfig->getAudioBitsPerSample();
+  uint16_t samplerate = A2DP_GetTrackSampleRate(p_codec_info);
+  return (samplerate * bits_per_sample * 2) / 4;
 }
 
 int A2DP_VendorGetTrackSampleRateAptx(const uint8_t* p_codec_info) {
@@ -285,8 +298,7 @@ int A2DP_VendorGetTrackSampleRateAptx(const uint8_t* p_codec_info) {
   // Check whether the codec info contains valid data
   tA2DP_STATUS a2dp_status = A2DP_ParseInfoAptx(&aptx_cie, p_codec_info, false);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return -1;
   }
 
@@ -302,12 +314,12 @@ int A2DP_VendorGetTrackBitsPerSampleAptx(const uint8_t* p_codec_info) {
   // Check whether the codec info contains valid data
   tA2DP_STATUS a2dp_status = A2DP_ParseInfoAptx(&aptx_cie, p_codec_info, false);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return -1;
   }
 
-  return 16;  // For aptX we always use 16 bits per audio sample
+  // NOTE: The bits per sample never changes for aptX
+  return 16;
 }
 
 int A2DP_VendorGetTrackChannelCountAptx(const uint8_t* p_codec_info) {
@@ -316,8 +328,7 @@ int A2DP_VendorGetTrackChannelCountAptx(const uint8_t* p_codec_info) {
   // Check whether the codec info contains valid data
   tA2DP_STATUS a2dp_status = A2DP_ParseInfoAptx(&aptx_cie, p_codec_info, false);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
+    LOG_ERROR("%s: cannot decode codec information: %d", __func__, a2dp_status);
     return -1;
   }
 
@@ -346,33 +357,40 @@ bool A2DP_VendorBuildCodecHeaderAptx(UNUSED_ATTR const uint8_t* p_codec_info,
   return true;
 }
 
-void A2DP_VendorDumpCodecInfoAptx(const uint8_t* p_codec_info) {
+std::string A2DP_VendorCodecInfoStringAptx(const uint8_t* p_codec_info) {
+  std::stringstream res;
+  std::string field;
   tA2DP_STATUS a2dp_status;
   tA2DP_APTX_CIE aptx_cie;
 
-  LOG_DEBUG(LOG_TAG, "%s", __func__);
-
   a2dp_status = A2DP_ParseInfoAptx(&aptx_cie, p_codec_info, true);
   if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: A2DP_ParseInfoAptx fail:%d", __func__, a2dp_status);
-    return;
+    res << "A2DP_ParseInfoAptx fail: " << loghex(a2dp_status);
+    return res.str();
   }
 
-  LOG_DEBUG(LOG_TAG, "\tsamp_freq: 0x%x", aptx_cie.sampleRate);
-  if (aptx_cie.sampleRate & A2DP_APTX_SAMPLERATE_44100) {
-    LOG_DEBUG(LOG_TAG, "\tsamp_freq: (44100)");
-  }
-  if (aptx_cie.sampleRate & A2DP_APTX_SAMPLERATE_48000) {
-    LOG_DEBUG(LOG_TAG, "\tsamp_freq: (48000)");
-  }
+  res << "\tname: aptX\n";
 
-  LOG_DEBUG(LOG_TAG, "\tch_mode: 0x%x", aptx_cie.channelMode);
-  if (aptx_cie.channelMode & A2DP_APTX_CHANNELS_MONO) {
-    LOG_DEBUG(LOG_TAG, "\tch_mode: (Mono)");
-  }
-  if (aptx_cie.channelMode & A2DP_APTX_CHANNELS_STEREO) {
-    LOG_DEBUG(LOG_TAG, "\tch_mode: (Stereo)");
-  }
+  // Sample frequency
+  field.clear();
+  AppendField(&field, (aptx_cie.sampleRate == 0), "NONE");
+  AppendField(&field, (aptx_cie.sampleRate & A2DP_APTX_SAMPLERATE_44100),
+              "44100");
+  AppendField(&field, (aptx_cie.sampleRate & A2DP_APTX_SAMPLERATE_48000),
+              "48000");
+  res << "\tsamp_freq: " << field << " (" << loghex(aptx_cie.sampleRate)
+      << ")\n";
+
+  // Channel mode
+  field.clear();
+  AppendField(&field, (aptx_cie.channelMode == 0), "NONE");
+  AppendField(&field, (aptx_cie.channelMode & A2DP_APTX_CHANNELS_MONO), "Mono");
+  AppendField(&field, (aptx_cie.channelMode & A2DP_APTX_CHANNELS_STEREO),
+              "Stereo");
+  res << "\tch_mode: " << field << " (" << loghex(aptx_cie.channelMode)
+      << ")\n";
+
+  return res.str();
 }
 
 const tA2DP_ENCODER_INTERFACE* A2DP_VendorGetEncoderInterfaceAptx(
@@ -399,8 +417,8 @@ btav_a2dp_codec_index_t A2DP_VendorSourceCodecIndexAptx(
 
 const char* A2DP_VendorCodecIndexStrAptx(void) { return "aptX"; }
 
-bool A2DP_VendorInitCodecConfigAptx(tAVDT_CFG* p_cfg) {
-  if (A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &a2dp_aptx_caps,
+bool A2DP_VendorInitCodecConfigAptx(AvdtpSepConfig* p_cfg) {
+  if (A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &a2dp_aptx_source_caps,
                          p_cfg->codec_info) != A2DP_SUCCESS) {
     return false;
   }
@@ -418,20 +436,21 @@ bool A2DP_VendorInitCodecConfigAptx(tAVDT_CFG* p_cfg) {
 
 A2dpCodecConfigAptx::A2dpCodecConfigAptx(
     btav_a2dp_codec_priority_t codec_priority)
-    : A2dpCodecConfig(BTAV_A2DP_CODEC_INDEX_SOURCE_APTX, "aptX",
-                      codec_priority) {
+    : A2dpCodecConfig(BTAV_A2DP_CODEC_INDEX_SOURCE_APTX,
+                      A2DP_VendorCodecIndexStrAptx(), codec_priority) {
   // Compute the local capability
-  if (a2dp_aptx_caps.sampleRate & A2DP_APTX_SAMPLERATE_44100) {
+  if (a2dp_aptx_source_caps.sampleRate & A2DP_APTX_SAMPLERATE_44100) {
     codec_local_capability_.sample_rate |= BTAV_A2DP_CODEC_SAMPLE_RATE_44100;
   }
-  if (a2dp_aptx_caps.sampleRate & A2DP_APTX_SAMPLERATE_48000) {
+  if (a2dp_aptx_source_caps.sampleRate & A2DP_APTX_SAMPLERATE_48000) {
     codec_local_capability_.sample_rate |= BTAV_A2DP_CODEC_SAMPLE_RATE_48000;
   }
-  codec_local_capability_.bits_per_sample = a2dp_aptx_caps.bits_per_sample;
-  if (a2dp_aptx_caps.channelMode & A2DP_APTX_CHANNELS_MONO) {
+  codec_local_capability_.bits_per_sample =
+      a2dp_aptx_source_caps.bits_per_sample;
+  if (a2dp_aptx_source_caps.channelMode & A2DP_APTX_CHANNELS_MONO) {
     codec_local_capability_.channel_mode |= BTAV_A2DP_CODEC_CHANNEL_MODE_MONO;
   }
-  if (a2dp_aptx_caps.channelMode & A2DP_APTX_CHANNELS_STEREO) {
+  if (a2dp_aptx_source_caps.channelMode & A2DP_APTX_CHANNELS_STEREO) {
     codec_local_capability_.channel_mode |= BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO;
   }
 }
@@ -443,7 +462,7 @@ bool A2dpCodecConfigAptx::init() {
 
   // Load the encoder
   if (!A2DP_VendorLoadEncoderAptx()) {
-    LOG_ERROR(LOG_TAG, "%s: cannot load the encoder", __func__);
+    LOG_ERROR("%s: cannot load the encoder", __func__);
     return false;
   }
 
@@ -501,6 +520,8 @@ static bool select_audio_sample_rate(
     case BTAV_A2DP_CODEC_SAMPLE_RATE_96000:
     case BTAV_A2DP_CODEC_SAMPLE_RATE_176400:
     case BTAV_A2DP_CODEC_SAMPLE_RATE_192000:
+    case BTAV_A2DP_CODEC_SAMPLE_RATE_16000:
+    case BTAV_A2DP_CODEC_SAMPLE_RATE_24000:
     case BTAV_A2DP_CODEC_SAMPLE_RATE_NONE:
       break;
   }
@@ -594,7 +615,7 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
                                          bool is_capability,
                                          uint8_t* p_result_codec_config) {
   std::lock_guard<std::recursive_mutex> lock(codec_mutex_);
-  tA2DP_APTX_CIE sink_info_cie;
+  tA2DP_APTX_CIE peer_info_cie;
   tA2DP_APTX_CIE result_config_cie;
   uint8_t sampleRate;
   uint8_t channelMode;
@@ -616,10 +637,10 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
          sizeof(ota_codec_peer_config_));
 
   tA2DP_STATUS status =
-      A2DP_ParseInfoAptx(&sink_info_cie, p_peer_codec_info, is_capability);
+      A2DP_ParseInfoAptx(&peer_info_cie, p_peer_codec_info, is_capability);
   if (status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: can't parse peer's Sink capabilities: error = %d",
-              __func__, status);
+    LOG_ERROR("%s: can't parse peer's capabilities: error = %d", __func__,
+              status);
     goto fail;
   }
 
@@ -627,13 +648,13 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
   // Build the preferred configuration
   //
   memset(&result_config_cie, 0, sizeof(result_config_cie));
-  result_config_cie.vendorId = a2dp_aptx_caps.vendorId;
-  result_config_cie.codecId = a2dp_aptx_caps.codecId;
+  result_config_cie.vendorId = a2dp_aptx_source_caps.vendorId;
+  result_config_cie.codecId = a2dp_aptx_source_caps.codecId;
 
   //
   // Select the sample frequency
   //
-  sampleRate = a2dp_aptx_caps.sampleRate & sink_info_cie.sampleRate;
+  sampleRate = a2dp_aptx_source_caps.sampleRate & peer_info_cie.sampleRate;
   codec_config_.sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_NONE;
   switch (codec_user_config_.sample_rate) {
     case BTAV_A2DP_CODEC_SAMPLE_RATE_44100:
@@ -654,6 +675,8 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
     case BTAV_A2DP_CODEC_SAMPLE_RATE_96000:
     case BTAV_A2DP_CODEC_SAMPLE_RATE_176400:
     case BTAV_A2DP_CODEC_SAMPLE_RATE_192000:
+    case BTAV_A2DP_CODEC_SAMPLE_RATE_16000:
+    case BTAV_A2DP_CODEC_SAMPLE_RATE_24000:
     case BTAV_A2DP_CODEC_SAMPLE_RATE_NONE:
       codec_capability_.sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_NONE;
       codec_config_.sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_NONE;
@@ -688,7 +711,7 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
 
     // No user preference - try the default config
     if (select_best_sample_rate(
-            a2dp_aptx_default_config.sampleRate & sink_info_cie.sampleRate,
+            a2dp_aptx_default_config.sampleRate & peer_info_cie.sampleRate,
             &result_config_cie, &codec_config_)) {
       break;
     }
@@ -700,10 +723,10 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
     }
   } while (false);
   if (codec_config_.sample_rate == BTAV_A2DP_CODEC_SAMPLE_RATE_NONE) {
-    LOG_ERROR(LOG_TAG,
-              "%s: cannot match sample frequency: source caps = 0x%x "
-              "sink info = 0x%x",
-              __func__, a2dp_aptx_caps.sampleRate, sink_info_cie.sampleRate);
+    LOG_ERROR(
+        "%s: cannot match sample frequency: local caps = 0x%x "
+        "peer info = 0x%x",
+        __func__, a2dp_aptx_source_caps.sampleRate, peer_info_cie.sampleRate);
     goto fail;
   }
 
@@ -730,7 +753,7 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
   do {
     // Compute the selectable capability
     codec_selectable_capability_.bits_per_sample =
-        a2dp_aptx_caps.bits_per_sample;
+        a2dp_aptx_source_caps.bits_per_sample;
 
     if (codec_config_.bits_per_sample != BTAV_A2DP_CODEC_BITS_PER_SAMPLE_NONE)
       break;
@@ -755,8 +778,7 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
     }
   } while (false);
   if (codec_config_.bits_per_sample == BTAV_A2DP_CODEC_BITS_PER_SAMPLE_NONE) {
-    LOG_ERROR(LOG_TAG,
-              "%s: cannot match bits per sample: user preference = 0x%x",
+    LOG_ERROR("%s: cannot match bits per sample: user preference = 0x%x",
               __func__, codec_user_config_.bits_per_sample);
     goto fail;
   }
@@ -764,7 +786,7 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
   //
   // Select the channel mode
   //
-  channelMode = a2dp_aptx_caps.channelMode & sink_info_cie.channelMode;
+  channelMode = a2dp_aptx_source_caps.channelMode & peer_info_cie.channelMode;
   codec_config_.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
   switch (codec_user_config_.channel_mode) {
     case BTAV_A2DP_CODEC_CHANNEL_MODE_MONO:
@@ -815,7 +837,7 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
 
     // No user preference - try the default config
     if (select_best_channel_mode(
-            a2dp_aptx_default_config.channelMode & sink_info_cie.channelMode,
+            a2dp_aptx_default_config.channelMode & peer_info_cie.channelMode,
             &result_config_cie, &codec_config_)) {
       break;
     }
@@ -827,18 +849,20 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
     }
   } while (false);
   if (codec_config_.channel_mode == BTAV_A2DP_CODEC_CHANNEL_MODE_NONE) {
-    LOG_ERROR(LOG_TAG,
-              "%s: cannot match channel mode: source caps = 0x%x "
-              "sink info = 0x%x",
-              __func__, a2dp_aptx_caps.channelMode, sink_info_cie.channelMode);
+    LOG_ERROR(
+        "%s: cannot match channel mode: local caps = 0x%x "
+        "peer info = 0x%x",
+        __func__, a2dp_aptx_source_caps.channelMode, peer_info_cie.channelMode);
     goto fail;
   }
 
   //
   // Set the rest of the fields as bit-wise AND operation
   //
-  result_config_cie.future1 = a2dp_aptx_caps.future1 & sink_info_cie.future1;
-  result_config_cie.future2 = a2dp_aptx_caps.future2 & sink_info_cie.future2;
+  result_config_cie.future1 =
+      a2dp_aptx_source_caps.future1 & peer_info_cie.future1;
+  result_config_cie.future2 =
+      a2dp_aptx_source_caps.future2 & peer_info_cie.future2;
 
   if (A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &result_config_cie,
                          p_result_codec_config) != A2DP_SUCCESS) {
@@ -860,10 +884,10 @@ bool A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_info,
   // Create a local copy of the peer codec capability/config, and the
   // result codec config.
   if (is_capability) {
-    status = A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &sink_info_cie,
+    status = A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &peer_info_cie,
                                 ota_codec_peer_capability_);
   } else {
-    status = A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &sink_info_cie,
+    status = A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &peer_info_cie,
                                 ota_codec_peer_config_);
   }
   CHECK(status == A2DP_SUCCESS);
@@ -885,5 +909,66 @@ fail:
          sizeof(ota_codec_peer_capability_));
   memcpy(ota_codec_peer_config_, saved_ota_codec_peer_config,
          sizeof(ota_codec_peer_config_));
+  return false;
+}
+
+bool A2dpCodecConfigAptx::setPeerCodecCapabilities(
+    const uint8_t* p_peer_codec_capabilities) {
+  std::lock_guard<std::recursive_mutex> lock(codec_mutex_);
+  tA2DP_APTX_CIE peer_info_cie;
+  uint8_t sampleRate;
+  uint8_t channelMode;
+
+  // Save the internal state
+  btav_a2dp_codec_config_t saved_codec_selectable_capability =
+      codec_selectable_capability_;
+  uint8_t saved_ota_codec_peer_capability[AVDT_CODEC_SIZE];
+  memcpy(saved_ota_codec_peer_capability, ota_codec_peer_capability_,
+         sizeof(ota_codec_peer_capability_));
+
+  tA2DP_STATUS status =
+      A2DP_ParseInfoAptx(&peer_info_cie, p_peer_codec_capabilities, true);
+  if (status != A2DP_SUCCESS) {
+    LOG_ERROR("%s: can't parse peer's capabilities: error = %d", __func__,
+              status);
+    goto fail;
+  }
+
+  // Compute the selectable capability - sample rate
+  sampleRate = a2dp_aptx_source_caps.sampleRate & peer_info_cie.sampleRate;
+  if (sampleRate & A2DP_APTX_SAMPLERATE_44100) {
+    codec_selectable_capability_.sample_rate |=
+        BTAV_A2DP_CODEC_SAMPLE_RATE_44100;
+  }
+  if (sampleRate & A2DP_APTX_SAMPLERATE_48000) {
+    codec_selectable_capability_.sample_rate |=
+        BTAV_A2DP_CODEC_SAMPLE_RATE_48000;
+  }
+
+  // Compute the selectable capability - bits per sample
+  codec_selectable_capability_.bits_per_sample =
+      a2dp_aptx_source_caps.bits_per_sample;
+
+  // Compute the selectable capability - channel mode
+  channelMode = a2dp_aptx_source_caps.channelMode & peer_info_cie.channelMode;
+  if (channelMode & A2DP_APTX_CHANNELS_MONO) {
+    codec_selectable_capability_.channel_mode |=
+        BTAV_A2DP_CODEC_CHANNEL_MODE_MONO;
+  }
+  if (channelMode & A2DP_APTX_CHANNELS_STEREO) {
+    codec_selectable_capability_.channel_mode |=
+        BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO;
+  }
+
+  status = A2DP_BuildInfoAptx(AVDT_MEDIA_TYPE_AUDIO, &peer_info_cie,
+                              ota_codec_peer_capability_);
+  CHECK(status == A2DP_SUCCESS);
+  return true;
+
+fail:
+  // Restore the internal state
+  codec_selectable_capability_ = saved_codec_selectable_capability;
+  memcpy(ota_codec_peer_capability_, saved_ota_codec_peer_capability,
+         sizeof(ota_codec_peer_capability_));
   return false;
 }
