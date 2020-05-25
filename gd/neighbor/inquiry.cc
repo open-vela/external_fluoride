@@ -39,8 +39,12 @@ struct InquiryModule::impl {
   void StartOneShotInquiry(bool limited, InquiryLength inquiry_length, NumResponses num_responses);
   void StopOneShotInquiry();
 
-  void StartPeriodicInquiry(bool limited, InquiryLength inquiry_length, NumResponses num_responses,
-                            PeriodLength max_delay, PeriodLength min_delay);
+  void StartPeriodicInquiry(
+      bool limited,
+      InquiryLength inquiry_length,
+      NumResponses num_responses,
+      PeriodLength max_delay,
+      PeriodLength min_delay);
   void StopPeriodicInquiry();
 
   void SetScanActivity(ScanParameters params);
@@ -218,10 +222,13 @@ void neighbor::InquiryModule::impl::OnEvent(hci::EventPacketView view) {
     case hci::EventCode::EXTENDED_INQUIRY_RESULT: {
       auto packet = hci::ExtendedInquiryResultView::Create(view);
       ASSERT(packet.IsValid());
-      LOG_DEBUG("Extended inquiry result addr:%s repetition_mode:%s cod:%s clock_offset:%d rssi:%hhd",
-                packet.GetAddress().ToString().c_str(),
-                hci::PageScanRepetitionModeText(packet.GetPageScanRepetitionMode()).c_str(),
-                packet.GetClassOfDevice().ToString().c_str(), packet.GetClockOffset(), packet.GetRssi());
+      LOG_DEBUG(
+          "Extended inquiry result addr:%s repetition_mode:%s cod:%s clock_offset:%d rssi:%hhd",
+          packet.GetAddress().ToString().c_str(),
+          hci::PageScanRepetitionModeText(packet.GetPageScanRepetitionMode()).c_str(),
+          packet.GetClassOfDevice().ToString().c_str(),
+          packet.GetClockOffset(),
+          packet.GetRssi());
       inquiry_callbacks_.extended_result(packet);
     } break;
 
@@ -237,14 +244,14 @@ void neighbor::InquiryModule::impl::OnEvent(hci::EventPacketView view) {
 void neighbor::InquiryModule::impl::RegisterCallbacks(InquiryCallbacks callbacks) {
   inquiry_callbacks_ = callbacks;
 
-  hci_layer_->RegisterEventHandler(hci::EventCode::INQUIRY_RESULT,
-                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
-  hci_layer_->RegisterEventHandler(hci::EventCode::INQUIRY_RESULT_WITH_RSSI,
-                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
-  hci_layer_->RegisterEventHandler(hci::EventCode::EXTENDED_INQUIRY_RESULT,
-                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
-  hci_layer_->RegisterEventHandler(hci::EventCode::INQUIRY_COMPLETE,
-                                   common::Bind(&InquiryModule::impl::OnEvent, common::Unretained(this)), handler_);
+  hci_layer_->RegisterEventHandler(
+      hci::EventCode::INQUIRY_RESULT, handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+  hci_layer_->RegisterEventHandler(
+      hci::EventCode::INQUIRY_RESULT_WITH_RSSI, handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+  hci_layer_->RegisterEventHandler(
+      hci::EventCode::EXTENDED_INQUIRY_RESULT, handler_->BindOn(this, &InquiryModule::impl::OnEvent));
+  hci_layer_->RegisterEventHandler(
+      hci::EventCode::INQUIRY_COMPLETE, handler_->BindOn(this, &InquiryModule::impl::OnEvent));
 }
 
 void neighbor::InquiryModule::impl::UnregisterCallbacks() {
@@ -257,28 +264,25 @@ void neighbor::InquiryModule::impl::UnregisterCallbacks() {
 }
 
 void neighbor::InquiryModule::impl::EnqueueCommandComplete(std::unique_ptr<hci::CommandPacketBuilder> command) {
-  hci_layer_->EnqueueCommand(std::move(command), common::BindOnce(&impl::OnCommandComplete, common::Unretained(this)),
-                             handler_);
+  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandComplete));
 }
 
 void neighbor::InquiryModule::impl::EnqueueCommandStatus(std::unique_ptr<hci::CommandPacketBuilder> command) {
-  hci_layer_->EnqueueCommand(std::move(command), common::BindOnce(&impl::OnCommandStatus, common::Unretained(this)),
-                             handler_);
+  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandStatus));
 }
 
 void neighbor::InquiryModule::impl::EnqueueCommandCompleteSync(std::unique_ptr<hci::CommandPacketBuilder> command) {
   ASSERT(command_sync_ == nullptr);
   command_sync_ = new std::promise<void>();
   auto command_received = command_sync_->get_future();
-  hci_layer_->EnqueueCommand(std::move(command),
-                             common::BindOnce(&impl::OnCommandCompleteSync, common::Unretained(this)), handler_);
+  hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandCompleteSync));
   command_received.wait();
   delete command_sync_;
   command_sync_ = nullptr;
 }
 
-void neighbor::InquiryModule::impl::StartOneShotInquiry(bool limited, InquiryLength inquiry_length,
-                                                        NumResponses num_responses) {
+void neighbor::InquiryModule::impl::StartOneShotInquiry(
+    bool limited, InquiryLength inquiry_length, NumResponses num_responses) {
   ASSERT(HasCallbacks());
   ASSERT(!IsInquiryActive());
   hci::Lap lap;
@@ -299,9 +303,12 @@ void neighbor::InquiryModule::impl::StopOneShotInquiry() {
   EnqueueCommandComplete(hci::InquiryCancelBuilder::Create());
 }
 
-void neighbor::InquiryModule::impl::StartPeriodicInquiry(bool limited, InquiryLength inquiry_length,
-                                                         NumResponses num_responses, PeriodLength max_delay,
-                                                         PeriodLength min_delay) {
+void neighbor::InquiryModule::impl::StartPeriodicInquiry(
+    bool limited,
+    InquiryLength inquiry_length,
+    NumResponses num_responses,
+    PeriodLength max_delay,
+    PeriodLength min_delay) {
   ASSERT(HasCallbacks());
   ASSERT(!IsInquiryActive());
   hci::Lap lap;
@@ -341,8 +348,10 @@ void neighbor::InquiryModule::impl::Start() {
 
 void neighbor::InquiryModule::impl::Stop() {
   LOG_INFO("Inquiry scan interval:%hu window:%hu", inquiry_scan_.interval, inquiry_scan_.window);
-  LOG_INFO("Inquiry mode:%s scan_type:%s", hci::InquiryModeText(inquiry_mode_).c_str(),
-           hci::InquiryScanTypeText(inquiry_scan_type_).c_str());
+  LOG_INFO(
+      "Inquiry mode:%s scan_type:%s",
+      hci::InquiryModeText(inquiry_mode_).c_str(),
+      hci::InquiryScanTypeText(inquiry_scan_type_).c_str());
   LOG_INFO("Inquiry response tx power:%hhd", inquiry_response_tx_power_);
   LOG_DEBUG("Stopped inquiry module");
 }
@@ -356,8 +365,12 @@ void neighbor::InquiryModule::impl::SetInquiryMode(hci::InquiryMode mode) {
 void neighbor::InquiryModule::impl::SetScanActivity(ScanParameters params) {
   EnqueueCommandComplete(hci::WriteInquiryScanActivityBuilder::Create(params.interval, params.window));
   inquiry_scan_ = params;
-  LOG_DEBUG("Set scan activity interval:0x%x/%.02fms window:0x%x/%.02fms", params.interval,
-            ScanIntervalTimeMs(params.interval), params.window, ScanWindowTimeMs(params.window));
+  LOG_DEBUG(
+      "Set scan activity interval:0x%x/%.02fms window:0x%x/%.02fms",
+      params.interval,
+      ScanIntervalTimeMs(params.interval),
+      params.window,
+      ScanWindowTimeMs(params.window));
 }
 
 void neighbor::InquiryModule::impl::SetScanType(hci::InquiryScanType scan_type) {
@@ -388,13 +401,21 @@ void neighbor::InquiryModule::UnregisterCallbacks() {
 }
 
 void neighbor::InquiryModule::StartGeneralInquiry(InquiryLength inquiry_length, NumResponses num_responses) {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::StartOneShotInquiry,
-                                      common::Unretained(pimpl_.get()), false, inquiry_length, num_responses));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::StartOneShotInquiry,
+      common::Unretained(pimpl_.get()),
+      false,
+      inquiry_length,
+      num_responses));
 }
 
 void neighbor::InquiryModule::StartLimitedInquiry(InquiryLength inquiry_length, NumResponses num_responses) {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::StartOneShotInquiry,
-                                      common::Unretained(pimpl_.get()), true, inquiry_length, num_responses));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::StartOneShotInquiry,
+      common::Unretained(pimpl_.get()),
+      true,
+      inquiry_length,
+      num_responses));
 }
 
 void neighbor::InquiryModule::StopInquiry() {
@@ -402,18 +423,28 @@ void neighbor::InquiryModule::StopInquiry() {
       common::BindOnce(&neighbor::InquiryModule::impl::StopOneShotInquiry, common::Unretained(pimpl_.get())));
 }
 
-void neighbor::InquiryModule::StartGeneralPeriodicInquiry(InquiryLength inquiry_length, NumResponses num_responses,
-                                                          PeriodLength max_delay, PeriodLength min_delay) {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::StartPeriodicInquiry,
-                                      common::Unretained(pimpl_.get()), false, inquiry_length, num_responses, max_delay,
-                                      min_delay));
+void neighbor::InquiryModule::StartGeneralPeriodicInquiry(
+    InquiryLength inquiry_length, NumResponses num_responses, PeriodLength max_delay, PeriodLength min_delay) {
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::StartPeriodicInquiry,
+      common::Unretained(pimpl_.get()),
+      false,
+      inquiry_length,
+      num_responses,
+      max_delay,
+      min_delay));
 }
 
-void neighbor::InquiryModule::StartLimitedPeriodicInquiry(InquiryLength inquiry_length, NumResponses num_responses,
-                                                          PeriodLength max_delay, PeriodLength min_delay) {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::StartPeriodicInquiry,
-                                      common::Unretained(pimpl_.get()), true, inquiry_length, num_responses, max_delay,
-                                      min_delay));
+void neighbor::InquiryModule::StartLimitedPeriodicInquiry(
+    InquiryLength inquiry_length, NumResponses num_responses, PeriodLength max_delay, PeriodLength min_delay) {
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::StartPeriodicInquiry,
+      common::Unretained(pimpl_.get()),
+      true,
+      inquiry_length,
+      num_responses,
+      max_delay,
+      min_delay));
 }
 
 void neighbor::InquiryModule::StopPeriodicInquiry() {
@@ -427,28 +458,30 @@ void neighbor::InquiryModule::SetScanActivity(ScanParameters params) {
 }
 
 void neighbor::InquiryModule::SetInterlacedScan() {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::SetScanType, common::Unretained(pimpl_.get()),
-                                      hci::InquiryScanType::INTERLACED));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::SetScanType, common::Unretained(pimpl_.get()), hci::InquiryScanType::INTERLACED));
 }
 
 void neighbor::InquiryModule::SetStandardScan() {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::SetScanType, common::Unretained(pimpl_.get()),
-                                      hci::InquiryScanType::STANDARD));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::SetScanType, common::Unretained(pimpl_.get()), hci::InquiryScanType::STANDARD));
 }
 
 void neighbor::InquiryModule::SetStandardInquiryResultMode() {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::SetInquiryMode, common::Unretained(pimpl_.get()),
-                                      hci::InquiryMode::STANDARD));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::SetInquiryMode, common::Unretained(pimpl_.get()), hci::InquiryMode::STANDARD));
 }
 
 void neighbor::InquiryModule::SetInquiryWithRssiResultMode() {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::SetInquiryMode, common::Unretained(pimpl_.get()),
-                                      hci::InquiryMode::RSSI));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::SetInquiryMode, common::Unretained(pimpl_.get()), hci::InquiryMode::RSSI));
 }
 
 void neighbor::InquiryModule::SetExtendedInquiryResultMode() {
-  GetHandler()->Post(common::BindOnce(&neighbor::InquiryModule::impl::SetInquiryMode, common::Unretained(pimpl_.get()),
-                                      hci::InquiryMode::RSSI_OR_EXTENDED));
+  GetHandler()->Post(common::BindOnce(
+      &neighbor::InquiryModule::impl::SetInquiryMode,
+      common::Unretained(pimpl_.get()),
+      hci::InquiryMode::RSSI_OR_EXTENDED));
 }
 
 /**
