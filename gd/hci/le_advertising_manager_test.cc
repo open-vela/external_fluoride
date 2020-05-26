@@ -127,14 +127,11 @@ class TestHciLayer : public HciLayer {
   }
 
   ConnectionManagementCommandView GetCommandPacket(OpCode op_code) {
-    if (command_queue_.empty()) {
-      return ConnectionManagementCommandView::Create(
-          CommandPacketView::Create(std::make_shared<std::vector<uint8_t>>()));
-    }
+    ASSERT(!command_queue_.empty());
     CommandPacketView command_packet_view = CommandPacketView::Create(command_queue_.front());
     command_queue_.pop_front();
     ConnectionManagementCommandView command = ConnectionManagementCommandView::Create(command_packet_view);
-    EXPECT_TRUE(command.IsValid());
+    ASSERT(command.IsValid());
     EXPECT_EQ(command.GetOpCode(), op_code);
 
     return command;
