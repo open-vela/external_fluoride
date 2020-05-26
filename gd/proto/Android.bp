@@ -4,10 +4,7 @@ java_library_static {
     proto: {
         type: "lite",
     },
-    srcs: [
-        "bluetooth/metrics/bluetooth.proto",
-        "bluetooth/bluetoothKeystore/keystore.proto",
-    ],
+    srcs: ["bluetooth/metrics/bluetooth.proto"],
 }
 
 cc_library_static {
@@ -17,10 +14,7 @@ cc_library_static {
         export_proto_headers: true,
         type: "lite",
     },
-    srcs: [
-        "bluetooth/metrics/bluetooth.proto",
-        "bluetooth/bluetoothKeystore/keystore.proto",
-    ],
+    srcs: ["bluetooth/metrics/bluetooth.proto"],
 }
 
 cc_library_static {
@@ -33,8 +27,7 @@ cc_library_static {
     },
     srcs: [
         "bluetooth/dumpmod.proto",
-        "bluetooth/metrics/bluetooth.proto",
-        "bluetooth/bluetoothKeystore/keystore.proto",
+        "bluetooth/metrics/bluetooth.proto"
     ],
     apex_available: [
         "//apex_available:platform",
