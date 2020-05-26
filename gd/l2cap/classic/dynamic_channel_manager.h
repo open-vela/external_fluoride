@@ -22,9 +22,9 @@
 #include "l2cap/classic/dynamic_channel.h"
 #include "l2cap/classic/dynamic_channel_configuration_option.h"
 #include "l2cap/classic/dynamic_channel_service.h"
+#include "l2cap/classic/security_policy.h"
 #include "l2cap/l2cap_packets.h"
 #include "l2cap/psm.h"
-#include "l2cap/security_policy.h"
 #include "os/handler.h"
 
 namespace bluetooth {
@@ -45,6 +45,8 @@ class DynamicChannelManager {
     FAIL_NO_SERVICE_REGISTERED = 1,  // No service is registered
     FAIL_HCI_ERROR = 2,              // See hci_error
     FAIL_L2CAP_ERROR = 3,            // See l2cap_connection_response_result
+    FAIL_REMOTE_NOT_SUPPORT = 4,     // Remote not support required retansmission and flow control mode
+    FAIL_SECURITY_BLOCK = 5,         // Cannot enhance required security level
   };
 
   struct ConnectionResult {
