@@ -17,11 +17,9 @@
 #pragma once
 
 #include "common/bidi_queue.h"
-#include "hci/acl_manager/le_acl_connection.h"
 #include "l2cap/cid.h"
 #include "l2cap/internal/channel_impl.h"
 #include "l2cap/le/fixed_channel.h"
-#include "l2cap/le/link_options.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -45,7 +43,7 @@ class FixedChannelImpl : public l2cap::internal::ChannelImpl {
   /* Return the role we have in the associated link */
   virtual hci::Role GetRole() const;
 
-  virtual hci::acl_manager::LeAclConnection* GetAclConnection() const;
+  virtual hci::AclConnection* GetAclConnection() const;
 
   virtual void RegisterOnCloseCallback(os::Handler* user_handler, FixedChannel::OnCloseCallback on_close_callback);
 
@@ -74,8 +72,6 @@ class FixedChannelImpl : public l2cap::internal::ChannelImpl {
   common::BidiQueueEnd<packet::PacketView<packet::kLittleEndian>, packet::BasePacketBuilder>* GetQueueDownEnd() {
     return channel_queue_.GetDownEnd();
   }
-
-  LinkOptions* GetLinkOptions();
 
  private:
   // Constructor states
