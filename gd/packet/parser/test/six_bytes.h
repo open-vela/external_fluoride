@@ -53,9 +53,6 @@ class SixBytes final {
   bool operator!=(const SixBytes& rhs) const {
     return !(*this == rhs);
   }
-  std::string ToString() const {
-    return "SixBytes";
-  }
 };
 
 }  // namespace test
