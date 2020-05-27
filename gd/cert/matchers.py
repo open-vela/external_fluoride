@@ -89,10 +89,6 @@ class HciMatchers(object):
     def SimplePairingComplete():
         return lambda event: HciMatchers.EventWithCode(EventCode.SIMPLE_PAIRING_COMPLETE)
 
-    @staticmethod
-    def Disconnect():
-        return lambda event: HciMatchers.EventWithCode(EventCode.DISCONNECT)
-
 
 class NeighborMatchers(object):
 

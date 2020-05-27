@@ -46,8 +46,7 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     std::optional<PairingEvent> pairingAccepted = WaitUiPairingAccept();
     if (!pairingAccepted || pairingAccepted->ui_value == 0) {
       LOG_INFO("User either did not accept the remote pairing, or the prompt timed out");
-      // TODO: Uncomment this one once we find a way to attempt to send packet when the link is down
-      // SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::UNSPECIFIED_REASON));
+      SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::UNSPECIFIED_REASON));
       i.OnPairingFinished(PairingFailure("User either did not accept the remote pairing, or the prompt timed out"));
       return;
     }
