@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#define OS_ANDROID
+#include "os/log.h"
+#undef OS_ANDROID
 #include "scripted_beacon.h"
 
 #include <fstream>
@@ -26,7 +29,6 @@
 
 #include "model/devices/scripted_beacon_ble_payload.pb.h"
 #include "model/setup/device_boutique.h"
-#include "os/log.h"
 
 using std::vector;
 
