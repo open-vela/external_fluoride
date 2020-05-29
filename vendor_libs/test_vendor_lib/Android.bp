@@ -2,8 +2,7 @@
 // ========================================================
 cc_library_static {
     name: "libbt-rootcanal",
-    defaults: ["gd_defaults",],
-    header_libs: ["jni_headers"],
+    defaults: ["libchrome_support_defaults"],
     host_supported: true,
     proprietary: true,
     srcs: [
@@ -61,7 +60,6 @@ cc_library_static {
     ],
     shared_libs: [
         "libbase",
-        "libchrome",
         "liblog",
     ],
     static_libs: [
