@@ -2016,9 +2016,6 @@ void l2cu_process_our_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
       /*                 timer value in config response shall be greater than
        * received processing time */
       p_cfg->fcr.mon_tout = p_cfg->fcr.rtrans_tout = 0;
-
-      if (p_cfg->fcr.mode == L2CAP_FCR_STREAM_MODE)
-        p_cfg->fcr.max_transmit = p_cfg->fcr.tx_win_sz = 0;
     }
 
     /* Set the threshold to send acks (may be updated in the cfg response) */
@@ -2244,7 +2241,8 @@ bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
 
   /* Check with the BT manager if details about remote device are known */
   p_inq_info = BTM_InqDbRead(p_lcb->remote_bd_addr);
-  if (p_inq_info != NULL) {
+  if ((p_inq_info != NULL) &&
+      (p_inq_info->results.inq_result_type & BTM_INQ_RESULT_BR)) {
     page_scan_rep_mode = p_inq_info->results.page_scan_rep_mode;
     page_scan_mode = p_inq_info->results.page_scan_mode;
     clock_offset = (uint16_t)(p_inq_info->results.clock_offset);
