@@ -55,6 +55,8 @@ void SecurityManagerChannel::Release(hci::Address address) {
     return;
   }
   entry->second->Release();
+  entry->second.reset();
+  link_map_.erase(entry);
 }
 
 void SecurityManagerChannel::Disconnect(hci::Address address) {
@@ -64,6 +66,8 @@ void SecurityManagerChannel::Disconnect(hci::Address address) {
     return;
   }
   entry->second->Disconnect();
+  entry->second.reset();
+  link_map_.erase(entry);
 }
 
 void SecurityManagerChannel::OnCommandComplete(hci::CommandCompleteView packet) {
