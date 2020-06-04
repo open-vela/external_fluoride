@@ -2,7 +2,6 @@ filegroup {
     name: "BluetoothCommonSources",
     srcs: [
         "link_key.cc",
-        "init_flags.cc",
     ],
 }
 
@@ -13,6 +12,5 @@ filegroup {
         "bidi_queue_unittest.cc",
         "observer_registry_test.cc",
         "link_key_unittest.cc",
-        "init_flags_test.cc",
     ],
 }
