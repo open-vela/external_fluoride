@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Android Open Source Project
+ * Copyright 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,22 @@
  * limitations under the License.
  */
 
-#include "service/common/bluetooth/a2dp_codec_config.h"
-#include "stack/include/a2dp_vendor_ldac.h"
+#pragma once
 
-bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
-  return nullptr;
-}
+namespace bluetooth {
+namespace common {
 
-int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
-int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
-  return 0;
-}
-int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
+class InitFlags final {
+ public:
+  static void Load(const char** flags);
+
+  static bool GdCoreEnabled() {
+    return gd_core_enabled;
+  }
+
+ private:
+  static bool gd_core_enabled;
+};
+
+}  // namespace common
+}  // namespace bluetooth
