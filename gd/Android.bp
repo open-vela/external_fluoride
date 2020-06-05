@@ -224,6 +224,7 @@ cc_test {
     static_libs: [
         "libbluetooth_gd",
         "libgmock",
+        "libc++fs",
     ],
     shared_libs: [
         "libchrome",
