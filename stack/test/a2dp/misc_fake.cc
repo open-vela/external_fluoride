@@ -13,34 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include <queue>
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include "storage/config_cache.h"
-#include "storage/mutation_entry.h"
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-namespace bluetooth {
-namespace storage {
-
-class Mutation {
- public:
-  explicit Mutation(ConfigCache& storage_module) : config_cache_(storage_module) {}
-
-  void Add(MutationEntry entry) {
-    entries_.emplace(std::move(entry));
-  }
-
-  void Commit() {
-    config_cache_.Commit(*this);
-  }
-
-  friend ConfigCache;
-
- private:
-  ConfigCache& config_cache_;
-  std::queue<MutationEntry> entries_;
-};
-
-}  // namespace storage
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
