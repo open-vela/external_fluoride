@@ -27,26 +27,20 @@ class HalCaptures(object):
     @staticmethod
     def ReadBdAddrCompleteCapture():
         return Capture(
-            lambda packet: packet.payload[0:5] == b'\x0e\x0a\x01\x09\x10', lambda packet: hci_packets.ReadBdAddrCompleteView(
+            lambda packet: b'\x0e\x0a\x01\x09\x10' in packet.payload, lambda packet: hci_packets.ReadBdAddrCompleteView(
                 hci_packets.CommandCompleteView(
                     hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.payload))))))
 
     @staticmethod
     def ConnectionRequestCapture():
         return Capture(
-            lambda packet: packet.payload[0:2] == b'\x04\x0a', lambda packet: hci_packets.ConnectionRequestView(
+            lambda packet: b'\x04\x0a' in packet.payload, lambda packet: hci_packets.ConnectionRequestView(
                 hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.payload)))))
 
     @staticmethod
     def ConnectionCompleteCapture():
         return Capture(
-            lambda packet: packet.payload[0:3] == b'\x03\x0b\x00', lambda packet: hci_packets.ConnectionCompleteView(
-                hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.payload)))))
-
-    @staticmethod
-    def DisconnectionCompleteCapture():
-        return Capture(
-            lambda packet: packet.payload[0:2] == b'\x05\x04', lambda packet: hci_packets.DisconnectionCompleteView(
+            lambda packet: b'\x03\x0b\x00' in packet.payload, lambda packet: hci_packets.ConnectionCompleteView(
                 hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.payload)))))
 
     @staticmethod
@@ -63,26 +57,20 @@ class HciCaptures(object):
     @staticmethod
     def ReadBdAddrCompleteCapture():
         return Capture(
-            lambda packet: packet.event[0:5] == b'\x0e\x0a\x01\x09\x10', lambda packet: hci_packets.ReadBdAddrCompleteView(
+            lambda packet: b'\x0e\x0a\x01\x09\x10' in packet.event, lambda packet: hci_packets.ReadBdAddrCompleteView(
                 hci_packets.CommandCompleteView(
                     hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.event))))))
 
     @staticmethod
     def ConnectionRequestCapture():
         return Capture(
-            lambda packet: packet.event[0:2] == b'\x04\x0a', lambda packet: hci_packets.ConnectionRequestView(
+            lambda packet: b'\x04\x0a' in packet.event, lambda packet: hci_packets.ConnectionRequestView(
                 hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.event)))))
 
     @staticmethod
     def ConnectionCompleteCapture():
         return Capture(
-            lambda packet: packet.event[0:3] == b'\x03\x0b\x00', lambda packet: hci_packets.ConnectionCompleteView(
-                hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.event)))))
-
-    @staticmethod
-    def DisconnectionCompleteCapture():
-        return Capture(
-            lambda packet: packet.event[0:2] == b'\x05\x04', lambda packet: hci_packets.DisconnectionCompleteView(
+            lambda packet: b'\x03\x0b\x00' in packet.event, lambda packet: hci_packets.ConnectionCompleteView(
                 hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet.event)))))
 
     @staticmethod
