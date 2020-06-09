@@ -36,9 +36,6 @@ class L2capPerformanceTest(L2capTestBase):
         super().teardown_test()
 
     def _basic_mode_tx(self, mtu, packets):
-        """
-        Send the specified number of packets and return the time interval in ms.
-        """
         self._setup_link_from_cert()
 
         (dut_channel, cert_channel) = self._open_channel_from_cert()
@@ -50,28 +47,7 @@ class L2capPerformanceTest(L2capTestBase):
         self.performance_test_logger.end_interval("TX")
 
         duration = self.performance_test_logger.get_duration_of_intervals("TX")[0]
-        self.log.info("Duration: %s" % str(duration))
-
-        return duration
-
-    def _basic_mode_tx_fixed_interval(self, mtu, interval=timedelta(seconds=10), batch_size=20):
-        """
-        Send packets as much as possible over a certain interval, and return the
-        number of packets sent
-        """
-        self._setup_link_from_cert()
-
-        (dut_channel, cert_channel) = self._open_channel_from_cert()
-        start_time = datetime.now()
-        end_time = start_time + interval
-        packets_sent = 0
-        while datetime.now() < end_time:
-            for _ in range(batch_size):
-                dut_channel.send(b'a' * mtu)
-            packets_sent += batch_size
-            assertThat(cert_channel).emits(L2capMatchers.Data(b'a' * mtu), at_least_times=batch_size)
-
-        return packets_sent
+        self.log.info("Duration: %d" % duration)
 
     def _basic_mode_rx(self, mtu, packets):
         self._setup_link_from_cert()
@@ -87,12 +63,9 @@ class L2capPerformanceTest(L2capTestBase):
         self.performance_test_logger.end_interval("RX")
 
         duration = self.performance_test_logger.get_duration_of_intervals("RX")[0]
-        self.log.info("Duration: %s" % str(duration))
+        self.log.info("Duration: %d" % duration)
 
     def _ertm_mode_tx(self, mtu, packets, tx_window_size=10):
-        """
-        Send the specified number of packets and return the time interval in ms.
-        """
         # Make sure that number of packets is a multiple of tx_window_size
         packets = packets // tx_window_size * tx_window_size
         # For ERTM TX test, we have to do it sequentially because cert needs to ack
@@ -116,9 +89,7 @@ class L2capPerformanceTest(L2capTestBase):
         self.performance_test_logger.end_interval("TX")
 
         duration = self.performance_test_logger.get_duration_of_intervals("TX")[0]
-        self.log.info("Duration: %s" % str(duration))
-
-        return duration
+        self.log.info("Duration: %d" % duration)
 
     def _ertm_mode_rx(self, mtu, packets, tx_window_size=10):
         # Make sure that number of packets is a multiple of tx_window_size
@@ -144,19 +115,16 @@ class L2capPerformanceTest(L2capTestBase):
         self.performance_test_logger.end_interval("RX")
 
         duration = self.performance_test_logger.get_duration_of_intervals("RX")[0]
-        self.log.info("Duration: %s" % str(duration))
+        self.log.info("Duration: %d" % duration)
 
     def test_basic_mode_tx_672_100(self):
-        duration = self._basic_mode_tx(672, 100)
-        assertThat(duration).isWithin(timedelta(seconds=2))
+        self._basic_mode_tx(672, 100)
 
     def test_basic_mode_tx_100_100(self):
-        duration = self._basic_mode_tx(100, 100)
-        assertThat(duration).isWithin(timedelta(seconds=2))
+        self._basic_mode_tx(100, 100)
 
     def test_ertm_mode_tx_672_100(self):
-        duration = self._ertm_mode_tx(672, 100)
-        assertThat(duration).isWithin(timedelta(seconds=5))
+        self._ertm_mode_tx(672, 100)
 
     def test_basic_mode_rx_672_100(self):
         self._basic_mode_rx(672, 100)
@@ -177,11 +145,5 @@ class L2capPerformanceTest(L2capTestBase):
             assertThat(dut_channel).emits(L2capMatchers.PacketPayloadRawData(data))
             self.performance_test_logger.end_interval("RX")
         duration = self.performance_test_logger.get_duration_of_intervals("RX")
-        mean = sum(duration, timedelta()) / len(duration)
-        self.log.info("Mean: %s" % str(mean))
-
-    def test_basic_mode_number_of_packets_10_seconds_672(self):
-        number_packets = self._basic_mode_tx_fixed_interval(672)
-        # Requiring that 500 packets (20ms period on average) are sent
-        self.log.info("Packets sent: %d" % number_packets)
-        assertThat(number_packets > 500).isTrue()
+        mean = sum(duration) / len(duration)
+        self.log.info("Mean: %d" % mean)
