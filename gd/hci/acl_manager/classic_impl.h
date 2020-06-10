@@ -497,22 +497,18 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
 
   void OnEncryptionStateChanged(EncryptionChangeView encryption_change_view) override {
     if (!encryption_change_view.IsValid()) {
-      LOG_ERROR("Invalid packet");
+      LOG_ERROR("Received on_encryption_change with invalid packet");
       return;
     } else if (encryption_change_view.GetStatus() != ErrorCode::SUCCESS) {
       auto status = encryption_change_view.GetStatus();
       std::string error_code = ErrorCodeText(status);
-      LOG_ERROR("error_code %s", error_code.c_str());
+      LOG_ERROR("Received on_change_connection_link_key_complete with error code %s", error_code.c_str());
       return;
     }
     uint16_t handle = encryption_change_view.GetConnectionHandle();
-    auto acl_connection = classic_impl_->acl_connections_.find(handle);
-    if (acl_connection == classic_impl_->acl_connections_.end()) {
-      LOG_INFO("Invalid handle (already closed?) %d", handle);
-      return;
-    }
+    auto& acl_connection = classic_impl_->acl_connections_.find(handle)->second;
     EncryptionEnabled enabled = encryption_change_view.GetEncryptionEnabled();
-    acl_connection->second.connection_management_callbacks_->OnEncryptionChange(enabled);
+    acl_connection.connection_management_callbacks_->OnEncryptionChange(enabled);
   }
 
   void set_security_module(security::SecurityModule* security_module) {
