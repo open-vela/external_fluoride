@@ -62,7 +62,7 @@ class L2capDynamicServiceManagerTest : public ::testing::Test {
   void sync_user_handler() {
     std::promise<void> promise;
     auto future = promise.get_future();
-    user_handler_->CallOn(&promise, &std::promise<void>::set_value);
+    user_handler_->Post(common::BindOnce(&std::promise<void>::set_value, common::Unretained(&promise)));
     auto future_status = future.wait_for(std::chrono::seconds(1));
     EXPECT_EQ(future_status, std::future_status::ready);
   }
@@ -78,24 +78,23 @@ class L2capDynamicServiceManagerTest : public ::testing::Test {
 TEST_F(L2capDynamicServiceManagerTest, register_and_unregister_classic_dynamic_channel) {
   DynamicChannelServiceImpl::PendingRegistration pending_registration{
       .user_handler_ = user_handler_,
-      .security_policy_ = SecurityPolicy::_SDP_ONLY_NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK,
       .on_registration_complete_callback_ =
-          user_handler_->BindOnceOn(this, &L2capDynamicServiceManagerTest::OnServiceRegistered, true)};
+          common::BindOnce(&L2capDynamicServiceManagerTest::OnServiceRegistered, common::Unretained(this), true)};
   Cid cid = kSmpBrCid;
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
   manager_->Register(cid, std::move(pending_registration));
   EXPECT_TRUE(manager_->IsServiceRegistered(cid));
   sync_user_handler();
   EXPECT_TRUE(service_registered_);
-  manager_->Unregister(cid, user_handler_->BindOnce([] {}));
+  manager_->Unregister(cid, common::BindOnce([] {}), user_handler_);
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
 }
 
 TEST_F(L2capDynamicServiceManagerTest, register_classic_dynamic_channel_bad_cid) {
   DynamicChannelServiceImpl::PendingRegistration pending_registration{
-      .security_policy_ = SecurityPolicy::_SDP_ONLY_NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK,
+      .user_handler_ = user_handler_,
       .on_registration_complete_callback_ =
-          user_handler_->BindOnceOn(this, &L2capDynamicServiceManagerTest::OnServiceRegistered, false)};
+          common::BindOnce(&L2capDynamicServiceManagerTest::OnServiceRegistered, common::Unretained(this), false)};
   Cid cid = 0x1000;
   EXPECT_FALSE(manager_->IsServiceRegistered(cid));
   manager_->Register(cid, std::move(pending_registration));
