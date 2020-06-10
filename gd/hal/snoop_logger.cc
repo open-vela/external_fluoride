@@ -18,7 +18,6 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
 #include <bitset>
 #include <chrono>
 
@@ -133,7 +132,9 @@ void SnoopLogger::Stop() {}
 
 std::string SnoopLogger::file_path = SnoopLogger::DefaultFilePath;
 
-const ModuleFactory SnoopLogger::Factory = ModuleFactory([]() { return new SnoopLogger(); });
+const ModuleFactory SnoopLogger::Factory = ModuleFactory([]() {
+  return new SnoopLogger();
+});
 
 }  // namespace hal
 }  // namespace bluetooth
