@@ -70,16 +70,17 @@ ScriptedBeacon::ScriptedBeacon() {
   properties_.SetLeScanResponse({0x05,  // Length
                                  0x08,  // TYPE_NAME_SHORT
                                  'g', 'b', 'e', 'a'});
+  LOG_INFO("%s scripted_beacon registered %s", __func__, registered_ ? "true" : "false");
 }
 
 bool ScriptedBeacon::is_config_file_ready() {
-  static bool file_absence_logged = false;
   if (access(config_file_.c_str(), F_OK) == -1) {
-   if (!file_absence_logged) {
+   if (!file_absence_logged_) {
      LOG_INFO("%s: playback file %s not available",
               __func__,
               config_file_.c_str());
-     file_absence_logged = true;
+     add_event(PlaybackEvent::WAITING_FOR_FILE);
+     file_absence_logged_ = true;
    }
    return false;
  }
@@ -88,6 +89,7 @@ bool ScriptedBeacon::is_config_file_ready() {
    LOG_ERROR("%s: playback file %s is not readable",
             __func__,
             config_file_.c_str());
+   add_event(PlaybackEvent::FILE_NOT_READABLE);
    return false;
  }
  LOG_INFO("%s: playback file %s is available and readable",
@@ -107,37 +109,84 @@ bool has_time_elapsed(std::chrono::steady_clock::time_point time_point) {
 }
 
 void ScriptedBeacon::Initialize(const vector<std::string>& args) {
-  if (args.size() < 2) return;
+  if (args.size() < 2) {
+    LOG_ERROR("Initialization failed, need mac address, playback and playback events file arguments %s", __func__);
+    return;
+  }
 
   Address addr{};
   if (Address::FromString(args[1], addr)) properties_.SetLeAddress(addr);
 
-  if (args.size() < 3) return;
-
+  if (args.size() < 4) {
+    LOG_ERROR("Initialization failed, need playback and playback events file arguments %s", __func__);
+  }
   config_file_ = args[2];
+  events_file_ = args[3];
+  playback_events_.clear_events();
+  LOG_INFO("Initialized scripted beacon %s", __func__);
+}
+
+void ScriptedBeacon::populate_event(PlaybackEvent * event, PlaybackEvent::PlaybackEventType type) {
+  struct timespec ts_now = {};
+  clock_gettime(CLOCK_REALTIME, &ts_now);
+  uint64_t timestamp_sec = (uint64_t) ts_now.tv_sec;
+
+  LOG_INFO("%s: adding event: %d", __func__, type);
+  event->set_type(type);
+  event->set_secs_since_epoch(timestamp_sec);
+}
+
+// Adds events to events file; we won't be able to post anything to the file
+// until we set to permissive mode in tests. We set permissive mode in tests
+// when we copy playback file. Until then we capture all the events in write
+// it to the events file when it becomes available. There after we should be
+// able to write events to file as soon as they are posted.
+void ScriptedBeacon::add_event(PlaybackEvent::PlaybackEventType type) {
+  PlaybackEvent event;
+  if (prev_event_type_ == type) {
+   return;
+  }
+  if (!events_ostream_.is_open()) {
+    events_ostream_.open(events_file_, std::ios::out | std::ios::binary | std::ios::trunc);
+    // Check if we have successfully opened;
+    if (!events_ostream_.is_open()) {
+      LOG_INFO("%s: Events file not opened yet, for event: %d", __func__, type);
+      populate_event(playback_events_.add_events(), type);
+      prev_event_type_ = type;
+      return;
+    } else {
+      // write all events until now
+      for (const PlaybackEvent& event : playback_events_.events()) {
+        event.SerializeToOstream(&events_ostream_);
+      }
+    }
+  }
+  prev_event_type_ = type;
+  populate_event(&event, type);
+  event.SerializeToOstream(&events_ostream_);
+  events_ostream_.flush();
 }
 
 void ScriptedBeacon::TimerTick() {
   if (!scanned_once_) {
     Beacon::TimerTick();
   } else {
-    static std::chrono::steady_clock::time_point next_check_time =
-      std::chrono::steady_clock::now();
+    next_check_time_ = std::chrono::steady_clock::now();
     if (!play_back_on_) {
-      if (!has_time_elapsed(next_check_time)) {
+      if (!has_time_elapsed(next_check_time_)) {
         return;
       }
       if (!is_config_file_ready()) {
-        next_check_time = std::chrono::steady_clock::now() +
+        next_check_time_ = std::chrono::steady_clock::now() +
             std::chrono::steady_clock::duration(std::chrono::seconds(1));
         return;
       }
       // Give time for the file to be written completely before being read
       {
-        static std::chrono::steady_clock::time_point write_delay_next_check_time =
+        write_delay_next_check_time_ =
             std::chrono::steady_clock::now() +
             std::chrono::steady_clock::duration(std::chrono::seconds(1));
-         if (!has_time_elapsed(write_delay_next_check_time)) {
+         if (!has_time_elapsed(write_delay_next_check_time_)) {
            return;
          }
       }
@@ -147,7 +196,9 @@ void ScriptedBeacon::TimerTick() {
         LOG_ERROR("%s: Cannot parse playback file %s", __func__, config_file_.c_str());
         return;
       }
+      input.close();
       LOG_INFO("%s: Starting Ble advertisement playback from file: %s", __func__, config_file_.c_str());
+      add_event(PlaybackEvent::PLAYBACK_STARTED);
       play_back_on_ = true;
       get_next_advertisement();
     }
@@ -193,21 +244,22 @@ void ScriptedBeacon::IncomingPacket(
 }
 
 void ScriptedBeacon::get_next_advertisement() {
-  static int packet_num = 0;
 
-  if (packet_num < ble_ad_list_.advertisements().size()) {
-    std::string payload = ble_ad_list_.advertisements(packet_num).payload();
-    std::string mac_address = ble_ad_list_.advertisements(packet_num).mac_address();
+  if (packet_num_ < ble_ad_list_.advertisements().size()) {
+    std::string payload = ble_ad_list_.advertisements(packet_num_).payload();
+    std::string mac_address = ble_ad_list_.advertisements(packet_num_).mac_address();
     uint32_t delay_before_send_ms =
-        ble_ad_list_.advertisements(packet_num).delay_before_send_ms();
+        ble_ad_list_.advertisements(packet_num_).delay_before_send_ms();
     next_ad_.ad.assign(payload.begin(), payload.end());
     Address::FromString(mac_address, next_ad_.address);
     next_ad_.ad_time = std::chrono::steady_clock::now() +
                       std::chrono::steady_clock::duration(
                           std::chrono::milliseconds(delay_before_send_ms));
-    packet_num++;
+    packet_num_++;
   } else {
     play_back_complete_ = true;
+    add_event(PlaybackEvent::PLAYBACK_ENDED);
+    events_ostream_.close();
     LOG_INFO("%s: Completed Ble advertisement playback from file: %s", __func__, config_file_.c_str());
   }
 }
