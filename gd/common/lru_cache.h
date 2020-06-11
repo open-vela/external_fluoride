@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <os/log.h>
+
 #include <functional>
 #include <iterator>
 #include <list>
@@ -25,7 +27,6 @@
 #include <unordered_map>
 
 #include "common/list_map.h"
-#include "os/log.h"
 
 namespace bluetooth {
 namespace common {
@@ -80,14 +81,6 @@ class LruCache {
     capacity_ = other.capacity_;
     list_map_ = other.list_map_;
     return *this;
-  }
-
-  // comparison operators
-  bool operator==(const LruCache& rhs) const {
-    return capacity_ == rhs.capacity_ && list_map_ == rhs.list_map_;
-  }
-  bool operator!=(const LruCache& rhs) const {
-    return !(*this == rhs);
   }
 
   ~LruCache() {
