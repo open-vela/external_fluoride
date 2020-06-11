@@ -119,7 +119,11 @@ ErrorCode LinkLayerController::SendAclToRemote(
   AddressWithType destination = connections_.GetAddress(handle);
   Phy::Type phy = connections_.GetPhyType(handle);
 
-  ScheduleTask(milliseconds(1), [this, handle]() {
+  LOG_INFO("%s(%s): handle 0x%x size %d", __func__,
+           properties_.GetAddress().ToString().c_str(), handle,
+           static_cast<int>(acl_packet.size()));
+
+  ScheduleTask(milliseconds(5), [this, handle]() {
     std::vector<bluetooth::hci::CompletedPackets> completed_packets;
     bluetooth::hci::CompletedPackets cp;
     cp.connection_handle_ = handle;
@@ -842,7 +846,7 @@ void LinkLayerController::HandleLeConnection(AddressWithType address,
       ErrorCode::SUCCESS, handle, static_cast<bluetooth::hci::Role>(role),
       address.GetAddressType(), address.GetAddress(), connection_interval,
       connection_latency, supervision_timeout,
-      static_cast<bluetooth::hci::ClockAccuracy>(0x00));
+      static_cast<bluetooth::hci::MasterClockAccuracy>(0x00));
   send_event_(std::move(packet));
 }
 
@@ -900,6 +904,7 @@ void LinkLayerController::IncomingLeConnectCompletePacket(
 
 void LinkLayerController::IncomingLeScanPacket(
     model::packets::LinkLayerPacketView incoming) {
+
   auto to_send = model::packets::LeScanResponseBuilder::Create(
       properties_.GetLeAddress(), incoming.GetSourceAddress(),
       static_cast<model::packets::AddressType>(properties_.GetLeAddressType()),
@@ -975,7 +980,7 @@ void LinkLayerController::IncomingPagePacket(
              incoming.GetSourceAddress().ToString().c_str());
   }
 
-  bluetooth::hci::Address source_address{};
+  bluetooth::hci::Address source_address;
   bluetooth::hci::Address::FromString(page.GetSourceAddress().ToString(),
                                       source_address);
 
@@ -1023,7 +1028,8 @@ void LinkLayerController::IncomingPageResponsePacket(
 }
 
 void LinkLayerController::TimerTick() {
-  if (inquiry_timer_task_id_ != kInvalidTaskId) Inquiry();
+  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) Inquiry();
+  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) PageScan();
   LeAdvertising();
   Connections();
 }
@@ -1121,6 +1127,11 @@ void LinkLayerController::CancelScheduledTask(AsyncTaskId task_id) {
 void LinkLayerController::RegisterTaskCancel(
     std::function<void(AsyncTaskId)> task_cancel) {
   cancel_task_ = task_cancel;
+}
+
+void LinkLayerController::AddControllerEvent(milliseconds delay,
+                                             const TaskCallback& task) {
+  controller_events_.push_back(ScheduleTask(delay, task));
 }
 
 void LinkLayerController::WriteSimplePairingMode(bool enabled) {
@@ -1611,19 +1622,6 @@ ErrorCode LinkLayerController::WriteLinkPolicySettings(uint16_t handle,
   return ErrorCode::SUCCESS;
 }
 
-ErrorCode LinkLayerController::WriteDefaultLinkPolicySettings(
-    uint16_t settings) {
-  if (settings > 7 /* Sniff + Hold + Role switch */) {
-    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
-  }
-  default_link_policy_settings_ = settings;
-  return ErrorCode::SUCCESS;
-}
-
-uint16_t LinkLayerController::ReadDefaultLinkPolicySettings() {
-  return default_link_policy_settings_;
-}
-
 ErrorCode LinkLayerController::FlowSpecification(
     uint16_t handle, uint8_t flow_direction, uint8_t service_type,
     uint32_t /* token_rate */, uint32_t /* token_bucket_size */,
@@ -1645,46 +1643,6 @@ ErrorCode LinkLayerController::WriteLinkSupervisionTimeout(uint16_t handle,
   if (!connections_.HasHandle(handle)) {
     return ErrorCode::UNKNOWN_CONNECTION;
   }
-  return ErrorCode::SUCCESS;
-}
-
-void LinkLayerController::LeConnectionUpdateComplete(
-    bluetooth::hci::LeConnectionUpdateView connection_update) {
-  uint16_t handle = connection_update.GetConnectionHandle();
-  ErrorCode status = ErrorCode::SUCCESS;
-  if (!connections_.HasHandle(handle)) {
-    status = ErrorCode::UNKNOWN_CONNECTION;
-  }
-  uint16_t interval_min = connection_update.GetConnIntervalMin();
-  uint16_t interval_max = connection_update.GetConnIntervalMax();
-  uint16_t latency = connection_update.GetConnLatency();
-  uint16_t supervision_timeout = connection_update.GetSupervisionTimeout();
-
-  if (interval_min < 6 || interval_max > 0xC80 || interval_min > interval_max ||
-      interval_max < interval_min || latency > 0x1F3 ||
-      supervision_timeout < 0xA || supervision_timeout > 0xC80 ||
-      // The Supervision_Timeout in milliseconds (*10) shall be larger than (1 +
-      // Connection_Latency) * Connection_Interval_Max (* 5/4) * 2
-      supervision_timeout <= ((((1 + latency) * interval_max * 10) / 4) / 10)) {
-    status = ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
-  }
-  uint16_t interval = (interval_min + interval_max) / 2;
-  send_event_(bluetooth::hci::LeConnectionUpdateCompleteBuilder::Create(
-      status, handle, interval, latency, supervision_timeout));
-}
-
-ErrorCode LinkLayerController::LeConnectionUpdate(
-    bluetooth::hci::LeConnectionUpdateView connection_update) {
-  uint16_t handle = connection_update.GetConnectionHandle();
-  if (!connections_.HasHandle(handle)) {
-    return ErrorCode::UNKNOWN_CONNECTION;
-  }
-
-  // This could negotiate with the remote device in the future
-  ScheduleTask(milliseconds(25), [this, connection_update]() {
-    LeConnectionUpdateComplete(connection_update);
-  });
-
   return ErrorCode::SUCCESS;
 }
 
@@ -1782,31 +1740,29 @@ bool LinkLayerController::LeResolvingListFull() {
 }
 
 void LinkLayerController::Reset() {
-  if (inquiry_timer_task_id_ != kInvalidTaskId) {
-    CancelScheduledTask(inquiry_timer_task_id_);
-    inquiry_timer_task_id_ = kInvalidTaskId;
-  }
+  inquiry_state_ = Inquiry::InquiryState::STANDBY;
   last_inquiry_ = steady_clock::now();
   le_scan_enable_ = bluetooth::hci::OpCode::NONE;
   le_advertising_enable_ = 0;
   le_connect_ = 0;
 }
 
+void LinkLayerController::PageScan() {}
+
 void LinkLayerController::StartInquiry(milliseconds timeout) {
-  inquiry_timer_task_id_ = ScheduleTask(milliseconds(timeout), [this]() {
-    LinkLayerController::InquiryTimeout();
-  });
+  ScheduleTask(milliseconds(timeout),
+               [this]() { LinkLayerController::InquiryTimeout(); });
+  inquiry_state_ = Inquiry::InquiryState::INQUIRY;
 }
 
 void LinkLayerController::InquiryCancel() {
-  ASSERT(inquiry_timer_task_id_ != kInvalidTaskId);
-  CancelScheduledTask(inquiry_timer_task_id_);
-  inquiry_timer_task_id_ = kInvalidTaskId;
+  ASSERT(inquiry_state_ == Inquiry::InquiryState::INQUIRY);
+  inquiry_state_ = Inquiry::InquiryState::STANDBY;
 }
 
 void LinkLayerController::InquiryTimeout() {
-  if (inquiry_timer_task_id_ != kInvalidTaskId) {
-    inquiry_timer_task_id_ = kInvalidTaskId;
+  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) {
+    inquiry_state_ = Inquiry::InquiryState::STANDBY;
     auto packet =
         bluetooth::hci::InquiryCompleteBuilder::Create(ErrorCode::SUCCESS);
     send_event_(std::move(packet));
