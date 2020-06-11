@@ -47,6 +47,8 @@ void PacketDef::GenParserDefinition(std::ostream& s) const {
     s << "{ return " << name_ << "View(packet); }";
   }
 
+  GenTestingParserFromBytes(s);
+
   std::set<std::string> fixed_types = {
       FixedScalarField::kFieldType,
       FixedEnumField::kFieldType,
@@ -60,6 +62,10 @@ void PacketDef::GenParserDefinition(std::ostream& s) const {
     s << "\n";
   }
   GenValidator(s);
+  s << "\n";
+
+  s << " public:";
+  GenParserToString(s);
   s << "\n";
 
   s << " protected:\n";
@@ -82,6 +88,29 @@ void PacketDef::GenParserDefinition(std::ostream& s) const {
     }
   }
   s << "};\n";
+}
+
+void PacketDef::GenTestingParserFromBytes(std::ostream& s) const {
+  s << "\n#if defined(PACKET_FUZZ_TESTING) || defined(PACKET_TESTING) || defined(FUZZ_TARGET)\n";
+
+  s << "static " << name_ << "View FromBytes(std::vector<uint8_t> bytes) {";
+  s << "auto vec = std::make_shared<std::vector<uint8_t>>(bytes);";
+  s << "return " << name_ << "View::Create(";
+  auto ancestor_ptr = parent_;
+  size_t parent_parens = 0;
+  while (ancestor_ptr != nullptr) {
+    s << ancestor_ptr->name_ << "View::Create(";
+    parent_parens++;
+    ancestor_ptr = ancestor_ptr->parent_;
+  }
+  s << "vec";
+  for (size_t i = 0; i < parent_parens; i++) {
+    s << ")";
+  }
+  s << ");";
+  s << "}";
+
+  s << "\n#endif\n";
 }
 
 void PacketDef::GenParserDefinitionPybind11(std::ostream& s) const {
@@ -283,6 +312,35 @@ void PacketDef::GenValidator(std::ostream& s) const {
   }
 }
 
+void PacketDef::GenParserToString(std::ostream& s) const {
+  s << "virtual std::string ToString() " << (parent_ != nullptr ? " override" : "") << " {";
+  s << "std::stringstream ss;";
+  s << "ss << std::showbase << std::hex << \"" << name_ << " { \";";
+
+  if (fields_.size() > 0) {
+    s << "ss << \"\" ";
+    bool firstfield = true;
+    for (const auto& field : fields_) {
+      if (field->GetFieldType() == ReservedField::kFieldType || field->GetFieldType() == FixedScalarField::kFieldType ||
+          field->GetFieldType() == ChecksumStartField::kFieldType)
+        continue;
+
+      s << (firstfield ? " << \"" : " << \", ") << field->GetName() << " = \" << ";
+
+      field->GenStringRepresentation(s, field->GetGetterFunctionName() + "()");
+
+      if (firstfield) {
+        firstfield = false;
+      }
+    }
+    s << ";";
+  }
+
+  s << "ss << \" }\";";
+  s << "return ss.str();";
+  s << "}\n";
+}
+
 void PacketDef::GenBuilderDefinition(std::ostream& s) const {
   s << "class " << name_ << "Builder";
   if (parent_ != nullptr) {
@@ -300,6 +358,9 @@ void PacketDef::GenBuilderDefinition(std::ostream& s) const {
 
   if (!fields_.HasBody()) {
     GenBuilderCreate(s);
+    s << "\n";
+
+    GenTestingFromView(s);
     s << "\n";
   }
 
@@ -324,6 +385,26 @@ void PacketDef::GenBuilderDefinition(std::ostream& s) const {
 
   GenFuzzTestDefine(s);
   s << "\n";
+}
+
+void PacketDef::GenTestingFromView(std::ostream& s) const {
+  s << "#if defined(PACKET_FUZZ_TESTING) || defined(PACKET_TESTING) || defined(FUZZ_TARGET)\n";
+
+  s << "static std::unique_ptr<" << name_ << "Builder> FromView(" << name_ << "View view) {";
+  s << "return " << name_ << "Builder::Create(";
+  FieldList params = GetParamList().GetFieldsWithoutTypes({
+      BodyField::kFieldType,
+  });
+  for (int i = 0; i < params.size(); i++) {
+    params[i]->GenBuilderParameterFromView(s);
+    if (i != params.size() - 1) {
+      s << ", ";
+    }
+  }
+  s << ");";
+  s << "}";
+
+  s << "\n#endif\n";
 }
 
 void PacketDef::GenBuilderDefinitionPybind11(std::ostream& s) const {
@@ -356,39 +437,16 @@ void PacketDef::GenTestDefine(std::ostream& s) const {
   s << "class " << name_ << "ReflectionTest : public testing::TestWithParam<std::vector<uint8_t>> { ";
   s << "public: ";
   s << "void CompareBytes(std::vector<uint8_t> captured_packet) {";
-  s << "auto vec = std::make_shared<std::vector<uint8_t>>(captured_packet.begin(), captured_packet.end());";
-  s << name_ << "View view = " << name_ << "View::Create(";
-  auto ancestor_ptr = parent_;
-  size_t parent_parens = 0;
-  while (ancestor_ptr != nullptr) {
-    s << ancestor_ptr->name_ << "View::Create(";
-    parent_parens++;
-    ancestor_ptr = ancestor_ptr->parent_;
-  }
-  s << "vec";
-  for (size_t i = 0; i < parent_parens; i++) {
-    s << ")";
-  }
-  s << ");";
+  s << name_ << "View view = " << name_ << "View::FromBytes(captured_packet);";
   s << "if (!view.IsValid()) { LOG_INFO(\"Invalid Packet Bytes (size = %zu)\", view.size());";
   s << "for (size_t i = 0; i < view.size(); i++) { LOG_DEBUG(\"%5zd:%02X\", i, *(view.begin() + i)); }}";
   s << "ASSERT_TRUE(view.IsValid());";
-  s << "auto packet = " << name_ << "Builder::Create(";
-  FieldList params = GetParamList().GetFieldsWithoutTypes({
-      BodyField::kFieldType,
-  });
-  for (int i = 0; i < params.size(); i++) {
-    params[i]->GenBuilderParameterFromView(s);
-    if (i != params.size() - 1) {
-      s << ", ";
-    }
-  }
-  s << ");";
+  s << "auto packet = " << name_ << "Builder::FromView(view);";
   s << "std::shared_ptr<std::vector<uint8_t>> packet_bytes = std::make_shared<std::vector<uint8_t>>();";
   s << "packet_bytes->reserve(packet->size());";
   s << "BitInserter it(*packet_bytes);";
   s << "packet->Serialize(it);";
-  s << "ASSERT_EQ(*packet_bytes, *vec);";
+  s << "ASSERT_EQ(*packet_bytes, captured_packet);";
   s << "}";
   s << "};";
   s << "TEST_P(" << name_ << "ReflectionTest, generatedReflectionTest) {";
@@ -403,32 +461,10 @@ void PacketDef::GenFuzzTestDefine(std::ostream& s) const {
   s << "#if defined(PACKET_FUZZ_TESTING) || defined(PACKET_TESTING)\n";
   s << "#define DEFINE_" << name_ << "ReflectionFuzzTest() ";
   s << "void Run" << name_ << "ReflectionFuzzTest(const uint8_t* data, size_t size) {";
-  s << "auto vec = std::make_shared<std::vector<uint8_t>>(data, data + size);";
-  s << name_ << "View view = " << name_ << "View::Create(";
-  auto ancestor_ptr = parent_;
-  size_t parent_parens = 0;
-  while (ancestor_ptr != nullptr) {
-    s << ancestor_ptr->name_ << "View::Create(";
-    parent_parens++;
-    ancestor_ptr = ancestor_ptr->parent_;
-  }
-  s << "vec";
-  for (size_t i = 0; i < parent_parens; i++) {
-    s << ")";
-  }
-  s << ");";
+  s << "auto vec = std::vector<uint8_t>(data, data + size);";
+  s << name_ << "View view = " << name_ << "View::FromBytes(vec);";
   s << "if (!view.IsValid()) { return; }";
-  s << "auto packet = " << name_ << "Builder::Create(";
-  FieldList params = GetParamList().GetFieldsWithoutTypes({
-      BodyField::kFieldType,
-  });
-  for (int i = 0; i < params.size(); i++) {
-    params[i]->GenBuilderParameterFromView(s);
-    if (i != params.size() - 1) {
-      s << ", ";
-    }
-  }
-  s << ");";
+  s << "auto packet = " << name_ << "Builder::FromView(view);";
   s << "std::shared_ptr<std::vector<uint8_t>> packet_bytes = std::make_shared<std::vector<uint8_t>>();";
   s << "packet_bytes->reserve(packet->size());";
   s << "BitInserter it(*packet_bytes);";
@@ -539,17 +575,17 @@ void PacketDef::GenBuilderCreatePybind11(std::ostream& s) const {
       // Serialize each struct
       s << "auto " << param->GetName() + "_bytes = std::make_shared<std::vector<uint8_t>>();";
       s << param->GetName() + "_bytes->reserve(" << param->GetName() << "[i]->size());";
-      s << "auto " << param->GetName() + "_reparsed = std::make_unique<" << struct_type << ">();";
       s << "BitInserter " << param->GetName() + "_bi(*" << param->GetName() << "_bytes);";
       s << param->GetName() << "[i]->Serialize(" << param->GetName() << "_bi);";
       // Parse it again
       s << "auto " << param->GetName() << "_view = PacketView<kLittleEndian>(" << param->GetName() << "_bytes);";
-      s << "auto result = Parse" << struct_type << "(" << param->GetName() + "_view.begin());";
+      s << param->GetElementField()->GetDataType() << " " << param->GetName() << "_reparsed = ";
+      s << "Parse" << struct_type << "(" << param->GetName() + "_view.begin());";
       // Push it into a new container
       if (param->GetFieldType() == VectorField::kFieldType) {
         s << move_only_param_name << ".push_back(std::move(" << param->GetName() + "_reparsed));";
       } else if (param->GetFieldType() == ArrayField::kFieldType) {
-        s << move_only_param_name << "[i] = " << param->GetName() << "_reparsed;";
+        s << move_only_param_name << "[i] = std::move(" << param->GetName() << "_reparsed);";
       } else {
         ERROR() << param << " is not supported by Pybind11";
       }
