@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cctype>
 #include <cerrno>
 #include <cstring>
 #include <fstream>
@@ -107,27 +108,27 @@ bool WriteToFile(const std::string& path, const std::string& data) {
     return false;
   }
 
-  int dir_fd = open(directory_path.c_str(), O_RDONLY | O_DIRECTORY);
+  int dir_fd = open(directory_path.c_str(), O_RDONLY);
   if (dir_fd < 0) {
     LOG_ERROR("unable to open dir '%s', error: %s", directory_path.c_str(), strerror(errno));
     return false;
   }
 
-  FILE* fp = std::fopen(temp_path.c_str(), "wt");
+  FILE* fp = fopen(temp_path.c_str(), "wt");
   if (!fp) {
     LOG_ERROR("unable to write to file '%s', error: %s", temp_path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;
   }
 
-  if (std::fprintf(fp, "%s", data.c_str()) < 0) {
+  if (fprintf(fp, "%s", data.c_str()) < 0) {
     LOG_ERROR("unable to write to file '%s', error: %s", temp_path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;
   }
 
   // Flush the stream buffer to the temp file.
-  if (std::fflush(fp) != 0) {
+  if (fflush(fp) < 0) {
     LOG_ERROR("unable to write flush buffer to file '%s', error: %s", temp_path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;
@@ -135,12 +136,12 @@ bool WriteToFile(const std::string& path, const std::string& data) {
 
   // Sync written temp file out to disk. fsync() is blocking until data makes it
   // to disk.
-  if (fsync(fileno(fp)) != 0) {
+  if (fsync(fileno(fp)) < 0) {
     LOG_WARN("unable to fsync file '%s', error: %s", temp_path.c_str(), strerror(errno));
     // Allow fsync to fail and continue
   }
 
-  if (std::fclose(fp) != 0) {
+  if (fclose(fp) != 0) {
     LOG_ERROR("unable to close file '%s', error: %s", temp_path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;
@@ -148,25 +149,25 @@ bool WriteToFile(const std::string& path, const std::string& data) {
   fp = nullptr;
 
   // Change the file's permissions to Read/Write by User and Group
-  if (chmod(temp_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) != 0) {
+  if (chmod(temp_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) == -1) {
     LOG_ERROR("unable to change file permissions '%s', error: %s", temp_path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;
   }
 
   // Rename written temp file to the actual config file.
-  if (std::rename(temp_path.c_str(), path.c_str()) == -1) {
+  if (rename(temp_path.c_str(), path.c_str()) == -1) {
     LOG_ERROR("unable to commit file from '%s' to '%s', error: %s", temp_path.c_str(), path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;
   }
 
   // This should ensure the directory is updated as well.
-  if (fsync(dir_fd) != 0) {
+  if (fsync(dir_fd) < 0) {
     LOG_WARN("unable to fsync dir '%s', error: %s", directory_path.c_str(), strerror(errno));
   }
 
-  if (close(dir_fd) != 0) {
+  if (close(dir_fd) < 0) {
     LOG_ERROR("unable to close dir '%s', error: %s", directory_path.c_str(), strerror(errno));
     HandleError(temp_path, &dir_fd, &fp);
     return false;

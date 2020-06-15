@@ -19,6 +19,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstdio>
 #include <filesystem>
 
 namespace testing {
@@ -32,7 +33,7 @@ TEST(FilesTest, write_read_loopback_test) {
   std::string text = "Hello world!\n";
   ASSERT_TRUE(WriteToFile(temp_file.string(), text));
   EXPECT_THAT(ReadSmallFile(temp_file.string()), Optional(StrEq(text)));
-  EXPECT_TRUE(std::filesystem::remove(temp_file));
+  EXPECT_EQ(remove(temp_file.c_str()), 0);
 }
 
 TEST(FilesTest, overwrite_test) {
@@ -44,7 +45,7 @@ TEST(FilesTest, overwrite_test) {
   text = "Foo bar!\n";
   ASSERT_TRUE(WriteToFile(temp_file.string(), text));
   EXPECT_THAT(ReadSmallFile(temp_file.string()), Optional(StrEq(text)));
-  EXPECT_TRUE(std::filesystem::remove(temp_file));
+  EXPECT_EQ(remove(temp_file.c_str()), 0);
 }
 
 TEST(FilesTest, write_read_empty_string_test) {
@@ -53,7 +54,7 @@ TEST(FilesTest, write_read_empty_string_test) {
   std::string text;
   ASSERT_TRUE(WriteToFile(temp_file.string(), text));
   EXPECT_THAT(ReadSmallFile(temp_file.string()), Optional(StrEq(text)));
-  EXPECT_TRUE(std::filesystem::remove(temp_file));
+  EXPECT_EQ(remove(temp_file.c_str()), 0);
 }
 
 TEST(FilesTest, read_non_existing_file_test) {

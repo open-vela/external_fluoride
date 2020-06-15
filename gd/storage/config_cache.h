@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <functional>
 #include <list>
 #include <mutex>
 #include <optional>
@@ -50,9 +49,14 @@ class ConfigCache {
   ConfigCache(ConfigCache&& other) noexcept;
   ConfigCache& operator=(ConfigCache&& other) noexcept;
 
-  // comparison operators, callback doesn't count
-  bool operator==(const ConfigCache& rhs) const;
-  bool operator!=(const ConfigCache& rhs) const;
+  // comparison operators
+  bool operator==(const ConfigCache& rhs) const {
+    return information_sections_ == rhs.information_sections_ && persistent_devices_ == rhs.persistent_devices_ &&
+           temporary_devices_ == rhs.temporary_devices_;
+  }
+  bool operator!=(const ConfigCache& rhs) const {
+    return !(*this == rhs);
+  }
 
   // observers
   virtual bool HasSection(const std::string& section) const;
@@ -61,8 +65,6 @@ class ConfigCache {
   virtual std::optional<std::string> GetProperty(const std::string& section, const std::string& property) const;
   // Returns a copy of persistent device MAC addresses
   virtual std::vector<std::string> GetPersistentDevices() const;
-  // Serialize to legacy config format
-  virtual std::string SerializeToLegacyFormat() const;
 
   // modifiers
   // Commit all mutation entries in sequence while holding the config mutex
@@ -71,12 +73,10 @@ class ConfigCache {
   virtual bool RemoveSection(const std::string& section);
   virtual bool RemoveProperty(const std::string& section, const std::string& property);
   // TODO: have a systematic way of doing this instead of specialized methods
-  // Remove sections with |property| set
-  virtual void RemoveSectionWithProperty(const std::string& property);
+  // Remove devices with "Restricted" property
+  virtual void RemoveRestricted();
   // remove all content in this config cache, restore it to the state after the explicit constructor
   virtual void Clear();
-  // Set a callback to notify interested party that a persistent config change has just happened
-  virtual void SetPersistentConfigChangedCallback(std::function<void()> persistent_config_changed_callback);
 
   // static methods
   // Check if section is formatted as a MAC address
@@ -85,12 +85,10 @@ class ConfigCache {
   static bool IsLinkKeyProperty(const std::string& property);
 
   // constants
-  static const std::string kDefaultSectionName;
+  static constexpr std::string_view kDefaultSectionName = "Global";
 
  private:
   mutable std::recursive_mutex mutex_;
-  // A callback to notify interested party that a persistent config change has just happened, empty by default
-  std::function<void()> persistent_config_changed_callback_;
   // Common section that does not relate to remote device, will be written to disk
   common::ListMap<std::string, common::ListMap<std::string, std::string>> information_sections_;
   // Information about persistent devices, normally paired, will be written to disk
@@ -98,13 +96,6 @@ class ConfigCache {
   // Information about temporary devices, normally unpaired, will not be written to disk, will be evicted automatically
   // if capacity exceeds given value during initialization
   common::LruCache<std::string, common::ListMap<std::string, std::string>> temporary_devices_;
-
-  // Convenience method to check if the callback is valid before calling it
-  inline void PersistentConfigChangedCallback() const {
-    if (persistent_config_changed_callback_) {
-      persistent_config_changed_callback_();
-    }
-  }
 };
 
 }  // namespace storage
