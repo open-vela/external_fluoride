@@ -6,7 +6,6 @@ filegroup {
             "legacy.cc",
             "legacy_osi_config.cc",
             "mutation_entry.cc",
-            "storage_module.cc",
     ],
 }
 
@@ -18,7 +17,6 @@ filegroup {
             "legacy_test.cc",
             "legacy_osi_config.cc",
             "mutation_test.cc",
-            "storage_module_test.cc",
     ],
 }
 

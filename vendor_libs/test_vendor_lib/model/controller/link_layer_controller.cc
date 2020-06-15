@@ -212,12 +212,6 @@ void LinkLayerController::IncomingPacket(
     case model::packets::PacketType::LE_CONNECT_COMPLETE:
       IncomingLeConnectCompletePacket(incoming);
       break;
-    case model::packets::PacketType::LE_ENCRYPT_CONNECTION:
-      IncomingLeEncryptConnection(incoming);
-      break;
-    case model::packets::PacketType::LE_ENCRYPT_CONNECTION_RESPONSE:
-      IncomingLeEncryptConnectionResponse(incoming);
-      break;
     case model::packets::PacketType::LE_SCAN:
       // TODO: Check Advertising flags and see if we are scannable.
       IncomingLeScanPacket(incoming);
@@ -298,11 +292,11 @@ void LinkLayerController::IncomingAclPacket(
   auto acl_view = bluetooth::hci::AclPacketView::Create(raw_packet);
   ASSERT(acl_view.IsValid());
 
-  LOG_INFO("Remote handle 0x%x size %d", acl_view.GetHandle(),
+  LOG_INFO("%s: remote handle 0x%x size %d", __func__, acl_view.GetHandle(),
            static_cast<int>(acl_view.size()));
   uint16_t local_handle =
       connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
-  LOG_INFO("Local handle 0x%x", local_handle);
+  LOG_INFO("%s: local handle 0x%x", __func__, local_handle);
 
   std::vector<uint8_t> payload_data(acl_view.GetPayload().begin(),
                                     acl_view.GetPayload().end());
@@ -494,13 +488,13 @@ void LinkLayerController::IncomingDisconnectPacket(
 
 void LinkLayerController::IncomingEncryptConnection(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO();
+  LOG_INFO("%s", __func__);
 
   // TODO: Check keys
   Address peer = incoming.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(peer);
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("Unknown connection @%s", peer.ToString().c_str());
+    LOG_INFO("%s: Unknown connection @%s", __func__, peer.ToString().c_str());
     return;
   }
   send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
@@ -520,12 +514,12 @@ void LinkLayerController::IncomingEncryptConnection(
 
 void LinkLayerController::IncomingEncryptConnectionResponse(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO();
+  LOG_INFO("%s", __func__);
   // TODO: Check keys
   uint16_t handle =
       connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("Unknown connection @%s",
+    LOG_INFO("%s: Unknown connection @%s", __func__,
              incoming.GetSourceAddress().ToString().c_str());
     return;
   }
@@ -659,9 +653,9 @@ void LinkLayerController::IncomingInquiryResponsePacket(
 
 void LinkLayerController::IncomingIoCapabilityRequestPacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_DEBUG();
+  LOG_DEBUG("%s", __func__);
   if (!simple_pairing_mode_enabled_) {
-    LOG_WARN("Only simple pairing mode is implemented");
+    LOG_WARN("%s: Only simple pairing mode is implemented", __func__);
     return;
   }
 
@@ -676,7 +670,7 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
   uint16_t handle = connections_.GetHandle(AddressWithType(
       peer, bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS));
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("Device not connected %s", peer.ToString().c_str());
+    LOG_INFO("%s: Device not connected %s", __func__, peer.ToString().c_str());
     return;
   }
 
@@ -697,7 +691,7 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
 
 void LinkLayerController::IncomingIoCapabilityResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_DEBUG();
+  LOG_DEBUG("%s", __func__);
 
   auto response = model::packets::IoCapabilityResponseView::Create(incoming);
   ASSERT(response.IsValid());
@@ -724,13 +718,13 @@ void LinkLayerController::IncomingIoCapabilityResponsePacket(
       AuthenticateRemoteStage1(peer, pairing_type);
     });
   } else {
-    LOG_INFO("Security Manager returned INVALID");
+    LOG_INFO("%s: Security Manager returned INVALID", __func__);
   }
 }
 
 void LinkLayerController::IncomingIoCapabilityNegativeResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_DEBUG();
+  LOG_DEBUG("%s", __func__);
   Address peer = incoming.GetSourceAddress();
 
   ASSERT(security_manager_.GetAuthenticationAddress() == peer);
@@ -811,12 +805,13 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
     if (!connections_.CreatePendingLeConnection(AddressWithType(
             address, static_cast<bluetooth::hci::AddressType>(address_type)))) {
       LOG_WARN(
-          "CreatePendingLeConnection failed for connection to %s (type %hhx)",
-          incoming.GetSourceAddress().ToString().c_str(), address_type);
+          "%s: CreatePendingLeConnection failed for connection to %s (type "
+          "%hhx)",
+          __func__, incoming.GetSourceAddress().ToString().c_str(),
+          address_type);
     }
-    LOG_INFO("Connecting to %s (type %hhx) own_address %s",
-             incoming.GetSourceAddress().ToString().c_str(), address_type,
-             properties_.GetLeAddress().ToString().c_str());
+    LOG_INFO("%s: connecting to %s (type %hhx)", __func__,
+             incoming.GetSourceAddress().ToString().c_str(), address_type);
     le_connect_ = false;
     le_scan_enable_ = bluetooth::hci::OpCode::NONE;
 
@@ -839,7 +834,7 @@ void LinkLayerController::HandleLeConnection(AddressWithType address,
   // TODO: Choose between LeConnectionComplete and LeEnhancedConnectionComplete
   uint16_t handle = connections_.CreateLeConnection(address, own_address);
   if (handle == acl::kReservedHandle) {
-    LOG_WARN("No pending connection for connection from %s",
+    LOG_WARN("%s: No pending connection for connection from %s", __func__,
              address.ToString().c_str());
     return;
   }
@@ -862,9 +857,9 @@ void LinkLayerController::IncomingLeConnectPacket(
           incoming.GetSourceAddress(), static_cast<bluetooth::hci::AddressType>(
                                            connect.GetAddressType())))) {
     LOG_WARN(
-        "CreatePendingLeConnection failed for connection from %s (type "
+        "%s: CreatePendingLeConnection failed for connection from %s (type "
         "%hhx)",
-        incoming.GetSourceAddress().ToString().c_str(),
+        __func__, incoming.GetSourceAddress().ToString().c_str(),
         connect.GetAddressType());
     return;
   }
@@ -901,61 +896,6 @@ void LinkLayerController::IncomingLeConnectCompletePacket(
       static_cast<uint8_t>(bluetooth::hci::Role::MASTER),
       complete.GetLeConnectionInterval(), complete.GetLeConnectionLatency(),
       complete.GetLeConnectionSupervisionTimeout());
-}
-
-void LinkLayerController::IncomingLeEncryptConnection(
-    model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO();
-
-  // TODO: Check keys
-  Address peer = incoming.GetSourceAddress();
-  uint16_t handle = connections_.GetHandleOnlyAddress(peer);
-  if (handle == acl::kReservedHandle) {
-    LOG_INFO("@%s: Unknown connection @%s",
-             incoming.GetDestinationAddress().ToString().c_str(),
-             peer.ToString().c_str());
-    return;
-  }
-  ErrorCode status = ErrorCode::SUCCESS;
-  auto le_encrypt = model::packets::LeEncryptConnectionView::Create(incoming);
-  ASSERT(le_encrypt.IsValid());
-
-  if (connections_.IsEncrypted(handle)) {
-    send_event_(bluetooth::hci::EncryptionKeyRefreshCompleteBuilder::Create(
-        status, handle));
-  } else {
-    connections_.Encrypt(handle);
-    send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
-        status, handle, bluetooth::hci::EncryptionEnabled::ON));
-  }
-  SendLeLinkLayerPacket(
-      model::packets::LeEncryptConnectionResponseBuilder::Create(
-          connections_.GetOwnAddress(handle).GetAddress(), peer,
-          le_encrypt.GetRand(), le_encrypt.GetEdiv(), le_encrypt.GetLtk()));
-}
-
-void LinkLayerController::IncomingLeEncryptConnectionResponse(
-    model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO();
-  // TODO: Check keys
-  uint16_t handle =
-      connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
-  if (handle == acl::kReservedHandle) {
-    LOG_INFO("@%s: Unknown connection @%s",
-             incoming.GetDestinationAddress().ToString().c_str(),
-             incoming.GetSourceAddress().ToString().c_str());
-    return;
-  }
-  ErrorCode status = ErrorCode::SUCCESS;
-
-  if (connections_.IsEncrypted(handle)) {
-    send_event_(bluetooth::hci::EncryptionKeyRefreshCompleteBuilder::Create(
-        status, handle));
-  } else {
-    connections_.Encrypt(handle);
-    send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
-        status, handle, bluetooth::hci::EncryptionEnabled::ON));
-  }
 }
 
 void LinkLayerController::IncomingLeScanPacket(
@@ -1025,12 +965,13 @@ void LinkLayerController::IncomingPagePacket(
     model::packets::LinkLayerPacketView incoming) {
   auto page = model::packets::PageView::Create(incoming);
   ASSERT(page.IsValid());
-  LOG_INFO("from %s", incoming.GetSourceAddress().ToString().c_str());
+  LOG_INFO("%s from %s", __func__,
+           incoming.GetSourceAddress().ToString().c_str());
 
   if (!connections_.CreatePendingConnection(
           incoming.GetSourceAddress(), properties_.GetAuthenticationEnable())) {
     // Send a response to indicate that we're busy, or drop the packet?
-    LOG_WARN("Failed to create a pending connection for %s",
+    LOG_WARN("%s: Failed to create a pending connection for %s", __func__,
              incoming.GetSourceAddress().ToString().c_str());
   }
 
@@ -1047,10 +988,10 @@ void LinkLayerController::IncomingPagePacket(
 
 void LinkLayerController::IncomingPageRejectPacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO("%s", incoming.GetSourceAddress().ToString().c_str());
+  LOG_INFO("%s: %s", __func__, incoming.GetSourceAddress().ToString().c_str());
   auto reject = model::packets::PageRejectView::Create(incoming);
   ASSERT(reject.IsValid());
-  LOG_INFO("Sending CreateConnectionComplete");
+  LOG_INFO("%s: Sending CreateConnectionComplete", __func__);
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
       static_cast<ErrorCode>(reject.GetReason()), 0x0eff,
       incoming.GetSourceAddress(), bluetooth::hci::LinkType::ACL,
@@ -1061,12 +1002,12 @@ void LinkLayerController::IncomingPageRejectPacket(
 void LinkLayerController::IncomingPageResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
   Address peer = incoming.GetSourceAddress();
-  LOG_INFO("%s", peer.ToString().c_str());
+  LOG_INFO("%s: %s", __func__, peer.ToString().c_str());
   bool awaiting_authentication = connections_.AuthenticatePendingConnection();
   uint16_t handle =
       connections_.CreateConnection(peer, incoming.GetDestinationAddress());
   if (handle == acl::kReservedHandle) {
-    LOG_WARN("No free handles");
+    LOG_WARN("%s: No free handles", __func__);
     return;
   }
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
@@ -1254,7 +1195,8 @@ ErrorCode LinkLayerController::LinkKeyRequestNegativeReply(
   // Simple pairing to get a key
   uint16_t handle = connections_.GetHandleOnlyAddress(address);
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("Device not connected %s", address.ToString().c_str());
+    LOG_INFO("%s: Device not connected %s", __func__,
+             address.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
@@ -1281,7 +1223,7 @@ ErrorCode LinkLayerController::IoCapabilityRequestReply(
         properties_.GetAddress(), peer, io_capability, oob_data_present_flag,
         authentication_requirements));
   } else {
-    LOG_INFO("Requesting remote capability");
+    LOG_INFO("%s: Requesting remote capability", __func__);
 
     SendLinkLayerPacket(model::packets::IoCapabilityRequestBuilder::Create(
         properties_.GetAddress(), peer, io_capability, oob_data_present_flag,
@@ -1455,13 +1397,14 @@ ErrorCode LinkLayerController::SetConnectionEncryption(
 ErrorCode LinkLayerController::AcceptConnectionRequest(const Address& addr,
                                                        bool try_role_switch) {
   if (!connections_.HasPendingConnection(addr)) {
-    LOG_INFO("No pending connection for %s", addr.ToString().c_str());
+    LOG_INFO("%s: No pending connection for %s", __func__,
+             addr.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
-  LOG_INFO("Accept in 200ms");
+  LOG_INFO("%s: Accept in 200ms", __func__);
   ScheduleTask(milliseconds(200), [this, addr, try_role_switch]() {
-    LOG_INFO("Accepted");
+    LOG_INFO("%s: Accepted", __func__);
     MakeSlaveConnection(addr, try_role_switch);
   });
 
@@ -1470,7 +1413,7 @@ ErrorCode LinkLayerController::AcceptConnectionRequest(const Address& addr,
 
 void LinkLayerController::MakeSlaveConnection(const Address& addr,
                                               bool try_role_switch) {
-  LOG_INFO("Sending page response to %s", addr.ToString().c_str());
+  LOG_INFO("%s sending page response to %s", __func__, addr.ToString().c_str());
   auto to_send = model::packets::PageResponseBuilder::Create(
       properties_.GetAddress(), addr, try_role_switch);
   SendLinkLayerPacket(std::move(to_send));
@@ -1478,10 +1421,10 @@ void LinkLayerController::MakeSlaveConnection(const Address& addr,
   uint16_t handle =
       connections_.CreateConnection(addr, properties_.GetAddress());
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("CreateConnection failed");
+    LOG_INFO("%s CreateConnection failed", __func__);
     return;
   }
-  LOG_INFO("CreateConnection returned handle 0x%x", handle);
+  LOG_INFO("%s CreateConnection returned handle 0x%x", __func__, handle);
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
       ErrorCode::SUCCESS, handle, addr, bluetooth::hci::LinkType::ACL,
       bluetooth::hci::Enable::DISABLED);
@@ -1491,7 +1434,8 @@ void LinkLayerController::MakeSlaveConnection(const Address& addr,
 ErrorCode LinkLayerController::RejectConnectionRequest(const Address& addr,
                                                        uint8_t reason) {
   if (!connections_.HasPendingConnection(addr)) {
-    LOG_INFO("No pending connection for %s", addr.ToString().c_str());
+    LOG_INFO("%s: No pending connection for %s", __func__,
+             addr.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
@@ -1505,7 +1449,7 @@ void LinkLayerController::RejectSlaveConnection(const Address& addr,
                                                 uint8_t reason) {
   auto to_send = model::packets::PageRejectBuilder::Create(
       properties_.GetAddress(), addr, reason);
-  LOG_INFO("Sending page reject to %s (reason 0x%02hhx)",
+  LOG_INFO("%s sending page reject to %s (reason 0x%02hhx)", __func__,
            addr.ToString().c_str(), reason);
   SendLinkLayerPacket(std::move(to_send));
 
@@ -1781,34 +1725,6 @@ void LinkLayerController::LeSetPrivacyMode(uint8_t address_type, Address addr,
   LOG_INFO("address type = %d ", address_type);
   LOG_INFO("address = %s ", addr.ToString().c_str());
   LOG_INFO("mode = %d ", mode);
-}
-
-void LinkLayerController::HandleLeEnableEncryption(
-    uint16_t handle, std::array<uint8_t, 8> rand, uint16_t ediv,
-    std::array<uint8_t, 16> ltk) {
-  // TODO: Check keys
-  // TODO: Block ACL traffic or at least guard against it
-  if (!connections_.HasHandle(handle)) {
-    return;
-  }
-  SendLeLinkLayerPacket(model::packets::LeEncryptConnectionBuilder::Create(
-      connections_.GetOwnAddress(handle).GetAddress(),
-      connections_.GetAddress(handle).GetAddress(), rand, ediv, ltk));
-}
-
-ErrorCode LinkLayerController::LeEnableEncryption(uint16_t handle,
-                                                  std::array<uint8_t, 8> rand,
-                                                  uint16_t ediv,
-                                                  std::array<uint8_t, 16> ltk) {
-  if (!connections_.HasHandle(handle)) {
-    LOG_INFO("Unknown handle %04x", handle);
-    return ErrorCode::UNKNOWN_CONNECTION;
-  }
-
-  ScheduleTask(milliseconds(5), [this, handle, rand, ediv, ltk]() {
-    HandleLeEnableEncryption(handle, rand, ediv, ltk);
-  });
-  return ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::LeWhiteListRemoveDevice(Address addr,
