@@ -2000,12 +2000,15 @@ void DualModeController::LeStartEncryption(CommandPacketView command) {
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
 
-  ErrorCode status = link_layer_controller_.LeEnableEncryption(
-      command_view.GetConnectionHandle(), command_view.GetRand(),
-      command_view.GetEdiv(), command_view.GetLtk());
+  uint16_t handle = command_view.GetConnectionHandle();
 
-  send_event_(bluetooth::hci::LeStartEncryptionStatusBuilder::Create(
-      status, kNumCommandPackets));
+  auto status_packet = bluetooth::hci::LeStartEncryptionStatusBuilder::Create(
+      ErrorCode::SUCCESS, kNumCommandPackets);
+  send_event_(std::move(status_packet));
+
+  auto complete_packet = bluetooth::hci::EncryptionChangeBuilder::Create(
+      ErrorCode::SUCCESS, handle, bluetooth::hci::EncryptionEnabled::OFF);
+  send_event_(std::move(complete_packet));
 }
 
 void DualModeController::ReadLoopbackMode(CommandPacketView command) {
