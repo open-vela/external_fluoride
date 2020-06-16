@@ -33,8 +33,6 @@ static_assert(sizeof(Address) == 6, "Address must be 6 bytes long!");
 const Address Address::kAny{{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};
 const Address Address::kEmpty{{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
 
-// Address cannot initialize member variables as it is a POD type
-// NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
 Address::Address(const uint8_t (&addr)[6]) {
   std::copy(addr, addr + kLength, address);
 };
@@ -48,7 +46,7 @@ std::string Address::ToString() const {
 }
 
 bool Address::FromString(const std::string& from, Address& to) {
-  Address new_addr{};
+  Address new_addr;
   if (from.length() != 17) {
     return false;
   }
@@ -88,7 +86,7 @@ size_t Address::FromOctets(const uint8_t* from) {
 };
 
 bool Address::IsValidAddress(const std::string& address) {
-  Address tmp{};
+  Address tmp;
   return Address::FromString(address, tmp);
 }
 
