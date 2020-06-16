@@ -3,12 +3,12 @@ syntax = "proto3";
 package bluetooth.hci;
 
 import "google/protobuf/empty.proto";
-import "facade/common.proto";
 
 service LeAclManagerFacade {
-  rpc CreateConnection(bluetooth.facade.BluetoothAddressWithType) returns (stream LeConnectionEvent) {}
-  rpc CancelConnection(bluetooth.facade.BluetoothAddressWithType) returns (google.protobuf.Empty) {}
+  rpc CreateConnection(LeConnectionMsg) returns (stream LeConnectionEvent) {}
+  rpc CancelConnection(LeConnectionMsg) returns (google.protobuf.Empty) {}
   rpc Disconnect(LeHandleMsg) returns (google.protobuf.Empty) {}
+  rpc AuthenticationRequested(LeHandleMsg) returns (google.protobuf.Empty) {}
   rpc SendAclData(LeAclData) returns (google.protobuf.Empty) {}
   rpc FetchAclData(google.protobuf.Empty) returns (stream LeAclData) {}
   rpc FetchIncomingConnection(google.protobuf.Empty) returns (stream LeConnectionEvent) {}
@@ -16,6 +16,11 @@ service LeAclManagerFacade {
 
 message LeHandleMsg {
   uint32 handle = 1;
+}
+
+message LeConnectionMsg {
+  uint32 address_type = 1;
+  bytes address = 2;
 }
 
 message LeConnectionEvent {
@@ -26,4 +31,3 @@ message LeAclData {
   uint32 handle = 1;
   bytes payload = 2;
 }
-

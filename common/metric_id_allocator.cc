@@ -42,8 +42,13 @@ static_assert((MetricIdAllocator::kMaxNumUnpairedDevicesInMemory +
               "kMaxNumPairedDevicesInMemory + MaxNumUnpairedDevicesInMemory");
 
 MetricIdAllocator::MetricIdAllocator()
-    : paired_device_cache_(kMaxNumPairedDevicesInMemory, LOGGING_TAG),
-      temporary_device_cache_(kMaxNumUnpairedDevicesInMemory, LOGGING_TAG) {}
+    : paired_device_cache_(kMaxNumPairedDevicesInMemory, LOGGING_TAG,
+                           [this](RawAddress mac_address, int id) {
+                             ForgetDevicePostprocess(mac_address, id);
+                           }),
+      temporary_device_cache_(
+          kMaxNumUnpairedDevicesInMemory, LOGGING_TAG,
+          [this](RawAddress dummy, int id) { this->id_set_.erase(id); }) {}
 
 bool MetricIdAllocator::Init(
     const std::unordered_map<RawAddress, int>& paired_device_map,
@@ -63,14 +68,11 @@ bool MetricIdAllocator::Init(
   }
 
   next_id_ = kMinId;
-  for (const auto& p : paired_device_map) {
+  for (const std::pair<RawAddress, int>& p : paired_device_map) {
     if (p.second < kMinId || p.second > kMaxId) {
       LOG(FATAL) << LOGGING_TAG << "Invalid Bluetooth Metric Id in config";
     }
-    auto evicted = paired_device_cache_.Put(p.first, p.second);
-    if (evicted) {
-      ForgetDevicePostprocess(evicted->first, evicted->second);
-    }
+    paired_device_cache_.Put(p.first, p.second);
     id_set_.insert(p.second);
     next_id_ = std::max(next_id_, p.second + 1);
   }
@@ -132,10 +134,7 @@ int MetricIdAllocator::AllocateId(const RawAddress& mac_address) {
   }
   id = next_id_++;
   id_set_.insert(id);
-  auto evicted = temporary_device_cache_.Put(mac_address, id);
-  if (evicted) {
-    this->id_set_.erase(evicted->second);
-  }
+  temporary_device_cache_.Put(mac_address, id);
 
   if (next_id_ > kMaxId) {
     next_id_ = kMinId;
@@ -161,10 +160,7 @@ bool MetricIdAllocator::SaveDevice(const RawAddress& mac_address) {
                << "Failed to remove device from temporary_device_cache_";
     return false;
   }
-  auto evicted = paired_device_cache_.Put(mac_address, id);
-  if (evicted) {
-    ForgetDevicePostprocess(evicted->first, evicted->second);
-  }
+  paired_device_cache_.Put(mac_address, id);
   if (!save_id_callback_(mac_address, id)) {
     LOG(ERROR) << LOGGING_TAG
                << "Callback returned false after saving the device";
