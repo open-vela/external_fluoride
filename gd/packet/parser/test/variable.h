@@ -62,10 +62,6 @@ class Variable final {
     *instance = ss.str();
     return it;
   }
-
-  std::string ToString() const {
-    return data;
-  }
 };
 
 }  // namespace test
