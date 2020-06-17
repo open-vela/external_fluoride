@@ -71,8 +71,6 @@ class AclManager : public Module {
   // successfully cancelled and already connected
   virtual void CancelConnect(Address address);
 
-  virtual void CancelLeConnect(AddressWithType address_with_type);
-
   virtual void MasterLinkKey(KeyFlag key_flag);
   virtual void SwitchRole(Address address, Role role);
   virtual uint16_t ReadDefaultLinkPolicySettings();
