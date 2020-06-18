@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -73,8 +73,8 @@ static const tL2CAP_APPL_INFO hst_reg_info = {
     NULL,
     hidh_l2cif_data_ind,
     hidh_l2cif_cong_ind,
-    NULL, /* tL2CA_TX_COMPLETE_CB */
-    NULL /* tL2CA_CREDITS_RECEIVED_CB */};
+    NULL /* tL2CA_TX_COMPLETE_CB */
+};
 
 /*******************************************************************************
  *
@@ -97,13 +97,11 @@ tHID_STATUS hidh_conn_reg(void) {
   hh_cb.l2cap_cfg.flush_to = HID_HOST_FLUSH_TO;
 
   /* Now, register with L2CAP */
-  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&hst_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&hst_reg_info)) {
     HIDH_TRACE_ERROR("HID-Host Control Registration failed");
     return (HID_ERR_L2CAP_FAILED);
   }
-  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&hst_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&hst_reg_info)) {
     L2CA_Deregister(HID_PSM_CONTROL);
     HIDH_TRACE_ERROR("HID-Host Interrupt Registration failed");
     return (HID_ERR_L2CAP_FAILED);
@@ -658,7 +656,7 @@ static void hidh_l2cif_disconnect_ind(uint16_t l2cap_cid, bool ack_needed) {
         (!(hh_cb.devices[dhandle].attr_mask & HID_RECONN_INIT)) &&
         (hh_cb.devices[dhandle].attr_mask & HID_NORMALLY_CONNECTABLE)) {
       hh_cb.devices[dhandle].conn_tries = 0;
-      uint64_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
+      period_ms_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
       alarm_set_on_mloop(hh_cb.devices[dhandle].conn.process_repage_timer,
                          interval_ms, hidh_process_repage_timer_timeout,
                          UINT_TO_PTR(dhandle));
@@ -1075,7 +1073,7 @@ static void hidh_conn_retry(uint8_t dhandle) {
 
   p_dev->conn.conn_state = HID_CONN_STATE_UNUSED;
 #if (HID_HOST_REPAGE_WIN > 0)
-  uint64_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
+  period_ms_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
   alarm_set_on_mloop(p_dev->conn.process_repage_timer, interval_ms,
                      hidh_process_repage_timer_timeout, UINT_TO_PTR(dhandle));
 #else
