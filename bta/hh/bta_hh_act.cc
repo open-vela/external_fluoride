@@ -44,8 +44,8 @@
 /*****************************************************************************
  *  Local Function prototypes
  ****************************************************************************/
-static void bta_hh_cback(uint8_t dev_handle, const RawAddress& addr,
-                         uint8_t event, uint32_t data, BT_HDR* pdata);
+static void bta_hh_cback(uint8_t dev_handle, BD_ADDR addr, uint8_t event,
+                         uint32_t data, BT_HDR* pdata);
 static tBTA_HH_STATUS bta_hh_get_trans_status(uint32_t result);
 
 #if (BTA_HH_DEBUG == TRUE)
@@ -183,8 +183,10 @@ static void bta_hh_sdp_cback(uint16_t result, uint16_t attr_mask,
     if (p_cb->sec_mask) attr_mask |= HID_SEC_REQUIRED;
 
 #if (BTA_HH_DEBUG == TRUE)
-    APPL_TRACE_EVENT("%s: p_cb: %d result 0x%02x, attr_mask 0x%02x, handle %x",
-                     __func__, p_cb, result, attr_mask, p_cb->hid_handle);
+    APPL_TRACE_EVENT(
+        "bta_hh_sdp_cback: p_cb: %d result 0x%02x, \
+                            attr_mask 0x%02x, handle %x",
+        p_cb, result, attr_mask, p_cb->hid_handle);
 #endif
 
     /* check to see type of device is supported , and should not been added
@@ -244,15 +246,17 @@ static void bta_hh_di_sdp_cback(uint16_t result) {
   tSDP_DI_GET_RECORD di_rec;
   tHID_STATUS ret;
 #if (BTA_HH_DEBUG == TRUE)
-  APPL_TRACE_EVENT("%s: p_cb: %d result 0x%02x", __func__, p_cb, result);
+  APPL_TRACE_EVENT("bta_hh_di_sdp_cback: p_cb: %d result 0x%02x", p_cb, result);
 #endif
 
   /* if DI record does not exist on remote device, vendor_id in
-   * tBTA_HH_DEV_DSCP_INFO will be set to 0xffff and we will allow the
-   * connection to go through. Spec mandates that DI record be set, but many
-   * HID devices do not set this. So for IOP purposes, we allow the connection
-   * to go through and update the DI record to invalid DI entry.
-   */
+   * tBTA_HH_DEV_DSCP_INFO will be
+       * set to 0xffff and we will allow the connection to go through. Spec
+   * mandates that DI
+       * record be set, but many HID devices do not set this. So for IOP
+   * purposes, we allow the
+       * connection to go through and update the DI record to invalid DI
+   * entry.*/
   if (((result == SDP_SUCCESS) || (result == SDP_NO_RECS_MATCH)) &&
       (p_cb != NULL)) {
     if (result == SDP_SUCCESS &&
@@ -274,8 +278,9 @@ static void bta_hh_di_sdp_cback(uint16_t result) {
       status = BTA_HH_OK;
     } else {
 #if (BTA_HH_DEBUG == TRUE)
-      APPL_TRACE_DEBUG("%s:  HID_HostGetSDPRecord failed: Status 0x%2x",
-                       __func__, ret);
+      APPL_TRACE_DEBUG(
+          "bta_hh_di_sdp_cback:  HID_HostGetSDPRecord failed: Status 0x%2x",
+          ret);
 #endif
     }
   }
@@ -319,7 +324,7 @@ void bta_hh_start_sdp(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
   if (p_cb->app_id) {
     status = BTA_HH_OK;
 #if (BTA_HH_DEBUG == TRUE)
-    APPL_TRACE_DEBUG("%s: skip SDP for known devices", __func__);
+    APPL_TRACE_DEBUG("bta_hh_start_sdp:: skip SDP for known devices");
 #endif
     if (p_cb->hid_handle == BTA_HH_INVALID_HANDLE) {
       if (HID_HostAddDev(p_cb->addr, p_cb->attr_mask, &hdl) == HID_SUCCESS) {
@@ -347,8 +352,10 @@ void bta_hh_start_sdp(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
                        p_bta_hh_cfg->sdp_db_size,
                        bta_hh_di_sdp_cback) != SDP_SUCCESS) {
 #if (BTA_HH_DEBUG == TRUE)
-      APPL_TRACE_DEBUG("%s:  SDP_DiDiscover failed: Status 0x%2X", __func__,
-                       status);
+      APPL_TRACE_DEBUG(
+          "bta_hh_start_sdp:  SDP_DiDiscover failed: \
+                    Status 0x%2X",
+          status);
 #endif
       status = BTA_HH_ERR_SDP;
       osi_free_and_reset((void**)&bta_hh_cb.p_disc_db);
@@ -388,13 +395,13 @@ void bta_hh_sdp_cmpl(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
   tBTA_HH_STATUS status = p_data->status;
 
 #if (BTA_HH_DEBUG == TRUE)
-  APPL_TRACE_DEBUG("%s:  status 0x%2X", __func__, p_data->status);
+  APPL_TRACE_DEBUG("bta_hh_sdp_cmpl:  status 0x%2X", p_data->status);
 #endif
 
   /* initialize call back data */
   memset((void*)&conn_dat, 0, sizeof(tBTA_HH_CONN));
   conn_dat.handle = p_cb->hid_handle;
-  conn_dat.bda = p_cb->addr;
+  bdcpy(conn_dat.bda, p_cb->addr);
 
   /* if SDP compl success */
   if (status == BTA_HH_OK) {
@@ -432,13 +439,12 @@ void bta_hh_sdp_cmpl(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
 
   if (status != BTA_HH_OK) {
     /* Check if this was incoming connection request  from an unknown device
-     * and connection failed due to missing HID Device SDP UUID
-     * In above condition, disconnect the link as well as remove the
-     * device from list of HID devices
-     */
+       **and connection failed due to missing HID Device SDP UUID
+       **In above condition, disconnect the link as well as remove the
+       **device from list of HID devices*/
     if ((status == BTA_HH_ERR_SDP) && (p_cb->incoming_conn) &&
         (p_cb->app_id == 0)) {
-      APPL_TRACE_DEBUG("%s: SDP failed for  incoming conn :hndl %d", __func__,
+      APPL_TRACE_DEBUG("bta_hh_sdp_cmpl:SDP failed for  incoming conn :hndl %d",
                        p_cb->incoming_hid_handle);
       HID_HostRemoveDev(p_cb->incoming_hid_handle);
     }
@@ -509,7 +515,7 @@ void bta_hh_open_cmpl_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
 
   memset((void*)&conn, 0, sizeof(tBTA_HH_CONN));
   conn.handle = dev_handle;
-  conn.bda = p_cb->addr;
+  bdcpy(conn.bda, p_cb->addr);
 
   /* increase connection number */
   bta_hh_cb.cnt_num++;
@@ -568,7 +574,7 @@ void bta_hh_open_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
       p_data ? (uint8_t)p_data->hid_cback.hdr.layer_specific : p_cb->hid_handle;
 
 #if (BTA_HH_DEBUG == TRUE)
-  APPL_TRACE_EVENT("%s:  Device[%d] connected", __func__, dev_handle);
+  APPL_TRACE_EVENT("bta_hh_open_act:  Device[%d] connected", dev_handle);
 #endif
 
   /* SDP has been done */
@@ -576,15 +582,14 @@ void bta_hh_open_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
     bta_hh_sm_execute(p_cb, BTA_HH_OPEN_CMPL_EVT, p_data);
   } else
   /*  app_id == 0 indicates an incoming conenction request arrives without SDP
-   *  performed, do it first
-   */
+      performed, do it first */
   {
     p_cb->incoming_conn = true;
     /* store the handle here in case sdp fails - need to disconnect */
     p_cb->incoming_hid_handle = dev_handle;
 
     memset(&conn_data, 0, sizeof(tBTA_HH_API_CONN));
-    conn_data.bd_addr = p_cb->addr;
+    bdcpy(conn_data.bd_addr, p_cb->addr);
     bta_hh_start_sdp(p_cb, (tBTA_HH_DATA*)&conn_data);
   }
 
@@ -665,7 +670,7 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
     case BTA_HH_OPEN_EVT:
       conn.status = p_data->hid_cback.data ? BTA_HH_ERR_PROTO : BTA_HH_OK;
       conn.handle = p_cb->hid_handle;
-      conn.bda = p_cb->addr;
+      bdcpy(conn.bda, p_cb->addr);
       (*bta_hh_cb.p_cback)(p_cb->w4_evt, (tBTA_HH*)&conn);
 #if (BTA_HH_DEBUG == TRUE)
       bta_hh_trace_dev_db();
@@ -774,7 +779,7 @@ void bta_hh_open_failure(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
   conn_dat.handle = p_cb->hid_handle;
   conn_dat.status =
       (reason == HID_ERR_AUTH_FAILED) ? BTA_HH_ERR_AUTH_FAILED : BTA_HH_ERR;
-  conn_dat.bda = p_cb->addr;
+  bdcpy(conn_dat.bda, p_cb->addr);
   HID_HostCloseDev(p_cb->hid_handle);
 
   /* Report OPEN fail event */
@@ -830,7 +835,7 @@ void bta_hh_close_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
     conn_dat.handle = p_cb->hid_handle;
     conn_dat.status =
         (reason == HID_ERR_AUTH_FAILED) ? BTA_HH_ERR_AUTH_FAILED : BTA_HH_ERR;
-    conn_dat.bda = p_cb->addr;
+    bdcpy(conn_dat.bda, p_cb->addr);
     HID_HostCloseDev(p_cb->hid_handle);
 
     /* Report OPEN fail event */
@@ -917,7 +922,7 @@ void bta_hh_maint_dev_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
 
   switch (p_dev_info->sub_event) {
     case BTA_HH_ADD_DEV_EVT: /* add a device */
-      dev_info.bda = p_dev_info->bda;
+      bdcpy(dev_info.bda, p_dev_info->bda);
       /* initialize callback data */
       if (p_cb->hid_handle == BTA_HH_INVALID_HANDLE) {
 #if (BTA_HH_LE_INCLUDED == TRUE)
@@ -965,7 +970,7 @@ void bta_hh_maint_dev_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
       break;
     case BTA_HH_RMV_DEV_EVT: /* remove device */
       dev_info.handle = (uint8_t)p_dev_info->hdr.layer_specific;
-      dev_info.bda = p_cb->addr;
+      bdcpy(dev_info.bda, p_cb->addr);
 
 #if (BTA_HH_LE_INCLUDED == TRUE)
       if (p_cb->is_le_device) {
@@ -1062,7 +1067,7 @@ void bta_hh_write_dev_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
         /* currently not expected */
         case HID_TRANS_DATAC:
         default:
-          APPL_TRACE_DEBUG("%s: cmd type = %d", __func__,
+          APPL_TRACE_DEBUG("bta_hh_write_dev_act:: cmd type = %d",
                            p_data->api_sndcmd.t_type);
           break;
       }
@@ -1095,13 +1100,13 @@ void bta_hh_write_dev_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-static void bta_hh_cback(uint8_t dev_handle, const RawAddress& addr,
-                         uint8_t event, uint32_t data, BT_HDR* pdata) {
+static void bta_hh_cback(uint8_t dev_handle, BD_ADDR addr, uint8_t event,
+                         uint32_t data, BT_HDR* pdata) {
   uint16_t sm_event = BTA_HH_INVALID_EVT;
   uint8_t xx = 0;
 
 #if (BTA_HH_DEBUG == TRUE)
-  APPL_TRACE_DEBUG("%s::HID_event [%s]", __func__,
+  APPL_TRACE_DEBUG("bta_hh_cback::HID_event [%s]",
                    bta_hh_hid_event_name(event));
 #endif
 
@@ -1144,7 +1149,7 @@ static void bta_hh_cback(uint8_t dev_handle, const RawAddress& addr,
     p_buf->hdr.event = sm_event;
     p_buf->hdr.layer_specific = (uint16_t)dev_handle;
     p_buf->data = data;
-    p_buf->addr = addr;
+    bdcpy(p_buf->addr, addr);
     p_buf->p_data = pdata;
 
     bta_sys_sendmsg(p_buf);
