@@ -78,7 +78,7 @@ static const int BT_HCI_RT_PRIORITY = 1;
 
 // Abort if there is no response to an HCI command.
 static const uint32_t COMMAND_PENDING_TIMEOUT_MS = 2000;
-static const uint32_t COMMAND_TIMEOUT_RESTART_US = 5000000;
+static const uint32_t COMMAND_TIMEOUT_RESTART_US = 500000;
 
 // Our interface
 static bool interface_created;
@@ -108,8 +108,7 @@ static list_t* commands_pending_response;
 static std::recursive_mutex commands_pending_response_mutex;
 
 // The hand-off point for data going to a higher layer, set by the higher layer
-static base::Callback<void(const tracked_objects::Location&, BT_HDR*)>
-    send_data_upwards;
+static fixed_queue_t* upwards_data_queue;
 
 static bool filter_incoming_event(BT_HDR* packet);
 static waiting_command_t* get_waiting_command(command_opcode_t opcode);
@@ -140,12 +139,12 @@ void initialization_complete() {
       FROM_HERE, base::Bind(&event_finish_startup, nullptr));
 }
 
-void hci_event_received(const tracked_objects::Location& from_here,
-                        BT_HDR* packet) {
+void hci_event_received(BT_HDR* packet) {
   btsnoop->capture(packet, true);
 
   if (!filter_incoming_event(packet)) {
-    send_data_upwards.Run(from_here, packet);
+    data_dispatcher_dispatch(interface.event_dispatcher, packet->data[0],
+                             packet);
   }
 }
 
@@ -299,11 +298,7 @@ EXPORT_SYMBOL extern const module_t hci_module = {
 
 // Interface functions
 
-static void set_data_cb(
-    base::Callback<void(const tracked_objects::Location&, BT_HDR*)>
-        send_data_cb) {
-  send_data_upwards = std::move(send_data_cb);
-}
+static void set_data_queue(fixed_queue_t* queue) { upwards_data_queue = queue; }
 
 static void transmit_command(BT_HDR* command,
                              command_complete_cb complete_callback,
@@ -343,7 +338,7 @@ static future_t* transmit_command_futured(BT_HDR* command) {
   return future;
 }
 
-static void transmit_downward(uint16_t type, void* data) {
+static void transmit_downward(data_dispatcher_type_t type, void* data) {
   if (type == MSG_STACK_TO_HC_HCI_CMD) {
     // TODO(zachoverflow): eliminate this call
     transmit_command((BT_HDR*)data, NULL, NULL, NULL);
@@ -441,8 +436,8 @@ static void fragmenter_transmit_finished(BT_HDR* packet,
     // This is kind of a weird case, since we're dispatching a partially sent
     // packet up to a higher layer.
     // TODO(zachoverflow): rework upper layer so this isn't necessary.
-
-    send_data_upwards.Run(FROM_HERE, packet);
+    data_dispatcher_dispatch(interface.event_dispatcher,
+                             packet->event & MSG_EVT_MASK, packet);
   }
 }
 
@@ -632,9 +627,9 @@ intercepted:
 static void dispatch_reassembled(BT_HDR* packet) {
   // Events should already have been dispatched before this point
   CHECK((packet->event & MSG_EVT_MASK) != MSG_HC_TO_STACK_HCI_EVT);
-  CHECK(!send_data_upwards.is_null());
+  CHECK(upwards_data_queue != NULL);
 
-  send_data_upwards.Run(FROM_HERE, packet);
+  fixed_queue_enqueue(upwards_data_queue, packet);
 }
 
 // Misc internal functions
@@ -678,8 +673,13 @@ static void init_layer_interface() {
   if (!interface_created) {
     // It's probably ok for this to live forever. It's small and
     // there's only one instance of the hci interface.
+    interface.event_dispatcher = data_dispatcher_new("hci_layer");
+    if (!interface.event_dispatcher) {
+      LOG_ERROR(LOG_TAG, "%s could not create upward dispatcher.", __func__);
+      return;
+    }
 
-    interface.set_data_cb = set_data_cb;
+    interface.set_data_queue = set_data_queue;
     interface.transmit_command = transmit_command;
     interface.transmit_command_futured = transmit_command_futured;
     interface.transmit_downward = transmit_downward;
@@ -689,9 +689,10 @@ static void init_layer_interface() {
 
 void hci_layer_cleanup_interface() {
   if (interface_created) {
-    send_data_upwards.Reset();
+    data_dispatcher_free(interface.event_dispatcher);
+    interface.event_dispatcher = NULL;
 
-    interface.set_data_cb = NULL;
+    interface.set_data_queue = NULL;
     interface.transmit_command = NULL;
     interface.transmit_command_futured = NULL;
     interface.transmit_downward = NULL;

@@ -122,8 +122,7 @@ void BTA_HhClose(uint8_t dev_handle) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HhOpen(const RawAddress& dev_bda, tBTA_HH_PROTO_MODE mode,
-                tBTA_SEC sec_mask) {
+void BTA_HhOpen(BD_ADDR dev_bda, tBTA_HH_PROTO_MODE mode, tBTA_SEC sec_mask) {
   tBTA_HH_API_CONN* p_buf =
       (tBTA_HH_API_CONN*)osi_calloc(sizeof(tBTA_HH_API_CONN));
 
@@ -131,7 +130,7 @@ void BTA_HhOpen(const RawAddress& dev_bda, tBTA_HH_PROTO_MODE mode,
   p_buf->hdr.layer_specific = BTA_HH_INVALID_HANDLE;
   p_buf->sec_mask = sec_mask;
   p_buf->mode = mode;
-  p_buf->bd_addr = dev_bda;
+  bdcpy(p_buf->bd_addr, dev_bda);
 
   bta_sys_sendmsg((void*)p_buf);
 }
@@ -272,7 +271,7 @@ void BTA_HhSendCtrl(uint8_t dev_handle, tBTA_HH_TRANS_CTRL_TYPE c_type) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HhSendData(uint8_t dev_handle, UNUSED_ATTR const RawAddress& dev_bda,
+void BTA_HhSendData(uint8_t dev_handle, UNUSED_ATTR BD_ADDR dev_bda,
                     BT_HDR* p_data) {
 #if (BTA_HH_LE_INCLUDED == TRUE)
   if (p_data->layer_specific != BTA_HH_RPTT_OUTPUT) {
@@ -316,9 +315,8 @@ void BTA_HhGetDscpInfo(uint8_t dev_handle) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HhAddDev(const RawAddress& bda, tBTA_HH_ATTR_MASK attr_mask,
-                  uint8_t sub_class, uint8_t app_id,
-                  tBTA_HH_DEV_DSCP_INFO dscp_info) {
+void BTA_HhAddDev(BD_ADDR bda, tBTA_HH_ATTR_MASK attr_mask, uint8_t sub_class,
+                  uint8_t app_id, tBTA_HH_DEV_DSCP_INFO dscp_info) {
   size_t len = sizeof(tBTA_HH_MAINT_DEV) + dscp_info.descriptor.dl_len;
   tBTA_HH_MAINT_DEV* p_buf = (tBTA_HH_MAINT_DEV*)osi_calloc(len);
 
@@ -329,7 +327,7 @@ void BTA_HhAddDev(const RawAddress& bda, tBTA_HH_ATTR_MASK attr_mask,
   p_buf->attr_mask = (uint16_t)attr_mask;
   p_buf->sub_class = sub_class;
   p_buf->app_id = app_id;
-  p_buf->bda = bda;
+  bdcpy(p_buf->bda, bda);
 
   memcpy(&p_buf->dscp_info, &dscp_info, sizeof(tBTA_HH_DEV_DSCP_INFO));
   if (dscp_info.descriptor.dl_len != 0 && dscp_info.descriptor.dsc_list) {

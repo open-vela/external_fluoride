@@ -14,7 +14,7 @@
 //  limitations under the License.
 //
 
-#include "android/bluetooth/advertise_data.h"
+#include "service/common/android/bluetooth/advertise_data.h"
 
 using android::OK;
 

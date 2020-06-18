@@ -27,7 +27,6 @@
 #define LOG_TAG "bt_main"
 
 #include <base/logging.h>
-#include <base/threading/thread.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
@@ -80,35 +79,13 @@
 static const hci_t* hci;
 
 /*******************************************************************************
- *  Externs
- ******************************************************************************/
-extern void btu_hci_msg_process(BT_HDR* p_msg);
-
-/*******************************************************************************
  *  Static functions
  ******************************************************************************/
 
-/******************************************************************************
- *
- * Function         post_to_hci_message_loop
- *
- * Description      Post an HCI event to the hci message queue
- *
- * Returns          None
- *
- *****************************************************************************/
-void post_to_hci_message_loop(const tracked_objects::Location& from_here,
-                              BT_HDR* p_msg) {
-  base::MessageLoop* hci_message_loop = get_message_loop();
-  if (!hci_message_loop || !hci_message_loop->task_runner().get()) {
-    LOG_ERROR(LOG_TAG, "%s: HCI message loop not running, accessed from %s",
-              __func__, from_here.ToString().c_str());
-    return;
-  }
-
-  hci_message_loop->task_runner()->PostTask(
-      from_here, base::Bind(&btu_hci_msg_process, p_msg));
-}
+/*******************************************************************************
+ *  Externs
+ ******************************************************************************/
+fixed_queue_t* btu_hci_msg_queue;
 
 /******************************************************************************
  *
@@ -128,7 +105,14 @@ void bte_main_boot_entry(void) {
     return;
   }
 
-  hci->set_data_cb(base::Bind(&post_to_hci_message_loop));
+  btu_hci_msg_queue = fixed_queue_new(SIZE_MAX);
+  if (btu_hci_msg_queue == NULL) {
+    LOG_ERROR(LOG_TAG, "%s unable to allocate hci message queue.", __func__);
+    return;
+  }
+
+  data_dispatcher_register_default(hci->event_dispatcher, btu_hci_msg_queue);
+  hci->set_data_queue(btu_hci_msg_queue);
 
   module_init(get_module(STACK_CONFIG_MODULE));
 }
@@ -143,6 +127,13 @@ void bte_main_boot_entry(void) {
  *
  *****************************************************************************/
 void bte_main_cleanup() {
+  data_dispatcher_register_default(hci_layer_get_interface()->event_dispatcher,
+                                   NULL);
+  hci->set_data_queue(NULL);
+  fixed_queue_free(btu_hci_msg_queue, NULL);
+
+  btu_hci_msg_queue = NULL;
+
   module_clean_up(get_module(STACK_CONFIG_MODULE));
 
   module_clean_up(get_module(INTEROP_MODULE));
