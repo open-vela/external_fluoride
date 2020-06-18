@@ -42,6 +42,10 @@ using bluetooth::Uuid;
 
 #define BLE_GATT_CL_SUP_FEAT_CACHING_BITMASK 0x01
 #define BLE_GATT_CL_SUP_FEAT_EATT_BITMASK 0x02
+#define BLE_GATT_CL_SUP_FEAT_MULTI_NOTIF_BITMASK 0x04
+
+#define BLE_GATT_CL_ANDROID_SUP_FEAT \
+  (BLE_GATT_CL_SUP_FEAT_EATT_BITMASK | BLE_GATT_CL_SUP_FEAT_MULTI_NOTIF_BITMASK)
 
 using gatt_eatt_support_cb = base::OnceCallback<void(const RawAddress&, bool)>;
 
@@ -417,7 +421,7 @@ void gatt_profile_db_init(void) {
   gatt_cb.handle_of_database_hash = service[4].attribute_handle;
 
   gatt_cb.gatt_svr_supported_feat_mask |= BLE_GATT_SVR_SUP_FEAT_EATT_BITMASK;
-  gatt_cb.gatt_cl_supported_feat_mask |= BLE_GATT_CL_SUP_FEAT_EATT_BITMASK;
+  gatt_cb.gatt_cl_supported_feat_mask |= BLE_GATT_CL_ANDROID_SUP_FEAT;
 
   if (gatt_sr_is_robust_caching_enabled())
     gatt_cb.gatt_cl_supported_feat_mask |= BLE_GATT_CL_SUP_FEAT_CACHING_BITMASK;
