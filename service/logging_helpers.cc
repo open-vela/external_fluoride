@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ const char* BtAclText(const bt_acl_state_t code) {
   }
 }
 
-std::string BtAddrString(const bt_bdaddr_t* addr) {
+std::string BtAddrString(const RawAddress* addr) {
   char buffer[20];
   snprintf(buffer, sizeof(buffer), "%02X:%02X:%02X:%02X:%02X:%02X",
            addr->address[0], addr->address[1], addr->address[2],

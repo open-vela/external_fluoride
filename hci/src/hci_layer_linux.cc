@@ -1,7 +1,7 @@
 /**********************************************************************
  *
- *  Copyright (C) 2017 The Android Open Source Project
- *  Copyright (C) 2015 Intel Corporation
+ *  Copyright 2017 The Android Open Source Project
+ *  Copyright 2015 Intel Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
  *
  **********************************************************************/
 #include <base/bind.h>
+#include <base/location.h>
 #include <base/logging.h>
 #include <base/threading/thread.h>
 #include <errno.h>
@@ -92,7 +93,7 @@ enum HciPacketType {
 };
 
 extern void initialization_complete();
-extern void hci_event_received(BT_HDR* packet);
+extern void hci_event_received(const base::Location& from_here, BT_HDR* packet);
 extern void acl_event_received(BT_HDR* packet);
 extern void sco_data_received(BT_HDR* packet);
 
@@ -129,7 +130,7 @@ void monitor_socket(int ctrl_fd, int fd) {
     switch (type) {
       case HCI_PACKET_TYPE_COMMAND:
         packet->event = MSG_HC_TO_STACK_HCI_EVT;
-        hci_event_received(packet);
+        hci_event_received(FROM_HERE, packet);
         break;
       case HCI_PACKET_TYPE_ACL_DATA:
         packet->event = MSG_HC_TO_STACK_HCI_ACL;
@@ -141,7 +142,7 @@ void monitor_socket(int ctrl_fd, int fd) {
         break;
       case HCI_PACKET_TYPE_EVENT:
         packet->event = MSG_HC_TO_STACK_HCI_EVT;
-        hci_event_received(packet);
+        hci_event_received(FROM_HERE, packet);
         break;
       default:
         LOG(FATAL) << "Unexpected event type: " << +type;
@@ -202,12 +203,12 @@ void hci_initialize() {
   addr.hci_dev = hci_interface;
   addr.hci_channel = HCI_CHANNEL_USER;
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    LOG(FATAL) << "socket bind error " << strerror(errno);
+    PLOG(FATAL) << "socket bind error";
   }
 
   int sv[2];
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
-    LOG(FATAL) << "socketpair failed: " << strerror(errno);
+    PLOG(FATAL) << "socketpair failed";
   }
 
   reader_thread_ctrl_fd = sv[0];
@@ -244,7 +245,7 @@ void hci_close() {
 }
 
 void hci_transmit(BT_HDR* packet) {
-  uint8_t type;
+  uint8_t type = 0;
 
   CHECK(bt_vendor_fd != -1);
 
@@ -273,7 +274,7 @@ void hci_transmit(BT_HDR* packet) {
 
   if (ret != packet->len + 1) LOG(ERROR) << "Should have send whole packet";
 
-  if (ret == -1) LOG(FATAL) << strerror(errno);
+  if (ret == -1) PLOG(FATAL) << "write failed";
 }
 
 static int wait_hcidev(void) {
@@ -287,7 +288,7 @@ static int wait_hcidev(void) {
 
   fd = socket(PF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
   if (fd < 0) {
-    LOG(ERROR) << "Bluetooth socket error: %s" << strerror(errno);
+    PLOG(ERROR) << "Bluetooth socket error";
     return -1;
   }
 
@@ -297,7 +298,7 @@ static int wait_hcidev(void) {
   addr.hci_channel = HCI_CHANNEL_CONTROL;
 
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    LOG(ERROR) << "HCI Channel Control: " << strerror(errno);
+    PLOG(ERROR) << "HCI Channel Control";
     close(fd);
     return -1;
   }
@@ -313,7 +314,7 @@ static int wait_hcidev(void) {
   ssize_t wrote;
   OSI_NO_INTR(wrote = write(fd, &ev, 6));
   if (wrote != 6) {
-    LOG(ERROR) << "Unable to write mgmt command: " << strerror(errno);
+    PLOG(ERROR) << "Unable to write mgmt command";
     ret = -1;
     goto end;
   }
@@ -322,7 +323,7 @@ static int wait_hcidev(void) {
     int n;
     OSI_NO_INTR(n = poll(fds, 1, MGMT_EV_POLL_TIMEOUT));
     if (n == -1) {
-      LOG(ERROR) << "Poll error: " << strerror(errno);
+      PLOG(ERROR) << "Poll error";
       ret = -1;
       break;
     } else if (n == 0) {
@@ -334,7 +335,7 @@ static int wait_hcidev(void) {
     if (fds[0].revents & POLLIN) {
       OSI_NO_INTR(n = read(fd, &ev, sizeof(struct mgmt_pkt)));
       if (n < 0) {
-        LOG(ERROR) << "Error reading control channel: " << strerror(errno);
+        PLOG(ERROR) << "Error reading control channel";
         ret = -1;
         break;
       }

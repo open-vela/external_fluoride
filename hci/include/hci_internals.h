@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,3 +26,5 @@
 #define HCI_SCO_PREAMBLE_SIZE 3
 // 1 byte for event code, 1 byte for parameter length (Volume 2, Part E, 5.4.4)
 #define HCI_EVENT_PREAMBLE_SIZE 2
+// 2 bytes for handle, 2 bytes for data length (Volume 2, Part E, 5.4.5)
+#define HCI_ISO_PREAMBLE_SIZE 4
