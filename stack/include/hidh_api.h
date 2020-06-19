@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ enum {
   HID_HDEV_EVT_VC_UNPLUG
 };
 typedef void(tHID_HOST_DEV_CALLBACK)(
-    uint8_t dev_handle, BD_ADDR addr,
+    uint8_t dev_handle, const RawAddress& addr,
     uint8_t event,  /* Event from HID-DEVICE. */
     uint32_t data,  /* Integer data corresponding to the event.*/
     BT_HDR* p_buf); /* Pointer data corresponding to the event. */
@@ -99,7 +99,8 @@ typedef void(tHID_HOST_DEV_CALLBACK)(
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-extern tHID_STATUS HID_HostGetSDPRecord(BD_ADDR addr, tSDP_DISCOVERY_DB* p_db,
+extern tHID_STATUS HID_HostGetSDPRecord(const RawAddress& addr,
+                                        tSDP_DISCOVERY_DB* p_db,
                                         uint32_t db_len,
                                         tHID_HOST_SDP_CALLBACK* sdp_cback);
 
@@ -134,7 +135,7 @@ extern tHID_STATUS HID_HostDeregister(void);
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-extern tHID_STATUS HID_HostAddDev(BD_ADDR addr, uint16_t attr_mask,
+extern tHID_STATUS HID_HostAddDev(const RawAddress& addr, uint16_t attr_mask,
                                   uint8_t* handle);
 
 /*******************************************************************************
@@ -214,7 +215,7 @@ extern tHID_STATUS HID_HostSetSecurityLevel(const char serv_name[],
  * Returns          true if device exists else false
  *
  ******************************************************************************/
-bool hid_known_hid_device(BD_ADDR bd_addr);
+bool hid_known_hid_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
