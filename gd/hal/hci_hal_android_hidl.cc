@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
+#include "hal/hci_hal.h"
+
+#include <stdlib.h>
+#include <vector>
+#include <future>
+
 #include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
 #include <android/hardware/bluetooth/1.0/IBluetoothHciCallbacks.h>
 #include <android/hardware/bluetooth/1.0/types.h>
-#include <stdlib.h>
 
-#include <future>
-#include <vector>
-
-#include "hal/hci_hal.h"
 #include "hal/snoop_logger.h"
 #include "os/log.h"
 
@@ -49,7 +50,8 @@ android::sp<HciDeathRecipient> hci_death_recipient_ = new HciDeathRecipient();
 
 class InternalHciCallbacks : public IBluetoothHciCallbacks {
  public:
-  InternalHciCallbacks(SnoopLogger* btsnoop_logger) : btsnoop_logger_(btsnoop_logger) {
+  InternalHciCallbacks(SnoopLogger* btsnoop_logger)
+      : btsnoop_logger_(btsnoop_logger) {
     init_promise_ = new std::promise<void>();
   }
 
@@ -74,7 +76,8 @@ class InternalHciCallbacks : public IBluetoothHciCallbacks {
 
   Return<void> hciEventReceived(const hidl_vec<uint8_t>& event) {
     std::vector<uint8_t> received_hci_packet(event.begin(), event.end());
-    btsnoop_logger_->capture(received_hci_packet, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::EVT);
+    btsnoop_logger_->capture(received_hci_packet, SnoopLogger::Direction::INCOMING,
+                             SnoopLogger::PacketType::EVT);
     if (callback_ != nullptr) {
       callback_->hciEventReceived(std::move(received_hci_packet));
     }
@@ -83,7 +86,8 @@ class InternalHciCallbacks : public IBluetoothHciCallbacks {
 
   Return<void> aclDataReceived(const hidl_vec<uint8_t>& data) {
     std::vector<uint8_t> received_hci_packet(data.begin(), data.end());
-    btsnoop_logger_->capture(received_hci_packet, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::ACL);
+    btsnoop_logger_->capture(received_hci_packet, SnoopLogger::Direction::INCOMING,
+                             SnoopLogger::PacketType::ACL);
     if (callback_ != nullptr) {
       callback_->aclDataReceived(std::move(received_hci_packet));
     }
@@ -92,7 +96,8 @@ class InternalHciCallbacks : public IBluetoothHciCallbacks {
 
   Return<void> scoDataReceived(const hidl_vec<uint8_t>& data) {
     std::vector<uint8_t> received_hci_packet(data.begin(), data.end());
-    btsnoop_logger_->capture(received_hci_packet, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::SCO);
+    btsnoop_logger_->capture(received_hci_packet, SnoopLogger::Direction::INCOMING,
+                             SnoopLogger::PacketType::SCO);
     if (callback_ != nullptr) {
       callback_->scoDataReceived(std::move(received_hci_packet));
     }
@@ -172,7 +177,9 @@ class HciHalHidl : public HciHal {
   SnoopLogger* btsnoop_logger_;
 };
 
-const ModuleFactory HciHal::Factory = ModuleFactory([]() { return new HciHalHidl(); });
+const ModuleFactory HciHal::Factory = ModuleFactory([]() {
+  return new HciHalHidl();
+});
 
 }  // namespace hal
 }  // namespace bluetooth
