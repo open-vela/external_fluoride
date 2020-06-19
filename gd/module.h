@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <flatbuffers/flatbuffers.h>
 #include <functional>
 #include <future>
 #include <map>
@@ -24,7 +23,6 @@
 #include <vector>
 
 #include "common/bind.h"
-#include "dumpsys_data_generated.h"
 #include "os/handler.h"
 #include "os/log.h"
 #include "os/thread.h"
@@ -62,8 +60,6 @@ public:
   std::vector<const ModuleFactory*> list_;
 };
 
-using DumpsysDataFinisher = std::function<void(DumpsysDataBuilder* dumpsys_data_builder)>;
-
 // Each leaf node module must have a factory like so:
 //
 // static const ModuleFactory Factory;
@@ -88,9 +84,6 @@ class Module {
 
   // Release all resources, you're about to be deleted
   virtual void Stop() = 0;
-
-  // Get relevant state data from the module
-  virtual DumpsysDataFinisher GetTable(flatbuffers::FlatBufferBuilder* builder) const;
 
   virtual std::string ToString() const;
 
@@ -160,11 +153,10 @@ class ModuleRegistry {
 
 class ModuleDumper {
  public:
-  ModuleDumper(const ModuleRegistry& module_registry) : module_registry_(module_registry) {}
-  void DumpState(std::string* output) const;
+  ModuleDumper(ModuleRegistry& module_registry) : module_registry_(module_registry) {}
 
  private:
-  [[maybe_unused]] const ModuleRegistry& module_registry_;
+  [[maybe_unused]] ModuleRegistry& module_registry_;
 };
 
 class TestModuleRegistry : public ModuleRegistry {

@@ -25,9 +25,6 @@
 #include <unordered_map>
 #include <utility>
 
-#include "bundler_generated.h"
-#include "flatbuffers/idl.h"
-#include "flatbuffers/reflection_generated.h"
 #include "module.h"
 #include "os/handler.h"
 #include "os/log.h"
@@ -70,73 +67,38 @@ struct Dumpsys::impl {
  public:
   void DumpWithArgs(int fd, const char** args, std::promise<void> promise);
 
-  void RegisterDumpsysFunction(const void* token, DumpsysFunction func);  // OBSOLETE
-  void UnregisterDumpsysFunction(const void* token);                      // OBSOLETE
+  void RegisterDumpsysFunction(const void* token, DumpsysFunction func);
+  void UnregisterDumpsysFunction(const void* token);
 
-  impl(const Dumpsys& dumpsys_module);
   ~impl() = default;
 
- protected:
-  void FilterAsUser(std::string* output);
-  void FilterAsDeveloper(std::string* output);
-  std::string PrintAsJson(std::string* output) const;
-
  private:
-  std::unordered_map<const void*, DumpsysFunction> dumpsys_functions_;  // OBSOLETE
-  const reflection::Schema* FindBundledSchema(
-      const dumpsys::BundleSchema& bundle_schema, const std::string& name) const;
-  const Dumpsys& dumpsys_module_;
+  std::unordered_map<const void*, DumpsysFunction> dumpsys_functions_;
 };
 
 const ModuleFactory Dumpsys::Factory = ModuleFactory([]() { return new Dumpsys(); });
 
-Dumpsys::impl::impl(const Dumpsys& dumpsys_module) : dumpsys_module_(dumpsys_module) {}
-
-void Dumpsys::impl::FilterAsDeveloper(std::string* output) {
-  ASSERT(output != nullptr);
-  LOG_INFO("%s UNIMPLEMENTED", __func__);
-}
-
-void Dumpsys::impl::FilterAsUser(std::string* output) {
-  ASSERT(output != nullptr);
-  LOG_INFO("%s UNIMPLEMENTED", __func__);
-}
-
-const reflection::Schema* Dumpsys::impl::FindBundledSchema(
-    const dumpsys::BundleSchema& bundle_schema, const std::string& name) const {
-  // TODO(cmanton) Return proper schema given schema container and name to index
-  return nullptr;
-}
-
-std::string Dumpsys::impl::PrintAsJson(std::string* output) const {
-  return std::string("UNIMPLEMENTED");
-}
-
 void Dumpsys::impl::DumpWithArgs(int fd, const char** args, std::promise<void> promise) {
   ParsedDumpsysArgs parsed_dumpsys_args(args);
-  const auto registry = dumpsys_module_.GetModuleRegistry();
-
-  ModuleDumper dumper(*registry);
-  std::string output;
-  // Get the dumpstate into out string
-  dumper.DumpState(&output);
-
   if (parsed_dumpsys_args.IsDeveloper()) {
-    FilterAsDeveloper(&output);
+    // TODO(cmanton) Create development Dumper
   } else {
-    FilterAsUser(&output);
+    // TODO(cmanton) Create typical Dumper
   }
 
-  dprintf(fd, "%s", PrintAsJson(&output).c_str());
+  std::for_each(
+      dumpsys_functions_.begin(), dumpsys_functions_.end(), [fd](std::pair<const void*, DumpsysFunction> element) {
+        element.second(fd);
+      });
   promise.set_value();
 }
 
-void Dumpsys::impl::RegisterDumpsysFunction(const void* token, DumpsysFunction func) {  // OBSOLETE
+void Dumpsys::impl::RegisterDumpsysFunction(const void* token, DumpsysFunction func) {
   ASSERT(dumpsys_functions_.find(token) == dumpsys_functions_.end());
   dumpsys_functions_[token] = func;
 }
 
-void Dumpsys::impl::UnregisterDumpsysFunction(const void* token) {  // OBSOLETE
+void Dumpsys::impl::UnregisterDumpsysFunction(const void* token) {
   ASSERT(dumpsys_functions_.find(token) != dumpsys_functions_.end());
   dumpsys_functions_.erase(token);
 }
@@ -148,12 +110,12 @@ void Dumpsys::Dump(int fd, const char** args) {
   future.get();
 }
 
-void Dumpsys::RegisterDumpsysFunction(const void* token, DumpsysFunction func) {  // OBSOLETE
+void Dumpsys::RegisterDumpsysFunction(const void* token, DumpsysFunction func) {
   GetHandler()->Post(
       common::BindOnce(&Dumpsys::impl::RegisterDumpsysFunction, common::Unretained(pimpl_.get()), token, func));
 }
 
-void Dumpsys::UnregisterDumpsysFunction(const void* token) {  // OBSOLETE
+void Dumpsys::UnregisterDumpsysFunction(const void* token) {
   GetHandler()->Post(
       common::BindOnce(&Dumpsys::impl::UnregisterDumpsysFunction, common::Unretained(pimpl_.get()), token));
 }
@@ -168,7 +130,7 @@ os::Handler* Dumpsys::GetGdShimHandler() {
 void Dumpsys::ListDependencies(ModuleList* list) {}
 
 void Dumpsys::Start() {
-  pimpl_ = std::make_unique<impl>(*this);
+  pimpl_ = std::make_unique<impl>();
 }
 
 void Dumpsys::Stop() {
