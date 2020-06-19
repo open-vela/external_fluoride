@@ -118,14 +118,13 @@ void SecurityManagerImpl::SetUserInterfaceHandler(UI* user_interface, os::Handle
   user_interface_handler_ = handler;
 }
 
-void SecurityManagerImpl::SetLeInitiatorAddressPolicy(
-    hci::LeAddressManager::AddressPolicy address_policy,
-    hci::AddressWithType fixed_address,
-    crypto_toolbox::Octet16 rotation_irk,
-    std::chrono::milliseconds minimum_rotation_time,
-    std::chrono::milliseconds maximum_rotation_time) {
+void SecurityManagerImpl::SetLeInitiatorAddress(hci::AddressWithType address) {
   acl_manager_->SetPrivacyPolicyForInitiatorAddress(
-      address_policy, fixed_address, rotation_irk, minimum_rotation_time, maximum_rotation_time);
+      hci::LeAddressManager::AddressPolicy::USE_STATIC_ADDRESS,
+      address,
+      crypto_toolbox::Octet16{},
+      std::chrono::milliseconds{0},
+      std::chrono::milliseconds{0});
 }
 
 void SecurityManagerImpl::RegisterCallbackListener(ISecurityManagerListener* listener, os::Handler* handler) {
