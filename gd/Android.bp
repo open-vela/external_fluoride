@@ -149,14 +149,11 @@ cc_defaults {
         ":BluetoothStorageSources",
     ],
     generated_headers: [
-        "BluetoothGeneratedBundler_h",
         "BluetoothGeneratedPackets_h",
-        "BluetoothGeneratedDumpsysData_h",
     ],
     shared_libs: [
         "libchrome",
         "libcrypto",
-        "libflatbuffers-cpp",
     ],
     static_libs: [
         "libbluetooth-protos",
@@ -203,7 +200,6 @@ cc_binary {
     ],
     generated_headers: [
         "BluetoothFacadeGeneratedStub_h",
-        "BluetoothGeneratedDumpsysData_h",
         "BluetoothGeneratedPackets_h",
         // Needed here to guarantee that generated zip file is created before
         // bluetooth_cert_tests.zip is packaged
@@ -213,10 +209,9 @@ cc_binary {
         "BluetoothFacadeGeneratedStub_cc",
     ],
     static_libs: [
-        "breakpad_client",
-        "libbluetooth-protos",
         "libbluetooth_gd",
-        "libflatbuffers-cpp",
+        "libbluetooth-protos",
+        "breakpad_client",
     ],
     shared_libs: [
         "libbacktrace",
@@ -291,15 +286,13 @@ cc_test {
         ":BluetoothStorageTestSources",
     ],
     generated_headers: [
-        "BluetoothGeneratedDumpsysData_h",
         "BluetoothGeneratedPackets_h",
     ],
     static_libs: [
         "libbluetooth-protos",
         "libbluetooth_gd",
-        "libc++fs",
-        "libflatbuffers-cpp",
         "libgmock",
+        "libc++fs",
     ],
     shared_libs: [
         "libchrome",
@@ -347,12 +340,10 @@ cc_defaults {
     ],
     host_supported: true,
     generated_headers: [
-        "BluetoothGeneratedDumpsysData_h",
         "BluetoothGeneratedPackets_h",
     ],
     shared_libs: [
         "libcrypto",
-        "libflatbuffers-cpp",
     ],
     cflags: [
         "-DFUZZ_TARGET",
@@ -434,20 +425,6 @@ genrule {
         "hci/hci_packets.h",
         "l2cap/l2cap_packets.h",
         "security/smp_packets.h",
-    ],
-}
-
-genrule {
-    name: "BluetoothGeneratedDumpsysData_h",
-    tools: [
-        "flatc",
-    ],
-    cmd: "$(location flatc) -I system/bt/gd -o $(genDir) --cpp $(in) ",
-    srcs: [
-        "dumpsys_data.fbs",
-    ],
-    out: [
-        "dumpsys_data_generated.h",
     ],
 }
 
