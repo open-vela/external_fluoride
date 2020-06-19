@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "hci/address_with_type.h"
-#include "hci/le_address_manager.h"
 #include "security/internal/security_manager_impl.h"
 #include "security/security_manager_listener.h"
 
@@ -76,14 +75,9 @@ class SecurityManager : public UICallbacks {
   void SetUserInterfaceHandler(UI* user_interface, os::Handler* handler);
 
   /**
-   * Specify the initiator address policy used for LE transport. Can only be called once.
+   * Specify the initiator address used for LE transport, used for tests only.
    */
-  void SetLeInitiatorAddressPolicy(
-      hci::LeAddressManager::AddressPolicy address_policy,
-      hci::AddressWithType fixed_address,
-      crypto_toolbox::Octet16 rotation_irk,
-      std::chrono::milliseconds minimum_rotation_time,
-      std::chrono::milliseconds maximum_rotation_time);
+  void SetLeInitiatorAddress(hci::AddressWithType address);
 
   /**
    * Register to listen for callback events from SecurityManager
