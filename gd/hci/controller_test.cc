@@ -57,21 +57,21 @@ PacketView<kLittleEndian> GetPacketView(std::unique_ptr<packet::BasePacketBuilde
 class TestHciLayer : public HciLayer {
  public:
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) override {
+                      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
     GetHandler()->Post(common::BindOnce(&TestHciLayer::HandleCommand, common::Unretained(this), std::move(command),
-                                        std::move(on_complete), common::Unretained(handler)));
+                                        std::move(on_complete)));
   }
 
   void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
-                      common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) override {
+                      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
     EXPECT_TRUE(false) << "Controller properties should not generate Command Status";
   }
 
   void HandleCommand(std::unique_ptr<CommandPacketBuilder> command_builder,
-                     common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) {
+                     common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) {
     auto packet_view = GetPacketView(std::move(command_builder));
     CommandPacketView command = CommandPacketView::Create(packet_view);
-    ASSERT(command.IsValid());
+    ASSERT_TRUE(command.IsValid());
 
     uint8_t num_packets = 1;
     std::unique_ptr<packet::BasePacketBuilder> event_builder;
@@ -108,7 +108,7 @@ class TestHciLayer : public HciLayer {
       } break;
       case (OpCode::READ_LOCAL_EXTENDED_FEATURES): {
         ReadLocalExtendedFeaturesView read_command = ReadLocalExtendedFeaturesView::Create(command);
-        ASSERT(read_command.IsValid());
+        ASSERT_TRUE(read_command.IsValid());
         uint8_t page_bumber = read_command.GetPageNumber();
         uint64_t lmp_features = 0x012345678abcdef;
         lmp_features += page_bumber;
@@ -123,11 +123,11 @@ class TestHciLayer : public HciLayer {
       case (OpCode::READ_BD_ADDR): {
         event_builder = ReadBdAddrCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, Address::kAny);
       } break;
-      case (OpCode::LE_READ_BUFFER_SIZE): {
+      case (OpCode::LE_READ_BUFFER_SIZE_V1): {
         LeBufferSize le_buffer_size;
         le_buffer_size.le_data_packet_length_ = 0x16;
         le_buffer_size.total_num_le_packets_ = 0x08;
-        event_builder = LeReadBufferSizeCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, le_buffer_size);
+        event_builder = LeReadBufferSizeV1CompleteBuilder::Create(num_packets, ErrorCode::SUCCESS, le_buffer_size);
       } break;
       case (OpCode::LE_READ_LOCAL_SUPPORTED_FEATURES): {
         event_builder =
@@ -175,7 +175,7 @@ class TestHciLayer : public HciLayer {
       } break;
       case (OpCode::SET_EVENT_MASK): {
         auto view = SetEventMaskView::Create(command);
-        ASSERT(view.IsValid());
+        ASSERT_TRUE(view.IsValid());
         event_mask = view.GetEventMask();
         event_builder = SetEventMaskCompleteBuilder::Create(num_packets, ErrorCode::SUCCESS);
       } break;
@@ -192,23 +192,21 @@ class TestHciLayer : public HciLayer {
     }
     auto packet = GetPacketView(std::move(event_builder));
     EventPacketView event = EventPacketView::Create(packet);
-    ASSERT(event.IsValid());
+    ASSERT_TRUE(event.IsValid());
     CommandCompleteView command_complete = CommandCompleteView::Create(event);
-    ASSERT(command_complete.IsValid());
-    handler->Post(common::BindOnce(std::move(on_complete), std::move(command_complete)));
+    ASSERT_TRUE(command_complete.IsValid());
+    on_complete.Invoke(std::move(command_complete));
   }
 
-  void RegisterEventHandler(EventCode event_code, common::Callback<void(EventPacketView)> event_handler,
-                            os::Handler* handler) override {
+  void RegisterEventHandler(EventCode event_code,
+                            common::ContextualCallback<void(EventPacketView)> event_handler) override {
     EXPECT_EQ(event_code, EventCode::NUMBER_OF_COMPLETED_PACKETS) << "Only NUMBER_OF_COMPLETED_PACKETS is needed";
     number_of_completed_packets_callback_ = event_handler;
-    client_handler_ = handler;
   }
 
   void UnregisterEventHandler(EventCode event_code) override {
     EXPECT_EQ(event_code, EventCode::NUMBER_OF_COMPLETED_PACKETS) << "Only NUMBER_OF_COMPLETED_PACKETS is needed";
     number_of_completed_packets_callback_ = {};
-    client_handler_ = nullptr;
   }
 
   void IncomingCredit() {
@@ -223,8 +221,8 @@ class TestHciLayer : public HciLayer {
     auto event_builder = NumberOfCompletedPacketsBuilder::Create(completed_packets);
     auto packet = GetPacketView(std::move(event_builder));
     EventPacketView event = EventPacketView::Create(packet);
-    ASSERT(event.IsValid());
-    client_handler_->Post(common::BindOnce(number_of_completed_packets_callback_, event));
+    ASSERT_TRUE(event.IsValid());
+    number_of_completed_packets_callback_.Invoke(event);
   }
 
   CommandPacketView GetCommand(OpCode op_code) {
@@ -237,7 +235,10 @@ class TestHciLayer : public HciLayer {
         break;
       }
     }
-    ASSERT(command_queue_.size() > 0);
+    EXPECT_TRUE(command_queue_.size() > 0);
+    if (command_queue_.empty()) {
+      return CommandPacketView::Create(std::make_shared<std::vector<uint8_t>>());
+    }
     CommandPacketView command = command_queue_.front();
     EXPECT_EQ(command.GetOpCode(), op_code);
     command_queue_.pop();
@@ -255,8 +256,7 @@ class TestHciLayer : public HciLayer {
   uint64_t event_mask = 0;
 
  private:
-  common::Callback<void(EventPacketView)> number_of_completed_packets_callback_;
-  os::Handler* client_handler_;
+  common::ContextualCallback<void(EventPacketView)> number_of_completed_packets_callback_;
   std::queue<CommandPacketView> command_queue_;
   mutable std::mutex mutex_;
   std::condition_variable not_empty_;
@@ -340,7 +340,7 @@ TEST_F(ControllerTest, send_reset_command) {
   controller_->Reset();
   auto packet = test_hci_layer_->GetCommand(OpCode::RESET);
   auto command = ResetView::Create(packet);
-  ASSERT(command.IsValid());
+  ASSERT_TRUE(command.IsValid());
 }
 
 TEST_F(ControllerTest, send_set_event_filter_command) {
@@ -349,7 +349,7 @@ TEST_F(ControllerTest, send_set_event_filter_command) {
   auto set_event_filter_view1 = SetEventFilterView::Create(packet);
   auto set_event_filter_inquiry_result_view1 = SetEventFilterInquiryResultView::Create(set_event_filter_view1);
   auto command1 = SetEventFilterInquiryResultAllDevicesView::Create(set_event_filter_inquiry_result_view1);
-  ASSERT(command1.IsValid());
+  ASSERT_TRUE(command1.IsValid());
 
   ClassOfDevice class_of_device({0xab, 0xcd, 0xef});
   ClassOfDevice class_of_device_mask({0x12, 0x34, 0x56});
@@ -358,7 +358,7 @@ TEST_F(ControllerTest, send_set_event_filter_command) {
   auto set_event_filter_view2 = SetEventFilterView::Create(packet);
   auto set_event_filter_inquiry_result_view2 = SetEventFilterInquiryResultView::Create(set_event_filter_view2);
   auto command2 = SetEventFilterInquiryResultClassOfDeviceView::Create(set_event_filter_inquiry_result_view2);
-  ASSERT(command2.IsValid());
+  ASSERT_TRUE(command2.IsValid());
   ASSERT_EQ(command2.GetClassOfDevice(), class_of_device);
 
   Address bdaddr({0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc});
@@ -367,7 +367,7 @@ TEST_F(ControllerTest, send_set_event_filter_command) {
   auto set_event_filter_view3 = SetEventFilterView::Create(packet);
   auto set_event_filter_connection_setup_view = SetEventFilterConnectionSetupView::Create(set_event_filter_view3);
   auto command3 = SetEventFilterConnectionSetupAddressView::Create(set_event_filter_connection_setup_view);
-  ASSERT(command3.IsValid());
+  ASSERT_TRUE(command3.IsValid());
   ASSERT_EQ(command3.GetAddress(), bdaddr);
 }
 
@@ -375,7 +375,7 @@ TEST_F(ControllerTest, send_host_buffer_size_command) {
   controller_->HostBufferSize(0xFF00, 0xF1, 0xFF02, 0xFF03);
   auto packet = test_hci_layer_->GetCommand(OpCode::HOST_BUFFER_SIZE);
   auto command = HostBufferSizeView::Create(packet);
-  ASSERT(command.IsValid());
+  ASSERT_TRUE(command.IsValid());
   ASSERT_EQ(command.GetHostAclDataPacketLength(), 0xFF00);
   ASSERT_EQ(command.GetHostSynchronousDataPacketLength(), 0xF1);
   ASSERT_EQ(command.GetHostTotalNumAclDataPackets(), 0xFF02);
@@ -386,7 +386,7 @@ TEST_F(ControllerTest, send_le_set_event_mask_command) {
   controller_->LeSetEventMask(0x000000000000001F);
   auto packet = test_hci_layer_->GetCommand(OpCode::LE_SET_EVENT_MASK);
   auto command = LeSetEventMaskView::Create(packet);
-  ASSERT(command.IsValid());
+  ASSERT_TRUE(command.IsValid());
   ASSERT_EQ(command.GetLeEventMask(), 0x000000000000001F);
 }
 
@@ -453,12 +453,24 @@ void CheckReceivedCredits(uint16_t handle, uint16_t credits) {
 }
 
 TEST_F(ControllerTest, aclCreditCallbacksTest) {
-  controller_->RegisterCompletedAclPacketsCallback(common::Bind(&CheckReceivedCredits), client_handler_);
+  controller_->RegisterCompletedAclPacketsCallback(client_handler_->Bind(&CheckReceivedCredits));
 
   test_hci_layer_->IncomingCredit();
 
   credits1_set.get_future().wait();
   credits2_set.get_future().wait();
+}
+
+TEST_F(ControllerTest, aclCreditCallbackListenerUnregistered) {
+  os::Thread thread("test_thread", os::Thread::Priority::NORMAL);
+  os::Handler handler(&thread);
+  controller_->RegisterCompletedAclPacketsCallback(handler.Bind(&CheckReceivedCredits));
+
+  handler.Clear();
+  handler.WaitUntilStopped(std::chrono::milliseconds(100));
+  controller_->UnregisterCompletedAclPacketsCallback();
+
+  test_hci_layer_->IncomingCredit();
 }
 }  // namespace
 }  // namespace hci
