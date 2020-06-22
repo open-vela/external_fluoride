@@ -88,10 +88,6 @@
     {
       "name" : "net_test_btif_config_cache",
       "host" : true
-    },
-    {
-      "name" : "net_test_btif_config_cache",
-      "host" : true
     }
   ]
 }
