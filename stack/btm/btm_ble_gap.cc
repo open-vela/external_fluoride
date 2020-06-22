@@ -88,6 +88,14 @@ class AdvertisingCache {
     return items.front().data;
   }
 
+  bool Exist(uint8_t addr_type, const RawAddress& addr) {
+    auto it = Find(addr_type, addr);
+    if (it != items.end()) {
+        return true;
+    }
+    return false;
+  }
+
   /* Append |data| for device |addr_type, addr| */
   const std::vector<uint8_t>& Append(uint8_t addr_type, const RawAddress& addr,
                                      std::vector<uint8_t> data) {
@@ -111,6 +119,10 @@ class AdvertisingCache {
     if (it != items.end()) {
       items.erase(it);
     }
+  }
+
+  void ClearAll() {
+    items.clear();
   }
 
  private:
@@ -448,6 +460,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
     /* scan is not started */
     if (!BTM_BLE_IS_SCAN_ACTIVE(btm_cb.ble_ctr_cb.scan_activity)) {
       /* allow config of scan type */
+      cache.ClearAll();
       p_inq->scan_type = (p_inq->scan_type == BTM_BLE_SCAN_MODE_NONE)
                              ? BTM_BLE_SCAN_MODE_ACTI
                              : p_inq->scan_type;
@@ -1049,7 +1062,7 @@ void btm_ble_set_adv_flag(uint16_t connect_mode, uint16_t disc_mode) {
 
   btm_ble_update_dmt_flag_bits(&flag, connect_mode, disc_mode);
 
-  LOG_DEBUG(LOG_TAG, "disc_mode %04x", disc_mode);
+  LOG_DEBUG("disc_mode %04x", disc_mode);
   /* update discoverable flag */
   if (disc_mode & BTM_BLE_LIMITED_DISCOVERABLE) {
     flag &= ~BTM_BLE_GEN_DISC_FLAG;
@@ -1298,6 +1311,7 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t mode, uint8_t duration) {
   }
 
   if (!BTM_BLE_IS_SCAN_ACTIVE(p_ble_cb->scan_activity)) {
+    cache.ClearAll();
     btm_send_hci_set_scan_params(
         BTM_BLE_SCAN_MODE_ACTI, BTM_BLE_LOW_LATENCY_SCAN_INT,
         BTM_BLE_LOW_LATENCY_SCAN_WIN,
@@ -1944,11 +1958,19 @@ void btm_ble_process_adv_pkt_cont(uint16_t evt_type, uint8_t addr_type,
 
   bool is_scannable = ble_evt_type_is_scannable(evt_type);
   bool is_scan_resp = ble_evt_type_is_scan_resp(evt_type);
+  bool is_legacy = ble_evt_type_is_legacy(evt_type);
 
-  bool is_start =
-      ble_evt_type_is_legacy(evt_type) && is_scannable && !is_scan_resp;
+  // We might receive a legacy scan response without receving a ADV_IND
+  // or ADV_SCAN_IND before. Only parsing the scan response data which
+  // has no ad flag, the device will be set to DUMO mode. The createbond
+  // procedure will use the wrong device mode.
+  // In such case no necessary to report scan response
+  if(is_legacy && is_scan_resp && !cache.Exist(addr_type, bda))
+    return;
 
-  if (ble_evt_type_is_legacy(evt_type))
+  bool is_start = is_legacy && is_scannable && !is_scan_resp;
+
+  if (is_legacy)
     AdvertiseDataParser::RemoveTrailingZeros(tmp);
 
   // We might have send scan request to this device before, but didn't get the
@@ -1993,6 +2015,7 @@ void btm_ble_process_adv_pkt_cont(uint16_t evt_type, uint8_t addr_type,
       update = false;
     } else {
       /* if yes, skip it */
+      cache.Clear(addr_type, bda);
       return; /* assumption: one result per event */
     }
   }
@@ -2020,8 +2043,7 @@ void btm_ble_process_adv_pkt_cont(uint16_t evt_type, uint8_t addr_type,
   uint8_t result = btm_ble_is_discoverable(bda, adv_data);
   if (result == 0) {
     cache.Clear(addr_type, bda);
-    LOG_WARN(LOG_TAG,
-             "%s device no longer discoverable, discarding advertising packet",
+    LOG_WARN("%s device no longer discoverable, discarding advertising packet",
              __func__);
     return;
   }
