@@ -21,13 +21,10 @@
 #include "os/handler.h"
 #include "os/log.h"
 
-#include "hci/acl_manager.h"
 #include "hci/hci_layer.h"
 #include "l2cap/le/l2cap_le_module.h"
 #include "security/channel/security_manager_channel.h"
-#include "security/facade_configuration_api.h"
 #include "security/internal/security_manager_impl.h"
-#include "security/l2cap_security_module_interface.h"
 #include "security/security_module.h"
 
 namespace bluetooth {
@@ -36,40 +33,22 @@ namespace security {
 const ModuleFactory SecurityModule::Factory = ModuleFactory([]() { return new SecurityModule(); });
 
 struct SecurityModule::impl {
-  impl(
-      os::Handler* security_handler,
-      l2cap::le::L2capLeModule* l2cap_le_module,
-      l2cap::classic::L2capClassicModule* l2cap_classic_module,
-      hci::HciLayer* hci_layer,
-      hci::AclManager* acl_manager)
-      : security_handler_(security_handler),
+  impl(os::Handler* security_handler, l2cap::le::L2capLeModule* l2cap_le_module,
+       l2cap::classic::L2capClassicModule* l2cap_classic_module, hci::HciLayer* hci_layer)
+      : security_handler_(security_handler), l2cap_le_module_(l2cap_le_module),
         l2cap_classic_module_(l2cap_classic_module),
-        l2cap_le_module_(l2cap_le_module),
         security_manager_channel_(new channel::SecurityManagerChannel(security_handler_, hci_layer)),
-        hci_layer_(hci_layer),
-        acl_manager_(acl_manager),
-        l2cap_security_interface_(&security_manager_impl, security_handler) {
-    l2cap_classic_module->InjectSecurityEnforcementInterface(&l2cap_security_interface_);
-    l2cap_le_module->InjectSecurityEnforcementInterface(&l2cap_security_interface_);
-    security_manager_channel_->SetSecurityInterface(
-        l2cap_classic_module->GetSecurityInterface(security_handler_, security_manager_channel_));
-  }
+        hci_layer_(hci_layer) {}
 
   os::Handler* security_handler_;
-  l2cap::classic::L2capClassicModule* l2cap_classic_module_;
   l2cap::le::L2capLeModule* l2cap_le_module_;
+  l2cap::classic::L2capClassicModule* l2cap_classic_module_;
   channel::SecurityManagerChannel* security_manager_channel_;
   hci::HciLayer* hci_layer_;
-  hci::AclManager* acl_manager_;
-  L2capSecurityModuleInterface l2cap_security_interface_;
-
-  internal::SecurityManagerImpl security_manager_impl{
-      security_handler_, l2cap_le_module_, security_manager_channel_, hci_layer_, acl_manager_};
-
+  internal::SecurityManagerImpl security_manager_impl{security_handler_, l2cap_le_module_, l2cap_classic_module_,
+                                                      security_manager_channel_, hci_layer_};
   ~impl() {
     delete security_manager_channel_;
-    l2cap_classic_module_->InjectSecurityEnforcementInterface(nullptr);
-    l2cap_le_module_->InjectSecurityEnforcementInterface(nullptr);
   }
 };
 
@@ -77,15 +56,11 @@ void SecurityModule::ListDependencies(ModuleList* list) {
   list->add<l2cap::le::L2capLeModule>();
   list->add<l2cap::classic::L2capClassicModule>();
   list->add<hci::HciLayer>();
-  list->add<hci::AclManager>();
 }
 
 void SecurityModule::Start() {
   pimpl_ = std::make_unique<impl>(GetHandler(), GetDependency<l2cap::le::L2capLeModule>(),
-                                  GetDependency<l2cap::classic::L2capClassicModule>(), GetDependency<hci::HciLayer>(),
-                                  GetDependency<hci::AclManager>());
-
-  GetDependency<hci::AclManager>()->SetSecurityModule(this);
+                                  GetDependency<l2cap::classic::L2capClassicModule>(), GetDependency<hci::HciLayer>());
 }
 
 void SecurityModule::Stop() {
@@ -99,11 +74,6 @@ std::string SecurityModule::ToString() const {
 std::unique_ptr<SecurityManager> SecurityModule::GetSecurityManager() {
   return std::unique_ptr<SecurityManager>(
       new SecurityManager(pimpl_->security_handler_, &pimpl_->security_manager_impl));
-}
-
-std::unique_ptr<FacadeConfigurationApi> SecurityModule::GetFacadeConfigurationApi() {
-  return std::unique_ptr<FacadeConfigurationApi>(
-      new FacadeConfigurationApi(pimpl_->security_handler_, &pimpl_->security_manager_impl));
 }
 
 }  // namespace security
