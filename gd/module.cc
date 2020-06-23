@@ -21,7 +21,7 @@ using ::bluetooth::os::Thread;
 
 namespace bluetooth {
 
-constexpr std::chrono::milliseconds kModuleStopTimeout = std::chrono::milliseconds(2000);
+constexpr std::chrono::milliseconds kModuleStopTimeout = std::chrono::milliseconds(20);
 
 ModuleFactory::ModuleFactory(std::function<Module*()> ctor) : ctor_(ctor) {
 }
@@ -33,11 +33,6 @@ std::string Module::ToString() const {
 Handler* Module::GetHandler() const {
   ASSERT_LOG(handler_ != nullptr, "Can't get handler when it's not started");
   return handler_;
-}
-
-DumpsysDataFinisher EmptyDumpsysDataFinisher = [](DumpsysDataBuilder* dumpsys_data_builder) {};
-DumpsysDataFinisher Module::GetTable(flatbuffers::FlatBufferBuilder* builder) const {
-  return EmptyDumpsysDataFinisher;
 }
 
 const ModuleRegistry* Module::GetModuleRegistry() const {
@@ -100,15 +95,10 @@ void ModuleRegistry::StopAll() {
     ASSERT(instance != started_modules_.end());
 
     // Clear the handler before stopping the module to allow it to shut down gracefully.
-    LOG_INFO("Stopping Handler of Module %s", instance->second->ToString().c_str());
     instance->second->handler_->Clear();
     instance->second->handler_->WaitUntilStopped(kModuleStopTimeout);
-    LOG_INFO("Stopping Module %s", instance->second->ToString().c_str());
     instance->second->Stop();
-  }
-  for (auto it = start_order_.rbegin(); it != start_order_.rend(); it++) {
-    auto instance = started_modules_.find(*it);
-    ASSERT(instance != started_modules_.end());
+
     delete instance->second->handler_;
     delete instance->second;
     started_modules_.erase(instance);
@@ -125,10 +115,4 @@ os::Handler* ModuleRegistry::GetModuleHandler(const ModuleFactory* module) const
   }
   return nullptr;
 }
-
-void ModuleDumper::DumpState(std::string* output) const {
-  // TODO(cmanton)
-  *output = std::string("TBD");
-}
-
 }  // namespace bluetooth
