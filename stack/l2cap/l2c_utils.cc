@@ -2016,9 +2016,6 @@ void l2cu_process_our_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
       /*                 timer value in config response shall be greater than
        * received processing time */
       p_cfg->fcr.mon_tout = p_cfg->fcr.rtrans_tout = 0;
-
-      if (p_cfg->fcr.mode == L2CAP_FCR_STREAM_MODE)
-        p_cfg->fcr.max_transmit = p_cfg->fcr.tx_win_sz = 0;
     }
 
     /* Set the threshold to send acks (may be updated in the cfg response) */
@@ -2532,8 +2529,7 @@ void l2cu_adjust_out_mps(tL2C_CCB* p_ccb) {
  * Returns          true or false
  *
  ******************************************************************************/
-bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
-                               tL2CAP_FCR_OPTS* p_fcr) {
+bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid) {
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
   tL2C_CCB* p_ccb;
 
@@ -2557,18 +2553,6 @@ bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
   p_ccb->remote_cid = fixed_cid;
 
   p_ccb->is_flushable = false;
-
-  if (p_fcr) {
-    /* Set the FCR parameters. For now, we will use default pools */
-    p_ccb->our_cfg.fcr = p_ccb->peer_cfg.fcr = *p_fcr;
-
-    p_ccb->ertm_info.fcr_rx_buf_size = L2CAP_FCR_RX_BUF_SIZE;
-    p_ccb->ertm_info.fcr_tx_buf_size = L2CAP_FCR_TX_BUF_SIZE;
-    p_ccb->ertm_info.user_rx_buf_size = L2CAP_USER_RX_BUF_SIZE;
-    p_ccb->ertm_info.user_tx_buf_size = L2CAP_USER_TX_BUF_SIZE;
-
-    p_ccb->fcrb.max_held_acks = p_fcr->tx_win_sz / 3;
-  }
 
   /* Link ccb to lcb and lcb to ccb */
   p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL] = p_ccb;
