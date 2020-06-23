@@ -205,6 +205,9 @@ class DualModeController : public Device {
   // 7.2.10
   void WriteLinkPolicySettings(CommandPacketView args);
 
+  // 7.2.11
+  void ReadDefaultLinkPolicySettings(CommandPacketView args);
+
   // 7.2.12
   void WriteDefaultLinkPolicySettings(CommandPacketView args);
 
@@ -435,6 +438,9 @@ class DualModeController : public Device {
 
   // 7.8.40
   void LeClearResolvingList(CommandPacketView args);
+
+  // 7.8.41
+  void LeReadResolvingListSize(CommandPacketView args);
 
   // 7.8.52
   void LeSetExtendedAdvertisingRandomAddress(CommandPacketView args);
