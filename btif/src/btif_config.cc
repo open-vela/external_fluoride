@@ -155,8 +155,7 @@ bool btif_get_device_type(const RawAddress& bda, int* p_device_type) {
 
   if (!btif_config_get_int(bd_addr_str, "DevType", p_device_type)) return false;
 
-  LOG_DEBUG(LOG_TAG, "%s: Device [%s] type %d", __func__, bd_addr_str,
-            *p_device_type);
+  LOG_DEBUG("%s: Device [%s] type %d", __func__, bd_addr_str, *p_device_type);
   return true;
 }
 
@@ -168,7 +167,7 @@ bool btif_get_address_type(const RawAddress& bda, int* p_addr_type) {
 
   if (!btif_config_get_int(bd_addr_str, "AddrType", p_addr_type)) return false;
 
-  LOG_DEBUG(LOG_TAG, "%s: Device [%s] address type %d", __func__, bd_addr_str,
+  LOG_DEBUG("%s: Device [%s] address type %d", __func__, bd_addr_str,
             *p_addr_type);
   return true;
 }
@@ -285,8 +284,8 @@ static future_t* init(void) {
     btif_config_source = ORIGINAL;
   }
   if (!config) {
-    LOG_WARN(LOG_TAG, "%s unable to load config file: %s; using backup.",
-             __func__, CONFIG_FILE_PATH);
+    LOG_WARN("%s unable to load config file: %s; using backup.", __func__,
+             CONFIG_FILE_PATH);
     if (config_checksum_pass(CONFIG_BACKUP_COMPARE_PASS)) {
       config = btif_config_open(CONFIG_BACKUP_PATH);
       btif_config_source = BACKUP;
@@ -294,16 +293,14 @@ static future_t* init(void) {
     }
   }
   if (!config) {
-    LOG_WARN(LOG_TAG,
-             "%s unable to load backup; attempting to transcode legacy file.",
+    LOG_WARN("%s unable to load backup; attempting to transcode legacy file.",
              __func__);
     config = btif_config_transcode(CONFIG_LEGACY_FILE_PATH);
     btif_config_source = LEGACY;
     file_source = "Legacy";
   }
   if (!config) {
-    LOG_ERROR(LOG_TAG,
-              "%s unable to transcode legacy file; creating empty config.",
+    LOG_ERROR("%s unable to transcode legacy file; creating empty config.",
               __func__);
     config = storage_config_get_interface()->config_new_empty();
     btif_config_source = NEW_FILE;
@@ -346,7 +343,7 @@ static future_t* init(void) {
   // write back to disk.
   config_timer = alarm_new("btif.config");
   if (!config_timer) {
-    LOG_ERROR(LOG_TAG, "%s unable to create alarm.", __func__);
+    LOG_ERROR("%s unable to create alarm.", __func__);
     goto error;
   }
 
@@ -369,7 +366,7 @@ static std::unique_ptr<config_t> btif_config_open(const char* filename) {
   if (!config) return nullptr;
 
   if (!config_has_section(*config, "Adapter")) {
-    LOG_ERROR(LOG_TAG, "Config is missing adapter section");
+    LOG_ERROR("Config is missing adapter section");
     return nullptr;
   }
 

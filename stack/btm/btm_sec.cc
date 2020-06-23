@@ -96,14 +96,7 @@ bool btm_sec_are_all_trusted(uint32_t p_mask[]);
 static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
                                                uint8_t reason,
                                                uint16_t conn_handle);
-uint8_t btm_sec_start_role_switch(tBTM_SEC_DEV_REC* p_dev_rec);
 tBTM_SEC_DEV_REC* btm_sec_find_dev_by_sec_state(uint8_t state);
-
-static bool btm_sec_set_security_level(CONNECTION_TYPE conn_type,
-                                       const char* p_name, uint8_t service_id,
-                                       uint16_t sec_level, uint16_t psm,
-                                       uint32_t mx_proto_id,
-                                       uint32_t mx_chan_id);
 
 static bool btm_dev_authenticated(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_dev_encrypted(tBTM_SEC_DEV_REC* p_dev_rec);
@@ -240,7 +233,7 @@ bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
 
   BTM_TRACE_EVENT("%s application registered", __func__);
 
-  LOG_INFO(LOG_TAG, "%s p_cb_info->p_le_callback == 0x%p", __func__,
+  LOG_INFO("%s p_cb_info->p_le_callback == 0x%p", __func__,
            p_cb_info->p_le_callback);
   if (p_cb_info->p_le_callback) {
     BTM_TRACE_EVENT("%s SMP_Register( btm_proc_smp_cback )", __func__);
@@ -251,11 +244,11 @@ bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
       btm_ble_reset_id();
     }
   } else {
-    LOG_WARN(LOG_TAG, "%s p_cb_info->p_le_callback == NULL", __func__);
+    LOG_WARN("%s p_cb_info->p_le_callback == NULL", __func__);
   }
 
   btm_cb.api = *p_cb_info;
-  LOG_INFO(LOG_TAG, "%s btm_cb.api.p_le_callback = 0x%p ", __func__,
+  LOG_INFO("%s btm_cb.api.p_le_callback = 0x%p ", __func__,
            btm_cb.api.p_le_callback);
   BTM_TRACE_EVENT("%s application registered", __func__);
   return (true);
@@ -428,41 +421,10 @@ void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired) {
 bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
                           uint8_t service_id, uint16_t sec_level, uint16_t psm,
                           uint32_t mx_proto_id, uint32_t mx_chan_id) {
-  return (btm_sec_set_security_level(is_originator, p_name, service_id,
-                                     sec_level, psm, mx_proto_id, mx_chan_id));
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_set_security_level
- *
- * Description      Register service security level with Security Manager
- *
- * Parameters:      conn_type   - true if originating the connection
- *                  p_name      - Name of the service relevant only if
- *                                authorization will show this name to user.
- *                                Ignored if BTM_SEC_SERVICE_NAME_LEN is 0.
- *                  service_id  - service ID for the service passed to
- *                                authorization callback
- *                  sec_level   - bit mask of the security features
- *                  psm         - L2CAP PSM
- *                  mx_proto_id - protocol ID of multiplexing proto below
- *                  mx_chan_id  - channel ID of multiplexing proto below
- *
- * Returns          true if registered OK, else false
- *
- ******************************************************************************/
-static bool btm_sec_set_security_level(CONNECTION_TYPE conn_type,
-                                       const char* p_name, uint8_t service_id,
-                                       uint16_t sec_level, uint16_t psm,
-                                       uint32_t mx_proto_id,
-                                       uint32_t mx_chan_id) {
   tBTM_SEC_SERV_REC* p_srec;
   uint16_t index;
   uint16_t first_unused_record = BTM_NO_AVAIL_SEC_SERVICES;
   bool record_allocated = false;
-  bool is_originator;
-  is_originator = conn_type;
 
   BTM_TRACE_API("%s : sec: 0x%x", __func__, sec_level);
 
@@ -1016,11 +978,12 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
  *  Note: After 2.1 parameters are not used and preserved here not to change API
  ******************************************************************************/
 tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                        tBT_TRANSPORT transport, uint8_t pin_len,
-                        uint8_t* p_pin, uint32_t trusted_mask[]) {
+                        tBT_TRANSPORT transport, int device_type,
+                        uint8_t pin_len, uint8_t* p_pin,
+                        uint32_t trusted_mask[]) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport, pin_len,
-                                        p_pin, trusted_mask);
+    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport,
+                                        device_type);
   }
 
   if (transport == BT_TRANSPORT_INVALID)
@@ -1972,7 +1935,7 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
       because of data path issues. Delay this disconnect a little bit
       */
       LOG_INFO(
-          LOG_TAG,
+
           "%s peer should have initiated security process by now (SM4 to SM4)",
           __func__);
       p_dev_rec->p_callback = p_callback;
@@ -4269,8 +4232,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 
 #if (BTM_DISC_DURING_RS == TRUE)
-  LOG_INFO(LOG_TAG, "%s clearing pending flag handle:%d reason:%d", __func__,
-           handle, reason);
+  LOG_INFO("%s clearing pending flag handle:%d reason:%d", __func__, handle,
+           reason);
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 #endif
 
@@ -4346,8 +4309,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
