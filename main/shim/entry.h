@@ -54,7 +54,7 @@ namespace security {
 class SecurityModule;
 }
 namespace storage {
-class StorageModule;
+class LegacyModule;
 }
 
 namespace shim {
@@ -76,7 +76,7 @@ neighbor::NameModule* GetName();
 neighbor::PageModule* GetPage();
 hci::LeScanningManager* GetScanning();
 bluetooth::security::SecurityModule* GetSecurityModule();
-storage::StorageModule* GetStorage();
+storage::LegacyModule* GetStorage();
 
 }  // namespace shim
 }  // namespace bluetooth
