@@ -16,18 +16,30 @@
 
 #pragma once
 
-#include "hci/command_interface.h"
+#include "common/callback.h"
 #include "hci/hci_packets.h"
+#include "os/handler.h"
+#include "os/utils.h"
 
 namespace bluetooth {
 namespace hci {
 
-constexpr hci::SubeventCode LeAdvertisingEvents[] = {
-    hci::SubeventCode::SCAN_REQUEST_RECEIVED,
-    hci::SubeventCode::ADVERTISING_SET_TERMINATED,
+class LeAdvertisingInterface {
+ public:
+  LeAdvertisingInterface() = default;
+  virtual ~LeAdvertisingInterface() = default;
+  DISALLOW_COPY_AND_ASSIGN(LeAdvertisingInterface);
+
+  virtual void EnqueueCommand(std::unique_ptr<LeAdvertisingCommandBuilder> command,
+                              common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) = 0;
+
+  virtual void EnqueueCommand(std::unique_ptr<LeAdvertisingCommandBuilder> command,
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) = 0;
+
+  static constexpr hci::SubeventCode LeAdvertisingEvents[] = {
+      hci::SubeventCode::SCAN_REQUEST_RECEIVED,
+      hci::SubeventCode::ADVERTISING_SET_TERMINATED,
+  };
 };
-
-typedef CommandInterface<LeAdvertisingCommandBuilder> LeAdvertisingInterface;
-
 }  // namespace hci
 }  // namespace bluetooth
