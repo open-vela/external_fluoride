@@ -992,15 +992,16 @@ bool L2CA_DisconnectRsp(uint16_t cid) {
   return (true);
 }
 
-bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid) {
+bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_GetRemoteCid(lcid, rcid);
+    return bluetooth::shim::L2CA_GetIdentifiers(lcid, rcid, handle);
   }
 
   tL2C_CCB* control_block = l2cu_find_ccb_by_cid(NULL, lcid);
   if (!control_block) return false;
 
   if (rcid) *rcid = control_block->remote_cid;
+  if (handle) *handle = control_block->p_lcb->handle;
 
   return true;
 }
