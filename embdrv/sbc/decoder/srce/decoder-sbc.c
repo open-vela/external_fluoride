@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
+ *  Copyright 2014 The Android Open Source Project
  *  Copyright 2006 Open Interface North America, Inc. All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,6 +32,12 @@
 #include "oi_codec_sbc_private.h"
 
 #define SPECIALIZE_READ_SAMPLES_JOINT
+
+#if __has_attribute(fallthrough)
+#define __fallthrough __attribute__((__fallthrough__))
+#else
+#define __fallthrough
+#endif
 
 /**
  * Scans through a buffer looking for a codec syncword. If the decoder has been
@@ -311,7 +317,6 @@ OI_STATUS OI_CODEC_SBC_DecodeFrame(OI_CODEC_SBC_DECODER_CONTEXT* context,
     return OI_CODEC_SBC_CHECKSUM_MISMATCH;
   }
 
-#ifdef OI_DEBUG
   /*
    * Make sure the bitpool values are sane.
    */
@@ -328,7 +333,6 @@ OI_STATUS OI_CODEC_SBC_DecodeFrame(OI_CODEC_SBC_DECODER_CONTEXT* context,
            OI_SBC_MaxBitpool(&context->common.frameInfo)));
     return OI_STATUS_INVALID_PARAMETERS;
   }
-#endif
 
   /*
    * Now decode the SBC data. Partial decode is not yet implemented for an SBC
@@ -413,7 +417,7 @@ uint8_t OI_CODEC_SBC_FrameCount(OI_BYTE* frameData, uint32_t frameBytes) {
 
       case SBC_DUAL_CHANNEL:
         frameLen *= 2;
-      /* fall through */
+        __fallthrough;
 
       default:
         if (mode == SBC_MONO) {

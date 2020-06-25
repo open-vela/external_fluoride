@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,13 +33,12 @@
 #include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
+#include "hci/include/btsnoop.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
 #include "l2cdefs.h"
 #include "osi/include/allocator.h"
-
-extern fixed_queue_t* btu_general_alarm_queue;
 
 /*******************************************************************************
  *
@@ -66,7 +65,7 @@ bool l2cu_can_allocate_lcb(void) {
  * Returns          LCB address or NULL if none found
  *
  ******************************************************************************/
-tL2C_LCB* l2cu_allocate_lcb(BD_ADDR p_bd_addr, bool is_bonding,
+tL2C_LCB* l2cu_allocate_lcb(const RawAddress& p_bd_addr, bool is_bonding,
                             tBT_TRANSPORT transport) {
   int xx;
   tL2C_LCB* p_lcb = &l2cb.lcb_pool[0];
@@ -77,7 +76,7 @@ tL2C_LCB* l2cu_allocate_lcb(BD_ADDR p_bd_addr, bool is_bonding,
       alarm_free(p_lcb->info_resp_timer);
       memset(p_lcb, 0, sizeof(tL2C_LCB));
 
-      memcpy(p_lcb->remote_bd_addr, p_bd_addr, BD_ADDR_LEN);
+      p_lcb->remote_bd_addr = p_bd_addr;
 
       p_lcb->in_use = true;
       p_lcb->link_state = LST_DISCONNECTED;
@@ -100,10 +99,6 @@ tL2C_LCB* l2cu_allocate_lcb(BD_ADDR p_bd_addr, bool is_bonding,
         l2cb.num_links_active++;
         l2c_link_adjust_allocation();
       }
-#if (L2CAP_UCD_INCLUDED == TRUE)
-      p_lcb->ucd_out_sec_pending_q = fixed_queue_new(SIZE_MAX);
-      p_lcb->ucd_in_sec_pending_q = fixed_queue_new(SIZE_MAX);
-#endif
       p_lcb->link_xmit_data_q = list_new(NULL);
       return (p_lcb);
     }
@@ -123,14 +118,12 @@ tL2C_LCB* l2cu_allocate_lcb(BD_ADDR p_bd_addr, bool is_bonding,
  * Returns          Nothing
  *
  ******************************************************************************/
-void l2cu_update_lcb_4_bonding(BD_ADDR p_bd_addr, bool is_bonding) {
+void l2cu_update_lcb_4_bonding(const RawAddress& p_bd_addr, bool is_bonding) {
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(p_bd_addr, BT_TRANSPORT_BR_EDR);
 
   if (p_lcb) {
-    L2CAP_TRACE_DEBUG("l2cu_update_lcb_4_bonding  BDA: %08x%04x is_bonding: %d",
-                      (p_bd_addr[0] << 24) + (p_bd_addr[1] << 16) +
-                          (p_bd_addr[2] << 8) + p_bd_addr[3],
-                      (p_bd_addr[4] << 8) + p_bd_addr[5], is_bonding);
+    VLOG(1) << __func__ << " BDA: " << p_bd_addr
+            << " is_bonding: " << is_bonding;
     p_lcb->is_bonding = is_bonding;
   }
 }
@@ -160,10 +153,8 @@ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
   /* Release any unfinished L2CAP packet on this link */
   osi_free_and_reset((void**)&p_lcb->p_hcit_rcv_acl);
 
-#if (BTM_SCO_INCLUDED == TRUE)
   if (p_lcb->transport == BT_TRANSPORT_BR_EDR) /* Release all SCO links */
     btm_remove_sco_links(p_lcb->remote_bd_addr);
-#endif
 
   if (p_lcb->sent_not_acked > 0) {
     if (p_lcb->transport == BT_TRANSPORT_LE) {
@@ -178,10 +169,6 @@ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
       }
     }
   }
-
-  // Reset BLE connecting flag only if the address matches
-  if (!memcmp(l2cb.ble_connecting_bda, p_lcb->remote_bd_addr, BD_ADDR_LEN))
-    l2cb.is_ble_connecting = false;
 
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
   l2cu_process_fixed_disc_cback(p_lcb);
@@ -208,11 +195,6 @@ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
     list_free(p_lcb->link_xmit_data_q);
     p_lcb->link_xmit_data_q = NULL;
   }
-
-#if (L2CAP_UCD_INCLUDED == TRUE)
-  /* clean up any security pending UCD */
-  l2c_ucd_delete_sec_pending_q(p_lcb);
-#endif
 
   /* Re-adjust flow control windows make sure it does not go negative */
   if (p_lcb->transport == BT_TRANSPORT_LE) {
@@ -260,13 +242,14 @@ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
  * Returns          pointer to matched LCB, or NULL if no match
  *
  ******************************************************************************/
-tL2C_LCB* l2cu_find_lcb_by_bd_addr(BD_ADDR p_bd_addr, tBT_TRANSPORT transport) {
+tL2C_LCB* l2cu_find_lcb_by_bd_addr(const RawAddress& p_bd_addr,
+                                   tBT_TRANSPORT transport) {
   int xx;
   tL2C_LCB* p_lcb = &l2cb.lcb_pool[0];
 
   for (xx = 0; xx < MAX_L2CAP_LINKS; xx++, p_lcb++) {
     if ((p_lcb->in_use) && p_lcb->transport == transport &&
-        (!memcmp(p_lcb->remote_bd_addr, p_bd_addr, BD_ADDR_LEN))) {
+        (p_lcb->remote_bd_addr == p_bd_addr)) {
       return (p_lcb);
     }
   }
@@ -1058,9 +1041,8 @@ void l2cu_send_peer_info_req(tL2C_LCB* p_lcb, uint16_t info_type) {
   UINT16_TO_STREAM(p, info_type);
 
   p_lcb->w4_info_rsp = true;
-  alarm_set_on_queue(p_lcb->info_resp_timer, L2CAP_WAIT_INFO_RSP_TIMEOUT_MS,
-                     l2c_info_resp_timer_timeout, p_lcb,
-                     btu_general_alarm_queue);
+  alarm_set_on_mloop(p_lcb->info_resp_timer, L2CAP_WAIT_INFO_RSP_TIMEOUT_MS,
+                     l2c_info_resp_timer_timeout, p_lcb);
 
   l2c_link_check_send_pkts(p_lcb, NULL, p_buf);
 }
@@ -1169,7 +1151,7 @@ void l2cu_send_peer_info_rsp(tL2C_LCB* p_lcb, uint8_t remote_id,
 #endif
   } else if (info_type == L2CAP_CONNLESS_MTU_INFO_TYPE) {
     UINT16_TO_STREAM(p, L2CAP_INFO_RESP_RESULT_SUCCESS);
-    UINT16_TO_STREAM(p, L2CAP_UCD_MTU);
+    UINT16_TO_STREAM(p, L2CAP_MTU_SIZE);
   } else {
     UINT16_TO_STREAM(
         p, L2CAP_INFO_RESP_RESULT_NOT_SUPPORTED); /* 'not supported' */
@@ -1197,9 +1179,8 @@ void l2cu_enqueue_ccb(tL2C_CCB* p_ccb) {
   if (p_ccb->p_lcb != NULL) p_q = &p_ccb->p_lcb->ccb_queue;
 
   if ((!p_ccb->in_use) || (p_q == NULL)) {
-    L2CAP_TRACE_ERROR(
-        "l2cu_enqueue_ccb  CID: 0x%04x ERROR in_use: %u  p_lcb: 0x%08x",
-        p_ccb->local_cid, p_ccb->in_use, p_ccb->p_lcb);
+    L2CAP_TRACE_ERROR("%s: CID: 0x%04x ERROR in_use: %u  p_lcb: %p", __func__,
+                      p_ccb->local_cid, p_ccb->in_use, p_ccb->p_lcb);
     return;
   }
 
@@ -1553,15 +1534,15 @@ bool l2cu_start_post_bond_timer(uint16_t handle) {
   if ((p_lcb->link_state == LST_CONNECTED) ||
       (p_lcb->link_state == LST_CONNECTING) ||
       (p_lcb->link_state == LST_DISCONNECTING)) {
-    period_ms_t timeout_ms = L2CAP_BONDING_TIMEOUT * 1000;
+    uint64_t timeout_ms = L2CAP_BONDING_TIMEOUT * 1000;
 
     if (p_lcb->idle_timeout == 0) {
       btsnd_hcic_disconnect(p_lcb->handle, HCI_ERR_PEER_USER);
       p_lcb->link_state = LST_DISCONNECTING;
       timeout_ms = L2CAP_LINK_DISCONNECT_TIMEOUT_MS;
     }
-    alarm_set_on_queue(p_lcb->l2c_lcb_timer, timeout_ms, l2c_lcb_timer_timeout,
-                       p_lcb, btu_general_alarm_queue);
+    alarm_set_on_mloop(p_lcb->l2c_lcb_timer, timeout_ms, l2c_lcb_timer_timeout,
+                       p_lcb);
     return (true);
   }
 
@@ -1589,6 +1570,9 @@ void l2cu_release_ccb(tL2C_CCB* p_ccb) {
   /* If already released, could be race condition */
   if (!p_ccb->in_use) return;
 
+  btsnoop_get_interface()->clear_l2cap_whitelist(
+      p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
+
   if (p_rcb && (p_rcb->psm != p_rcb->real_psm)) {
     btm_sec_clr_service_by_psm(p_rcb->psm);
   }
@@ -1611,11 +1595,7 @@ void l2cu_release_ccb(tL2C_CCB* p_ccb) {
   l2c_fcr_cleanup(p_ccb);
 
   /* Channel may not be assigned to any LCB if it was just pre-reserved */
-  if ((p_lcb) && ((p_ccb->local_cid >= L2CAP_BASE_APPL_CID)
-#if (L2CAP_UCD_INCLUDED == TRUE)
-                  || (p_ccb->local_cid == L2CAP_CONNECTIONLESS_CID)
-#endif
-                      )) {
+  if ((p_lcb) && ((p_ccb->local_cid >= L2CAP_BASE_APPL_CID))) {
     l2cu_dequeue_ccb(p_ccb);
 
     /* Delink the CCB from the LCB */
@@ -1639,18 +1619,28 @@ void l2cu_release_ccb(tL2C_CCB* p_ccb) {
   p_ccb->in_use = false;
 
   /* If no channels on the connection, start idle timeout */
-  if ((p_lcb) && p_lcb->in_use && (p_lcb->link_state == LST_CONNECTED)) {
-    if (!p_lcb->ccb_queue.p_first_ccb) {
-      // Closing a security channel on LE device should not start connection
-      // timeout
-      if (p_lcb->transport == BT_TRANSPORT_LE &&
-          p_ccb->local_cid == L2CAP_SMP_CID)
-        return;
+  if ((p_lcb) && p_lcb->in_use) {
+    if (p_lcb->link_state == LST_CONNECTED) {
+      if (!p_lcb->ccb_queue.p_first_ccb) {
+        // Closing a security channel on LE device should not start connection
+        // timeout
+        if (p_lcb->transport == BT_TRANSPORT_LE &&
+            p_ccb->local_cid == L2CAP_SMP_CID)
+          return;
 
-      l2cu_no_dynamic_ccbs(p_lcb);
-    } else {
-      /* Link is still active, adjust channel quotas. */
-      l2c_link_adjust_chnl_allocation();
+        l2cu_no_dynamic_ccbs(p_lcb);
+      } else {
+        /* Link is still active, adjust channel quotas. */
+        l2c_link_adjust_chnl_allocation();
+      }
+    } else if (p_lcb->link_state == LST_CONNECTING) {
+      if (!p_lcb->ccb_queue.p_first_ccb) {
+        if (p_lcb->transport == BT_TRANSPORT_LE &&
+            p_ccb->local_cid == L2CAP_ATT_CID) {
+          L2CAP_TRACE_WARNING("%s - disconnecting the LE link", __func__);
+          l2cu_no_dynamic_ccbs(p_lcb);
+        }
+      }
     }
   }
 }
@@ -1698,9 +1688,6 @@ tL2C_RCB* l2cu_allocate_rcb(uint16_t psm) {
     if (!p_rcb->in_use) {
       p_rcb->in_use = true;
       p_rcb->psm = psm;
-#if (L2CAP_UCD_INCLUDED == TRUE)
-      p_rcb->ucd.state = L2C_UCD_STATE_UNUSED;
-#endif
       return (p_rcb);
     }
   }
@@ -1727,9 +1714,6 @@ tL2C_RCB* l2cu_allocate_ble_rcb(uint16_t psm) {
     if (!p_rcb->in_use) {
       p_rcb->in_use = true;
       p_rcb->psm = psm;
-#if (L2CAP_UCD_INCLUDED == TRUE)
-      p_rcb->ucd.state = L2C_UCD_STATE_UNUSED;
-#endif
       return (p_rcb);
     }
   }
@@ -1748,6 +1732,21 @@ tL2C_RCB* l2cu_allocate_ble_rcb(uint16_t psm) {
  *
  ******************************************************************************/
 void l2cu_release_rcb(tL2C_RCB* p_rcb) {
+  p_rcb->in_use = false;
+  p_rcb->psm = 0;
+}
+
+/*******************************************************************************
+ *
+ * Function         l2cu_release_ble_rcb
+ *
+ * Description      Mark an LE RCB as no longer in use
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void l2cu_release_ble_rcb(tL2C_RCB* p_rcb) {
+  L2CA_FreeLePSM(p_rcb->psm);
   p_rcb->in_use = false;
   p_rcb->psm = 0;
 }
@@ -1861,7 +1860,7 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     /* Make sure MTU is at least the minimum */
     if (p_cfg->mtu >= L2CAP_MIN_MTU) {
       /* In basic mode, limit the MTU to our buffer size */
-      if ((p_cfg->fcr_present == false) && (p_cfg->mtu > L2CAP_MTU_SIZE))
+      if ((!p_cfg->fcr_present) && (p_cfg->mtu > L2CAP_MTU_SIZE))
         p_cfg->mtu = L2CAP_MTU_SIZE;
 
       /* Save the accepted value in case of renegotiation */
@@ -1903,13 +1902,13 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     /* Make sure service type is not a reserved value; otherwise let upper
        layer decide if acceptable
     */
-    if (p_cfg->qos.service_type <= GUARANTEED) {
+    if (p_cfg->qos.service_type <= SVC_TYPE_GUARANTEED) {
       p_ccb->peer_cfg.qos = p_cfg->qos;
       p_ccb->peer_cfg.qos_present = true;
       p_ccb->peer_cfg_bits |= L2CAP_CH_CFG_MASK_QOS;
     } else /* Illegal service type value */
     {
-      p_cfg->qos.service_type = BEST_EFFORT;
+      p_cfg->qos.service_type = SVC_TYPE_BEST_EFFORT;
       qos_type_ok = false;
     }
   }
@@ -2057,7 +2056,7 @@ void l2cu_process_our_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
         p_lcb->link_flush_tout = p_cfg->flush_to;
 
         /* If the timeout is within range of HCI, set the flush timeout */
-        if (p_cfg->flush_to <= ((HCI_MAX_AUTO_FLUSH_TOUT * 5) / 8)) {
+        if (p_cfg->flush_to <= ((HCI_MAX_AUTOMATIC_FLUSH_TIMEOUT * 5) / 8)) {
           /* Convert flush timeout to 0.625 ms units, with round */
           hci_flush_to = ((p_cfg->flush_to * 8) + 3) / 5;
           btsnd_hcic_write_auto_flush_tout(p_lcb->handle, hci_flush_to);
@@ -2108,45 +2107,36 @@ void l2cu_device_reset(void) {
       l2c_link_hci_disc_comp(p_lcb->handle, (uint8_t)-1);
     }
   }
-  l2cb.is_ble_connecting = false;
 }
 
-/*******************************************************************************
- *
- * Function         l2cu_create_conn
- *
- * Description      This function initiates an acl connection via HCI
- *
- * Returns          true if successful, false if get buffer fails.
- *
- ******************************************************************************/
-bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport) {
+bool l2cu_create_conn_le(tL2C_LCB* p_lcb) {
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
-  return l2cu_create_conn(p_lcb, transport, phy);
+  return l2cu_create_conn_le(p_lcb, phy);
 }
 
-bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
-                      uint8_t initiating_phys) {
-  int xx;
-  tL2C_LCB* p_lcb_cur = &l2cb.lcb_pool[0];
-#if (BTM_SCO_INCLUDED == TRUE)
-  bool is_sco_active;
-#endif
-
+/* This function initiates an acl connection to a LE device.
+ * Returns true if request started successfully, false otherwise. */
+bool l2cu_create_conn_le(tL2C_LCB* p_lcb, uint8_t initiating_phys) {
   tBT_DEVICE_TYPE dev_type;
   tBLE_ADDR_TYPE addr_type;
 
   BTM_ReadDevInfo(p_lcb->remote_bd_addr, &dev_type, &addr_type);
 
-  if (transport == BT_TRANSPORT_LE) {
-    if (!controller_get_interface()->supports_ble()) return false;
+  if (!controller_get_interface()->supports_ble()) return false;
 
-    p_lcb->ble_addr_type = addr_type;
-    p_lcb->transport = BT_TRANSPORT_LE;
-    p_lcb->initiating_phys = initiating_phys;
+  p_lcb->ble_addr_type = addr_type;
+  p_lcb->transport = BT_TRANSPORT_LE;
+  p_lcb->initiating_phys = initiating_phys;
 
-    return (l2cble_create_conn(p_lcb));
-  }
+  return (l2cble_create_conn(p_lcb));
+}
+
+/* This function initiates an acl connection to a Classic device via HCI.
+ * Returns true on success, false otherwise. */
+bool l2cu_create_conn_br_edr(tL2C_LCB* p_lcb) {
+  int xx;
+  tL2C_LCB* p_lcb_cur = &l2cb.lcb_pool[0];
+  bool is_sco_active;
 
   /* If there is a connection where we perform as a slave, try to switch roles
      for this connection */
@@ -2155,7 +2145,6 @@ bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
     if (p_lcb_cur == p_lcb) continue;
 
     if ((p_lcb_cur->in_use) && (p_lcb_cur->link_role == HCI_ROLE_SLAVE)) {
-#if (BTM_SCO_INCLUDED == TRUE)
       /* The LMP_switch_req shall be sent only if the ACL logical transport
       is in active mode, when encryption is disabled, and all synchronous
       logical transports on the same physical link are disabled." */
@@ -2165,11 +2154,10 @@ bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
 
       L2CAP_TRACE_API(
           "l2cu_create_conn - btm_is_sco_active_by_bdaddr() is_sco_active = %s",
-          (is_sco_active == true) ? "true" : "false");
+          (is_sco_active) ? "true" : "false");
 
-      if (is_sco_active == true)
+      if (is_sco_active)
         continue; /* No Master Slave switch not allowed when SCO Active */
-#endif
       /*4_1_TODO check  if btm_cb.devcb.local_features to be used instead */
       if (HCI_SWITCH_SUPPORTED(BTM_ReadLocalFeatures())) {
         /* mark this lcb waiting for switch to be completed and
@@ -2179,9 +2167,9 @@ bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
 
         if (BTM_SwitchRole(p_lcb_cur->remote_bd_addr, HCI_ROLE_MASTER, NULL) ==
             BTM_CMD_STARTED) {
-          alarm_set_on_queue(
-              p_lcb->l2c_lcb_timer, L2CAP_LINK_ROLE_SWITCH_TIMEOUT_MS,
-              l2c_lcb_timer_timeout, p_lcb, btu_general_alarm_queue);
+          alarm_set_on_mloop(p_lcb->l2c_lcb_timer,
+                             L2CAP_LINK_ROLE_SWITCH_TIMEOUT_MS,
+                             l2c_lcb_timer_timeout, p_lcb);
           return (true);
         }
       }
@@ -2256,7 +2244,8 @@ bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
 
   /* Check with the BT manager if details about remote device are known */
   p_inq_info = BTM_InqDbRead(p_lcb->remote_bd_addr);
-  if (p_inq_info != NULL) {
+  if ((p_inq_info != NULL) &&
+      (p_inq_info->results.inq_result_type & BTM_INQ_RESULT_BR)) {
     page_scan_rep_mode = p_inq_info->results.page_scan_rep_mode;
     page_scan_mode = p_inq_info->results.page_scan_mode;
     clock_offset = (uint16_t)(p_inq_info->results.clock_offset);
@@ -2276,8 +2265,8 @@ bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
 
   btm_acl_update_busy_level(BTM_BLI_PAGE_EVT);
 
-  alarm_set_on_queue(p_lcb->l2c_lcb_timer, L2CAP_LINK_CONNECT_TIMEOUT_MS,
-                     l2c_lcb_timer_timeout, p_lcb, btu_general_alarm_queue);
+  alarm_set_on_mloop(p_lcb->l2c_lcb_timer, L2CAP_LINK_CONNECT_TIMEOUT_MS,
+                     l2c_lcb_timer_timeout, p_lcb);
 
   return (true);
 }
@@ -2362,7 +2351,7 @@ bool l2cu_lcb_disconnecting(void) {
  *
  ******************************************************************************/
 
-bool l2cu_set_acl_priority(BD_ADDR bd_addr, uint8_t priority,
+bool l2cu_set_acl_priority(const RawAddress& bd_addr, uint8_t priority,
                            bool reset_after_rs) {
   tL2C_LCB* p_lcb;
   uint8_t* pp;
@@ -2434,7 +2423,7 @@ void l2cu_set_non_flushable_pbf(bool is_supported) {
  * Returns          void
  *
  ******************************************************************************/
-void l2cu_resubmit_pending_sec_req(BD_ADDR p_bda) {
+void l2cu_resubmit_pending_sec_req(const RawAddress* p_bda) {
   tL2C_LCB* p_lcb;
   tL2C_CCB* p_ccb;
   tL2C_CCB* p_next_ccb;
@@ -2444,7 +2433,7 @@ void l2cu_resubmit_pending_sec_req(BD_ADDR p_bda) {
 
   /* If we are called with a BDA, only resubmit for that BDA */
   if (p_bda) {
-    p_lcb = l2cu_find_lcb_by_bd_addr(p_bda, BT_TRANSPORT_BR_EDR);
+    p_lcb = l2cu_find_lcb_by_bd_addr(*p_bda, BT_TRANSPORT_BR_EDR);
 
     /* If we don't have one, this is an error */
     if (p_lcb) {
@@ -2609,7 +2598,7 @@ bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
  ******************************************************************************/
 void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb) {
   tBTM_STATUS rc;
-  period_ms_t timeout_ms = p_lcb->idle_timeout * 1000;
+  uint64_t timeout_ms = p_lcb->idle_timeout * 1000;
   bool start_timeout = true;
 
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
@@ -2618,6 +2607,12 @@ void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb) {
   for (xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
     if ((p_lcb->p_fixed_ccbs[xx] != NULL) &&
         (p_lcb->p_fixed_ccbs[xx]->fixed_chnl_idle_tout * 1000 > timeout_ms)) {
+
+      if (p_lcb->p_fixed_ccbs[xx]->fixed_chnl_idle_tout == L2CAP_NO_IDLE_TIMEOUT) {
+         L2CAP_TRACE_DEBUG("%s NO IDLE timeout set for fixed cid 0x%04x", __func__,
+            p_lcb->p_fixed_ccbs[xx]->local_cid);
+         start_timeout = false;
+      }
       timeout_ms = p_lcb->p_fixed_ccbs[xx]->fixed_chnl_idle_tout * 1000;
     }
   }
@@ -2654,8 +2649,8 @@ void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb) {
 
   if (start_timeout) {
     L2CAP_TRACE_DEBUG("%s starting IDLE timeout: %d ms", __func__, timeout_ms);
-    alarm_set_on_queue(p_lcb->l2c_lcb_timer, timeout_ms, l2c_lcb_timer_timeout,
-                       p_lcb, btu_general_alarm_queue);
+    alarm_set_on_mloop(p_lcb->l2c_lcb_timer, timeout_ms, l2c_lcb_timer_timeout,
+                       p_lcb);
   } else {
     alarm_cancel(p_lcb->l2c_lcb_timer);
   }
@@ -2682,28 +2677,34 @@ void l2cu_process_fixed_chnl_resp(tL2C_LCB* p_lcb) {
 
   /* Tell all registered fixed channels about the connection */
   for (int xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
+    uint16_t channel_id = xx + L2CAP_FIRST_FIXED_CHNL;
+
+    /* See BT Spec Ver 5.0 | Vol 3, Part A 2.1 table 2.1 and 2.2 */
+
     /* skip sending LE fix channel callbacks on BR/EDR links */
     if (p_lcb->transport == BT_TRANSPORT_BR_EDR &&
-        xx + L2CAP_FIRST_FIXED_CHNL >= L2CAP_ATT_CID &&
-        xx + L2CAP_FIRST_FIXED_CHNL <= L2CAP_SMP_CID)
+        channel_id >= L2CAP_ATT_CID && channel_id <= L2CAP_SMP_CID)
       continue;
-    if (l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb != NULL) {
-      if (p_lcb->peer_chnl_mask[(xx + L2CAP_FIRST_FIXED_CHNL) / 8] &
-          (1 << ((xx + L2CAP_FIRST_FIXED_CHNL) % 8))) {
-        if (p_lcb->p_fixed_ccbs[xx])
-          p_lcb->p_fixed_ccbs[xx]->chnl_state = CST_OPEN;
-        (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(xx + L2CAP_FIRST_FIXED_CHNL,
-                                                 p_lcb->remote_bd_addr, true, 0,
-                                                 p_lcb->transport);
-      } else {
-        (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(
-            xx + L2CAP_FIRST_FIXED_CHNL, p_lcb->remote_bd_addr, false,
-            p_lcb->disc_reason, p_lcb->transport);
 
-        if (p_lcb->p_fixed_ccbs[xx]) {
-          l2cu_release_ccb(p_lcb->p_fixed_ccbs[xx]);
-          p_lcb->p_fixed_ccbs[xx] = NULL;
-        }
+    /* skip sending BR fix channel callbacks on LE links */
+    if (p_lcb->transport == BT_TRANSPORT_LE && channel_id == L2CAP_SMP_BR_CID)
+      continue;
+
+    if (!l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb) continue;
+
+    if (p_lcb->peer_chnl_mask[(channel_id) / 8] & (1 << ((channel_id) % 8))) {
+      if (p_lcb->p_fixed_ccbs[xx])
+        p_lcb->p_fixed_ccbs[xx]->chnl_state = CST_OPEN;
+      (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(
+          channel_id, p_lcb->remote_bd_addr, true, 0, p_lcb->transport);
+    } else {
+      (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(
+          channel_id, p_lcb->remote_bd_addr, false, p_lcb->disc_reason,
+          p_lcb->transport);
+
+      if (p_lcb->p_fixed_ccbs[xx]) {
+        l2cu_release_ccb(p_lcb->p_fixed_ccbs[xx]);
+        p_lcb->p_fixed_ccbs[xx] = NULL;
       }
     }
   }
@@ -3067,10 +3068,6 @@ tL2C_LCB* l2cu_find_lcb_by_handle(uint16_t handle) {
  ******************************************************************************/
 tL2C_CCB* l2cu_find_ccb_by_cid(tL2C_LCB* p_lcb, uint16_t local_cid) {
   tL2C_CCB* p_ccb = NULL;
-#if (L2CAP_UCD_INCLUDED == TRUE)
-  uint8_t xx;
-#endif
-
   if (local_cid >= L2CAP_BASE_APPL_CID) {
     /* find the associated CCB by "index" */
     local_cid -= L2CAP_BASE_APPL_CID;
@@ -3088,21 +3085,6 @@ tL2C_CCB* l2cu_find_ccb_by_cid(tL2C_LCB* p_lcb, uint16_t local_cid) {
       p_ccb = NULL;
     }
   }
-#if (L2CAP_UCD_INCLUDED == TRUE)
-  else {
-    /* searching fixed channel */
-    p_ccb = l2cb.ccb_pool;
-    for (xx = 0; xx < MAX_L2CAP_CHANNELS; xx++) {
-      if ((p_ccb->local_cid == local_cid) && (p_ccb->in_use) &&
-          (p_lcb == p_ccb->p_lcb))
-        break;
-      else
-        p_ccb++;
-    }
-    if (xx >= MAX_L2CAP_CHANNELS) return NULL;
-  }
-#endif
-
   return (p_ccb);
 }
 
@@ -3245,8 +3227,7 @@ static tL2C_CCB* l2cu_get_next_channel(tL2C_LCB* p_lcb) {
 #endif /* (L2CAP_ROUND_ROBIN_CHANNEL_SERVICE == TRUE) */
 
 void l2cu_tx_complete(tL2C_TX_COMPLETE_CB_INFO* p_cbi) {
-  if (p_cbi->cb != NULL)
-      p_cbi->cb(p_cbi->local_cid, p_cbi->num_sdu);
+  if (p_cbi->cb != NULL) p_cbi->cb(p_cbi->local_cid, p_cbi->num_sdu);
 }
 
 /******************************************************************************
@@ -3259,7 +3240,8 @@ void l2cu_tx_complete(tL2C_TX_COMPLETE_CB_INFO* p_cbi) {
  * Returns          pointer to buffer or NULL
  *
  ******************************************************************************/
-BT_HDR* l2cu_get_next_buffer_to_send(tL2C_LCB* p_lcb, tL2C_TX_COMPLETE_CB_INFO* p_cbi) {
+BT_HDR* l2cu_get_next_buffer_to_send(tL2C_LCB* p_lcb,
+                                     tL2C_TX_COMPLETE_CB_INFO* p_cbi) {
   tL2C_CCB* p_ccb;
   BT_HDR* p_buf;
 
@@ -3330,10 +3312,16 @@ BT_HDR* l2cu_get_next_buffer_to_send(tL2C_LCB* p_lcb, tL2C_TX_COMPLETE_CB_INFO* 
       L2CAP_TRACE_DEBUG("%s No credits to send packets", __func__);
       return NULL;
     }
-    p_buf = l2c_lcc_get_next_xmit_sdu_seg(p_ccb, 0);
-    if (p_buf == NULL) return (NULL);
 
+    bool last_piece_of_sdu = false;
+    p_buf = l2c_lcc_get_next_xmit_sdu_seg(p_ccb, &last_piece_of_sdu);
     p_ccb->peer_conn_cfg.credits--;
+
+    if (last_piece_of_sdu) {
+      // TODO: send callback up the stack. Investigate setting p_cbi->cb to
+      // notify after controller ack send.
+    }
+
   } else {
     if (p_ccb->peer_cfg.fcr.mode != L2CAP_FCR_BASIC_MODE) {
       p_buf = l2c_fcr_get_next_xmit_sdu_seg(p_ccb, 0);
@@ -3416,112 +3404,54 @@ void l2cu_set_acl_hci_header(BT_HDR* p_buf, tL2C_CCB* p_ccb) {
   p_buf->len += HCI_DATA_PREAMBLE_SIZE;
 }
 
-/******************************************************************************
- *
- * Function         l2cu_check_channel_congestion
- *
- * Description      check if any change in congestion status
- *
- * Returns          None
- *
- ******************************************************************************/
-void l2cu_check_channel_congestion(tL2C_CCB* p_ccb) {
-  size_t q_count = fixed_queue_length(p_ccb->xmit_hold_q);
+static void send_congestion_status_to_all_clients(tL2C_CCB* p_ccb,
+                                                  bool status) {
+  p_ccb->cong_sent = status;
 
-#if (L2CAP_UCD_INCLUDED == TRUE)
-  if (p_ccb->local_cid == L2CAP_CONNECTIONLESS_CID) {
-    q_count += fixed_queue_length(p_ccb->p_lcb->ucd_out_sec_pending_q);
+  if (p_ccb->p_rcb && p_ccb->p_rcb->api.pL2CA_CongestionStatus_Cb) {
+    L2CAP_TRACE_DEBUG(
+        "L2CAP - Calling CongestionStatus_Cb (%d), CID: 0x%04x "
+        "xmit_hold_q.count: %u  buff_quota: %u",
+        status, p_ccb->local_cid, fixed_queue_length(p_ccb->xmit_hold_q),
+        p_ccb->buff_quota);
+
+    /* Prevent recursive calling */
+    if (status == false) l2cb.is_cong_cback_context = true;
+
+    (*p_ccb->p_rcb->api.pL2CA_CongestionStatus_Cb)(p_ccb->local_cid, status);
+
+    if (status == false) l2cb.is_cong_cback_context = false;
   }
-#endif
-  /* If the CCB queue limit is subject to a quota, check for congestion */
-  /* if this channel has outgoing traffic */
-  if (p_ccb->buff_quota != 0) {
-    /* If this channel was congested */
-    if (p_ccb->cong_sent) {
-      /* If the channel is not congested now, tell the app */
-      if (q_count <= (p_ccb->buff_quota / 2)) {
-        p_ccb->cong_sent = false;
-        if (p_ccb->p_rcb && p_ccb->p_rcb->api.pL2CA_CongestionStatus_Cb) {
-          L2CAP_TRACE_DEBUG(
-              "L2CAP - Calling CongestionStatus_Cb (false), CID: 0x%04x  "
-              "xmit_hold_q.count: %u  buff_quota: %u",
-              p_ccb->local_cid, q_count, p_ccb->buff_quota);
-
-          /* Prevent recursive calling */
-          l2cb.is_cong_cback_context = true;
-          (*p_ccb->p_rcb->api.pL2CA_CongestionStatus_Cb)(p_ccb->local_cid,
-                                                         false);
-          l2cb.is_cong_cback_context = false;
-        }
-#if (L2CAP_UCD_INCLUDED == TRUE)
-        else if (p_ccb->p_rcb && p_ccb->local_cid == L2CAP_CONNECTIONLESS_CID) {
-          if (p_ccb->p_rcb->ucd.cb_info.pL2CA_UCD_Congestion_Status_Cb) {
-            L2CAP_TRACE_DEBUG(
-                "L2CAP - Calling UCD CongestionStatus_Cb (false), "
-                "SecPendingQ:%u,XmitQ:%u,Quota:%u",
-                fixed_queue_length(p_ccb->p_lcb->ucd_out_sec_pending_q),
-                fixed_queue_length(p_ccb->xmit_hold_q), p_ccb->buff_quota);
-            p_ccb->p_rcb->ucd.cb_info.pL2CA_UCD_Congestion_Status_Cb(
-                p_ccb->p_lcb->remote_bd_addr, false);
-          }
-        }
-#endif
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
-        else {
-          uint8_t xx;
-          for (xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
-            if (p_ccb->p_lcb->p_fixed_ccbs[xx] == p_ccb) {
-              if (l2cb.fixed_reg[xx].pL2CA_FixedCong_Cb != NULL)
-                (*l2cb.fixed_reg[xx].pL2CA_FixedCong_Cb)(
-                    p_ccb->p_lcb->remote_bd_addr, false);
-              break;
-            }
-          }
-        }
-#endif
-      }
-    } else {
-      /* If this channel was not congested but it is congested now, tell the app
-       */
-      if (q_count > p_ccb->buff_quota) {
-        p_ccb->cong_sent = true;
-        if (p_ccb->p_rcb && p_ccb->p_rcb->api.pL2CA_CongestionStatus_Cb) {
-          L2CAP_TRACE_DEBUG(
-              "L2CAP - Calling CongestionStatus_Cb "
-              "(true),CID:0x%04x,XmitQ:%u,Quota:%u",
-              p_ccb->local_cid, q_count, p_ccb->buff_quota);
-
-          (*p_ccb->p_rcb->api.pL2CA_CongestionStatus_Cb)(p_ccb->local_cid,
-                                                         true);
-        }
-#if (L2CAP_UCD_INCLUDED == TRUE)
-        else if (p_ccb->p_rcb && p_ccb->local_cid == L2CAP_CONNECTIONLESS_CID) {
-          if (p_ccb->p_rcb->ucd.cb_info.pL2CA_UCD_Congestion_Status_Cb) {
-            L2CAP_TRACE_DEBUG(
-                "L2CAP - Calling UCD CongestionStatus_Cb (true), "
-                "SecPendingQ:%u,XmitQ:%u,Quota:%u",
-                fixed_queue_length(p_ccb->p_lcb->ucd_out_sec_pending_q),
-                fixed_queue_length(p_ccb->xmit_hold_q), p_ccb->buff_quota);
-            p_ccb->p_rcb->ucd.cb_info.pL2CA_UCD_Congestion_Status_Cb(
-                p_ccb->p_lcb->remote_bd_addr, true);
-          }
-        }
-#endif
-#if (L2CAP_NUM_FIXED_CHNLS > 0)
-        else {
-          uint8_t xx;
-          for (xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
-            if (p_ccb->p_lcb->p_fixed_ccbs[xx] == p_ccb) {
-              if (l2cb.fixed_reg[xx].pL2CA_FixedCong_Cb != NULL)
-                (*l2cb.fixed_reg[xx].pL2CA_FixedCong_Cb)(
-                    p_ccb->p_lcb->remote_bd_addr, true);
-              break;
-            }
-          }
-        }
-#endif
+  else {
+    for (uint8_t xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
+      if (p_ccb->p_lcb->p_fixed_ccbs[xx] == p_ccb) {
+        if (l2cb.fixed_reg[xx].pL2CA_FixedCong_Cb != NULL)
+          (*l2cb.fixed_reg[xx].pL2CA_FixedCong_Cb)(p_ccb->p_lcb->remote_bd_addr,
+                                                   status);
+        break;
       }
     }
+  }
+#endif
+}
+
+/* check if any change in congestion status */
+void l2cu_check_channel_congestion(tL2C_CCB* p_ccb) {
+  /* If the CCB queue limit is subject to a quota, check for congestion if this
+   * channel has outgoing traffic */
+  if (p_ccb->buff_quota == 0) return;
+
+  size_t q_count = fixed_queue_length(p_ccb->xmit_hold_q);
+
+  if (p_ccb->cong_sent) {
+    /* if channel was congested, but is not congested now, tell the app */
+    if (q_count <= (p_ccb->buff_quota / 2))
+      send_congestion_status_to_all_clients(p_ccb, false);
+  } else {
+    /* if channel was not congested, but is congested now, tell the app */
+    if (q_count > p_ccb->buff_quota)
+      send_congestion_status_to_all_clients(p_ccb, true);
   }
 }
 

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2015 The Android Open Source Project
+ *  Copyright 2015 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@
 #include "bta_api.h"
 #include "btm_api.h"
 
+using bluetooth::Uuid;
+
 /* status values */
 #define BTA_SDP_SUCCESS 0 /* Successful operation. */
 #define BTA_SDP_FAILURE 1 /* Generic failure. */
@@ -54,8 +56,8 @@ typedef uint16_t tBTA_SDP_EVT;
 /* data associated with BTA_SDP_DISCOVERY_COMP_EVT */
 typedef struct {
   tBTA_SDP_STATUS status;
-  BD_ADDR remote_addr;
-  tBT_UUID uuid;
+  RawAddress remote_addr;
+  bluetooth::Uuid uuid;
   int record_count;
   bluetooth_sdp_record records[BTA_SDP_MAX_RECORDS];
 } tBTA_SDP_SEARCH_COMP;
@@ -103,7 +105,8 @@ extern tBTA_SDP_STATUS BTA_SdpEnable(tBTA_SDP_DM_CBACK* p_cback);
  *                  BTA_SDP_FAIL if internal failure.
  *
  ******************************************************************************/
-extern tBTA_SDP_STATUS BTA_SdpSearch(BD_ADDR bd_addr, tSDP_UUID* uuid);
+extern tBTA_SDP_STATUS BTA_SdpSearch(const RawAddress& bd_addr,
+                                     const bluetooth::Uuid& uuid);
 
 /*******************************************************************************
  *
