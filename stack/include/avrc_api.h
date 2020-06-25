@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2006-2012 Broadcom Corporation
+ *  Copyright (C) 2006-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,13 +23,10 @@
  ******************************************************************************/
 #ifndef AVRC_API_H
 #define AVRC_API_H
-
 #include "avct_api.h"
 #include "avrc_defs.h"
 #include "bt_target.h"
 #include "sdp_api.h"
-
-#include <base/callback.h>
 
 /*****************************************************************************
  *  constants
@@ -164,24 +161,23 @@ typedef struct {
  * implementation of this callback function must copy the p_service_name
  * and p_provider_name parameters passed to it as they are not guaranteed
  * to remain after the callback function exits. */
-using tAVRC_FIND_CBACK = base::Callback<void(uint16_t status)>;
+typedef void(tAVRC_FIND_CBACK)(uint16_t status);
 
 /* This is the control callback function.  This function passes events
  * listed in Table 20 to the application. */
-using tAVRC_CTRL_CBACK =
-    base::Callback<void(uint8_t handle, uint8_t event, uint16_t result,
-                        const RawAddress* peer_addr)>;
+typedef void(tAVRC_CTRL_CBACK)(uint8_t handle, uint8_t event, uint16_t result,
+                               const RawAddress* peer_addr);
 
 /* This is the message callback function.  It is executed when AVCTP has
  * a message packet ready for the application.  The implementation of this
  * callback function must copy the tAVRC_MSG structure passed to it as it
  * is not guaranteed to remain after the callback function exits. */
-using tAVRC_MSG_CBACK = base::Callback<void(uint8_t handle, uint8_t label,
-                                            uint8_t opcode, tAVRC_MSG* p_msg)>;
+typedef void(tAVRC_MSG_CBACK)(uint8_t handle, uint8_t label, uint8_t opcode,
+                              tAVRC_MSG* p_msg);
 
 typedef struct {
-  tAVRC_CTRL_CBACK ctrl_cback;    /* application control callback */
-  tAVRC_MSG_CBACK msg_cback;      /* application message callback */
+  tAVRC_CTRL_CBACK* p_ctrl_cback; /* pointer to application control callback */
+  tAVRC_MSG_CBACK* p_msg_cback;   /* pointer to application message callback */
   uint32_t company_id;            /* the company ID  */
   uint8_t conn;                   /* Connection role (Initiator/acceptor) */
   uint8_t control;                /* Control role (Control/Target) */
@@ -278,7 +274,7 @@ extern uint16_t AVRC_AddRecord(uint16_t service_uuid,
 extern uint16_t AVRC_FindService(uint16_t service_uuid,
                                  const RawAddress& bd_addr,
                                  tAVRC_SDP_DB_PARAMS* p_db,
-                                 const tAVRC_FIND_CBACK& cback);
+                                 tAVRC_FIND_CBACK* p_cback);
 
 /******************************************************************************
  *

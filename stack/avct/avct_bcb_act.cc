@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2016 Broadcom Corporation
+ *  Copyright (C) 2003-2016 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
  ******************************************************************************/
 
 /*****************************************************************************
- *
- *  Name:           avct_bcb_act.cc
- *
- *  Description:    This module contains action functions of the browsing
- *                  control state machine.
- *
+*
+*  Name:           avct_bcb_act.cc
+*
+*  Description:    This module contains action functions of the browsing control
+*                  state machine.
+*
  *****************************************************************************/
 
 #include <log/log.h>
@@ -106,7 +106,7 @@ void avct_bcb_chnl_open(tAVCT_BCB* p_bcb, UNUSED_ATTR tAVCT_LCB_EVT* p_data) {
   BTM_SetOutService(p_lcb->peer_addr, BTM_SEC_SERVICE_AVCTP_BROWSE, 0);
 
   /* Set the FCR options: Browsing channel mandates ERTM */
-  ertm_info.preferred_mode = L2CAP_FCR_ERTM_MODE;
+  ertm_info.preferred_mode = avct_l2c_br_fcr_opts_def.mode;
   ertm_info.allowed_modes = L2CAP_FCR_CHAN_OPT_ERTM;
   ertm_info.user_rx_buf_size = BT_DEFAULT_BUFFER_SIZE;
   ertm_info.user_tx_buf_size = BT_DEFAULT_BUFFER_SIZE;
@@ -187,7 +187,7 @@ void avct_bcb_open_ind(tAVCT_BCB* p_bcb, tAVCT_LCB_EVT* p_data) {
   }
 
   /* if no ccbs bound to this lcb, disconnect */
-  if (!bind) {
+  if (bind == false) {
     avct_bcb_event(p_bcb, AVCT_LCB_INT_CLOSE_EVT, p_data);
     return;
   }

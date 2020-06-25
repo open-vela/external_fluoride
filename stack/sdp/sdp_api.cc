@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,16 +22,22 @@
  *
  ******************************************************************************/
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "bt_common.h"
 #include "bt_target.h"
+#include "bt_utils.h"
+#include "hcidefs.h"
+#include "hcimsgs.h"
+#include "l2cdefs.h"
 
+#include "btu.h"
 #include "sdp_api.h"
 #include "sdpint.h"
 
 #include "osi/include/osi.h"
-
-using bluetooth::Uuid;
 
 /**********************************************************************
  *   C L I E N T    F U N C T I O N    P R O T O T Y P E S            *
@@ -60,7 +66,7 @@ using bluetooth::Uuid;
  *
  ******************************************************************************/
 bool SDP_InitDiscoveryDb(tSDP_DISCOVERY_DB* p_db, uint32_t len,
-                         uint16_t num_uuid, const Uuid* p_uuid_list,
+                         uint16_t num_uuid, tSDP_UUID* p_uuid_list,
                          uint16_t num_attr, uint16_t* p_attr_list) {
   uint16_t xx;
 
@@ -209,6 +215,45 @@ bool SDP_ServiceSearchAttributeRequest2(const RawAddress& p_bd_addr,
 
 /*******************************************************************************
  *
+ * Function         SDP_FindAttributeInDb
+ *
+ * Description      This function queries an SDP database for a specific
+ *                  attribute. If the p_start_rec pointer is NULL, it looks from
+ *                  the beginning of the database, else it continues from the
+ *                  next record after p_start_rec.
+ *
+ * Returns          Pointer to matching record, or NULL
+ *
+ ******************************************************************************/
+tSDP_DISC_REC* SDP_FindAttributeInDb(tSDP_DISCOVERY_DB* p_db, uint16_t attr_id,
+                                     tSDP_DISC_REC* p_start_rec) {
+  tSDP_DISC_REC* p_rec;
+  tSDP_DISC_ATTR* p_attr;
+
+  /* Must have a valid database */
+  if (p_db == NULL) return (NULL);
+
+  if (!p_start_rec)
+    p_rec = p_db->p_first_rec;
+  else
+    p_rec = p_start_rec->p_next_rec;
+
+  while (p_rec) {
+    p_attr = p_rec->p_first_attr;
+    while (p_attr) {
+      if (p_attr->attr_id == attr_id) return (p_rec);
+
+      p_attr = p_attr->p_next_attr;
+    }
+
+    p_rec = p_rec->p_next_rec;
+  }
+  /* If here, no matching attribute found */
+  return (NULL);
+}
+
+/*******************************************************************************
+ *
  * Function         SDP_FindAttributeInRec
  *
  * Description      This function searches an SDP discovery record for a
@@ -244,7 +289,7 @@ tSDP_DISC_ATTR* SDP_FindAttributeInRec(tSDP_DISC_REC* p_rec, uint16_t attr_id) {
  * Returns          true if found, otherwise false.
  *
  ******************************************************************************/
-bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
+bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, tBT_UUID* p_uuid) {
   tSDP_DISC_ATTR *p_attr, *p_sattr, *p_extra_sattr;
 
   p_attr = p_rec->p_first_attr;
@@ -255,14 +300,18 @@ bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
       for (p_sattr = p_attr->attr_value.v.p_sub_attr; p_sattr;
            p_sattr = p_sattr->p_next_attr) {
         if (SDP_DISC_ATTR_TYPE(p_sattr->attr_len_type) == UUID_DESC_TYPE) {
-          if (SDP_DISC_ATTR_LEN(p_sattr->attr_len_type) == Uuid::kNumBytes16) {
-            *p_uuid = Uuid::From16Bit(p_sattr->attr_value.v.u16);
+          if (SDP_DISC_ATTR_LEN(p_sattr->attr_len_type) == LEN_UUID_16) {
+            p_uuid->len = LEN_UUID_16;
+            p_uuid->uu.uuid16 = p_sattr->attr_value.v.u16;
           } else if (SDP_DISC_ATTR_LEN(p_sattr->attr_len_type) ==
-                     Uuid::kNumBytes128) {
-            *p_uuid = Uuid::From128BitBE(p_sattr->attr_value.v.array);
-          } else if (SDP_DISC_ATTR_LEN(p_sattr->attr_len_type) ==
-                     Uuid::kNumBytes32) {
-            *p_uuid = Uuid::From32Bit(p_sattr->attr_value.v.u32);
+                     LEN_UUID_128) {
+            p_uuid->len = LEN_UUID_128;
+            for (uint8_t i = 0; i != LEN_UUID_128; ++i)
+              p_uuid->uu.uuid128[i] =
+                  p_sattr->attr_value.v.array[LEN_UUID_128 - i - 1];
+          } else if (SDP_DISC_ATTR_LEN(p_sattr->attr_len_type) == LEN_UUID_32) {
+            p_uuid->len = LEN_UUID_32;
+            p_uuid->uu.uuid32 = p_sattr->attr_value.v.u32;
           }
 
           return (true);
@@ -283,7 +332,8 @@ bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
                    UUID_DESC_TYPE)
                   /* only support 16 bits UUID for now */
                   && (SDP_DISC_ATTR_LEN(p_extra_sattr->attr_len_type) == 2)) {
-                *p_uuid = Uuid::From16Bit(p_extra_sattr->attr_value.v.u16);
+                p_uuid->len = 2;
+                p_uuid->uu.uuid16 = p_extra_sattr->attr_value.v.u16;
                 return (true);
               }
             }
@@ -295,7 +345,8 @@ bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
       if ((SDP_DISC_ATTR_TYPE(p_attr->attr_len_type) == UUID_DESC_TYPE)
           /* only support 16 bits UUID for now */
           && (SDP_DISC_ATTR_LEN(p_attr->attr_len_type) == 2)) {
-        *p_uuid = Uuid::From16Bit(p_attr->attr_value.v.u16);
+        p_uuid->len = 2;
+        p_uuid->uu.uuid16 = p_attr->attr_value.v.u16;
         return (true);
       }
     }
@@ -317,7 +368,7 @@ bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
  * Returns          true if found, otherwise false.
  *
  ******************************************************************************/
-bool SDP_FindServiceUUIDInRec_128bit(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
+bool SDP_FindServiceUUIDInRec_128bit(tSDP_DISC_REC* p_rec, tBT_UUID* p_uuid) {
   tSDP_DISC_ATTR* p_attr = p_rec->p_first_attr;
   while (p_attr) {
     if ((p_attr->attr_id == ATTR_ID_SERVICE_CLASS_ID_LIST) &&
@@ -327,7 +378,10 @@ bool SDP_FindServiceUUIDInRec_128bit(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
         if (SDP_DISC_ATTR_TYPE(p_sattr->attr_len_type) == UUID_DESC_TYPE) {
           /* only support 128 bits UUID for now */
           if (SDP_DISC_ATTR_LEN(p_sattr->attr_len_type) == 16) {
-            *p_uuid = Uuid::From128BitBE(p_sattr->attr_value.v.array);
+            p_uuid->len = LEN_UUID_128;
+            for (uint8_t i = 0; i != LEN_UUID_128; ++i)
+              p_uuid->uu.uuid128[i] =
+                  p_sattr->attr_value.v.array[LEN_UUID_128 - i - 1];
           }
           return (true);
         }
@@ -339,7 +393,10 @@ bool SDP_FindServiceUUIDInRec_128bit(tSDP_DISC_REC* p_rec, Uuid* p_uuid) {
       if ((SDP_DISC_ATTR_TYPE(p_attr->attr_len_type) == UUID_DESC_TYPE)
           /* only support 128 bits UUID for now */
           && (SDP_DISC_ATTR_LEN(p_attr->attr_len_type) == 16)) {
-        *p_uuid = Uuid::From128BitBE(p_attr->attr_value.v.array);
+        p_uuid->len = LEN_UUID_128;
+        for (uint8_t i = 0; i != LEN_UUID_128; ++i)
+          p_uuid->uu.uuid128[i] =
+              p_attr->attr_value.v.array[LEN_UUID_128 - i - 1];
         return (true);
       }
     }
@@ -516,13 +573,13 @@ tSDP_DISC_REC* SDP_FindServiceInDb_128bit(tSDP_DISCOVERY_DB* p_db,
  *
  * NOTE             the only difference between this function and the previous
  *                  function "SDP_FindServiceInDb()" is that this function takes
- *                  a Uuid input
+ *                  a tBT_UUID input
  *
  * Returns          Pointer to record containing service class, or NULL
  *
  ******************************************************************************/
 tSDP_DISC_REC* SDP_FindServiceUUIDInDb(tSDP_DISCOVERY_DB* p_db,
-                                       const Uuid& uuid,
+                                       tBT_UUID* p_uuid,
                                        tSDP_DISC_REC* p_start_rec) {
   tSDP_DISC_REC* p_rec;
   tSDP_DISC_ATTR *p_attr, *p_sattr;
@@ -544,13 +601,13 @@ tSDP_DISC_REC* SDP_FindServiceUUIDInDb(tSDP_DISCOVERY_DB* p_db,
         for (p_sattr = p_attr->attr_value.v.p_sub_attr; p_sattr;
              p_sattr = p_sattr->p_next_attr) {
           if (SDP_DISC_ATTR_TYPE(p_sattr->attr_len_type) == UUID_DESC_TYPE) {
-            if (sdpu_compare_uuid_with_attr(uuid, p_sattr)) return (p_rec);
+            if (sdpu_compare_uuid_with_attr(p_uuid, p_sattr)) return (p_rec);
           }
         }
         break;
       } else if (p_attr->attr_id == ATTR_ID_SERVICE_ID) {
         if (SDP_DISC_ATTR_TYPE(p_attr->attr_len_type) == UUID_DESC_TYPE) {
-          if (sdpu_compare_uuid_with_attr(uuid, p_attr)) return (p_rec);
+          if (sdpu_compare_uuid_with_attr(p_uuid, p_attr)) return (p_rec);
         }
       }
 
@@ -648,6 +705,44 @@ bool SDP_FindProtocolListElemInRec(tSDP_DISC_REC* p_rec, uint16_t layer_uuid,
 
 /*******************************************************************************
  *
+ * Function         SDP_FindAddProtoListsElemInRec
+ *
+ * Description      This function looks at a specific discovery record for a
+ *                  protocol list element.
+ *
+ * Returns          true if found, false if not
+ *                  If found, the passed protocol list element is filled in.
+ *
+ ******************************************************************************/
+bool SDP_FindAddProtoListsElemInRec(tSDP_DISC_REC* p_rec, uint16_t layer_uuid,
+                                    tSDP_PROTOCOL_ELEM* p_elem) {
+  tSDP_DISC_ATTR *p_attr, *p_sattr;
+  bool ret = false;
+
+  p_attr = p_rec->p_first_attr;
+  while (p_attr) {
+    /* Find the additional protocol descriptor list attribute */
+    if ((p_attr->attr_id == ATTR_ID_ADDITION_PROTO_DESC_LISTS) &&
+        (SDP_DISC_ATTR_TYPE(p_attr->attr_len_type) == DATA_ELE_SEQ_DESC_TYPE)) {
+      for (p_sattr = p_attr->attr_value.v.p_sub_attr; p_sattr;
+           p_sattr = p_sattr->p_next_attr) {
+        /* Safety check - each entry should itself be a sequence */
+        if (SDP_DISC_ATTR_TYPE(p_sattr->attr_len_type) ==
+            DATA_ELE_SEQ_DESC_TYPE) {
+          ret = sdp_fill_proto_elem(p_sattr, layer_uuid, p_elem);
+          if (ret == true) break;
+        }
+      }
+      return ret;
+    }
+    p_attr = p_attr->p_next_attr;
+  }
+  /* If here, no match found */
+  return (false);
+}
+
+/*******************************************************************************
+ *
  * Function         SDP_FindProfileVersionInRec
  *
  * Description      This function looks at a specific discovery record for the
@@ -734,7 +829,9 @@ uint16_t SDP_DiDiscover(const RawAddress& remote_device,
   uint16_t di_uuid = UUID_SERVCLASS_PNP_INFORMATION;
 
   /* build uuid for db init */
-  Uuid init_uuid = Uuid::From16Bit(di_uuid);
+  tSDP_UUID init_uuid;
+  init_uuid.len = 2;
+  init_uuid.uu.uuid16 = di_uuid;
 
   if (SDP_InitDiscoveryDb(p_db, len, num_uuids, &init_uuid, 0, NULL))
     if (SDP_ServiceSearchRequest(remote_device, p_db, p_cb))
@@ -914,7 +1011,8 @@ uint16_t SDP_SetLocalDiRecord(tSDP_DI_RECORD* p_device_info,
   if (p_device_info == NULL) return SDP_ILLEGAL_PARAMETER;
 
   /* if record is to be primary record, get handle to replace old primary */
-  if (p_device_info->primary_record && sdp_cb.server_db.di_primary_handle)
+  if (p_device_info->primary_record == true &&
+      sdp_cb.server_db.di_primary_handle)
     handle = sdp_cb.server_db.di_primary_handle;
   else {
     handle = SDP_CreateRecord();
@@ -925,7 +1023,7 @@ uint16_t SDP_SetLocalDiRecord(tSDP_DI_RECORD* p_device_info,
 
   /* build the SDP entry */
   /* Add the UUID to the Service Class ID List */
-  if (!(SDP_AddServiceClassIdList(handle, 1, &di_uuid)))
+  if ((SDP_AddServiceClassIdList(handle, 1, &di_uuid)) == false)
     result = SDP_DI_REG_FAILED;
 
   /* mandatory */
@@ -1022,7 +1120,7 @@ uint16_t SDP_SetLocalDiRecord(tSDP_DI_RECORD* p_device_info,
 
   if (result != SDP_SUCCESS)
     SDP_DeleteRecord(handle);
-  else if (p_device_info->primary_record)
+  else if (p_device_info->primary_record == true)
     sdp_cb.server_db.di_primary_handle = handle;
 
   return result;
