@@ -99,6 +99,32 @@ bt_status_t btif_storage_set_remote_device_property(
 
 /*******************************************************************************
  *
+ * Function         btif_storage_get_io_caps
+ *
+ * Description      BTIF storage API - Fetches the local Input/Output
+ *                  capabilities of the device.
+ *
+ * Returns          Returns local IO Capability of device. If not stored,
+ *                  returns BTM_LOCAL_IO_CAPS.
+ *
+ ******************************************************************************/
+uint8_t btif_storage_get_local_io_caps();
+
+/*******************************************************************************
+ *
+ * Function         btif_storage_get_io_caps_ble
+ *
+ * Description      BTIF storage API - Fetches the local Input/Output
+ *                  capabilities of the BLE device.
+ *
+ * Returns          Returns local IO Capability of BLE device. If not stored,
+ *                  returns BTM_LOCAL_IO_CAPS_BLE.
+ *
+ ******************************************************************************/
+uint8_t btif_storage_get_local_io_caps_ble();
+
+/*******************************************************************************
+ *
  * Function         btif_storage_add_remote_device
  *
  * Description      BTIF storage API - Adds a newly discovered device to
@@ -125,7 +151,7 @@ bt_status_t btif_storage_add_remote_device(const RawAddress* remote_bd_addr,
  *
  ******************************************************************************/
 bt_status_t btif_storage_add_bonded_device(RawAddress* remote_bd_addr,
-                                           LINK_KEY link_key, uint8_t key_type,
+                                           LinkKey link_key, uint8_t key_type,
                                            uint8_t pin_length);
 
 /*******************************************************************************
@@ -193,7 +219,7 @@ bt_status_t btif_storage_load_bonded_hid_info(void);
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_remove_hid_info(RawAddress* remote_bd_addr);
+bt_status_t btif_storage_remove_hid_info(const RawAddress& remote_bd_addr);
 
 /** Loads information about bonded hearing aid devices */
 void btif_storage_load_bonded_hearing_aids();
@@ -201,11 +227,14 @@ void btif_storage_load_bonded_hearing_aids();
 /** Deletes the bonded hearing aid device info from NVRAM */
 void btif_storage_remove_hearing_aid(const RawAddress& address);
 
-/** Add the hearing aid device to white list */
-void btif_storage_add_hearing_aid_to_white_list(const RawAddress& address);
+/** Set/Unset the hearing aid device HEARING_AID_IS_WHITE_LISTED flag. */
+void btif_storage_set_hearing_aid_white_list(const RawAddress& address,
+                                             bool add_to_whitelist);
 
-/** Remove the hearing aid device from white list */
-void btif_storage_remove_hearing_aid_white_list(const RawAddress& address);
+/** Get the hearing aid device properties. */
+bool btif_storage_get_hearing_aid_prop(
+    const RawAddress& address, uint8_t* capabilities, uint64_t* hi_sync_id,
+    uint16_t* render_delay, uint16_t* preparation_delay, uint16_t* codecs);
 
 /*******************************************************************************
  *
@@ -220,22 +249,24 @@ void btif_storage_remove_hearing_aid_white_list(const RawAddress& address);
  ******************************************************************************/
 bool btif_storage_is_restricted_device(const RawAddress* remote_bd_addr);
 
+int btif_storage_get_num_bonded_devices(void);
+
 bt_status_t btif_storage_add_ble_bonding_key(RawAddress* remote_bd_addr,
                                              const uint8_t* key,
                                              uint8_t key_type,
                                              uint8_t key_length);
-bt_status_t btif_storage_get_ble_bonding_key(RawAddress* remote_bd_addr,
+bt_status_t btif_storage_get_ble_bonding_key(const RawAddress& remote_bd_addr,
                                              uint8_t key_type,
                                              uint8_t* key_value,
                                              int key_length);
 
-bt_status_t btif_storage_add_ble_local_key(char* key, uint8_t key_type,
-                                           uint8_t key_length);
+bt_status_t btif_storage_add_ble_local_key(const Octet16& key,
+                                           uint8_t key_type);
 bt_status_t btif_storage_remove_ble_bonding_keys(
     const RawAddress* remote_bd_addr);
 bt_status_t btif_storage_remove_ble_local_keys(void);
-bt_status_t btif_storage_get_ble_local_key(uint8_t key_type, char* key_value,
-                                           int key_len);
+bt_status_t btif_storage_get_ble_local_key(uint8_t key_type,
+                                           Octet16* key_value);
 
 bt_status_t btif_storage_get_remote_addr_type(const RawAddress* remote_bd_addr,
                                               int* addr_type);
@@ -263,7 +294,7 @@ bt_status_t btif_storage_load_hidd(void);
  *
  ******************************************************************************/
 
-bt_status_t btif_storage_set_hidd(RawAddress* remote_bd_addr);
+bt_status_t btif_storage_set_hidd(const RawAddress& remote_bd_addr);
 
 /*******************************************************************************
  *

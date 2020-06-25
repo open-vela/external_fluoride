@@ -41,7 +41,6 @@
 #include <time.h>
 
 #include "bt_common.h"
-#include "bta_closure_api.h"
 #include "bta_hd_api.h"
 #include "bta_hearing_aid_api.h"
 #include "bta_hh_api.h"
@@ -73,9 +72,6 @@ using bluetooth::Uuid;
 #define BTIF_STORAGE_PATH_REMOTE_DEVCLASS "DevClass"
 #define BTIF_STORAGE_PATH_REMOTE_DEVTYPE "DevType"
 #define BTIF_STORAGE_PATH_REMOTE_NAME "Name"
-#define BTIF_STORAGE_PATH_REMOTE_VER_MFCT "Manufacturer"
-#define BTIF_STORAGE_PATH_REMOTE_VER_VER "LmpVer"
-#define BTIF_STORAGE_PATH_REMOTE_VER_SUBVER "LmpSubVer"
 
 //#define BTIF_STORAGE_PATH_REMOTE_LINKKEYS "remote_linkkeys"
 #define BTIF_STORAGE_PATH_REMOTE_ALIASE "Aliase"
@@ -83,6 +79,8 @@ using bluetooth::Uuid;
 #define BTIF_STORAGE_PATH_REMOTE_HIDINFO "HidInfo"
 #define BTIF_STORAGE_KEY_ADAPTER_NAME "Name"
 #define BTIF_STORAGE_KEY_ADAPTER_SCANMODE "ScanMode"
+#define BTIF_STORAGE_KEY_LOCAL_IO_CAPS "LocalIOCaps"
+#define BTIF_STORAGE_KEY_LOCAL_IO_CAPS_BLE "LocalIOCapsBLE"
 #define BTIF_STORAGE_KEY_ADAPTER_DISC_TIMEOUT "DiscoveryTimeout"
 
 /* This is a local property to add a device found */
@@ -225,6 +223,14 @@ static int prop2cfg(const RawAddress* remote_bd_addr, bt_property_t* prop) {
       btif_config_set_int("Adapter", BTIF_STORAGE_KEY_ADAPTER_SCANMODE,
                           *(int*)prop->val);
       break;
+    case BT_PROPERTY_LOCAL_IO_CAPS:
+      btif_config_set_int("Adapter", BTIF_STORAGE_KEY_LOCAL_IO_CAPS,
+                          *(int*)prop->val);
+      break;
+    case BT_PROPERTY_LOCAL_IO_CAPS_BLE:
+      btif_config_set_int("Adapter", BTIF_STORAGE_KEY_LOCAL_IO_CAPS_BLE,
+                          *(int*)prop->val);
+      break;
     case BT_PROPERTY_ADAPTER_DISCOVERY_TIMEOUT:
       btif_config_set_int("Adapter", BTIF_STORAGE_KEY_ADAPTER_DISC_TIMEOUT,
                           *(int*)prop->val);
@@ -251,11 +257,10 @@ static int prop2cfg(const RawAddress* remote_bd_addr, bt_property_t* prop) {
 
       if (!info) return false;
 
-      btif_config_set_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_MFCT,
+      btif_config_set_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_MFCT,
                           info->manufacturer);
-      btif_config_set_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_VER,
-                          info->version);
-      btif_config_set_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_SUBVER,
+      btif_config_set_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_VER, info->version);
+      btif_config_set_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_SUBVER,
                           info->sub_ver);
     } break;
 
@@ -326,6 +331,18 @@ static int cfg2prop(const RawAddress* remote_bd_addr, bt_property_t* prop) {
         ret = btif_config_get_int("Adapter", BTIF_STORAGE_KEY_ADAPTER_SCANMODE,
                                   (int*)prop->val);
       break;
+
+    case BT_PROPERTY_LOCAL_IO_CAPS:
+      if (prop->len >= (int)sizeof(int))
+        ret = btif_config_get_int("Adapter", BTIF_STORAGE_KEY_LOCAL_IO_CAPS,
+                                  (int*)prop->val);
+      break;
+    case BT_PROPERTY_LOCAL_IO_CAPS_BLE:
+      if (prop->len >= (int)sizeof(int))
+        ret = btif_config_get_int("Adapter", BTIF_STORAGE_KEY_LOCAL_IO_CAPS_BLE,
+                                  (int*)prop->val);
+      break;
+
     case BT_PROPERTY_ADAPTER_DISCOVERY_TIMEOUT:
       if (prop->len >= (int)sizeof(int))
         ret = btif_config_get_int(
@@ -361,15 +378,15 @@ static int cfg2prop(const RawAddress* remote_bd_addr, bt_property_t* prop) {
       bt_remote_version_t* info = (bt_remote_version_t*)prop->val;
 
       if (prop->len >= (int)sizeof(bt_remote_version_t)) {
-        ret = btif_config_get_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_MFCT,
+        ret = btif_config_get_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_MFCT,
                                   &info->manufacturer);
 
         if (ret)
-          ret = btif_config_get_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_VER,
+          ret = btif_config_get_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_VER,
                                     &info->version);
 
         if (ret)
-          ret = btif_config_get_int(bdstr, BTIF_STORAGE_PATH_REMOTE_VER_SUBVER,
+          ret = btif_config_get_int(bdstr, BT_CONFIG_KEY_REMOTE_VER_SUBVER,
                                     &info->sub_ver);
       }
     } break;
@@ -394,9 +411,9 @@ static int cfg2prop(const RawAddress* remote_bd_addr, bt_property_t* prop) {
 static bt_status_t btif_in_fetch_bonded_device(const std::string& bdstr) {
   bool bt_linkkey_file_found = false;
 
-  LINK_KEY link_key;
-  size_t size = sizeof(link_key);
-  if (btif_config_get_bin(bdstr, "LinkKey", (uint8_t*)link_key, &size)) {
+  LinkKey link_key;
+  size_t size = link_key.size();
+  if (btif_config_get_bin(bdstr, "LinkKey", link_key.data(), &size)) {
     int linkkey_type;
     if (btif_config_get_int(bdstr, "LinkKeyType", &linkkey_type)) {
       bt_linkkey_file_found = true;
@@ -431,20 +448,15 @@ static bt_status_t btif_in_fetch_bonded_devices(
   bool bt_linkkey_file_found = false;
   int device_type;
 
-  // TODO: this code is not thread safe, it can corrupt config content.
-  // b/67595284
-  for (const section_t& section : btif_config_sections()) {
-    const std::string& name = section.name;
-    if (!RawAddress::IsValidAddress(name)) continue;
+  for (const auto& bd_addr : btif_config_get_paired_devices()) {
+    auto name = bd_addr.ToString();
 
     BTIF_TRACE_DEBUG("Remote device:%s", name.c_str());
-    LINK_KEY link_key;
+    LinkKey link_key;
     size_t size = sizeof(link_key);
-    if (btif_config_get_bin(name, "LinkKey", link_key, &size)) {
+    if (btif_config_get_bin(name, "LinkKey", link_key.data(), &size)) {
       int linkkey_type;
       if (btif_config_get_int(name, "LinkKeyType", &linkkey_type)) {
-        RawAddress bd_addr;
-        RawAddress::FromString(name, bd_addr);
         if (add) {
           DEV_CLASS dev_class = {0, 0, 0};
           int cod;
@@ -466,8 +478,7 @@ static bt_status_t btif_in_fetch_bonded_devices(
         bt_linkkey_file_found = false;
       }
     }
-    if (!btif_in_fetch_bonded_ble_device(name.c_str(), add, p_bonded_devices) &&
-        !bt_linkkey_file_found) {
+    if (!btif_in_fetch_bonded_ble_device(name, add, p_bonded_devices) && !bt_linkkey_file_found) {
       BTIF_TRACE_DEBUG("Remote device:%s, no link key or ble key found",
                        name.c_str());
     }
@@ -485,7 +496,7 @@ static void btif_read_le_key(const uint8_t key_type, const size_t key_len,
   tBTA_LE_KEY_VALUE key;
   memset(&key, 0, sizeof(key));
 
-  if (btif_storage_get_ble_bonding_key(&bd_addr, key_type, (uint8_t*)&key,
+  if (btif_storage_get_ble_bonding_key(bd_addr, key_type, (uint8_t*)&key,
                                        key_len) == BT_STATUS_SUCCESS) {
     if (add_key) {
       if (!*device_added) {
@@ -545,6 +556,57 @@ size_t btif_split_uuids_string(const char* str, bluetooth::Uuid* p_uuid,
   return num_uuids;
 }
 
+/**
+ * Helper function for fetching a local Input/Output capability property. If not
+ * set, it returns the default value.
+ */
+static uint8_t btif_storage_get_io_cap_property(bt_property_type_t type,
+                                                uint8_t default_value) {
+  char buf[sizeof(int)];
+
+  bt_property_t property;
+  property.type = type;
+  property.val = (void*)buf;
+  property.len = sizeof(int);
+
+  bt_status_t ret = btif_storage_get_adapter_property(&property);
+
+  return (ret == BT_STATUS_SUCCESS) ? (uint8_t)(*(int*)property.val)
+                                    : default_value;
+}
+
+/*******************************************************************************
+ *
+ * Function         btif_storage_get_io_caps
+ *
+ * Description      BTIF storage API - Fetches the local Input/Output
+ *                  capabilities of the device.
+ *
+ * Returns          Returns local IO Capability of device. If not stored,
+ *                  returns BTM_LOCAL_IO_CAPS.
+ *
+ ******************************************************************************/
+uint8_t btif_storage_get_local_io_caps() {
+  return btif_storage_get_io_cap_property(BT_PROPERTY_LOCAL_IO_CAPS,
+                                          BTM_LOCAL_IO_CAPS);
+}
+
+/*******************************************************************************
+ *
+ * Function         btif_storage_get_io_caps_ble
+ *
+ * Description      BTIF storage API - Fetches the local Input/Output
+ *                  capabilities of the BLE device.
+ *
+ * Returns          Returns local IO Capability of BLE device. If not stored,
+ *                  returns BTM_LOCAL_IO_CAPS_BLE.
+ *
+ ******************************************************************************/
+uint8_t btif_storage_get_local_io_caps_ble() {
+  return btif_storage_get_io_cap_property(BT_PROPERTY_LOCAL_IO_CAPS_BLE,
+                                          BTM_LOCAL_IO_CAPS_BLE);
+}
+
 /*******************************************************************************
  *
  * Function         btif_storage_get_adapter_property
@@ -565,13 +627,12 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
     /* Fetch the local BD ADDR */
     const controller_t* controller = controller_get_interface();
     if (!controller->get_is_ready()) {
-      LOG_ERROR(LOG_TAG,
-                "%s: Controller not ready! Unable to return Bluetooth Address",
+      LOG_ERROR("%s: Controller not ready! Unable to return Bluetooth Address",
                 __func__);
       *bd_addr = RawAddress::kEmpty;
       return BT_STATUS_FAIL;
     } else {
-      LOG_ERROR(LOG_TAG, "%s: Controller ready!", __func__);
+      LOG_ERROR("%s: Controller ready!", __func__);
       *bd_addr = *controller->get_address();
     }
     property->len = RawAddress::kLength;
@@ -600,7 +661,7 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
     uint32_t i;
 
     tBTA_SERVICE_MASK service_mask = btif_get_enabled_services_mask();
-    LOG_INFO(LOG_TAG, "%s service_mask:0x%x", __func__, service_mask);
+    LOG_INFO("%s service_mask:0x%x", __func__, service_mask);
     for (i = 0; i < BTA_MAX_SERVICE_ID; i++) {
       /* This should eventually become a function when more services are enabled
        */
@@ -611,6 +672,7 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
                 Uuid::From16Bit(UUID_SERVCLASS_AG_HANDSFREE);
             num_uuids++;
           }
+            FALLTHROUGH_INTENDED; /* FALLTHROUGH */
           /* intentional fall through: Send both BFP & HSP UUIDs if HFP is
            * enabled */
           case BTA_HSP_SERVICE_ID: {
@@ -745,12 +807,13 @@ bt_status_t btif_storage_add_remote_device(const RawAddress* remote_bd_addr,
  ******************************************************************************/
 
 bt_status_t btif_storage_add_bonded_device(RawAddress* remote_bd_addr,
-                                           LINK_KEY link_key, uint8_t key_type,
+                                           LinkKey link_key, uint8_t key_type,
                                            uint8_t pin_length) {
   std::string bdstr = remote_bd_addr->ToString();
   int ret = btif_config_set_int(bdstr, "LinkKeyType", (int)key_type);
   ret &= btif_config_set_int(bdstr, "PinLength", (int)pin_length);
-  ret &= btif_config_set_bin(bdstr, "LinkKey", link_key, sizeof(LINK_KEY));
+  ret &=
+      btif_config_set_bin(bdstr, "LinkKey", link_key.data(), link_key.size());
 
   if (is_restricted_mode()) {
     BTIF_TRACE_WARNING("%s: '%s' pairing will be removed if unrestricted",
@@ -804,20 +867,14 @@ bt_status_t btif_storage_remove_bonded_device(
  */
 static void remove_devices_with_sample_ltk() {
   std::vector<RawAddress> bad_ltk;
-  for (const section_t& section : btif_config_sections()) {
-    const std::string& name = section.name;
-    if (!RawAddress::IsValidAddress(name)) {
-      continue;
-    }
-
-    RawAddress bd_addr;
-    RawAddress::FromString(name, bd_addr);
+  for (const auto& bd_addr : btif_config_get_paired_devices()) {
+    auto name = bd_addr.ToString();
 
     tBTA_LE_KEY_VALUE key;
     memset(&key, 0, sizeof(key));
 
     if (btif_storage_get_ble_bonding_key(
-            &bd_addr, BTIF_DM_LE_KEY_PENC, (uint8_t*)&key,
+            bd_addr, BTIF_DM_LE_KEY_PENC, (uint8_t*)&key,
             sizeof(tBTM_LE_PENC_KEYS)) == BT_STATUS_SUCCESS) {
       if (is_sample_ltk(key.penc_key.ltk)) {
         bad_ltk.push_back(bd_addr);
@@ -1025,7 +1082,7 @@ bt_status_t btif_storage_add_ble_bonding_key(RawAddress* remote_bd_addr,
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_get_ble_bonding_key(RawAddress* remote_bd_addr,
+bt_status_t btif_storage_get_ble_bonding_key(const RawAddress& remote_bd_addr,
                                              uint8_t key_type,
                                              uint8_t* key_value,
                                              int key_length) {
@@ -1048,12 +1105,13 @@ bt_status_t btif_storage_get_ble_bonding_key(RawAddress* remote_bd_addr,
       break;
     case BTIF_DM_LE_KEY_LID:
       name = "LE_KEY_LID";
+      break;
     default:
       return BT_STATUS_FAIL;
   }
   size_t length = key_length;
   int ret =
-      btif_config_get_bin(remote_bd_addr->ToString(), name, key_value, &length);
+      btif_config_get_bin(remote_bd_addr.ToString(), name, key_value, &length);
   return ret ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;
 }
 
@@ -1096,8 +1154,8 @@ bt_status_t btif_storage_remove_ble_bonding_keys(
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_add_ble_local_key(char* key, uint8_t key_type,
-                                           uint8_t key_length) {
+bt_status_t btif_storage_add_ble_local_key(const Octet16& key,
+                                           uint8_t key_type) {
   const char* name;
   switch (key_type) {
     case BTIF_DM_LE_LOCAL_KEY_IR:
@@ -1115,24 +1173,17 @@ bt_status_t btif_storage_add_ble_local_key(char* key, uint8_t key_type,
     default:
       return BT_STATUS_FAIL;
   }
-  int ret =
-      btif_config_set_bin("Adapter", name, (const uint8_t*)key, key_length);
+  int ret = btif_config_set_bin("Adapter", name, key.data(), key.size());
   btif_config_save();
   return ret ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;
 }
 
-/*******************************************************************************
- *
- * Function         btif_storage_get_ble_local_key
- *
- * Description
- *
- * Returns          BT_STATUS_SUCCESS if the fetch was successful,
- *                  BT_STATUS_FAIL otherwise
- *
- ******************************************************************************/
-bt_status_t btif_storage_get_ble_local_key(uint8_t key_type, char* key_value,
-                                           int key_length) {
+/** Stores local key of |key_type| into |key_value|
+ * Returns BT_STATUS_SUCCESS if the fetch was successful, BT_STATUS_FAIL
+ * otherwise
+ */
+bt_status_t btif_storage_get_ble_local_key(uint8_t key_type,
+                                           Octet16* key_value) {
   const char* name;
   switch (key_type) {
     case BTIF_DM_LE_LOCAL_KEY_IR:
@@ -1150,8 +1201,8 @@ bt_status_t btif_storage_get_ble_local_key(uint8_t key_type, char* key_value,
     default:
       return BT_STATUS_FAIL;
   }
-  size_t length = key_length;
-  int ret = btif_config_get_bin("Adapter", name, (uint8_t*)key_value, &length);
+  size_t length = key_value->size();
+  int ret = btif_config_get_bin("Adapter", name, key_value->data(), &length);
   return ret ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;
 }
 
@@ -1304,11 +1355,8 @@ bt_status_t btif_storage_add_hid_device_info(
  *
  ******************************************************************************/
 bt_status_t btif_storage_load_bonded_hid_info(void) {
-  // TODO: this code is not thread safe, it can corrupt config content.
-  // b/67595284
-  for (const section_t& section : btif_config_sections()) {
-    const std::string& name = section.name;
-    if (!RawAddress::IsValidAddress(name)) continue;
+  for (const auto& bd_addr : btif_config_get_paired_devices()) {
+    auto name = bd_addr.ToString();
 
     BTIF_TRACE_DEBUG("Remote device:%s", name.c_str());
 
@@ -1317,9 +1365,7 @@ bt_status_t btif_storage_load_bonded_hid_info(void) {
     uint16_t attr_mask = (uint16_t)value;
 
     if (btif_in_fetch_bonded_device(name) != BT_STATUS_SUCCESS) {
-      RawAddress bd_addr;
-      RawAddress::FromString(name, bd_addr);
-      btif_storage_remove_hid_info(&bd_addr);
+      btif_storage_remove_hid_info(bd_addr);
       continue;
     }
 
@@ -1360,8 +1406,6 @@ bt_status_t btif_storage_load_bonded_hid_info(void) {
                           (uint8_t*)dscp_info.descriptor.dsc_list, &len);
     }
 
-    RawAddress bd_addr;
-    RawAddress::FromString(name, bd_addr);
     // add extracted information to BTA HH
     if (btif_hh_add_added_dev(bd_addr, attr_mask)) {
       BTA_HhAddDev(bd_addr, attr_mask, sub_class, app_id, dscp_info);
@@ -1382,8 +1426,8 @@ bt_status_t btif_storage_load_bonded_hid_info(void) {
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_remove_hid_info(RawAddress* remote_bd_addr) {
-  std::string bdstr = remote_bd_addr->ToString();
+bt_status_t btif_storage_remove_hid_info(const RawAddress& remote_bd_addr) {
+  std::string bdstr = remote_bd_addr.ToString();
 
   btif_config_remove(bdstr, "HidAttrMask");
   btif_config_remove(bdstr, "HidSubClass");
@@ -1399,71 +1443,89 @@ bt_status_t btif_storage_remove_hid_info(RawAddress* remote_bd_addr) {
   return BT_STATUS_SUCCESS;
 }
 
-constexpr char HEARING_AID_PSM[] = "HearingAidPsm";
+constexpr char HEARING_AID_READ_PSM_HANDLE[] = "HearingAidReadPsmHandle";
 constexpr char HEARING_AID_CAPABILITIES[] = "HearingAidCapabilities";
 constexpr char HEARING_AID_CODECS[] = "HearingAidCodecs";
 constexpr char HEARING_AID_AUDIO_CONTROL_POINT[] =
     "HearingAidAudioControlPoint";
 constexpr char HEARING_AID_VOLUME_HANDLE[] = "HearingAidVolumeHandle";
+constexpr char HEARING_AID_AUDIO_STATUS_HANDLE[] =
+    "HearingAidAudioStatusHandle";
+constexpr char HEARING_AID_AUDIO_STATUS_CCC_HANDLE[] =
+    "HearingAidAudioStatusCccHandle";
+constexpr char HEARING_AID_SERVICE_CHANGED_CCC_HANDLE[] =
+    "HearingAidServiceChangedCccHandle";
 constexpr char HEARING_AID_SYNC_ID[] = "HearingAidSyncId";
 constexpr char HEARING_AID_RENDER_DELAY[] = "HearingAidRenderDelay";
 constexpr char HEARING_AID_PREPARATION_DELAY[] = "HearingAidPreparationDelay";
 constexpr char HEARING_AID_IS_WHITE_LISTED[] = "HearingAidIsWhiteListed";
 
-void btif_storage_add_hearing_aid(const RawAddress& address, uint16_t psm,
-                                  uint8_t capabilities, uint16_t codecs,
-                                  uint16_t audio_control_point_handle,
-                                  uint16_t volume_handle, uint64_t hi_sync_id,
-                                  uint16_t render_delay,
-                                  uint16_t preparation_delay) {
+void btif_storage_add_hearing_aid(const HearingDevice& dev_info) {
   do_in_jni_thread(
       FROM_HERE,
       Bind(
-          [](const RawAddress& address, uint16_t psm, uint8_t capabilities,
-             uint16_t codecs, uint16_t audio_control_point_handle,
-             uint16_t volume_handle, uint64_t hi_sync_id, uint16_t render_delay,
-             uint16_t preparation_delay) {
-            std::string bdstr = address.ToString();
+          [](const HearingDevice& dev_info) {
+            std::string bdstr = dev_info.address.ToString();
             VLOG(2) << "saving hearing aid device: " << bdstr;
-            btif_config_set_int(bdstr, HEARING_AID_PSM, psm);
-            btif_config_set_int(bdstr, HEARING_AID_CAPABILITIES, capabilities);
-            btif_config_set_int(bdstr, HEARING_AID_CODECS, codecs);
+            btif_config_set_int(bdstr, HEARING_AID_SERVICE_CHANGED_CCC_HANDLE,
+                                dev_info.service_changed_ccc_handle);
+            btif_config_set_int(bdstr, HEARING_AID_READ_PSM_HANDLE,
+                                dev_info.read_psm_handle);
+            btif_config_set_int(bdstr, HEARING_AID_CAPABILITIES,
+                                dev_info.capabilities);
+            btif_config_set_int(bdstr, HEARING_AID_CODECS, dev_info.codecs);
             btif_config_set_int(bdstr, HEARING_AID_AUDIO_CONTROL_POINT,
-                                audio_control_point_handle);
+                                dev_info.audio_control_point_handle);
             btif_config_set_int(bdstr, HEARING_AID_VOLUME_HANDLE,
-                                volume_handle);
-            btif_config_set_uint64(bdstr, HEARING_AID_SYNC_ID, hi_sync_id);
-            btif_config_set_int(bdstr, HEARING_AID_RENDER_DELAY, render_delay);
+                                dev_info.volume_handle);
+            btif_config_set_int(bdstr, HEARING_AID_AUDIO_STATUS_HANDLE,
+                                dev_info.audio_status_handle);
+            btif_config_set_int(bdstr, HEARING_AID_AUDIO_STATUS_CCC_HANDLE,
+                                dev_info.audio_status_ccc_handle);
+            btif_config_set_uint64(bdstr, HEARING_AID_SYNC_ID,
+                                   dev_info.hi_sync_id);
+            btif_config_set_int(bdstr, HEARING_AID_RENDER_DELAY,
+                                dev_info.render_delay);
             btif_config_set_int(bdstr, HEARING_AID_PREPARATION_DELAY,
-                                preparation_delay);
+                                dev_info.preparation_delay);
             btif_config_set_int(bdstr, HEARING_AID_IS_WHITE_LISTED, true);
             btif_config_save();
           },
-          address, psm, capabilities, codecs, audio_control_point_handle,
-          volume_handle, hi_sync_id, render_delay, preparation_delay));
+          dev_info));
 }
 
 /** Loads information about bonded hearing aid devices */
 void btif_storage_load_bonded_hearing_aids() {
-  // TODO: this code is not thread safe, it can corrupt config content.
-  // b/67595284
-  for (const section_t& section : btif_config_sections()) {
-    const std::string& name = section.name;
-    if (!RawAddress::IsValidAddress(name)) continue;
+  for (const auto& bd_addr : btif_config_get_paired_devices()) {
+    const std::string& name = bd_addr.ToString();
+
+    int size = STORAGE_UUID_STRING_SIZE * HEARINGAID_MAX_NUM_UUIDS;
+    char uuid_str[size];
+    bool isHearingaidDevice = false;
+    if (btif_config_get_str(name, BTIF_STORAGE_PATH_REMOTE_SERVICE, uuid_str,
+                            &size)) {
+      Uuid p_uuid[HEARINGAID_MAX_NUM_UUIDS];
+      size_t num_uuids =
+          btif_split_uuids_string(uuid_str, p_uuid, HEARINGAID_MAX_NUM_UUIDS);
+      for (size_t i = 0; i < num_uuids; i++) {
+        if (p_uuid[i] == Uuid::FromString("FDF0")) {
+          isHearingaidDevice = true;
+          break;
+        }
+      }
+    }
+    if (!isHearingaidDevice) {
+      continue;
+    }
 
     BTIF_TRACE_DEBUG("Remote device:%s", name.c_str());
 
-    int value;
-    if (!btif_config_get_int(name, HEARING_AID_PSM, &value)) continue;
-    uint16_t psm = value;
-
-    if (btif_in_fetch_bonded_device(name.c_str()) != BT_STATUS_SUCCESS) {
-      RawAddress bd_addr;
-      RawAddress::FromString(name, bd_addr);
+    if (btif_in_fetch_bonded_device(name) != BT_STATUS_SUCCESS) {
       btif_storage_remove_hearing_aid(bd_addr);
       continue;
     }
 
+    int value;
     uint8_t capabilities = 0;
     if (btif_config_get_int(name, HEARING_AID_CAPABILITIES, &value))
       capabilities = value;
@@ -1475,9 +1537,26 @@ void btif_storage_load_bonded_hearing_aids() {
     if (btif_config_get_int(name, HEARING_AID_AUDIO_CONTROL_POINT, &value))
       audio_control_point_handle = value;
 
+    uint16_t audio_status_handle = 0;
+    if (btif_config_get_int(name, HEARING_AID_AUDIO_STATUS_HANDLE, &value))
+      audio_status_handle = value;
+
+    uint16_t audio_status_ccc_handle = 0;
+    if (btif_config_get_int(name, HEARING_AID_AUDIO_STATUS_CCC_HANDLE, &value))
+      audio_status_ccc_handle = value;
+
+    uint16_t service_changed_ccc_handle = 0;
+    if (btif_config_get_int(name, HEARING_AID_SERVICE_CHANGED_CCC_HANDLE,
+                            &value))
+      service_changed_ccc_handle = value;
+
     uint16_t volume_handle = 0;
     if (btif_config_get_int(name, HEARING_AID_VOLUME_HANDLE, &value))
       volume_handle = value;
+
+    uint16_t read_psm_handle = 0;
+    if (btif_config_get_int(name, HEARING_AID_READ_PSM_HANDLE, &value))
+      read_psm_handle = value;
 
     uint64_t lvalue;
     uint64_t hi_sync_id = 0;
@@ -1496,43 +1575,85 @@ void btif_storage_load_bonded_hearing_aids() {
     if (btif_config_get_int(name, HEARING_AID_IS_WHITE_LISTED, &value))
       is_white_listed = value;
 
-    RawAddress bd_addr;
-    RawAddress::FromString(name, bd_addr);
     // add extracted information to BTA Hearing Aid
-    do_in_bta_thread(
+    do_in_main_thread(
         FROM_HERE,
-        Bind(&HearingAid::AddFromStorage, bd_addr, psm, capabilities, codecs,
-             audio_control_point_handle, volume_handle, hi_sync_id,
-             render_delay, preparation_delay, is_white_listed));
+        Bind(&HearingAid::AddFromStorage,
+             HearingDevice(bd_addr, capabilities, codecs,
+                           audio_control_point_handle, audio_status_handle,
+                           audio_status_ccc_handle, service_changed_ccc_handle,
+                           volume_handle, read_psm_handle, hi_sync_id,
+                           render_delay, preparation_delay),
+             is_white_listed));
   }
 }
 
 /** Deletes the bonded hearing aid device info from NVRAM */
 void btif_storage_remove_hearing_aid(const RawAddress& address) {
   std::string addrstr = address.ToString();
-
-  btif_config_remove(addrstr, HEARING_AID_PSM);
+  btif_config_remove(addrstr, HEARING_AID_READ_PSM_HANDLE);
   btif_config_remove(addrstr, HEARING_AID_CAPABILITIES);
   btif_config_remove(addrstr, HEARING_AID_CODECS);
   btif_config_remove(addrstr, HEARING_AID_AUDIO_CONTROL_POINT);
   btif_config_remove(addrstr, HEARING_AID_VOLUME_HANDLE);
+  btif_config_remove(addrstr, HEARING_AID_AUDIO_STATUS_HANDLE);
+  btif_config_remove(addrstr, HEARING_AID_AUDIO_STATUS_CCC_HANDLE);
+  btif_config_remove(addrstr, HEARING_AID_SERVICE_CHANGED_CCC_HANDLE);
   btif_config_remove(addrstr, HEARING_AID_SYNC_ID);
+  btif_config_remove(addrstr, HEARING_AID_RENDER_DELAY);
+  btif_config_remove(addrstr, HEARING_AID_PREPARATION_DELAY);
   btif_config_remove(addrstr, HEARING_AID_IS_WHITE_LISTED);
   btif_config_save();
 }
 
-/** Add the hearing aid device to white list */
-void btif_storage_add_hearing_aid_to_white_list(const RawAddress& address) {
+/** Set/Unset the hearing aid device HEARING_AID_IS_WHITE_LISTED flag. */
+void btif_storage_set_hearing_aid_white_list(const RawAddress& address,
+                                             bool add_to_whitelist) {
   std::string addrstr = address.ToString();
 
-  btif_config_set_int(addrstr, HEARING_AID_IS_WHITE_LISTED, true);
+  btif_config_set_int(addrstr, HEARING_AID_IS_WHITE_LISTED, add_to_whitelist);
+  btif_config_save();
 }
 
-/** Remove the hearing aid device from white list */
-void btif_storage_remove_hearing_aid_white_list(const RawAddress& address) {
+/** Get the hearing aid device properties. */
+bool btif_storage_get_hearing_aid_prop(
+    const RawAddress& address, uint8_t* capabilities, uint64_t* hi_sync_id,
+    uint16_t* render_delay, uint16_t* preparation_delay, uint16_t* codecs) {
   std::string addrstr = address.ToString();
 
-  btif_config_set_int(addrstr, HEARING_AID_IS_WHITE_LISTED, false);
+  int value;
+  if (btif_config_get_int(addrstr, HEARING_AID_CAPABILITIES, &value)) {
+    *capabilities = value;
+  } else {
+    return false;
+  }
+
+  if (btif_config_get_int(addrstr, HEARING_AID_CODECS, &value)) {
+    *codecs = value;
+  } else {
+    return false;
+  }
+
+  if (btif_config_get_int(addrstr, HEARING_AID_RENDER_DELAY, &value)) {
+    *render_delay = value;
+  } else {
+    return false;
+  }
+
+  if (btif_config_get_int(addrstr, HEARING_AID_PREPARATION_DELAY, &value)) {
+    *preparation_delay = value;
+  } else {
+    return false;
+  }
+
+  uint64_t lvalue;
+  if (btif_config_get_uint64(addrstr, HEARING_AID_SYNC_ID, &lvalue)) {
+    *hi_sync_id = lvalue;
+  } else {
+    return false;
+  }
+
+  return true;
 }
 
 /*******************************************************************************
@@ -1550,6 +1671,12 @@ bool btif_storage_is_restricted_device(const RawAddress* remote_bd_addr) {
   return btif_config_exist(remote_bd_addr->ToString(), "Restricted");
 }
 
+int btif_storage_get_num_bonded_devices(void) {
+  btif_bonded_devices_t bonded_devices;
+  btif_in_fetch_bonded_devices(&bonded_devices, 0);
+  return bonded_devices.num_devices;
+}
+
 /*******************************************************************************
  * Function         btif_storage_load_hidd
  *
@@ -1559,18 +1686,13 @@ bool btif_storage_is_restricted_device(const RawAddress* remote_bd_addr) {
  *
  ******************************************************************************/
 bt_status_t btif_storage_load_hidd(void) {
-  // TODO: this code is not thread safe, it can corrupt config content.
-  // b/67595284
-  for (const section_t& section : btif_config_sections()) {
-    const std::string& name = section.name;
-    if (!RawAddress::IsValidAddress(name)) continue;
+  for (const auto& bd_addr : btif_config_get_paired_devices()) {
+    auto name = bd_addr.ToString();
 
     BTIF_TRACE_DEBUG("Remote device:%s", name.c_str());
     int value;
     if (btif_in_fetch_bonded_device(name) == BT_STATUS_SUCCESS) {
       if (btif_config_get_int(name, "HidDeviceCabled", &value)) {
-        RawAddress bd_addr;
-        RawAddress::FromString(name, bd_addr);
         BTA_HdAddDevice(bd_addr);
         break;
       }
@@ -1590,13 +1712,13 @@ bt_status_t btif_storage_load_hidd(void) {
  * Returns          BT_STATUS_SUCCESS
  *
  ******************************************************************************/
-bt_status_t btif_storage_set_hidd(RawAddress* remote_bd_addr) {
-  std::string remote_device_address_string = remote_bd_addr->ToString();
-  for (const section_t& section : btif_config_sections()) {
-    if (!RawAddress::IsValidAddress(section.name)) continue;
-    if (section.name == remote_device_address_string) continue;
-    if (btif_in_fetch_bonded_device(section.name) == BT_STATUS_SUCCESS) {
-      btif_config_remove(section.name, "HidDeviceCabled");
+bt_status_t btif_storage_set_hidd(const RawAddress& remote_bd_addr) {
+  std::string remote_device_address_string = remote_bd_addr.ToString();
+  for (const auto& bd_addr : btif_config_get_paired_devices()) {
+    auto name = bd_addr.ToString();
+    if (bd_addr == remote_bd_addr) continue;
+    if (btif_in_fetch_bonded_device(name) == BT_STATUS_SUCCESS) {
+      btif_config_remove(name, "HidDeviceCabled");
     }
   }
 

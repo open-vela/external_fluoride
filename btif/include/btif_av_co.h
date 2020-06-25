@@ -48,10 +48,11 @@ const tA2DP_DECODER_INTERFACE* bta_av_co_get_decoder_interface(void);
 // Sets the user preferred codec configuration.
 // The peer address is |peer_addr|.
 // |codec_user_config| contains the preferred codec configuration.
+// |restart_output| is used to know whether AV is reconfiguring with remote.
 // Returns true on success, otherwise false.
 bool bta_av_co_set_codec_user_config(
     const RawAddress& peer_addr,
-    const btav_a2dp_codec_config_t& codec_user_config);
+    const btav_a2dp_codec_config_t& codec_user_config, bool* p_restart_output);
 
 // Sets the Audio HAL selected audio feeding parameters.
 // Those parameters are applied only to the currently selected codec.
@@ -64,6 +65,10 @@ bool bta_av_co_set_codec_audio_config(
 // |codec_priorities| contains the A2DP Source codec priorities to use.
 void bta_av_co_init(
     const std::vector<btav_a2dp_codec_config_t>& codec_priorities);
+
+// Checks whether the codec for |codec_index| is supported.
+// Returns true if the codec is supported, otherwise false.
+bool bta_av_co_is_supported_codec(btav_a2dp_codec_index_t codec_index);
 
 // Gets the current A2DP codec for the active peer.
 // Returns a pointer to the current |A2dpCodecConfig| if valid, otherwise
