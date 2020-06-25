@@ -103,12 +103,8 @@ static const tA2DP_ENCODER_INTERFACE a2dp_encoder_interface_sbc = {
 };
 
 static const tA2DP_DECODER_INTERFACE a2dp_decoder_interface_sbc = {
-    a2dp_sbc_decoder_init,
-    a2dp_sbc_decoder_cleanup,
+    a2dp_sbc_decoder_init, a2dp_sbc_decoder_cleanup,
     a2dp_sbc_decoder_decode_packet,
-    nullptr,  // decoder_start
-    nullptr,  // decoder_suspend
-    nullptr,  // decoder_configure
 };
 
 static tA2DP_STATUS A2DP_CodecInfoMatchesCapabilitySbc(
@@ -201,22 +197,7 @@ static tA2DP_STATUS A2DP_ParseInfoSbc(tA2DP_SBC_CIE* p_ie,
     return A2DP_BAD_MAX_BITPOOL;
   }
 
-  if (is_capability) {
-    // NOTE: The checks here are very liberal. We should be using more
-    // pedantic checks specific to the SRC or SNK as specified in the spec.
-    if (A2DP_BitsSet(p_ie->samp_freq) == A2DP_SET_ZERO_BIT)
-      return A2DP_BAD_SAMP_FREQ;
-    if (A2DP_BitsSet(p_ie->ch_mode) == A2DP_SET_ZERO_BIT)
-      return A2DP_BAD_CH_MODE;
-    if (A2DP_BitsSet(p_ie->block_len) == A2DP_SET_ZERO_BIT)
-      return A2DP_BAD_BLOCK_LEN;
-    if (A2DP_BitsSet(p_ie->num_subbands) == A2DP_SET_ZERO_BIT)
-      return A2DP_BAD_SUBBANDS;
-    if (A2DP_BitsSet(p_ie->alloc_method) == A2DP_SET_ZERO_BIT)
-      return A2DP_BAD_ALLOC_METHOD;
-
-    return A2DP_SUCCESS;
-  }
+  if (is_capability) return A2DP_SUCCESS;
 
   if (A2DP_BitsSet(p_ie->samp_freq) != A2DP_SET_ONE_BIT)
     return A2DP_BAD_SAMP_FREQ;
@@ -485,20 +466,6 @@ int A2DP_GetTrackSampleRateSbc(const uint8_t* p_codec_info) {
   }
 
   return -1;
-}
-
-int A2DP_GetTrackBitsPerSampleSbc(const uint8_t* p_codec_info) {
-  tA2DP_SBC_CIE sbc_cie;
-
-  tA2DP_STATUS a2dp_status = A2DP_ParseInfoSbc(&sbc_cie, p_codec_info, false);
-  if (a2dp_status != A2DP_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s: cannot decode codec information: %d", __func__,
-              a2dp_status);
-    return -1;
-  }
-
-  // NOTE: The bits per sample never changes for SBC
-  return 16;
 }
 
 int A2DP_GetTrackChannelCountSbc(const uint8_t* p_codec_info) {
@@ -873,8 +840,8 @@ UNUSED_ATTR static void build_codec_config(const tA2DP_SBC_CIE& config_cie,
 
 A2dpCodecConfigSbcSource::A2dpCodecConfigSbcSource(
     btav_a2dp_codec_priority_t codec_priority)
-    : A2dpCodecConfigSbcBase(BTAV_A2DP_CODEC_INDEX_SOURCE_SBC,
-                             A2DP_CodecIndexStrSbc(), codec_priority, true) {
+    : A2dpCodecConfigSbcBase(BTAV_A2DP_CODEC_INDEX_SOURCE_SBC, "SBC",
+                             codec_priority, true) {
   // Compute the local capability
   if (a2dp_sbc_source_caps.samp_freq & A2DP_SBC_IE_SAMP_FREQ_44) {
     codec_local_capability_.sample_rate |= BTAV_A2DP_CODEC_SAMPLE_RATE_44100;
@@ -1558,9 +1525,8 @@ fail:
 
 A2dpCodecConfigSbcSink::A2dpCodecConfigSbcSink(
     btav_a2dp_codec_priority_t codec_priority)
-    : A2dpCodecConfigSbcBase(BTAV_A2DP_CODEC_INDEX_SINK_SBC,
-                             A2DP_CodecIndexStrSbcSink(), codec_priority,
-                             false) {}
+    : A2dpCodecConfigSbcBase(BTAV_A2DP_CODEC_INDEX_SINK_SBC, "SBC(Sink)",
+                             codec_priority, false) {}
 
 A2dpCodecConfigSbcSink::~A2dpCodecConfigSbcSink() {}
 
@@ -1589,7 +1555,7 @@ bool A2dpCodecConfigSbcSink::updateEncoderUserConfig(
   return false;
 }
 
-uint64_t A2dpCodecConfigSbcSink::encoderIntervalMs() const {
+period_ms_t A2dpCodecConfigSbcSink::encoderIntervalMs() const {
   // TODO: This method applies only to Source codecs
   return 0;
 }

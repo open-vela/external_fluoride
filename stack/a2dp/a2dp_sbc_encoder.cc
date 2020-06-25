@@ -22,14 +22,12 @@
 #include "a2dp_sbc_encoder.h"
 
 #include <limits.h>
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "a2dp_sbc.h"
 #include "a2dp_sbc_up_sample.h"
 #include "bt_common.h"
-#include "common/time_util.h"
 #include "embdrv/sbc/encoder/include/sbc_encoder.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
@@ -45,6 +43,11 @@
 
 #define A2DP_SBC_NON_EDR_MAX_RATE 229
 
+/*
+ * 2DH5 payload size of:
+ * 679 bytes - (4 bytes L2CAP Header + 12 bytes AVDTP Header)
+ */
+#define MAX_2MBPS_AVDTP_MTU 663
 #define A2DP_SBC_MAX_PCM_ITER_NUM_PER_TICK 3
 
 #define A2DP_SBC_MAX_HQ_FRAME_SIZE_44_1 119
@@ -72,8 +75,8 @@ typedef struct {
   int32_t aa_feed_counter;
   int32_t aa_feed_residue;
   uint32_t counter;
-  uint32_t bytes_per_tick;              // pcm bytes read each media task tick
-  uint64_t last_frame_timestamp_100ns;  // values in 1/10 microseconds
+  uint32_t bytes_per_tick; /* pcm bytes read each media task tick */
+  uint64_t last_frame_us;
 } tA2DP_SBC_FEEDING_STATE;
 
 typedef struct {
@@ -139,8 +142,7 @@ void a2dp_sbc_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
                            a2dp_source_enqueue_callback_t enqueue_callback) {
   memset(&a2dp_sbc_encoder_cb, 0, sizeof(a2dp_sbc_encoder_cb));
 
-  a2dp_sbc_encoder_cb.stats.session_start_us =
-      bluetooth::common::time_get_os_boottime_us();
+  a2dp_sbc_encoder_cb.stats.session_start_us = time_get_os_boottime_us();
 
   a2dp_sbc_encoder_cb.read_callback = read_callback;
   a2dp_sbc_encoder_cb.enqueue_callback = enqueue_callback;
@@ -397,7 +399,7 @@ void a2dp_sbc_feeding_flush(void) {
   a2dp_sbc_encoder_cb.feeding_state.aa_feed_residue = 0;
 }
 
-uint64_t a2dp_sbc_get_encoder_interval_ms(void) {
+period_ms_t a2dp_sbc_get_encoder_interval_ms(void) {
   return A2DP_SBC_ENCODER_INTERVAL_MS;
 }
 
@@ -434,30 +436,15 @@ static void a2dp_sbc_get_num_frame_iteration(uint8_t* num_of_iterations,
   LOG_VERBOSE(LOG_TAG, "%s: pcm_bytes_per_frame %u", __func__,
               pcm_bytes_per_frame);
 
-  uint32_t hecto_ns_this_tick = A2DP_SBC_ENCODER_INTERVAL_MS * 10000;
-  uint64_t* last_100ns =
-      &a2dp_sbc_encoder_cb.feeding_state.last_frame_timestamp_100ns;
-  uint64_t now_100ns = timestamp_us * 10;
-  if (*last_100ns != 0) {
-    hecto_ns_this_tick = (now_100ns - *last_100ns);
-  }
-  *last_100ns = now_100ns;
+  uint32_t us_this_tick = A2DP_SBC_ENCODER_INTERVAL_MS * 1000;
+  uint64_t now_us = timestamp_us;
+  if (a2dp_sbc_encoder_cb.feeding_state.last_frame_us != 0)
+    us_this_tick = (now_us - a2dp_sbc_encoder_cb.feeding_state.last_frame_us);
+  a2dp_sbc_encoder_cb.feeding_state.last_frame_us = now_us;
 
-  uint32_t bytes_this_tick = a2dp_sbc_encoder_cb.feeding_state.bytes_per_tick *
-                             hecto_ns_this_tick /
-                             (A2DP_SBC_ENCODER_INTERVAL_MS * 10000);
-  a2dp_sbc_encoder_cb.feeding_state.counter += bytes_this_tick;
-  // Without this erratum, there was a three microseocnd shift per tick which
-  // would cause one SBC frame mismatched after every 20 seconds
-  uint32_t erratum_100ns =
-      ceil(1.0f * A2DP_SBC_ENCODER_INTERVAL_MS * 10000 * bytes_this_tick /
-           a2dp_sbc_encoder_cb.feeding_state.bytes_per_tick);
-  if (erratum_100ns < hecto_ns_this_tick) {
-    LOG_VERBOSE(LOG_TAG,
-                "%s: hecto_ns_this_tick=%d, bytes=%d, erratum_100ns=%d",
-                __func__, hecto_ns_this_tick, bytes_this_tick, erratum_100ns);
-    *last_100ns -= hecto_ns_this_tick - erratum_100ns;
-  }
+  a2dp_sbc_encoder_cb.feeding_state.counter +=
+      a2dp_sbc_encoder_cb.feeding_state.bytes_per_tick * us_this_tick /
+      (A2DP_SBC_ENCODER_INTERVAL_MS * 1000);
 
   /* Calculate the number of frames pending for this media tick */
   projected_nof =
@@ -873,7 +860,7 @@ static uint32_t a2dp_sbc_frame_length(void) {
 
   switch (p_encoder_params->s16ChannelMode) {
     case SBC_MONO:
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* FALLTHROUGH */
     case SBC_DUAL:
       frame_len = A2DP_SBC_FRAME_HEADER_SIZE_BYTES +
                   ((uint32_t)(A2DP_SBC_SCALE_FACTOR_BITS *
@@ -922,7 +909,7 @@ uint32_t a2dp_sbc_get_bitrate() {
   return p_encoder_params->u16BitRate * 1000;
 }
 
-uint64_t A2dpCodecConfigSbcSource::encoderIntervalMs() const {
+period_ms_t A2dpCodecConfigSbcSource::encoderIntervalMs() const {
   return a2dp_sbc_get_encoder_interval_ms();
 }
 
