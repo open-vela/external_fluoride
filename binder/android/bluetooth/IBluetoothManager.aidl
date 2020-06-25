@@ -31,13 +31,16 @@ interface IBluetoothManager
 {
     IBluetooth registerAdapter(in IBluetoothManagerCallback callback);
     void unregisterAdapter(in IBluetoothManagerCallback callback);
+    @UnsupportedAppUsage
     void registerStateChangeCallback(in IBluetoothStateChangeCallback callback);
+    @UnsupportedAppUsage
     void unregisterStateChangeCallback(in IBluetoothStateChangeCallback callback);
     boolean isEnabled();
     boolean enable(String packageName);
     boolean enableNoAutoConnect(String packageName);
     boolean disable(String packageName, boolean persist);
     int getState();
+    @UnsupportedAppUsage
     IBluetoothGatt getBluetoothGatt();
 
     boolean bindBluetoothProfileService(int profile, IBluetoothProfileServiceConnection proxy);
@@ -49,7 +52,8 @@ interface IBluetoothManager
     boolean onFactoryReset();
 
     boolean isBleScanAlwaysAvailable();
-    int updateBleAppCount(IBinder b, boolean enable, String packageName);
+    boolean enableBle(String packageName, IBinder b);
+    boolean disableBle(String packageName, IBinder b);
     boolean isBleAppPresent();
     boolean isHearingAidProfileSupported();
 }
