@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2008-2012 Broadcom Corporation
+ *  Copyright (C) 2008-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -73,14 +73,13 @@ void bta_ar_init(void) {
  * Returns          void
  *
  ******************************************************************************/
-static void bta_ar_avdt_cback(uint8_t handle, const RawAddress& bd_addr,
-                              uint8_t event, tAVDT_CTRL* p_data,
-                              uint8_t scb_index) {
+static void bta_ar_avdt_cback(uint8_t handle, const RawAddress* bd_addr,
+                              uint8_t event, tAVDT_CTRL* p_data) {
   /* route the AVDT registration callback to av or avk */
   if (bta_ar_cb.p_av_conn_cback)
-    (*bta_ar_cb.p_av_conn_cback)(handle, bd_addr, event, p_data, scb_index);
+    (*bta_ar_cb.p_av_conn_cback)(handle, bd_addr, event, p_data);
   if (bta_ar_cb.p_avk_conn_cback)
-    (*bta_ar_cb.p_avk_conn_cback)(handle, bd_addr, event, p_data, scb_index);
+    (*bta_ar_cb.p_avk_conn_cback)(handle, bd_addr, event, p_data);
 }
 
 /*******************************************************************************
@@ -92,7 +91,7 @@ static void bta_ar_avdt_cback(uint8_t handle, const RawAddress& bd_addr,
  * Returns          void
  *
  ******************************************************************************/
-void bta_ar_reg_avdt(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback,
+void bta_ar_reg_avdt(tAVDT_REG* p_reg, tAVDT_CTRL_CBACK* p_cback,
                      tBTA_SYS_ID sys_id) {
   uint8_t mask = 0;
 
@@ -102,17 +101,17 @@ void bta_ar_reg_avdt(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback,
   } else if (sys_id == BTA_ID_AVK) {
     bta_ar_cb.p_avk_conn_cback = p_cback;
     mask = BTA_AR_AVK_MASK;
-  } else {
-    APPL_TRACE_ERROR("%s: the registration is from wrong sys_id:%d", __func__,
-                     sys_id);
   }
+#if (BTA_AR_DEBUG == TRUE)
+  else {
+    APPL_TRACE_ERROR(
+        "bta_ar_reg_avdt: the registration is from wrong sys_id:%d", sys_id);
+  }
+#endif
 
   if (mask) {
     if (bta_ar_cb.avdt_registered == 0) {
       AVDT_Register(p_reg, bta_ar_avdt_cback);
-    } else {
-      APPL_TRACE_WARNING("%s: sys_id:%d doesn't register again (registered:%d)",
-                         __func__, sys_id, bta_ar_cb.avdt_registered);
     }
     bta_ar_cb.avdt_registered |= mask;
   }
@@ -154,18 +153,17 @@ void bta_ar_dereg_avdt(tBTA_SYS_ID sys_id) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_ar_avdt_conn(tBTA_SYS_ID sys_id, const RawAddress& bd_addr,
-                      uint8_t scb_index) {
+void bta_ar_avdt_conn(tBTA_SYS_ID sys_id, const RawAddress& bd_addr) {
   uint8_t event = BTA_AR_AVDT_CONN_EVT;
   tAVDT_CTRL data;
 
   if (sys_id == BTA_ID_AV) {
     if (bta_ar_cb.p_avk_conn_cback) {
-      (*bta_ar_cb.p_avk_conn_cback)(0, bd_addr, event, &data, scb_index);
+      (*bta_ar_cb.p_avk_conn_cback)(0, &bd_addr, event, &data);
     }
   } else if (sys_id == BTA_ID_AVK) {
     if (bta_ar_cb.p_av_conn_cback) {
-      (*bta_ar_cb.p_av_conn_cback)(0, bd_addr, event, &data, scb_index);
+      (*bta_ar_cb.p_av_conn_cback)(0, &bd_addr, event, &data);
     }
   }
 }

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
  ******************************************************************************/
 
 #include "adapter/bluetooth_test.h"
-#include <binder/ProcessState.h>
-#include <stdio.h>
 #include <mutex>
 #include "btcore/include/property.h"
 
@@ -33,7 +31,6 @@ std::mutex callback_lock;
 namespace bttest {
 
 void BluetoothTest::SetUp() {
-  android::ProcessState::self()->startThreadPool();
   bt_interface_ = nullptr;
   state_ = BT_STATE_OFF;
   properties_changed_count_ = 0;
@@ -48,9 +45,6 @@ void BluetoothTest::SetUp() {
   remote_device_properties_callback_sem_ = semaphore_new(0);
   adapter_state_changed_callback_sem_ = semaphore_new(0);
   discovery_state_changed_callback_sem_ = semaphore_new(0);
-
-  remove("/data/misc/bluedroid/bt_config.conf.encrypted-checksum");
-  remove("/data/misc/bluedroid/bt_config.bak.encrypted-checksum");
 
   bluetooth::hal::BluetoothInterface::Initialize();
   ASSERT_TRUE(bluetooth::hal::BluetoothInterface::IsInitialized());
