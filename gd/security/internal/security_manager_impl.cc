@@ -313,16 +313,10 @@ void SecurityManagerImpl::OnPairingHandlerComplete(hci::Address address, Pairing
     pairing_handler_map_.erase(entry);
     security_manager_channel_->Release(address);
   }
-  auto remote = hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS);
-  auto cb_entry = enforce_security_policy_callback_map_.find(remote);
-  if (cb_entry != enforce_security_policy_callback_map_.end()) {
-    this->InternalEnforceSecurityPolicy(remote, cb_entry->second.first, std::move(cb_entry->second.second), false);
-    enforce_security_policy_callback_map_.erase(cb_entry);
-  }
   if (!std::holds_alternative<PairingFailure>(status)) {
-    NotifyDeviceBonded(remote);
+    NotifyDeviceBonded(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS));
   } else {
-    NotifyDeviceBondFailed(remote, status);
+    NotifyDeviceBondFailed(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS), status);
   }
 }
 
@@ -571,11 +565,9 @@ void SecurityManagerImpl::SetOobDataPresent(hci::OobDataPresent data_present) {
   this->local_oob_data_present_ = data_present;
 }
 
-void SecurityManagerImpl::InternalEnforceSecurityPolicy(
-    hci::AddressWithType remote,
-    l2cap::classic::SecurityPolicy policy,
-    l2cap::classic::SecurityEnforcementInterface::ResultCallback result_callback,
-    bool try_meet_requirements) {
+void SecurityManagerImpl::EnforceSecurityPolicy(
+    hci::AddressWithType remote, l2cap::classic::SecurityPolicy policy,
+    l2cap::classic::SecurityEnforcementInterface::ResultCallback result_callback) {
   bool result = false;
   auto record = this->security_database_.FindOrCreate(remote);
   switch (policy) {
@@ -590,27 +582,10 @@ void SecurityManagerImpl::InternalEnforceSecurityPolicy(
       result = true;
       break;
   }
-  if (!result && try_meet_requirements) {
-    auto entry = enforce_security_policy_callback_map_.find(remote);
-    if (entry != enforce_security_policy_callback_map_.end()) {
-      LOG_WARN("Callback already pending for remote: '%s' !", remote.ToString().c_str());
-    } else {
-      enforce_security_policy_callback_map_.emplace(
-          remote,
-          std::pair<l2cap::classic::SecurityPolicy, l2cap::classic::SecurityEnforcementInterface::ResultCallback>(
-              policy, std::move(result_callback)));
-      DispatchPairingHandler(record, true);
-    }
-    return;
+  if (!result) {
+    // TODO(optedoblivion): Start pairing process to meet requirements
   }
   result_callback.Invoke(result);
-}
-
-void SecurityManagerImpl::EnforceSecurityPolicy(
-    hci::AddressWithType remote,
-    l2cap::classic::SecurityPolicy policy,
-    l2cap::classic::SecurityEnforcementInterface::ResultCallback result_callback) {
-  this->InternalEnforceSecurityPolicy(remote, policy, std::move(result_callback), true);
 }
 
 void SecurityManagerImpl::EnforceLeSecurityPolicy(
