@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,27 +22,20 @@
  *
  ******************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_target.h"
-#include "bt_utils.h"
 #include "hcidefs.h"
-#include "hcimsgs.h"
 
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
 
 #include "btm_api.h"
-#include "btu.h"
 
 #include "sdp_api.h"
 #include "sdpint.h"
-
-extern fixed_queue_t* btu_general_alarm_queue;
 
 /******************************************************************************/
 /*                     G L O B A L      S D P       D A T A                   */
@@ -52,7 +45,7 @@ tSDP_CB sdp_cb;
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
 /******************************************************************************/
-static void sdp_connect_ind(BD_ADDR bd_addr, uint16_t l2cap_cid,
+static void sdp_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
                             UNUSED_ATTR uint16_t psm, uint8_t l2cap_id);
 static void sdp_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg);
 static void sdp_config_cfm(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg);
@@ -91,7 +84,7 @@ void sdp_init(void) {
 #if (SDP_SERVER_ENABLED == TRUE)
   /* Register with Security Manager for the specific security level */
   if (!BTM_SetSecurityLevel(false, SDP_SERVICE_NAME, BTM_SEC_SERVICE_SDP_SERVER,
-                            SDP_SECURITY_LEVEL, SDP_PSM, 0, 0)) {
+                            BTM_SEC_NONE, SDP_PSM, 0, 0)) {
     SDP_TRACE_ERROR("Security Registration Server failed");
     return;
   }
@@ -99,7 +92,7 @@ void sdp_init(void) {
 
   /* Register with Security Manager for the specific security level */
   if (!BTM_SetSecurityLevel(true, SDP_SERVICE_NAME, BTM_SEC_SERVICE_SDP_SERVER,
-                            SDP_SECURITY_LEVEL, SDP_PSM, 0, 0)) {
+                            BTM_SEC_NONE, SDP_PSM, 0, 0)) {
     SDP_TRACE_ERROR("Security Registration for Client failed");
     return;
   }
@@ -123,7 +116,8 @@ void sdp_init(void) {
   sdp_cb.reg_info.pL2CA_TxComplete_Cb = NULL;
 
   /* Now, register with L2CAP */
-  if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info)) {
+  if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info, true /* enable_snoop */,
+                     nullptr)) {
     SDP_TRACE_ERROR("SDP Registration failed");
   }
 }
@@ -134,26 +128,6 @@ void sdp_free(void) {
     sdp_cb.ccb[i].sdp_conn_timer = NULL;
   }
 }
-
-#if (SDP_DEBUG == TRUE)
-/*******************************************************************************
- *
- * Function         sdp_set_max_attr_list_size
- *
- * Description      This function sets the max attribute list size to use
- *
- * Returns          void
- *
- ******************************************************************************/
-uint16_t sdp_set_max_attr_list_size(uint16_t max_size) {
-  if (max_size > (sdp_cb.l2cap_my_cfg.mtu - 16))
-    max_size = sdp_cb.l2cap_my_cfg.mtu - 16;
-
-  sdp_cb.max_attr_list_size = max_size;
-
-  return sdp_cb.max_attr_list_size;
-}
-#endif
 
 /*******************************************************************************
  *
@@ -166,7 +140,7 @@ uint16_t sdp_set_max_attr_list_size(uint16_t max_size) {
  * Returns          void
  *
  ******************************************************************************/
-static void sdp_connect_ind(BD_ADDR bd_addr, uint16_t l2cap_cid,
+static void sdp_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
                             UNUSED_ATTR uint16_t psm, uint8_t l2cap_id) {
 #if (SDP_SERVER_ENABLED == TRUE)
   tCONN_CB* p_ccb;
@@ -179,7 +153,7 @@ static void sdp_connect_ind(BD_ADDR bd_addr, uint16_t l2cap_cid,
   p_ccb->con_state = SDP_STATE_CFG_SETUP;
 
   /* Save the BD Address and Channel ID. */
-  memcpy(&p_ccb->device_address[0], bd_addr, sizeof(BD_ADDR));
+  p_ccb->device_address = bd_addr;
   p_ccb->connection_id = l2cap_cid;
 
   /* Send response to the L2CAP layer. */
@@ -370,9 +344,8 @@ static void sdp_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg) {
       sdp_disc_connected(p_ccb);
     } else {
       /* Start inactivity timer */
-      alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                         sdp_conn_timer_timeout, p_ccb,
-                         btu_general_alarm_queue);
+      alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                         sdp_conn_timer_timeout, p_ccb);
     }
   }
 }
@@ -411,9 +384,8 @@ static void sdp_config_cfm(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg) {
         sdp_disc_connected(p_ccb);
       } else {
         /* Start inactivity timer */
-        alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                           sdp_conn_timer_timeout, p_ccb,
-                           btu_general_alarm_queue);
+        alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                           sdp_conn_timer_timeout, p_ccb);
       }
     }
   } else {
@@ -516,24 +488,26 @@ static void sdp_data_ind(uint16_t l2cap_cid, BT_HDR* p_msg) {
  * Returns          void
  *
  ******************************************************************************/
-tCONN_CB* sdp_conn_originate(uint8_t* p_bd_addr) {
+tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   tCONN_CB* p_ccb;
   uint16_t cid;
 
   /* Allocate a new CCB. Return if none available. */
   p_ccb = sdpu_allocate_ccb();
   if (p_ccb == NULL) {
-    SDP_TRACE_WARNING("SDP - no spare CCB for orig");
+    SDP_TRACE_WARNING("%s: no spare CCB for peer %s", __func__,
+                      p_bd_addr.ToString().c_str());
     return (NULL);
   }
 
-  SDP_TRACE_EVENT("SDP - Originate started");
+  SDP_TRACE_EVENT("%s: SDP - Originate started for peer %s", __func__,
+                  p_bd_addr.ToString().c_str());
 
   /* We are the originator of this connection */
   p_ccb->con_flags |= SDP_FLAGS_IS_ORIG;
 
   /* Save the BD Address and Channel ID. */
-  memcpy(&p_ccb->device_address[0], p_bd_addr, sizeof(BD_ADDR));
+  p_ccb->device_address = p_bd_addr;
 
   /* Transition to the next appropriate state, waiting for connection confirm.
    */
@@ -542,15 +516,14 @@ tCONN_CB* sdp_conn_originate(uint8_t* p_bd_addr) {
   cid = L2CA_ConnectReq(SDP_PSM, p_bd_addr);
 
   /* Check if L2CAP started the connection process */
-  if (cid != 0) {
-    p_ccb->connection_id = cid;
-
-    return (p_ccb);
-  } else {
-    SDP_TRACE_WARNING("SDP - Originate failed");
+  if (cid == 0) {
+    SDP_TRACE_WARNING("%s: SDP - Originate failed for peer %s", __func__,
+                      p_bd_addr.ToString().c_str());
     sdpu_release_ccb(p_ccb);
     return (NULL);
   }
+  p_ccb->connection_id = cid;
+  return (p_ccb);
 }
 
 /*******************************************************************************
