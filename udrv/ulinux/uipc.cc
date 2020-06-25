@@ -485,7 +485,7 @@ int uipc_start_main_server_thread(tUIPC_STATE& uipc) {
   uipc.running = 1;
 
   if (pthread_create(&uipc.tid, (const pthread_attr_t*)NULL, uipc_read_task,
-                     &uipc) < 0) {
+                     &uipc) != 0) {
     BTIF_TRACE_ERROR("uipc_thread_create pthread_create failed:%d", errno);
     return -1;
   }
@@ -621,14 +621,14 @@ bool UIPC_Send(tUIPC_STATE& uipc, tUIPC_CH_ID ch_id,
 uint32_t UIPC_Read(tUIPC_STATE& uipc, tUIPC_CH_ID ch_id,
                    UNUSED_ATTR uint16_t* p_msg_evt, uint8_t* p_buf,
                    uint32_t len) {
-  int n_read = 0;
-  int fd = uipc.ch[ch_id].fd;
-  struct pollfd pfd;
-
   if (ch_id >= UIPC_CH_NUM) {
     BTIF_TRACE_ERROR("UIPC_Read : invalid ch id %d", ch_id);
     return 0;
   }
+
+  int n_read = 0;
+  int fd = uipc.ch[ch_id].fd;
+  struct pollfd pfd;
 
   if (fd == UIPC_DISCONNECTED) {
     BTIF_TRACE_ERROR("UIPC_Read : channel %d closed", ch_id);

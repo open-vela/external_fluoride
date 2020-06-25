@@ -92,27 +92,6 @@ uint8_t btif_av_get_peer_sep(void);
 void btif_av_clear_remote_suspend_flag(void);
 
 /**
- * Process AVRCP Open event.
- *
- * @param peer_address the peer address
- */
-void btif_av_avrcp_event_open(const RawAddress& peer_address);
-
-/**
- * Process AVRCP Close event.
- *
- * @param peer_address the peer address
- */
-void btif_av_avrcp_event_close(const RawAddress& peer_address);
-
-/**
- * Process AVRCP Remote Play event.
- *
- * @param peer_address the peer address
- */
-void btif_av_avrcp_event_remote_play(const RawAddress& peer_address);
-
-/**
  * Check whether the connected A2DP peer supports EDR.
  *
  * The value can be provided only if the remote peer is connected.
@@ -133,6 +112,14 @@ bool btif_av_is_peer_edr(const RawAddress& peer_address);
  * @return true if the remote peer is capable of EDR and supports 3 Mbps
  */
 bool btif_av_peer_supports_3mbps(const RawAddress& peer_address);
+
+/**
+ * Check whether the mandatory codec is more preferred for this peer.
+ *
+ * @param peer_address the target peer address
+ * @return true if optional codecs are not preferred to be used
+ */
+bool btif_av_peer_prefers_mandatory_codec(const RawAddress& peer_address);
 
 /**
  * Report A2DP Source Codec State for a peer.
@@ -184,9 +171,16 @@ void btif_debug_av_dump(int fd);
 /**
  * Set the audio delay for the stream.
  *
+ * @param peer_address the address of the peer to report
  * @param delay the delay to set in units of 1/10ms
  */
-void btif_av_set_audio_delay(uint16_t delay);
+void btif_av_set_audio_delay(const RawAddress& peer_address, uint16_t delay);
+
+/**
+ * Get the audio delay for the stream.
+ *  @param  none
+ */
+uint16_t btif_av_get_audio_delay(void);
 
 /**
  * Reset the audio delay and count of audio bytes sent to zero.
@@ -207,4 +201,19 @@ void btif_av_src_disconnect_sink(const RawAddress& peer_address);
  *  @param  none
  */
 bool btif_av_is_a2dp_offload_enabled(void);
+
+/**
+ *  check A2DP offload enabled and running
+ *  @param  none
+ */
+bool btif_av_is_a2dp_offload_running(void);
+
+/**
+ * Check whether peer device is silenced
+ *
+ * @param peer_address to check
+ *
+ */
+bool btif_av_is_peer_silenced(const RawAddress& peer_address);
+
 #endif /* BTIF_AV_H */
