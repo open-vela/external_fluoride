@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 
 #include <stdbool.h>
 
-#include "raw_address.h"
+#include "btcore/include/bdaddr.h"
 
 static const char INTEROP_MODULE[] = "interop_module";
 
@@ -89,17 +89,7 @@ typedef enum {
   // Disable role switch for headsets/car-kits.
   // Some car kits allow role switch but when the Phone initiates role switch,
   // the Remote device will go into bad state that will lead to LMP time out.
-  INTEROP_DISABLE_ROLE_SWITCH,
-
-  // Set a very low initial sniff subrating for HID devices that do not
-  // set their own sniff interval.
-  INTEROP_HID_HOST_LIMIT_SNIFF_INTERVAL,
-
-  // Disable remote name requst for some devices.
-  // The public address of these devices are same as the Random address in ADV.
-  // Then will get name by LE_Create_connection, actually fails,
-  // but will block pairing.
-  INTEROP_DISABLE_NAME_REQUEST
+  INTEROP_DISABLE_ROLE_SWITCH
 } interop_feature_t;
 
 // Check if a given |addr| matches a known interoperability workaround as
@@ -107,7 +97,7 @@ typedef enum {
 // address based lookups where more information is not available. No
 // look-ups or random address resolution are performed on |addr|.
 bool interop_match_addr(const interop_feature_t feature,
-                        const RawAddress* addr);
+                        const bt_bdaddr_t* addr);
 
 // Check if a given remote device |name| matches a known workaround.
 // Name comparisons are case sensitive and do not allow for partial matches.
@@ -120,10 +110,10 @@ bool interop_match_name(const interop_feature_t feature, const char* name);
 // Add a dynamic interop database entry for a device matching the first |length|
 // bytes of |addr|, implementing the workaround identified by |feature|.
 // |addr| may not be null.
-// |length| must be greater than 0 and less than RawAddress::kLength.
+// |length| must be greater than 0 and less than sizeof(bt_bdaddr_t).
 // As |interop_feature_t| is not exposed in the public API, feature must be a
 // valid integer representing an option in the enum.
-void interop_database_add(uint16_t feature, const RawAddress* addr,
+void interop_database_add(const uint16_t feature, const bt_bdaddr_t* addr,
                           size_t length);
 
 // Clear the dynamic portion of the interoperability workaround database.
