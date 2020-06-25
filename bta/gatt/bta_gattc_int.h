@@ -28,7 +28,6 @@
 
 #include "bta_gatt_api.h"
 #include "bta_sys.h"
-#include "database_builder.h"
 #include "osi/include/fixed_queue.h"
 
 #include "bt_common.h"
@@ -71,9 +70,9 @@ typedef uint16_t tBTA_GATTC_INT_EVT;
 #define BTA_GATTC_CL_MAX 32
 #endif
 
-/* max known devices GATTC can support in Bluetooth spec */
+/* max known devices GATTC can support */
 #ifndef BTA_GATTC_KNOWN_SR_MAX
-#define BTA_GATTC_KNOWN_SR_MAX 255
+#define BTA_GATTC_KNOWN_SR_MAX 10
 #endif
 
 #define BTA_GATTC_CONN_MAX GATT_MAX_PHY_CHANNEL
@@ -207,11 +206,13 @@ typedef struct {
 
   uint8_t state;
 
-  gatt::Database gatt_database;
+  std::vector<tBTA_GATTC_SERVICE> srvc_cache;
   uint8_t update_count; /* indication received */
   uint8_t num_clcb;     /* number of associated CLCB */
 
-  gatt::DatabaseBuilder pending_discovery;
+  std::vector<tBTA_GATTC_SERVICE> pending_discovery;
+  std::vector<tBTA_GATTC_SERVICE>::iterator pending_service;
+  std::vector<tBTA_GATTC_CHARACTERISTIC>::iterator pending_char;
 
   uint8_t srvc_hdl_chg; /* service handle change indication pending */
   uint16_t attr_index;  /* cahce NV saving/loading attribute index */
@@ -426,23 +427,27 @@ extern tGATT_STATUS bta_gattc_discover_pri_service(uint16_t conn_id,
                                                    uint8_t disc_type);
 extern void bta_gattc_search_service(tBTA_GATTC_CLCB* p_clcb,
                                      bluetooth::Uuid* p_uuid);
-extern const std::list<gatt::Service>* bta_gattc_get_services(uint16_t conn_id);
-extern const gatt::Service* bta_gattc_get_service_for_handle(uint16_t conn_id,
-                                                             uint16_t handle);
-const gatt::Characteristic* bta_gattc_get_characteristic_srcb(
-    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
-extern const gatt::Service* bta_gattc_get_service_for_handle_srcb(
-    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
-extern const gatt::Characteristic* bta_gattc_get_characteristic(
+extern std::vector<tBTA_GATTC_SERVICE>* bta_gattc_get_services(
+    uint16_t conn_id);
+extern const tBTA_GATTC_SERVICE* bta_gattc_get_service_for_handle(
     uint16_t conn_id, uint16_t handle);
-extern const gatt::Descriptor* bta_gattc_get_descriptor(uint16_t conn_id,
-                                                        uint16_t handle);
-extern const gatt::Characteristic* bta_gattc_get_owning_characteristic(
+tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_characteristic_srcb(
+    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
+extern tBTA_GATTC_SERVICE* bta_gattc_get_service_for_handle_srcb(
+    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
+extern tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_characteristic(uint16_t conn_id,
+                                                               uint16_t handle);
+extern const tBTA_GATTC_DESCRIPTOR* bta_gattc_get_descriptor(uint16_t conn_id,
+                                                             uint16_t handle);
+extern const tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_owning_characteristic(
     uint16_t conn_id, uint16_t handle);
 extern void bta_gattc_get_gatt_db(uint16_t conn_id, uint16_t start_handle,
                                   uint16_t end_handle, btgatt_db_element_t** db,
                                   int* count);
-extern void bta_gattc_init_cache(tBTA_GATTC_SERV* p_srvc_cb);
+extern tGATT_STATUS bta_gattc_init_cache(tBTA_GATTC_SERV* p_srvc_cb);
+extern void bta_gattc_rebuild_cache(tBTA_GATTC_SERV* p_srcv, uint16_t num_attr,
+                                    tBTA_GATTC_NV_ATTR* attr);
+extern void bta_gattc_cache_save(tBTA_GATTC_SERV* p_srvc_cb, uint16_t conn_id);
 extern void bta_gattc_reset_discover_st(tBTA_GATTC_SERV* p_srcb,
                                         tGATT_STATUS status);
 
@@ -451,7 +456,7 @@ extern tBTA_GATTC_CONN* bta_gattc_conn_find(const RawAddress& remote_bda);
 extern tBTA_GATTC_CONN* bta_gattc_conn_find_alloc(const RawAddress& remote_bda);
 extern bool bta_gattc_conn_dealloc(const RawAddress& remote_bda);
 
-extern bool bta_gattc_cache_load(tBTA_GATTC_SERV* p_srcb);
+extern bool bta_gattc_cache_load(tBTA_GATTC_CLCB* p_clcb);
 extern void bta_gattc_cache_reset(const RawAddress& server_bda);
 
 #endif /* BTA_GATTC_INT_H */

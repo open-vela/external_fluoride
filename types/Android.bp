@@ -4,14 +4,6 @@ cc_library_headers {
     export_include_dirs: ["./"],
     vendor_available: true,
     host_supported: true,
-    apex_available: [
-        "//apex_available:platform",
-        "com.android.media",
-        "com.android.media.swcodec",
-        "com.android.bluetooth.updatable"
-    ],
-    // As part of updatable mainline modules(media, swcodec), it should support at least 29(Q)
-    min_sdk_version: "29",
 }
 
 cc_library_static {
@@ -24,7 +16,6 @@ cc_library_static {
     ],
     host_supported: true,
     srcs: [
-        "class_of_device.cc",
         "raw_address.cc",
         "bluetooth/uuid.cc",
     ],
@@ -39,7 +30,6 @@ cc_test {
     defaults: ["fluoride_defaults"],
     host_supported: true,
     srcs: [
-        "test/class_of_device_unittest.cc",
         "test/raw_address_unittest.cc",
         "test/bluetooth/uuid_unittest.cc",
     ],
