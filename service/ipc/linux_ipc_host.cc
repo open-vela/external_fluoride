@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@
 #include "service/adapter.h"
 
 using bluetooth::Adapter;
-using bluetooth::Uuid;
+using bluetooth::UUID;
 
 using namespace bluetooth::gatt;
 
@@ -82,7 +82,7 @@ bool LinuxIPCHost::EventLoop() {
     int status =
         TEMP_FAILURE_RETRY(ppoll(pfds_.data(), pfds_.size(), nullptr, nullptr));
     if (status < 1) {
-      LOG_ERROR("ppoll error");
+      LOG_ERROR(LOG_TAG, "ppoll error");
       return false;
     }
 
@@ -108,10 +108,10 @@ bool LinuxIPCHost::OnCreateService(const std::string& service_uuid) {
   gatt_servers_[service_uuid] = std::unique_ptr<Server>(new Server);
 
   int gattfd;
-  bool status = gatt_servers_[service_uuid]->Initialize(
-      Uuid::FromString(service_uuid), &gattfd);
+  bool status =
+      gatt_servers_[service_uuid]->Initialize(UUID(service_uuid), &gattfd);
   if (!status) {
-    LOG_ERROR("Failed to initialize bluetooth");
+    LOG_ERROR(LOG_TAG, "Failed to initialize bluetooth");
     return false;
   }
   pfds_.resize(kPossibleFds);
@@ -155,12 +155,11 @@ bool LinuxIPCHost::OnAddCharacteristic(const std::string& service_uuid,
 
   if (control_uuid.empty()) {
     gatt_servers_[service_uuid]->AddCharacteristic(
-        Uuid::FromString(characteristic_uuid), properties_mask,
-        permissions_mask);
+        UUID(characteristic_uuid), properties_mask, permissions_mask);
   } else {
-    gatt_servers_[service_uuid]->AddBlob(Uuid::FromString(characteristic_uuid),
-                                         Uuid::FromString(control_uuid),
-                                         properties_mask, permissions_mask);
+    gatt_servers_[service_uuid]->AddBlob(UUID(characteristic_uuid),
+                                         UUID(control_uuid), properties_mask,
+                                         permissions_mask);
   }
   return true;
 }
@@ -171,8 +170,8 @@ bool LinuxIPCHost::OnSetCharacteristicValue(
   std::string decoded_data;
   base::Base64Decode(value, &decoded_data);
   std::vector<uint8_t> blob_data(decoded_data.begin(), decoded_data.end());
-  gatt_servers_[service_uuid]->SetCharacteristicValue(
-      Uuid::FromString(characteristic_uuid), blob_data);
+  gatt_servers_[service_uuid]->SetCharacteristicValue(UUID(characteristic_uuid),
+                                                      blob_data);
   return true;
 }
 
@@ -181,16 +180,17 @@ bool LinuxIPCHost::OnSetAdvertisement(const std::string& service_uuid,
                                       const std::string& advertise_data,
                                       const std::string& manufacturer_data,
                                       const std::string& transmit_name) {
-  LOG_INFO("%s: service:%s uuids:%s data:%s", __func__, service_uuid.c_str(),
-           advertise_uuids.c_str(), advertise_data.c_str());
+  LOG_INFO(LOG_TAG, "%s: service:%s uuids:%s data:%s", __func__,
+           service_uuid.c_str(), advertise_uuids.c_str(),
+           advertise_data.c_str());
 
   std::vector<std::string> advertise_uuid_tokens = base::SplitString(
       advertise_uuids, ".", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
 
-  // string -> vector<Uuid>
-  std::vector<Uuid> ids;
+  // string -> vector<UUID>
+  std::vector<UUID> ids;
   for (const auto& uuid_token : advertise_uuid_tokens)
-    ids.emplace_back(Uuid::FromString(uuid_token));
+    ids.emplace_back(uuid_token);
 
   std::string decoded_data;
   base::Base64Decode(advertise_data, &decoded_data);
@@ -215,10 +215,10 @@ bool LinuxIPCHost::OnSetScanResponse(const std::string& service_uuid,
   std::vector<std::string> scan_response_uuid_tokens = base::SplitString(
       scan_response_uuids, ".", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
 
-  // string -> vector<Uuid>
-  std::vector<Uuid> ids;
+  // string -> vector<UUID>
+  std::vector<UUID> ids;
   for (const auto& uuid_token : scan_response_uuid_tokens)
-    ids.emplace_back(Uuid::FromString(uuid_token));
+    ids.emplace_back(uuid_token);
 
   std::string decoded_data;
   base::Base64Decode(scan_response_data, &decoded_data);
@@ -250,20 +250,20 @@ bool LinuxIPCHost::OnMessage() {
   OSI_NO_INTR(size =
                   recv(pfds_[kFdIpc].fd, &ipc_msg[0], 0, MSG_PEEK | MSG_TRUNC));
   if (-1 == size) {
-    LOG_ERROR("Error reading datagram size: %s", strerror(errno));
+    LOG_ERROR(LOG_TAG, "Error reading datagram size: %s", strerror(errno));
     return false;
   } else if (0 == size) {
-    LOG_INFO("%s:%d: Connection closed", __func__, __LINE__);
+    LOG_INFO(LOG_TAG, "%s:%d: Connection closed", __func__, __LINE__);
     return false;
   }
 
   ipc_msg.resize(size);
   OSI_NO_INTR(size = read(pfds_[kFdIpc].fd, &ipc_msg[0], ipc_msg.size()));
   if (-1 == size) {
-    LOG_ERROR("Error reading IPC: %s", strerror(errno));
+    LOG_ERROR(LOG_TAG, "Error reading IPC: %s", strerror(errno));
     return false;
   } else if (0 == size) {
-    LOG_INFO("%s:%d: Connection closed", __func__, __LINE__);
+    LOG_INFO(LOG_TAG, "%s:%d: Connection closed", __func__, __LINE__);
     return false;
   }
 
@@ -299,24 +299,24 @@ bool LinuxIPCHost::OnMessage() {
       break;
   }
 
-  LOG_ERROR("Malformed IPC message: %s", ipc_msg.c_str());
+  LOG_ERROR(LOG_TAG, "Malformed IPC message: %s", ipc_msg.c_str());
   return false;
 }
 
 bool LinuxIPCHost::OnGattWrite() {
-  Uuid::UUID128Bit id;
+  UUID::UUID128Bit id;
   ssize_t r;
 
   OSI_NO_INTR(r = read(pfds_[kFdGatt].fd, id.data(), id.size()));
   if (r != id.size()) {
-    LOG_ERROR("Error reading GATT attribute ID");
+    LOG_ERROR(LOG_TAG, "Error reading GATT attribute ID");
     return false;
   }
 
   std::vector<uint8_t> value;
   // TODO(icoolidge): Generalize this for multiple clients.
   auto server = gatt_servers_.begin();
-  server->second->GetCharacteristicValue(Uuid::From128BitBE(id), &value);
+  server->second->GetCharacteristicValue(UUID(id), &value);
   const std::string value_string(value.begin(), value.end());
   std::string encoded_value;
   base::Base64Encode(value_string, &encoded_value);
@@ -328,7 +328,7 @@ bool LinuxIPCHost::OnGattWrite() {
 
   OSI_NO_INTR(r = write(pfds_[kFdIpc].fd, transmit.data(), transmit.size()));
   if (-1 == r) {
-    LOG_ERROR("Error replying to IPC: %s", strerror(errno));
+    LOG_ERROR(LOG_TAG, "Error replying to IPC: %s", strerror(errno));
     return false;
   }
 
