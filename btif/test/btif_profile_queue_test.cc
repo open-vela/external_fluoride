@@ -15,12 +15,14 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+#include "btif/include/btif_profile_queue.h"
+
 #include <gtest/gtest.h>
 
 #include <base/bind.h>
+#include <base/callback.h>
+#include <base/location.h>
 
-#include "base/location.h"
-#include "btif/include/btif_profile_queue.h"
 #include "stack_manager.h"
 #include "types/raw_address.h"
 
@@ -33,9 +35,9 @@ bool get_stack_is_running(void) { return sStackRunning; }
 static stack_manager_t sStackManager = {nullptr, nullptr, nullptr, nullptr,
                                         get_stack_is_running};
 const stack_manager_t* stack_manager_get_interface() { return &sStackManager; }
-bt_status_t do_in_jni_thread(const tracked_objects::Location& from_here,
-                             const base::Closure& task) {
-  task.Run();
+bt_status_t do_in_jni_thread(const base::Location& from_here,
+                             base::OnceClosure task) {
+  std::move(task).Run();
   return BT_STATUS_SUCCESS;
 }
 bool is_on_jni_thread() { return true; }
@@ -93,6 +95,49 @@ TEST_F(BtifProfileQueueTest, test_connect) {
   sResult = NOT_SET;
   btif_queue_connect(kTestUuid1, &kTestAddr1, test_connect_cb);
   EXPECT_EQ(sResult, UUID1_ADDR1);
+}
+
+static bt_status_t test_connect_cb_fail(RawAddress* bda, uint16_t uuid) {
+  sResult = UNKNOWN;
+  if (*bda == BtifProfileQueueTest::kTestAddr1) {
+    if (uuid == BtifProfileQueueTest::kTestUuid1) {
+      sResult = UUID1_ADDR1;
+    } else if (uuid == BtifProfileQueueTest::kTestUuid2) {
+      sResult = UUID2_ADDR1;
+    }
+  } else if (*bda == BtifProfileQueueTest::kTestAddr2) {
+    if (uuid == BtifProfileQueueTest::kTestUuid1) {
+      sResult = UUID1_ADDR2;
+    } else if (uuid == BtifProfileQueueTest::kTestUuid2) {
+      sResult = UUID2_ADDR2;
+    }
+  }
+  return BT_STATUS_BUSY;
+}
+
+TEST_F(BtifProfileQueueTest, test_connect_fail_still_can_advance_the_queue) {
+  sResult = NOT_SET;
+  // First connect-message for UUID1-ADDR1 is executed, but does not be removed
+  // from connect-queue yet.
+  btif_queue_connect(kTestUuid1, &kTestAddr1, test_connect_cb);
+  EXPECT_EQ(sResult, UUID1_ADDR1);
+  sResult = NOT_SET;
+  // Second connect-message for UUID2-ADDR1 be pushed into connect-queue, but is
+  // not executed
+  btif_queue_connect(kTestUuid2, &kTestAddr1, test_connect_cb_fail);
+  EXPECT_EQ(sResult, NOT_SET);
+  // Third connect-message for UUID1-ADDR2 be pushed into connect-queue, but is
+  // not executed
+  btif_queue_connect(kTestUuid1, &kTestAddr2, test_connect_cb_fail);
+  EXPECT_EQ(sResult, NOT_SET);
+  // Fourth connect-message for UUID2-ADDR2 be pushed into connect-queue, but is
+  // not executed
+  btif_queue_connect(kTestUuid2, &kTestAddr2, test_connect_cb_fail);
+  EXPECT_EQ(sResult, NOT_SET);
+  // removed First connect-message from connect-queue, check it can advance to
+  // subsequent connect-message.
+  btif_queue_advance();
+  EXPECT_EQ(sResult, UUID2_ADDR2);
 }
 
 TEST_F(BtifProfileQueueTest, test_connect_same_uuid_do_not_repeat) {

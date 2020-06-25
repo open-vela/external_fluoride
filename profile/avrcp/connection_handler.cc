@@ -22,9 +22,9 @@
 
 #include "avrc_defs.h"
 #include "avrcp_message_converter.h"
-#include "avrcp_packet.h"
 #include "bt_types.h"
 #include "btu.h"
+#include "packet/avrcp/avrcp_packet.h"
 // TODO (apanicke): Remove dependency on this header once we cleanup feature
 // handling.
 #include "bta/include/bta_av_api.h"
@@ -132,15 +132,13 @@ bool ConnectionHandler::ConnectDevice(const RawAddress& bdaddr) {
     return;
   };
 
-  return SdpLookup(bdaddr, base::Bind(connection_lambda, this, bdaddr));
+  return SdpLookup(bdaddr, base::Bind(connection_lambda, this, bdaddr), false);
 }
 
 bool ConnectionHandler::DisconnectDevice(const RawAddress& bdaddr) {
   for (auto it = device_map_.begin(); it != device_map_.end(); it++) {
     if (bdaddr == it->second->GetAddress()) {
-      it->second->DeviceDisconnected();
       uint8_t handle = it->first;
-      device_map_.erase(handle);
       return avrc_->Close(handle) == AVRC_SUCCESS;
     }
   }
@@ -151,13 +149,14 @@ bool ConnectionHandler::DisconnectDevice(const RawAddress& bdaddr) {
 std::vector<std::shared_ptr<Device>> ConnectionHandler::GetListOfDevices()
     const {
   std::vector<std::shared_ptr<Device>> list;
-  for (auto device : device_map_) {
+  for (const auto& device : device_map_) {
     list.push_back(device.second);
   }
   return list;
 }
 
-bool ConnectionHandler::SdpLookup(const RawAddress& bdaddr, SdpCallback cb) {
+bool ConnectionHandler::SdpLookup(const RawAddress& bdaddr, SdpCallback cb,
+                                  bool retry) {
   LOG(INFO) << __PRETTY_FUNCTION__;
 
   tAVRC_SDP_DB_PARAMS db_params;
@@ -174,10 +173,11 @@ bool ConnectionHandler::SdpLookup(const RawAddress& bdaddr, SdpCallback cb) {
   db_params.p_db = disc_db;
   db_params.p_attrs = attr_list;
 
-  return avrc_->FindService(
-             UUID_SERVCLASS_AV_REMOTE_CONTROL, bdaddr, &db_params,
-             base::Bind(&ConnectionHandler::SdpCb, base::Unretained(this),
-                        bdaddr, cb, disc_db)) == AVRC_SUCCESS;
+  return avrc_->FindService(UUID_SERVCLASS_AV_REMOTE_CONTROL, bdaddr,
+                            &db_params,
+                            base::Bind(&ConnectionHandler::SdpCb,
+                                       weak_ptr_factory_.GetWeakPtr(), bdaddr,
+                                       cb, disc_db, retry)) == AVRC_SUCCESS;
 }
 
 bool ConnectionHandler::AvrcpConnect(bool initiator, const RawAddress& bdaddr) {
@@ -192,7 +192,7 @@ bool ConnectionHandler::AvrcpConnect(bool initiator, const RawAddress& bdaddr) {
                                     weak_ptr_factory_.GetWeakPtr());
   }
   open_cb.msg_cback =
-      base::Bind(&ConnectionHandler::MessageCb, base::Unretained(this));
+      base::Bind(&ConnectionHandler::MessageCb, weak_ptr_factory_.GetWeakPtr());
   open_cb.company_id = AVRC_CO_GOOGLE;
   open_cb.conn = initiator ? AVRC_CONN_INT
                            : AVRC_CONN_ACP;  // 0 if initiator, 1 if acceptor
@@ -272,13 +272,20 @@ void ConnectionHandler::InitiatorControlCb(uint8_t handle, uint8_t event,
       device_map_.erase(handle);
     } break;
 
-    case AVRC_BROWSE_OPEN_IND_EVT:
+    case AVRC_BROWSE_OPEN_IND_EVT: {
       LOG(INFO) << __PRETTY_FUNCTION__ << ": Browse Open Event";
       // NOTE (apanicke): We don't need to explicitly handle this message
       // since the AVCTP Layer will still send us browsing messages
       // regardless. It would be useful to note this though for future
       // compatibility issues.
-      break;
+      if (device_map_.find(handle) == device_map_.end()) {
+        LOG(WARNING) << "Browse Opened received from device that doesn't exist";
+        return;
+      }
+
+      auto browse_mtu = avrc_->GetBrowseMtu(handle) - AVCT_HDR_LEN;
+      device_map_[handle]->SetBrowseMtu(browse_mtu);
+    } break;
     case AVRC_BROWSE_CLOSE_IND_EVT:
       LOG(INFO) << __PRETTY_FUNCTION__ << ": Browse Close Event";
       break;
@@ -302,7 +309,7 @@ void ConnectionHandler::AcceptorControlCb(uint8_t handle, uint8_t event,
       LOG(INFO) << __PRETTY_FUNCTION__ << ": Connection Opened Event";
 
       auto&& callback = base::Bind(&ConnectionHandler::SendMessage,
-                                   base::Unretained(this), handle);
+                                   weak_ptr_factory_.GetWeakPtr(), handle);
       auto&& ctrl_mtu = avrc_->GetPeerMtu(handle) - AVCT_HDR_LEN;
       auto&& browse_mtu = avrc_->GetBrowseMtu(handle) - AVCT_HDR_LEN;
       std::shared_ptr<Device> newDevice = std::make_shared<Device>(
@@ -336,7 +343,7 @@ void ConnectionHandler::AcceptorControlCb(uint8_t handle, uint8_t event,
         }
       };
 
-      SdpLookup(*peer_addr, base::Bind(sdp_lambda, this, handle));
+      SdpLookup(*peer_addr, base::Bind(sdp_lambda, this, handle), false);
 
       avrc_->OpenBrowse(handle, AVCT_ACP);
       AvrcpConnect(false, RawAddress::kAny);
@@ -356,13 +363,20 @@ void ConnectionHandler::AcceptorControlCb(uint8_t handle, uint8_t event,
       device_map_.erase(handle);
     } break;
 
-    case AVRC_BROWSE_OPEN_IND_EVT:
+    case AVRC_BROWSE_OPEN_IND_EVT: {
       LOG(INFO) << __PRETTY_FUNCTION__ << ": Browse Open Event";
       // NOTE (apanicke): We don't need to explicitly handle this message
       // since the AVCTP Layer will still send us browsing messages
       // regardless. It would be useful to note this though for future
       // compatibility issues.
-      break;
+      if (device_map_.find(handle) == device_map_.end()) {
+        LOG(WARNING) << "Browse Opened received from device that doesn't exist";
+        return;
+      }
+
+      auto browse_mtu = avrc_->GetBrowseMtu(handle) - AVCT_HDR_LEN;
+      device_map_[handle]->SetBrowseMtu(browse_mtu);
+    } break;
     case AVRC_BROWSE_CLOSE_IND_EVT:
       LOG(INFO) << __PRETTY_FUNCTION__ << ": Browse Close Event";
       break;
@@ -374,7 +388,7 @@ void ConnectionHandler::AcceptorControlCb(uint8_t handle, uint8_t event,
 
 void ConnectionHandler::MessageCb(uint8_t handle, uint8_t label, uint8_t opcode,
                                   tAVRC_MSG* p_msg) {
-  if (device_map_[handle] == nullptr) {
+  if (device_map_.find(handle) == device_map_.end()) {
     LOG(ERROR) << "Message received for unconnected device: handle="
                << loghex(handle);
     return;
@@ -393,10 +407,15 @@ void ConnectionHandler::MessageCb(uint8_t handle, uint8_t label, uint8_t opcode,
 }
 
 void ConnectionHandler::SdpCb(const RawAddress& bdaddr, SdpCallback cb,
-                              tSDP_DISCOVERY_DB* disc_db, uint16_t status) {
+                              tSDP_DISCOVERY_DB* disc_db, bool retry,
+                              uint16_t status) {
   LOG(INFO) << __PRETTY_FUNCTION__ << ": SDP lookup callback received";
 
-  if (status != AVRC_SUCCESS) {
+  if (status == SDP_CONN_FAILED and !retry) {
+    LOG(WARNING) << __PRETTY_FUNCTION__ << ": SDP Failure retry again";
+    SdpLookup(bdaddr, cb, true);
+    return;
+  } else if (status != AVRC_SUCCESS) {
     LOG(ERROR) << __PRETTY_FUNCTION__
                << ": SDP Failure: status = " << (unsigned int)status;
     cb.Run(status, 0, 0);
@@ -521,6 +540,11 @@ void ConnectionHandler::SendMessage(
   // doesn't need to be processed. In the future, this is the only place sending
   // the packet so none of these layer specific fields will be used.
   pkt->event = 0xFFFF;
+  /* Handle for AVRCP fragment */
+  uint16_t op_code = (uint16_t)(::bluetooth::Packet::Specialize<Packet>(packet)->GetOpcode());
+  if (!browse && (op_code == (uint16_t)(Opcode::VENDOR))) {
+    pkt->event = op_code;
+  }
 
   // TODO (apanicke): This layer specific stuff can go away once we move over
   // to the new service.
