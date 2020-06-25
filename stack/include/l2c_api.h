@@ -95,11 +95,9 @@ typedef uint8_t tL2CAP_CHNL_DATA_RATE;
  */
 #define L2CAP_FCR_CHAN_OPT_BASIC (1 << L2CAP_FCR_BASIC_MODE)
 #define L2CAP_FCR_CHAN_OPT_ERTM (1 << L2CAP_FCR_ERTM_MODE)
-#define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
 
-#define L2CAP_FCR_CHAN_OPT_ALL_MASK                     \
-  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM | \
-   L2CAP_FCR_CHAN_OPT_STREAM)
+#define L2CAP_FCR_CHAN_OPT_ALL_MASK \
+  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM)
 
 /* Validity check for PSM.  PSM values must be odd.  Also, all PSM values must
  * be assigned such that the least significant bit of the most sigificant
@@ -566,11 +564,10 @@ extern bool L2CA_DisconnectRsp(uint16_t cid);
 extern uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
 
 // Given a local channel identifier, |lcid|, this function returns the bound
-// remote channel identifier, |rcid|, and the ACL link handle, |handle|. If
+// remote channel identifier, |rcid|. If
 // |lcid| is not known or is invalid, this function returns false and does not
-// modify the values pointed at by |rcid| and |handle|. |rcid| and |handle| may
-// be NULL.
-bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle);
+// modify the value pointed at by |rcid|. |rcid| may be NULL.
+bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid);
 
 /*******************************************************************************
  *
@@ -774,7 +771,6 @@ typedef struct {
   tL2CA_FIXED_CHNL_CB* pL2CA_FixedConn_Cb;
   tL2CA_FIXED_DATA_CB* pL2CA_FixedData_Cb;
   tL2CA_FIXED_CONGESTION_STATUS_CB* pL2CA_FixedCong_Cb;
-  tL2CAP_FCR_OPTS fixed_chnl_opts;
 
   uint16_t default_idle_tout;
   tL2CA_TX_COMPLETE_CB*
