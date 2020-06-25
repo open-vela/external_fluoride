@@ -702,7 +702,8 @@ class BtmScanningCallbacks : public bluetooth::hci::LeScanningManagerCallbacks {
               TransformToExtendedEventType(&extended_event_type,
                                            {.legacy = true});
               break;
-            case hci::AdvertisingEventType::SCAN_RESPONSE:
+            case hci::AdvertisingEventType::
+                ADV_DIRECT_IND_LOW:  // SCAN_RESPONSE
               TransformToExtendedEventType(&extended_event_type,
                                            {.connectable = true,
                                             .scannable = true,
