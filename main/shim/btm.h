@@ -24,13 +24,11 @@
 #include <vector>
 
 #include "main/shim/timer.h"
-#include "osi/include/alarm.h"
-#include "osi/include/future.h"
-#include "osi/include/log.h"
 #include "stack/include/btm_api_types.h"
 
 #include "hci/hci_packets.h"
-#include "hci/le_advertising_manager.h"
+
+#include "gd/hci/le_advertising_manager.h"
 
 //
 // NOTE: limited and general constants for inquiry and discoverable are swapped
@@ -239,12 +237,11 @@ class Btm {
   static void ShutDown(Btm* btm);
 
   tBTM_STATUS CreateBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                         tBT_TRANSPORT transport, uint8_t pin_len,
-                         uint8_t* p_pin, uint32_t trusted_mask[]);
+                         tBT_TRANSPORT transport, int device_type);
   bool CancelBond(const RawAddress& bd_addr);
   bool RemoveBond(const RawAddress& bd_addr);
 
-  void SetSimplePairingCallback(tBTM_SP_CALLBACK* callback);
+  uint16_t GetAclHandle(const RawAddress& remote_bda, tBT_TRANSPORT transport);
 
  private:
   ReadRemoteName le_read_remote_name_;
@@ -256,8 +253,6 @@ class Btm {
   std::mutex sync_mutex_;
 
   LegacyInquiryCompleteCallback legacy_inquiry_complete_callback_{};
-
-  tBTM_SP_CALLBACK* simple_pairing_callback_{nullptr};
 
   uint8_t active_inquiry_mode_ = 0;
 
