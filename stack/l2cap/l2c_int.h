@@ -192,7 +192,6 @@ typedef struct {
   uint8_t max_held_acks;     /* Max acks we can hold before sending */
 
   bool remote_busy; /* true if peer has flowed us off */
-  bool local_busy;  /* true if we have flowed off the peer */
 
   bool rej_sent;       /* Reject was sent */
   bool srej_sent;      /* Selective Reject was sent */
@@ -658,8 +657,7 @@ extern void l2cu_send_peer_ble_flow_control_credit(tL2C_CCB* p_ccb,
                                                    uint16_t credit_value);
 extern void l2cu_send_peer_ble_credit_based_disconn_req(tL2C_CCB* p_ccb);
 
-extern bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
-                                      tL2CAP_FCR_OPTS* p_fcr);
+extern bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid);
 extern void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb);
 extern void l2cu_process_fixed_chnl_resp(tL2C_LCB* p_lcb);
 extern bool l2cu_is_ccb_active(tL2C_CCB* p_ccb);
