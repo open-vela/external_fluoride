@@ -62,7 +62,7 @@ void SMP_Init(void) {
 
   smp_l2cap_if_init();
   /* initialization of P-256 parameters */
-  p_256_init_curve();
+  p_256_init_curve(KEY_LENGTH_DWORDS_P256);
 
   /* Initialize failure case for certification */
   smp_cb.cert_failure =
@@ -148,7 +148,6 @@ tSMP_STATUS SMP_Pair(const RawAddress& bd_addr) {
     if (!L2CA_ConnectFixedChnl(L2CAP_SMP_CID, bd_addr)) {
       tSMP_INT_DATA smp_int_data;
       smp_int_data.status = SMP_PAIR_INTERNAL_ERR;
-      p_cb->status = SMP_PAIR_INTERNAL_ERR;
       SMP_TRACE_ERROR("%s: L2C connect fixed channel failed.", __func__);
       smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
       return SMP_PAIR_INTERNAL_ERR;
@@ -193,7 +192,6 @@ tSMP_STATUS SMP_BR_PairWith(const RawAddress& bd_addr) {
     SMP_TRACE_ERROR("%s: L2C connect fixed channel failed.", __func__);
     tSMP_INT_DATA smp_int_data;
     smp_int_data.status = SMP_PAIR_INTERNAL_ERR;
-    p_cb->status = SMP_PAIR_INTERNAL_ERR;
     smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
     return SMP_PAIR_INTERNAL_ERR;
   }
