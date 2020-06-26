@@ -16,9 +16,6 @@
 
 #pragma once
 
-#include <set>
-
-#include "hci/address_with_type.h"
 #include "security/record/security_record.h"
 
 namespace bluetooth {
@@ -27,17 +24,16 @@ namespace record {
 
 class SecurityRecordDatabase {
  public:
-  using iterator = std::set<std::shared_ptr<SecurityRecord>>::iterator;
+  using iterator = std::vector<record::SecurityRecord>::iterator;
 
-  std::shared_ptr<SecurityRecord> FindOrCreate(hci::AddressWithType address) {
+  record::SecurityRecord& FindOrCreate(hci::AddressWithType address) {
     auto it = Find(address);
     // Security record check
     if (it != records_.end()) return *it;
 
     // No security record, create one
-    auto record_ptr = std::make_shared<SecurityRecord>(address);
-    records_.insert(record_ptr);
-    return record_ptr;
+    records_.emplace_back(address);
+    return records_.back();
   }
 
   void Remove(const hci::AddressWithType& address) {
@@ -46,20 +42,22 @@ class SecurityRecordDatabase {
     // No record exists
     if (it == records_.end()) return;
 
-    records_.erase(it);
+    record::SecurityRecord& last = records_.back();
+    *it = std::move(last);
+    records_.pop_back();
   }
 
   iterator Find(hci::AddressWithType address) {
     for (auto it = records_.begin(); it != records_.end(); ++it) {
-      std::shared_ptr<SecurityRecord> record = *it;
-      if (record->identity_address_.has_value() && record->identity_address_.value() == address) return it;
-      if (record->GetPseudoAddress() == address) return it;
-      if (record->irk.has_value() && address.IsRpaThatMatchesIrk(record->irk.value())) return it;
+      record::SecurityRecord& record = *it;
+      if (record.identity_address_.has_value() && record.identity_address_.value() == address) return it;
+      if (record.GetPseudoAddress() == address) return it;
+      if (record.irk.has_value() && address.IsRpaThatMatchesIrk(record.irk.value())) return it;
     }
     return records_.end();
   }
 
-  std::set<std::shared_ptr<SecurityRecord>> records_;
+  std::vector<record::SecurityRecord> records_;
 };
 
 }  // namespace record
