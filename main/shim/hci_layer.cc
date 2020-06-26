@@ -180,13 +180,13 @@ static void transmit_command(BT_HDR* command,
   if (IsCommandStatusOpcode(op_code)) {
     bluetooth::shim::GetHciLayer()->EnqueueCommand(
         std::move(packet),
-        bluetooth::shim::GetGdShimHandler()->BindOnce(
-            OnTransmitPacketStatus, status_callback, context));
+        BindOnce(OnTransmitPacketStatus, status_callback, context),
+        bluetooth::shim::GetGdShimHandler());
   } else {
     bluetooth::shim::GetHciLayer()->EnqueueCommand(
         std::move(packet),
-        bluetooth::shim::GetGdShimHandler()->BindOnce(
-            OnTransmitPacketCommandComplete, complete_callback, context));
+        BindOnce(OnTransmitPacketCommandComplete, complete_callback, context),
+        bluetooth::shim::GetGdShimHandler());
   }
 }
 
