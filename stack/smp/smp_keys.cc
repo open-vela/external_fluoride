@@ -393,8 +393,7 @@ void smp_gen_p1_4_confirm(tSMP_CB* p_cb, tBLE_ADDR_TYPE remote_bd_addr_type,
  * Returns          void
  *
  ******************************************************************************/
-void smp_gen_p2_4_confirm(tSMP_CB* p_cb, const RawAddress& remote_bda,
-                          BT_OCTET16 p2) {
+void smp_gen_p2_4_confirm(tSMP_CB* p_cb, BD_ADDR remote_bda, BT_OCTET16 p2) {
   SMP_TRACE_DEBUG("%s", __func__);
   uint8_t* p = (uint8_t*)p2;
   /* 32-bit Padding */
@@ -425,7 +424,7 @@ void smp_gen_p2_4_confirm(tSMP_CB* p_cb, const RawAddress& remote_bda,
 tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, BT_OCTET16 rand,
                                   tSMP_ENC* output) {
   SMP_TRACE_DEBUG("%s", __func__);
-  RawAddress remote_bda;
+  BD_ADDR remote_bda;
   tBLE_ADDR_TYPE remote_bd_addr_type = 0;
   /* get remote connection specific bluetooth address */
   if (!BTM_ReadRemoteConnectionAddr(p_cb->pairing_bda, remote_bda,
@@ -887,8 +886,8 @@ void smp_calculate_local_commitment(tSMP_CB* p_cb) {
     case SMP_MODEL_SEC_CONN_NUM_COMP:
       if (p_cb->role == HCI_ROLE_MASTER)
         SMP_TRACE_WARNING(
-            "local commitment calc on master is not expected "
-            "for Just Works/Numeric Comparison models");
+            "local commitment calc on master is not expected \
+                                    for Just Works/Numeric Comparison models");
       smp_calculate_f4(p_cb->loc_publ_key.x, p_cb->peer_publ_key.x, p_cb->rand,
                        0, p_cb->commitment);
       break;
@@ -934,8 +933,8 @@ void smp_calculate_peer_commitment(tSMP_CB* p_cb, BT_OCTET16 output_buf) {
     case SMP_MODEL_SEC_CONN_NUM_COMP:
       if (p_cb->role == HCI_ROLE_SLAVE)
         SMP_TRACE_WARNING(
-            "peer commitment calc on slave is not expected "
-            "for Just Works/Numeric Comparison models");
+            "peer commitment calc on slave is not expected \
+                for Just Works/Numeric Comparison models");
       smp_calculate_f4(p_cb->peer_publ_key.x, p_cb->loc_publ_key.x, p_cb->rrand,
                        0, output_buf);
       break;
@@ -1633,7 +1632,7 @@ bool smp_calculate_f6(uint8_t* w, uint8_t* n1, uint8_t* n2, uint8_t* r,
  ******************************************************************************/
 bool smp_calculate_link_key_from_long_term_key(tSMP_CB* p_cb) {
   tBTM_SEC_DEV_REC* p_dev_rec;
-  RawAddress bda_for_lk;
+  BD_ADDR bda_for_lk;
   tBLE_ADDR_TYPE conn_addr_type;
   BT_OCTET16 salt = {0x31, 0x70, 0x6D, 0x74, 0x00, 0x00, 0x00, 0x00,
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -1643,7 +1642,7 @@ bool smp_calculate_link_key_from_long_term_key(tSMP_CB* p_cb) {
   if (p_cb->id_addr_rcvd && p_cb->id_addr_type == BLE_ADDR_PUBLIC) {
     SMP_TRACE_DEBUG(
         "Use rcvd identity address as BD_ADDR of LK rcvd identity address");
-    bda_for_lk = p_cb->id_addr;
+    memcpy(bda_for_lk, p_cb->id_addr, BD_ADDR_LEN);
   } else if ((BTM_ReadRemoteConnectionAddr(p_cb->pairing_bda, bda_for_lk,
                                            &conn_addr_type)) &&
              conn_addr_type == BLE_ADDR_PUBLIC) {

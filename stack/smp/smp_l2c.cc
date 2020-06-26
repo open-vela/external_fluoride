@@ -30,18 +30,19 @@
 
 #include "smp_int.h"
 
+extern fixed_queue_t* btu_general_alarm_queue;
+
 static void smp_tx_complete_callback(uint16_t cid, uint16_t num_pkt);
 
-static void smp_connect_callback(uint16_t channel, const RawAddress& bd_addr,
+static void smp_connect_callback(uint16_t channel, BD_ADDR bd_addr,
                                  bool connected, uint16_t reason,
                                  tBT_TRANSPORT transport);
-static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
-                              BT_HDR* p_buf);
+static void smp_data_received(uint16_t channel, BD_ADDR bd_addr, BT_HDR* p_buf);
 
-static void smp_br_connect_callback(uint16_t channel, const RawAddress& bd_addr,
+static void smp_br_connect_callback(uint16_t channel, BD_ADDR bd_addr,
                                     bool connected, uint16_t reason,
                                     tBT_TRANSPORT transport);
-static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
+static void smp_br_data_received(uint16_t channel, BD_ADDR bd_addr,
                                  BT_HDR* p_buf);
 
 /*******************************************************************************
@@ -88,19 +89,25 @@ void smp_l2cap_if_init(void) {
  *                      connected (conn = true)/disconnected (conn = false).
  *
  ******************************************************************************/
-static void smp_connect_callback(uint16_t channel, const RawAddress& bd_addr,
+static void smp_connect_callback(uint16_t channel, BD_ADDR bd_addr,
                                  bool connected, uint16_t reason,
                                  tBT_TRANSPORT transport) {
   tSMP_CB* p_cb = &smp_cb;
   tSMP_INT_DATA int_data;
+  BD_ADDR dummy_bda = {0};
 
   SMP_TRACE_EVENT("SMDBG l2c %s", __func__);
 
-  if (transport == BT_TRANSPORT_BR_EDR || bd_addr.IsEmpty()) return;
+  if (transport == BT_TRANSPORT_BR_EDR ||
+      memcmp(bd_addr, dummy_bda, BD_ADDR_LEN) == 0)
+    return;
 
-  if (bd_addr == p_cb->pairing_bda) {
-    VLOG(2) << __func__ << " for pairing BDA: " << bd_addr
-            << " Event: " << ((connected) ? "connected" : "disconnected");
+  if (memcmp(bd_addr, p_cb->pairing_bda, BD_ADDR_LEN) == 0) {
+    SMP_TRACE_EVENT("%s()  for pairing BDA: %08x%04x  Event: %s", __func__,
+                    (bd_addr[0] << 24) + (bd_addr[1] << 16) +
+                        (bd_addr[2] << 8) + bd_addr[3],
+                    (bd_addr[4] << 8) + bd_addr[5],
+                    (connected) ? "connected" : "disconnected");
 
     if (connected) {
       if (!p_cb->connect_initialized) {
@@ -133,7 +140,7 @@ static void smp_connect_callback(uint16_t channel, const RawAddress& bd_addr,
  * Returns          void
  *
  ******************************************************************************/
-static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
+static void smp_data_received(uint16_t channel, BD_ADDR bd_addr,
                               BT_HDR* p_buf) {
   tSMP_CB* p_cb = &smp_cb;
   uint8_t* p = (uint8_t*)(p_buf + 1) + p_buf->offset;
@@ -155,8 +162,8 @@ static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
         (p_cb->br_state == SMP_BR_STATE_IDLE) &&
         !(p_cb->flags & SMP_PAIR_FLAGS_WE_STARTED_DD)) {
       p_cb->role = L2CA_GetBleConnRole(bd_addr);
-      p_cb->pairing_bda = bd_addr;
-    } else if (bd_addr != p_cb->pairing_bda) {
+      memcpy(&p_cb->pairing_bda[0], bd_addr, BD_ADDR_LEN);
+    } else if (memcmp(&bd_addr[0], p_cb->pairing_bda, BD_ADDR_LEN)) {
       osi_free(p_buf);
       smp_reject_unexpected_pairing_command(bd_addr);
       return;
@@ -165,9 +172,9 @@ static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
      * SM */
   }
 
-  if (bd_addr == p_cb->pairing_bda) {
-    alarm_set_on_mloop(p_cb->smp_rsp_timer_ent, SMP_WAIT_FOR_RSP_TIMEOUT_MS,
-                       smp_rsp_timeout, NULL);
+  if (memcmp(&bd_addr[0], p_cb->pairing_bda, BD_ADDR_LEN) == 0) {
+    alarm_set_on_queue(p_cb->smp_rsp_timer_ent, SMP_WAIT_FOR_RSP_TIMEOUT_MS,
+                       smp_rsp_timeout, NULL, btu_general_alarm_queue);
 
     if (cmd == SMP_OPCODE_CONFIRM) {
       SMP_TRACE_DEBUG(
@@ -222,7 +229,7 @@ static void smp_tx_complete_callback(uint16_t cid, uint16_t num_pkt) {
  *                      connected (conn = true)/disconnected (conn = false).
  *
  ******************************************************************************/
-static void smp_br_connect_callback(uint16_t channel, const RawAddress& bd_addr,
+static void smp_br_connect_callback(uint16_t channel, BD_ADDR bd_addr,
                                     bool connected, uint16_t reason,
                                     tBT_TRANSPORT transport) {
   tSMP_CB* p_cb = &smp_cb;
@@ -236,10 +243,13 @@ static void smp_br_connect_callback(uint16_t channel, const RawAddress& bd_addr,
     return;
   }
 
-  if (bd_addr != p_cb->pairing_bda) return;
+  if (!(memcmp(bd_addr, p_cb->pairing_bda, BD_ADDR_LEN) == 0)) return;
 
-  VLOG(1) << __func__ << " for pairing BDA: " << bd_addr
-          << " Event: " << ((connected) ? "connected" : "disconnected");
+  SMP_TRACE_EVENT(
+      "%s for pairing BDA: %08x%04x  Event: %s", __func__,
+      (bd_addr[0] << 24) + (bd_addr[1] << 16) + (bd_addr[2] << 8) + bd_addr[3],
+      (bd_addr[4] << 8) + bd_addr[5],
+      (connected) ? "connected" : "disconnected");
 
   if (connected) {
     if (!p_cb->connect_initialized) {
@@ -267,7 +277,7 @@ static void smp_br_connect_callback(uint16_t channel, const RawAddress& bd_addr,
  * Returns          void
  *
  ******************************************************************************/
-static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
+static void smp_br_data_received(uint16_t channel, BD_ADDR bd_addr,
                                  BT_HDR* p_buf) {
   tSMP_CB* p_cb = &smp_cb;
   uint8_t* p = (uint8_t*)(p_buf + 1) + p_buf->offset;
@@ -289,8 +299,8 @@ static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
         (p_cb->br_state == SMP_BR_STATE_IDLE)) {
       p_cb->role = HCI_ROLE_SLAVE;
       p_cb->smp_over_br = true;
-      p_cb->pairing_bda = bd_addr;
-    } else if (bd_addr != p_cb->pairing_bda) {
+      memcpy(&p_cb->pairing_bda[0], bd_addr, BD_ADDR_LEN);
+    } else if (memcmp(&bd_addr[0], p_cb->pairing_bda, BD_ADDR_LEN)) {
       osi_free(p_buf);
       smp_reject_unexpected_pairing_command(bd_addr);
       return;
@@ -298,9 +308,9 @@ static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
     /* else, out of state pairing request received, passed into State Machine */
   }
 
-  if (bd_addr == p_cb->pairing_bda) {
-    alarm_set_on_mloop(p_cb->smp_rsp_timer_ent, SMP_WAIT_FOR_RSP_TIMEOUT_MS,
-                       smp_rsp_timeout, NULL);
+  if (memcmp(&bd_addr[0], p_cb->pairing_bda, BD_ADDR_LEN) == 0) {
+    alarm_set_on_queue(p_cb->smp_rsp_timer_ent, SMP_WAIT_FOR_RSP_TIMEOUT_MS,
+                       smp_rsp_timeout, NULL, btu_general_alarm_queue);
 
     p_cb->rcvd_cmd_code = cmd;
     p_cb->rcvd_cmd_len = (uint8_t)p_buf->len;

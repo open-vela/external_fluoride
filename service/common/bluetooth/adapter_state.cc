@@ -14,7 +14,7 @@
 //  limitations under the License.
 //
 
-#include "bluetooth/adapter_state.h"
+#include "service/common/bluetooth/adapter_state.h"
 
 namespace bluetooth {
 
