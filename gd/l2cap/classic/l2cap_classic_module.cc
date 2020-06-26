@@ -38,9 +38,13 @@ namespace classic {
 
 const ModuleFactory L2capClassicModule::Factory = ModuleFactory([]() { return new L2capClassicModule(); });
 
+static SecurityEnforcementRejectAllImpl default_security_module_impl_;
+
 struct L2capClassicModule::impl {
   impl(os::Handler* l2cap_handler, hci::AclManager* acl_manager)
-      : l2cap_handler_(l2cap_handler), acl_manager_(acl_manager) {}
+      : l2cap_handler_(l2cap_handler), acl_manager_(acl_manager) {
+    dynamic_channel_service_manager_impl_.SetSecurityEnforcementInterface(&default_security_module_impl_);
+  }
   os::Handler* l2cap_handler_;
   hci::AclManager* acl_manager_;
   l2cap::internal::ParameterProvider parameter_provider_;
@@ -48,6 +52,29 @@ struct L2capClassicModule::impl {
   internal::DynamicChannelServiceManagerImpl dynamic_channel_service_manager_impl_{l2cap_handler_};
   internal::LinkManager link_manager_{l2cap_handler_, acl_manager_, &fixed_channel_service_manager_impl_,
                                       &dynamic_channel_service_manager_impl_, &parameter_provider_};
+
+  struct SecurityInterfaceImpl : public SecurityInterface {
+    SecurityInterfaceImpl(impl* module_impl) : module_impl_(module_impl) {}
+
+    void RegisterLinkSecurityInterfaceListener(os::Handler* handler, LinkSecurityInterfaceListener* listener) {
+      ASSERT(!registered_);
+      module_impl_->link_manager_.RegisterLinkSecurityInterfaceListener(handler, listener);
+      registered_ = true;
+    }
+
+    void InitiateConnectionForSecurity(hci::Address remote) override {
+      ASSERT(registered_);
+      module_impl_->link_manager_.InitiateConnectionForSecurity(remote);
+    }
+
+    void Unregister() override {
+      ASSERT(registered_);
+      module_impl_->link_manager_.RegisterLinkSecurityInterfaceListener(nullptr, nullptr);
+      registered_ = false;
+    }
+    impl* module_impl_;
+    bool registered_ = false;
+  } security_interface_impl_{this};
 };
 
 L2capClassicModule::L2capClassicModule() {}
@@ -78,6 +105,21 @@ std::unique_ptr<FixedChannelManager> L2capClassicModule::GetFixedChannelManager(
 std::unique_ptr<DynamicChannelManager> L2capClassicModule::GetDynamicChannelManager() {
   return std::unique_ptr<DynamicChannelManager>(new DynamicChannelManager(
       &pimpl_->dynamic_channel_service_manager_impl_, &pimpl_->link_manager_, pimpl_->l2cap_handler_));
+}
+
+void L2capClassicModule::InjectSecurityEnforcementInterface(
+    SecurityEnforcementInterface* security_enforcement_interface) {
+  if (security_enforcement_interface != nullptr) {
+    pimpl_->dynamic_channel_service_manager_impl_.SetSecurityEnforcementInterface(security_enforcement_interface);
+  } else {
+    pimpl_->dynamic_channel_service_manager_impl_.SetSecurityEnforcementInterface(&default_security_module_impl_);
+  }
+}
+
+SecurityInterface* L2capClassicModule::GetSecurityInterface(
+    os::Handler* handler, LinkSecurityInterfaceListener* listener) {
+  pimpl_->security_interface_impl_.RegisterLinkSecurityInterfaceListener(handler, listener);
+  return &pimpl_->security_interface_impl_;
 }
 
 }  // namespace classic
