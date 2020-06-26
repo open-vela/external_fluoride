@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2005-2012 Broadcom Corporation
+ *  Copyright (C) 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ void BTA_HhEnable(tBTA_SEC sec_mask, tBTA_HH_CBACK* p_cback) {
   tBTA_HH_API_ENABLE* p_buf =
       (tBTA_HH_API_ENABLE*)osi_calloc(sizeof(tBTA_HH_API_ENABLE));
 
-  LOG_INFO("%s sec_mask:0x%x p_cback:%p", __func__, sec_mask, p_cback);
+  LOG_INFO(LOG_TAG, "%s sec_mask:0x%x p_cback:%p", __func__, sec_mask, p_cback);
 
   /* register with BTA system manager */
   bta_sys_register(BTA_ID_HH, &bta_hh_reg);
@@ -122,8 +122,7 @@ void BTA_HhClose(uint8_t dev_handle) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HhOpen(const RawAddress& dev_bda, tBTA_HH_PROTO_MODE mode,
-                tBTA_SEC sec_mask) {
+void BTA_HhOpen(BD_ADDR dev_bda, tBTA_HH_PROTO_MODE mode, tBTA_SEC sec_mask) {
   tBTA_HH_API_CONN* p_buf =
       (tBTA_HH_API_CONN*)osi_calloc(sizeof(tBTA_HH_API_CONN));
 
@@ -131,7 +130,7 @@ void BTA_HhOpen(const RawAddress& dev_bda, tBTA_HH_PROTO_MODE mode,
   p_buf->hdr.layer_specific = BTA_HH_INVALID_HANDLE;
   p_buf->sec_mask = sec_mask;
   p_buf->mode = mode;
-  p_buf->bd_addr = dev_bda;
+  bdcpy(p_buf->bd_addr, dev_bda);
 
   bta_sys_sendmsg((void*)p_buf);
 }
@@ -172,13 +171,7 @@ static void bta_hh_snd_write_dev(uint8_t dev_handle, uint8_t t_type,
  ******************************************************************************/
 void BTA_HhSetReport(uint8_t dev_handle, tBTA_HH_RPT_TYPE r_type,
                      BT_HDR* p_data) {
-  /* send feature report on control channel */
-  if (r_type == BTA_HH_RPTT_FEATURE)
-    bta_hh_snd_write_dev(dev_handle, HID_TRANS_SET_REPORT, r_type, 0, 0,
-                         p_data);
-  /* send output data report on interrupt channel */
-  else
-    bta_hh_snd_write_dev(dev_handle, HID_TRANS_DATA, r_type, 0, 0, p_data);
+  bta_hh_snd_write_dev(dev_handle, HID_TRANS_SET_REPORT, r_type, 0, 0, p_data);
 }
 /*******************************************************************************
  *
@@ -278,7 +271,7 @@ void BTA_HhSendCtrl(uint8_t dev_handle, tBTA_HH_TRANS_CTRL_TYPE c_type) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HhSendData(uint8_t dev_handle, UNUSED_ATTR const RawAddress& dev_bda,
+void BTA_HhSendData(uint8_t dev_handle, UNUSED_ATTR BD_ADDR dev_bda,
                     BT_HDR* p_data) {
 #if (BTA_HH_LE_INCLUDED == TRUE)
   if (p_data->layer_specific != BTA_HH_RPTT_OUTPUT) {
@@ -322,9 +315,8 @@ void BTA_HhGetDscpInfo(uint8_t dev_handle) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HhAddDev(const RawAddress& bda, tBTA_HH_ATTR_MASK attr_mask,
-                  uint8_t sub_class, uint8_t app_id,
-                  tBTA_HH_DEV_DSCP_INFO dscp_info) {
+void BTA_HhAddDev(BD_ADDR bda, tBTA_HH_ATTR_MASK attr_mask, uint8_t sub_class,
+                  uint8_t app_id, tBTA_HH_DEV_DSCP_INFO dscp_info) {
   size_t len = sizeof(tBTA_HH_MAINT_DEV) + dscp_info.descriptor.dl_len;
   tBTA_HH_MAINT_DEV* p_buf = (tBTA_HH_MAINT_DEV*)osi_calloc(len);
 
@@ -335,7 +327,7 @@ void BTA_HhAddDev(const RawAddress& bda, tBTA_HH_ATTR_MASK attr_mask,
   p_buf->attr_mask = (uint16_t)attr_mask;
   p_buf->sub_class = sub_class;
   p_buf->app_id = app_id;
-  p_buf->bda = bda;
+  bdcpy(p_buf->bda, bda);
 
   memcpy(&p_buf->dscp_info, &dscp_info, sizeof(tBTA_HH_DEV_DSCP_INFO));
   if (dscp_info.descriptor.dl_len != 0 && dscp_info.descriptor.dsc_list) {
