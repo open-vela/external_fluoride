@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2005-2012 Broadcom Corporation
+ *  Copyright 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -249,7 +249,7 @@ void bta_hh_sm_execute(tBTA_HH_DEV_CB* p_cb, uint16_t event,
         case BTA_HH_API_OPEN_EVT:
           cback_event = BTA_HH_OPEN_EVT;
           /* build cback data */
-          bdcpy(cback_data.conn.bda, ((tBTA_HH_API_CONN*)p_data)->bd_addr);
+          cback_data.conn.bda = ((tBTA_HH_API_CONN*)p_data)->bd_addr;
           cback_data.conn.status = BTA_HH_ERR_DB_FULL;
           cback_data.conn.handle = BTA_HH_INVALID_HANDLE;
           break;
@@ -258,7 +258,7 @@ void bta_hh_sm_execute(tBTA_HH_DEV_CB* p_cb, uint16_t event,
           cback_event = p_data->api_maintdev.sub_event;
 
           if (p_data->api_maintdev.sub_event == BTA_HH_ADD_DEV_EVT) {
-            bdcpy(cback_data.dev_info.bda, p_data->api_maintdev.bda);
+            cback_data.dev_info.bda = p_data->api_maintdev.bda;
             cback_data.dev_info.status = BTA_HH_ERR_DB_FULL;
             cback_data.dev_info.handle = BTA_HH_INVALID_HANDLE;
           } else {
@@ -400,7 +400,7 @@ bool bta_hh_hdl_event(BT_HDR* p_msg) {
             * force the index to be IDX_INVALID
             */
           if ((index != BTA_HH_IDX_INVALID) &&
-              (bta_hh_cb.kdev[index].in_use == false)) {
+              (!bta_hh_cb.kdev[index].in_use)) {
             index = BTA_HH_IDX_INVALID;
           }
         }

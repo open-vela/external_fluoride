@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -14,19 +14,18 @@
 //  limitations under the License.
 //
 
-#include "service/common/bluetooth/scan_result.h"
+#include "bluetooth/scan_result.h"
+#include "raw_address.h"
 
 #include <base/logging.h>
-
-#include "service/common/bluetooth/util/address_helper.h"
 
 namespace bluetooth {
 
 ScanResult::ScanResult(const std::string& device_address,
                        const std::vector<uint8_t>& scan_record, int rssi)
     : device_address_(device_address), scan_record_(scan_record), rssi_(rssi) {
-  CHECK(util::IsAddressValid(device_address)) << "Invalid BD_ADDR given: "
-                                              << device_address;
+  CHECK(RawAddress::IsValidAddress(device_address)) << "Invalid BD_ADDR given: "
+                                                    << device_address;
 }
 
 bool ScanResult::operator==(const ScanResult& rhs) const {

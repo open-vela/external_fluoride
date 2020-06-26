@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 Google, Inc.
+ *  Copyright 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
 #include "adapter/bluetooth_test.h"
 #include "rfcomm/rfcomm_test.h"
 
-#include "btcore/include/bdaddr.h"
-
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -36,8 +34,7 @@ TEST_F(RFCommTest, RfcommConnectPairedDevice) {
   size_t len = 0;
 
   error = socket_interface()->connect(&bt_remote_bdaddr_, BTSOCK_RFCOMM,
-                                      (const uint8_t*)&HFP_UUID, 0, &fd, 0,
-                                      getuid());
+                                      &HFP_UUID, 0, &fd, 0, getuid());
   EXPECT_TRUE(error == BT_STATUS_SUCCESS) << "Error creating RFCOMM socket: "
                                           << error;
   EXPECT_TRUE(fd != -1) << "Error creating RFCOMM socket: invalid fd";
@@ -51,7 +48,7 @@ TEST_F(RFCommTest, RfcommConnectPairedDevice) {
   EXPECT_TRUE(len == sizeof(signal))
       << "Connection signal not read from RFCOMM socket. Bytes read: " << len;
 
-  EXPECT_TRUE(!memcmp(&signal.bd_addr, &bt_remote_bdaddr_, sizeof(bt_bdaddr_t)))
+  EXPECT_TRUE(signal.bd_addr == bt_remote_bdaddr_)
       << "Connected to a different bdaddr than expected.";
   EXPECT_TRUE(channel == signal.channel)
       << "Inconsistent channels returned: " << channel << " and "
@@ -78,8 +75,7 @@ TEST_F(RFCommTest, RfcommRepeatedConnectPairedDevice) {
     size_t len = 0;
 
     error = socket_interface()->connect(&bt_remote_bdaddr_, BTSOCK_RFCOMM,
-                                        (const uint8_t*)&HFP_UUID, 0, &fd, 0,
-                                        getuid());
+                                        &HFP_UUID, 0, &fd, 0, getuid());
     ASSERT_TRUE(error == BT_STATUS_SUCCESS) << "Error creating RFCOMM socket: "
                                             << error;
     ASSERT_TRUE(fd != -1) << "Error creating RFCOMM socket: invalid fd";
@@ -101,8 +97,7 @@ TEST_F(RFCommTest, RfcommRepeatedConnectPairedDevice) {
       signal_fail++;
     }
 
-    EXPECT_TRUE(
-        !memcmp(&signal.bd_addr, &bt_remote_bdaddr_, sizeof(bt_bdaddr_t)))
+    EXPECT_TRUE(signal.bd_addr == bt_remote_bdaddr_)
         << "Connected to a different bdaddr than expected.";
     EXPECT_TRUE(channel == signal.channel)
         << "Inconsistent channels returned: " << channel << " and "
