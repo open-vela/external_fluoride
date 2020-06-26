@@ -33,36 +33,33 @@ namespace bluetooth {
 namespace security {
 namespace internal {
 
-void SecurityManagerImpl::DispatchPairingHandler(
-    std::shared_ptr<record::SecurityRecord> record, bool locally_initiated) {
+void SecurityManagerImpl::DispatchPairingHandler(record::SecurityRecord& record, bool locally_initiated,
+                                                 hci::AuthenticationRequirements authentication_requirements) {
   common::OnceCallback<void(hci::Address, PairingResultOrFailure)> callback =
       common::BindOnce(&SecurityManagerImpl::OnPairingHandlerComplete, common::Unretained(this));
-  auto entry = pairing_handler_map_.find(record->GetPseudoAddress().GetAddress());
+  auto entry = pairing_handler_map_.find(record.GetPseudoAddress().GetAddress());
   if (entry != pairing_handler_map_.end()) {
     LOG_WARN("Device already has a pairing handler, and is in the middle of pairing!");
     return;
   }
   std::shared_ptr<pairing::PairingHandler> pairing_handler = nullptr;
-  switch (record->GetPseudoAddress().GetAddressType()) {
+  switch (record.GetPseudoAddress().GetAddressType()) {
     case hci::AddressType::PUBLIC_DEVICE_ADDRESS: {
+      std::shared_ptr<record::SecurityRecord> record_copy =
+          std::make_shared<record::SecurityRecord>(record.GetPseudoAddress());
       pairing_handler = std::make_shared<security::pairing::ClassicPairingHandler>(
-          security_manager_channel_,
-          record,
-          security_handler_,
-          std::move(callback),
-          user_interface_,
-          user_interface_handler_,
-          "TODO: grab device name properly");
+          l2cap_classic_module_->GetFixedChannelManager(), security_manager_channel_, record_copy, security_handler_,
+          std::move(callback), user_interface_, user_interface_handler_, "TODO: grab device name properly");
       break;
     }
     default:
-      ASSERT_LOG(false, "Pairing type %hhu not implemented!", record->GetPseudoAddress().GetAddressType());
+      ASSERT_LOG(false, "Pairing type %hhu not implemented!", record.GetPseudoAddress().GetAddressType());
   }
   auto new_entry = std::pair<hci::Address, std::shared_ptr<pairing::PairingHandler>>(
-      record->GetPseudoAddress().GetAddress(), pairing_handler);
+      record.GetPseudoAddress().GetAddress(), pairing_handler);
   pairing_handler_map_.insert(std::move(new_entry));
-  pairing_handler->Initiate(locally_initiated, this->local_io_capability_, this->local_oob_data_present_,
-                            this->local_authentication_requirements_);
+  pairing_handler->Initiate(locally_initiated, pairing::kDefaultIoCapability, pairing::kDefaultOobDataPresent,
+                            authentication_requirements);
 }
 
 void SecurityManagerImpl::Init() {
@@ -73,18 +70,18 @@ void SecurityManagerImpl::Init() {
 }
 
 void SecurityManagerImpl::CreateBond(hci::AddressWithType device) {
-  auto record = security_database_.FindOrCreate(device);
-  if (record->IsBonded()) {
+  record::SecurityRecord& record = security_database_.FindOrCreate(device);
+  if (record.IsBonded()) {
     NotifyDeviceBonded(device);
   } else {
     // Dispatch pairing handler, if we are calling create we are the initiator
-    DispatchPairingHandler(record, true);
+    DispatchPairingHandler(record, true, pairing::kDefaultAuthenticationRequirements);
   }
 }
 
 void SecurityManagerImpl::CreateBondLe(hci::AddressWithType address) {
-  auto record = security_database_.FindOrCreate(address);
-  if (record->IsBonded()) {
+  record::SecurityRecord& record = security_database_.FindOrCreate(address);
+  if (record.IsBonded()) {
     NotifyDeviceBondFailed(address, PairingFailure("Already bonded"));
     return;
   }
@@ -108,7 +105,6 @@ void SecurityManagerImpl::CancelBond(hci::AddressWithType device) {
 void SecurityManagerImpl::RemoveBond(hci::AddressWithType device) {
   CancelBond(device);
   security_database_.Remove(device);
-  security_manager_channel_->Disconnect(device.GetAddress());
   // Signal disconnect
   // Remove security record
   // Signal Remove from database
@@ -120,16 +116,6 @@ void SecurityManagerImpl::SetUserInterfaceHandler(UI* user_interface, os::Handle
   }
   user_interface_ = user_interface;
   user_interface_handler_ = handler;
-}
-
-void SecurityManagerImpl::SetLeInitiatorAddressPolicy(
-    hci::LeAddressManager::AddressPolicy address_policy,
-    hci::AddressWithType fixed_address,
-    crypto_toolbox::Octet16 rotation_irk,
-    std::chrono::milliseconds minimum_rotation_time,
-    std::chrono::milliseconds maximum_rotation_time) {
-  acl_manager_->SetPrivacyPolicyForInitiatorAddress(
-      address_policy, fixed_address, rotation_irk, minimum_rotation_time, maximum_rotation_time);
 }
 
 void SecurityManagerImpl::RegisterCallbackListener(ISecurityManagerListener* listener, os::Handler* handler) {
@@ -173,13 +159,6 @@ void SecurityManagerImpl::NotifyDeviceUnbonded(hci::AddressWithType device) {
   }
 }
 
-void SecurityManagerImpl::NotifyEncryptionStateChanged(hci::EncryptionChangeView encryption_change_view) {
-  for (auto& iter : listeners_) {
-    iter.second->Post(common::Bind(&ISecurityManagerListener::OnEncryptionStateChanged, common::Unretained(iter.first),
-                                   encryption_change_view));
-  }
-}
-
 template <class T>
 void SecurityManagerImpl::HandleEvent(T packet) {
   ASSERT(packet.IsValid());
@@ -188,8 +167,11 @@ void SecurityManagerImpl::HandleEvent(T packet) {
   if (entry == pairing_handler_map_.end()) {
     auto bd_addr = packet.GetBdAddr();
     auto event_code = packet.GetEventCode();
+    auto event = hci::EventPacketView::Create(std::move(packet));
+    ASSERT_LOG(event.IsValid(), "Received invalid packet");
 
-    if (event_code != hci::EventCode::LINK_KEY_REQUEST) {
+    const hci::EventCode code = event.GetEventCode();
+    if (code != hci::EventCode::LINK_KEY_REQUEST) {
       LOG_ERROR("No classic pairing handler for device '%s' ready for command %s ", bd_addr.ToString().c_str(),
                 hci::EventCodeText(event_code).c_str());
       return;
@@ -197,7 +179,8 @@ void SecurityManagerImpl::HandleEvent(T packet) {
 
     auto record =
         security_database_.FindOrCreate(hci::AddressWithType{bd_addr, hci::AddressType::PUBLIC_DEVICE_ADDRESS});
-    DispatchPairingHandler(record, true);
+    auto authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
+    DispatchPairingHandler(record, true, authentication_requirements);
     entry = pairing_handler_map_.find(bd_addr);
   }
   entry->second->OnReceive(packet);
@@ -246,30 +229,21 @@ void SecurityManagerImpl::OnHciEventReceived(hci::EventPacketView packet) {
       break;
 
     case hci::EventCode::ENCRYPTION_CHANGE: {
-      EncryptionChangeView encryption_change_view = EncryptionChangeView::Create(event);
-      if (!encryption_change_view.IsValid()) {
+      EncryptionChangeView enc_chg_packet = EncryptionChangeView::Create(event);
+      if (!enc_chg_packet.IsValid()) {
         LOG_ERROR("Invalid EncryptionChange packet received");
         return;
       }
-      if (encryption_change_view.GetConnectionHandle() == pending_le_pairing_.connection_handle_) {
+      if (enc_chg_packet.GetConnectionHandle() == pending_le_pairing_.connection_handle_) {
         pending_le_pairing_.handler_->OnHciEvent(event);
         return;
       }
-      NotifyEncryptionStateChanged(encryption_change_view);
       break;
     }
 
     default:
       ASSERT_LOG(false, "Cannot handle received packet: %s", hci::EventCodeText(code).c_str());
       break;
-  }
-}
-
-void SecurityManagerImpl::OnConnectionClosed(hci::Address address) {
-  auto entry = pairing_handler_map_.find(address);
-  if (entry != pairing_handler_map_.end()) {
-    LOG_DEBUG("Cancelling pairing handler for '%s'", address.ToString().c_str());
-    entry->second->Cancel();
   }
 }
 
@@ -315,18 +289,11 @@ void SecurityManagerImpl::OnPairingHandlerComplete(hci::Address address, Pairing
   auto entry = pairing_handler_map_.find(address);
   if (entry != pairing_handler_map_.end()) {
     pairing_handler_map_.erase(entry);
-    security_manager_channel_->Release(address);
-  }
-  auto remote = hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS);
-  auto cb_entry = enforce_security_policy_callback_map_.find(remote);
-  if (cb_entry != enforce_security_policy_callback_map_.end()) {
-    this->InternalEnforceSecurityPolicy(remote, cb_entry->second.first, std::move(cb_entry->second.second), false);
-    enforce_security_policy_callback_map_.erase(cb_entry);
   }
   if (!std::holds_alternative<PairingFailure>(status)) {
-    NotifyDeviceBonded(remote);
+    NotifyDeviceBonded(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS));
   } else {
-    NotifyDeviceBondFailed(remote, status);
+    NotifyDeviceBondFailed(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS), status);
   }
 }
 
@@ -337,141 +304,45 @@ void SecurityManagerImpl::OnL2capRegistrationCompleteLe(
              "Failed to register to LE SMP Fixed Channel Service");
 }
 
-LeFixedChannelEntry* SecurityManagerImpl::FindStoredLeChannel(const hci::AddressWithType& device) {
-  for (LeFixedChannelEntry& storage : all_channels_) {
-    if (storage.channel_->GetDevice() == device) {
-      return &storage;
-    }
-  }
-  return nullptr;
-}
+void SecurityManagerImpl::OnSmpCommandLe() {
+  auto packet = pending_le_pairing_.channel_->GetQueueUpEnd()->TryDequeue();
+  if (!packet) LOG_ERROR("Received dequeue, but no data ready...");
 
-bool SecurityManagerImpl::EraseStoredLeChannel(const hci::AddressWithType& device) {
-  for (auto it = all_channels_.begin(); it != all_channels_.end(); it++) {
-    if (it->channel_->GetDevice() == device) {
-      all_channels_.erase(it);
-      return true;
-    }
-  }
-  return false;
-}
-
-void SecurityManagerImpl::OnSmpCommandLe(hci::AddressWithType device) {
-  LeFixedChannelEntry* stored_chan = FindStoredLeChannel(device);
-  if (!stored_chan) {
-    LOG_ALWAYS_FATAL("Received SMP command for unknown channel");
-    return;
-  }
-
-  std::unique_ptr<l2cap::le::FixedChannel>& channel = stored_chan->channel_;
-
-  auto packet = channel->GetQueueUpEnd()->TryDequeue();
-  if (!packet) {
-    LOG_ERROR("Received dequeue, but no data ready...");
-    return;
-  }
-
-  // Pending pairing - pass the data to the handler
   auto temp_cmd_view = CommandView::Create(*packet);
-  if (pending_le_pairing_.address_ == device) {
-    pending_le_pairing_.handler_->OnCommandView(temp_cmd_view);
-    return;
-  }
-
-  // no pending pairing attempt
-  if (!temp_cmd_view.IsValid()) {
-    LOG_ERROR("Invalid Command packet");
-    return;
-  }
-
-  if (temp_cmd_view.GetCode() == Code::SECURITY_REQUEST) {
-    // TODO: either start encryption or pairing
-    LOG_WARN("Unhandled security request!!!");
-    return;
-  }
-
-  auto my_role = channel->GetLinkOptions()->GetRole();
-  if (temp_cmd_view.GetCode() == Code::PAIRING_REQUEST && my_role == hci::Role::SLAVE) {
-    // TODO: if (pending_le_pairing_) { do not start another }
-
-    LOG_INFO("start of security request handling!");
-
-    PairingRequestView pairing_request = PairingRequestView::Create(temp_cmd_view);
-    auto& enqueue_buffer = stored_chan->enqueue_buffer_;
-
-    // TODO: this doesn't have to be a unique ptr, if there is a way to properly std::move it into place where it's
-    // stored
-    pending_le_pairing_.connection_handle_ = channel->GetLinkOptions()->GetHandle();
-    InitialInformations initial_informations{
-        .my_role = my_role,
-        .my_connection_address = channel->GetLinkOptions()->GetLocalAddress(),
-        /*TODO: properly obtain capabilities from device-specific storage*/
-        .myPairingCapabilities = {.io_capability = local_le_io_capability_,
-                                  .oob_data_flag = OobDataFlag::NOT_PRESENT,
-                                  .auth_req = local_le_auth_req_,
-                                  .maximum_encryption_key_size = 16,
-                                  .initiator_key_distribution = 0x07,
-                                  .responder_key_distribution = 0x07},
-        .remotely_initiated = true,
-        .connection_handle = channel->GetLinkOptions()->GetHandle(),
-        .remote_connection_address = channel->GetDevice(),
-        .remote_name = "TODO: grab proper device name in sec mgr",
-        /* contains pairing request, if the pairing was remotely initiated */
-        .pairing_request = pairing_request,
-        .remote_oob_data = std::nullopt,  // TODO:
-        .my_oob_data = std::nullopt,      // TODO:
-        /* Used by Pairing Handler to present user with requests*/
-        .user_interface = user_interface_,
-        .user_interface_handler = user_interface_handler_,
-
-        /* HCI interface to use */
-        .le_security_interface = hci_security_interface_le_,
-        .proper_l2cap_interface = enqueue_buffer.get(),
-        .l2cap_handler = security_handler_,
-        /* Callback to execute once the Pairing process is finished */
-        // TODO: make it an common::OnceCallback ?
-        .OnPairingFinished = std::bind(&SecurityManagerImpl::OnPairingFinished, this, std::placeholders::_1),
-    };
-    pending_le_pairing_.address_ = device;
-    pending_le_pairing_.handler_ = std::make_unique<PairingHandlerLe>(PairingHandlerLe::PHASE1, initial_informations);
-  }
+  pending_le_pairing_.handler_->OnCommandView(temp_cmd_view);
 }
 
-void SecurityManagerImpl::OnConnectionOpenLe(std::unique_ptr<l2cap::le::FixedChannel> channel_param) {
-  auto enqueue_buffer_temp =
-      std::make_unique<os::EnqueueBuffer<packet::BasePacketBuilder>>(channel_param->GetQueueUpEnd());
-
-  all_channels_.push_back({std::move(channel_param), std::move(enqueue_buffer_temp)});
-  auto& stored_channel = all_channels_.back();
-  auto& channel = stored_channel.channel_;
-  auto& enqueue_buffer = stored_channel.enqueue_buffer_;
-
-  channel->RegisterOnCloseCallback(
-      security_handler_,
-      common::BindOnce(&SecurityManagerImpl::OnConnectionClosedLe, common::Unretained(this), channel->GetDevice()));
-  channel->GetQueueUpEnd()->RegisterDequeue(
-      security_handler_,
-      common::Bind(&SecurityManagerImpl::OnSmpCommandLe, common::Unretained(this), channel->GetDevice()));
-
+void SecurityManagerImpl::OnConnectionOpenLe(std::unique_ptr<l2cap::le::FixedChannel> channel) {
   if (pending_le_pairing_.address_ != channel->GetDevice()) {
     return;
   }
+  pending_le_pairing_.channel_ = std::move(channel);
+  pending_le_pairing_.channel_->RegisterOnCloseCallback(
+      security_handler_, common::BindOnce(&SecurityManagerImpl::OnConnectionClosedLe, common::Unretained(this),
+                                          pending_le_pairing_.channel_->GetDevice()));
+  // TODO: this enqueue buffer must be stored together with pairing_handler, and we must make sure it doesn't go out of
+  // scope while the pairing happens
+  pending_le_pairing_.enqueue_buffer_ =
+      std::make_unique<os::EnqueueBuffer<packet::BasePacketBuilder>>(pending_le_pairing_.channel_->GetQueueUpEnd());
+  pending_le_pairing_.channel_->GetQueueUpEnd()->RegisterDequeue(
+      security_handler_, common::Bind(&SecurityManagerImpl::OnSmpCommandLe, common::Unretained(this)));
 
   // TODO: this doesn't have to be a unique ptr, if there is a way to properly std::move it into place where it's stored
-  pending_le_pairing_.connection_handle_ = channel->GetLinkOptions()->GetHandle();
+  pending_le_pairing_.connection_handle_ = pending_le_pairing_.channel_->GetAclConnection()->GetHandle();
   InitialInformations initial_informations{
-      .my_role = channel->GetLinkOptions()->GetRole(),
-      .my_connection_address = channel->GetLinkOptions()->GetLocalAddress(),
+      .my_role = pending_le_pairing_.channel_->GetAclConnection()->GetRole(),
+      .my_connection_address = {hci::Address{{0x00, 0x11, 0xFF, 0xFF, 0x33, 0x22}} /*TODO: obtain my address*/,
+                                hci::AddressType::RANDOM_DEVICE_ADDRESS},
       /*TODO: properly obtain capabilities from device-specific storage*/
-      .myPairingCapabilities = {.io_capability = local_le_io_capability_,
+      .myPairingCapabilities = {.io_capability = IoCapability::KEYBOARD_DISPLAY,
                                 .oob_data_flag = OobDataFlag::NOT_PRESENT,
-                                .auth_req = local_le_auth_req_,
+                                .auth_req = AuthReqMaskBondingFlag | AuthReqMaskMitm | AuthReqMaskSc,
                                 .maximum_encryption_key_size = 16,
                                 .initiator_key_distribution = 0x07,
                                 .responder_key_distribution = 0x07},
       .remotely_initiated = false,
-      .connection_handle = channel->GetLinkOptions()->GetHandle(),
-      .remote_connection_address = channel->GetDevice(),
+      .connection_handle = pending_le_pairing_.channel_->GetAclConnection()->GetHandle(),
+      .remote_connection_address = pending_le_pairing_.channel_->GetDevice(),
       .remote_name = "TODO: grab proper device name in sec mgr",
       /* contains pairing request, if the pairing was remotely initiated */
       .pairing_request = std::nullopt,  // TODO: handle remotely initiated pairing in SecurityManager properly
@@ -483,7 +354,7 @@ void SecurityManagerImpl::OnConnectionOpenLe(std::unique_ptr<l2cap::le::FixedCha
 
       /* HCI interface to use */
       .le_security_interface = hci_security_interface_le_,
-      .proper_l2cap_interface = enqueue_buffer.get(),
+      .proper_l2cap_interface = pending_le_pairing_.enqueue_buffer_.get(),
       .l2cap_handler = security_handler_,
       /* Callback to execute once the Pairing process is finished */
       // TODO: make it an common::OnceCallback ?
@@ -494,14 +365,6 @@ void SecurityManagerImpl::OnConnectionOpenLe(std::unique_ptr<l2cap::le::FixedCha
 
 void SecurityManagerImpl::OnConnectionClosedLe(hci::AddressWithType address, hci::ErrorCode error_code) {
   if (pending_le_pairing_.address_ != address) {
-    LeFixedChannelEntry* stored_chan = FindStoredLeChannel(address);
-    if (!stored_chan) {
-      LOG_ALWAYS_FATAL("Received connection closed for unknown channel");
-      return;
-    }
-    stored_chan->channel_->GetQueueUpEnd()->UnregisterDequeue();
-    stored_chan->enqueue_buffer_.reset();
-    EraseStoredLeChannel(address);
     return;
   }
   pending_le_pairing_.handler_->SendExitSignal();
@@ -518,23 +381,18 @@ void SecurityManagerImpl::OnConnectionFailureLe(bluetooth::l2cap::le::FixedChann
   NotifyDeviceBondFailed(pending_le_pairing_.address_, PairingFailure("Connection establishment failed"));
 }
 
-SecurityManagerImpl::SecurityManagerImpl(
-    os::Handler* security_handler,
-    l2cap::le::L2capLeModule* l2cap_le_module,
-    channel::SecurityManagerChannel* security_manager_channel,
-    hci::HciLayer* hci_layer,
-    hci::AclManager* acl_manager)
-    : security_handler_(security_handler),
-      l2cap_le_module_(l2cap_le_module),
-      l2cap_manager_le_(l2cap_le_module_->GetFixedChannelManager()),
-      hci_security_interface_le_(
-          hci_layer->GetLeSecurityInterface(security_handler_->BindOn(this, &SecurityManagerImpl::OnHciLeEvent))),
-      security_manager_channel_(security_manager_channel),
-      acl_manager_(acl_manager) {
+SecurityManagerImpl::SecurityManagerImpl(os::Handler* security_handler, l2cap::le::L2capLeModule* l2cap_le_module,
+                                         l2cap::classic::L2capClassicModule* l2cap_classic_module,
+                                         channel::SecurityManagerChannel* security_manager_channel,
+                                         hci::HciLayer* hci_layer)
+    : security_handler_(security_handler), l2cap_le_module_(l2cap_le_module),
+      l2cap_classic_module_(l2cap_classic_module), l2cap_manager_le_(l2cap_le_module_->GetFixedChannelManager()),
+      hci_security_interface_le_(hci_layer->GetLeSecurityInterface(
+          common::Bind(&SecurityManagerImpl::OnHciLeEvent, common::Unretained(this)), security_handler)),
+      security_manager_channel_(security_manager_channel) {
   Init();
-
   l2cap_manager_le_->RegisterService(
-      bluetooth::l2cap::kSmpCid,
+      bluetooth::l2cap::kSmpCid, {},
       common::BindOnce(&SecurityManagerImpl::OnL2capRegistrationCompleteLe, common::Unretained(this)),
       common::Bind(&SecurityManagerImpl::OnConnectionOpenLe, common::Unretained(this)), security_handler_);
 }
@@ -549,96 +407,10 @@ void SecurityManagerImpl::OnPairingFinished(security::PairingResultOrFailure pai
     return;
   }
 
-  auto result = std::get<PairingResult>(pairing_result);
-  LOG_INFO("Pairing with %s was successful", result.connection_address.ToString().c_str());
-  NotifyDeviceBonded(result.connection_address);
+  LOG_INFO("Pairing with %s was successfull",
+           std::get<PairingResult>(pairing_result).connection_address.ToString().c_str());
 }
 
-// Facade Configuration API functions
-void SecurityManagerImpl::SetIoCapability(hci::IoCapability io_capability) {
-  this->local_io_capability_ = io_capability;
-}
-
-void SecurityManagerImpl::SetLeIoCapability(security::IoCapability io_capability) {
-  this->local_le_io_capability_ = io_capability;
-}
-
-void SecurityManagerImpl::SetLeAuthReq(uint8_t auth_req) {
-  this->local_le_auth_req_ = auth_req;
-}
-
-void SecurityManagerImpl::SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements) {
-  this->local_authentication_requirements_ = authentication_requirements;
-}
-
-void SecurityManagerImpl::SetOobDataPresent(hci::OobDataPresent data_present) {
-  this->local_oob_data_present_ = data_present;
-}
-
-void SecurityManagerImpl::InternalEnforceSecurityPolicy(
-    hci::AddressWithType remote,
-    l2cap::classic::SecurityPolicy policy,
-    l2cap::classic::SecurityEnforcementInterface::ResultCallback result_callback,
-    bool try_meet_requirements) {
-  bool result = false;
-  auto record = this->security_database_.FindOrCreate(remote);
-  switch (policy) {
-    case l2cap::classic::SecurityPolicy::BEST:
-    case l2cap::classic::SecurityPolicy::AUTHENTICATED_ENCRYPTED_TRANSPORT:
-      result = record->IsAuthenticated() && record->RequiresMitmProtection() && record->IsEncryptionRequired();
-      break;
-    case l2cap::classic::SecurityPolicy::ENCRYPTED_TRANSPORT:
-      result = record->IsAuthenticated() && record->IsEncryptionRequired();
-      break;
-    case l2cap::classic::SecurityPolicy::_SDP_ONLY_NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK:
-      result = true;
-      break;
-  }
-  if (!result && try_meet_requirements) {
-    auto entry = enforce_security_policy_callback_map_.find(remote);
-    if (entry != enforce_security_policy_callback_map_.end()) {
-      LOG_WARN("Callback already pending for remote: '%s' !", remote.ToString().c_str());
-    } else {
-      enforce_security_policy_callback_map_.emplace(
-          remote,
-          std::pair<l2cap::classic::SecurityPolicy, l2cap::classic::SecurityEnforcementInterface::ResultCallback>(
-              policy, std::move(result_callback)));
-      DispatchPairingHandler(record, true);
-    }
-    return;
-  }
-  result_callback.Invoke(result);
-}
-
-void SecurityManagerImpl::EnforceSecurityPolicy(
-    hci::AddressWithType remote,
-    l2cap::classic::SecurityPolicy policy,
-    l2cap::classic::SecurityEnforcementInterface::ResultCallback result_callback) {
-  this->InternalEnforceSecurityPolicy(remote, policy, std::move(result_callback), true);
-}
-
-void SecurityManagerImpl::EnforceLeSecurityPolicy(
-    hci::AddressWithType remote, l2cap::le::SecurityPolicy policy,
-    l2cap::le::SecurityEnforcementInterface::ResultCallback result_callback) {
-  bool result = false;
-  // TODO(jpawlowski): Implement for LE
-  switch (policy) {
-    case l2cap::le::SecurityPolicy::BEST:
-      break;
-    case l2cap::le::SecurityPolicy::AUTHENTICATED_ENCRYPTED_TRANSPORT:
-      break;
-    case l2cap::le::SecurityPolicy::ENCRYPTED_TRANSPORT:
-      break;
-    case l2cap::le::SecurityPolicy::NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK:
-      result = true;
-      break;
-    case l2cap::le::SecurityPolicy::_NOT_FOR_YOU__AUTHENTICATED_PAIRING_WITH_128_BIT_KEY:
-      break;
-    case l2cap::le::SecurityPolicy::_NOT_FOR_YOU__AUTHORIZATION:
-      break;
-  }
-  result_callback.Invoke(result);
-}
 }  // namespace internal
 }  // namespace security
 }  // namespace bluetooth
