@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -635,7 +635,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
        p_rec; p_rec = sdp_db_service_search(p_rec, &uid_seq)) {
     /* Allow space for attribute sequence type and length */
     p_seq_start = p_rsp;
-    if (p_ccb->cont_info.last_attr_seq_desc_sent == false) {
+    if (!p_ccb->cont_info.last_attr_seq_desc_sent) {
       /* See if there is enough room to include a new service in the current
        * response */
       rem_len = max_list_len - (int16_t)(p_rsp - &p_ccb->rsp_list[0]);
@@ -717,7 +717,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
     }
 
     /* Go back and put the type and length into the buffer */
-    if (p_ccb->cont_info.last_attr_seq_desc_sent == false) {
+    if (!p_ccb->cont_info.last_attr_seq_desc_sent) {
       seq_len = sdpu_get_attrib_seq_len(p_rec, &attr_seq_sav);
       if (seq_len != 0) {
         UINT8_TO_BE_STREAM(p_seq_start,
