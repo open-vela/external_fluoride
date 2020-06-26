@@ -27,21 +27,32 @@
 #define LOG_TAG "bt_main"
 
 #include <base/logging.h>
+#include <base/threading/thread.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include <hardware/bluetooth.h>
 
 #include "bt_common.h"
+#include "bt_hci_bdroid.h"
+#include "bt_utils.h"
+#include "bta_api.h"
 #include "btcore/include/module.h"
 #include "bte.h"
-#include "btif/include/btif_config.h"
+#include "btif_common.h"
 #include "btsnoop.h"
 #include "btu.h"
 #include "device/include/interop.h"
 #include "hci_layer.h"
+#include "hcimsgs.h"
+#include "osi/include/alarm.h"
+#include "osi/include/fixed_queue.h"
+#include "osi/include/future.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "shim/hci_layer.h"
-#include "shim/shim.h"
 #include "stack_config.h"
 
 /*******************************************************************************
@@ -107,7 +118,7 @@ void bte_main_boot_entry(void) {
 
   hci = hci_layer_get_interface();
   if (!hci) {
-    LOG_ERROR("%s could not get hci layer interface.", __func__);
+    LOG_ERROR(LOG_TAG, "%s could not get hci layer interface.", __func__);
     return;
   }
 
@@ -144,16 +155,8 @@ void bte_main_cleanup() {
 void bte_main_enable() {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO("%s Gd shim module enabled", __func__);
-    module_shut_down(get_module(GD_IDLE_MODULE));
-    module_start_up(get_module(GD_SHIM_MODULE));
-    module_start_up(get_module(BTIF_CONFIG_MODULE));
-  } else {
-    module_start_up(get_module(BTIF_CONFIG_MODULE));
-    module_start_up(get_module(BTSNOOP_MODULE));
-    module_start_up(get_module(HCI_MODULE));
-  }
+  module_start_up(get_module(BTSNOOP_MODULE));
+  module_start_up(get_module(HCI_MODULE));
 
   BTU_StartUp();
 }
@@ -171,14 +174,8 @@ void bte_main_enable() {
 void bte_main_disable(void) {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO("%s Gd shim module enabled", __func__);
-    module_shut_down(get_module(GD_SHIM_MODULE));
-    module_start_up(get_module(GD_IDLE_MODULE));
-  } else {
-    module_shut_down(get_module(HCI_MODULE));
-    module_shut_down(get_module(BTSNOOP_MODULE));
-  }
+  module_shut_down(get_module(HCI_MODULE));
+  module_shut_down(get_module(BTSNOOP_MODULE));
 
   BTU_ShutDown();
 }
