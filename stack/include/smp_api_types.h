@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@ enum { SMP_OOB_INVALID_TYPE, SMP_OOB_PEER, SMP_OOB_LOCAL, SMP_OOB_BOTH };
 typedef uint8_t tSMP_OOB_DATA_TYPE;
 
 #define SMP_AUTH_NO_BOND 0x00
-#define SMP_AUTH_GEN_BOND 0x01  // todo sdh change GEN_BOND to BOND
+#define SMP_AUTH_BOND 0x01
 
 /* SMP Authentication requirement */
 #define SMP_AUTH_YN_BIT (1 << 2)
@@ -131,11 +131,9 @@ typedef uint8_t tSMP_OOB_DATA_TYPE;
 #define SMP_KP_SUPPORT_BIT (1 << 4)
 #define SMP_H7_SUPPORT_BIT (1 << 5)
 
-#define SMP_AUTH_MASK                                         \
-  (SMP_AUTH_GEN_BOND | SMP_AUTH_YN_BIT | SMP_SC_SUPPORT_BIT | \
-   SMP_KP_SUPPORT_BIT | SMP_H7_SUPPORT_BIT)
-
-#define SMP_AUTH_BOND SMP_AUTH_GEN_BOND
+#define SMP_AUTH_MASK                                                          \
+  (SMP_AUTH_BOND | SMP_AUTH_YN_BIT | SMP_SC_SUPPORT_BIT | SMP_KP_SUPPORT_BIT | \
+   SMP_H7_SUPPORT_BIT)
 
 /* no MITM, No Bonding, encryption only */
 #define SMP_AUTH_NB_ENC_ONLY 0x00  //(SMP_AUTH_MASK | BTM_AUTH_SP_NO)
@@ -144,27 +142,25 @@ typedef uint8_t tSMP_OOB_DATA_TYPE;
 #define SMP_AUTH_NB_IOCAP (SMP_AUTH_NO_BOND | SMP_AUTH_YN_BIT)
 
 /* No MITM, General Bonding, Encryption only */
-#define SMP_AUTH_GB_ENC_ONLY (SMP_AUTH_GEN_BOND)
+#define SMP_AUTH_GB_ENC_ONLY SMP_AUTH_BOND
 
 /* MITM, General Bonding, Use IO Capability to determine authentication
  * procedure */
-#define SMP_AUTH_GB_IOCAP (SMP_AUTH_GEN_BOND | SMP_AUTH_YN_BIT)
+#define SMP_AUTH_GB_IOCAP (SMP_AUTH_BOND | SMP_AUTH_YN_BIT)
 
 /* Secure Connections, no MITM, no Bonding */
 #define SMP_AUTH_SC_ENC_ONLY (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT)
 
 /* Secure Connections, no MITM, Bonding */
-#define SMP_AUTH_SC_GB \
-  (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT | SMP_AUTH_GEN_BOND)
+#define SMP_AUTH_SC_GB (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT | SMP_AUTH_BOND)
 
 /* Secure Connections, MITM, no Bonding */
 #define SMP_AUTH_SC_MITM_NB \
   (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT | SMP_AUTH_YN_BIT | SMP_AUTH_NO_BOND)
 
 /* Secure Connections, MITM, Bonding */
-#define SMP_AUTH_SC_MITM_GB                                    \
-  (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT | SMP_AUTH_YN_BIT | \
-   SMP_AUTH_GEN_BOND)
+#define SMP_AUTH_SC_MITM_GB \
+  (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT | SMP_AUTH_YN_BIT | SMP_AUTH_BOND)
 
 /* All AuthReq RFU bits are set to 1 - NOTE: reserved bit in Bonding_Flags is
  * not set */
@@ -271,7 +267,7 @@ typedef struct {
 
 /* Security Manager events - Called by the stack when Security Manager related
  * events occur.*/
-typedef uint8_t(tSMP_CALLBACK)(tSMP_EVT event, BD_ADDR bd_addr,
+typedef uint8_t(tSMP_CALLBACK)(tSMP_EVT event, const RawAddress& bd_addr,
                                tSMP_EVT_DATA* p_data);
 
 /* callback function for CMAC algorithm
