@@ -407,16 +407,16 @@ class DualModeController : public Device {
   void LeConnectionCancel(CommandPacketView args);
 
   // 7.8.14
-  void LeReadConnectListSize(CommandPacketView args);
+  void LeReadWhiteListSize(CommandPacketView args);
 
   // 7.8.15
-  void LeClearConnectList(CommandPacketView args);
+  void LeClearWhiteList(CommandPacketView args);
 
   // 7.8.16
-  void LeAddDeviceToConnectList(CommandPacketView args);
+  void LeAddDeviceToWhiteList(CommandPacketView args);
 
   // 7.8.17
-  void LeRemoveDeviceFromConnectList(CommandPacketView args);
+  void LeRemoveDeviceFromWhiteList(CommandPacketView args);
 
   // 7.8.21
   void LeReadRemoteFeatures(CommandPacketView args);
