@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2017 The Android Open Source Project
+ *  Copyright (C) 2017 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ class AdvertiseDataParser {
     auto data_start = ad.begin() + position;
 
     // Traxxas - bad name length
-    if ((ad.size() - position) >= 18 &&
-        std::equal(data_start, data_start + 3, trx_quirk.begin()) &&
+    if (std::equal(data_start, data_start + 3, trx_quirk.begin()) &&
         std::equal(data_start + 5, data_start + 11, trx_quirk.begin() + 5) &&
         std::equal(data_start + 12, data_start + 18, trx_quirk.begin() + 12)) {
       return true;
@@ -58,7 +57,12 @@ class AdvertiseDataParser {
       // end of the packet. Otherwise i.e. gluing scan response to advertise
       // data will result in data with zero padding in the middle.
       if (len == 0) {
-        ad.erase(ad.begin() + position, ad.end());
+        size_t zeros_start = position;
+        for (size_t i = position + 1; i < ad_len; i++) {
+          if (ad[i] != 0) return;
+        }
+
+        ad.erase(ad.begin() + zeros_start, ad.end());
         return;
       }
 

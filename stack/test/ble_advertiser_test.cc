@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
+ *  Copyright (C) 2016 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -47,16 +47,24 @@ bool BTM_BleLocalPrivacyEnabled() { return true; }
 uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval) {
   return true;
 }
+bool SMP_Encrypt(uint8_t* key, uint8_t key_len, uint8_t* plain_text,
+                 uint8_t pt_len, tSMP_ENC* p_out) {
+  return true;
+}
+void BTM_GetDeviceIDRoot(BT_OCTET16 irk) {}
+void btm_ble_update_dmt_flag_bits(uint8_t* flag_value,
+                                  const uint16_t connect_mode,
+                                  const uint16_t disc_mode) {}
 void btm_acl_update_conn_addr(uint16_t conn_handle, const RawAddress& address) {
 }
-void btm_gen_resolvable_private_addr(
-    base::Callback<void(const RawAddress& rpa)> cb) {
-  cb.Run(RawAddress::kEmpty);
+void btm_gen_resolvable_private_addr(base::Callback<void(uint8_t[8])> cb) {
+  uint8_t fake_rand[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  cb.Run(fake_rand);
 }
 
 alarm_callback_t last_alarm_cb = nullptr;
 void* last_alarm_data = nullptr;
-void alarm_set_on_mloop(alarm_t* alarm, uint64_t interval_ms,
+void alarm_set_on_mloop(alarm_t* alarm, period_ms_t interval_ms,
                         alarm_callback_t cb, void* data) {
   last_alarm_cb = cb;
   last_alarm_data = data;
@@ -67,8 +75,6 @@ alarm_t* alarm_new_periodic(const char* name) { return nullptr; }
 alarm_t* alarm_new(const char* name) { return nullptr; }
 void alarm_free(alarm_t* alarm) {}
 const controller_t* controller_get_interface() { return nullptr; }
-
-uint64_t btm_get_next_private_addrress_interval_ms() { return 15 * 60 * 1000; }
 
 namespace {
 void DoNothing(uint8_t) {}
@@ -133,7 +139,7 @@ class AdvertiserHciMock : public BleAdvertiserHciInterface {
                    cmd_complete);
   };
 
-  bool QuirkAdvertiserZeroHandle() override { return false; }
+  bool QuirkAdvertiserZeroHandle() { return false; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(AdvertiserHciMock);
@@ -155,7 +161,7 @@ class BleAdvertisingManagerTest : public testing::Test {
 
   std::unique_ptr<AdvertiserHciMock> hci_mock;
 
-  void SetUp() override {
+  virtual void SetUp() {
     hci_mock.reset(new AdvertiserHciMock());
 
     base::Callback<void(uint8_t)> inst_cnt_Cb;
@@ -170,7 +176,7 @@ class BleAdvertisingManagerTest : public testing::Test {
     inst_cnt_Cb.Run(num_adv_instances);
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     BleAdvertisingManager::CleanUp();
     hci_mock.reset();
   }
@@ -1056,53 +1062,6 @@ TEST_F(BleAdvertisingManagerTest, test_duration_update_during_timeout) {
 
   disable_cb.Run(0);
   remove_cb.Run(0);
-}
-
-/* This test verifies that stack cleanup, and shutdown happening while there is
- * outstanding HCI command is not triggering the callback */
-TEST_F(BleAdvertisingManagerTest, test_cleanup_during_execution) {
-  std::vector<uint8_t> adv_data;
-  std::vector<uint8_t> scan_resp;
-  tBTM_BLE_ADV_PARAMS params;
-  tBLE_PERIODIC_ADV_PARAMS periodic_params;
-  periodic_params.enable = false;
-  std::vector<uint8_t> periodic_data;
-
-  parameters_cb set_params_cb;
-  status_cb set_address_cb;
-  status_cb set_data_cb;
-  EXPECT_CALL(*hci_mock, SetParameters1(_, _, _, _, _, _, _, _, _)).Times(1);
-  EXPECT_CALL(*hci_mock, SetParameters2(_, _, _, _, _, _, _, _))
-      .Times(1)
-      .WillOnce(SaveArg<7>(&set_params_cb));
-  EXPECT_CALL(*hci_mock, SetRandomAddress(_, _, _))
-      .Times(1)
-      .WillOnce(SaveArg<2>(&set_address_cb));
-  EXPECT_CALL(*hci_mock, SetAdvertisingData(_, _, _, _, _, _))
-      .Times(1)
-      .WillOnce(SaveArg<5>(&set_data_cb));
-
-  BleAdvertisingManager::Get()->StartAdvertisingSet(
-      Bind(&BleAdvertisingManagerTest::StartAdvertisingSetCb,
-           base::Unretained(this)),
-      &params, adv_data, scan_resp, &periodic_params, periodic_data,
-      0 /* duration */, 0 /* maxExtAdvEvents */, Bind(DoNothing2));
-
-  // we are a truly gracious fake controller, let the commands succeed!
-  int selected_tx_power = -15;
-  set_params_cb.Run(0, selected_tx_power);
-  set_address_cb.Run(0);
-
-  // Someone shut down the stack in the middle of flow, when the HCI Set
-  // Advertise Data was scheduled!
-  BleAdvertisingManager::Get()->CleanUp();
-
-  // The HCI call returns with status, and tries to execute the callback. This
-  // should just silently drop the call. If it got executed, we would get crash,
-  // because BleAdvertisingManager object was already deleted.
-  set_data_cb.Run(0);
-
-  ::testing::Mock::VerifyAndClearExpectations(hci_mock.get());
 }
 
 extern void testRecomputeTimeout1();

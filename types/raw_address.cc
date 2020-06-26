@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2017 The Android Open Source Project
+ *  Copyright (C) 2017 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,10 +33,6 @@ RawAddress::RawAddress(const uint8_t (&addr)[6]) {
   std::copy(addr, addr + kLength, address);
 };
 
-RawAddress::RawAddress(const std::array<uint8_t, kLength>& addr) {
-  std::copy(addr.data(), addr.data() + kLength, address);
-}
-
 std::string RawAddress::ToString() const {
   return base::StringPrintf("%02x:%02x:%02x:%02x:%02x:%02x", address[0],
                             address[1], address[2], address[3], address[4],
@@ -65,11 +61,6 @@ bool RawAddress::FromString(const std::string& from, RawAddress& to) {
   to = new_addr;
   return true;
 }
-
-size_t RawAddress::FromOctets(const uint8_t* from) {
-  std::copy(from, from + kLength, address);
-  return kLength;
-};
 
 bool RawAddress::IsValidAddress(const std::string& address) {
   RawAddress tmp;
