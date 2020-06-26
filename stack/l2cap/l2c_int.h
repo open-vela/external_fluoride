@@ -546,6 +546,14 @@ typedef struct {
 
 typedef void(tL2C_FCR_MGMT_EVT_HDLR)(uint8_t, tL2C_CCB*);
 
+/* Necessary info for postponed TX completion callback
+*/
+typedef struct {
+  uint16_t local_cid;
+  uint16_t num_sdu;
+  tL2CA_TX_COMPLETE_CB* cb;
+} tL2C_TX_COMPLETE_CB_INFO;
+
 /* The offset in a buffer that L2CAP will use when building commands.
 */
 #define L2CAP_SEND_CMD_OFFSET 0
@@ -580,6 +588,7 @@ extern void l2c_process_held_packets(bool timed_out);
 /* Functions provided by l2c_utils.cc
  ***********************************
 */
+extern bool l2cu_can_allocate_lcb(void);
 extern tL2C_LCB* l2cu_allocate_lcb(BD_ADDR p_bd_addr, bool is_bonding,
                                    tBT_TRANSPORT transport);
 extern bool l2cu_start_post_bond_timer(uint16_t handle);
@@ -629,6 +638,8 @@ extern void l2cu_send_peer_info_req(tL2C_LCB* p_lcb, uint16_t info_type);
 extern void l2cu_set_acl_hci_header(BT_HDR* p_buf, tL2C_CCB* p_ccb);
 extern void l2cu_check_channel_congestion(tL2C_CCB* p_ccb);
 extern void l2cu_disconnect_chnl(tL2C_CCB* p_ccb);
+
+extern void l2cu_tx_complete(tL2C_TX_COMPLETE_CB_INFO* p_cbi);
 
 #if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 extern void l2cu_set_non_flushable_pbf(bool);
@@ -700,7 +711,8 @@ extern bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport);
 extern bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
                              uint8_t initiating_phys);
 extern bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb);
-extern BT_HDR* l2cu_get_next_buffer_to_send(tL2C_LCB* p_lcb);
+extern BT_HDR* l2cu_get_next_buffer_to_send(tL2C_LCB* p_lcb,
+                                            tL2C_TX_COMPLETE_CB_INFO* p_cbi);
 extern void l2cu_resubmit_pending_sec_req(BD_ADDR p_bda);
 extern void l2cu_initialize_amp_ccb(tL2C_LCB* p_lcb);
 extern void l2cu_adjust_out_mps(tL2C_CCB* p_ccb);

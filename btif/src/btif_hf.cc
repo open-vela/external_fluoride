@@ -33,7 +33,6 @@
 
 #include <hardware/bluetooth.h>
 #include <hardware/bt_hf.h>
-#include <log/log.h>
 
 #include "bta/include/utl.h"
 #include "bta_ag_api.h"
@@ -667,7 +666,7 @@ static void btif_in_hf_generic_evt(uint16_t event, char* p_param) {
 static bool inband_ringing_property_enabled() {
   char inband_ringing_flag[PROPERTY_VALUE_MAX] = {0};
   osi_property_get("persist.bluetooth.enableinbandringing", inband_ringing_flag,
-                   "false");
+                   "true");
   if (strncmp(inband_ringing_flag, "true", 4) == 0) {
     BTIF_TRACE_DEBUG("%s: In-band ringing enabled by property", __func__);
     return true;
@@ -1198,20 +1197,13 @@ static bt_status_t clcc_response(int index, bthf_call_direction_t dir,
           dialnum[newidx++] = '+';
         }
         for (size_t i = 0; number[i] != 0; i++) {
-          if (newidx >= (sizeof(dialnum) - res_strlen - 1)) {
-            android_errorWriteLog(0x534e4554, "79266386");
-            break;
-          }
           if (utl_isdialchar(number[i])) {
             dialnum[newidx++] = number[i];
           }
         }
         dialnum[newidx] = 0;
-        // Reserve 5 bytes for ["][,][3_digit_type]
-        snprintf(&ag_res.str[res_strlen], rem_bytes - 5, ",\"%s", dialnum);
-        std::stringstream remaining_string;
-        remaining_string << "\"," << type;
-        strncat(&ag_res.str[res_strlen], remaining_string.str().c_str(), 5);
+        snprintf(&ag_res.str[res_strlen], rem_bytes, ",\"%s\",%d", dialnum,
+                 type);
       }
     }
     BTA_AgResult(btif_hf_cb[idx].handle, BTA_AG_CLCC_RES, &ag_res);
@@ -1364,13 +1356,6 @@ static bt_status_t phone_state_change(int num_active, int num_held,
           else
             xx = snprintf(ag_res.str, sizeof(ag_res.str), "\"%s\"", number);
           ag_res.num = type;
-          // 5 = [,][3_digit_type][null_terminator]
-          if (xx > static_cast<int>(sizeof(ag_res.str) - 5)) {
-            android_errorWriteLog(0x534e4554, "79431031");
-            xx = sizeof(ag_res.str) - 5;
-            // Null terminating the string
-            memset(&ag_res.str[xx], 0, 5);
-          }
 
           if (res == BTA_AG_CALL_WAIT_RES)
             snprintf(&ag_res.str[xx], sizeof(ag_res.str) - xx, ",%d", type);
@@ -1508,6 +1493,7 @@ bool btif_hf_call_terminated_recently() {
 static void cleanup(void) {
   BTIF_TRACE_EVENT("%s", __func__);
 
+  btif_queue_cleanup(UUID_SERVCLASS_AG_HANDSFREE);
   if (bt_hf_callbacks) {
 #if (defined(BTIF_HF_SERVICES) && (BTIF_HF_SERVICES & BTA_HFP_SERVICE_MASK))
     btif_disable_service(BTA_HFP_SERVICE_ID);

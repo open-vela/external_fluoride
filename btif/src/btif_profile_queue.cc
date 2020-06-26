@@ -32,6 +32,7 @@
 #include <string.h>
 
 #include "bt_common.h"
+#include "btcore/include/bdaddr.h"
 #include "btif_common.h"
 #include "osi/include/allocator.h"
 #include "osi/include/list.h"
@@ -44,6 +45,7 @@
 typedef enum {
   BTIF_QUEUE_CONNECT_EVT,
   BTIF_QUEUE_ADVANCE_EVT,
+  BTIF_QUEUE_CLEANUP_EVT
 } btif_queue_event_t;
 
 typedef struct {
@@ -67,6 +69,7 @@ static const size_t MAX_REASONABLE_REQUESTS = 10;
 
 static void queue_int_add(connect_node_t* p_param) {
   if (!connect_queue) {
+    LOG_INFO(LOG_TAG, "%s: allocating profile queue", __func__);
     connect_queue = list_new(osi_free);
     CHECK(connect_queue != NULL);
   }
@@ -77,8 +80,14 @@ static void queue_int_add(connect_node_t* p_param) {
   for (const list_node_t* node = list_begin(connect_queue);
        node != list_end(connect_queue); node = list_next(node)) {
     if (((connect_node_t*)list_node(node))->uuid == p_param->uuid) {
-      LOG_INFO(LOG_TAG, "%s dropping duplicate connect request for uuid: %04x",
-               __func__, p_param->uuid);
+      bdstr_t bd_addr_str;
+      LOG_ERROR(
+          LOG_TAG,
+          "%s dropping duplicate connection request UUID=%04X, "
+          "bd_addr=%s, busy=%d",
+          __func__, p_param->uuid,
+          bdaddr_to_string(&p_param->bda, bd_addr_str, sizeof(bd_addr_str)),
+          p_param->busy);
       return;
     }
   }
@@ -93,6 +102,34 @@ static void queue_int_advance() {
     list_remove(connect_queue, list_front(connect_queue));
 }
 
+static void queue_int_cleanup(uint16_t* p_uuid) {
+  if (!p_uuid) {
+    LOG_ERROR(LOG_TAG, "%s: UUID is null", __func__);
+    return;
+  }
+  uint16_t uuid = *p_uuid;
+  LOG_INFO(LOG_TAG, "%s: UUID=%04X", __func__, uuid);
+  if (!connect_queue) {
+    return;
+  }
+  connect_node_t* connection_request;
+  const list_node_t* node = list_begin(connect_queue);
+  while (node && node != list_end(connect_queue)) {
+    connection_request = (connect_node_t*)list_node(node);
+    node = list_next(node);
+    if (connection_request->uuid == uuid) {
+      bdstr_t bd_addr_str;
+      LOG_INFO(LOG_TAG,
+               "%s: removing connection request UUID=%04X, bd_addr=%s, busy=%d",
+               __func__, connection_request->uuid,
+               bdaddr_to_string(&connection_request->bda, bd_addr_str,
+                                sizeof(bd_addr_str)),
+               connection_request->busy);
+      list_remove(connect_queue, connection_request);
+    }
+  }
+}
+
 static void queue_int_handle_evt(uint16_t event, char* p_param) {
   switch (event) {
     case BTIF_QUEUE_CONNECT_EVT:
@@ -102,6 +139,10 @@ static void queue_int_handle_evt(uint16_t event, char* p_param) {
     case BTIF_QUEUE_ADVANCE_EVT:
       queue_int_advance();
       break;
+
+    case BTIF_QUEUE_CLEANUP_EVT:
+      queue_int_cleanup((uint16_t*)(p_param));
+      return;
   }
 
   if (stack_manager_get_interface()->get_stack_is_running())
@@ -132,6 +173,20 @@ bt_status_t btif_queue_connect(uint16_t uuid, const bt_bdaddr_t* bda,
 
 /*******************************************************************************
  *
+ * Function         btif_queue_cleanup
+ *
+ * Description      Clean up existing connection requests for a UUID
+ *
+ * Returns          void, always succeed
+ *
+ ******************************************************************************/
+void btif_queue_cleanup(uint16_t uuid) {
+  btif_transfer_context(queue_int_handle_evt, BTIF_QUEUE_CLEANUP_EVT,
+                        (char*)&uuid, sizeof(uint16_t), NULL);
+}
+
+/*******************************************************************************
+ *
  * Function         btif_queue_advance
  *
  * Description      Clear the queue's busy status and advance to the next
@@ -152,6 +207,12 @@ bt_status_t btif_queue_connect_next(void) {
 
   connect_node_t* p_head = (connect_node_t*)list_front(connect_queue);
 
+  bdstr_t bd_addr_str;
+  LOG_INFO(LOG_TAG,
+           "%s: executing connection request UUID=%04X, bd_addr=%s, busy=%d",
+           __func__, p_head->uuid,
+           bdaddr_to_string(&p_head->bda, bd_addr_str, sizeof(bd_addr_str)),
+           p_head->busy);
   // If the queue is currently busy, we return success anyway,
   // since the connection has been queued...
   if (p_head->busy) return BT_STATUS_SUCCESS;
@@ -170,6 +231,7 @@ bt_status_t btif_queue_connect_next(void) {
  *
  ******************************************************************************/
 void btif_queue_release() {
+  LOG_INFO(LOG_TAG, "%s", __func__);
   list_free(connect_queue);
   connect_queue = NULL;
 }
