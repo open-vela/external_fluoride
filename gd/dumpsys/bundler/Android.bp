@@ -15,7 +15,7 @@ filegroup {
 }
 
 genrule {
-    name: "BluetoothGeneratedBundlerSchema_h_bfbs",
+    name: "BluetoothGeneratedBundler_h",
     tools: [
         "flatc",
     ],
@@ -28,44 +28,43 @@ genrule {
     ],
 }
 
-cc_defaults {
-    name: "bluetooth_flatbuffer_bundler_defaults",
-    cpp_std: "c++17",
+cc_binary_host {
+    name: "bluetooth_flatbuffer_bundler",
     cflags: [
         "-Wall",
         "-Werror",
         "-Wno-unused-parameter",
         "-Wno-unused-variable",
     ],
-    generated_headers: [
-        "BluetoothGeneratedBundlerSchema_h_bfbs",
-    ],
-    sanitize: {
-        misc_undefined: ["bounds"],
-    },
-    static_libs: [
-        "libflatbuffers-cpp",
-    ],
-}
-
-cc_binary_host {
-    name: "bluetooth_flatbuffer_bundler",
     srcs: [
         ":BluetoothFlatbufferBundlerSources",
     ],
-    defaults: [
-        "bluetooth_flatbuffer_bundler_defaults",
+    generated_headers: [
+        "BluetoothGeneratedBundler_h",
+    ],
+    static_libs: [
+        "libflatbuffers-cpp",
     ],
 }
 
 cc_test {
     name: "bluetooth_flatbuffer_bundler_test",
     host_supported: true,
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+        "-DUSE_TEST_GENERATED",
+    ],
     srcs: [
         ":BluetoothFlatbufferBundlerTestSources",
     ],
-    defaults: [
-        "bluetooth_flatbuffer_bundler_defaults",
+    generated_headers: [
+        "BluetoothGeneratedBundler_h",
+    ],
+    static_libs: [
+        "libflatbuffers-cpp",
     ],
     data: [
         "test.bfbs",
