@@ -234,6 +234,8 @@ int WriteBundledSchema() {
     fprintf(stderr, "Unable to save file:%s\n", final_filename.c_str());
     return EXIT_FAILURE;
   }
+  fprintf(
+      stdout, "Successfully bundled %zu bfbs files into filename:%s\n", bfbs_filenames.size(), final_filename.c_str());
 
   std::string header(opts.gen);
   header += ("/" + std::string(opts.filename) + ".h");
