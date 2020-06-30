@@ -30,7 +30,7 @@ class Dumpsys : public bluetooth::Module {
   // Convenience thread used by shim layer for task execution
   os::Handler* GetGdShimHandler();
 
-  Dumpsys(const std::string& pre_bundled_schema);
+  Dumpsys() = default;
   ~Dumpsys() = default;
 
   static const ModuleFactory Factory;
@@ -40,12 +40,10 @@ class Dumpsys : public bluetooth::Module {
   void Start() override;                             // Module
   void Stop() override;                              // Module
   std::string ToString() const override;             // Module
-  DumpsysDataFinisher GetDumpsysData(flatbuffers::FlatBufferBuilder* builder) const override;  // Module
 
  private:
   struct impl;
   std::unique_ptr<impl> pimpl_;
-  const std::string& pre_bundled_schema_;
   DISALLOW_COPY_AND_ASSIGN(Dumpsys);
 };
 
