@@ -16,11 +16,8 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "main/shim/btm.h"
 
-#include "gd/module.h"
 #include "gd/os/handler.h"
 #include "gd/os/thread.h"
 #include "gd/os/utils.h"
@@ -30,7 +27,6 @@
 namespace bluetooth {
 namespace shim {
 
-// GD shim stack, having modes corresponding to legacy stack
 class Stack {
  public:
   static Stack* GetInstance();
@@ -38,11 +34,7 @@ class Stack {
   Stack() = default;
   ~Stack() = default;
 
-  // Idle mode, config is loaded, but controller is not enabled
-  void StartIdleMode();
-  // Running mode, everything is up
-  void StartEverything();
-
+  void Start();
   void Stop();
   bool IsRunning();
 
@@ -53,14 +45,11 @@ class Stack {
   DISALLOW_COPY_AND_ASSIGN(Stack);
 
  private:
-  std::mutex mutex_;
   StackManager stack_manager_;
   bool is_running_ = false;
   os::Thread* stack_thread_ = nullptr;
   os::Handler* stack_handler_ = nullptr;
   Btm* btm_ = nullptr;
-
-  void Start(ModuleList* modules);
 };
 
 }  // namespace shim
