@@ -263,7 +263,8 @@ bool bluetooth::shim::L2CA_RemoveFixedChnl(uint16_t fixed_cid,
  * Channel hygiene APIs
  */
 bool bluetooth::shim::L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid) {
-  return shim_l2cap.GetRemoteCid(lcid, rcid);
+  LOG_INFO("UNIMPLEMENTED %s", __func__);
+  return false;
 }
 
 bool bluetooth::shim::L2CA_SetIdleTimeout(uint16_t cid, uint16_t timeout,
