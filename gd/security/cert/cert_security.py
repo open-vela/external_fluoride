@@ -198,11 +198,5 @@ class CertSecurity(PySecurity):
         """
         pass
 
-    def wait_for_enforce_security_event(self, expected_enforce_security_event):
-        """
-            Cert side needs to pass
-        """
-        pass
-
     def close(self):
         safeClose(self._hci)
