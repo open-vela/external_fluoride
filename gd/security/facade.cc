@@ -85,8 +85,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
 
     switch (request->message_type()) {
       case UiCallbackType::PASSKEY:
-        security_module_->GetSecurityManager()->OnPasskeyEntry(
-            hci::AddressWithType(peer, remote_type), request->numeric_value());
+        // TODO: security_module_->GetSecurityManager()->OnPasskeyEntry();
         break;
       case UiCallbackType::YES_NO:
         security_module_->GetSecurityManager()->OnConfirmYesNo(hci::AddressWithType(peer, remote_type),
