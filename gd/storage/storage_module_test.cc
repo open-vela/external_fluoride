@@ -40,9 +40,6 @@ using bluetooth::storage::LegacyConfigFile;
 using bluetooth::storage::StorageModule;
 
 static const std::chrono::milliseconds kTestConfigSaveDelay = std::chrono::milliseconds(100);
-// Assume it takes at most 1 second to write the file
-static const std::chrono::milliseconds kTestConfigSaveWaitDelay =
-    kTestConfigSaveDelay + std::chrono::milliseconds(1000);
 
 static std::optional<std::chrono::system_clock::time_point> ParseTimestamp(
     const std::string& timestamp, const std::string& format) {
@@ -102,8 +99,8 @@ class StorageModuleTest : public Test {
     temp_config_ = temp_dir_ / "temp_config.txt";
     temp_backup_config_ = temp_dir_ / "temp_config.bak";
     DeleteConfigFiles();
-    ASSERT_FALSE(std::filesystem::exists(temp_config_));
-    ASSERT_FALSE(std::filesystem::exists(temp_backup_config_));
+    EXPECT_FALSE(std::filesystem::exists(temp_config_));
+    EXPECT_FALSE(std::filesystem::exists(temp_backup_config_));
   }
 
   void TearDown() override {
@@ -134,11 +131,11 @@ TEST_F(StorageModuleTest, empty_config_no_op_test) {
   auto time_after = std::chrono::system_clock::now();
 
   // Verify states after test
-  ASSERT_TRUE(std::filesystem::exists(temp_config_));
+  EXPECT_TRUE(std::filesystem::exists(temp_config_));
 
   // Verify config after test
   auto config = LegacyConfigFile::FromPath(temp_config_.string()).Read(10);
-  ASSERT_TRUE(config);
+  EXPECT_TRUE(config);
   EXPECT_TRUE(config->HasSection(StorageModule::kInfoSection));
   EXPECT_THAT(
       config->GetProperty(StorageModule::kInfoSection, StorageModule::kFileSourceProperty), Optional(StrEq("Empty")));
@@ -175,7 +172,7 @@ static const std::string kReadTestConfig =
     "\n";
 
 TEST_F(StorageModuleTest, read_existing_config_test) {
-  ASSERT_TRUE(bluetooth::os::WriteToFile(temp_config_.string(), kReadTestConfig));
+  EXPECT_TRUE(bluetooth::os::WriteToFile(temp_config_.string(), kReadTestConfig));
   // Actual test
 
   // Set up
@@ -184,7 +181,7 @@ TEST_F(StorageModuleTest, read_existing_config_test) {
   test_registry.InjectTestModule(&StorageModule::Factory, storage);
 
   // Test
-  ASSERT_NE(storage->GetConfigCachePublic(), nullptr);
+  EXPECT_NE(storage->GetConfigCachePublic(), nullptr);
   EXPECT_TRUE(storage->GetConfigCachePublic()->HasSection("Metrics"));
   EXPECT_THAT(storage->GetConfigCachePublic()->GetPersistentDevices(), ElementsAre("01:02:03:ab:cd:ea"));
   EXPECT_THAT(
@@ -205,7 +202,7 @@ TEST_F(StorageModuleTest, read_existing_config_test) {
 
 TEST_F(StorageModuleTest, save_config_test) {
   // Prepare config file
-  ASSERT_TRUE(bluetooth::os::WriteToFile(temp_config_.string(), kReadTestConfig));
+  EXPECT_TRUE(bluetooth::os::WriteToFile(temp_config_.string(), kReadTestConfig));
 
   // Set up
   auto* storage = new TestStorageModule(temp_config_.string(), kTestConfigSaveDelay, 10, false, false);
@@ -213,37 +210,37 @@ TEST_F(StorageModuleTest, save_config_test) {
   test_registry.InjectTestModule(&StorageModule::Factory, storage);
 
   // Test
-  ASSERT_NE(storage->GetConfigCachePublic(), nullptr);
+  EXPECT_NE(storage->GetConfigCachePublic(), nullptr);
 
   // Change a property
   EXPECT_THAT(
       storage->GetConfigCachePublic()->GetProperty("01:02:03:ab:cd:ea", "name"), Optional(StrEq("hello world")));
   storage->GetConfigCachePublic()->SetProperty("01:02:03:ab:cd:ea", "name", "foo");
   EXPECT_THAT(storage->GetConfigCachePublic()->GetProperty("01:02:03:ab:cd:ea", "name"), Optional(StrEq("foo")));
-  std::this_thread::sleep_for(kTestConfigSaveWaitDelay);
+  std::this_thread::sleep_for(kTestConfigSaveDelay * 1.5);
   auto config = LegacyConfigFile::FromPath(temp_config_.string()).Read(10);
-  ASSERT_TRUE(config);
+  EXPECT_TRUE(config);
   EXPECT_THAT(config->GetProperty("01:02:03:ab:cd:ea", "name"), Optional(StrEq("foo")));
 
   // Remove a property
   storage->GetConfigCachePublic()->RemoveProperty("01:02:03:ab:cd:ea", "name");
-  std::this_thread::sleep_for(kTestConfigSaveWaitDelay);
+  std::this_thread::sleep_for(kTestConfigSaveDelay * 1.5);
   config = LegacyConfigFile::FromPath(temp_config_.string()).Read(10);
-  ASSERT_TRUE(config);
+  EXPECT_TRUE(config);
   EXPECT_FALSE(config->HasProperty("01:02:03:ab:cd:ea", "name"));
 
   // Remove a section
   storage->GetConfigCachePublic()->RemoveSection("01:02:03:ab:cd:ea");
-  std::this_thread::sleep_for(kTestConfigSaveWaitDelay);
+  std::this_thread::sleep_for(kTestConfigSaveDelay * 1.5);
   config = LegacyConfigFile::FromPath(temp_config_.string()).Read(10);
-  ASSERT_TRUE(config);
+  EXPECT_TRUE(config);
   EXPECT_FALSE(config->HasSection("01:02:03:ab:cd:ea"));
 
   // Add a section and save immediately
   storage->GetConfigCachePublic()->SetProperty("01:02:03:ab:cd:eb", "LinkKey", "123456");
   storage->SaveImmediatelyPublic();
   config = LegacyConfigFile::FromPath(temp_config_.string()).Read(10);
-  ASSERT_TRUE(config);
+  EXPECT_TRUE(config);
   EXPECT_TRUE(config->HasSection("01:02:03:ab:cd:eb"));
 
   // Tear down
