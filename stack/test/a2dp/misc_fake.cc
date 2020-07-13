@@ -14,32 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include <grpc++/grpc++.h>
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-#include "grpc/grpc_module.h"
-#include "shim/dumpsys.h"
-
-namespace bluetooth {
-namespace shim {
-namespace facade {
-
-class ShimFacadeService;
-
-class ShimFacadeModule : public ::bluetooth::grpc::GrpcFacadeModule {
- public:
-  static const ModuleFactory Factory;
-
-  void ListDependencies(ModuleList* list) override;
-  void Start() override;
-  void Stop() override;
-  ::grpc::Service* GetService() const override;
-
- private:
-  ShimFacadeService* service_;
-};
-
-}  // namespace facade
-}  // namespace shim
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }

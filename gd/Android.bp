@@ -201,7 +201,6 @@ cc_binary {
         ":BluetoothFacade_l2cap_layer",
         ":BluetoothFacade_neighbor",
         ":BluetoothFacade_security_layer",
-        ":BluetoothFacade_shim_layer",
     ],
     generated_headers: [
         "BluetoothFacadeGeneratedStub_h",
@@ -536,7 +535,6 @@ filegroup {
         "l2cap/classic/facade.proto",
         "l2cap/le/facade.proto",
         "security/facade.proto",
-        "shim/facade/facade.proto",
     ],
 }
 
@@ -579,8 +577,6 @@ genrule {
         "neighbor/facade/facade.pb.h",
         "security/facade.grpc.pb.h",
         "security/facade.pb.h",
-        "shim/facade/facade.grpc.pb.h",
-        "shim/facade/facade.pb.h",
     ],
 }
 
@@ -623,8 +619,6 @@ genrule {
         "neighbor/facade/facade.pb.cc",
         "security/facade.grpc.pb.cc",
         "security/facade.pb.cc",
-        "shim/facade/facade.grpc.pb.cc",
-        "shim/facade/facade.pb.cc",
     ],
 }
 
