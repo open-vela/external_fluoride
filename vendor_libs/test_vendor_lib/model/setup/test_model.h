@@ -38,9 +38,6 @@ class TestModel {
             std::function<void(AsyncTaskId)> cancel, std::function<int(const std::string&, int)> connect_to_remote);
   ~TestModel() = default;
 
-  TestModel(TestModel& model) = delete;
-  TestModel& operator=(const TestModel& model) = delete;
-
   // Commands:
 
   // Add a device, return its index
@@ -88,8 +85,10 @@ class TestModel {
   void Reset();
 
  private:
-  std::vector<PhyLayerFactory> phys_;
-  std::vector<std::shared_ptr<Device>> devices_;
+  std::map<size_t, std::shared_ptr<PhyLayerFactory>> phys_;
+  size_t phys_counter_ = 0;
+  std::map<size_t, std::shared_ptr<Device>> devices_;
+  size_t devices_counter_ = 0;
   std::string list_string_;
 
   // Callbacks to schedule tasks.
@@ -100,7 +99,10 @@ class TestModel {
   std::function<int(const std::string&, int)> connect_to_remote_;
 
   AsyncTaskId timer_tick_task_{kInvalidTaskId};
-  std::chrono::milliseconds timer_period_{};
+  std::chrono::milliseconds timer_period_;
+
+  TestModel(TestModel& model) = delete;
+  TestModel& operator=(const TestModel& model) = delete;
 
   std::vector<std::shared_ptr<Device>> example_devices_;
 };
