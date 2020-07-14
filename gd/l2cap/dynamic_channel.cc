@@ -21,26 +21,23 @@
 namespace bluetooth {
 namespace l2cap {
 
-hci::AddressWithType DynamicChannel::GetDevice() const {
+hci::Address DynamicChannel::GetDevice() const {
   return impl_->GetDevice();
 }
 
-void DynamicChannel::RegisterOnCloseCallback(DynamicChannel::OnCloseCallback on_close_callback) {
-  l2cap_handler_->CallOn(
-      impl_.get(), &l2cap::internal::DynamicChannelImpl::RegisterOnCloseCallback, std::move(on_close_callback));
+void DynamicChannel::RegisterOnCloseCallback(os::Handler* user_handler,
+                                             DynamicChannel::OnCloseCallback on_close_callback) {
+  l2cap_handler_->Post(common::BindOnce(&l2cap::internal::DynamicChannelImpl::RegisterOnCloseCallback, impl_,
+                                        user_handler, std::move(on_close_callback)));
 }
 
 void DynamicChannel::Close() {
-  l2cap_handler_->CallOn(impl_.get(), &l2cap::internal::DynamicChannelImpl::Close);
+  l2cap_handler_->Post(common::BindOnce(&l2cap::internal::DynamicChannelImpl::Close, impl_));
 }
 
 common::BidiQueueEnd<packet::BasePacketBuilder, packet::PacketView<packet::kLittleEndian>>*
 DynamicChannel::GetQueueUpEnd() const {
   return impl_->GetQueueUpEnd();
-}
-
-Cid DynamicChannel::HACK_GetRemoteCid() {
-  return impl_->GetRemoteCid();
 }
 }  // namespace l2cap
 }  // namespace bluetooth
