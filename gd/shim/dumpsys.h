@@ -23,18 +23,14 @@
 namespace bluetooth {
 namespace shim {
 
-using DumpsysFunction = std::function<void(int fd)>;
-
 class Dumpsys : public bluetooth::Module {
  public:
-  void Dump(int fd);
-  void RegisterDumpsysFunction(const void* token, DumpsysFunction func);
-  void UnregisterDumpsysFunction(const void* token);
+  void Dump(int fd, const char** args);
 
-  /* This is not a dumpsys-specific method, we just must grab thread from of one modules */
+  // Convenience thread used by shim layer for task execution
   os::Handler* GetGdShimHandler();
 
-  Dumpsys() = default;
+  Dumpsys(const std::string& pre_bundled_schema);
   ~Dumpsys() = default;
 
   static const ModuleFactory Factory;
@@ -44,10 +40,12 @@ class Dumpsys : public bluetooth::Module {
   void Start() override;                             // Module
   void Stop() override;                              // Module
   std::string ToString() const override;             // Module
+  DumpsysDataFinisher GetDumpsysData(flatbuffers::FlatBufferBuilder* builder) const override;  // Module
 
  private:
   struct impl;
   std::unique_ptr<impl> pimpl_;
+  const std::string& pre_bundled_schema_;
   DISALLOW_COPY_AND_ASSIGN(Dumpsys);
 };
 
