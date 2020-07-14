@@ -46,6 +46,7 @@ class PageModule;
 namespace hci {
 class Controller;
 class HciLayer;
+class AclManager;
 class LeAdvertisingManager;
 class LeScanningManager;
 }
@@ -54,12 +55,10 @@ namespace security {
 class SecurityModule;
 }
 namespace storage {
-class LegacyModule;
+class StorageModule;
 }
 
 namespace shim {
-future_t* StartGabeldorscheStack();
-future_t* StopGabeldorscheStack();
 
 /* This returns a handler that might be used in shim to receive callbacks from
  * within the stack. */
@@ -76,7 +75,8 @@ neighbor::NameModule* GetName();
 neighbor::PageModule* GetPage();
 hci::LeScanningManager* GetScanning();
 bluetooth::security::SecurityModule* GetSecurityModule();
-storage::LegacyModule* GetStorage();
+storage::StorageModule* GetStorage();
+hci::AclManager* GetAclManager();
 
 }  // namespace shim
 }  // namespace bluetooth
