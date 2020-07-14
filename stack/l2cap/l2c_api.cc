@@ -992,16 +992,15 @@ bool L2CA_DisconnectRsp(uint16_t cid) {
   return (true);
 }
 
-bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle) {
+bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_GetIdentifiers(lcid, rcid, handle);
+    return bluetooth::shim::L2CA_GetRemoteCid(lcid, rcid);
   }
 
   tL2C_CCB* control_block = l2cu_find_ccb_by_cid(NULL, lcid);
   if (!control_block) return false;
 
   if (rcid) *rcid = control_block->remote_cid;
-  if (handle) *handle = control_block->p_lcb->handle;
 
   return true;
 }
@@ -1460,10 +1459,7 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda,
     }
 
     // Get a CCB and link the lcb to it
-    if (!l2cu_initialize_fixed_ccb(
-            p_lcb, fixed_cid,
-            &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
-                 .fixed_chnl_opts)) {
+    if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
       L2CAP_TRACE_WARNING("%s(0x%04x) - LCB but no CCB", __func__, fixed_cid);
       return false;
     }
@@ -1490,9 +1486,7 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda,
   }
 
   // Get a CCB and link the lcb to it
-  if (!l2cu_initialize_fixed_ccb(
-          p_lcb, fixed_cid, &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
-                                 .fixed_chnl_opts)) {
+  if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
     p_lcb->disc_reason = L2CAP_CONN_NO_RESOURCES;
     L2CAP_TRACE_WARNING("%s(0x%04x) - no CCB", __func__, fixed_cid);
     l2cu_release_lcb(p_lcb);
@@ -1588,10 +1582,7 @@ uint16_t L2CA_SendFixedChnlData(uint16_t fixed_cid, const RawAddress& rem_bda,
   p_buf->layer_specific = L2CAP_FLUSHABLE_CH_BASED;
 
   if (!p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL]) {
-    if (!l2cu_initialize_fixed_ccb(
-            p_lcb, fixed_cid,
-            &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
-                 .fixed_chnl_opts)) {
+    if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
       L2CAP_TRACE_WARNING("L2CA_SendFixedChnlData() - no CCB for chnl: 0x%4x",
                           fixed_cid);
       osi_free(p_buf);
