@@ -18,10 +18,6 @@
 
 #include "security/pairing_handler_le.h"
 
-#include "os/rand.h"
-
-using bluetooth::os::GenerateRandom;
-
 namespace bluetooth {
 namespace security {
 
@@ -89,8 +85,7 @@ Stage1ResultOrFailure PairingHandlerLe::DoSecureConnectionsStage1(const InitialI
                                                                   const EcdhPublicKey& PKa, const EcdhPublicKey& PKb,
                                                                   const PairingRequestView& pairing_request,
                                                                   const PairingResponseView& pairing_response) {
-  if (((pairing_request.GetAuthReq() & AuthReqMaskMitm) == 0) &&
-      ((pairing_response.GetAuthReq() & AuthReqMaskMitm) == 0)) {
+  if ((pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskMitm) == 0) {
     // If both devices have not set MITM option, Just Works shall be used
     return SecureConnectionsJustWorks(i, PKa, PKb);
   }
