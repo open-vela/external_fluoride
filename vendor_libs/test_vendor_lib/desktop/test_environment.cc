@@ -59,6 +59,7 @@ void TestEnvironment::initialize(std::promise<void> barrier) {
 
 void TestEnvironment::close() {
   LOG_INFO("%s", __func__);
+  test_model_.Reset();
 }
 
 void TestEnvironment::SetUpHciServer(const std::function<void(int)>& connection_callback) {
@@ -126,7 +127,7 @@ int TestEnvironment::ConnectToRemoteServer(const std::string& server, int port) 
     return -1;
   }
 
-  struct sockaddr_in serv_addr;
+  struct sockaddr_in serv_addr {};
   memset((void*)&serv_addr, 0, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -147,13 +148,13 @@ int TestEnvironment::ConnectToRemoteServer(const std::string& server, int port) 
 
 void TestEnvironment::SetUpTestChannel() {
   int socket_fd = test_channel_transport_.SetUp(test_port_);
+  test_channel_.RegisterSendResponse([](const std::string& response) {
+    LOG_INFO("No test channel: %s", response.c_str());
+  });
   test_channel_.AddPhy({"BR_EDR"});
   test_channel_.AddPhy({"LOW_ENERGY"});
-  test_channel_.SetTimerPeriod({"10"});
+  test_channel_.SetTimerPeriod({"5"});
   test_channel_.StartTimer({});
-
-  test_channel_.RegisterSendResponse(
-      [](const std::string& response) { LOG_INFO("No test channel: %s", response.c_str()); });
 
   if (socket_fd == -1) {
     LOG_ERROR("Test channel SetUp(%d) failed.", test_port_);
