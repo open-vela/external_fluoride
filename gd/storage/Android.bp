@@ -1,16 +1,22 @@
 filegroup {
     name: "BluetoothStorageSources",
     srcs: [
-            "legacy.cc",
-            "legacy_osi_config.cc",
+            "config_cache.cc",
+            "config_cache_helper.cc",
+            "legacy_config_file.cc",
+            "mutation_entry.cc",
+            "storage_module.cc",
     ],
 }
 
 filegroup {
     name: "BluetoothStorageTestSources",
     srcs: [
-            "legacy_test.cc",
-            "legacy_osi_config.cc",
+            "config_cache_test.cc",
+            "config_cache_helper_test.cc",
+            "legacy_config_file_test.cc",
+            "mutation_test.cc",
+            "storage_module_test.cc",
     ],
 }
 
