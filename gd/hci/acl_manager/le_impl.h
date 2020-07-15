@@ -374,11 +374,7 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
   void on_create_connection_cancel_complete(CommandCompleteView view) {
     auto complete_view = LeCreateConnectionCancelCompleteView::Create(view);
     ASSERT(complete_view.IsValid());
-    if (complete_view.GetStatus() != ErrorCode::SUCCESS) {
-      auto status = complete_view.GetStatus();
-      std::string error_code = ErrorCodeText(status);
-      LOG_WARN("Received on_create_connection_cancel_complete with error code %s", error_code.c_str());
-    }
+    ASSERT(complete_view.GetStatus() == ErrorCode::SUCCESS);
     le_address_manager_->AckPause(this);
   }
 
