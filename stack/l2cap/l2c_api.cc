@@ -1402,6 +1402,7 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_ConnectFixedChnl(fixed_cid, rem_bda);
   }
+
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
   return L2CA_ConnectFixedChnl(fixed_cid, rem_bda, phy);
 }
@@ -1904,13 +1905,4 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
   l2cu_check_channel_congestion(p_ccb);
 
   return (num_left);
-}
-
-bool L2CA_IsLinkEstablished(const RawAddress& bd_addr,
-                            tBT_TRANSPORT transport) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_IsLinkEstablished(bd_addr, transport);
-  }
-
-  return l2cu_find_lcb_by_bd_addr(bd_addr, transport) != nullptr;
 }

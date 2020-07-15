@@ -51,12 +51,6 @@ class LeAdvertisingManager;
 class LeScanningManager;
 }
 
-namespace l2cap {
-namespace le {
-class L2capLeModule;
-}  // namespace le
-}  // namespace l2cap
-
 namespace security {
 class SecurityModule;
 }
@@ -77,7 +71,6 @@ Dumpsys* GetDumpsys();
 neighbor::InquiryModule* GetInquiry();
 hci::HciLayer* GetHciLayer();
 L2cap* GetL2cap();
-l2cap::le::L2capLeModule* GetL2capLeModule();
 neighbor::NameModule* GetName();
 neighbor::PageModule* GetPage();
 hci::LeScanningManager* GetScanning();
