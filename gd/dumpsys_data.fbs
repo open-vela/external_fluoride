@@ -1,0 +1,15 @@
+// Top level module dumpsys data schema
+include "module_unittest.fbs";
+include "shim/dumpsys.fbs";
+
+namespace bluetooth;
+
+attribute "privacy";
+
+table DumpsysData {
+    title:string;
+    shim_dumpsys_data:bluetooth.shim.DumpsysModuleData (privacy:"Any");
+    module_unittest_data:bluetooth.ModuleUnitTestData; // private
+}
+
+root_type DumpsysData;
