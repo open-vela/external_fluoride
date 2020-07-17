@@ -78,10 +78,7 @@ void Link::Encrypt() {
 }
 
 void Link::Authenticate() {
-  if (!IsAuthenticated() && !has_requested_authentication_) {
-    has_requested_authentication_ = true;
-    acl_connection_->AuthenticationRequested();
-  }
+  acl_connection_->AuthenticationRequested();
 }
 
 bool Link::IsAuthenticated() const {
