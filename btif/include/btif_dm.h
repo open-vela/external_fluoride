@@ -19,7 +19,7 @@
 #ifndef BTIF_DM_H
 #define BTIF_DM_H
 
-#include "bta_api.h"
+#include "bta/include/bta_api.h"
 #include "bte_appl.h"
 #include "btif_uid.h"
 
@@ -61,9 +61,9 @@ void btif_dm_set_oob_for_le_io_req(const RawAddress& bd_addr,
                                    tBTA_LE_AUTH_REQ* p_auth_req);
 #ifdef BTIF_DM_OOB_TEST
 void btif_dm_load_local_oob(void);
-void btif_dm_proc_loc_oob(bool valid, BT_OCTET16 c, BT_OCTET16 r);
-bool btif_dm_proc_rmt_oob(const RawAddress& bd_addr, BT_OCTET16 p_c,
-                          BT_OCTET16 p_r);
+void btif_dm_proc_loc_oob(bool valid, const Octet16& c, const Octet16& r);
+bool btif_dm_proc_rmt_oob(const RawAddress& bd_addr, Octet16* p_c,
+                          Octet16* p_r);
 #endif /* BTIF_DM_OOB_TEST */
 
 /*callout for reading SMP properties from Text file*/
@@ -98,11 +98,11 @@ typedef struct {
 
 void btif_dm_load_ble_local_keys(void);
 void btif_dm_get_ble_local_keys(tBTA_DM_BLE_LOCAL_KEY_MASK* p_key_mask,
-                                BT_OCTET16 er,
+                                Octet16* p_er,
                                 tBTA_BLE_LOCAL_ID_KEYS* p_id_keys);
 void btif_dm_save_ble_bonding_keys(RawAddress& bd_addr);
 void btif_dm_remove_ble_bonding_keys(void);
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent);
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req);
 
 void btif_dm_update_ble_remote_properties(const RawAddress& bd_addr,
                                           BD_NAME bd_name,

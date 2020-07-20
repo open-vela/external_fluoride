@@ -119,9 +119,6 @@ typedef struct {
 #define BTM_BLE_ISVALID_PARAM(x, min, max) \
   (((x) >= (min) && (x) <= (max)) || ((x) == BTM_BLE_CONN_PARAM_UNDEF))
 
-/* 15 minutes minimum for random address refreshing */
-#define BTM_BLE_PRIVATE_ADDR_INT_MS (15 * 60 * 1000)
-
 typedef struct {
   uint16_t discoverable_mode;
   uint16_t connectable_mode;
@@ -185,9 +182,8 @@ typedef struct {
 } tBTM_LE_BG_CONN_DEV;
 
 /* white list using state as a bit mask */
-#define BTM_BLE_WL_IDLE 0
-#define BTM_BLE_WL_INIT 1
-typedef uint8_t tBTM_BLE_WL_STATE;
+constexpr uint8_t BTM_BLE_WL_IDLE = 0;
+constexpr uint8_t BTM_BLE_WL_INIT = 1;
 
 /* resolving list using state as a bit mask */
 #define BTM_BLE_RL_IDLE 0
@@ -198,8 +194,7 @@ typedef uint8_t tBTM_BLE_RL_STATE;
 
 /* BLE connection state */
 #define BLE_CONN_IDLE 0
-#define BLE_DIR_CONN 1
-#define BLE_BG_CONN 2
+#define BLE_CONNECTING 2
 #define BLE_CONN_CANCEL 3
 typedef uint8_t tBTM_BLE_CONN_ST;
 
@@ -287,14 +282,12 @@ typedef struct {
   alarm_t* observer_timer;
 
   /* background connection procedure cb value */
-  tBTM_BLE_CONN_TYPE bg_conn_type;
-  uint32_t scan_int;
-  uint32_t scan_win;
+  uint16_t scan_int;
+  uint16_t scan_win;
 
   /* white list information */
-  tBTM_BLE_WL_STATE wl_state;
+  uint8_t wl_state;
 
-  fixed_queue_t* conn_pending_q;
   tBTM_BLE_CONN_ST conn_state;
 
   /* random address management control block */
