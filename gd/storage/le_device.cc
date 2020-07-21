@@ -36,9 +36,5 @@ Device LeDevice::Parent() {
   return Device(config_, section_);
 }
 
-std::string LeDevice::ToLogString() {
-  return section_;
-}
-
 }  // namespace storage
 }  // namespace bluetooth
