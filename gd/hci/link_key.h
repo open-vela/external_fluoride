@@ -16,9 +16,6 @@
 
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <initializer_list>
 #include <optional>
 #include <string>
 
@@ -30,39 +27,10 @@ namespace hci {
 class LinkKey final : public storage::Serializable<LinkKey> {
  public:
   LinkKey() = default;
-  LinkKey(const uint8_t (&d)[16]);
-  LinkKey(std::initializer_list<uint8_t> l);
+  explicit LinkKey(const uint8_t (&data)[16]);
 
-  static constexpr size_t kLength = 16;
-  std::array<uint8_t, kLength> link_key = {};
-
-  uint8_t* data() {
-    return link_key.data();
-  }
-
-  const uint8_t* data() const {
-    return link_key.data();
-  }
-
-  // operators
-  bool operator<(const LinkKey& rhs) const {
-    return link_key < rhs.link_key;
-  }
-  bool operator==(const LinkKey& rhs) const {
-    return link_key == rhs.link_key;
-  }
-  bool operator>(const LinkKey& rhs) const {
-    return (rhs < *this);
-  }
-  bool operator<=(const LinkKey& rhs) const {
-    return !(*this > rhs);
-  }
-  bool operator>=(const LinkKey& rhs) const {
-    return !(*this < rhs);
-  }
-  bool operator!=(const LinkKey& rhs) const {
-    return !(*this == rhs);
-  }
+  static constexpr unsigned int kLength = 16;
+  uint8_t link_key[kLength] = {};
 
   // storage::Serializable methods
   std::string ToString() const override;
