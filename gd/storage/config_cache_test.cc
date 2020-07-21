@@ -21,8 +21,6 @@
 
 #include <cstdio>
 
-#include "hci/enum_helper.h"
-
 namespace testing {
 
 namespace {
@@ -35,25 +33,24 @@ std::string GetTestAddress(int i) {
 }  // namespace
 
 using bluetooth::storage::ConfigCache;
-using SectionAndPropertyValue = bluetooth::storage::ConfigCache::SectionAndPropertyValue;
 
 TEST(ConfigCacheTest, simple_set_get_test) {
   ConfigCache config(100);
   config.SetProperty("A", "B", "C");
   auto value = config.GetProperty("A", "B");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "C");
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "C");
 }
 
 TEST(ConfigCacheTest, empty_values_test) {
   ConfigCache config(100);
-  ASSERT_DEATH({ config.SetProperty("", "B", "C"); }, "Empty section name not allowed");
-  ASSERT_DEATH({ config.SetProperty("A", "", "C"); }, "Empty property name not allowed");
+  EXPECT_DEATH({ config.SetProperty("", "B", "C"); }, "Empty section name not allowed");
+  EXPECT_DEATH({ config.SetProperty("A", "", "C"); }, "Empty property name not allowed");
   // empty value is allowed
   config.SetProperty("A", "B", "");
   auto value = config.GetProperty("A", "B");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "");
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "");
 }
 
 TEST(ConfigCacheTest, insert_boundary_device_with_linkkey_test) {
@@ -62,7 +59,7 @@ TEST(ConfigCacheTest, insert_boundary_device_with_linkkey_test) {
   config.SetProperty("CC:DD:EE:FF:00:10", "Name", "Hello");
   config.SetProperty("CC:DD:EE:FF:00:09", "Name", "Hello 2");
   config.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_TRUE(config.GetProperty("CC:DD:EE:FF:00:10", "Name"));
+  EXPECT_TRUE(config.GetProperty("CC:DD:EE:FF:00:10", "Name"));
 }
 
 TEST(ConfigCacheTest, comparison_test) {
@@ -76,18 +73,18 @@ TEST(ConfigCacheTest, comparison_test) {
   config_2.SetProperty("CC:DD:EE:FF:00:10", "Name", "Hello");
   config_2.SetProperty("CC:DD:EE:FF:00:09", "Name", "Hello 2");
   config_2.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_EQ(config_1, config_2);
+  EXPECT_EQ(config_1, config_2);
   // Config with different temp device order should not be equal
-  ASSERT_TRUE(config_2.GetProperty("CC:DD:EE:FF:00:10", "Name"));
-  ASSERT_NE(config_1, config_2);
-  ASSERT_TRUE(config_1.GetProperty("CC:DD:EE:FF:00:10", "Name"));
-  ASSERT_EQ(config_1, config_2);
+  EXPECT_TRUE(config_2.GetProperty("CC:DD:EE:FF:00:10", "Name"));
+  EXPECT_NE(config_1, config_2);
+  EXPECT_TRUE(config_1.GetProperty("CC:DD:EE:FF:00:10", "Name"));
+  EXPECT_EQ(config_1, config_2);
   // Config with different persistent device order should not be equal
   config_1.SetProperty("CC:DD:EE:FF:00:12", "LinkKey", "AABBAABBCCDDEE");
   config_2.RemoveSection("CC:DD:EE:FF:00:11");
   config_2.SetProperty("CC:DD:EE:FF:00:12", "LinkKey", "AABBAABBCCDDEE");
   config_2.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_NE(config_1, config_2);
+  EXPECT_NE(config_1, config_2);
   // Config with different capacity should not be equal
   ConfigCache config_3(3);
   config_3.SetProperty("A", "B", "C");
@@ -95,24 +92,24 @@ TEST(ConfigCacheTest, comparison_test) {
   config_3.SetProperty("CC:DD:EE:FF:00:09", "Name", "Hello 2");
   config_3.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
   config_3.SetProperty("CC:DD:EE:FF:00:12", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_NE(config_1, config_3);
+  EXPECT_NE(config_1, config_3);
   // Empty config should not be equal to non-empty ones
   ConfigCache config_4(2);
-  ASSERT_NE(config_1, config_4);
+  EXPECT_NE(config_1, config_4);
   // Empty configs should be equal
   ConfigCache config_5(2);
-  ASSERT_EQ(config_4, config_5);
+  EXPECT_EQ(config_4, config_5);
   // Empty configs with different capacity should not be equal
   ConfigCache config_6(3);
-  ASSERT_NE(config_4, config_6);
+  EXPECT_NE(config_4, config_6);
 }
 
 TEST(ConfigCacheTest, empty_string_test) {
   ConfigCache config(100);
   config.SetProperty("A", "B", "");
   auto value = config.GetProperty("A", "B");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "");
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "");
 }
 
 TEST(ConfigCacheTest, mac_address_set_get_test) {
@@ -120,13 +117,13 @@ TEST(ConfigCacheTest, mac_address_set_get_test) {
   config.SetProperty("A", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
   auto value = config.GetProperty("A", "B");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "C");
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "C");
   value = config.GetProperty("AA:BB:CC:DD:EE:FF", "B");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "C");
-  ASSERT_FALSE(config.GetProperty("A", "BC"));
-  ASSERT_FALSE(config.GetProperty("ABC", "B"));
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "C");
+  EXPECT_FALSE(config.GetProperty("A", "BC"));
+  EXPECT_FALSE(config.GetProperty("ABC", "B"));
 }
 
 TEST(ConfigCacheTest, has_section_and_property_test) {
@@ -134,25 +131,25 @@ TEST(ConfigCacheTest, has_section_and_property_test) {
   config.SetProperty("A", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
-  ASSERT_TRUE(config.HasSection("A"));
-  ASSERT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_TRUE(config.HasProperty("A", "B"));
-  ASSERT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_TRUE(config.HasSection("A"));
+  EXPECT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_TRUE(config.HasProperty("A", "B"));
+  EXPECT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
   auto value = config.GetProperty("AA:BB:CC:DD:EE:FF", "C");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "D");
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "D");
   value = config.GetProperty("AA:BB:CC:DD:EE:FF", "B");
-  ASSERT_TRUE(value);
-  ASSERT_EQ(*value, "C");
+  EXPECT_TRUE(value);
+  EXPECT_EQ(*value, "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "E");
   value = config.GetProperty("AA:BB:CC:DD:EE:FF", "B");
-  ASSERT_TRUE(value);
-  ASSERT_THAT(value, Optional(StrEq("E")));
-  ASSERT_FALSE(config.HasSection("Ab"));
-  ASSERT_FALSE(config.HasSection("AA:11:CC:DD:EE:FF"));
-  ASSERT_FALSE(config.HasProperty("A", "bB"));
-  ASSERT_FALSE(config.HasProperty("AA:BB:11:DD:EE:FF", "B"));
+  EXPECT_TRUE(value);
+  EXPECT_THAT(value, Optional(StrEq("E")));
+  EXPECT_FALSE(config.HasSection("Ab"));
+  EXPECT_FALSE(config.HasSection("AA:11:CC:DD:EE:FF"));
+  EXPECT_FALSE(config.HasProperty("A", "bB"));
+  EXPECT_FALSE(config.HasProperty("AA:BB:11:DD:EE:FF", "B"));
 }
 
 TEST(ConfigCacheTest, remove_section_test) {
@@ -160,14 +157,14 @@ TEST(ConfigCacheTest, remove_section_test) {
   config.SetProperty("A", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
-  ASSERT_TRUE(config.HasSection("A"));
-  ASSERT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_TRUE(config.HasProperty("A", "B"));
-  ASSERT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
-  ASSERT_TRUE(config.RemoveSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_TRUE(config.RemoveSection("A"));
-  ASSERT_FALSE(config.HasProperty("A", "B"));
-  ASSERT_FALSE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_TRUE(config.HasSection("A"));
+  EXPECT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_TRUE(config.HasProperty("A", "B"));
+  EXPECT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_TRUE(config.RemoveSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_TRUE(config.RemoveSection("A"));
+  EXPECT_FALSE(config.HasProperty("A", "B"));
+  EXPECT_FALSE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
 }
 
 TEST(ConfigCacheTest, remove_property_test) {
@@ -175,14 +172,14 @@ TEST(ConfigCacheTest, remove_property_test) {
   config.SetProperty("A", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
-  ASSERT_TRUE(config.HasSection("A"));
-  ASSERT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_TRUE(config.HasProperty("A", "B"));
-  ASSERT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
-  ASSERT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "C"));
-  ASSERT_TRUE(config.RemoveProperty("AA:BB:CC:DD:EE:FF", "B"));
-  ASSERT_FALSE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
-  ASSERT_FALSE(config.GetProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_TRUE(config.HasSection("A"));
+  EXPECT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_TRUE(config.HasProperty("A", "B"));
+  EXPECT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "C"));
+  EXPECT_TRUE(config.RemoveProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_FALSE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_FALSE(config.GetProperty("AA:BB:CC:DD:EE:FF", "B"));
 }
 
 TEST(ConfigCacheTest, remove_all_properties_from_section_test) {
@@ -190,15 +187,15 @@ TEST(ConfigCacheTest, remove_all_properties_from_section_test) {
   config.SetProperty("A", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
-  ASSERT_TRUE(config.HasSection("A"));
-  ASSERT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_TRUE(config.HasProperty("A", "B"));
-  ASSERT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
-  ASSERT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "C"));
-  ASSERT_TRUE(config.RemoveSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_FALSE(config.HasSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_FALSE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
-  ASSERT_FALSE(config.GetProperty("AA:BB:CC:DD:EE:FF", "C"));
+  EXPECT_TRUE(config.HasSection("A"));
+  EXPECT_TRUE(config.HasSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_TRUE(config.HasProperty("A", "B"));
+  EXPECT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_TRUE(config.HasProperty("AA:BB:CC:DD:EE:FF", "C"));
+  EXPECT_TRUE(config.RemoveSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_FALSE(config.HasSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_FALSE(config.HasProperty("AA:BB:CC:DD:EE:FF", "B"));
+  EXPECT_FALSE(config.GetProperty("AA:BB:CC:DD:EE:FF", "C"));
 }
 
 TEST(ConfigCacheTest, get_persistent_devices_test) {
@@ -207,12 +204,12 @@ TEST(ConfigCacheTest, get_persistent_devices_test) {
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
   config.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_TRUE(config.HasProperty("CC:DD:EE:FF:00:11", "LinkKey"));
-  ASSERT_THAT(config.GetPersistentDevices(), ElementsAre("CC:DD:EE:FF:00:11"));
+  EXPECT_TRUE(config.HasProperty("CC:DD:EE:FF:00:11", "LinkKey"));
+  EXPECT_THAT(config.GetPersistentDevices(), ElementsAre("CC:DD:EE:FF:00:11"));
   config.SetProperty("AA:BB:CC:DD:EE:FF", "LinkKey", "DEERDEERDEER");
-  ASSERT_THAT(config.GetPersistentDevices(), ElementsAre("CC:DD:EE:FF:00:11", "AA:BB:CC:DD:EE:FF"));
-  ASSERT_TRUE(config.RemoveProperty("CC:DD:EE:FF:00:11", "LinkKey"));
-  ASSERT_THAT(config.GetPersistentDevices(), ElementsAre("AA:BB:CC:DD:EE:FF"));
+  EXPECT_THAT(config.GetPersistentDevices(), ElementsAre("CC:DD:EE:FF:00:11", "AA:BB:CC:DD:EE:FF"));
+  EXPECT_TRUE(config.RemoveProperty("CC:DD:EE:FF:00:11", "LinkKey"));
+  EXPECT_THAT(config.GetPersistentDevices(), ElementsAre("AA:BB:CC:DD:EE:FF"));
 }
 
 TEST(ConfigCacheTest, appoaching_temporary_config_limit_test) {
@@ -225,17 +222,17 @@ TEST(ConfigCacheTest, appoaching_temporary_config_limit_test) {
   }
   for (int i = 0; i < 10; ++i) {
     if (i % 2 == 0) {
-      ASSERT_TRUE(config.HasSection(GetTestAddress(i)));
-      ASSERT_TRUE(config.HasProperty(GetTestAddress(i), "LinkKey"));
-      ASSERT_THAT(config.GetProperty(GetTestAddress(i), "Name"), Optional(StrEq("Hello" + std::to_string(i))));
+      EXPECT_TRUE(config.HasSection(GetTestAddress(i)));
+      EXPECT_TRUE(config.HasProperty(GetTestAddress(i), "LinkKey"));
+      EXPECT_THAT(config.GetProperty(GetTestAddress(i), "Name"), Optional(StrEq("Hello" + std::to_string(i))));
     } else if (i >= 7) {
-      ASSERT_TRUE(config.HasSection(GetTestAddress(i)));
-      ASSERT_THAT(config.GetProperty(GetTestAddress(i), "Name"), Optional(StrEq("Hello" + std::to_string(i))));
+      EXPECT_TRUE(config.HasSection(GetTestAddress(i)));
+      EXPECT_THAT(config.GetProperty(GetTestAddress(i), "Name"), Optional(StrEq("Hello" + std::to_string(i))));
     } else {
-      ASSERT_FALSE(config.HasSection(GetTestAddress(i)));
+      EXPECT_FALSE(config.HasSection(GetTestAddress(i)));
     }
   }
-  ASSERT_THAT(
+  EXPECT_THAT(
       config.GetPersistentDevices(),
       ElementsAre(GetTestAddress(0), GetTestAddress(2), GetTestAddress(4), GetTestAddress(6), GetTestAddress(8)));
 }
@@ -248,9 +245,9 @@ TEST(ConfigCacheTest, remove_section_with_property_test) {
   config.SetProperty("CC:DD:EE:FF:00:11", "B", "AABBAABBCCDDEE");
   config.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
   config.RemoveSectionWithProperty("B");
-  ASSERT_FALSE(config.HasSection("A"));
-  ASSERT_FALSE(config.HasSection("AA:BB:CC:DD:EE:FF"));
-  ASSERT_FALSE(config.HasSection("CC:DD:EE:FF:00:11"));
+  EXPECT_FALSE(config.HasSection("A"));
+  EXPECT_FALSE(config.HasSection("AA:BB:CC:DD:EE:FF"));
+  EXPECT_FALSE(config.HasSection("CC:DD:EE:FF:00:11"));
 }
 
 TEST(ConfigCacheTest, persistent_config_changed_callback_test) {
@@ -258,59 +255,19 @@ TEST(ConfigCacheTest, persistent_config_changed_callback_test) {
   int num_change = 0;
   config.SetPersistentConfigChangedCallback([&num_change] { num_change++; });
   config.SetProperty("A", "B", "C");
-  ASSERT_EQ(num_change, 1);
+  EXPECT_EQ(num_change, 1);
   config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
-  ASSERT_EQ(num_change, 1);
+  EXPECT_EQ(num_change, 1);
   config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
-  ASSERT_EQ(num_change, 1);
+  EXPECT_EQ(num_change, 1);
   config.SetProperty("CC:DD:EE:FF:00:11", "B", "AABBAABBCCDDEE");
-  ASSERT_EQ(num_change, 1);
+  EXPECT_EQ(num_change, 1);
   config.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_EQ(num_change, 2);
+  EXPECT_EQ(num_change, 2);
   config.RemoveProperty("CC:DD:EE:FF:00:11", "LinkKey");
-  ASSERT_EQ(num_change, 3);
+  EXPECT_EQ(num_change, 3);
   config.RemoveSectionWithProperty("B");
-  ASSERT_EQ(num_change, 4);
-}
-
-TEST(ConfigCacheTest, fix_device_type_inconsistency_test) {
-  ConfigCache config(100);
-  config.SetProperty("A", "B", "C");
-  config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
-  config.SetProperty("AA:BB:CC:DD:EE:FF", "C", "D");
-  ASSERT_TRUE(config.FixDeviceTypeInconsistencies());
-  ASSERT_THAT(
-      config.GetProperty("AA:BB:CC:DD:EE:FF", "DevType"),
-      Optional(StrEq(std::to_string(bluetooth::hci::DeviceType::BR_EDR))));
-  config.SetProperty("CC:DD:EE:FF:00:11", "B", "AABBAABBCCDDEE");
-  config.SetProperty("CC:DD:EE:FF:00:11", "DevType", std::to_string(bluetooth::hci::DeviceType::BR_EDR));
-  config.SetProperty("CC:DD:EE:FF:00:11", "LinkKey", "AABBAABBCCDDEE");
-  ASSERT_FALSE(config.FixDeviceTypeInconsistencies());
-  ASSERT_THAT(
-      config.GetProperty("CC:DD:EE:FF:00:11", "DevType"),
-      Optional(StrEq(std::to_string(bluetooth::hci::DeviceType::BR_EDR))));
-  config.SetProperty("CC:DD:EE:FF:00:11", "LE_KEY_PENC", "AABBAABBCCDDEE");
-  ASSERT_TRUE(config.FixDeviceTypeInconsistencies());
-  ASSERT_THAT(
-      config.GetProperty("CC:DD:EE:FF:00:11", "DevType"),
-      Optional(StrEq(std::to_string(bluetooth::hci::DeviceType::DUAL))));
-  config.RemoveProperty("CC:DD:EE:FF:00:11", "LinkKey");
-  ASSERT_TRUE(config.FixDeviceTypeInconsistencies());
-  ASSERT_THAT(
-      config.GetProperty("CC:DD:EE:FF:00:11", "DevType"),
-      Optional(StrEq(std::to_string(bluetooth::hci::DeviceType::LE))));
-}
-
-TEST(ConfigCacheTest, test_get_section_with_property) {
-  ConfigCache config(100);
-  config.SetProperty("A", "B", "C");
-  config.SetProperty("AA:BB:CC:DD:EE:FF", "B", "C");
-  config.SetProperty("AA:BB:CC:DD:EE:EF", "C", "D");
-  ASSERT_THAT(
-      config.GetSectionNamesWithProperty("B"),
-      ElementsAre(
-          SectionAndPropertyValue{.section = "A", .property = "C"},
-          SectionAndPropertyValue{.section = "AA:BB:CC:DD:EE:FF", .property = "C"}));
+  EXPECT_EQ(num_change, 4);
 }
 
 }  // namespace testing
