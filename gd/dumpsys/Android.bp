@@ -1,7 +1,6 @@
 filegroup {
     name: "BluetoothDumpsysSources",
     srcs: [
-        "filter.cc",
         "internal/filter_internal.cc",
         "reflection_schema.cc",
     ],
@@ -10,7 +9,6 @@ filegroup {
 filegroup {
     name: "BluetoothDumpsysTestSources",
     srcs: [
-        "filter_test.cc",
         "internal/filter_internal_test.cc",
         "reflection_schema_test.cc",
     ],
