@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
-#include "service/common/bluetooth/a2dp_codec_config.h"
-#include "stack/include/a2dp_vendor_ldac.h"
+#pragma once
 
-bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
-  return nullptr;
-}
+namespace bluetooth {
+namespace shim {
 
-int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
-int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
-  return 0;
-}
-int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
+class ParsedDumpsysArgs {
+ public:
+  ParsedDumpsysArgs(const char** args);
+  bool IsDeveloper() const;
+
+ private:
+  unsigned num_args_{0};
+  bool dev_arg_{false};
+};
+
+}  // namespace shim
+}  // namespace bluetooth
