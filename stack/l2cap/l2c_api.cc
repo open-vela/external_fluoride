@@ -61,11 +61,10 @@ using base::StringPrintf;
  *
  ******************************************************************************/
 uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
-                       uint16_t required_mtu) {
+                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_Register(psm, p_cb_info, enable_snoop,
-                                          p_ertm_info, required_mtu);
+                                          p_ertm_info);
   }
 
   tL2C_RCB* p_rcb;
