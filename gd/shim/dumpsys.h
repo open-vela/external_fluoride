@@ -15,22 +15,17 @@
  */
 #pragma once
 
-#include <future>
 #include <memory>
 #include <string>
 
-#include "dumpsys/reflection_schema.h"
 #include "module.h"
 
 namespace bluetooth {
 namespace shim {
 
-constexpr char kArgumentDeveloper[] = "--dev";
-
 class Dumpsys : public bluetooth::Module {
  public:
   void Dump(int fd, const char** args);
-  void Dump(int fd, const char** args, std::promise<void> promise);
 
   // Convenience thread used by shim layer for task execution
   os::Handler* GetGdShimHandler();
@@ -50,7 +45,7 @@ class Dumpsys : public bluetooth::Module {
  private:
   struct impl;
   std::unique_ptr<impl> pimpl_;
-  const dumpsys::ReflectionSchema reflection_schema_;
+  const std::string& pre_bundled_schema_;
   DISALLOW_COPY_AND_ASSIGN(Dumpsys);
 };
 
