@@ -31,6 +31,7 @@ class RawAddress final {
 
   RawAddress() = default;
   RawAddress(const uint8_t (&addr)[kLength]);
+  RawAddress(const std::array<uint8_t, kLength>& addr);
 
   bool operator<(const RawAddress& rhs) const {
     return (std::memcmp(address, rhs.address, sizeof(address)) < 0);
