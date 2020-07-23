@@ -28,29 +28,21 @@ using ::bluetooth::shim::GetSecurityModule;
 namespace bluetooth {
 namespace shim {
 
-namespace {
-bool waiting_for_pairing_prompt = false;
-}
-
 class ShimUi : public security::UI {
  public:
   ~ShimUi() {}
   void DisplayPairingPrompt(const bluetooth::hci::AddressWithType& address,
                             std::string name) {
-    waiting_for_pairing_prompt = true;
-    bt_bdname_t legacy_name{0};
-    memcpy(legacy_name.name, name.data(), name.length());
-    callback_(ToRawAddress(address.GetAddress()), legacy_name,
-              ((0x1F) << 8) /* COD_UNCLASSIFIED*/, BT_SSP_VARIANT_CONSENT, 0);
+    LOG_WARN("%s ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ TODO Unimplemented",
+             __func__);
   }
-
   void Cancel(const bluetooth::hci::AddressWithType& address) {
-    LOG(WARNING) << " ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ " << __func__;
+    LOG_WARN("%s ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ TODO Unimplemented",
+             __func__);
   }
 
   void DisplayConfirmValue(const bluetooth::hci::AddressWithType& address,
                            std::string name, uint32_t numeric_value) {
-    waiting_for_pairing_prompt = false;
     bt_bdname_t legacy_name{0};
     memcpy(legacy_name.name, name.data(), name.length());
     callback_(ToRawAddress(address.GetAddress()), legacy_name,
@@ -60,7 +52,6 @@ class ShimUi : public security::UI {
 
   void DisplayYesNoDialog(const bluetooth::hci::AddressWithType& address,
                           std::string name) {
-    waiting_for_pairing_prompt = false;
     bt_bdname_t legacy_name{0};
     memcpy(legacy_name.name, name.data(), name.length());
     callback_(ToRawAddress(address.GetAddress()), legacy_name,
@@ -68,7 +59,6 @@ class ShimUi : public security::UI {
   }
 
   void DisplayEnterPasskeyDialog(const bluetooth::hci::AddressWithType& address, std::string name) {
-    waiting_for_pairing_prompt = false;
     bt_bdname_t legacy_name{0};
     memcpy(legacy_name.name, name.data(), name.length());
     callback_(ToRawAddress(address.GetAddress()), legacy_name,
@@ -77,7 +67,6 @@ class ShimUi : public security::UI {
   }
 
   void DisplayPasskey(const bluetooth::hci::AddressWithType& address, std::string name, uint32_t passkey) {
-    waiting_for_pairing_prompt = false;
     bt_bdname_t legacy_name{0};
     memcpy(legacy_name.name, name.data(), name.length());
     callback_(ToRawAddress(address.GetAddress()), legacy_name,
@@ -101,6 +90,7 @@ ShimUi ui;
  * Sets handler to SecurityModule and provides callback to handler
  */
 void BTIF_DM_SetUiCallback(std::function<void(RawAddress, bt_bdname_t, uint32_t, bt_ssp_variant_t, uint32_t)> callback) {
+  LOG_WARN("%s", __func__);
   auto security_manager = bluetooth::shim::GetSecurityModule()->GetSecurityManager();
   ui.SetLegacyCallback(callback);
   security_manager->SetUserInterfaceHandler(&ui, bluetooth::shim::GetGdShimHandler());
@@ -150,40 +140,24 @@ void BTIF_RegisterBondStateChangeListener(
 }
 
 void BTIF_DM_ssp_reply(const RawAddress bd_addr, uint8_t addr_type, bt_ssp_variant_t variant, uint8_t accept) {
-  // TODO: GD expects to receive correct address type.
-  // pass addr_type once it's properly set in btif layer
-  hci::AddressWithType address = ToAddressWithType(bd_addr, 0);
-  hci::AddressWithType address2 = ToAddressWithType(bd_addr, 1);
+  hci::AddressWithType address = ToAddressWithType(bd_addr, addr_type);
   auto security_manager = bluetooth::shim::GetSecurityModule()->GetSecurityManager();
 
-  if (variant == BT_SSP_VARIANT_PASSKEY_CONFIRMATION) {
-    if (waiting_for_pairing_prompt) {
-      LOG(INFO) << "interpreting confirmation as pairing accept " << address;
-      security_manager->OnPairingPromptAccepted(address, accept);
-      security_manager->OnPairingPromptAccepted(address2, accept);
-      waiting_for_pairing_prompt = false;
-    } else {
-      LOG(INFO) << "interpreting confirmation as yes/no confirmation "
-                << address;
-      security_manager->OnConfirmYesNo(address, accept);
-      security_manager->OnConfirmYesNo(address2, accept);
-    }
-  } else if (variant == BT_SSP_VARIANT_CONSENT) {
-    LOG(INFO) << "consent ";
+  if (variant == BT_SSP_VARIANT_PASSKEY_CONFIRMATION || variant == BT_SSP_VARIANT_CONSENT) {
     security_manager->OnConfirmYesNo(address, accept);
-    security_manager->OnConfirmYesNo(address2, accept);
   } else {
     //TODO:
+    // void OnPairingPromptAccepted(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
     //  void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
-    LOG(WARNING) << "Variant not implemented yet %02x" << +variant;
+    LOG_WARN(
+        "■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ Variant not implemented yet "
+        "%02x",
+        variant);
   }
 }
 
 void BTIF_DM_pin_reply(const RawAddress bd_addr, uint8_t addr_type, uint8_t accept, uint8_t pin_len, bt_pin_code_t pin_code) {
-  // TODO: GD expects to receive correct address type.
-  // pass addr_type once it's properly set in btif layer
-  hci::AddressWithType address = ToAddressWithType(bd_addr, 0);
-  hci::AddressWithType address2 = ToAddressWithType(bd_addr, 1);
+  hci::AddressWithType address = ToAddressWithType(bd_addr, addr_type);
   auto security_manager = bluetooth::shim::GetSecurityModule()->GetSecurityManager();
 
   if (!accept) {
@@ -198,7 +172,6 @@ void BTIF_DM_pin_reply(const RawAddress bd_addr, uint8_t addr_type, uint8_t acce
   }
 
   security_manager->OnPasskeyEntry(address, passkey);
-  security_manager->OnPasskeyEntry(address2, passkey);
 }
 
 }  // namespace shim
