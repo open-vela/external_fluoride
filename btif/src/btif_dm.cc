@@ -985,8 +985,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  uint32_t cod;
   bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
+  uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -2494,7 +2494,6 @@ bt_status_t btif_dm_ssp_reply(const RawAddress* bd_addr,
     do_in_main_thread(
     FROM_HERE,
       base::Bind(&bluetooth::shim::BTIF_DM_ssp_reply, *bd_addr, tmp_addr_type, variant, accept));
-    return BT_STATUS_SUCCESS;
   }
 
   if (variant == BT_SSP_VARIANT_PASSKEY_ENTRY) {
