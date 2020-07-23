@@ -107,15 +107,15 @@ class ShimBondListener : public security::ISecurityManagerListener {
   }
 
   void OnDeviceBonded(bluetooth::hci::AddressWithType device) override {
-    bond_state_bonded_cb_(ToRawAddress(device.GetAddress()));
+    bond_state_bonded_cb_(RawAddress(device.GetAddress().address));
   }
 
   void OnDeviceUnbonded(bluetooth::hci::AddressWithType device) override {
-    bond_state_none_cb_(ToRawAddress(device.GetAddress()));
+    bond_state_none_cb_(RawAddress(device.GetAddress().address));
   }
 
   void OnDeviceBondFailed(bluetooth::hci::AddressWithType device) override {
-    bond_state_none_cb_(ToRawAddress(device.GetAddress()));
+    bond_state_none_cb_(RawAddress(device.GetAddress().address));
   }
 
   void OnEncryptionStateChanged(
