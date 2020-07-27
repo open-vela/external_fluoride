@@ -58,7 +58,6 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -1289,8 +1288,6 @@ static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
  *
  ******************************************************************************/
 void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr) {
-  ASSERT_LOG(!bluetooth::shim::is_gd_shim_enabled(), "Unreachable code path");
-
   tBTM_SEC_DEV_REC* p_dev_rec;
 
   BTM_TRACE_EVENT("BTM_ConfirmReqReply() State: %s  Res: %u",
@@ -1339,8 +1336,6 @@ void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr) {
  ******************************************************************************/
 void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
                          uint32_t passkey) {
-  ASSERT_LOG(!bluetooth::shim::is_gd_shim_enabled(), "Unreachable code path");
-
   BTM_TRACE_API("BTM_PasskeyReqReply: State: %s  res:%d",
                 btm_pair_state_descr(btm_cb.pairing_state), res);
 
@@ -1384,6 +1379,26 @@ void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
     btm_cb.acl_disc_reason = HCI_SUCCESS;
     btsnd_hcic_user_passkey_reply(bd_addr, passkey);
   }
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_SendKeypressNotif
+ *
+ * Description      This function is used during the passkey entry model
+ *                  by a device with KeyboardOnly IO capabilities
+ *                  (very likely to be a HID Device).
+ *                  It is called by a HID Device to inform the remote device
+ *                  when a key has been entered or erased.
+ *
+ * Parameters:      bd_addr - Address of the peer device
+ *                  type - notification type
+ *
+ ******************************************************************************/
+void BTM_SendKeypressNotif(const RawAddress& bd_addr, tBTM_SP_KEY_TYPE type) {
+  /* This API only make sense between PASSKEY_REQ and SP complete */
+  if (btm_cb.pairing_state == BTM_PAIR_STATE_KEY_ENTRY)
+    btsnd_hcic_send_keypress_notif(bd_addr, type);
 }
 
 /*******************************************************************************
@@ -2879,13 +2894,6 @@ void btm_io_capabilities_req(const RawAddress& p) {
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
 
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
@@ -4301,8 +4309,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -4411,7 +4418,8 @@ void btm_sec_link_key_notification(const RawAddress& p_bda,
     /* If it is for bonding nothing else will follow, so we need to start name
      * resolution */
     if (we_are_bonding) {
-      SendRemoteNameRequest(p_bda);
+      btsnd_hcic_rmt_name_req(p_bda, HCI_PAGE_SCAN_REP_MODE_R1,
+                              HCI_MANDATARY_PAGE_SCAN_MODE, 0);
     }
 
     BTM_TRACE_EVENT("rmt_io_caps:%d, sec_flags:x%x, dev_class[1]:x%02x",
@@ -4728,7 +4736,8 @@ void btm_sec_pin_code_request(const RawAddress& p_bda) {
       /* We received PIN code request for the device with unknown name */
       /* it is not user friendly just to ask for the PIN without name */
       /* try to get name at first */
-      SendRemoteNameRequest(p_dev_rec->bd_addr);
+      btsnd_hcic_rmt_name_req(p_dev_rec->bd_addr, HCI_PAGE_SCAN_REP_MODE_R1,
+                              HCI_MANDATARY_PAGE_SCAN_MODE, 0);
     }
   }
 
@@ -4907,14 +4916,19 @@ tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
  *
  ******************************************************************************/
 static bool btm_sec_start_get_name(tBTM_SEC_DEV_REC* p_dev_rec) {
-  if (!BTM_IsDeviceUp()) return false;
+  uint8_t tempstate = p_dev_rec->sec_state;
 
   p_dev_rec->sec_state = BTM_SEC_STATE_GETTING_NAME;
 
   /* 0 and NULL are as timeout and callback params because they are not used in
    * security get name case */
-  SendRemoteNameRequest(p_dev_rec->bd_addr);
-  return true;
+  if ((btm_initiate_rem_name(p_dev_rec->bd_addr, BTM_RMT_NAME_SEC, 0, NULL)) !=
+      BTM_CMD_STARTED) {
+    p_dev_rec->sec_state = tempstate;
+    return (false);
+  }
+
+  return (true);
 }
 
 /*******************************************************************************
