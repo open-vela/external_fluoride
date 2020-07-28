@@ -40,6 +40,9 @@ bool TrimAfterNewLine(std::string& value) {
 namespace bluetooth {
 namespace storage {
 
+const std::unordered_set<std::string_view> kLinkKeyPropertyNames = {
+    "LinkKey", "LE_KEY_PENC", "LE_KEY_PID", "LE_KEY_PCSRK", "LE_KEY_LENC", "LE_KEY_LCSRK"};
+
 const std::unordered_set<std::string_view> kLePropertyNames = {
     "LE_KEY_PENC", "LE_KEY_PID", "LE_KEY_PCSRK", "LE_KEY_LENC", "LE_KEY_LCSRK"};
 
@@ -48,11 +51,8 @@ const std::unordered_set<std::string_view> kClassicPropertyNames = {
 
 const std::string ConfigCache::kDefaultSectionName = "Global";
 
-ConfigCache::ConfigCache(size_t temp_device_capacity, std::unordered_set<std::string_view> persistent_property_names)
-    : persistent_property_names_(std::move(persistent_property_names)),
-      information_sections_(),
-      persistent_devices_(),
-      temporary_devices_(temp_device_capacity) {}
+ConfigCache::ConfigCache(size_t temp_device_capacity)
+    : information_sections_(), persistent_devices_(), temporary_devices_(temp_device_capacity) {}
 
 void ConfigCache::SetPersistentConfigChangedCallback(std::function<void()> persistent_config_changed_callback) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -61,7 +61,6 @@ void ConfigCache::SetPersistentConfigChangedCallback(std::function<void()> persi
 
 ConfigCache::ConfigCache(ConfigCache&& other) noexcept
     : persistent_config_changed_callback_(std::move(other.persistent_config_changed_callback_)),
-      persistent_property_names_(std::move(other.persistent_property_names_)),
       information_sections_(std::move(other.information_sections_)),
       persistent_devices_(std::move(other.persistent_devices_)),
       temporary_devices_(std::move(other.temporary_devices_)) {
@@ -77,7 +76,6 @@ ConfigCache& ConfigCache::operator=(ConfigCache&& other) noexcept {
   std::lock_guard<std::recursive_mutex> others_lock(other.mutex_);
   persistent_config_changed_callback_.swap(other.persistent_config_changed_callback_);
   other.persistent_config_changed_callback_ = {};
-  persistent_property_names_ = std::move(other.persistent_property_names_);
   information_sections_ = std::move(other.information_sections_);
   persistent_devices_ = std::move(other.persistent_devices_);
   temporary_devices_ = std::move(other.temporary_devices_);
@@ -87,8 +85,7 @@ ConfigCache& ConfigCache::operator=(ConfigCache&& other) noexcept {
 bool ConfigCache::operator==(const ConfigCache& rhs) const {
   std::lock_guard<std::recursive_mutex> my_lock(mutex_);
   std::lock_guard<std::recursive_mutex> others_lock(rhs.mutex_);
-  return persistent_property_names_ == rhs.persistent_property_names_ &&
-         information_sections_ == rhs.information_sections_ && persistent_devices_ == rhs.persistent_devices_ &&
+  return information_sections_ == rhs.information_sections_ && persistent_devices_ == rhs.persistent_devices_ &&
          temporary_devices_ == rhs.temporary_devices_;
 }
 
@@ -177,7 +174,7 @@ void ConfigCache::SetProperty(std::string section, std::string property, std::st
     return;
   }
   auto section_iter = persistent_devices_.find(section);
-  if (section_iter == persistent_devices_.end() && IsPersistentProperty(property)) {
+  if (section_iter == persistent_devices_.end() && IsLinkKeyProperty(property)) {
     // move paired devices or create new paired device when a link key is set
     auto section_properties = temporary_devices_.extract(section);
     if (section_properties) {
@@ -219,7 +216,7 @@ bool ConfigCache::RemoveProperty(const std::string& section, const std::string& 
   section_iter = persistent_devices_.find(section);
   if (section_iter != persistent_devices_.end()) {
     auto value = section_iter->second.extract(property);
-    if (value && IsPersistentProperty(property)) {
+    if (value && IsLinkKeyProperty(property)) {
       // move unpaired device
       auto section_properties = persistent_devices_.extract(section);
       temporary_devices_.insert_or_assign(section, std::move(section_properties->second));
@@ -242,8 +239,8 @@ bool ConfigCache::IsDeviceSection(const std::string& section) {
   return hci::Address::IsValidAddress(section);
 }
 
-bool ConfigCache::IsPersistentProperty(const std::string& property) const {
-  return persistent_property_names_.find(property) != persistent_property_names_.end();
+bool ConfigCache::IsLinkKeyProperty(const std::string& property) {
+  return kLinkKeyPropertyNames.find(property) != kLinkKeyPropertyNames.end();
 }
 
 void ConfigCache::RemoveSectionWithProperty(const std::string& property) {
@@ -273,7 +270,7 @@ void ConfigCache::RemoveSectionWithProperty(const std::string& property) {
   }
 }
 
-std::vector<std::string> ConfigCache::GetPersistentSections() const {
+std::vector<std::string> ConfigCache::GetPersistentDevices() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<std::string> paired_devices;
   paired_devices.reserve(persistent_devices_.size());
@@ -401,39 +398,6 @@ bool ConfigCache::FixDeviceTypeInconsistencies() {
     PersistentConfigChangedCallback();
   }
   return persistent_device_changed || temp_device_changed;
-}
-
-bool ConfigCache::HasAtLeastOneMatchingPropertiesInSection(
-    const std::string& section, const std::unordered_set<std::string_view>& property_names) const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  const common::ListMap<std::string, std::string>* section_ptr;
-  if (!IsDeviceSection(section)) {
-    auto section_iter = information_sections_.find(section);
-    if (section_iter == information_sections_.end()) {
-      return false;
-    }
-    section_ptr = &section_iter->second;
-  } else {
-    auto section_iter = persistent_devices_.find(section);
-    if (section_iter == persistent_devices_.end()) {
-      section_iter = temporary_devices_.find(section);
-      if (section_iter == temporary_devices_.end()) {
-        return false;
-      }
-    }
-    section_ptr = &section_iter->second;
-  }
-  for (const auto& property : *section_ptr) {
-    if (property_names.count(property.first) > 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool ConfigCache::IsPersistentSection(const std::string& section) const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  return persistent_devices_.contains(section);
 }
 
 }  // namespace storage
