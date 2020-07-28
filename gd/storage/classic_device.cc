@@ -23,8 +23,6 @@
 namespace bluetooth {
 namespace storage {
 
-const std::unordered_set<std::string_view> ClassicDevice::kLinkKeyProperties = {"LinkKey"};
-
 ClassicDevice::ClassicDevice(ConfigCache* config, std::string section)
     : config_(config), section_(std::move(section)) {}
 
@@ -32,23 +30,15 @@ Device ClassicDevice::Parent() {
   return Device(config_, section_);
 }
 
-std::string ClassicDevice::ToLogString() const {
+std::string ClassicDevice::ToLogString() {
   return section_;
 }
 
-hci::Address ClassicDevice::GetAddress() const {
+hci::Address ClassicDevice::GetAddress() {
   // section name of a classic device is its MAC address
   auto addr = hci::Address::FromString(section_);
   ASSERT(addr.has_value());
   return std::move(addr.value());
-}
-
-bool ClassicDevice::IsPaired() const {
-  // This first check is here only to speed up the checking process
-  if (!config_->IsPersistentSection(section_)) {
-    return false;
-  }
-  return config_->HasAtLeastOneMatchingPropertiesInSection(section_, kLinkKeyProperties);
 }
 
 }  // namespace storage

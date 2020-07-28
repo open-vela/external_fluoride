@@ -153,7 +153,7 @@ bool BtifConfigInterface::RemoveProperty(const std::string& section,
 }
 
 std::vector<std::string> BtifConfigInterface::GetPersistentDevices() {
-  return GetStorage()->GetConfigCache()->GetPersistentSections();
+  return GetStorage()->GetConfigCache()->GetPersistentDevices();
 }
 
 void BtifConfigInterface::Save() { GetStorage()->SaveDelayed(); }

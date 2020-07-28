@@ -16,7 +16,6 @@
 
 #include "storage/device.h"
 
-#include <algorithm>
 #include <limits>
 
 #include "os/log.h"
@@ -36,7 +35,7 @@ const std::string kLeIdentityAddressKey = "LeIdentityAddr";
 const std::string kLeLegacyPseudoAddr = "LeLegacyPseudoAddr";
 
 std::string GetConfigSection(
-    ConfigCache* config, const hci::Address& key_address, Device::ConfigKeyAddressType key_address_type) {
+    ConfigCache* config, hci::Address key_address, Device::ConfigKeyAddressType key_address_type) {
   ASSERT_LOG(config != nullptr, "config cannot be null");
   ASSERT_LOG(!key_address.IsEmpty(), "key_address cannot be empty");
   // assume lower case
@@ -68,13 +67,10 @@ std::string GetConfigSection(
 
 }  // namespace
 
-const std::unordered_set<std::string_view> Device::kLinkKeyProperties = {
-    "LinkKey", "LE_KEY_PENC", "LE_KEY_PID", "LE_KEY_PCSRK", "LE_KEY_LENC", "LE_KEY_LCSRK"};
-
 Device::Device(ConfigCache* config, hci::Address key_address, ConfigKeyAddressType key_address_type)
-    : Device(config, GetConfigSection(config, std::move(key_address), key_address_type)) {}
+    : Device(config, GetConfigSection(config, key_address, key_address_type)) {}
 
-Device::Device(ConfigCache* config, std::string section) : config_(config), section_(std::move(section)) {}
+Device::Device(ConfigCache* config, std::string section) : config_(config), section_(section) {}
 
 bool Device::Exists() {
   return config_->HasSection(section_);
@@ -98,7 +94,7 @@ ClassicDevice Device::Classic() {
   return ClassicDevice(config_, section_);
 }
 
-std::string Device::ToLogString() const {
+std::string Device::ToLogString() {
   return section_;
 }
 
