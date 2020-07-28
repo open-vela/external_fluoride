@@ -603,8 +603,7 @@ TEST(HciPacketsTest, testLeSetAdvertisingDataBuilderLength) {
   packet_bytes->reserve(builder->size());
   BitInserter bit_inserter(*packet_bytes);
   builder->Serialize(bit_inserter);
-  auto command_view =
-      LeAdvertisingCommandView::Create(CommandPacketView::Create(PacketView<kLittleEndian>(packet_bytes)));
+  auto command_view = LeAdvertisingCommandView::Create(CommandPacketView::Create(packet_bytes));
   ASSERT_TRUE(command_view.IsValid());
   ASSERT_EQ(1 /* data_length */ + 31 /* data */, command_view.GetPayload().size());
   auto view = LeSetAdvertisingDataView::Create(command_view);
@@ -622,8 +621,7 @@ TEST(HciPacketsTest, testLeSetScanResponseDataBuilderLength) {
   packet_bytes->reserve(builder->size());
   BitInserter bit_inserter(*packet_bytes);
   builder->Serialize(bit_inserter);
-  auto command_view =
-      LeAdvertisingCommandView::Create(CommandPacketView::Create(PacketView<kLittleEndian>(packet_bytes)));
+  auto command_view = LeAdvertisingCommandView::Create(CommandPacketView::Create(packet_bytes));
   ASSERT_TRUE(command_view.IsValid());
   ASSERT_EQ(1 /* data_length */ + 31 /* data */, command_view.GetPayload().size());
   auto view = LeSetScanResponseDataView::Create(command_view);
@@ -642,8 +640,8 @@ TEST(HciPacketsTest, testLeMultiAdvSetAdvertisingDataBuilderLength) {
   packet_bytes->reserve(builder->size());
   BitInserter bit_inserter(*packet_bytes);
   builder->Serialize(bit_inserter);
-  auto command_view = LeMultiAdvtView::Create(
-      LeAdvertisingCommandView::Create(CommandPacketView::Create(PacketView<kLittleEndian>(packet_bytes))));
+  auto command_view =
+      LeMultiAdvtView::Create(LeAdvertisingCommandView::Create(CommandPacketView::Create(packet_bytes)));
   ASSERT_TRUE(command_view.IsValid());
   EXPECT_EQ(1 /* data_length */ + 31 /* data */ + 1 /* set */, command_view.GetPayload().size());
   auto view = LeMultiAdvtSetDataView::Create(command_view);
@@ -662,8 +660,8 @@ TEST(HciPacketsTest, testLeMultiAdvSetScanResponseDataBuilderLength) {
   packet_bytes->reserve(builder->size());
   BitInserter bit_inserter(*packet_bytes);
   builder->Serialize(bit_inserter);
-  auto command_view = LeMultiAdvtView::Create(
-      LeAdvertisingCommandView::Create(CommandPacketView::Create(PacketView<kLittleEndian>(packet_bytes))));
+  auto command_view =
+      LeMultiAdvtView::Create(LeAdvertisingCommandView::Create(CommandPacketView::Create(packet_bytes)));
   ASSERT_TRUE(command_view.IsValid());
   ASSERT_EQ(1 /* data_length */ + 31 /* data */ + 1 /* set */, command_view.GetPayload().size());
   auto view = LeMultiAdvtSetScanRespView::Create(command_view);
