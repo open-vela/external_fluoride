@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "os/log.h"
+#include "os/rand.h"
 #include "security/pairing_handler_le.h"
 #include "security/test/mocks.h"
 
@@ -29,6 +30,7 @@ using ::testing::Eq;
 using ::testing::Field;
 using ::testing::VariantWith;
 
+using bluetooth::os::GenerateRandom;
 using bluetooth::security::CommandView;
 
 namespace bluetooth {
@@ -43,18 +45,6 @@ CommandView BuilderToView(std::unique_ptr<BasePacketBuilder> builder) {
   PacketView<kLittleEndian> packet_bytes_view(packet_bytes);
   auto temp_cmd_view = CommandView::Create(packet_bytes_view);
   return CommandView::Create(temp_cmd_view);
-}
-
-std::condition_variable outgoing_l2cap_blocker_;
-std::optional<bluetooth::security::CommandView> outgoing_l2cap_packet_;
-
-bool WaitForOutgoingL2capPacket() {
-  std::mutex mutex;
-  std::unique_lock<std::mutex> lock(mutex);
-  if (outgoing_l2cap_blocker_.wait_for(lock, std::chrono::seconds(5)) == std::cv_status::timeout) {
-    return false;
-  }
-  return true;
 }
 
 class PairingResultHandlerMock {
@@ -111,11 +101,34 @@ class PairingHandlerUnitTest : public testing::Test {
     outgoing_l2cap_blocker_.notify_one();
   }
 
+  std::optional<bluetooth::security::CommandView> WaitForOutgoingL2capPacket() {
+    std::mutex mutex;
+    std::unique_lock<std::mutex> lock(mutex);
+
+    // It is possible that we lost wakeup from condition_variable, check if data is already waiting to be processed
+    if (outgoing_l2cap_packet_ != std::nullopt) {
+      std::optional<bluetooth::security::CommandView> tmp = std::nullopt;
+      outgoing_l2cap_packet_.swap(tmp);
+      return tmp;
+    }
+
+    // Data not ready yet, wait for it.
+    if (outgoing_l2cap_blocker_.wait_for(lock, std::chrono::seconds(5)) == std::cv_status::timeout) {
+      return std::nullopt;
+    }
+
+    std::optional<bluetooth::security::CommandView> tmp = std::nullopt;
+    outgoing_l2cap_packet_.swap(tmp);
+    return tmp;
+  }
+
  public:
   os::Thread* thread_;
   os::Handler* handler_;
   std::unique_ptr<common::BidiQueue<packet::PacketView<packet::kLittleEndian>, packet::BasePacketBuilder>> bidi_queue_;
   std::unique_ptr<os::EnqueueBuffer<packet::BasePacketBuilder>> up_buffer_;
+  std::condition_variable outgoing_l2cap_blocker_;
+  std::optional<bluetooth::security::CommandView> outgoing_l2cap_packet_ = std::nullopt;
 };
 
 InitialInformations initial_informations{
@@ -144,8 +157,9 @@ TEST_F(PairingHandlerUnitTest, test_phase_1_failure) {
   std::unique_ptr<PairingHandlerLe> pairing_handler =
       std::make_unique<PairingHandlerLe>(PairingHandlerLe::PHASE1, initial_informations);
 
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(outgoing_l2cap_packet_->GetCode(), Code::PAIRING_REQUEST);
+  std::optional<bluetooth::security::CommandView> pairing_request = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(pairing_request.has_value());
+  EXPECT_EQ(pairing_request->GetCode(), Code::PAIRING_REQUEST);
 
   EXPECT_CALL(*pairingResult, OnPairingFinished(VariantWith<PairingFailure>(_))).Times(1);
 
@@ -154,8 +168,9 @@ TEST_F(PairingHandlerUnitTest, test_phase_1_failure) {
   bad_pairing_response.IsValid();
   pairing_handler->OnCommandView(bad_pairing_response);
 
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(outgoing_l2cap_packet_->GetCode(), Code::PAIRING_FAILED);
+  std::optional<bluetooth::security::CommandView> pairing_failure = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(pairing_failure.has_value());
+  EXPECT_EQ(pairing_failure->GetCode(), Code::PAIRING_FAILED);
 }
 
 TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
@@ -168,9 +183,10 @@ TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
   std::unique_ptr<PairingHandlerLe> pairing_handler =
       std::make_unique<PairingHandlerLe>(PairingHandlerLe::PHASE1, initial_informations);
 
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(outgoing_l2cap_packet_->GetCode(), Code::PAIRING_REQUEST);
-  CommandView pairing_request = outgoing_l2cap_packet_.value();
+  std::optional<bluetooth::security::CommandView> pairing_request_pkt = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(pairing_request_pkt.has_value());
+  EXPECT_EQ(pairing_request_pkt->GetCode(), Code::PAIRING_REQUEST);
+  CommandView pairing_request = pairing_request_pkt.value();
 
   auto pairing_response = BuilderToView(
       PairingResponseBuilder::Create(IoCapability::KEYBOARD_DISPLAY, OobDataFlag::NOT_PRESENT,
@@ -179,10 +195,11 @@ TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
   // Phase 1 finished.
 
   // pairing public key
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(Code::PAIRING_PUBLIC_KEY, outgoing_l2cap_packet_->GetCode());
+  std::optional<bluetooth::security::CommandView> public_key_pkt = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(public_key_pkt.has_value());
+  EXPECT_EQ(Code::PAIRING_PUBLIC_KEY, public_key_pkt->GetCode());
   EcdhPublicKey my_public_key;
-  auto ppkv = PairingPublicKeyView::Create(outgoing_l2cap_packet_.value());
+  auto ppkv = PairingPublicKeyView::Create(public_key_pkt.value());
   ppkv.IsValid();
   my_public_key.x = ppkv.GetPublicKeyX();
   my_public_key.y = ppkv.GetPublicKeyY();
@@ -197,7 +214,7 @@ TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
   Octet16 ra, rb;
   ra = rb = {0};
 
-  Octet16 Nb = PairingHandlerLe::GenerateRandom<16>();
+  Octet16 Nb = GenerateRandom<16>();
 
   // Compute confirm
   Octet16 Cb = crypto_toolbox::f4((uint8_t*)public_key.x.data(), (uint8_t*)my_public_key.x.data(), Nb, 0);
@@ -205,9 +222,10 @@ TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
   pairing_handler->OnCommandView(BuilderToView(PairingConfirmBuilder::Create(Cb)));
 
   // random
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(Code::PAIRING_RANDOM, outgoing_l2cap_packet_->GetCode());
-  auto prv = PairingRandomView::Create(outgoing_l2cap_packet_.value());
+  std::optional<bluetooth::security::CommandView> random_pkt = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(random_pkt.has_value());
+  EXPECT_EQ(Code::PAIRING_RANDOM, random_pkt->GetCode());
+  auto prv = PairingRandomView::Create(random_pkt.value());
   prv.IsValid();
   Octet16 Na = prv.GetRandomValue();
 
@@ -216,9 +234,9 @@ TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
   // Start of authentication stage 2
   uint8_t a[7];
   uint8_t b[7];
-  memcpy(b, initial_informations.remote_connection_address.GetAddress().address, 6);
+  memcpy(b, initial_informations.remote_connection_address.GetAddress().data(), hci::Address::kLength);
   b[6] = (uint8_t)initial_informations.remote_connection_address.GetAddressType();
-  memcpy(a, initial_informations.my_connection_address.GetAddress().address, 6);
+  memcpy(a, initial_informations.my_connection_address.GetAddress().data(), hci::Address::kLength);
   a[6] = (uint8_t)initial_informations.my_connection_address.GetAddressType();
 
   Octet16 ltk, mac_key;
@@ -237,9 +255,10 @@ TEST_F(PairingHandlerUnitTest, test_secure_connections_just_works) {
   Octet16 Ea = crypto_toolbox::f6(mac_key, Na, Nb, rb, iocapA.data(), a, b);
   Octet16 Eb = crypto_toolbox::f6(mac_key, Nb, Na, ra, iocapB.data(), b, a);
 
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(Code::PAIRING_DH_KEY_CHECK, outgoing_l2cap_packet_->GetCode());
-  auto pdhkcv = PairingDhKeyCheckView::Create(outgoing_l2cap_packet_.value());
+  std::optional<bluetooth::security::CommandView> dh_key_pkt = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(dh_key_pkt.has_value());
+  EXPECT_EQ(Code::PAIRING_DH_KEY_CHECK, dh_key_pkt->GetCode());
+  auto pdhkcv = PairingDhKeyCheckView::Create(dh_key_pkt.value());
   pdhkcv.IsValid();
   EXPECT_EQ(pdhkcv.GetDhKeyCheck(), Ea);
 
@@ -280,8 +299,9 @@ TEST_F(PairingHandlerUnitTest, test_remote_slave_initiating) {
   // Simulate user accepting the pairing in UI
   pairing_handler->OnUiAction(PairingEvent::PAIRING_ACCEPTED, 0x01 /* Non-zero value means success */);
 
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(Code::PAIRING_REQUEST, outgoing_l2cap_packet_->GetCode());
+  std::optional<bluetooth::security::CommandView> pairing_request_pkt = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(pairing_request_pkt.has_value());
+  EXPECT_EQ(Code::PAIRING_REQUEST, pairing_request_pkt->GetCode());
 
   // We don't care for the rest of the flow, let it die.
   pairing_handler.reset();
@@ -322,8 +342,9 @@ TEST_F(PairingHandlerUnitTest, test_remote_master_initiating) {
   // Simulate user accepting the pairing in UI
   pairing_handler->OnUiAction(PairingEvent::PAIRING_ACCEPTED, 0x01 /* Non-zero value means success */);
 
-  EXPECT_TRUE(WaitForOutgoingL2capPacket());
-  EXPECT_EQ(Code::PAIRING_RESPONSE, outgoing_l2cap_packet_->GetCode());
+  std::optional<bluetooth::security::CommandView> pairing_response_pkt = WaitForOutgoingL2capPacket();
+  EXPECT_TRUE(pairing_response_pkt.has_value());
+  EXPECT_EQ(Code::PAIRING_RESPONSE, pairing_response_pkt->GetCode());
   // Phase 1 finished.
 
   // We don't care for the rest of the flow, it's handled in in other tests. let it die.

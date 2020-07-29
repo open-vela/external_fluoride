@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "hci/address_with_type.h"
+#include "hci/le_address_manager.h"
 #include "security/internal/security_manager_impl.h"
 #include "security/security_manager_listener.h"
 
@@ -73,6 +74,16 @@ class SecurityManager : public UICallbacks {
    * Register Security UI handler, for handling prompts around the Pairing process.
    */
   void SetUserInterfaceHandler(UI* user_interface, os::Handler* handler);
+
+  /**
+   * Specify the initiator address policy used for LE transport. Can only be called once.
+   */
+  void SetLeInitiatorAddressPolicyForTest(
+      hci::LeAddressManager::AddressPolicy address_policy,
+      hci::AddressWithType fixed_address,
+      crypto_toolbox::Octet16 rotation_irk,
+      std::chrono::milliseconds minimum_rotation_time,
+      std::chrono::milliseconds maximum_rotation_time);
 
   /**
    * Register to listen for callback events from SecurityManager
