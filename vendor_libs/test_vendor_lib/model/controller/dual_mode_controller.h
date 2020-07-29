@@ -205,9 +205,6 @@ class DualModeController : public Device {
   // 7.2.10
   void WriteLinkPolicySettings(CommandPacketView args);
 
-  // 7.2.11
-  void ReadDefaultLinkPolicySettings(CommandPacketView args);
-
   // 7.2.12
   void WriteDefaultLinkPolicySettings(CommandPacketView args);
 
@@ -407,16 +404,16 @@ class DualModeController : public Device {
   void LeConnectionCancel(CommandPacketView args);
 
   // 7.8.14
-  void LeReadConnectListSize(CommandPacketView args);
+  void LeReadWhiteListSize(CommandPacketView args);
 
   // 7.8.15
-  void LeClearConnectList(CommandPacketView args);
+  void LeClearWhiteList(CommandPacketView args);
 
   // 7.8.16
-  void LeAddDeviceToConnectList(CommandPacketView args);
+  void LeAddDeviceToWhiteList(CommandPacketView args);
 
   // 7.8.17
-  void LeRemoveDeviceFromConnectList(CommandPacketView args);
+  void LeRemoveDeviceFromWhiteList(CommandPacketView args);
 
   // 7.8.21
   void LeReadRemoteFeatures(CommandPacketView args);
@@ -439,12 +436,6 @@ class DualModeController : public Device {
   // 7.8.40
   void LeClearResolvingList(CommandPacketView args);
 
-  // 7.8.41
-  void LeReadResolvingListSize(CommandPacketView args);
-
-  // 7.8.46
-  void LeReadMaximumDataLength(CommandPacketView args);
-
   // 7.8.52
   void LeSetExtendedAdvertisingRandomAddress(CommandPacketView args);
 
@@ -459,18 +450,6 @@ class DualModeController : public Device {
 
   // 7.8.56
   void LeSetExtendedAdvertisingEnable(CommandPacketView args);
-
-  // 7.8.57
-  void LeReadMaximumAdvertisingDataLength(CommandPacketView args);
-
-  // 7.8.58
-  void LeReadNumberOfSupportedAdvertisingSets(CommandPacketView args);
-
-  // 7.8.59
-  void LeRemoveAdvertisingSet(CommandPacketView args);
-
-  // 7.8.60
-  void LeClearAdvertisingSets(CommandPacketView args);
 
   // 7.8.64
   void LeSetExtendedScanParameters(CommandPacketView args);
