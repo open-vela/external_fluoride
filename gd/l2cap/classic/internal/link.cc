@@ -303,7 +303,9 @@ void Link::OnConnectionPacketTypeChanged(uint16_t packet_type) {
 }
 
 void Link::OnAuthenticationComplete() {
-  Encrypt();
+  if (!pending_channel_list_.empty()) {
+    acl_connection_->SetConnectionEncryption(hci::Enable::ENABLED);
+  }
 }
 
 void Link::OnEncryptionChange(hci::EncryptionEnabled enabled) {
