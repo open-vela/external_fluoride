@@ -15,6 +15,7 @@
  */
 
 #include "link_layer_controller.h"
+#include <hci/hci_packets.h>
 
 #include "include/le_advertisement.h"
 #include "os/log.h"
@@ -22,6 +23,9 @@
 
 using std::vector;
 using namespace std::chrono;
+using bluetooth::hci::Address;
+using bluetooth::hci::AddressType;
+using bluetooth::hci::AddressWithType;
 
 namespace test_vendor_lib {
 
@@ -119,11 +123,7 @@ ErrorCode LinkLayerController::SendAclToRemote(
   AddressWithType destination = connections_.GetAddress(handle);
   Phy::Type phy = connections_.GetPhyType(handle);
 
-  LOG_INFO("%s(%s): handle 0x%x size %d", __func__,
-           properties_.GetAddress().ToString().c_str(), handle,
-           static_cast<int>(acl_packet.size()));
-
-  ScheduleTask(milliseconds(5), [this, handle]() {
+  ScheduleTask(milliseconds(1), [this, handle]() {
     std::vector<bluetooth::hci::CompletedPackets> completed_packets;
     bluetooth::hci::CompletedPackets cp;
     cp.connection_handle_ = handle;
@@ -166,12 +166,27 @@ ErrorCode LinkLayerController::SendAclToRemote(
 void LinkLayerController::IncomingPacket(
     model::packets::LinkLayerPacketView incoming) {
   ASSERT(incoming.IsValid());
+  auto destination_address = incoming.GetDestinationAddress();
 
-  // TODO: Resolvable private addresses?
-  if (incoming.GetDestinationAddress() != properties_.GetAddress() &&
-      incoming.GetDestinationAddress() != properties_.GetLeAddress() &&
-      incoming.GetDestinationAddress() != Address::kEmpty) {
-    // Drop packets not addressed to me
+  // Match broadcasts
+  bool address_matches = (destination_address == Address::kEmpty);
+
+  // Match addresses from device properties
+  if (destination_address == properties_.GetAddress() ||
+      destination_address == properties_.GetLeAddress()) {
+    address_matches = true;
+  }
+
+  // Check advertising addresses
+  for (const auto& advertiser : advertisers_) {
+    if (advertiser.IsEnabled() &&
+        advertiser.GetAddress().GetAddress() == destination_address) {
+      address_matches = true;
+    }
+  }
+
+  // Drop packets not addressed to me
+  if (!address_matches) {
     return;
   }
 
@@ -215,6 +230,12 @@ void LinkLayerController::IncomingPacket(
       break;
     case model::packets::PacketType::LE_CONNECT_COMPLETE:
       IncomingLeConnectCompletePacket(incoming);
+      break;
+    case model::packets::PacketType::LE_ENCRYPT_CONNECTION:
+      IncomingLeEncryptConnection(incoming);
+      break;
+    case model::packets::PacketType::LE_ENCRYPT_CONNECTION_RESPONSE:
+      IncomingLeEncryptConnectionResponse(incoming);
       break;
     case model::packets::PacketType::LE_SCAN:
       // TODO: Check Advertising flags and see if we are scannable.
@@ -296,11 +317,11 @@ void LinkLayerController::IncomingAclPacket(
   auto acl_view = bluetooth::hci::AclPacketView::Create(raw_packet);
   ASSERT(acl_view.IsValid());
 
-  LOG_INFO("%s: remote handle 0x%x size %d", __func__, acl_view.GetHandle(),
+  LOG_INFO("Remote handle 0x%x size %d", acl_view.GetHandle(),
            static_cast<int>(acl_view.size()));
   uint16_t local_handle =
       connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
-  LOG_INFO("%s: local handle 0x%x", __func__, local_handle);
+  LOG_INFO("Local handle 0x%x", local_handle);
 
   std::vector<uint8_t> payload_data(acl_view.GetPayload().begin(),
                                     acl_view.GetPayload().end());
@@ -309,6 +330,11 @@ void LinkLayerController::IncomingAclPacket(
       (payload_data.size() + acl_buffer_size - 1) / acl_buffer_size;
 
   auto pb_flag_controller_to_host = acl_view.GetPacketBoundaryFlag();
+  if (pb_flag_controller_to_host ==
+      bluetooth::hci::PacketBoundaryFlag::FIRST_NON_AUTOMATICALLY_FLUSHABLE) {
+    pb_flag_controller_to_host =
+        bluetooth::hci::PacketBoundaryFlag::FIRST_AUTOMATICALLY_FLUSHABLE;
+  }
   for (int i = 0; i < num_packets; i++) {
     size_t start_index = acl_buffer_size * i;
     size_t end_index =
@@ -492,13 +518,13 @@ void LinkLayerController::IncomingDisconnectPacket(
 
 void LinkLayerController::IncomingEncryptConnection(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO();
 
   // TODO: Check keys
   Address peer = incoming.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(peer);
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("%s: Unknown connection @%s", __func__, peer.ToString().c_str());
+    LOG_INFO("Unknown connection @%s", peer.ToString().c_str());
     return;
   }
   send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
@@ -518,12 +544,12 @@ void LinkLayerController::IncomingEncryptConnection(
 
 void LinkLayerController::IncomingEncryptConnectionResponse(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO();
   // TODO: Check keys
   uint16_t handle =
       connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("%s: Unknown connection @%s", __func__,
+    LOG_INFO("Unknown connection @%s",
              incoming.GetSourceAddress().ToString().c_str());
     return;
   }
@@ -657,9 +683,9 @@ void LinkLayerController::IncomingInquiryResponsePacket(
 
 void LinkLayerController::IncomingIoCapabilityRequestPacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_DEBUG("%s", __func__);
+  LOG_DEBUG();
   if (!simple_pairing_mode_enabled_) {
-    LOG_WARN("%s: Only simple pairing mode is implemented", __func__);
+    LOG_WARN("Only simple pairing mode is implemented");
     return;
   }
 
@@ -674,7 +700,7 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
   uint16_t handle = connections_.GetHandle(AddressWithType(
       peer, bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS));
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("%s: Device not connected %s", __func__, peer.ToString().c_str());
+    LOG_INFO("Device not connected %s", peer.ToString().c_str());
     return;
   }
 
@@ -695,7 +721,7 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
 
 void LinkLayerController::IncomingIoCapabilityResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_DEBUG("%s", __func__);
+  LOG_DEBUG();
 
   auto response = model::packets::IoCapabilityResponseView::Create(incoming);
   ASSERT(response.IsValid());
@@ -722,13 +748,13 @@ void LinkLayerController::IncomingIoCapabilityResponsePacket(
       AuthenticateRemoteStage1(peer, pairing_type);
     });
   } else {
-    LOG_INFO("%s: Security Manager returned INVALID", __func__);
+    LOG_INFO("Security Manager returned INVALID");
   }
 }
 
 void LinkLayerController::IncomingIoCapabilityNegativeResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_DEBUG("%s", __func__);
+  LOG_DEBUG();
   Address peer = incoming.GetSourceAddress();
 
   ASSERT(security_manager_.GetAuthenticationAddress() == peer);
@@ -743,9 +769,8 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
   Address address = incoming.GetSourceAddress();
   auto advertisement = model::packets::LeAdvertisementView::Create(incoming);
   ASSERT(advertisement.IsValid());
-  auto adv_type = static_cast<LeAdvertisement::AdvertisementType>(
-      advertisement.GetAdvertisementType());
   auto address_type = advertisement.GetAddressType();
+  auto adv_type = advertisement.GetAdvertisementType();
 
   if (le_scan_enable_ == bluetooth::hci::OpCode::LE_SET_SCAN_ENABLE) {
     vector<uint8_t> ad = advertisement.GetData();
@@ -774,7 +799,24 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
     raw_builder_ptr->AddOctets1(static_cast<uint8_t>(
         bluetooth::hci::SubeventCode::EXTENDED_ADVERTISING_REPORT));
     raw_builder_ptr->AddOctets1(0x01);  // num reports
-    raw_builder_ptr->AddOctets1(static_cast<uint8_t>(adv_type));
+    switch (adv_type) {
+      case model::packets::AdvertisementType::ADV_IND:
+        raw_builder_ptr->AddOctets1(0x13);
+        break;
+      case model::packets::AdvertisementType::ADV_DIRECT_IND:
+        raw_builder_ptr->AddOctets1(0x15);
+        break;
+      case model::packets::AdvertisementType::ADV_SCAN_IND:
+        raw_builder_ptr->AddOctets1(0x12);
+        break;
+      case model::packets::AdvertisementType::ADV_NONCONN_IND:
+        raw_builder_ptr->AddOctets1(0x10);
+        break;
+      case model::packets::AdvertisementType::SCAN_RESPONSE:
+        raw_builder_ptr->AddOctets1(0x1b);  // 0x1a for ADV_SCAN_IND scan
+        return;
+    }
+    raw_builder_ptr->AddOctets1(0x00);  // Reserved
     raw_builder_ptr->AddOctets1(static_cast<uint8_t>(address_type));
     raw_builder_ptr->AddAddress(address);
     raw_builder_ptr->AddOctets1(1);     // Primary_PHY
@@ -782,14 +824,13 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
     raw_builder_ptr->AddOctets1(0xFF);  // Advertising_SID - not provided
     raw_builder_ptr->AddOctets1(0x7F);  // Tx_Power - Not available
     raw_builder_ptr->AddOctets1(GetRssi());
-    raw_builder_ptr->AddOctets1(0);  // Periodic_Advertising_Interval - None
+    raw_builder_ptr->AddOctets2(0);  // Periodic_Advertising_Interval - None
     raw_builder_ptr->AddOctets1(0);  // Direct_Address_Type - PUBLIC
     raw_builder_ptr->AddAddress(Address::kEmpty);  // Direct_Address
     raw_builder_ptr->AddOctets1(ad.size());
     raw_builder_ptr->AddOctets(ad);
-    auto packet = bluetooth::hci::EventPacketBuilder::Create(
-        bluetooth::hci::EventCode::LE_META_EVENT, std::move(raw_builder_ptr));
-    send_event_(std::move(packet));
+    send_event_(bluetooth::hci::EventPacketBuilder::Create(
+        bluetooth::hci::EventCode::LE_META_EVENT, std::move(raw_builder_ptr)));
   }
 
   // Active scanning
@@ -802,20 +843,19 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
   // Connect
   if ((le_connect_ && le_peer_address_ == address &&
        le_peer_address_type_ == static_cast<uint8_t>(address_type) &&
-       (adv_type == LeAdvertisement::AdvertisementType::ADV_IND ||
-        adv_type == LeAdvertisement::AdvertisementType::ADV_DIRECT_IND)) ||
-      (LeWhiteListContainsDevice(address,
-                                 static_cast<uint8_t>(address_type)))) {
+       (adv_type == model::packets::AdvertisementType::ADV_IND ||
+        adv_type == model::packets::AdvertisementType::ADV_DIRECT_IND)) ||
+      (LeConnectListContainsDevice(address,
+                                   static_cast<uint8_t>(address_type)))) {
     if (!connections_.CreatePendingLeConnection(AddressWithType(
             address, static_cast<bluetooth::hci::AddressType>(address_type)))) {
       LOG_WARN(
-          "%s: CreatePendingLeConnection failed for connection to %s (type "
-          "%hhx)",
-          __func__, incoming.GetSourceAddress().ToString().c_str(),
-          address_type);
+          "CreatePendingLeConnection failed for connection to %s (type %hhx)",
+          incoming.GetSourceAddress().ToString().c_str(), address_type);
     }
-    LOG_INFO("%s: connecting to %s (type %hhx)", __func__,
-             incoming.GetSourceAddress().ToString().c_str(), address_type);
+    LOG_INFO("Connecting to %s (type %hhx) own_address %s (type %hhx)",
+             incoming.GetSourceAddress().ToString().c_str(), address_type,
+             properties_.GetLeAddress().ToString().c_str(), le_address_type_);
     le_connect_ = false;
     le_scan_enable_ = bluetooth::hci::OpCode::NONE;
 
@@ -838,7 +878,7 @@ void LinkLayerController::HandleLeConnection(AddressWithType address,
   // TODO: Choose between LeConnectionComplete and LeEnhancedConnectionComplete
   uint16_t handle = connections_.CreateLeConnection(address, own_address);
   if (handle == acl::kReservedHandle) {
-    LOG_WARN("%s: No pending connection for connection from %s", __func__,
+    LOG_WARN("No pending connection for connection from %s",
              address.ToString().c_str());
     return;
   }
@@ -846,7 +886,7 @@ void LinkLayerController::HandleLeConnection(AddressWithType address,
       ErrorCode::SUCCESS, handle, static_cast<bluetooth::hci::Role>(role),
       address.GetAddressType(), address.GetAddress(), connection_interval,
       connection_latency, supervision_timeout,
-      static_cast<bluetooth::hci::MasterClockAccuracy>(0x00));
+      static_cast<bluetooth::hci::ClockAccuracy>(0x00));
   send_event_(std::move(packet));
 }
 
@@ -861,28 +901,41 @@ void LinkLayerController::IncomingLeConnectPacket(
           incoming.GetSourceAddress(), static_cast<bluetooth::hci::AddressType>(
                                            connect.GetAddressType())))) {
     LOG_WARN(
-        "%s: CreatePendingLeConnection failed for connection from %s (type "
+        "CreatePendingLeConnection failed for connection from %s (type "
         "%hhx)",
-        __func__, incoming.GetSourceAddress().ToString().c_str(),
+        incoming.GetSourceAddress().ToString().c_str(),
         connect.GetAddressType());
     return;
   }
+  bluetooth::hci::AddressWithType my_address{};
+  bool matched_advertiser = false;
+  for (auto advertiser : advertisers_) {
+    AddressWithType advertiser_address = advertiser.GetAddress();
+    if (incoming.GetDestinationAddress() == advertiser_address.GetAddress()) {
+      my_address = advertiser_address;
+      matched_advertiser = true;
+    }
+  }
+
+  if (!matched_advertiser) {
+    LOG_INFO("Dropping unmatched connection request to %s",
+             incoming.GetSourceAddress().ToString().c_str());
+    return;
+  }
+
   HandleLeConnection(
       AddressWithType(
           incoming.GetSourceAddress(),
           static_cast<bluetooth::hci::AddressType>(connect.GetAddressType())),
-      AddressWithType(incoming.GetDestinationAddress(),
-                      static_cast<bluetooth::hci::AddressType>(
-                          properties_.GetLeAdvertisingOwnAddressType())),
-      static_cast<uint8_t>(bluetooth::hci::Role::SLAVE), connection_interval,
-      connect.GetLeConnectionLatency(),
+      my_address, static_cast<uint8_t>(bluetooth::hci::Role::SLAVE),
+      connection_interval, connect.GetLeConnectionLatency(),
       connect.GetLeConnectionSupervisionTimeout());
 
   auto to_send = model::packets::LeConnectCompleteBuilder::Create(
       incoming.GetDestinationAddress(), incoming.GetSourceAddress(),
       connection_interval, connect.GetLeConnectionLatency(),
       connect.GetLeConnectionSupervisionTimeout(),
-      properties_.GetLeAdvertisingOwnAddressType());
+      static_cast<uint8_t>(my_address.GetAddressType()));
   SendLeLinkLayerPacket(std::move(to_send));
 }
 
@@ -902,17 +955,70 @@ void LinkLayerController::IncomingLeConnectCompletePacket(
       complete.GetLeConnectionSupervisionTimeout());
 }
 
+void LinkLayerController::IncomingLeEncryptConnection(
+    model::packets::LinkLayerPacketView incoming) {
+  LOG_INFO();
+
+  // TODO: Check keys
+  Address peer = incoming.GetSourceAddress();
+  uint16_t handle = connections_.GetHandleOnlyAddress(peer);
+  if (handle == acl::kReservedHandle) {
+    LOG_INFO("@%s: Unknown connection @%s",
+             incoming.GetDestinationAddress().ToString().c_str(),
+             peer.ToString().c_str());
+    return;
+  }
+  ErrorCode status = ErrorCode::SUCCESS;
+  auto le_encrypt = model::packets::LeEncryptConnectionView::Create(incoming);
+  ASSERT(le_encrypt.IsValid());
+
+  if (connections_.IsEncrypted(handle)) {
+    send_event_(bluetooth::hci::EncryptionKeyRefreshCompleteBuilder::Create(
+        status, handle));
+  } else {
+    connections_.Encrypt(handle);
+    send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
+        status, handle, bluetooth::hci::EncryptionEnabled::ON));
+  }
+  SendLeLinkLayerPacket(
+      model::packets::LeEncryptConnectionResponseBuilder::Create(
+          connections_.GetOwnAddress(handle).GetAddress(), peer,
+          le_encrypt.GetRand(), le_encrypt.GetEdiv(), le_encrypt.GetLtk()));
+}
+
+void LinkLayerController::IncomingLeEncryptConnectionResponse(
+    model::packets::LinkLayerPacketView incoming) {
+  LOG_INFO();
+  // TODO: Check keys
+  uint16_t handle =
+      connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
+  if (handle == acl::kReservedHandle) {
+    LOG_INFO("@%s: Unknown connection @%s",
+             incoming.GetDestinationAddress().ToString().c_str(),
+             incoming.GetSourceAddress().ToString().c_str());
+    return;
+  }
+  ErrorCode status = ErrorCode::SUCCESS;
+
+  if (connections_.IsEncrypted(handle)) {
+    send_event_(bluetooth::hci::EncryptionKeyRefreshCompleteBuilder::Create(
+        status, handle));
+  } else {
+    connections_.Encrypt(handle);
+    send_event_(bluetooth::hci::EncryptionChangeBuilder::Create(
+        status, handle, bluetooth::hci::EncryptionEnabled::ON));
+  }
+}
+
 void LinkLayerController::IncomingLeScanPacket(
     model::packets::LinkLayerPacketView incoming) {
-
-  auto to_send = model::packets::LeScanResponseBuilder::Create(
-      properties_.GetLeAddress(), incoming.GetSourceAddress(),
-      static_cast<model::packets::AddressType>(properties_.GetLeAddressType()),
-      static_cast<model::packets::AdvertisementType>(
-          properties_.GetLeAdvertisementType()),
-      properties_.GetLeScanResponse());
-
-  SendLeLinkLayerPacket(std::move(to_send));
+  for (auto& advertiser : advertisers_) {
+    auto to_send = advertiser.GetScanResponse(incoming.GetDestinationAddress(),
+                                              incoming.GetSourceAddress());
+    if (to_send != nullptr) {
+      SendLeLinkLayerPacket(std::move(to_send));
+    }
+  }
 }
 
 void LinkLayerController::IncomingLeScanResponsePacket(
@@ -920,17 +1026,20 @@ void LinkLayerController::IncomingLeScanResponsePacket(
   auto scan_response = model::packets::LeScanResponseView::Create(incoming);
   ASSERT(scan_response.IsValid());
   vector<uint8_t> ad = scan_response.GetData();
-  auto adv_type = static_cast<LeAdvertisement::AdvertisementType>(
-      scan_response.GetAdvertisementType());
+  auto adv_type = scan_response.GetAdvertisementType();
   auto address_type =
       static_cast<LeAdvertisement::AddressType>(scan_response.GetAddressType());
   if (le_scan_enable_ == bluetooth::hci::OpCode::LE_SET_SCAN_ENABLE) {
+    if (adv_type != model::packets::AdvertisementType::SCAN_RESPONSE) {
+      return;
+    }
     std::unique_ptr<bluetooth::packet::RawBuilder> raw_builder_ptr =
         std::make_unique<bluetooth::packet::RawBuilder>();
     raw_builder_ptr->AddOctets1(
         static_cast<uint8_t>(bluetooth::hci::SubeventCode::ADVERTISING_REPORT));
     raw_builder_ptr->AddOctets1(0x01);  // num reports
-    raw_builder_ptr->AddOctets1(static_cast<uint8_t>(adv_type));
+    raw_builder_ptr->AddOctets1(static_cast<uint8_t>(
+        bluetooth::hci::AdvertisingEventType::SCAN_RESPONSE));
     raw_builder_ptr->AddOctets1(static_cast<uint8_t>(address_type));
     raw_builder_ptr->AddAddress(incoming.GetSourceAddress());
     raw_builder_ptr->AddOctets1(ad.size());
@@ -947,7 +1056,7 @@ void LinkLayerController::IncomingLeScanResponsePacket(
     raw_builder_ptr->AddOctets1(static_cast<uint8_t>(
         bluetooth::hci::SubeventCode::EXTENDED_ADVERTISING_REPORT));
     raw_builder_ptr->AddOctets1(0x01);  // num reports
-    raw_builder_ptr->AddOctets1(static_cast<uint8_t>(adv_type));
+    raw_builder_ptr->AddOctets1(0x1a);  // TODO: 0x1b for ADV_SCAN_IND
     raw_builder_ptr->AddOctets1(static_cast<uint8_t>(address_type));
     raw_builder_ptr->AddAddress(incoming.GetSourceAddress());
     raw_builder_ptr->AddOctets1(1);     // Primary_PHY
@@ -970,17 +1079,16 @@ void LinkLayerController::IncomingPagePacket(
     model::packets::LinkLayerPacketView incoming) {
   auto page = model::packets::PageView::Create(incoming);
   ASSERT(page.IsValid());
-  LOG_INFO("%s from %s", __func__,
-           incoming.GetSourceAddress().ToString().c_str());
+  LOG_INFO("from %s", incoming.GetSourceAddress().ToString().c_str());
 
   if (!connections_.CreatePendingConnection(
           incoming.GetSourceAddress(), properties_.GetAuthenticationEnable())) {
     // Send a response to indicate that we're busy, or drop the packet?
-    LOG_WARN("%s: Failed to create a pending connection for %s", __func__,
+    LOG_WARN("Failed to create a pending connection for %s",
              incoming.GetSourceAddress().ToString().c_str());
   }
 
-  bluetooth::hci::Address source_address;
+  bluetooth::hci::Address source_address{};
   bluetooth::hci::Address::FromString(page.GetSourceAddress().ToString(),
                                       source_address);
 
@@ -993,10 +1101,10 @@ void LinkLayerController::IncomingPagePacket(
 
 void LinkLayerController::IncomingPageRejectPacket(
     model::packets::LinkLayerPacketView incoming) {
-  LOG_INFO("%s: %s", __func__, incoming.GetSourceAddress().ToString().c_str());
+  LOG_INFO("%s", incoming.GetSourceAddress().ToString().c_str());
   auto reject = model::packets::PageRejectView::Create(incoming);
   ASSERT(reject.IsValid());
-  LOG_INFO("%s: Sending CreateConnectionComplete", __func__);
+  LOG_INFO("Sending CreateConnectionComplete");
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
       static_cast<ErrorCode>(reject.GetReason()), 0x0eff,
       incoming.GetSourceAddress(), bluetooth::hci::LinkType::ACL,
@@ -1007,12 +1115,12 @@ void LinkLayerController::IncomingPageRejectPacket(
 void LinkLayerController::IncomingPageResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
   Address peer = incoming.GetSourceAddress();
-  LOG_INFO("%s: %s", __func__, peer.ToString().c_str());
+  LOG_INFO("%s", peer.ToString().c_str());
   bool awaiting_authentication = connections_.AuthenticatePendingConnection();
   uint16_t handle =
       connections_.CreateConnection(peer, incoming.GetDestinationAddress());
   if (handle == acl::kReservedHandle) {
-    LOG_WARN("%s: No free handles", __func__);
+    LOG_WARN("No free handles");
     return;
   }
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
@@ -1028,41 +1136,19 @@ void LinkLayerController::IncomingPageResponsePacket(
 }
 
 void LinkLayerController::TimerTick() {
-  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) Inquiry();
-  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) PageScan();
+  if (inquiry_timer_task_id_ != kInvalidTaskId) Inquiry();
   LeAdvertising();
-  Connections();
 }
 
 void LinkLayerController::LeAdvertising() {
-  if (!le_advertising_enable_) {
-    return;
-  }
   steady_clock::time_point now = steady_clock::now();
-  if (duration_cast<milliseconds>(now - last_le_advertisement_) <
-      milliseconds(200)) {
-    return;
+  for (auto& advertiser : advertisers_) {
+    auto ad = advertiser.GetAdvertisement(now);
+    if (ad == nullptr) {
+      continue;
+    }
+    SendLeLinkLayerPacket(std::move(ad));
   }
-  last_le_advertisement_ = now;
-
-  auto own_address_type = static_cast<model::packets::AddressType>(
-      properties_.GetLeAdvertisingOwnAddressType());
-  Address advertising_address = Address::kEmpty;
-  if (own_address_type == model::packets::AddressType::PUBLIC) {
-    advertising_address = properties_.GetAddress();
-  } else if (own_address_type == model::packets::AddressType::RANDOM) {
-    advertising_address = properties_.GetLeAddress();
-  }
-  ASSERT(advertising_address != Address::kEmpty);
-  auto to_send = model::packets::LeAdvertisementBuilder::Create(
-      advertising_address, Address::kEmpty, own_address_type,
-      static_cast<model::packets::AdvertisementType>(own_address_type),
-      properties_.GetLeAdvertisement());
-  SendLeLinkLayerPacket(std::move(to_send));
-}
-
-void LinkLayerController::Connections() {
-  // TODO: Keep connections alive?
 }
 
 void LinkLayerController::RegisterEventChannel(
@@ -1127,11 +1213,6 @@ void LinkLayerController::CancelScheduledTask(AsyncTaskId task_id) {
 void LinkLayerController::RegisterTaskCancel(
     std::function<void(AsyncTaskId)> task_cancel) {
   cancel_task_ = task_cancel;
-}
-
-void LinkLayerController::AddControllerEvent(milliseconds delay,
-                                             const TaskCallback& task) {
-  controller_events_.push_back(ScheduleTask(delay, task));
 }
 
 void LinkLayerController::WriteSimplePairingMode(bool enabled) {
@@ -1206,8 +1287,7 @@ ErrorCode LinkLayerController::LinkKeyRequestNegativeReply(
   // Simple pairing to get a key
   uint16_t handle = connections_.GetHandleOnlyAddress(address);
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("%s: Device not connected %s", __func__,
-             address.ToString().c_str());
+    LOG_INFO("Device not connected %s", address.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
@@ -1234,7 +1314,7 @@ ErrorCode LinkLayerController::IoCapabilityRequestReply(
         properties_.GetAddress(), peer, io_capability, oob_data_present_flag,
         authentication_requirements));
   } else {
-    LOG_INFO("%s: Requesting remote capability", __func__);
+    LOG_INFO("Requesting remote capability");
 
     SendLinkLayerPacket(model::packets::IoCapabilityRequestBuilder::Create(
         properties_.GetAddress(), peer, io_capability, oob_data_present_flag,
@@ -1271,14 +1351,14 @@ ErrorCode LinkLayerController::UserConfirmationRequestReply(
 
   security_manager_.AuthenticationRequestFinished();
 
-  ScheduleTask(milliseconds(5), [this, peer, key_vec]() {
-    send_event_(bluetooth::hci::LinkKeyNotificationBuilder::Create(
-        peer, key_vec, bluetooth::hci::KeyType::AUTHENTICATED_P256));
-  });
-
   ScheduleTask(milliseconds(5), [this, peer]() {
     send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
         ErrorCode::SUCCESS, peer));
+  });
+
+  ScheduleTask(milliseconds(5), [this, peer, key_vec]() {
+    send_event_(bluetooth::hci::LinkKeyNotificationBuilder::Create(
+        peer, key_vec, bluetooth::hci::KeyType::AUTHENTICATED_P256));
   });
 
   ScheduleTask(milliseconds(15),
@@ -1291,6 +1371,12 @@ ErrorCode LinkLayerController::UserConfirmationRequestNegativeReply(
   if (security_manager_.GetAuthenticationAddress() != peer) {
     return ErrorCode::AUTHENTICATION_FAILURE;
   }
+
+  ScheduleTask(milliseconds(5), [this, peer]() {
+    send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+        ErrorCode::AUTHENTICATION_FAILURE, peer));
+  });
+
   return ErrorCode::SUCCESS;
 }
 
@@ -1408,14 +1494,13 @@ ErrorCode LinkLayerController::SetConnectionEncryption(
 ErrorCode LinkLayerController::AcceptConnectionRequest(const Address& addr,
                                                        bool try_role_switch) {
   if (!connections_.HasPendingConnection(addr)) {
-    LOG_INFO("%s: No pending connection for %s", __func__,
-             addr.ToString().c_str());
+    LOG_INFO("No pending connection for %s", addr.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
-  LOG_INFO("%s: Accept in 200ms", __func__);
+  LOG_INFO("Accept in 200ms");
   ScheduleTask(milliseconds(200), [this, addr, try_role_switch]() {
-    LOG_INFO("%s: Accepted", __func__);
+    LOG_INFO("Accepted");
     MakeSlaveConnection(addr, try_role_switch);
   });
 
@@ -1424,7 +1509,7 @@ ErrorCode LinkLayerController::AcceptConnectionRequest(const Address& addr,
 
 void LinkLayerController::MakeSlaveConnection(const Address& addr,
                                               bool try_role_switch) {
-  LOG_INFO("%s sending page response to %s", __func__, addr.ToString().c_str());
+  LOG_INFO("Sending page response to %s", addr.ToString().c_str());
   auto to_send = model::packets::PageResponseBuilder::Create(
       properties_.GetAddress(), addr, try_role_switch);
   SendLinkLayerPacket(std::move(to_send));
@@ -1432,10 +1517,10 @@ void LinkLayerController::MakeSlaveConnection(const Address& addr,
   uint16_t handle =
       connections_.CreateConnection(addr, properties_.GetAddress());
   if (handle == acl::kReservedHandle) {
-    LOG_INFO("%s CreateConnection failed", __func__);
+    LOG_INFO("CreateConnection failed");
     return;
   }
-  LOG_INFO("%s CreateConnection returned handle 0x%x", __func__, handle);
+  LOG_INFO("CreateConnection returned handle 0x%x", handle);
   auto packet = bluetooth::hci::ConnectionCompleteBuilder::Create(
       ErrorCode::SUCCESS, handle, addr, bluetooth::hci::LinkType::ACL,
       bluetooth::hci::Enable::DISABLED);
@@ -1445,8 +1530,7 @@ void LinkLayerController::MakeSlaveConnection(const Address& addr,
 ErrorCode LinkLayerController::RejectConnectionRequest(const Address& addr,
                                                        uint8_t reason) {
   if (!connections_.HasPendingConnection(addr)) {
-    LOG_INFO("%s: No pending connection for %s", __func__,
-             addr.ToString().c_str());
+    LOG_INFO("No pending connection for %s", addr.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
@@ -1460,7 +1544,7 @@ void LinkLayerController::RejectSlaveConnection(const Address& addr,
                                                 uint8_t reason) {
   auto to_send = model::packets::PageRejectBuilder::Create(
       properties_.GetAddress(), addr, reason);
-  LOG_INFO("%s sending page reject to %s (reason 0x%02hhx)", __func__,
+  LOG_INFO("Sending page reject to %s (reason 0x%02hhx)",
            addr.ToString().c_str(), reason);
   SendLinkLayerPacket(std::move(to_send));
 
@@ -1622,6 +1706,19 @@ ErrorCode LinkLayerController::WriteLinkPolicySettings(uint16_t handle,
   return ErrorCode::SUCCESS;
 }
 
+ErrorCode LinkLayerController::WriteDefaultLinkPolicySettings(
+    uint16_t settings) {
+  if (settings > 7 /* Sniff + Hold + Role switch */) {
+    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+  }
+  default_link_policy_settings_ = settings;
+  return ErrorCode::SUCCESS;
+}
+
+uint16_t LinkLayerController::ReadDefaultLinkPolicySettings() {
+  return default_link_policy_settings_;
+}
+
 ErrorCode LinkLayerController::FlowSpecification(
     uint16_t handle, uint8_t flow_direction, uint8_t service_type,
     uint32_t /* token_rate */, uint32_t /* token_bucket_size */,
@@ -1646,19 +1743,178 @@ ErrorCode LinkLayerController::WriteLinkSupervisionTimeout(uint16_t handle,
   return ErrorCode::SUCCESS;
 }
 
-void LinkLayerController::LeWhiteListClear() { le_white_list_.clear(); }
+ErrorCode LinkLayerController::SetLeExtendedAddress(uint8_t set,
+                                                    Address address) {
+  advertisers_[set].SetAddress(address);
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::SetLeExtendedAdvertisingData(
+    uint8_t set, const std::vector<uint8_t>& data) {
+  advertisers_[set].SetData(data);
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::SetLeExtendedAdvertisingParameters(
+    uint8_t set, uint16_t interval_min, uint16_t interval_max,
+    bluetooth::hci::LegacyAdvertisingProperties type,
+    bluetooth::hci::OwnAddressType own_address_type,
+    bluetooth::hci::PeerAddressType peer_address_type, Address peer,
+    bluetooth::hci::AdvertisingFilterPolicy filter_policy) {
+  model::packets::AdvertisementType ad_type;
+  switch (type) {
+    case bluetooth::hci::LegacyAdvertisingProperties::ADV_IND:
+      ad_type = model::packets::AdvertisementType::ADV_IND;
+      peer = Address::kEmpty;
+      break;
+    case bluetooth::hci::LegacyAdvertisingProperties::ADV_NONCONN_IND:
+      ad_type = model::packets::AdvertisementType::ADV_NONCONN_IND;
+      peer = Address::kEmpty;
+      break;
+    case bluetooth::hci::LegacyAdvertisingProperties::ADV_SCAN_IND:
+      ad_type = model::packets::AdvertisementType::ADV_SCAN_IND;
+      peer = Address::kEmpty;
+      break;
+    case bluetooth::hci::LegacyAdvertisingProperties::ADV_DIRECT_IND_HIGH:
+    case bluetooth::hci::LegacyAdvertisingProperties::ADV_DIRECT_IND_LOW:
+      ad_type = model::packets::AdvertisementType::ADV_DIRECT_IND;
+      break;
+  }
+  auto interval_ms =
+      static_cast<int>((interval_max + interval_min) * 0.625 / 2);
+
+  AddressWithType peer_address;
+  switch (peer_address_type) {
+    case bluetooth::hci::PeerAddressType::PUBLIC_DEVICE_OR_IDENTITY_ADDRESS:
+      peer_address = AddressWithType(
+          peer, bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS);
+      break;
+    case bluetooth::hci::PeerAddressType::RANDOM_DEVICE_OR_IDENTITY_ADDRESS:
+      peer_address = AddressWithType(
+          peer, bluetooth::hci::AddressType::RANDOM_DEVICE_ADDRESS);
+      break;
+  }
+
+  AddressType own_address_address_type;
+  switch (own_address_type) {
+    case bluetooth::hci::OwnAddressType::RANDOM_DEVICE_ADDRESS:
+      own_address_address_type =
+          bluetooth::hci::AddressType::RANDOM_DEVICE_ADDRESS;
+      break;
+    case bluetooth::hci::OwnAddressType::PUBLIC_DEVICE_ADDRESS:
+      own_address_address_type =
+          bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS;
+      break;
+    case bluetooth::hci::OwnAddressType::RESOLVABLE_OR_PUBLIC_ADDRESS:
+      own_address_address_type =
+          bluetooth::hci::AddressType::PUBLIC_IDENTITY_ADDRESS;
+      break;
+    case bluetooth::hci::OwnAddressType::RESOLVABLE_OR_RANDOM_ADDRESS:
+      own_address_address_type =
+          bluetooth::hci::AddressType::RANDOM_IDENTITY_ADDRESS;
+      break;
+  }
+
+  bluetooth::hci::LeScanningFilterPolicy scanning_filter_policy;
+  switch (filter_policy) {
+    case bluetooth::hci::AdvertisingFilterPolicy::ALL_DEVICES:
+      scanning_filter_policy =
+          bluetooth::hci::LeScanningFilterPolicy::ACCEPT_ALL;
+      break;
+    case bluetooth::hci::AdvertisingFilterPolicy::LISTED_SCAN:
+      scanning_filter_policy =
+          bluetooth::hci::LeScanningFilterPolicy::CONNECT_LIST_ONLY;
+      break;
+    case bluetooth::hci::AdvertisingFilterPolicy::LISTED_CONNECT:
+      scanning_filter_policy =
+          bluetooth::hci::LeScanningFilterPolicy::CHECK_INITIATORS_IDENTITY;
+      break;
+    case bluetooth::hci::AdvertisingFilterPolicy::LISTED_SCAN_AND_CONNECT:
+      scanning_filter_policy = bluetooth::hci::LeScanningFilterPolicy::
+          CONNECT_LIST_AND_INITIATORS_IDENTITY;
+      break;
+  }
+
+  advertisers_[set].InitializeExtended(own_address_address_type, peer_address,
+                                       scanning_filter_policy, ad_type,
+                                       std::chrono::milliseconds(interval_ms));
+
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::LeRemoveAdvertisingSet(uint8_t set) {
+  if (set >= advertisers_.size()) {
+    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+  }
+  advertisers_[set].Disable();
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::LeClearAdvertisingSets() {
+  for (auto& advertiser : advertisers_) {
+    if (advertiser.IsEnabled()) {
+      return ErrorCode::COMMAND_DISALLOWED;
+    }
+  }
+  for (auto& advertiser : advertisers_) {
+    advertiser.Clear();
+  }
+  return ErrorCode::SUCCESS;
+}
+
+void LinkLayerController::LeConnectionUpdateComplete(
+    bluetooth::hci::LeConnectionUpdateView connection_update) {
+  uint16_t handle = connection_update.GetConnectionHandle();
+  ErrorCode status = ErrorCode::SUCCESS;
+  if (!connections_.HasHandle(handle)) {
+    status = ErrorCode::UNKNOWN_CONNECTION;
+  }
+  uint16_t interval_min = connection_update.GetConnIntervalMin();
+  uint16_t interval_max = connection_update.GetConnIntervalMax();
+  uint16_t latency = connection_update.GetConnLatency();
+  uint16_t supervision_timeout = connection_update.GetSupervisionTimeout();
+
+  if (interval_min < 6 || interval_max > 0xC80 || interval_min > interval_max ||
+      interval_max < interval_min || latency > 0x1F3 ||
+      supervision_timeout < 0xA || supervision_timeout > 0xC80 ||
+      // The Supervision_Timeout in milliseconds (*10) shall be larger than (1 +
+      // Connection_Latency) * Connection_Interval_Max (* 5/4) * 2
+      supervision_timeout <= ((((1 + latency) * interval_max * 10) / 4) / 10)) {
+    status = ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+  }
+  uint16_t interval = (interval_min + interval_max) / 2;
+  send_event_(bluetooth::hci::LeConnectionUpdateCompleteBuilder::Create(
+      status, handle, interval, latency, supervision_timeout));
+}
+
+ErrorCode LinkLayerController::LeConnectionUpdate(
+    bluetooth::hci::LeConnectionUpdateView connection_update) {
+  uint16_t handle = connection_update.GetConnectionHandle();
+  if (!connections_.HasHandle(handle)) {
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
+
+  // This could negotiate with the remote device in the future
+  ScheduleTask(milliseconds(25), [this, connection_update]() {
+    LeConnectionUpdateComplete(connection_update);
+  });
+
+  return ErrorCode::SUCCESS;
+}
+
+void LinkLayerController::LeConnectListClear() { le_connect_list_.clear(); }
 
 void LinkLayerController::LeResolvingListClear() { le_resolving_list_.clear(); }
 
-void LinkLayerController::LeWhiteListAddDevice(Address addr,
-                                               uint8_t addr_type) {
+void LinkLayerController::LeConnectListAddDevice(Address addr,
+                                                 uint8_t addr_type) {
   std::tuple<Address, uint8_t> new_tuple = std::make_tuple(addr, addr_type);
-  for (auto dev : le_white_list_) {
+  for (auto dev : le_connect_list_) {
     if (dev == new_tuple) {
       return;
     }
   }
-  le_white_list_.emplace_back(new_tuple);
+  le_connect_list_.emplace_back(new_tuple);
 }
 
 void LinkLayerController::LeResolvingListAddDevice(
@@ -1667,8 +1923,8 @@ void LinkLayerController::LeResolvingListAddDevice(
   std::tuple<Address, uint8_t, std::array<uint8_t, kIrk_size>,
              std::array<uint8_t, kIrk_size>>
       new_tuple = std::make_tuple(addr, addr_type, peerIrk, localIrk);
-  for (size_t i = 0; i < le_white_list_.size(); i++) {
-    auto curr = le_white_list_[i];
+  for (size_t i = 0; i < le_connect_list_.size(); i++) {
+    auto curr = le_connect_list_[i];
     if (std::get<0>(curr) == addr && std::get<1>(curr) == addr_type) {
       le_resolving_list_[i] = new_tuple;
       return;
@@ -1685,14 +1941,117 @@ void LinkLayerController::LeSetPrivacyMode(uint8_t address_type, Address addr,
   LOG_INFO("mode = %d ", mode);
 }
 
-void LinkLayerController::LeWhiteListRemoveDevice(Address addr,
-                                                  uint8_t addr_type) {
+void LinkLayerController::HandleLeEnableEncryption(
+    uint16_t handle, std::array<uint8_t, 8> rand, uint16_t ediv,
+    std::array<uint8_t, 16> ltk) {
+  // TODO: Check keys
+  // TODO: Block ACL traffic or at least guard against it
+  if (!connections_.HasHandle(handle)) {
+    return;
+  }
+  SendLeLinkLayerPacket(model::packets::LeEncryptConnectionBuilder::Create(
+      connections_.GetOwnAddress(handle).GetAddress(),
+      connections_.GetAddress(handle).GetAddress(), rand, ediv, ltk));
+}
+
+ErrorCode LinkLayerController::LeEnableEncryption(uint16_t handle,
+                                                  std::array<uint8_t, 8> rand,
+                                                  uint16_t ediv,
+                                                  std::array<uint8_t, 16> ltk) {
+  if (!connections_.HasHandle(handle)) {
+    LOG_INFO("Unknown handle %04x", handle);
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
+
+  ScheduleTask(milliseconds(5), [this, handle, rand, ediv, ltk]() {
+    HandleLeEnableEncryption(handle, rand, ediv, ltk);
+  });
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::SetLeAdvertisingEnable(
+    uint8_t le_advertising_enable) {
+  if (!le_advertising_enable) {
+    advertisers_[0].Disable();
+    return ErrorCode::SUCCESS;
+  }
+  auto interval_ms = (properties_.GetLeAdvertisingIntervalMax() +
+                      properties_.GetLeAdvertisingIntervalMin()) *
+                     0.625 / 2;
+
+  Address own_address = properties_.GetAddress();
+  if (properties_.GetLeAdvertisingOwnAddressType() ==
+          static_cast<uint8_t>(AddressType::RANDOM_DEVICE_ADDRESS) ||
+      properties_.GetLeAdvertisingOwnAddressType() ==
+          static_cast<uint8_t>(AddressType::RANDOM_IDENTITY_ADDRESS)) {
+    if (properties_.GetLeAddress().ToString() == "bb:bb:bb:ba:d0:1e" ||
+        properties_.GetLeAddress() == Address::kEmpty) {
+      return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+    }
+    own_address = properties_.GetLeAddress();
+  }
+  auto own_address_with_type = AddressWithType(
+      own_address, static_cast<bluetooth::hci::AddressType>(
+                       properties_.GetLeAdvertisingOwnAddressType()));
+
+  auto interval = std::chrono::milliseconds(static_cast<uint64_t>(interval_ms));
+  if (interval < std::chrono::milliseconds(20)) {
+    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+  }
+  advertisers_[0].Initialize(
+      own_address_with_type,
+      bluetooth::hci::AddressWithType(
+          properties_.GetLeAdvertisingPeerAddress(),
+          static_cast<bluetooth::hci::AddressType>(
+              properties_.GetLeAdvertisingPeerAddressType())),
+      static_cast<bluetooth::hci::LeScanningFilterPolicy>(
+          properties_.GetLeAdvertisingFilterPolicy()),
+      static_cast<model::packets::AdvertisementType>(
+          properties_.GetLeAdvertisementType()),
+      properties_.GetLeAdvertisement(), properties_.GetLeScanResponse(),
+      interval);
+  advertisers_[0].Enable();
+  return ErrorCode::SUCCESS;
+}
+
+void LinkLayerController::LeDisableAdvertisingSets() {
+  for (auto& advertiser : advertisers_) {
+    advertiser.Disable();
+  }
+}
+
+uint8_t LinkLayerController::LeReadNumberOfSupportedAdvertisingSets() {
+  return advertisers_.size();
+}
+
+ErrorCode LinkLayerController::SetLeExtendedAdvertisingEnable(
+    bluetooth::hci::Enable enable,
+    const std::vector<bluetooth::hci::EnabledSet>& enabled_sets) {
+  for (const auto& set : enabled_sets) {
+    if (set.advertising_handle_ > advertisers_.size()) {
+      return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+    }
+  }
+  for (const auto& set : enabled_sets) {
+    auto handle = set.advertising_handle_;
+    if (enable == bluetooth::hci::Enable::ENABLED) {
+      advertisers_[handle].EnableExtended(
+          std::chrono::milliseconds(10 * set.duration_));
+    } else {
+      advertisers_[handle].Disable();
+    }
+  }
+  return ErrorCode::SUCCESS;
+}
+
+void LinkLayerController::LeConnectListRemoveDevice(Address addr,
+                                                    uint8_t addr_type) {
   // TODO: Add checks to see if advertising, scanning, or a connection request
-  // with the white list is ongoing.
+  // with the connect list is ongoing.
   std::tuple<Address, uint8_t> erase_tuple = std::make_tuple(addr, addr_type);
-  for (size_t i = 0; i < le_white_list_.size(); i++) {
-    if (le_white_list_[i] == erase_tuple) {
-      le_white_list_.erase(le_white_list_.begin() + i);
+  for (size_t i = 0; i < le_connect_list_.size(); i++) {
+    if (le_connect_list_[i] == erase_tuple) {
+      le_connect_list_.erase(le_connect_list_.begin() + i);
     }
   }
 }
@@ -1700,20 +2059,20 @@ void LinkLayerController::LeWhiteListRemoveDevice(Address addr,
 void LinkLayerController::LeResolvingListRemoveDevice(Address addr,
                                                       uint8_t addr_type) {
   // TODO: Add checks to see if advertising, scanning, or a connection request
-  // with the white list is ongoing.
-  for (size_t i = 0; i < le_white_list_.size(); i++) {
-    auto curr = le_white_list_[i];
+  // with the connect list is ongoing.
+  for (size_t i = 0; i < le_connect_list_.size(); i++) {
+    auto curr = le_connect_list_[i];
     if (std::get<0>(curr) == addr && std::get<1>(curr) == addr_type) {
       le_resolving_list_.erase(le_resolving_list_.begin() + i);
     }
   }
 }
 
-bool LinkLayerController::LeWhiteListContainsDevice(Address addr,
-                                                    uint8_t addr_type) {
+bool LinkLayerController::LeConnectListContainsDevice(Address addr,
+                                                      uint8_t addr_type) {
   std::tuple<Address, uint8_t> sought_tuple = std::make_tuple(addr, addr_type);
-  for (size_t i = 0; i < le_white_list_.size(); i++) {
-    if (le_white_list_[i] == sought_tuple) {
+  for (size_t i = 0; i < le_connect_list_.size(); i++) {
+    if (le_connect_list_[i] == sought_tuple) {
       return true;
     }
   }
@@ -1722,8 +2081,8 @@ bool LinkLayerController::LeWhiteListContainsDevice(Address addr,
 
 bool LinkLayerController::LeResolvingListContainsDevice(Address addr,
                                                         uint8_t addr_type) {
-  for (size_t i = 0; i < le_white_list_.size(); i++) {
-    auto curr = le_white_list_[i];
+  for (size_t i = 0; i < le_connect_list_.size(); i++) {
+    auto curr = le_connect_list_[i];
     if (std::get<0>(curr) == addr && std::get<1>(curr) == addr_type) {
       return true;
     }
@@ -1731,8 +2090,8 @@ bool LinkLayerController::LeResolvingListContainsDevice(Address addr,
   return false;
 }
 
-bool LinkLayerController::LeWhiteListFull() {
-  return le_white_list_.size() >= properties_.GetLeWhiteListSize();
+bool LinkLayerController::LeConnectListFull() {
+  return le_connect_list_.size() >= properties_.GetLeConnectListSize();
 }
 
 bool LinkLayerController::LeResolvingListFull() {
@@ -1740,29 +2099,31 @@ bool LinkLayerController::LeResolvingListFull() {
 }
 
 void LinkLayerController::Reset() {
-  inquiry_state_ = Inquiry::InquiryState::STANDBY;
+  if (inquiry_timer_task_id_ != kInvalidTaskId) {
+    CancelScheduledTask(inquiry_timer_task_id_);
+    inquiry_timer_task_id_ = kInvalidTaskId;
+  }
   last_inquiry_ = steady_clock::now();
   le_scan_enable_ = bluetooth::hci::OpCode::NONE;
-  le_advertising_enable_ = 0;
+  LeDisableAdvertisingSets();
   le_connect_ = 0;
 }
 
-void LinkLayerController::PageScan() {}
-
 void LinkLayerController::StartInquiry(milliseconds timeout) {
-  ScheduleTask(milliseconds(timeout),
-               [this]() { LinkLayerController::InquiryTimeout(); });
-  inquiry_state_ = Inquiry::InquiryState::INQUIRY;
+  inquiry_timer_task_id_ = ScheduleTask(milliseconds(timeout), [this]() {
+    LinkLayerController::InquiryTimeout();
+  });
 }
 
 void LinkLayerController::InquiryCancel() {
-  ASSERT(inquiry_state_ == Inquiry::InquiryState::INQUIRY);
-  inquiry_state_ = Inquiry::InquiryState::STANDBY;
+  ASSERT(inquiry_timer_task_id_ != kInvalidTaskId);
+  CancelScheduledTask(inquiry_timer_task_id_);
+  inquiry_timer_task_id_ = kInvalidTaskId;
 }
 
 void LinkLayerController::InquiryTimeout() {
-  if (inquiry_state_ == Inquiry::InquiryState::INQUIRY) {
-    inquiry_state_ = Inquiry::InquiryState::STANDBY;
+  if (inquiry_timer_task_id_ != kInvalidTaskId) {
+    inquiry_timer_task_id_ = kInvalidTaskId;
     auto packet =
         bluetooth::hci::InquiryCompleteBuilder::Create(ErrorCode::SUCCESS);
     send_event_(std::move(packet));

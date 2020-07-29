@@ -41,7 +41,7 @@ namespace {
 
 bool BtTestConsoleEnabled() {
   // Assume enabled by default.
-  return property_get_bool("bt.rootcanal_test_console", true);
+  return property_get_bool("vendor.bt.rootcanal_test_console", true);
 }
 
 }  // namespace
@@ -97,14 +97,14 @@ Return<void> BluetoothHci::initialize_impl(
   test_channel_transport_.RegisterCommandHandler(
       [this](const std::string& name, const std::vector<std::string>& args) {
         async_manager_.ExecAsync(
-            std::chrono::milliseconds(0),
+            user_id_, std::chrono::milliseconds(0),
             [this, name, args]() { test_channel_.HandleCommand(name, args); });
       });
 
   controller_ = std::make_shared<DualModeController>();
 
   char mac_property[PROPERTY_VALUE_MAX] = "";
-  property_get("bt.rootcanal_mac_address", mac_property, "3C:5A:B4:01:02:03");
+  property_get("vendor.bt.rootcanal_mac_address", mac_property, "3C:5A:B4:01:02:03");
   controller_->Initialize({"dmc", std::string(mac_property)});
 
   controller_->RegisterEventChannel(
@@ -151,13 +151,14 @@ Return<void> BluetoothHci::initialize_impl(
 
   controller_->RegisterTaskScheduler(
       [this](std::chrono::milliseconds delay, const TaskCallback& task) {
-        return async_manager_.ExecAsync(delay, task);
+        return async_manager_.ExecAsync(user_id_, delay, task);
       });
 
   controller_->RegisterPeriodicTaskScheduler(
       [this](std::chrono::milliseconds delay, std::chrono::milliseconds period,
              const TaskCallback& task) {
-        return async_manager_.ExecAsyncPeriodically(delay, period, task);
+        return async_manager_.ExecAsyncPeriodically(user_id_, delay, period,
+                                                    task);
       });
 
   controller_->RegisterTaskCancel(
@@ -228,38 +229,46 @@ Return<void> BluetoothHci::close() {
 }
 
 Return<void> BluetoothHci::sendHciCommand(const hidl_vec<uint8_t>& packet) {
-  async_manager_.ExecAsync(std::chrono::milliseconds(0), [this, packet]() {
-    std::shared_ptr<std::vector<uint8_t>> packet_copy =
-        std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(packet));
-    controller_->HandleCommand(packet_copy);
-  });
+  async_manager_.ExecAsync(user_id_, std::chrono::milliseconds(0),
+                           [this, packet]() {
+                             std::shared_ptr<std::vector<uint8_t>> packet_copy =
+                                 std::shared_ptr<std::vector<uint8_t>>(
+                                     new std::vector<uint8_t>(packet));
+                             controller_->HandleCommand(packet_copy);
+                           });
   return Void();
 }
 
 Return<void> BluetoothHci::sendAclData(const hidl_vec<uint8_t>& packet) {
-  async_manager_.ExecAsync(std::chrono::milliseconds(0), [this, packet]() {
-    std::shared_ptr<std::vector<uint8_t>> packet_copy =
-        std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(packet));
-    controller_->HandleAcl(packet_copy);
-  });
+  async_manager_.ExecAsync(user_id_, std::chrono::milliseconds(0),
+                           [this, packet]() {
+                             std::shared_ptr<std::vector<uint8_t>> packet_copy =
+                                 std::shared_ptr<std::vector<uint8_t>>(
+                                     new std::vector<uint8_t>(packet));
+                             controller_->HandleAcl(packet_copy);
+                           });
   return Void();
 }
 
 Return<void> BluetoothHci::sendScoData(const hidl_vec<uint8_t>& packet) {
-  async_manager_.ExecAsync(std::chrono::milliseconds(0), [this, packet]() {
-    std::shared_ptr<std::vector<uint8_t>> packet_copy =
-        std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(packet));
-    controller_->HandleSco(packet_copy);
-  });
+  async_manager_.ExecAsync(user_id_, std::chrono::milliseconds(0),
+                           [this, packet]() {
+                             std::shared_ptr<std::vector<uint8_t>> packet_copy =
+                                 std::shared_ptr<std::vector<uint8_t>>(
+                                     new std::vector<uint8_t>(packet));
+                             controller_->HandleSco(packet_copy);
+                           });
   return Void();
 }
 
 Return<void> BluetoothHci::sendIsoData(const hidl_vec<uint8_t>& packet) {
-  async_manager_.ExecAsync(std::chrono::milliseconds(0), [this, packet]() {
-    std::shared_ptr<std::vector<uint8_t>> packet_copy =
-        std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(packet));
-    controller_->HandleIso(packet_copy);
-  });
+  async_manager_.ExecAsync(user_id_, std::chrono::milliseconds(0),
+                           [this, packet]() {
+                             std::shared_ptr<std::vector<uint8_t>> packet_copy =
+                                 std::shared_ptr<std::vector<uint8_t>>(
+                                     new std::vector<uint8_t>(packet));
+                             controller_->HandleIso(packet_copy);
+                           });
   return Void();
 }
 
