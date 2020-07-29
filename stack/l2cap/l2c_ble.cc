@@ -36,6 +36,7 @@
 #include "l2c_int.h"
 #include "l2cdefs.h"
 #include "log/log.h"
+#include "main/shim/shim.h"
 #include "osi/include/osi.h"
 #include "stack/gatt/connection_manager.h"
 #include "stack_config.h"
@@ -147,6 +148,11 @@ bool L2CA_UpdateBleConnParams(const RawAddress& rem_bda, uint16_t min_int,
  *
  ******************************************************************************/
 bool L2CA_EnableUpdateBleConnParams(const RawAddress& rem_bda, bool enable) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    LOG(ERROR) << "NOT IMPLEMENTED";
+    return true;
+  }
+
   if (stack_config_get_interface()->get_pts_conn_updates_disabled())
     return false;
 
@@ -279,10 +285,7 @@ void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
       LOG(ERROR) << __func__ << "failed to allocate LCB";
       return;
     } else {
-      if (!l2cu_initialize_fixed_ccb(
-              p_lcb, L2CAP_ATT_CID,
-              &l2cb.fixed_reg[L2CAP_ATT_CID - L2CAP_FIRST_FIXED_CHNL]
-                   .fixed_chnl_opts)) {
+      if (!l2cu_initialize_fixed_ccb(p_lcb, L2CAP_ATT_CID)) {
         btm_sec_disconnect(handle, HCI_ERR_NO_CONNECTION);
         LOG(WARNING) << __func__ << "LCB but no CCB";
         return;
@@ -1288,4 +1291,9 @@ void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
                       __func__, *max_interval, phone_min_interval);
     *max_interval = phone_min_interval;
   }
+}
+
+void L2CA_SetLeFixedChannelTxDataLength(const RawAddress& remote_bda,
+                                        uint16_t fix_cid, uint16_t tx_mtu) {
+  l2cble_set_fixed_channel_tx_data_length(remote_bda, fix_cid, tx_mtu);
 }
