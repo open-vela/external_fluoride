@@ -249,7 +249,7 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
   /* Register the PSM with L2CAP */
   if (transport == BT_TRANSPORT_BR_EDR) {
     p_ccb->psm = L2CA_Register(psm, &conn.reg_info, false /* enable_snoop */,
-                               &p_ccb->ertm_info);
+                               &p_ccb->ertm_info, L2CAP_MTU_SIZE);
     if (p_ccb->psm == 0) {
       LOG(ERROR) << StringPrintf("%s: Failure registering PSM 0x%04x", __func__,
                                  psm);
@@ -868,7 +868,7 @@ static void gap_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
       gap_checks_con_flags(p_ccb);
     }
   } else {
-    /* Tell the user if he has a callback */
+    /* Tell the user if there is a callback */
     if (p_ccb->p_callback)
       (*p_ccb->p_callback)(p_ccb->gap_handle, GAP_EVT_CONN_CLOSED, nullptr);
 

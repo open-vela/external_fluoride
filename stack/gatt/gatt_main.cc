@@ -109,13 +109,6 @@ void gatt_init(void) {
   gatt_cb.sign_op_queue = fixed_queue_new(SIZE_MAX);
   gatt_cb.srv_chg_clt_q = fixed_queue_new(SIZE_MAX);
   /* First, register fixed L2CAP channel for ATT over BLE */
-  fixed_reg.fixed_chnl_opts.mode = L2CAP_FCR_BASIC_MODE;
-  fixed_reg.fixed_chnl_opts.max_transmit = 0xFF;
-  fixed_reg.fixed_chnl_opts.rtrans_tout = 2000;
-  fixed_reg.fixed_chnl_opts.mon_tout = 12000;
-  fixed_reg.fixed_chnl_opts.mps = 670;
-  fixed_reg.fixed_chnl_opts.tx_win_sz = 1;
-
   fixed_reg.pL2CA_FixedConn_Cb = gatt_le_connect_cback;
   fixed_reg.pL2CA_FixedData_Cb = gatt_le_data_ind;
   fixed_reg.pL2CA_FixedCong_Cb = gatt_le_cong_cback; /* congestion callback */
@@ -125,7 +118,7 @@ void gatt_init(void) {
 
   /* Now, register with L2CAP for ATT PSM over BR/EDR */
   if (!L2CA_Register(BT_PSM_ATT, (tL2CAP_APPL_INFO*)&dyn_info,
-                     false /* enable_snoop */, nullptr)) {
+                     false /* enable_snoop */, nullptr, gatt_cb.def_mtu_size)) {
     LOG(ERROR) << "ATT Dynamic Registration failed";
   }
 
