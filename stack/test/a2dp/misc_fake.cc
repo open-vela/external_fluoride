@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-#include "storage/adapter_config.h"
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-namespace bluetooth {
-namespace storage {
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-AdapterConfig::AdapterConfig(ConfigCache* config, ConfigCache* memory_only_config, std::string section)
-    : config_(config), memory_only_config_(memory_only_config), section_(std::move(section)) {}
-
-}  // namespace storage
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
