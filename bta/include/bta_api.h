@@ -1198,7 +1198,7 @@ tBTA_STATUS BTA_DmGetCachedRemoteName(const RawAddress& remote_device,
  *
  ******************************************************************************/
 extern void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                       tBTA_TRANSPORT transport);
+                       tBTA_TRANSPORT transport, int device_type);
 
 /*******************************************************************************
  *
@@ -1454,66 +1454,6 @@ extern void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
                                        uint16_t max_conn_int,
                                        uint16_t slave_latency,
                                        uint16_t supervision_tout);
-
-/*******************************************************************************
- *
- * Function         BTA_DmSetBleConnScanParams
- *
- * Description      This function is called to set scan parameters used in
- *                  BLE connection request
- *
- * Parameters:      scan_interval    - scan interval
- *                  scan_window      - scan window
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void BTA_DmSetBleConnScanParams(uint32_t scan_interval,
-                                       uint32_t scan_window);
-
-/*******************************************************************************
- *
- * Function         BTA_DmSearchExt
- *
- * Description      This function searches for peer Bluetooth devices. It
- *                  performs an inquiry and gets the remote name for devices.
- *                  Service discovery is done if services is non zero
- *
- * Parameters       p_dm_inq: inquiry conditions
- *                  services: if service is not empty, service discovery will be
- *                            done.
- *                            for all GATT based service condition, put
- *                            num_uuid, and p_uuid is the pointer to the list of
- *                            UUID values.
- *                  p_cback: callback functino when search is completed.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void BTA_DmSearchExt(tBTA_DM_INQ* p_dm_inq,
-                            tBTA_SERVICE_MASK_EXT* p_services,
-                            tBTA_DM_SEARCH_CBACK* p_cback);
-
-/*******************************************************************************
- *
- * Function         BTA_DmDiscoverExt
- *
- * Description      This function does service discovery for services of a
- *                  peer device. When services.num_uuid is 0, it indicates all
- *                  GATT based services are to be searched; other wise a list of
- *                  UUID of interested services should be provided through
- *                  services.p_uuid.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void BTA_DmDiscoverExt(const RawAddress& bd_addr,
-                              tBTA_SERVICE_MASK_EXT* p_services,
-                              tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search);
 
 /*******************************************************************************
  *

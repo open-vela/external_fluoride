@@ -88,6 +88,7 @@ HciSocketDevice::HciSocketDevice(int file_descriptor) : socket_file_descriptor_(
       },
       [this]() {
         LOG_INFO("HCI socket device disconnected");
+        socket_file_descriptor_ = -1;
         close_callback_();
       });
 
@@ -105,7 +106,8 @@ void HciSocketDevice::TimerTick() {
 
 void HciSocketDevice::SendHci(hci::PacketType packet_type, const std::shared_ptr<std::vector<uint8_t>> packet) {
   if (socket_file_descriptor_ == -1) {
-    LOG_INFO("socket_file_descriptor == -1");
+    LOG_INFO("Closed socket. Dropping packet of type %d",
+             static_cast<int>(packet_type));
     return;
   }
   uint8_t type = static_cast<uint8_t>(packet_type);
@@ -121,7 +123,9 @@ void HciSocketDevice::SendHci(hci::PacketType packet_type, const std::shared_ptr
 }
 
 void HciSocketDevice::RegisterCloseCallback(std::function<void()> close_callback) {
-  close_callback_ = close_callback;
+  if (socket_file_descriptor_ != -1) {
+    close_callback_ = close_callback;
+  }
 }
 
 }  // namespace test_vendor_lib

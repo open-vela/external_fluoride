@@ -74,7 +74,8 @@ void rfcomm_l2cap_if_init(void) {
   p_l2c->pL2CA_CongestionStatus_Cb = RFCOMM_CongestionStatusInd;
   p_l2c->pL2CA_TxComplete_Cb = NULL;
 
-  L2CA_Register(BT_PSM_RFCOMM, p_l2c, true /* enable_snoop */, nullptr);
+  L2CA_Register(BT_PSM_RFCOMM, p_l2c, true /* enable_snoop */, nullptr,
+                RFCOMM_DEFAULT_MTU);
 }
 
 /*******************************************************************************
@@ -182,7 +183,7 @@ void RFCOMM_ConnectCnf(uint16_t lcid, uint16_t result) {
       RFCOMM_TRACE_DEBUG("RFCOMM_ConnectCnf peer gave up pending LCID(0x%x)",
                          p_mcb->pending_lcid);
 
-      /* Peer gave up his connection request, make sure cleaning up L2CAP
+      /* Peer gave up its connection request, make sure cleaning up L2CAP
        * channel */
       L2CA_ConnectRsp(p_mcb->bd_addr, p_mcb->pending_id, p_mcb->pending_lcid,
                       L2CAP_CONN_NO_RESOURCES, 0);
