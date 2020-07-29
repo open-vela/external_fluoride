@@ -30,6 +30,7 @@
 
 #include "bt_common.h"
 #include "bt_target.h"
+#include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hci/include/btsnoop.h"
@@ -196,7 +197,10 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
     /* only process fixed channel data when link is open or wait for data
      * indication */
     if (!p_lcb || p_lcb->link_state == LST_DISCONNECTING ||
-        !l2cu_initialize_fixed_ccb(p_lcb, rcv_cid)) {
+        !l2cu_initialize_fixed_ccb(
+            p_lcb, rcv_cid,
+            &l2cb.fixed_reg[rcv_cid - L2CAP_FIRST_FIXED_CHNL]
+                 .fixed_chnl_opts)) {
       osi_free(p_msg);
       return;
     }
