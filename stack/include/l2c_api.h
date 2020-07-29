@@ -95,11 +95,9 @@ typedef uint8_t tL2CAP_CHNL_DATA_RATE;
  */
 #define L2CAP_FCR_CHAN_OPT_BASIC (1 << L2CAP_FCR_BASIC_MODE)
 #define L2CAP_FCR_CHAN_OPT_ERTM (1 << L2CAP_FCR_ERTM_MODE)
-#define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
 
-#define L2CAP_FCR_CHAN_OPT_ALL_MASK                     \
-  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM | \
-   L2CAP_FCR_CHAN_OPT_STREAM)
+#define L2CAP_FCR_CHAN_OPT_ALL_MASK \
+  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM)
 
 /* Validity check for PSM.  PSM values must be odd.  Also, all PSM values must
  * be assigned such that the least significant bit of the most sigificant
@@ -325,7 +323,8 @@ typedef struct {
  *
  ******************************************************************************/
 extern uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                              bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info);
+                              bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
+                              uint16_t required_mtu);
 
 /*******************************************************************************
  *
@@ -566,11 +565,10 @@ extern bool L2CA_DisconnectRsp(uint16_t cid);
 extern uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
 
 // Given a local channel identifier, |lcid|, this function returns the bound
-// remote channel identifier, |rcid|, and the ACL link handle, |handle|. If
+// remote channel identifier, |rcid|. If
 // |lcid| is not known or is invalid, this function returns false and does not
-// modify the values pointed at by |rcid| and |handle|. |rcid| and |handle| may
-// be NULL.
-bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle);
+// modify the value pointed at by |rcid|. |rcid| may be NULL.
+bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid);
 
 /*******************************************************************************
  *
@@ -774,7 +772,6 @@ typedef struct {
   tL2CA_FIXED_CHNL_CB* pL2CA_FixedConn_Cb;
   tL2CA_FIXED_DATA_CB* pL2CA_FixedData_Cb;
   tL2CA_FIXED_CONGESTION_STATUS_CB* pL2CA_FixedCong_Cb;
-  tL2CAP_FCR_OPTS fixed_chnl_opts;
 
   uint16_t default_idle_tout;
   tL2CA_TX_COMPLETE_CB*
@@ -945,4 +942,18 @@ extern uint16_t L2CA_GetDisconnectReason(const RawAddress& remote_bda,
 extern void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
                                            uint16_t* max_interval,
                                            uint16_t floor_interval);
+
+/**
+ * Update max fixed channel tx data length if applicable
+ */
+extern void L2CA_SetLeFixedChannelTxDataLength(const RawAddress& remote_bda,
+                                               uint16_t fix_cid,
+                                               uint16_t tx_mtu);
+
+/**
+ * Check whether an ACL or LE link to the remote device is established
+ */
+extern bool L2CA_IsLinkEstablished(const RawAddress& bd_addr,
+                                   tBT_TRANSPORT transport);
+
 #endif /* L2C_API_H */
