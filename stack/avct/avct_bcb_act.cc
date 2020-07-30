@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2016 Broadcom Corporation
+ *  Copyright (C) 2003-2016 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
  ******************************************************************************/
 
 /*****************************************************************************
- *
- *  Name:           avct_bcb_act.cc
- *
- *  Description:    This module contains action functions of the browsing
- *                  control state machine.
- *
+*
+*  Name:           avct_bcb_act.cc
+*
+*  Description:    This module contains action functions of the browsing control
+*                  state machine.
+*
  *****************************************************************************/
 
 #include <log/log.h>
@@ -187,7 +187,7 @@ void avct_bcb_open_ind(tAVCT_BCB* p_bcb, tAVCT_LCB_EVT* p_data) {
   }
 
   /* if no ccbs bound to this lcb, disconnect */
-  if (!bind) {
+  if (bind == false) {
     avct_bcb_event(p_bcb, AVCT_LCB_INT_CLOSE_EVT, p_data);
     return;
   }

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Broadcom Corporation
+ *  Copyright (C) 2014 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -63,7 +63,6 @@ void btm_ble_batchscan_filter_track_adv_vse_cback(uint8_t len, uint8_t* p) {
 
   uint8_t sub_event = 0;
   tBTM_BLE_VSC_CB cmn_ble_vsc_cb;
-  if (len == 0) return;
   STREAM_TO_UINT8(sub_event, p);
 
   BTM_TRACE_EVENT(
@@ -91,7 +90,6 @@ void btm_ble_batchscan_filter_track_adv_vse_cback(uint8_t len, uint8_t* p) {
 
       /* Extract the adv info details */
       if (ADV_INFO_PRESENT == adv_data.advertiser_info_present) {
-        if (len < 15) return;
         STREAM_TO_UINT8(adv_data.tx_power, p);
         STREAM_TO_UINT8(adv_data.rssi_value, p);
         STREAM_TO_UINT16(adv_data.time_stamp, p);
@@ -498,8 +496,8 @@ void BTM_BleReadScanReports(tBTM_BLE_BATCH_SCAN_MODE scan_mode,
 
   /* Check only for modes, as scan reports can be called after disabling batch
    * scan */
-  if (scan_mode != BTM_BLE_BATCH_SCAN_MODE_PASS &&
-      scan_mode != BTM_BLE_BATCH_SCAN_MODE_ACTI) {
+  if (read_scan_mode < 0 || (scan_mode != BTM_BLE_BATCH_SCAN_MODE_PASS &&
+                             scan_mode != BTM_BLE_BATCH_SCAN_MODE_ACTI)) {
     BTM_TRACE_ERROR("Illegal read scan params: %d, %d, %d", read_scan_mode,
                     scan_mode, ble_batchscan_cb.cur_state);
     cb.Run(BTM_ILLEGAL_VALUE, 0, 0, {});
