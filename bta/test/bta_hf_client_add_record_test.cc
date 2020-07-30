@@ -31,7 +31,9 @@ bool SDP_AddUuidSequence(uint32_t handle, uint16_t attr_id, uint16_t num_uuids,
 
 class BtaHfClientAddRecordTest : public ::testing::Test {
  protected:
-  void SetUp() override { gVersion = 0; }
+  void SetUp() override {
+    gVersion = 0;
+  }
 
   void TearDown() override {}
 };
@@ -50,3 +52,4 @@ TEST_F(BtaHfClientAddRecordTest, test_hf_client_add_record) {
   bta_hf_client_add_record("Handsfree", scn, features, sdp_handle);
   EXPECT_EQ(gVersion, 0x0106);
 }
+
