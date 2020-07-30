@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2017 The Android Open Source Project
+ *  Copyright 2017 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <array>
+#include <cstring>
 #include <string>
 
 /** Bluetooth Address */
@@ -28,7 +30,7 @@ class RawAddress final {
   uint8_t address[kLength];
 
   RawAddress() = default;
-  RawAddress(const uint8_t (&addr)[6]);
+  RawAddress(const uint8_t (&addr)[kLength]);
 
   bool operator<(const RawAddress& rhs) const {
     return (std::memcmp(address, rhs.address, sizeof(address)) < 0);
@@ -50,6 +52,10 @@ class RawAddress final {
   // returns false. Otherwise, it returns true.
   static bool FromString(const std::string& from, RawAddress& to);
 
+  // Copies |from| raw Bluetooth address octets to the local object.
+  // Returns the number of copied octets - should be always RawAddress::kLength
+  size_t FromOctets(const uint8_t* from);
+
   static bool IsValidAddress(const std::string& address);
 
   static const RawAddress kEmpty;  // 00:00:00:00:00:00
@@ -60,3 +66,14 @@ inline std::ostream& operator<<(std::ostream& os, const RawAddress& a) {
   os << a.ToString();
   return os;
 }
+
+template <>
+struct std::hash<RawAddress> {
+  std::size_t operator()(const RawAddress& val) const {
+    static_assert(sizeof(uint64_t) >= RawAddress::kLength);
+    uint64_t int_addr = 0;
+    memcpy(reinterpret_cast<uint8_t*>(&int_addr), val.address,
+           RawAddress::kLength);
+    return std::hash<uint64_t>{}(int_addr);
+  }
+};
