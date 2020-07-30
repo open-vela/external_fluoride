@@ -51,6 +51,8 @@
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
+#include "main/shim/btm_api.h"
+#include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -543,8 +545,8 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
   tBTM_PM_MODE pwr_mode;
   tBTM_PM_PWR_MD settings;
 
-  LOG_INFO(LOG_TAG, "%s: peer %s new_role=0x%x p_cb=%p p_switch_role_cb=%p",
-           __func__, remote_bd_addr.ToString().c_str(), new_role, p_cb,
+  LOG_INFO("%s: peer %s new_role=0x%x p_cb=%p p_switch_role_cb=%p", __func__,
+           remote_bd_addr.ToString().c_str(), new_role, p_cb,
            btm_cb.devcb.p_switch_role_cb);
 
   /* Make sure the local device supports switching */
@@ -1225,7 +1227,7 @@ void btm_establish_continue(tACL_CONN* p_acl_cb) {
   }
   p_acl_cb->link_up_issued = true;
 
-  /* If anyone cares, tell him database changed */
+  /* If anyone cares, tell them that the database changed */
   if (btm_cb.p_bl_changed_cb) {
     evt_data.event = BTM_BL_CONN_EVT;
     evt_data.conn.p_bda = &p_acl_cb->remote_addr;
@@ -1382,6 +1384,10 @@ uint16_t btm_get_acl_disc_reason_code(void) {
  ******************************************************************************/
 uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
                               tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_GetHCIConnHandle(remote_bda, transport);
+  }
+
   tACL_CONN* p;
   BTM_TRACE_DEBUG("BTM_GetHCIConnHandle");
   p = btm_bda_to_acl(remote_bda, transport);
