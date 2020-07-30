@@ -127,14 +127,6 @@ static const uint8_t* btm_eir_get_uuid_list(uint8_t* p_eir, size_t eir_len,
                                             uint8_t* p_num_uuid,
                                             uint8_t* p_uuid_list_type);
 
-void SendRemoteNameRequest(const RawAddress& raw_address) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::SendRemoteNameRequest(raw_address);
-  } else {
-    btsnd_hcic_rmt_name_req(raw_address, HCI_PAGE_SCAN_REP_MODE_R1,
-                            HCI_MANDATARY_PAGE_SCAN_MODE, 0);
-  }
-}
 /*******************************************************************************
  *
  * Function         BTM_SetDiscoverability
@@ -1877,7 +1869,15 @@ tBTM_STATUS btm_initiate_rem_name(const RawAddress& remote_bda, uint8_t origin,
 
   /*** Make sure the device is ready ***/
   if (!BTM_IsDeviceUp()) return (BTM_WRONG_MODE);
-  if (origin == BTM_RMT_NAME_EXT) {
+
+  if (origin == BTM_RMT_NAME_SEC) {
+    btsnd_hcic_rmt_name_req(remote_bda, HCI_PAGE_SCAN_REP_MODE_R1,
+                            HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+    return BTM_CMD_STARTED;
+  }
+  /* Make sure there are no two remote name requests from external API in
+     progress */
+  else if (origin == BTM_RMT_NAME_EXT) {
     if (p_inq->remname_active) {
       return (BTM_BUSY);
     } else {
@@ -2396,7 +2396,7 @@ static uint16_t btm_convert_uuid_to_uuid16(const uint8_t* p_uuid,
       if (uuid32 < 0x10000) uuid16 = (uint16_t)uuid32;
       break;
     case Uuid::kNumBytes128:
-      /* See if we can compress the UUID down to 16 or 32bit UUIDs */
+      /* See if we can compress his UUID down to 16 or 32bit UUIDs */
       is_base_uuid = true;
       for (xx = 0; xx < Uuid::kNumBytes128 - 4; xx++) {
         if (p_uuid[xx] != base_uuid[xx]) {
