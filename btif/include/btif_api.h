@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -105,19 +105,6 @@ bool is_restricted_mode(void);
 
 /*******************************************************************************
  *
- * Function         is_niap_mode
- *
- * Description      Checks if BT was enabled in single user mode. In this
- *                  mode, use of keystore for key attestation of LTK is limitee
- *                  to this mode defined by UserManager.
- *
- * Returns          bool
- *
- ******************************************************************************/
-bool is_niap_mode(void);
-
-/*******************************************************************************
- *
  * Function         btif_get_adapter_properties
  *
  * Description      Fetches all local adapter properties
@@ -197,8 +184,8 @@ bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
-                                           const bluetooth::Uuid& uuid);
+bt_status_t btif_get_remote_service_record(RawAddress* remote_addr,
+                                           bt_uuid_t* uuid);
 
 /*******************************************************************************
  *  BTIF DM API
@@ -342,8 +329,8 @@ bt_status_t btif_dm_get_adapter_property(bt_property_t* prop);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_service_record(const RawAddress& remote_addr,
-                                              const bluetooth::Uuid& uuid);
+bt_status_t btif_dm_get_remote_service_record(RawAddress* remote_addr,
+                                              bt_uuid_t* uuid);
 
 /*******************************************************************************
  *

@@ -1,20 +1,20 @@
 /******************************************************************************
- *
- *  Copyright 1999-2012 Broadcom Corporation
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at:
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- ******************************************************************************/
+*
+*  Copyright (C) 1999-2012 Broadcom Corporation
+*
+*  Licensed under the Apache License, Version 2.0 (the "License");
+*  you may not use this file except in compliance with the License.
+*  You may obtain a copy of the License at:
+*
+*  http://www.apache.org/licenses/LICENSE-2.0
+*
+*  Unless required by applicable law or agreed to in writing, software
+*  distributed under the License is distributed on an "AS IS" BASIS,
+*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*  See the License for the specific language governing permissions and
+*  limitations under the License.
+*
+******************************************************************************/
 
 /******************************************************************************
  *
@@ -42,8 +42,6 @@
 #define L2CAP_LCC_SDU_LENGTH 2
 #define L2CAP_LCC_OFFSET \
   (L2CAP_MIN_OFFSET + L2CAP_LCC_SDU_LENGTH) /* plus SDU length(2) */
-
-#define L2CAP_FCS_LENGTH 2
 
 /* ping result codes */
 #define L2CAP_PING_RESULT_OK 0      /* Ping reply received OK     */
@@ -286,15 +284,6 @@ typedef void(tL2CA_NOCP_CB)(const RawAddress&);
  */
 typedef void(tL2CA_TX_COMPLETE_CB)(uint16_t, uint16_t);
 
-/* Callback for receiving credits from the remote device.
- * |credit_received| parameter represents number of credits received in "LE Flow
- * Control Credit" packet from the remote. |credit_count| parameter represents
- * the total available credits, including |credit_received|.
- */
-typedef void(tL2CA_CREDITS_RECEIVED_CB)(uint16_t local_cid,
-                                        uint16_t credits_received,
-                                        uint16_t credit_count);
-
 /* Define the structure that applications use to register with
  * L2CAP. This structure includes callback functions. All functions
  * MUST be provided, with the exception of the "connect pending"
@@ -312,7 +301,7 @@ typedef struct {
   tL2CA_DATA_IND_CB* pL2CA_DataInd_Cb;
   tL2CA_CONGESTION_STATUS_CB* pL2CA_CongestionStatus_Cb;
   tL2CA_TX_COMPLETE_CB* pL2CA_TxComplete_Cb;
-  tL2CA_CREDITS_RECEIVED_CB* pL2CA_CreditsReceived_Cb;
+
 } tL2CAP_APPL_INFO;
 
 /* Define the structure that applications use to create or accept
@@ -328,7 +317,7 @@ typedef struct {
 
 } tL2CAP_ERTM_INFO;
 
-#define L2CA_REGISTER(a, b, c) L2CA_Register(a, (tL2CAP_APPL_INFO*)(b), c)
+#define L2CA_REGISTER(a, b, c) L2CA_Register(a, (tL2CAP_APPL_INFO*)(b))
 #define L2CA_DEREGISTER(a) L2CA_Deregister(a)
 #define L2CA_CONNECT_REQ(a, b, c) L2CA_ErtmConnectReq(a, b, c)
 #define L2CA_CONNECT_RSP(a, b, c, d, e, f) L2CA_ErtmConnectRsp(a, b, c, d, e, f)
@@ -362,8 +351,7 @@ typedef struct {
  *                  BTM_SetSecurityLevel().
  *
  ******************************************************************************/
-extern uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                              bool enable_snoop);
+extern uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info);
 
 /*******************************************************************************
  *
@@ -388,29 +376,6 @@ extern void L2CA_Deregister(uint16_t psm);
  *
  ******************************************************************************/
 extern uint16_t L2CA_AllocatePSM(void);
-
-/*******************************************************************************
- *
- * Function         L2CA_AllocateLePSM
- *
- * Description      Other layers call this function to find an unused LE PSM for
- *                  L2CAP services.
- *
- * Returns          LE_PSM to use if success. Otherwise returns 0.
- *
- ******************************************************************************/
-extern uint16_t L2CA_AllocateLePSM(void);
-
-/*******************************************************************************
- *
- * Function         L2CA_FreeLePSM
- *
- * Description      Free an assigned LE PSM.
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void L2CA_FreeLePSM(uint16_t psm);
 
 /*******************************************************************************
  *
@@ -1235,10 +1200,6 @@ extern bool L2CA_CancelBleConnectReq(const RawAddress& rem_bda);
 extern bool L2CA_UpdateBleConnParams(const RawAddress& rem_bdRa,
                                      uint16_t min_int, uint16_t max_int,
                                      uint16_t latency, uint16_t timeout);
-extern bool L2CA_UpdateBleConnParams(const RawAddress& rem_bda,
-                                     uint16_t min_int, uint16_t max_int,
-                                     uint16_t latency, uint16_t timeout,
-                                     uint16_t min_ce_len, uint16_t max_ce_len);
 
 /*******************************************************************************
  *
@@ -1281,7 +1242,4 @@ extern uint8_t L2CA_GetBleConnRole(const RawAddress& bd_addr);
 extern uint16_t L2CA_GetDisconnectReason(const RawAddress& remote_bda,
                                          tBT_TRANSPORT transport);
 
-extern void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
-                                           uint16_t* max_interval,
-                                           uint16_t floor_interval);
 #endif /* L2C_API_H */
