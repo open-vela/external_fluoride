@@ -25,6 +25,7 @@
 #include "l2cap/classic/facade.grpc.pb.h"
 #include "l2cap/classic/facade.h"
 #include "l2cap/classic/l2cap_classic_module.h"
+#include "l2cap/l2cap_packets.h"
 #include "os/log.h"
 #include "packet/raw_builder.h"
 
@@ -56,6 +57,30 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     return pending_connection_close_.RunLoop(context, writer);
   }
 
+  ::grpc::Status Connect(::grpc::ServerContext* context, const facade::BluetoothAddress* request,
+                         ::google::protobuf::Empty* response) override {
+    auto fixed_channel_manager = l2cap_layer_->GetFixedChannelManager();
+    hci::Address peer;
+    ASSERT(hci::Address::FromString(request->address(), peer));
+    fixed_channel_manager->ConnectServices(peer, common::BindOnce([](FixedChannelManager::ConnectionResult) {}),
+                                           facade_handler_);
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status SendL2capPacket(::grpc::ServerContext* context, const classic::L2capPacket* request,
+                                 SendL2capPacketResult* response) override {
+    std::unique_lock<std::mutex> lock(channel_map_mutex_);
+    if (fixed_channel_helper_map_.find(request->channel()) == fixed_channel_helper_map_.end()) {
+      return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Channel not registered");
+    }
+    std::vector<uint8_t> packet(request->payload().begin(), request->payload().end());
+    if (!fixed_channel_helper_map_[request->channel()]->SendPacket(packet)) {
+      return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Channel not open");
+    }
+    response->set_result_type(SendL2capPacketResultType::OK);
+    return ::grpc::Status::OK;
+  }
+
   ::grpc::Status SendDynamicChannelPacket(::grpc::ServerContext* context, const DynamicChannelPacket* request,
                                           ::google::protobuf::Empty* response) override {
     std::unique_lock<std::mutex> lock(channel_map_mutex_);
@@ -72,13 +97,14 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
   ::grpc::Status OpenChannel(::grpc::ServerContext* context,
                              const ::bluetooth::l2cap::classic::OpenChannelRequest* request,
                              ::google::protobuf::Empty* response) override {
-    auto service_helper = dynamic_channel_helper_map_.find(request->psm());
-    if (service_helper == dynamic_channel_helper_map_.end()) {
-      return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Psm not registered");
-    }
+    std::unique_lock<std::mutex> lock(channel_map_mutex_);
+    auto psm = request->psm();
+    auto mode = request->mode();
+    dynamic_channel_helper_map_.emplace(
+        psm, std::make_unique<L2capDynamicChannelHelper>(this, l2cap_layer_, facade_handler_, psm, mode));
     hci::Address peer;
     ASSERT(hci::Address::FromString(request->remote().address(), peer));
-    dynamic_channel_helper_map_[request->psm()]->Connect(peer);
+    dynamic_channel_helper_map_[psm]->Connect(peer);
     return ::grpc::Status::OK;
   }
 
@@ -89,16 +115,156 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     if (dynamic_channel_helper_map_.find(request->psm()) == dynamic_channel_helper_map_.end()) {
       return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Psm not registered");
     }
-    dynamic_channel_helper_map_[psm]->Disconnect();
+    dynamic_channel_helper_map_[psm]->disconnect();
     return ::grpc::Status::OK;
   }
 
   ::grpc::Status FetchL2capData(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
                                 ::grpc::ServerWriter<classic::L2capPacket>* writer) override {
+    {
+      std::unique_lock<std::mutex> lock(channel_map_mutex_);
+
+      for (auto& connection : fixed_channel_helper_map_) {
+        if (connection.second->channel_ != nullptr) {
+          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
+              facade_handler_,
+              common::Bind(&L2capFixedChannelHelper::on_incoming_packet, common::Unretained(connection.second.get())));
+        }
+      }
+
+      for (auto& connection : dynamic_channel_helper_map_) {
+        if (connection.second->channel_ != nullptr) {
+          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
+              facade_handler_, common::Bind(&L2capDynamicChannelHelper::on_incoming_packet,
+                                            common::Unretained(connection.second.get())));
+        }
+      }
+
+      fetch_l2cap_data_ = true;
+    }
+
     auto status = pending_l2cap_data_.RunLoop(context, writer);
+
+    {
+      std::unique_lock<std::mutex> lock(channel_map_mutex_);
+
+      fetch_l2cap_data_ = false;
+
+      for (auto& connection : fixed_channel_helper_map_) {
+        if (connection.second->channel_ != nullptr) {
+          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
+              facade_handler_,
+              common::Bind(&L2capFixedChannelHelper::on_incoming_packet, common::Unretained(connection.second.get())));
+        }
+      }
+
+      for (auto& connection : dynamic_channel_helper_map_) {
+        if (connection.second->channel_ != nullptr) {
+          connection.second->channel_->GetQueueUpEnd()->RegisterDequeue(
+              facade_handler_, common::Bind(&L2capDynamicChannelHelper::on_incoming_packet,
+                                            common::Unretained(connection.second.get())));
+        }
+      }
+    }
 
     return status;
   }
+
+  ::grpc::Status RegisterChannel(::grpc::ServerContext* context, const classic::RegisterChannelRequest* request,
+                                 ::google::protobuf::Empty* response) override {
+    std::unique_lock<std::mutex> lock(channel_map_mutex_);
+    if (fixed_channel_helper_map_.find(request->channel()) != fixed_channel_helper_map_.end()) {
+      return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Already registered");
+    }
+    fixed_channel_helper_map_.emplace(request->channel(), std::make_unique<L2capFixedChannelHelper>(
+                                                              this, l2cap_layer_, facade_handler_, request->channel()));
+
+    return ::grpc::Status::OK;
+  }
+
+  class L2capFixedChannelHelper {
+   public:
+    L2capFixedChannelHelper(L2capClassicModuleFacadeService* service, L2capClassicModule* l2cap_layer,
+                            os::Handler* handler, Cid cid)
+        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), cid_(cid) {
+      fixed_channel_manager_ = l2cap_layer_->GetFixedChannelManager();
+      fixed_channel_manager_->RegisterService(
+          cid, {},
+          common::BindOnce(&L2capFixedChannelHelper::on_l2cap_service_registration_complete, common::Unretained(this)),
+          common::Bind(&L2capFixedChannelHelper::on_connection_open, common::Unretained(this)), handler_);
+    }
+
+    void on_l2cap_service_registration_complete(FixedChannelManager::RegistrationResult registration_result,
+                                                std::unique_ptr<FixedChannelService> service) {
+      service_ = std::move(service);
+    }
+
+    void on_connection_open(std::unique_ptr<FixedChannel> channel) {
+      ConnectionCompleteEvent event;
+      event.mutable_remote()->set_address(channel->GetDevice().ToString());
+      facade_service_->pending_connection_complete_.OnIncomingEvent(event);
+      channel_ = std::move(channel);
+      channel_->RegisterOnCloseCallback(
+          facade_service_->facade_handler_,
+          common::BindOnce(&L2capFixedChannelHelper::on_close_callback, common::Unretained(this)));
+      {
+        std::unique_lock<std::mutex> lock(facade_service_->channel_map_mutex_);
+        if (facade_service_->fetch_l2cap_data_) {
+          channel_->GetQueueUpEnd()->RegisterDequeue(
+              facade_service_->facade_handler_,
+              common::Bind(&L2capFixedChannelHelper::on_incoming_packet, common::Unretained(this)));
+        }
+      }
+    }
+
+    bool SendPacket(const std::vector<uint8_t>& packet) {
+      if (channel_ == nullptr) {
+        LOG_WARN("Channel is not open");
+        return false;
+      }
+      channel_->GetQueueUpEnd()->RegisterEnqueue(
+          handler_, common::Bind(&L2capFixedChannelHelper::enqueue_callback, common::Unretained(this), packet));
+      return true;
+    }
+
+    void on_close_callback(hci::ErrorCode error_code) {
+      {
+        std::unique_lock<std::mutex> lock(facade_service_->channel_map_mutex_);
+        if (facade_service_->fetch_l2cap_data_) {
+          channel_->GetQueueUpEnd()->UnregisterDequeue();
+        }
+      }
+      channel_ = nullptr;
+      classic::ConnectionCloseEvent event;
+      event.mutable_remote()->set_address(channel_->GetDevice().ToString());
+      event.set_reason(static_cast<uint32_t>(error_code));
+      facade_service_->pending_connection_close_.OnIncomingEvent(event);
+    }
+
+    void on_incoming_packet() {
+      auto packet = channel_->GetQueueUpEnd()->TryDequeue();
+      std::string data = std::string(packet->begin(), packet->end());
+      L2capPacket l2cap_data;
+      l2cap_data.set_channel(cid_);
+      l2cap_data.set_payload(data);
+      facade_service_->pending_l2cap_data_.OnIncomingEvent(l2cap_data);
+    }
+
+    std::unique_ptr<packet::BasePacketBuilder> enqueue_callback(const std::vector<uint8_t>& packet) {
+      auto packet_one = std::make_unique<packet::RawBuilder>();
+      packet_one->AddOctets(packet);
+      channel_->GetQueueUpEnd()->UnregisterEnqueue();
+      return packet_one;
+    };
+
+    L2capClassicModuleFacadeService* facade_service_;
+    L2capClassicModule* l2cap_layer_;
+    os::Handler* handler_;
+    std::unique_ptr<FixedChannelManager> fixed_channel_manager_;
+    std::unique_ptr<FixedChannelService> service_;
+    std::unique_ptr<FixedChannel> channel_ = nullptr;
+    Cid cid_;
+  };
 
   ::grpc::Status SetDynamicChannel(::grpc::ServerContext* context, const SetEnableDynamicChannelRequest* request,
                                    google::protobuf::Empty* response) override {
@@ -108,127 +274,75 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SetTrafficPaused(::grpc::ServerContext* context, const SetTrafficPausedRequest* request,
-                                  ::google::protobuf::Empty* response) override {
-    auto psm = request->psm();
-    if (dynamic_channel_helper_map_.find(request->psm()) == dynamic_channel_helper_map_.end()) {
-      return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "Psm not registered");
-    }
-    if (request->paused()) {
-      dynamic_channel_helper_map_[psm]->SuspendDequeue();
-    } else {
-      dynamic_channel_helper_map_[psm]->ResumeDequeue();
-    }
-    return ::grpc::Status::OK;
-  }
-
-  ::grpc::Status GetChannelQueueDepth(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
-                                      GetChannelQueueDepthResponse* response) override {
-    // Use the value kChannelQueueSize (5) in internal/dynamic_channel_impl.h
-    response->set_size(5);
-    return ::grpc::Status::OK;
-  }
-
   class L2capDynamicChannelHelper {
    public:
     L2capDynamicChannelHelper(L2capClassicModuleFacadeService* service, L2capClassicModule* l2cap_layer,
                               os::Handler* handler, Psm psm, RetransmissionFlowControlMode mode)
-        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm), mode_(mode) {
+        : facade_service_(service), l2cap_layer_(l2cap_layer), handler_(handler), psm_(psm) {
       dynamic_channel_manager_ = l2cap_layer_->GetDynamicChannelManager();
       DynamicChannelConfigurationOption configuration_option = {};
-      configuration_option.channel_mode = (DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode)mode;
-      dynamic_channel_manager_->RegisterService(
-          psm,
-          configuration_option,
-          SecurityPolicy::_SDP_ONLY_NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK,
-          handler_->BindOnceOn(this, &L2capDynamicChannelHelper::on_l2cap_service_registration_complete),
-          handler_->BindOn(this, &L2capDynamicChannelHelper::on_connection_open));
-    }
-
-    ~L2capDynamicChannelHelper() {
-      if (dequeue_registered_) {
-        channel_->GetQueueUpEnd()->UnregisterDequeue();
-        channel_ = nullptr;
+      if (mode == RetransmissionFlowControlMode::BASIC) {
+        configuration_option.channel_mode =
+            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::L2CAP_BASIC;
+      } else if (mode == RetransmissionFlowControlMode::ERTM) {
+        configuration_option.channel_mode =
+            DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION;
       }
-      enqueue_buffer_.reset();
+      dynamic_channel_manager_->RegisterService(
+          psm, configuration_option, {},
+          common::BindOnce(&L2capDynamicChannelHelper::on_l2cap_service_registration_complete,
+                           common::Unretained(this)),
+          common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)), handler_);
     }
 
     void Connect(hci::Address address) {
-      DynamicChannelConfigurationOption configuration_option = l2cap::classic::DynamicChannelConfigurationOption();
-      configuration_option.channel_mode = (DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode)mode_;
-
+      // TODO: specify channel mode
       dynamic_channel_manager_->ConnectChannel(
-          address,
-          configuration_option,
-          psm_,
-          handler_->BindOn(this, &L2capDynamicChannelHelper::on_connection_open),
-          handler_->BindOnceOn(this, &L2capDynamicChannelHelper::on_connect_fail));
-      std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-      if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(2), [this] { return channel_ != nullptr; })) {
-        LOG_WARN("Channel is not open for psm %d", psm_);
-      }
+          address, {}, psm_, common::Bind(&L2capDynamicChannelHelper::on_connection_open, common::Unretained(this)),
+          common::Bind(&L2capDynamicChannelHelper::on_connect_fail, common::Unretained(this)), handler_);
     }
 
-    void Disconnect() {
-      if (channel_ == nullptr) {
-        std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-        if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(2), [this] { return channel_ != nullptr; })) {
-          LOG_WARN("Channel is not open for psm %d", psm_);
-          return;
-        }
-      }
+    void disconnect() {
       channel_->Close();
     }
 
     void on_l2cap_service_registration_complete(DynamicChannelManager::RegistrationResult registration_result,
                                                 std::unique_ptr<DynamicChannelService> service) {}
 
-    // invoked from Facade Handler
     void on_connection_open(std::unique_ptr<DynamicChannel> channel) {
       ConnectionCompleteEvent event;
-      event.mutable_remote()->set_address(channel->GetDevice().GetAddress().ToString());
+      event.mutable_remote()->set_address(channel->GetDevice().ToString());
       facade_service_->pending_connection_complete_.OnIncomingEvent(event);
       {
         std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
         channel_ = std::move(channel);
-        enqueue_buffer_ = std::make_unique<os::EnqueueBuffer<BasePacketBuilder>>(channel_->GetQueueUpEnd());
       }
       channel_open_cv_.notify_all();
       channel_->RegisterOnCloseCallback(
-          facade_service_->facade_handler_->BindOnceOn(this, &L2capDynamicChannelHelper::on_close_callback));
-      dequeue_registered_ = true;
-      channel_->GetQueueUpEnd()->RegisterDequeue(
           facade_service_->facade_handler_,
-          common::Bind(&L2capDynamicChannelHelper::on_incoming_packet, common::Unretained(this)));
+          common::BindOnce(&L2capDynamicChannelHelper::on_close_callback, common::Unretained(this)));
+      {
+        std::unique_lock<std::mutex> lock(facade_service_->channel_map_mutex_);
+        if (facade_service_->fetch_l2cap_data_) {
+          channel_->GetQueueUpEnd()->RegisterDequeue(
+              facade_service_->facade_handler_,
+              common::Bind(&L2capDynamicChannelHelper::on_incoming_packet, common::Unretained(this)));
+        }
+      }
     }
 
     void on_close_callback(hci::ErrorCode error_code) {
       {
         std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-        if (dequeue_registered_.exchange(false)) {
+        if (facade_service_->fetch_l2cap_data_) {
           channel_->GetQueueUpEnd()->UnregisterDequeue();
         }
       }
       classic::ConnectionCloseEvent event;
-      event.mutable_remote()->set_address(channel_->GetDevice().GetAddress().ToString());
+      event.mutable_remote()->set_address(channel_->GetDevice().ToString());
+      channel_ = nullptr;
       event.set_reason(static_cast<uint32_t>(error_code));
       facade_service_->pending_connection_close_.OnIncomingEvent(event);
-      channel_ = nullptr;
-      enqueue_buffer_.reset();
-    }
-
-    void SuspendDequeue() {
-      if (dequeue_registered_.exchange(false)) {
-        channel_->GetQueueUpEnd()->UnregisterDequeue();
-      }
-    }
-
-    void ResumeDequeue() {
-      if (!dequeue_registered_.exchange(true)) {
-        channel_->GetQueueUpEnd()->RegisterDequeue(
-            facade_service_->facade_handler_,
-            common::Bind(&L2capDynamicChannelHelper::on_incoming_packet, common::Unretained(this)));
-      }
     }
 
     void on_connect_fail(DynamicChannelManager::ConnectionResult result) {}
@@ -237,7 +351,7 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
       auto packet = channel_->GetQueueUpEnd()->TryDequeue();
       std::string data = std::string(packet->begin(), packet->end());
       L2capPacket l2cap_data;
-      l2cap_data.set_psm(psm_);
+      //      l2cap_data.set_channel(cid_);
       l2cap_data.set_payload(data);
       facade_service_->pending_l2cap_data_.OnIncomingEvent(l2cap_data);
     }
@@ -245,26 +359,30 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
     bool SendPacket(std::vector<uint8_t> packet) {
       if (channel_ == nullptr) {
         std::unique_lock<std::mutex> lock(channel_open_cv_mutex_);
-        if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(2), [this] { return channel_ != nullptr; })) {
+        if (!channel_open_cv_.wait_for(lock, std::chrono::seconds(1), [this] { return channel_ != nullptr; })) {
           LOG_WARN("Channel is not open");
           return false;
         }
       }
-      auto packet_one = std::make_unique<packet::RawBuilder>(2000);
-      packet_one->AddOctets(packet);
-      enqueue_buffer_->Enqueue(std::move(packet_one), handler_);
+      channel_->GetQueueUpEnd()->RegisterEnqueue(
+          handler_, common::Bind(&L2capDynamicChannelHelper::enqueue_callback, common::Unretained(this), packet));
       return true;
     }
+
+    std::unique_ptr<packet::BasePacketBuilder> enqueue_callback(std::vector<uint8_t> packet) {
+      auto packet_one = std::make_unique<packet::RawBuilder>(2000);
+      packet_one->AddOctets(packet);
+      channel_->GetQueueUpEnd()->UnregisterEnqueue();
+      return packet_one;
+    };
+
     L2capClassicModuleFacadeService* facade_service_;
     L2capClassicModule* l2cap_layer_;
     os::Handler* handler_;
     std::unique_ptr<DynamicChannelManager> dynamic_channel_manager_;
     std::unique_ptr<DynamicChannelService> service_;
     std::unique_ptr<DynamicChannel> channel_ = nullptr;
-    std::unique_ptr<os::EnqueueBuffer<BasePacketBuilder>> enqueue_buffer_ = nullptr;
     Psm psm_;
-    RetransmissionFlowControlMode mode_ = RetransmissionFlowControlMode::BASIC;
-    std::atomic_bool dequeue_registered_ = false;
     std::condition_variable channel_open_cv_;
     std::mutex channel_open_cv_mutex_;
   };
@@ -272,7 +390,9 @@ class L2capClassicModuleFacadeService : public L2capClassicModuleFacade::Service
   L2capClassicModule* l2cap_layer_;
   ::bluetooth::os::Handler* facade_handler_;
   std::mutex channel_map_mutex_;
+  std::map<Cid, std::unique_ptr<L2capFixedChannelHelper>> fixed_channel_helper_map_;
   std::map<Psm, std::unique_ptr<L2capDynamicChannelHelper>> dynamic_channel_helper_map_;
+  bool fetch_l2cap_data_ = false;
   ::bluetooth::grpc::GrpcEventQueue<classic::ConnectionCompleteEvent> pending_connection_complete_{
       "FetchConnectionComplete"};
   ::bluetooth::grpc::GrpcEventQueue<classic::ConnectionCloseEvent> pending_connection_close_{"FetchConnectionClose"};
