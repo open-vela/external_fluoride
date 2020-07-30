@@ -119,14 +119,16 @@ static bool check_uint16_overflow(uint16_t a, uint16_t b) {
   return (UINT16_MAX - a) < b;
 }
 
-static void reassemble_and_dispatch(BT_HDR* packet) {
+static void reassemble_and_dispatch(UNUSED_ATTR BT_HDR* packet) {
   if ((packet->event & MSG_EVT_MASK) == MSG_HC_TO_STACK_HCI_ACL) {
     uint8_t* stream = packet->data;
     uint16_t handle;
+    uint16_t l2cap_length;
     uint16_t acl_length;
 
     STREAM_TO_UINT16(handle, stream);
     STREAM_TO_UINT16(acl_length, stream);
+    STREAM_TO_UINT16(l2cap_length, stream);
 
     CHECK(acl_length == packet->len - HCI_ACL_PREAMBLE_SIZE);
 
@@ -134,13 +136,6 @@ static void reassemble_and_dispatch(BT_HDR* packet) {
     handle = handle & HANDLE_MASK;
 
     if (boundary_flag == START_PACKET_BOUNDARY) {
-      if (acl_length < 2) {
-        LOG_WARN(LOG_TAG, "%s invalid acl_length %d", __func__, acl_length);
-        buffer_allocator->free(packet);
-        return;
-      }
-      uint16_t l2cap_length;
-      STREAM_TO_UINT16(l2cap_length, stream);
       auto map_iter = partial_packets.find(handle);
       if (map_iter != partial_packets.end()) {
         LOG_WARN(LOG_TAG,
@@ -215,13 +210,14 @@ static void reassemble_and_dispatch(BT_HDR* packet) {
       packet->offset = HCI_ACL_PREAMBLE_SIZE;
       uint16_t projected_offset =
           partial_packet->offset + (packet->len - HCI_ACL_PREAMBLE_SIZE);
-      if ((packet->len - packet->offset) >
-          (partial_packet->len - partial_packet->offset)) {
+      if (projected_offset >
+          partial_packet->len) {  // len stores the expected length
         LOG_WARN(LOG_TAG,
                  "%s got packet which would exceed expected length of %d. "
                  "Truncating.",
                  __func__, partial_packet->len);
-        packet->len = (partial_packet->len - partial_packet->offset) + packet->offset;
+        packet->len =
+            (partial_packet->len - partial_packet->offset) + packet->offset;
         projected_offset = partial_packet->len;
       }
 

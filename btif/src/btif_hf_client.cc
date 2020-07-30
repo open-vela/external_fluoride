@@ -747,7 +747,7 @@ static bt_status_t send_at_cmd(const RawAddress* bd_addr, int cmd, int val1,
 }
 
 static const bthf_client_interface_t bthfClientInterface = {
-    .size = sizeof(bthf_client_interface_t),
+    sizeof(bthf_client_interface_t),
     .init = init,
     .connect = connect,
     .disconnect = disconnect,
@@ -949,7 +949,7 @@ static void btif_hf_client_upstreams_evt(uint16_t event, char* p_param) {
                 (bthf_client_call_state_t)p_data->clcc.status,
                 p_data->clcc.mpty ? BTHF_CLIENT_CALL_MPTY_TYPE_MULTI
                                   : BTHF_CLIENT_CALL_MPTY_TYPE_SINGLE,
-                p_data->clcc.number_present ? p_data->clcc.number : "");
+                p_data->clcc.number_present ? p_data->clcc.number : NULL);
       break;
 
     case BTA_HF_CLIENT_CNUM_EVT:
@@ -999,10 +999,6 @@ static void btif_hf_client_upstreams_evt(uint16_t event, char* p_param) {
     case BTA_HF_CLIENT_RING_INDICATION:
       HAL_CBACK(bt_hf_client_callbacks, ring_indication_cb, &cb->peer_bda);
       break;
-    case BTA_HF_CLIENT_UNKNOWN_EVT:
-      HAL_CBACK(bt_hf_client_callbacks, unknown_event_cb, &cb->peer_bda,
-                p_data->unknown.event_string);
-      break;
     default:
       BTIF_TRACE_WARNING("%s: Unhandled event: %d", __func__, event);
       break;
@@ -1044,16 +1040,12 @@ static void bta_hf_client_evt(tBTA_HF_CLIENT_EVT event,
 bt_status_t btif_hf_client_execute_service(bool b_enable) {
   BTIF_TRACE_EVENT("%s: enable: %d", __func__, b_enable);
 
-  tBTA_HF_CLIENT_FEAT features = BTIF_HF_CLIENT_FEATURES;
-  if (osi_property_get_bool("persist.bluetooth.hfpclient.sco_s4_supported",
-                            false))
-    features |= BTA_HF_CLIENT_FEAT_S4;
-
   if (b_enable) {
     /* Enable and register with BTA-HFClient */
-    BTIF_TRACE_EVENT("%s: support codec negotiation %d ", __func__, features);
-    BTA_HfClientEnable(bta_hf_client_evt, BTIF_HF_CLIENT_SECURITY, features,
-                       BTIF_HF_CLIENT_SERVICE_NAME);
+    BTIF_TRACE_EVENT("%s: support codec negotiation %d ", __func__,
+                     BTIF_HF_CLIENT_FEATURES);
+    BTA_HfClientEnable(bta_hf_client_evt, BTIF_HF_CLIENT_SECURITY,
+                       BTIF_HF_CLIENT_FEATURES, BTIF_HF_CLIENT_SERVICE_NAME);
   } else {
     BTA_HfClientDisable();
   }

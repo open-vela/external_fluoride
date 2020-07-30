@@ -573,8 +573,9 @@ typedef uint8_t tBTM_BLE_SEC_ACT;
 /***************************
  *  Device Discovery Types
  ***************************/
-/* Definitions of the parameters passed to BTM_StartInquiry.
- */
+/* Definitions of the parameters passed to BTM_StartInquiry and
+ * BTM_SetPeriodicInquiryMode.
+*/
 typedef struct /* contains the two device class condition fields */
 {
   DEV_CLASS dev_class;
@@ -610,7 +611,7 @@ constexpr uint8_t BLE_EVT_LEGACY_BIT = 4;
 constexpr uint8_t PHY_LE_NO_PACKET = 0x00;
 constexpr uint8_t PHY_LE_1M = 0x01;
 constexpr uint8_t PHY_LE_2M = 0x02;
-constexpr uint8_t PHY_LE_CODED = 0x04;
+constexpr uint8_t PHY_LE_CODED = 0x03;
 
 constexpr uint8_t NO_ADI_PRESENT = 0xFF;
 constexpr uint8_t TX_POWER_NOT_PRESENT = 0x7F;
@@ -1045,6 +1046,9 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
 #define BTM_SEC_MODE_SP_DEBUG 5
 #define BTM_SEC_MODE_SC 6
 
+/* Maximum Number of BTM Security Modes */
+#define BTM_SEC_MODES_MAX 7
+
 /* Security Service Levels [bit mask] (BTM_SetSecurityLevel)
  * Encryption should not be used without authentication
 */
@@ -1114,10 +1118,15 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
 typedef uint8_t tBTM_LINK_KEY_TYPE;
 
 /* Protocol level security (BTM_SetSecurityLevel) */
+#define BTM_SEC_PROTO_L2CAP 0
+#define BTM_SEC_PROTO_SDP 1
+#define BTM_SEC_PROTO_TCS 2
 #define BTM_SEC_PROTO_RFCOMM 3
+#define BTM_SEC_PROTO_OBEX 4
 #define BTM_SEC_PROTO_BNEP 5
 #define BTM_SEC_PROTO_HID 6 /* HID      */
 #define BTM_SEC_PROTO_AVDT 7
+#define BTM_SEC_PROTO_MCA 8
 
 /* Determine the number of uint32_t's necessary for security services */
 #define BTM_SEC_ARRAY_BITS 32 /* Number of bits in each array element */
@@ -1231,6 +1240,62 @@ typedef uint8_t tBTM_LINK_KEY_TYPE;
       ((uint32_t*)(p_dst))[trst] = 0;                         \
   }
 
+/* Following bits can be provided by host in the trusted_mask array */
+/* 0..31 bits of mask[0] (Least Significant Word) */
+#define BTM_SEC_TRUST_SDP_SERVER (1 << BTM_SEC_SERVICE_SDP_SERVER)
+#define BTM_SEC_TRUST_SERIAL_PORT (1 << BTM_SEC_SERVICE_SERIAL_PORT)
+#define BTM_SEC_TRUST_LAN_ACCESS (1 << BTM_SEC_SERVICE_LAN_ACCESS)
+#define BTM_SEC_TRUST_DUN (1 << BTM_SEC_SERVICE_DUN)
+#define BTM_SEC_TRUST_IRMC_SYNC (1 << BTM_SEC_SERVICE_IRMC_SYNC)
+#define BTM_SEC_TRUST_IRMC_SYNC_CMD (1 << BTM_SEC_SERVICE_IRMC_SYNC_CMD)
+#define BTM_SEC_TRUST_OBEX (1 << BTM_SEC_SERVICE_OBEX)
+#define BTM_SEC_TRUST_OBEX_FTP (1 << BTM_SEC_SERVICE_OBEX_FTP)
+#define BTM_SEC_TRUST_HEADSET (1 << BTM_SEC_SERVICE_HEADSET)
+#define BTM_SEC_TRUST_CORDLESS (1 << BTM_SEC_SERVICE_CORDLESS)
+#define BTM_SEC_TRUST_INTERCOM (1 << BTM_SEC_SERVICE_INTERCOM)
+#define BTM_SEC_TRUST_FAX (1 << BTM_SEC_SERVICE_FAX)
+#define BTM_SEC_TRUST_HEADSET_AG (1 << BTM_SEC_SERVICE_HEADSET_AG)
+#define BTM_SEC_TRUST_PNP_INFO (1 << BTM_SEC_SERVICE_PNP_INFO)
+#define BTM_SEC_TRUST_GEN_NET (1 << BTM_SEC_SERVICE_GEN_NET)
+#define BTM_SEC_TRUST_GEN_FILE (1 << BTM_SEC_SERVICE_GEN_FILE)
+#define BTM_SEC_TRUST_GEN_AUDIO (1 << BTM_SEC_SERVICE_GEN_AUDIO)
+#define BTM_SEC_TRUST_GEN_TEL (1 << BTM_SEC_SERVICE_GEN_TEL)
+#define BTM_SEC_TRUST_CTP_DATA (1 << BTM_SEC_SERVICE_CTP_DATA)
+#define BTM_SEC_TRUST_HCRP_CTRL (1 << BTM_SEC_SERVICE_HCRP_CTRL)
+#define BTM_SEC_TRUST_HCRP_DATA (1 << BTM_SEC_SERVICE_HCRP_DATA)
+#define BTM_SEC_TRUST_HCRP_NOTIF (1 << BTM_SEC_SERVICE_HCRP_NOTIF)
+#define BTM_SEC_TRUST_BPP_JOB (1 << BTM_SEC_SERVICE_JOB)
+#define BTM_SEC_TRUST_BPP_STATUS (1 << BTM_SEC_SERVICE_STATUS)
+#define BTM_SEC_TRUST_BPP_REF (1 << BTM_SEC_SERVICE_REF)
+#define BTM_SEC_TRUST_BNEP_PANU (1 << BTM_SEC_SERVICE_BNEP_PANU)
+#define BTM_SEC_TRUST_BNEP_GN (1 << BTM_SEC_SERVICE_BNEP_GN)
+#define BTM_SEC_TRUST_BNEP_NAP (1 << BTM_SEC_SERVICE_BNEP_NAP)
+#define BTM_SEC_TRUST_HFP_HF (1 << BTM_SEC_SERVICE_HF_HANDSFREE)
+#define BTM_SEC_TRUST_HFP_AG (1 << BTM_SEC_SERVICE_AG_HANDSFREE)
+#define BTM_SEC_TRUST_TE_PHONE_ACCESS (1 << BTM_SEC_SERVICE_TE_PHONE_ACCESS)
+#define BTM_SEC_TRUST_ME_PHONE_ACCESS (1 << BTM_SEC_SERVICE_ME_PHONE_ACCESS)
+
+/* 0..31 bits of mask[1] (Most Significant Word) */
+#define BTM_SEC_TRUST_HIDH_CTRL (1 << (BTM_SEC_SERVICE_HIDH_SEC_CTRL - 32))
+#define BTM_SEC_TRUST_HIDH_NOSEC_CTRL \
+  (1 << (BTM_SEC_SERVICE_HIDH_NOSEC_CTRL - 32))
+#define BTM_SEC_TRUST_HIDH_INTR (1 << (BTM_SEC_SERVICE_HIDH_INTR - 32))
+#define BTM_SEC_TRUST_BIP (1 << (BTM_SEC_SERVICE_BIP - 32))
+#define BTM_SEC_TRUST_BIP_REF (1 << (BTM_SEC_SERVICE_BIP_REF - 32))
+#define BTM_SEC_TRUST_AVDTP (1 << (BTM_SEC_SERVICE_AVDTP - 32))
+#define BTM_SEC_TRUST_AVDTP_NOSEC (1 << (BTM_SEC_SERVICE_AVDTP_NOSEC - 32))
+#define BTM_SEC_TRUST_AVCTP (1 << (BTM_SEC_SERVICE_AVCTP - 32))
+#define BTM_SEC_TRUST_SAP (1 << (BTM_SEC_SERVICE_SAP - 32))
+#define BTM_SEC_TRUST_PBAP (1 << (BTM_SEC_SERVICE_PBAP - 32))
+#define BTM_SEC_TRUST_RFC_MUX (1 << (BTM_SEC_SERVICE_RFC_MUX - 32))
+#define BTM_SEC_TRUST_AVCTP_BROWSE (1 << (BTM_SEC_SERVICE_AVCTP_BROWSE - 32))
+#define BTM_SEC_TRUST_MAP (1 << (BTM_SEC_SERVICE_MAP - 32))
+#define BTM_SEC_TRUST_MAP_NOTIF (1 << (BTM_SEC_SERVICE_MAP_NOTIF - 32))
+#define BTM_SEC_TRUST_MCAP_CTRL (1 << (BTM_SEC_SERVICE_MCAP_CTRL - 32))
+#define BTM_SEC_TRUST_MCAP_DATA (1 << (BTM_SEC_SERVICE_MCAP_DATA - 32))
+#define BTM_SEC_TRUST_HDP_SNK (1 << (BTM_SEC_SERVICE_HDP_SNK - 32))
+#define BTM_SEC_TRUST_HDP_SRC (1 << (BTM_SEC_SERVICE_HDP_SRC - 32))
+
 #define BTM_SEC_TRUST_ALL 0xFFFFFFFF /* for each array element */
 
 /****************************************
@@ -1267,8 +1332,8 @@ typedef uint8_t(tBTM_PIN_CALLBACK)(const RawAddress& bd_addr,
 */
 typedef uint8_t(tBTM_LINK_KEY_CALLBACK)(const RawAddress& bd_addr,
                                         DEV_CLASS dev_class,
-                                        tBTM_BD_NAME bd_name,
-                                        const LinkKey& key, uint8_t key_type);
+                                        tBTM_BD_NAME bd_name, uint8_t* key,
+                                        uint8_t key_type);
 
 /* Remote Name Resolved.  Parameters are
  *              BD Address of remote
@@ -1415,8 +1480,8 @@ typedef struct {
 /* data type for BTM_SP_LOC_OOB_EVT */
 typedef struct {
   tBTM_STATUS status; /* */
-  Octet16 c;          /* Simple Pairing Hash C */
-  Octet16 r;          /* Simple Pairing Randomnizer R */
+  BT_OCTET16 c;       /* Simple Pairing Hash C */
+  BT_OCTET16 r;       /* Simple Pairing Randomnizer R */
 } tBTM_SP_LOC_OOB;
 
 /* data type for BTM_SP_RMT_OOB_EVT */
@@ -1567,7 +1632,7 @@ typedef struct {
 
 /* BLE encryption keys */
 typedef struct {
-  Octet16 ltk;
+  BT_OCTET16 ltk;
   BT_OCTET8 rand;
   uint16_t ediv;
   uint8_t sec_level;
@@ -1577,13 +1642,13 @@ typedef struct {
 /* BLE CSRK keys */
 typedef struct {
   uint32_t counter;
-  Octet16 csrk;
+  BT_OCTET16 csrk;
   uint8_t sec_level;
 } tBTM_LE_PCSRK_KEYS;
 
 /* BLE Encryption reproduction keys */
 typedef struct {
-  Octet16 ltk;
+  BT_OCTET16 ltk;
   uint16_t div;
   uint8_t key_size;
   uint8_t sec_level;
@@ -1594,13 +1659,13 @@ typedef struct {
   uint32_t counter;
   uint16_t div;
   uint8_t sec_level;
-  Octet16 csrk;
+  BT_OCTET16 csrk;
 } tBTM_LE_LCSRK_KEYS;
 
 typedef struct {
-  Octet16 irk;
-  tBLE_ADDR_TYPE identity_addr_type;
-  RawAddress identity_addr;
+  BT_OCTET16 irk;
+  tBLE_ADDR_TYPE addr_type;
+  RawAddress static_addr;
 } tBTM_LE_PID_KEYS;
 
 typedef union {
@@ -1640,15 +1705,15 @@ typedef uint8_t(tBTM_LE_CALLBACK)(tBTM_LE_EVT event, const RawAddress& bda,
 #define BTM_BLE_KEY_TYPE_COUNTER 3  // tobe obsolete
 
 typedef struct {
-  Octet16 ir;
-  Octet16 irk;
-  Octet16 dhk;
+  BT_OCTET16 ir;
+  BT_OCTET16 irk;
+  BT_OCTET16 dhk;
 
 } tBTM_BLE_LOCAL_ID_KEYS;
 
 typedef union {
   tBTM_BLE_LOCAL_ID_KEYS id_keys;
-  Octet16 er;
+  BT_OCTET16 er;
 } tBTM_BLE_LOCAL_KEYS;
 
 /* New LE identity key for local device.
@@ -1743,6 +1808,63 @@ typedef struct {
   uint16_t num_keys;
 
 } tBTM_DELETE_STORED_LINK_KEY_COMPLETE;
+
+/* MIP evnets, callbacks    */
+enum {
+  BTM_MIP_MODE_CHG_EVT,
+  BTM_MIP_DISCONNECT_EVT,
+  BTM_MIP_PKTS_COMPL_EVT,
+  BTM_MIP_RXDATA_EVT
+};
+typedef uint8_t tBTM_MIP_EVT;
+
+typedef struct {
+  tBTM_MIP_EVT event;
+  RawAddress bd_addr;
+  uint16_t mip_id;
+} tBTM_MIP_MODE_CHANGE;
+
+typedef struct {
+  tBTM_MIP_EVT event;
+  uint16_t mip_id;
+  uint8_t disc_reason;
+} tBTM_MIP_CONN_TIMEOUT;
+
+#define BTM_MIP_MAX_RX_LEN 17
+
+typedef struct {
+  tBTM_MIP_EVT event;
+  uint16_t mip_id;
+  uint8_t rx_len;
+  uint8_t rx_data[BTM_MIP_MAX_RX_LEN];
+} tBTM_MIP_RXDATA;
+
+typedef struct {
+  tBTM_MIP_EVT event;
+  RawAddress bd_addr;
+  uint8_t data[11]; /* data[0] shows Vender-specific device type */
+} tBTM_MIP_EIR_HANDSHAKE;
+
+typedef struct {
+  tBTM_MIP_EVT event;
+  uint16_t num_sent; /* Completed packet count at the controller */
+} tBTM_MIP_PKTS_COMPL;
+
+typedef union {
+  tBTM_MIP_EVT event;
+  tBTM_MIP_MODE_CHANGE mod_chg;
+  tBTM_MIP_CONN_TIMEOUT conn_tmo;
+  tBTM_MIP_EIR_HANDSHAKE eir;
+  tBTM_MIP_PKTS_COMPL completed;
+  tBTM_MIP_RXDATA rxdata;
+} tBTM_MIP_EVENT_DATA;
+
+/* MIP event callback function  */
+typedef void(tBTM_MIP_EVENTS_CB)(tBTM_MIP_EVT event, tBTM_MIP_EVENT_DATA data);
+
+/* MIP Device query callback function  */
+typedef bool(tBTM_MIP_QUERY_CB)(const RawAddress& dev_addr, uint8_t* p_mode,
+                                LINK_KEY link_key);
 
 /* ACL link on, SCO link ongoing, sniff mode */
 #define BTM_CONTRL_ACTIVE 1
