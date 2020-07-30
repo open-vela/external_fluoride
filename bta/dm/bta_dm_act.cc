@@ -42,7 +42,6 @@
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btu.h"
-#include "device/include/interop.h"
 #include "gap_api.h" /* For GAP_BleReadPeerPrefConnParams */
 #include "l2c_api.h"
 #include "osi/include/log.h"
@@ -813,13 +812,15 @@ void bta_dm_remove_all_acl(const tBTA_DM_LINK_TYPE link_type) {
 }
 
 /** Bonds with peer device */
-void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                 tBTA_TRANSPORT transport, int device_type) {
+void bta_dm_bond(const RawAddress& bd_addr, tBTA_TRANSPORT transport) {
+  tBTM_STATUS status;
   tBTA_DM_SEC sec_event;
   char* p_name;
 
-  tBTM_STATUS status =
-      BTM_SecBond(bd_addr, addr_type, transport, device_type, 0, NULL, 0);
+  if (transport == BTA_TRANSPORT_UNKNOWN)
+    status = BTM_SecBond(bd_addr, 0, NULL, 0);
+  else
+    status = BTM_SecBondByTransport(bd_addr, transport, 0, NULL, 0);
 
   if (bta_dm_cb.p_sec_cback && (status != BTM_CMD_STARTED)) {
     memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
@@ -1355,10 +1356,8 @@ void bta_dm_sdp_result(tBTA_DM_MSG* p_data) {
     do {
       p_sdp_rec = NULL;
       if (bta_dm_search_cb.service_index == (BTA_USER_SERVICE_ID + 1)) {
-        if (!bta_dm_search_cb.uuid.IsEmpty()) {
-          p_sdp_rec = SDP_FindServiceUUIDInDb(bta_dm_search_cb.p_sdp_db,
-                                              bta_dm_search_cb.uuid, p_sdp_rec);
-        }
+        p_sdp_rec = SDP_FindServiceUUIDInDb(bta_dm_search_cb.p_sdp_db,
+                                            bta_dm_search_cb.uuid, p_sdp_rec);
 
         if (p_sdp_rec && SDP_FindProtocolListElemInRec(
                              p_sdp_rec, UUID_PROTOCOL_RFCOMM, &pe)) {
@@ -1754,9 +1753,7 @@ void bta_dm_search_cancel_notify(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   if (bta_dm_search_cb.p_search_cback) {
     bta_dm_search_cb.p_search_cback(BTA_DM_SEARCH_CANCEL_CMPL_EVT, NULL);
   }
-  if (!bta_dm_search_cb.name_discover_done &&
-      (bta_dm_search_cb.state == BTA_DM_SEARCH_ACTIVE ||
-       bta_dm_search_cb.state == BTA_DM_SEARCH_CANCELLING)) {
+  if (!bta_dm_search_cb.name_discover_done) {
     BTM_CancelRemoteDeviceName();
   }
   if (bta_dm_search_cb.gatt_disc_active) {
@@ -1774,6 +1771,7 @@ void bta_dm_search_cancel_notify(UNUSED_ATTR tBTA_DM_MSG* p_data) {
  *
  ******************************************************************************/
 static void bta_dm_find_services(const RawAddress& bd_addr) {
+
   while (bta_dm_search_cb.service_index < BTA_MAX_SERVICE_ID) {
     Uuid uuid = Uuid::kEmpty;
     if (bta_dm_search_cb.services_to_search &
@@ -1785,7 +1783,7 @@ static void bta_dm_find_services(const RawAddress& bd_addr) {
                        bta_dm_search_cb.services);
       /* try to search all services by search based on L2CAP UUID */
       if (bta_dm_search_cb.services == BTA_ALL_SERVICE_MASK) {
-        LOG_INFO("%s services_to_search=%08x", __func__,
+        LOG_INFO(LOG_TAG, "%s services_to_search=%08x", __func__,
                  bta_dm_search_cb.services_to_search);
         if (bta_dm_search_cb.services_to_search & BTA_RES_SERVICE_MASK) {
           uuid = Uuid::From16Bit(bta_service_id_to_uuid_lkup_tbl[0]);
@@ -1829,7 +1827,8 @@ static void bta_dm_find_services(const RawAddress& bd_addr) {
         uuid = bta_dm_search_cb.uuid;
       }
 
-      LOG_INFO("%s search UUID = %s", __func__, uuid.ToString().c_str());
+      LOG_INFO(LOG_TAG, "%s search UUID = %s", __func__,
+               uuid.ToString().c_str());
       SDP_InitDiscoveryDb(bta_dm_search_cb.p_sdp_db, BTA_DM_SDP_DB_SIZE, 1,
                           &uuid, 0, NULL);
 
@@ -1946,13 +1945,10 @@ static void bta_dm_discover_device(const RawAddress& remote_bd_addr) {
     APPL_TRACE_DEBUG("%s appl_knows_rem_name %d", __func__,
                      bta_dm_search_cb.p_btm_inq_info->appl_knows_rem_name);
   }
-  if (((bta_dm_search_cb.p_btm_inq_info) &&
-       (bta_dm_search_cb.p_btm_inq_info->results.device_type ==
-        BT_DEVICE_TYPE_BLE) &&
-       (bta_dm_search_cb.state == BTA_DM_SEARCH_ACTIVE)) ||
-      (transport == BT_TRANSPORT_LE &&
-       interop_match_addr(INTEROP_DISABLE_NAME_REQUEST,
-                          &bta_dm_search_cb.peer_bdaddr))) {
+  if ((bta_dm_search_cb.p_btm_inq_info) &&
+      (bta_dm_search_cb.p_btm_inq_info->results.device_type ==
+       BT_DEVICE_TYPE_BLE) &&
+      (bta_dm_search_cb.state == BTA_DM_SEARCH_ACTIVE)) {
     /* Do not perform RNR for LE devices at inquiry complete*/
     bta_dm_search_cb.name_discover_done = true;
   }
@@ -2508,7 +2504,7 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
       sec_event.cfm_req.loc_io_caps = p_data->cfm_req.loc_io_caps;
       sec_event.cfm_req.rmt_io_caps = p_data->cfm_req.rmt_io_caps;
 
-      [[fallthrough]];
+    /* continue to next case */
     /* Passkey entry mode, mobile device with output capability is very
         unlikely to receive key request, so skip this event */
     /*case BTM_SP_KEY_REQ_EVT: */
@@ -2673,7 +2669,8 @@ static void handle_role_change(const RawAddress& bd_addr, uint8_t new_role,
 
   tBTA_DM_PEER_DEVICE* p_dev = bta_dm_find_peer_device(bd_addr);
   if (!p_dev) return;
-  LOG_INFO("%s: peer %s info:0x%x new_role:0x%x dev count:%d hci_status=%d",
+  LOG_INFO(LOG_TAG,
+           "%s: peer %s info:0x%x new_role:0x%x dev count:%d hci_status=%d",
            __func__, bd_addr.ToString().c_str(), p_dev->info, new_role,
            bta_dm_cb.device_list.count, hci_status);
   if (p_dev->info & BTA_DM_DI_AV_ACTIVE) {
@@ -2769,9 +2766,6 @@ static void bta_dm_acl_change(bool is_new, const RawAddress& bd_addr,
         if (BTM_SecDeleteDevice(
                 bta_dm_cb.device_list.peer_device[i].peer_bdaddr))
           issue_unpair_cb = true;
-
-        /* remove all cached GATT information */
-        BTA_GATTC_Refresh(bd_addr);
 
         APPL_TRACE_DEBUG("%s: Unpairing: issue unpair CB = %d ", __func__,
                          issue_unpair_cb);
@@ -3803,6 +3797,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
 
       break;
 
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
+      break;
+
     case BTM_LE_SEC_REQUEST_EVT:
       sec_event.ble_req.bd_addr = bda;
       p_name = BTM_SecReadDevName(bda);
@@ -4009,6 +4013,12 @@ void bta_dm_ble_set_conn_params(const RawAddress& bd_addr,
                            supervision_tout);
 }
 
+/** This function set the preferred connection scan parameters */
+void bta_dm_ble_set_conn_scan_params(uint32_t scan_interval,
+                                     uint32_t scan_window) {
+  BTM_BleSetConnScanParams(scan_interval, scan_window);
+}
+
 /** This function update LE connection parameters */
 void bta_dm_ble_update_conn_params(const RawAddress& bd_addr, uint16_t min_int,
                                    uint16_t max_int, uint16_t latency,
@@ -4182,7 +4192,7 @@ static void bta_dm_gatt_disc_result(tBTA_GATT_ID service_id) {
         __func__, bta_dm_search_cb.ble_raw_size, bta_dm_search_cb.ble_raw_used);
   }
 
-  LOG_INFO("%s service_id_uuid_len=%zu", __func__,
+  LOG_INFO(LOG_TAG, "%s service_id_uuid_len=%zu", __func__,
            service_id.uuid.GetShortestRepresentationSize());
   if (bta_dm_search_cb.state != BTA_DM_SEARCH_IDLE) {
     /* send result back to app now, one by one */

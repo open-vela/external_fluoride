@@ -1622,9 +1622,6 @@ static tBTA_JV_PCB* bta_jv_add_rfc_port(tBTA_JV_RFC_CB* p_cb,
         p_pcb->handle = BTA_JV_RFC_H_S_TO_HDL(p_cb->handle, si);
         VLOG(2) << __func__ << ": p_pcb->handle=" << loghex(p_pcb->handle)
                 << ", curr_sess=" << p_cb->curr_sess;
-      } else {
-        LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
-        return NULL;
       }
     } else {
       LOG(ERROR) << __func__ << ": cannot create new rfc listen port";
@@ -1891,6 +1888,15 @@ static struct fc_channel* fcchan_get(uint16_t chan, char create) {
       .pL2CA_FixedConn_Cb = fcchan_conn_chng_cbk,
       .pL2CA_FixedData_Cb = fcchan_data_cbk,
       .default_idle_tout = 0xffff,
+      .fixed_chnl_opts =
+          {
+              .mode = L2CAP_FCR_BASIC_MODE,
+              .max_transmit = 0xFF,
+              .rtrans_tout = 2000,
+              .mon_tout = 12000,
+              .mps = 670,
+              .tx_win_sz = 1,
+          },
   };
 
   while (t && t->chan != chan) t = t->next;

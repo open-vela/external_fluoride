@@ -14,11 +14,10 @@
 // limitations under the License.
 //
 
-#ifndef HIDL_GENERATED_android_hardware_bluetooth_V1_1_BluetoothHci_H_
-#define HIDL_GENERATED_android_hardware_bluetooth_V1_1_BluetoothHci_H_
+#ifndef HIDL_GENERATED_android_hardware_bluetooth_V1_0_BluetoothHci_H_
+#define HIDL_GENERATED_android_hardware_bluetooth_V1_0_BluetoothHci_H_
 
 #include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
-#include <android/hardware/bluetooth/1.1/IBluetoothHci.h>
 
 #include <hidl/MQDescriptor.h>
 
@@ -29,7 +28,7 @@
 namespace android {
 namespace hardware {
 namespace bluetooth {
-namespace V1_1 {
+namespace V1_0 {
 namespace btlinux {
 
 using ::android::hardware::Return;
@@ -41,20 +40,13 @@ class BluetoothHci : public IBluetoothHci {
  public:
   BluetoothHci();
   Return<void> initialize(
-      const ::android::sp<V1_0::IBluetoothHciCallbacks>& cb) override;
-  Return<void> initialize_1_1(
-      const ::android::sp<V1_1::IBluetoothHciCallbacks>& cb) override;
+      const ::android::sp<IBluetoothHciCallbacks>& cb) override;
   Return<void> sendHciCommand(const hidl_vec<uint8_t>& packet) override;
   Return<void> sendAclData(const hidl_vec<uint8_t>& data) override;
   Return<void> sendScoData(const hidl_vec<uint8_t>& data) override;
-  Return<void> sendIsoData(const hidl_vec<uint8_t>& data) override;
   Return<void> close() override;
 
  private:
-  Return<void> initialize_impl(
-      const ::android::sp<V1_0::IBluetoothHciCallbacks>& cb,
-      const ::android::sp<V1_1::IBluetoothHciCallbacks>& cb_1_1);
-
   async::AsyncFdWatcher fd_watcher_;
   hci::H4Protocol* hci_handle_;
   int bt_soc_fd_;
@@ -63,7 +55,6 @@ class BluetoothHci : public IBluetoothHci {
   const uint8_t HCI_DATA_TYPE_COMMAND = 1;
   const uint8_t HCI_DATA_TYPE_ACL = 2;
   const uint8_t HCI_DATA_TYPE_SCO = 3;
-  const uint8_t HCI_DATA_TYPE_ISO = 5;
 
   int waitHciDev(int hci_interface);
   int findRfKill(void);
@@ -79,9 +70,9 @@ class BluetoothHci : public IBluetoothHci {
 extern "C" IBluetoothHci* HIDL_FETCH_IBluetoothHci(const char* name);
 
 }  // namespace btlinux
-}  // namespace V1_1
+}  // namespace V1_0
 }  // namespace bluetooth
 }  // namespace hardware
 }  // namespace android
 
-#endif  // HIDL_GENERATED_android_hardware_bluetooth_V1_1_BluetoothHci_H_
+#endif  // HIDL_GENERATED_android_hardware_bluetooth_V1_0_BluetoothHci_H_
