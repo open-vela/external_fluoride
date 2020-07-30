@@ -26,7 +26,6 @@
 #include "gatt_api.h"
 #include "osi/include/fixed_queue.h"
 
-#include <base/bind.h>
 #include <base/strings/stringprintf.h>
 #include <string.h>
 #include <list>
@@ -324,8 +323,6 @@ struct tGATT_CLCB {
   bool in_use;
   alarm_t* gatt_rsp_timer_ent; /* peer response timer */
   uint8_t retry_count;
-  uint16_t read_req_current_mtu; /* This is the MTU value that the read was
-                                    initiated with */
 };
 
 typedef struct {
@@ -333,6 +330,11 @@ typedef struct {
   uint16_t uuid;
   uint32_t service_change;
 } tGATT_SVC_CHG;
+
+typedef struct {
+  std::unordered_set<tGATT_IF> gatt_if;
+  RawAddress remote_bda;
+} tGATT_BG_CONN_DEV;
 
 #define GATT_SVC_CHANGED_CONNECTING 1     /* wait for connection */
 #define GATT_SVC_CHANGED_SERVICE 2        /* GATT service discovery */
@@ -380,20 +382,11 @@ typedef struct {
   tGATT_PROFILE_CLCB profile_clcb[GATT_MAX_APPS];
   uint16_t
       handle_of_h_r; /* Handle of the handles reused characteristic value */
-  uint16_t handle_cl_supported_feat;
-  uint16_t handle_sr_supported_feat;
-  uint8_t
-      gatt_svr_supported_feat_mask; /* Local supported features as a server */
-
-  /* Supported features as a client. To be written to remote device.
-   * Note this is NOT a value of the characteristic with handle
-   * handle_cl_support_feat, as that one should be written by remote device.
-   */
-  uint8_t gatt_cl_supported_feat_mask;
 
   tGATT_APPL_INFO cb_info;
 
   tGATT_HDL_CFG hdl_cfg;
+  std::list<tGATT_BG_CONN_DEV> bgconn_dev;
 } tGATT_CB;
 
 #define GATT_SIZE_OF_SRV_CHG_HNDL_RANGE 4
@@ -409,10 +402,10 @@ extern void gatt_set_err_rsp(bool enable, uint8_t req_op_code,
 /* from gatt_main.cc */
 extern bool gatt_disconnect(tGATT_TCB* p_tcb);
 extern bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr,
-                             tBT_TRANSPORT transport, int8_t initiating_phys);
+                             tBT_TRANSPORT transport, bool opportunistic,
+                             int8_t initiating_phys);
 extern bool gatt_connect(const RawAddress& rem_bda, tGATT_TCB* p_tcb,
-                         tBT_TRANSPORT transport, uint8_t initiating_phys,
-                         tGATT_IF gatt_if);
+                         tBT_TRANSPORT transport, uint8_t initiating_phys);
 extern void gatt_data_process(tGATT_TCB& p_tcb, BT_HDR* p_buf);
 extern void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb,
                                           bool is_add, bool check_acl_link);
@@ -428,10 +421,6 @@ extern void gatt_add_a_bonded_dev_for_srv_chg(const RawAddress& bda);
 
 /* from gatt_attr.cc */
 extern uint16_t gatt_profile_find_conn_id_by_bd_addr(const RawAddress& bda);
-
-extern bool gatt_profile_get_eatt_support(
-    const RawAddress& remote_bda,
-    base::OnceCallback<void(const RawAddress&, bool)> cb);
 
 /* Functions provided by att_protocol.cc */
 extern tGATT_STATUS attp_send_cl_msg(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
@@ -472,7 +461,7 @@ extern bool gatt_find_the_connected_bda(uint8_t start_idx, RawAddress& bda,
                                         tBT_TRANSPORT* p_transport);
 extern void gatt_set_srv_chg(void);
 extern void gatt_delete_dev_from_srv_chg_clt_list(const RawAddress& bd_addr);
-extern void gatt_add_pending_ind(tGATT_TCB* p_tcb, tGATT_VALUE* p_ind);
+extern tGATT_VALUE* gatt_add_pending_ind(tGATT_TCB* p_tcb, tGATT_VALUE* p_ind);
 extern void gatt_free_srvc_db_buffer_app_id(const bluetooth::Uuid& app_id);
 extern bool gatt_cl_send_next_cmd_inq(tGATT_TCB& tcb);
 
@@ -484,8 +473,14 @@ extern tGATT_HDL_LIST_ELEM* gatt_find_hdl_buffer_by_handle(uint16_t handle);
 extern tGATTS_SRV_CHG* gatt_add_srv_chg_clt(tGATTS_SRV_CHG* p_srv_chg);
 
 /* for background connection */
-extern bool gatt_auto_connect_dev_remove(tGATT_IF gatt_if,
+extern bool gatt_update_auto_connect_dev(tGATT_IF gatt_if, bool add,
                                          const RawAddress& bd_addr);
+extern bool gatt_is_bg_dev_for_app(tGATT_BG_CONN_DEV* p_dev, tGATT_IF gatt_if);
+extern bool gatt_remove_bg_dev_for_app(tGATT_IF gatt_if,
+                                       const RawAddress& bd_addr);
+extern uint8_t gatt_clear_bg_dev_for_addr(const RawAddress& bd_addr);
+extern tGATT_BG_CONN_DEV* gatt_find_bg_dev(const RawAddress& remote_bda);
+extern void gatt_deregister_bgdev_list(tGATT_IF gatt_if);
 
 /* server function */
 extern std::list<tGATT_SRV_LIST_ELEM>::iterator gatt_sr_find_i_rcb_by_handle(
@@ -553,7 +548,7 @@ extern void gatt_send_queue_write_cancel(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                                          tGATT_EXEC_FLAG flag);
 
 /* gatt_auth.cc */
-extern bool gatt_security_check_start(tGATT_CLCB* p_clcb);
+extern void gatt_security_check_start(tGATT_CLCB* p_clcb);
 extern void gatt_verify_signature(tGATT_TCB& tcb, BT_HDR* p_buf);
 extern tGATT_STATUS gatt_get_link_encrypt_status(tGATT_TCB& tcb);
 extern tGATT_SEC_ACTION gatt_get_sec_act(tGATT_TCB* p_tcb);
