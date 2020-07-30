@@ -20,19 +20,11 @@
 #include <memory>
 #include <utility>
 
-#include "common/bind.h"
-#include "common/callback.h"
 #include "hci/hci_layer.h"
 
 namespace bluetooth {
 namespace hci {
 
-using common::Bind;
-using common::BindOnce;
-using common::Callback;
-using common::Closure;
-using common::OnceCallback;
-using common::OnceClosure;
 using os::Handler;
 
 struct Controller::impl {
@@ -40,82 +32,84 @@ struct Controller::impl {
 
   void Start(hci::HciLayer* hci) {
     hci_ = hci;
+    Handler* handler = module_.GetHandler();
     hci_->RegisterEventHandler(EventCode::NUMBER_OF_COMPLETED_PACKETS,
-                               Bind(&Controller::impl::NumberOfCompletedPackets, common::Unretained(this)),
-                               module_.GetHandler());
+                               handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
 
     set_event_mask(kDefaultEventMask);
+    write_simple_pairing_mode(Enable::ENABLED);
+    // TODO(b/159927452): Legacy stack set SimultaneousLeHost = 1. Revisit if this causes problem.
+    write_le_host_support(Enable::ENABLED, SimultaneousLeHost::DISABLED);
     hci_->EnqueueCommand(ReadLocalNameBuilder::Create(),
-                         BindOnce(&Controller::impl::read_local_name_complete_handler, common::Unretained(this)),
-                         module_.GetHandler());
-    hci_->EnqueueCommand(
-        ReadLocalVersionInformationBuilder::Create(),
-        BindOnce(&Controller::impl::read_local_version_information_complete_handler, common::Unretained(this)),
-        module_.GetHandler());
-    hci_->EnqueueCommand(
-        ReadLocalSupportedCommandsBuilder::Create(),
-        BindOnce(&Controller::impl::read_local_supported_commands_complete_handler, common::Unretained(this)),
-        module_.GetHandler());
-    hci_->EnqueueCommand(
-        ReadLocalSupportedFeaturesBuilder::Create(),
-        BindOnce(&Controller::impl::read_local_supported_features_complete_handler, common::Unretained(this)),
-        module_.GetHandler());
+                         handler->BindOnceOn(this, &Controller::impl::read_local_name_complete_handler));
+    hci_->EnqueueCommand(ReadLocalVersionInformationBuilder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::read_local_version_information_complete_handler));
+    hci_->EnqueueCommand(ReadLocalSupportedCommandsBuilder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::read_local_supported_commands_complete_handler));
+    hci_->EnqueueCommand(ReadLocalSupportedFeaturesBuilder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::read_local_supported_features_complete_handler));
 
     // Wait for all extended features read
     std::promise<void> features_promise;
     auto features_future = features_promise.get_future();
     hci_->EnqueueCommand(ReadLocalExtendedFeaturesBuilder::Create(0x00),
-                         BindOnce(&Controller::impl::read_local_extended_features_complete_handler,
-                                  common::Unretained(this), std::move(features_promise)),
-                         module_.GetHandler());
+                         handler->BindOnceOn(this, &Controller::impl::read_local_extended_features_complete_handler,
+                                             std::move(features_promise)));
     features_future.wait();
 
     hci_->EnqueueCommand(ReadBufferSizeBuilder::Create(),
-                         BindOnce(&Controller::impl::read_buffer_size_complete_handler, common::Unretained(this)),
-                         module_.GetHandler());
+                         handler->BindOnceOn(this, &Controller::impl::read_buffer_size_complete_handler));
 
-    hci_->EnqueueCommand(LeReadBufferSizeBuilder::Create(),
-                         BindOnce(&Controller::impl::le_read_buffer_size_handler, common::Unretained(this)),
-                         module_.GetHandler());
+    hci_->EnqueueCommand(LeReadBufferSizeV1Builder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::le_read_buffer_size_handler));
 
-    hci_->EnqueueCommand(
-        LeReadLocalSupportedFeaturesBuilder::Create(),
-        BindOnce(&Controller::impl::le_read_local_supported_features_handler, common::Unretained(this)),
-        module_.GetHandler());
+    hci_->EnqueueCommand(LeReadLocalSupportedFeaturesBuilder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::le_read_local_supported_features_handler));
 
     hci_->EnqueueCommand(LeReadSupportedStatesBuilder::Create(),
-                         BindOnce(&Controller::impl::le_read_supported_states_handler, common::Unretained(this)),
-                         module_.GetHandler());
+                         handler->BindOnceOn(this, &Controller::impl::le_read_supported_states_handler));
+
+    hci_->EnqueueCommand(
+        LeReadConnectListSizeBuilder::Create(),
+        handler->BindOnceOn(this, &Controller::impl::le_read_connect_list_size_handler));
+
+    hci_->EnqueueCommand(
+        LeReadResolvingListSizeBuilder::Create(),
+        handler->BindOnceOn(this, &Controller::impl::le_read_resolving_list_size_handler));
 
     if (is_supported(OpCode::LE_READ_MAXIMUM_DATA_LENGTH)) {
       hci_->EnqueueCommand(LeReadMaximumDataLengthBuilder::Create(),
-                           BindOnce(&Controller::impl::le_read_maximum_data_length_handler, common::Unretained(this)),
-                           module_.GetHandler());
+                           handler->BindOnceOn(this, &Controller::impl::le_read_maximum_data_length_handler));
+    } else {
+      le_maximum_data_length_.supported_max_rx_octets_ = 0;
+      le_maximum_data_length_.supported_max_rx_time_ = 0;
+      le_maximum_data_length_.supported_max_tx_octets_ = 0;
+      le_maximum_data_length_.supported_max_tx_time_ = 0;
     }
     if (is_supported(OpCode::LE_READ_MAXIMUM_ADVERTISING_DATA_LENGTH)) {
       hci_->EnqueueCommand(
           LeReadMaximumAdvertisingDataLengthBuilder::Create(),
-          BindOnce(&Controller::impl::le_read_maximum_advertising_data_length_handler, common::Unretained(this)),
-          module_.GetHandler());
+          handler->BindOnceOn(this, &Controller::impl::le_read_maximum_advertising_data_length_handler));
+    } else {
+      le_maximum_advertising_data_length_ = 31;
     }
     if (is_supported(OpCode::LE_READ_NUMBER_OF_SUPPORTED_ADVERTISING_SETS)) {
       hci_->EnqueueCommand(
           LeReadNumberOfSupportedAdvertisingSetsBuilder::Create(),
-          BindOnce(&Controller::impl::le_read_number_of_supported_advertising_sets_handler, common::Unretained(this)),
-          module_.GetHandler());
+          handler->BindOnceOn(this, &Controller::impl::le_read_number_of_supported_advertising_sets_handler));
+    } else {
+      le_number_supported_advertising_sets_ = 1;
     }
 
     hci_->EnqueueCommand(LeGetVendorCapabilitiesBuilder::Create(),
-                         BindOnce(&Controller::impl::le_get_vendor_capabilities_handler, common::Unretained(this)),
-                         module_.GetHandler());
+                         handler->BindOnceOn(this, &Controller::impl::le_get_vendor_capabilities_handler));
 
     // We only need to synchronize the last read. Make BD_ADDR to be the last one.
     std::promise<void> promise;
     auto future = promise.get_future();
     hci_->EnqueueCommand(
         ReadBdAddrBuilder::Create(),
-        BindOnce(&Controller::impl::read_controller_mac_address_handler, common::Unretained(this), std::move(promise)),
-        module_.GetHandler());
+        handler->BindOnceOn(this, &Controller::impl::read_controller_mac_address_handler, std::move(promise)));
     future.wait();
   }
 
@@ -125,21 +119,27 @@ struct Controller::impl {
   }
 
   void NumberOfCompletedPackets(EventPacketView event) {
-    ASSERT(acl_credits_handler_ != nullptr);
+    if (acl_credits_callback_.IsEmpty()) {
+      LOG_WARN("Received event when AclManager is not listening");
+      return;
+    }
     auto complete_view = NumberOfCompletedPacketsView::Create(event);
     ASSERT(complete_view.IsValid());
     for (auto completed_packets : complete_view.GetCompletedPackets()) {
       uint16_t handle = completed_packets.connection_handle_;
       uint16_t credits = completed_packets.host_num_of_completed_packets_;
-      acl_credits_handler_->Post(Bind(acl_credits_callback_, handle, credits));
+      acl_credits_callback_.Invoke(handle, credits);
     }
   }
 
-  void RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
-                                           Handler* handler) {
-    ASSERT(acl_credits_handler_ == nullptr);
-    acl_credits_callback_ = cb;
-    acl_credits_handler_ = handler;
+  void register_completed_acl_packets_callback(CompletedAclPacketsCallback callback) {
+    ASSERT(acl_credits_callback_.IsEmpty());
+    acl_credits_callback_ = callback;
+  }
+
+  void unregister_completed_acl_packets_callback() {
+    ASSERT(!acl_credits_callback_.IsEmpty());
+    acl_credits_callback_ = {};
   }
 
   void read_local_name_complete_handler(CommandCompleteView view) {
@@ -191,10 +191,10 @@ struct Controller::impl {
     // Query all extended features
     if (page_number < maximum_page_number_) {
       page_number++;
-      hci_->EnqueueCommand(ReadLocalExtendedFeaturesBuilder::Create(page_number),
-                           BindOnce(&Controller::impl::read_local_extended_features_complete_handler,
-                                    common::Unretained(this), std::move(promise)),
-                           module_.GetHandler());
+      hci_->EnqueueCommand(
+          ReadLocalExtendedFeaturesBuilder::Create(page_number),
+          module_.GetHandler()->BindOnceOn(this, &Controller::impl::read_local_extended_features_complete_handler,
+                                           std::move(promise)));
     } else {
       promise.set_value();
     }
@@ -222,11 +222,19 @@ struct Controller::impl {
   }
 
   void le_read_buffer_size_handler(CommandCompleteView view) {
-    auto complete_view = LeReadBufferSizeCompleteView::Create(view);
+    auto complete_view = LeReadBufferSizeV1CompleteView::Create(view);
     ASSERT(complete_view.IsValid());
     ErrorCode status = complete_view.GetStatus();
     ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
     le_buffer_size_ = complete_view.GetLeBufferSize();
+
+    // If LE buffer size is zero, then buffers returned by Read_Buffer_Size are shared between BR/EDR and LE.
+    if (le_buffer_size_.total_num_le_packets_ == 0) {
+      ASSERT(acl_buffers_ != 0);
+      le_buffer_size_.total_num_le_packets_ = acl_buffers_ / 2;
+      acl_buffers_ -= le_buffer_size_.total_num_le_packets_;
+      le_buffer_size_.le_data_packet_length_ = acl_buffer_length_;
+    }
   }
 
   void le_read_local_supported_features_handler(CommandCompleteView view) {
@@ -243,6 +251,22 @@ struct Controller::impl {
     ErrorCode status = complete_view.GetStatus();
     ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
     le_supported_states_ = complete_view.GetLeStates();
+  }
+
+  void le_read_connect_list_size_handler(CommandCompleteView view) {
+    auto complete_view = LeReadConnectListSizeCompleteView::Create(view);
+    ASSERT(complete_view.IsValid());
+    ErrorCode status = complete_view.GetStatus();
+    ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
+    le_connect_list_size_ = complete_view.GetConnectListSize();
+  }
+
+  void le_read_resolving_list_size_handler(CommandCompleteView view) {
+    auto complete_view = LeReadResolvingListSizeCompleteView::Create(view);
+    ASSERT(complete_view.IsValid());
+    ErrorCode status = complete_view.GetStatus();
+    ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
+    le_resolving_list_size_ = complete_view.GetResolvingListSize();
   }
 
   void le_read_maximum_data_length_handler(CommandCompleteView view) {
@@ -345,23 +369,33 @@ struct Controller::impl {
 
   void set_event_mask(uint64_t event_mask) {
     std::unique_ptr<SetEventMaskBuilder> packet = SetEventMaskBuilder::Create(event_mask);
-    hci_->EnqueueCommand(std::move(packet),
-                         BindOnce(&Controller::impl::check_status<SetEventMaskCompleteView>, common::Unretained(this)),
-                         module_.GetHandler());
+    hci_->EnqueueCommand(std::move(packet), module_.GetHandler()->BindOnceOn(
+                                                this, &Controller::impl::check_status<SetEventMaskCompleteView>));
+  }
+
+  void write_simple_pairing_mode(Enable enable) {
+    std::unique_ptr<WriteSimplePairingModeBuilder> packet = WriteSimplePairingModeBuilder::Create(enable);
+    hci_->EnqueueCommand(
+        std::move(packet),
+        module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteSimplePairingModeCompleteView>));
+  }
+
+  void write_le_host_support(Enable enable, SimultaneousLeHost simultaneous_le_host) {
+    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable, simultaneous_le_host);
+    hci_->EnqueueCommand(
+        std::move(packet),
+        module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteLeHostSupportCompleteView>));
   }
 
   void reset() {
     std::unique_ptr<ResetBuilder> packet = ResetBuilder::Create();
     hci_->EnqueueCommand(std::move(packet),
-                         BindOnce(&Controller::impl::check_status<ResetCompleteView>, common::Unretained(this)),
-                         module_.GetHandler());
+                         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<ResetCompleteView>));
   }
 
   void set_event_filter(std::unique_ptr<SetEventFilterBuilder> packet) {
-    hci_->EnqueueCommand(
-        std::move(packet),
-        BindOnce(&Controller::impl::check_status<SetEventFilterCompleteView>, common::Unretained(this)),
-        module_.GetHandler());
+    hci_->EnqueueCommand(std::move(packet), module_.GetHandler()->BindOnceOn(
+                                                this, &Controller::impl::check_status<SetEventFilterCompleteView>));
   }
 
   void write_local_name(std::string local_name) {
@@ -372,10 +406,8 @@ struct Controller::impl {
     std::copy(std::begin(local_name), std::end(local_name), std::begin(local_name_array));
 
     std::unique_ptr<WriteLocalNameBuilder> packet = WriteLocalNameBuilder::Create(local_name_array);
-    hci_->EnqueueCommand(
-        std::move(packet),
-        BindOnce(&Controller::impl::check_status<WriteLocalNameCompleteView>, common::Unretained(this)),
-        module_.GetHandler());
+    hci_->EnqueueCommand(std::move(packet), module_.GetHandler()->BindOnceOn(
+                                                this, &Controller::impl::check_status<WriteLocalNameCompleteView>));
   }
 
   void host_buffer_size(uint16_t host_acl_data_packet_length, uint8_t host_synchronous_data_packet_length,
@@ -383,18 +415,14 @@ struct Controller::impl {
     std::unique_ptr<HostBufferSizeBuilder> packet =
         HostBufferSizeBuilder::Create(host_acl_data_packet_length, host_synchronous_data_packet_length,
                                       host_total_num_acl_data_packets, host_total_num_synchronous_data_packets);
-    hci_->EnqueueCommand(
-        std::move(packet),
-        BindOnce(&Controller::impl::check_status<HostBufferSizeCompleteView>, common::Unretained(this)),
-        module_.GetHandler());
+    hci_->EnqueueCommand(std::move(packet), module_.GetHandler()->BindOnceOn(
+                                                this, &Controller::impl::check_status<HostBufferSizeCompleteView>));
   }
 
   void le_set_event_mask(uint64_t le_event_mask) {
     std::unique_ptr<LeSetEventMaskBuilder> packet = LeSetEventMaskBuilder::Create(le_event_mask);
-    hci_->EnqueueCommand(
-        std::move(packet),
-        BindOnce(&Controller::impl::check_status<LeSetEventMaskCompleteView>, common::Unretained(this)),
-        module_.GetHandler());
+    hci_->EnqueueCommand(std::move(packet), module_.GetHandler()->BindOnceOn(
+                                                this, &Controller::impl::check_status<LeSetEventMaskCompleteView>));
   }
 
   template <class T>
@@ -549,7 +577,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(READ_LE_HOST_SUPPORT)
       OP_CODE_MAPPING(WRITE_LE_HOST_SUPPORT)
       OP_CODE_MAPPING(LE_SET_EVENT_MASK)
-      OP_CODE_MAPPING(LE_READ_BUFFER_SIZE)
+      OP_CODE_MAPPING(LE_READ_BUFFER_SIZE_V1)
       OP_CODE_MAPPING(LE_READ_LOCAL_SUPPORTED_FEATURES)
       OP_CODE_MAPPING(LE_SET_RANDOM_ADDRESS)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_PARAMETERS)
@@ -561,10 +589,10 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_SET_SCAN_ENABLE)
       OP_CODE_MAPPING(LE_CREATE_CONNECTION)
       OP_CODE_MAPPING(LE_CREATE_CONNECTION_CANCEL)
-      OP_CODE_MAPPING(LE_READ_WHITE_LIST_SIZE)
-      OP_CODE_MAPPING(LE_CLEAR_WHITE_LIST)
-      OP_CODE_MAPPING(LE_ADD_DEVICE_TO_WHITE_LIST)
-      OP_CODE_MAPPING(LE_REMOVE_DEVICE_FROM_WHITE_LIST)
+      OP_CODE_MAPPING(LE_READ_CONNECT_LIST_SIZE)
+      OP_CODE_MAPPING(LE_CLEAR_CONNECT_LIST)
+      OP_CODE_MAPPING(LE_ADD_DEVICE_TO_CONNECT_LIST)
+      OP_CODE_MAPPING(LE_REMOVE_DEVICE_FROM_CONNECT_LIST)
       OP_CODE_MAPPING(LE_CONNECTION_UPDATE)
       OP_CODE_MAPPING(LE_SET_HOST_CHANNEL_CLASSIFICATION)
       OP_CODE_MAPPING(LE_READ_CHANNEL_MAP)
@@ -580,7 +608,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_TEST_END)
       OP_CODE_MAPPING(ENHANCED_SETUP_SYNCHRONOUS_CONNECTION)
       OP_CODE_MAPPING(ENHANCED_ACCEPT_SYNCHRONOUS_CONNECTION)
-      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODECS)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODECS_V1)
       OP_CODE_MAPPING(READ_SECURE_CONNECTIONS_HOST_SUPPORT)
       OP_CODE_MAPPING(WRITE_SECURE_CONNECTIONS_HOST_SUPPORT)
       OP_CODE_MAPPING(READ_LOCAL_OOB_EXTENDED_DATA)
@@ -632,7 +660,40 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_READ_RF_PATH_COMPENSATION_POWER)
       OP_CODE_MAPPING(LE_WRITE_RF_PATH_COMPENSATION_POWER)
       OP_CODE_MAPPING(LE_SET_PRIVACY_MODE)
+      OP_CODE_MAPPING(LE_SET_PERIODIC_ADVERTISING_RECEIVE_ENABLE)
+      OP_CODE_MAPPING(LE_PERIODIC_ADVERTISING_SYNC_TRANSFER)
+      OP_CODE_MAPPING(LE_PERIODIC_ADVERTISING_SET_INFO_TRANSFER)
+      OP_CODE_MAPPING(LE_SET_PERIODIC_ADVERTISING_SYNC_TRANSFER_PARAMETERS)
+      OP_CODE_MAPPING(LE_SET_DEFAULT_PERIODIC_ADVERTISING_SYNC_TRANSFER_PARAMETERS)
       OP_CODE_MAPPING(LE_GENERATE_DHKEY_COMMAND)
+      OP_CODE_MAPPING(LE_MODIFY_SLEEP_CLOCK_ACCURACY)
+      OP_CODE_MAPPING(LE_READ_BUFFER_SIZE_V2)
+      OP_CODE_MAPPING(LE_READ_ISO_TX_SYNC)
+      OP_CODE_MAPPING(LE_SET_CIG_PARAMETERS)
+      OP_CODE_MAPPING(LE_CREATE_CIS)
+      OP_CODE_MAPPING(LE_REMOVE_CIG)
+      OP_CODE_MAPPING(LE_ACCEPT_CIS_REQUEST)
+      OP_CODE_MAPPING(LE_REJECT_CIS_REQUEST)
+      OP_CODE_MAPPING(LE_CREATE_BIG)
+      OP_CODE_MAPPING(LE_TERMINATE_BIG)
+      OP_CODE_MAPPING(LE_BIG_CREATE_SYNC)
+      OP_CODE_MAPPING(LE_BIG_TERMINATE_SYNC)
+      OP_CODE_MAPPING(LE_REQUEST_PEER_SCA)
+      OP_CODE_MAPPING(LE_SETUP_ISO_DATA_PATH)
+      OP_CODE_MAPPING(LE_REMOVE_ISO_DATA_PATH)
+      OP_CODE_MAPPING(LE_SET_HOST_FEATURE)
+      OP_CODE_MAPPING(LE_READ_ISO_LINK_QUALITY)
+      OP_CODE_MAPPING(LE_ENHANCED_READ_TRANSMIT_POWER_LEVEL)
+      OP_CODE_MAPPING(LE_READ_REMOTE_TRANSMIT_POWER_LEVEL)
+      OP_CODE_MAPPING(LE_SET_PATH_LOSS_REPORTING_PARAMETERS)
+      OP_CODE_MAPPING(LE_SET_PATH_LOSS_REPORTING_ENABLE)
+      OP_CODE_MAPPING(LE_SET_TRANSMIT_POWER_REPORTING_ENABLE)
+      OP_CODE_MAPPING(SET_ECOSYSTEM_BASE_INTERVAL)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODECS_V2)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODEC_CAPABILITIES)
+      OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CONTROLLER_DELAY)
+      OP_CODE_MAPPING(CONFIGURE_DATA_PATH)
+
       // vendor specific
       case OpCode::LE_GET_VENDOR_CAPABILITIES:
         return vendor_capabilities_.is_supported_ == 0x01;
@@ -669,8 +730,7 @@ struct Controller::impl {
 
   HciLayer* hci_;
 
-  Callback<void(uint16_t, uint16_t)> acl_credits_callback_;
-  Handler* acl_credits_handler_ = nullptr;
+  CompletedAclPacketsCallback acl_credits_callback_{};
   LocalVersionInformation local_version_information_;
   std::array<uint8_t, 64> local_supported_commands_;
   uint64_t local_supported_features_;
@@ -685,6 +745,8 @@ struct Controller::impl {
   LeBufferSize le_buffer_size_;
   uint64_t le_local_supported_features_;
   uint64_t le_supported_states_;
+  uint8_t le_connect_list_size_;
+  uint8_t le_resolving_list_size_;
   LeMaximumDataLength le_maximum_data_length_;
   uint16_t le_maximum_advertising_data_length_;
   uint8_t le_number_supported_advertising_sets_;
@@ -695,9 +757,12 @@ Controller::Controller() : impl_(std::make_unique<impl>(*this)) {}
 
 Controller::~Controller() = default;
 
-void Controller::RegisterCompletedAclPacketsCallback(Callback<void(uint16_t /* handle */, uint16_t /* packets */)> cb,
-                                                     Handler* handler) {
-  impl_->RegisterCompletedAclPacketsCallback(cb, handler);  // TODO hsz: why here?
+void Controller::RegisterCompletedAclPacketsCallback(CompletedAclPacketsCallback cb) {
+  CallOn(impl_.get(), &impl::register_completed_acl_packets_callback, cb);
+}
+
+void Controller::UnregisterCompletedAclPacketsCallback() {
+  CallOn(impl_.get(), &impl::unregister_completed_acl_packets_callback);
 }
 
 std::string Controller::GetControllerLocalName() const {
@@ -748,41 +813,41 @@ Address Controller::GetControllerMacAddress() const {
 }
 
 void Controller::SetEventMask(uint64_t event_mask) {
-  GetHandler()->Post(common::BindOnce(&impl::set_event_mask, common::Unretained(impl_.get()), event_mask));
+  CallOn(impl_.get(), &impl::set_event_mask, event_mask);
 }
 
 void Controller::Reset() {
-  GetHandler()->Post(common::BindOnce(&impl::reset, common::Unretained(impl_.get())));
+  CallOn(impl_.get(), &impl::reset);
 }
 
 void Controller::SetEventFilterClearAll() {
   std::unique_ptr<SetEventFilterClearAllBuilder> packet = SetEventFilterClearAllBuilder::Create();
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::SetEventFilterInquiryResultAllDevices() {
   std::unique_ptr<SetEventFilterInquiryResultAllDevicesBuilder> packet =
       SetEventFilterInquiryResultAllDevicesBuilder::Create();
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::SetEventFilterInquiryResultClassOfDevice(ClassOfDevice class_of_device,
                                                           ClassOfDevice class_of_device_mask) {
   std::unique_ptr<SetEventFilterInquiryResultClassOfDeviceBuilder> packet =
       SetEventFilterInquiryResultClassOfDeviceBuilder::Create(class_of_device, class_of_device_mask);
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::SetEventFilterInquiryResultAddress(Address address) {
   std::unique_ptr<SetEventFilterInquiryResultAddressBuilder> packet =
       SetEventFilterInquiryResultAddressBuilder::Create(address);
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::SetEventFilterConnectionSetupAllDevices(AutoAcceptFlag auto_accept_flag) {
   std::unique_ptr<SetEventFilterConnectionSetupAllDevicesBuilder> packet =
       SetEventFilterConnectionSetupAllDevicesBuilder::Create(auto_accept_flag);
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::SetEventFilterConnectionSetupClassOfDevice(ClassOfDevice class_of_device,
@@ -791,30 +856,34 @@ void Controller::SetEventFilterConnectionSetupClassOfDevice(ClassOfDevice class_
   std::unique_ptr<SetEventFilterConnectionSetupClassOfDeviceBuilder> packet =
       SetEventFilterConnectionSetupClassOfDeviceBuilder::Create(class_of_device, class_of_device_mask,
                                                                 auto_accept_flag);
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::SetEventFilterConnectionSetupAddress(Address address, AutoAcceptFlag auto_accept_flag) {
   std::unique_ptr<SetEventFilterConnectionSetupAddressBuilder> packet =
       SetEventFilterConnectionSetupAddressBuilder::Create(address, auto_accept_flag);
-  GetHandler()->Post(common::BindOnce(&impl::set_event_filter, common::Unretained(impl_.get()), std::move(packet)));
+  CallOn(impl_.get(), &impl::set_event_filter, std::move(packet));
 }
 
 void Controller::WriteLocalName(std::string local_name) {
   impl_->local_name_ = local_name;
-  GetHandler()->Post(common::BindOnce(&impl::write_local_name, common::Unretained(impl_.get()), local_name));
+  CallOn(impl_.get(), &impl::write_local_name, local_name);
 }
 
 void Controller::HostBufferSize(uint16_t host_acl_data_packet_length, uint8_t host_synchronous_data_packet_length,
                                 uint16_t host_total_num_acl_data_packets,
                                 uint16_t host_total_num_synchronous_data_packets) {
-  GetHandler()->Post(common::BindOnce(&impl::host_buffer_size, common::Unretained(impl_.get()),
-                                      host_acl_data_packet_length, host_synchronous_data_packet_length,
-                                      host_total_num_acl_data_packets, host_total_num_synchronous_data_packets));
+  CallOn(
+      impl_.get(),
+      &impl::host_buffer_size,
+      host_acl_data_packet_length,
+      host_synchronous_data_packet_length,
+      host_total_num_acl_data_packets,
+      host_total_num_synchronous_data_packets);
 }
 
 void Controller::LeSetEventMask(uint64_t le_event_mask) {
-  GetHandler()->Post(common::BindOnce(&impl::le_set_event_mask, common::Unretained(impl_.get()), le_event_mask));
+  CallOn(impl_.get(), &impl::le_set_event_mask, le_event_mask);
 }
 
 LeBufferSize Controller::GetControllerLeBufferSize() const {
@@ -827,6 +896,14 @@ uint64_t Controller::GetControllerLeLocalSupportedFeatures() const {
 
 uint64_t Controller::GetControllerLeSupportedStates() const {
   return impl_->le_supported_states_;
+}
+
+uint8_t Controller::GetControllerLeConnectListSize() const {
+  return impl_->le_connect_list_size_;
+}
+
+uint8_t Controller::GetControllerLeResolvingListSize() const {
+  return impl_->le_resolving_list_size_;
 }
 
 LeMaximumDataLength Controller::GetControllerLeMaximumDataLength() const {
