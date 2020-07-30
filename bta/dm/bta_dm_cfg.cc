@@ -28,7 +28,6 @@
 #include "bt_target.h"
 #include "bta_api.h"
 #include "bta_dm_int.h"
-#include "bta_hh_api.h"
 #include "bta_jv_api.h"
 #include "bta_sys.h"
 
@@ -117,8 +116,8 @@ const tBTA_DM_CFG* p_bta_dm_cfg = &bta_dm_cfg;
 const tBTA_DM_RM* p_bta_dm_rm_cfg = &bta_dm_rm_cfg[0];
 
 #define BTA_DM_NUM_PM_ENTRY \
-  25 /* number of entries in bta_dm_pm_cfg except the first */
-#define BTA_DM_NUM_PM_SPEC 16 /* number of entries in bta_dm_pm_spec */
+  23 /* number of entries in bta_dm_pm_cfg except the first */
+#define BTA_DM_NUM_PM_SPEC 15 /* number of entries in bta_dm_pm_spec */
 
 tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_CFG
     bta_dm_pm_cfg[BTA_DM_NUM_PM_ENTRY + 1] = {
@@ -127,32 +126,28 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_CFG
         {BTA_ID_AG, BTA_ALL_APP_ID,
          0},               /* ag uses first spec table for app id 0 */
         {BTA_ID_CT, 1, 1}, /* ct (BTA_ID_CT,APP ID=1) spec table */
-        {BTA_ID_CG, BTA_ALL_APP_ID, 1},     /* cg resue ct spec table */
-        {BTA_ID_DG, BTA_ALL_APP_ID, 2},     /* dg spec table */
-        {BTA_ID_AV, BTA_ALL_APP_ID, 4},     /* av spec table */
-        {BTA_ID_AVK, BTA_ALL_APP_ID, 13},   /* avk spec table */
-        {BTA_ID_FTC, BTA_ALL_APP_ID, 7},    /* ftc spec table */
-        {BTA_ID_FTS, BTA_ALL_APP_ID, 8},    /* fts spec table */
-        {BTA_ID_HD, BTA_ALL_APP_ID, 3},     /* hd spec table */
-        {BTA_ID_HH, BTA_HH_APP_ID_JOY, 5},  /* app BTA_HH_APP_ID_JOY,
-                                               similar to hh spec table */
-        {BTA_ID_HH, BTA_HH_APP_ID_GPAD, 5}, /* app BTA_HH_APP_ID_GPAD,
-                                               similar to hh spec table */
-        {BTA_ID_HH, BTA_ALL_APP_ID, 6},     /* hh spec table */
-        {BTA_ID_PBC, BTA_ALL_APP_ID, 2},    /* reuse dg spec table */
-        {BTA_ID_PBS, BTA_ALL_APP_ID, 8},    /* reuse fts spec table */
-        {BTA_ID_OPC, BTA_ALL_APP_ID, 7},    /* reuse ftc spec table */
-        {BTA_ID_OPS, BTA_ALL_APP_ID, 8},    /* reuse fts spec table */
-        {BTA_ID_MSE, BTA_ALL_APP_ID, 8},    /* reuse fts spec table */
+        {BTA_ID_CG, BTA_ALL_APP_ID, 1},   /* cg resue ct spec table */
+        {BTA_ID_DG, BTA_ALL_APP_ID, 2},   /* dg spec table */
+        {BTA_ID_AV, BTA_ALL_APP_ID, 4},   /* av spec table */
+        {BTA_ID_AVK, BTA_ALL_APP_ID, 12}, /* avk spec table */
+        {BTA_ID_FTC, BTA_ALL_APP_ID, 6},  /* ftc spec table */
+        {BTA_ID_FTS, BTA_ALL_APP_ID, 7},  /* fts spec table */
+        {BTA_ID_HD, BTA_ALL_APP_ID, 3},   /* hd spec table */
+        {BTA_ID_HH, BTA_ALL_APP_ID, 5},   /* hh spec table */
+        {BTA_ID_PBC, BTA_ALL_APP_ID, 2},  /* reuse dg spec table */
+        {BTA_ID_PBS, BTA_ALL_APP_ID, 7},  /* reuse fts spec table */
+        {BTA_ID_OPC, BTA_ALL_APP_ID, 6},  /* reuse ftc spec table */
+        {BTA_ID_OPS, BTA_ALL_APP_ID, 7},  /* reuse fts spec table */
+        {BTA_ID_MSE, BTA_ALL_APP_ID, 7},  /* reuse fts spec table */
         {BTA_ID_JV, BTA_JV_PM_ID_1,
-         7}, /* app BTA_JV_PM_ID_1, reuse ftc spec table */
-        {BTA_ID_JV, BTA_ALL_APP_ID, 8},     /* reuse fts spec table */
-        {BTA_ID_HL, BTA_ALL_APP_ID, 9},     /* reuse fts spec table */
-        {BTA_ID_PAN, BTUI_PAN_ID_PANU, 10}, /* PANU spec table */
-        {BTA_ID_PAN, BTUI_PAN_ID_NAP, 11},  /* NAP spec table */
-        {BTA_ID_HS, BTA_ALL_APP_ID, 12},    /* HS spec table */
-        {BTA_ID_GATTC, BTA_ALL_APP_ID, 14}, /* gattc spec table */
-        {BTA_ID_GATTS, BTA_ALL_APP_ID, 15}  /* gatts spec table */
+         6}, /* app BTA_JV_PM_ID_1, reuse ftc spec table */
+        {BTA_ID_JV, BTA_ALL_APP_ID, 7},     /* reuse fts spec table */
+        {BTA_ID_HL, BTA_ALL_APP_ID, 8},     /* reuse fts spec table */
+        {BTA_ID_PAN, BTUI_PAN_ID_PANU, 9},  /* PANU spec table */
+        {BTA_ID_PAN, BTUI_PAN_ID_NAP, 10},  /* NAP spec table */
+        {BTA_ID_HS, BTA_ALL_APP_ID, 11},    /* HS spec table */
+        {BTA_ID_GATTC, BTA_ALL_APP_ID, 13}, /* gattc spec table */
+        {BTA_ID_GATTS, BTA_ALL_APP_ID, 14}  /* gatts spec table */
 };
 
 tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
@@ -171,9 +166,8 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}}, /* sco open, active */
          {{BTA_DM_PM_SNIFF_A2DP_IDX, 7000},
           {BTA_DM_PM_NO_ACTION, 0}}, /* sco close sniff  */
-         {{BTA_DM_PM_SNIFF_A2DP_IDX, 7000},
-          {BTA_DM_PM_NO_ACTION, 0}},                        /* idle */
-         {{BTA_DM_PM_ACTIVE, 0}, {BTA_DM_PM_NO_ACTION, 0}}, /* busy */
+         {{BTA_DM_PM_NO_ACTION, 0}, {BTA_DM_PM_NO_ACTION, 0}}, /* idle */
+         {{BTA_DM_PM_ACTIVE, 0}, {BTA_DM_PM_NO_ACTION, 0}},    /* busy */
          {{BTA_DM_PM_RETRY, 7000},
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
@@ -242,7 +236,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
     /* AV : 4 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
-     (BTA_DM_PM_SSR2), /* the SSR entry */
+     (BTA_DM_PM_SSR0), /* the SSR entry */
 #endif
      {
          {{BTA_DM_PM_SNIFF_A2DP_IDX, 7000},
@@ -259,29 +253,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* HH for joysticks and gamepad : 5 */
-    {(BTA_DM_PM_SNIFF | BTA_DM_PM_PARK), /* allow park & sniff */
-#if (BTM_SSR_INCLUDED == TRUE)
-     (BTA_DM_PM_SSR1), /* the SSR entry */
-#endif
-     {
-         {{BTA_DM_PM_SNIFF6, BTA_DM_PM_HH_OPEN_DELAY},
-          {BTA_DM_PM_NO_ACTION, 0}}, /* conn open  sniff */
-         {{BTA_DM_PM_NO_PREF, 0}, {BTA_DM_PM_NO_ACTION, 0}},   /* conn close  */
-         {{BTA_DM_PM_NO_ACTION, 0}, {BTA_DM_PM_NO_ACTION, 0}}, /* app open */
-         {{BTA_DM_PM_NO_ACTION, 0}, {BTA_DM_PM_NO_ACTION, 0}}, /* app close */
-         {{BTA_DM_PM_NO_ACTION, 0}, {BTA_DM_PM_NO_ACTION, 0}}, /* sco open  */
-         {{BTA_DM_PM_NO_ACTION, 0},
-          {BTA_DM_PM_NO_ACTION, 0}}, /* sco close, used for HH suspend   */
-         {{BTA_DM_PM_SNIFF6, BTA_DM_PM_HH_IDLE_DELAY},
-          {BTA_DM_PM_NO_ACTION, 0}}, /* idle */
-         {{BTA_DM_PM_SNIFF6, BTA_DM_PM_HH_ACTIVE_DELAY},
-          {BTA_DM_PM_NO_ACTION, 0}}, /* busy */
-         {{BTA_DM_PM_NO_ACTION, 0},
-          {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
-     }},
-
-    /* HH : 6 */
+    /* HH : 5 */
     {(BTA_DM_PM_SNIFF | BTA_DM_PM_PARK), /* allow park & sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR1), /* the SSR entry */
@@ -303,7 +275,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* FTC, OPC, JV : 7 */
+    /* FTC, OPC, JV : 6 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -323,7 +295,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* FTS, PBS, OPS, MSE, BTA_JV_PM_ID_1 : 8 */
+    /* FTS, PBS, OPS, MSE, BTA_JV_PM_ID_1 : 7 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -343,7 +315,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* HL : 9 */
+    /* HL : 8 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -364,7 +336,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* PANU : 10 */
+    /* PANU : 9 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -384,7 +356,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* NAP : 11 */
+    /* NAP : 10 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -405,7 +377,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* HS : 12 */
+    /* HS : 11 */
     {(BTA_DM_PM_SNIFF | BTA_DM_PM_PARK), /* allow park & sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -426,7 +398,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }},
 
-    /* AVK : 13 */
+    /* AVK : 12 */
     {(BTA_DM_PM_SNIFF), /* allow sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
      (BTA_DM_PM_SSR2), /* the SSR entry */
@@ -445,7 +417,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }}
 
-    /* GATTC : 14 */
+    /* GATTC : 13 */
     ,
     {(BTA_DM_PM_SNIFF | BTA_DM_PM_PARK), /* allow park & sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
@@ -465,7 +437,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
          {{BTA_DM_PM_RETRY, 5000},
           {BTA_DM_PM_NO_ACTION, 0}} /* mode change retry */
      }}
-    /* GATTS : 15 */
+    /* GATTS : 14 */
     ,
     {(BTA_DM_PM_SNIFF | BTA_DM_PM_PARK), /* allow park & sniff */
 #if (BTM_SSR_INCLUDED == TRUE)
@@ -502,7 +474,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
 /* Please refer to the SNIFF table definitions in bta_api.h.
  *
  * Adding to or Modifying the Table
- * Additional sniff parameter entries can be added for BTA_DM_PM_SNIFF6 -
+ * Additional sniff parameter entries can be added for BTA_DM_PM_SNIFF5 -
  * BTA_DM_PM_SNIFF7.
  * Overrides of additional table entries can be specified in bdroid_buildcfg.h.
  * If additional
@@ -549,9 +521,6 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTM_PM_PWR_MD bta_dm_pm_md[] = {
     {BTA_DM_PM_SNIFF5_MAX, BTA_DM_PM_SNIFF5_MIN, BTA_DM_PM_SNIFF5_ATTEMPT,
      BTA_DM_PM_SNIFF5_TIMEOUT,
      BTM_PM_MD_SNIFF}, /* for BTA_DM_PM_SNIFF5- HD active */
-    {BTA_DM_PM_SNIFF6_MAX, BTA_DM_PM_SNIFF6_MIN, BTA_DM_PM_SNIFF6_ATTEMPT,
-     BTA_DM_PM_SNIFF6_TIMEOUT,
-     BTM_PM_MD_SNIFF}, /* for BTA_DM_PM_SNIFF6- HD active */
     {BTA_DM_PM_PARK_MAX, BTA_DM_PM_PARK_MIN, BTA_DM_PM_PARK_ATTEMPT,
      BTA_DM_PM_PARK_TIMEOUT, BTM_PM_MD_PARK}
 
@@ -586,9 +555,8 @@ tBTA_DM_SSR_SPEC bta_dm_ssr_spec[] = {
        default max latency and min remote timeout as 0, and always read
        individual device preference from HH module */
     {0, 0, 2},
-    {1200, 2, 2},     /* BTA_DM_PM_SSR2 - others (as long as sniff is allowed)*/
-    {360, 160, 1600}, /* BTA_DM_PM_SSR3 - HD */
-    {1200, 65534, 65534} /* BTA_DM_PM_SSR4 - A2DP streaming */
+    {1200, 2, 2},    /* BTA_DM_PM_SSR2 - others (as long as sniff is allowed)*/
+    {360, 160, 1600} /* BTA_DM_PM_SSR3 - HD */
 };
 
 tBTA_DM_SSR_SPEC* p_bta_dm_ssr_spec = &bta_dm_ssr_spec[0];
