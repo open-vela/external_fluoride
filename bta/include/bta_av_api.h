@@ -72,7 +72,6 @@ typedef uint8_t tBTA_AV_STATUS;
 #define BTA_AV_FEAT_DELAY_RPT 0x0400 /* allow delay reporting */
 #define BTA_AV_FEAT_ACP_START \
   0x0800 /* start stream when 2nd SNK was accepted   */
-#define BTA_AV_FEAT_COVER_ARTWORK 0x1000 /* use cover art feature */
 #define BTA_AV_FEAT_APP_SETTING 0x2000 /* Player app setting support */
 
 /* Internal features */
@@ -95,6 +94,11 @@ typedef uint8_t tBTA_AV_HNDL;
 /* maximum number of streams created */
 #ifndef BTA_AV_NUM_STRS
 #define BTA_AV_NUM_STRS 6
+#endif
+
+#ifndef BTA_AV_MAX_A2DP_MTU
+/*#define BTA_AV_MAX_A2DP_MTU     668 //224 (DM5) * 3 - 4(L2CAP header) */
+#define BTA_AV_MAX_A2DP_MTU 1008
 #endif
 
 /* operation id list for BTA_AvRemoteCmd */
@@ -145,9 +149,8 @@ typedef uint8_t tBTA_AV_ERR;
 #define BTA_AV_OFFLOAD_START_RSP_EVT 22 /* a2dp offload start response */
 #define BTA_AV_RC_BROWSE_OPEN_EVT 23    /* remote control channel open */
 #define BTA_AV_RC_BROWSE_CLOSE_EVT 24   /* remote control channel closed */
-#define BTA_AV_RC_PSM_EVT 25            /* cover art psm update */
 /* Max BTA event */
-#define BTA_AV_MAX_EVT 26
+#define BTA_AV_MAX_EVT 25
 
 typedef uint8_t tBTA_AV_EVT;
 
@@ -236,7 +239,6 @@ typedef struct {
 /* data associated with BTA_AV_RC_OPEN_EVT */
 typedef struct {
   uint8_t rc_handle;
-  uint16_t cover_art_psm;
   tBTA_AV_FEAT peer_features;
   RawAddress peer_addr;
   tBTA_AV_STATUS status;
@@ -267,13 +269,6 @@ typedef struct {
   tBTA_AV_FEAT peer_features;
   RawAddress peer_addr;
 } tBTA_AV_RC_FEAT;
-
-/* data associated with BTA_AV_RC_PSM_EVT */
-typedef struct {
-  uint8_t rc_handle;
-  uint16_t cover_art_psm;
-  RawAddress peer_addr;
-} tBTA_AV_RC_PSM;
 
 /* data associated with BTA_AV_REMOTE_CMD_EVT */
 typedef struct {
@@ -352,7 +347,6 @@ typedef union {
   tBTA_AV_META_MSG meta_msg;
   tBTA_AV_REJECT reject;
   tBTA_AV_RC_FEAT rc_feat;
-  tBTA_AV_RC_PSM rc_cover_art_psm;
   tBTA_AV_STATUS status;
 } tBTA_AV;
 
@@ -371,8 +365,7 @@ typedef union {
 
 /* AV callback */
 typedef void(tBTA_AV_CBACK)(tBTA_AV_EVT event, tBTA_AV* p_data);
-typedef void(tBTA_AV_SINK_DATA_CBACK)(const RawAddress&, tBTA_AV_EVT event,
-                                      tBTA_AV_MEDIA* p_data);
+typedef void(tBTA_AV_SINK_DATA_CBACK)(tBTA_AV_EVT event, tBTA_AV_MEDIA* p_data);
 
 /* type for stream state machine action functions */
 struct tBTA_AV_SCB;

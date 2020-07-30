@@ -22,9 +22,9 @@
 #include <memory>
 
 #include "avrcp_internal.h"
-#include "packet/avrcp/avrcp_packet.h"
-#include "packet/base/packet.h"
-#include "profile/avrcp/device.h"
+#include "avrcp_packet.h"
+#include "device.h"
+#include "packet.h"
 #include "raw_address.h"
 
 namespace bluetooth {
@@ -135,9 +135,9 @@ class ConnectionHandler {
 
   using SdpCallback = base::Callback<void(uint16_t status, uint16_t version,
                                           uint16_t features)>;
-  virtual bool SdpLookup(const RawAddress& bdaddr, SdpCallback cb, bool retry);
+  virtual bool SdpLookup(const RawAddress& bdaddr, SdpCallback cb);
   void SdpCb(const RawAddress& bdaddr, SdpCallback cb,
-             tSDP_DISCOVERY_DB* disc_db, bool retry, uint16_t status);
+             tSDP_DISCOVERY_DB* disc_db, uint16_t status);
 
   virtual bool AvrcpConnect(bool initiator, const RawAddress& bdaddr);
 
