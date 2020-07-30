@@ -27,11 +27,20 @@
 #include "btcore/include/module.h"
 #include "btcore/include/version.h"
 #include "hcimsgs.h"
+#include "main/shim/controller.h"
+#include "main/shim/shim.h"
 #include "osi/include/future.h"
 #include "stack/include/btm_ble_api.h"
 
-const bt_event_mask_t BLE_EVENT_MASK = {
-    {0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x1E, 0x7f}};
+const bt_event_mask_t BLE_EVENT_MASK = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+#if (BLE_PRIVACY_SPT == TRUE)
+                                         0x1E,
+#else
+                                         /* Disable "LE Enhanced Connection
+                                            Complete" when privacy is off */
+                                         0x1C,
+#endif
+                                         0x7f}};
 
 const bt_event_mask_t CLASSIC_EVENT_MASK = {HCI_DUMO_EVENT_MASK_EXT};
 
@@ -44,7 +53,7 @@ const uint8_t SCO_HOST_BUFFER_SIZE = 0xff;
 #define BLE_SUPPORTED_FEATURES_SIZE 8
 #define MAX_LOCAL_SUPPORTED_CODECS_SIZE 8
 
-static const hci_t* hci;
+static const hci_t* local_hci;
 static const hci_packet_factory_t* packet_factory;
 static const hci_packet_parser_t* packet_parser;
 
@@ -81,7 +90,8 @@ static bool simple_pairing_supported;
 static bool secure_connections_supported;
 
 #define AWAIT_COMMAND(command) \
-  static_cast<BT_HDR*>(future_await(hci->transmit_command_futured(command)))
+  static_cast<BT_HDR*>(        \
+      future_await(local_hci->transmit_command_futured(command)))
 
 // Module lifecycle functions
 
@@ -575,12 +585,12 @@ static const controller_t interface = {
     get_local_supported_codecs,
     get_le_all_initiating_phys};
 
-const controller_t* controller_get_interface() {
+const controller_t* bluetooth::legacy::controller_get_interface() {
   static bool loaded = false;
   if (!loaded) {
     loaded = true;
 
-    hci = hci_layer_get_interface();
+    local_hci = hci_layer_get_interface();
     packet_factory = hci_packet_factory_get_interface();
     packet_parser = hci_packet_parser_get_interface();
   }
@@ -588,11 +598,19 @@ const controller_t* controller_get_interface() {
   return &interface;
 }
 
+const controller_t* controller_get_interface() {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::controller_get_interface();
+  } else {
+    return bluetooth::legacy::controller_get_interface();
+  }
+}
+
 const controller_t* controller_get_test_interface(
     const hci_t* hci_interface,
     const hci_packet_factory_t* packet_factory_interface,
     const hci_packet_parser_t* packet_parser_interface) {
-  hci = hci_interface;
+  local_hci = hci_interface;
   packet_factory = packet_factory_interface;
   packet_parser = packet_parser_interface;
   return &interface;
