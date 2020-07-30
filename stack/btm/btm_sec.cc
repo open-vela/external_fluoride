@@ -58,7 +58,6 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -97,14 +96,7 @@ bool btm_sec_are_all_trusted(uint32_t p_mask[]);
 static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
                                                uint8_t reason,
                                                uint16_t conn_handle);
-uint8_t btm_sec_start_role_switch(tBTM_SEC_DEV_REC* p_dev_rec);
 tBTM_SEC_DEV_REC* btm_sec_find_dev_by_sec_state(uint8_t state);
-
-static bool btm_sec_set_security_level(CONNECTION_TYPE conn_type,
-                                       const char* p_name, uint8_t service_id,
-                                       uint16_t sec_level, uint16_t psm,
-                                       uint32_t mx_proto_id,
-                                       uint32_t mx_chan_id);
 
 static bool btm_dev_authenticated(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_dev_encrypted(tBTM_SEC_DEV_REC* p_dev_rec);
@@ -241,7 +233,7 @@ bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
 
   BTM_TRACE_EVENT("%s application registered", __func__);
 
-  LOG_INFO(LOG_TAG, "%s p_cb_info->p_le_callback == 0x%p", __func__,
+  LOG_INFO("%s p_cb_info->p_le_callback == 0x%p", __func__,
            p_cb_info->p_le_callback);
   if (p_cb_info->p_le_callback) {
     BTM_TRACE_EVENT("%s SMP_Register( btm_proc_smp_cback )", __func__);
@@ -252,11 +244,11 @@ bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info) {
       btm_ble_reset_id();
     }
   } else {
-    LOG_WARN(LOG_TAG, "%s p_cb_info->p_le_callback == NULL", __func__);
+    LOG_WARN("%s p_cb_info->p_le_callback == NULL", __func__);
   }
 
   btm_cb.api = *p_cb_info;
-  LOG_INFO(LOG_TAG, "%s btm_cb.api.p_le_callback = 0x%p ", __func__,
+  LOG_INFO("%s btm_cb.api.p_le_callback = 0x%p ", __func__,
            btm_cb.api.p_le_callback);
   BTM_TRACE_EVENT("%s application registered", __func__);
   return (true);
@@ -429,41 +421,10 @@ void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired) {
 bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
                           uint8_t service_id, uint16_t sec_level, uint16_t psm,
                           uint32_t mx_proto_id, uint32_t mx_chan_id) {
-  return (btm_sec_set_security_level(is_originator, p_name, service_id,
-                                     sec_level, psm, mx_proto_id, mx_chan_id));
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_set_security_level
- *
- * Description      Register service security level with Security Manager
- *
- * Parameters:      conn_type   - true if originating the connection
- *                  p_name      - Name of the service relevant only if
- *                                authorization will show this name to user.
- *                                Ignored if BTM_SEC_SERVICE_NAME_LEN is 0.
- *                  service_id  - service ID for the service passed to
- *                                authorization callback
- *                  sec_level   - bit mask of the security features
- *                  psm         - L2CAP PSM
- *                  mx_proto_id - protocol ID of multiplexing proto below
- *                  mx_chan_id  - channel ID of multiplexing proto below
- *
- * Returns          true if registered OK, else false
- *
- ******************************************************************************/
-static bool btm_sec_set_security_level(CONNECTION_TYPE conn_type,
-                                       const char* p_name, uint8_t service_id,
-                                       uint16_t sec_level, uint16_t psm,
-                                       uint32_t mx_proto_id,
-                                       uint32_t mx_chan_id) {
   tBTM_SEC_SERV_REC* p_srec;
   uint16_t index;
   uint16_t first_unused_record = BTM_NO_AVAIL_SEC_SERVICES;
   bool record_allocated = false;
-  bool is_originator;
-  is_originator = conn_type;
 
   BTM_TRACE_API("%s : sec: 0x%x", __func__, sec_level);
 
@@ -1017,11 +978,12 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
  *  Note: After 2.1 parameters are not used and preserved here not to change API
  ******************************************************************************/
 tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                        tBT_TRANSPORT transport, uint8_t pin_len,
-                        uint8_t* p_pin, uint32_t trusted_mask[]) {
+                        tBT_TRANSPORT transport, int device_type,
+                        uint8_t pin_len, uint8_t* p_pin,
+                        uint32_t trusted_mask[]) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport, pin_len,
-                                        p_pin, trusted_mask);
+    return bluetooth::shim::BTM_SecBond(bd_addr, addr_type, transport,
+                                        device_type);
   }
 
   if (transport == BT_TRANSPORT_INVALID)
@@ -1326,6 +1288,8 @@ static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
  *
  ******************************************************************************/
 void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr) {
+  ASSERT_LOG(!bluetooth::shim::is_gd_shim_enabled(), "Unreachable code path");
+
   tBTM_SEC_DEV_REC* p_dev_rec;
 
   BTM_TRACE_EVENT("BTM_ConfirmReqReply() State: %s  Res: %u",
@@ -1374,6 +1338,8 @@ void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr) {
  ******************************************************************************/
 void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
                          uint32_t passkey) {
+  ASSERT_LOG(!bluetooth::shim::is_gd_shim_enabled(), "Unreachable code path");
+
   BTM_TRACE_API("BTM_PasskeyReqReply: State: %s  res:%d",
                 btm_pair_state_descr(btm_cb.pairing_state), res);
 
@@ -1417,26 +1383,6 @@ void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
     btm_cb.acl_disc_reason = HCI_SUCCESS;
     btsnd_hcic_user_passkey_reply(bd_addr, passkey);
   }
-}
-
-/*******************************************************************************
- *
- * Function         BTM_SendKeypressNotif
- *
- * Description      This function is used during the passkey entry model
- *                  by a device with KeyboardOnly IO capabilities
- *                  (very likely to be a HID Device).
- *                  It is called by a HID Device to inform the remote device
- *                  when a key has been entered or erased.
- *
- * Parameters:      bd_addr - Address of the peer device
- *                  type - notification type
- *
- ******************************************************************************/
-void BTM_SendKeypressNotif(const RawAddress& bd_addr, tBTM_SP_KEY_TYPE type) {
-  /* This API only make sense between PASSKEY_REQ and SP complete */
-  if (btm_cb.pairing_state == BTM_PAIR_STATE_KEY_ENTRY)
-    btsnd_hcic_send_keypress_notif(bd_addr, type);
 }
 
 /*******************************************************************************
@@ -1973,7 +1919,7 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
       because of data path issues. Delay this disconnect a little bit
       */
       LOG_INFO(
-          LOG_TAG,
+
           "%s peer should have initiated security process by now (SM4 to SM4)",
           __func__);
       p_dev_rec->p_callback = p_callback;
@@ -2066,6 +2012,11 @@ tBTM_STATUS btm_sec_mx_access_request(const RawAddress& bd_addr, uint16_t psm,
   uint16_t security_required;
   bool transport = false; /* should check PSM range in LE connection oriented
                              L2CAP connection */
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::btm_sec_mx_access_request(
+        bd_addr, psm, is_originator, mx_proto_id, mx_chan_id, p_callback,
+        p_ref_data);
+  }
 
   BTM_TRACE_DEBUG("%s() is_originator: %d", __func__, is_originator);
   /* Find or get oldest record */
@@ -2932,13 +2883,6 @@ void btm_io_capabilities_req(const RawAddress& p) {
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
 
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
@@ -3648,7 +3592,7 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
   }
 
   /* Currently we do not notify user if it is a keyboard which connects */
-  /* User probably Disabled the keyboard while it was asleap.  Let her try */
+  /* User probably Disabled the keyboard while it was asleap.  Let them try */
   if (btm_cb.api.p_auth_complete_callback) {
     /* report the suthentication status */
     if ((old_state != BTM_PAIR_STATE_IDLE) || (status != HCI_SUCCESS))
@@ -4277,8 +4221,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 
 #if (BTM_DISC_DURING_RS == TRUE)
-  LOG_INFO(LOG_TAG, "%s clearing pending flag handle:%d reason:%d", __func__,
-           handle, reason);
+  LOG_INFO("%s clearing pending flag handle:%d reason:%d", __func__, handle,
+           reason);
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 #endif
 
@@ -4354,8 +4298,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -4464,8 +4407,7 @@ void btm_sec_link_key_notification(const RawAddress& p_bda,
     /* If it is for bonding nothing else will follow, so we need to start name
      * resolution */
     if (we_are_bonding) {
-      btsnd_hcic_rmt_name_req(p_bda, HCI_PAGE_SCAN_REP_MODE_R1,
-                              HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+      SendRemoteNameRequest(p_bda);
     }
 
     BTM_TRACE_EVENT("rmt_io_caps:%d, sec_flags:x%x, dev_class[1]:x%02x",
@@ -4782,8 +4724,7 @@ void btm_sec_pin_code_request(const RawAddress& p_bda) {
       /* We received PIN code request for the device with unknown name */
       /* it is not user friendly just to ask for the PIN without name */
       /* try to get name at first */
-      btsnd_hcic_rmt_name_req(p_dev_rec->bd_addr, HCI_PAGE_SCAN_REP_MODE_R1,
-                              HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+      SendRemoteNameRequest(p_dev_rec->bd_addr);
     }
   }
 
@@ -4962,19 +4903,14 @@ tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
  *
  ******************************************************************************/
 static bool btm_sec_start_get_name(tBTM_SEC_DEV_REC* p_dev_rec) {
-  uint8_t tempstate = p_dev_rec->sec_state;
+  if (!BTM_IsDeviceUp()) return false;
 
   p_dev_rec->sec_state = BTM_SEC_STATE_GETTING_NAME;
 
   /* 0 and NULL are as timeout and callback params because they are not used in
    * security get name case */
-  if ((btm_initiate_rem_name(p_dev_rec->bd_addr, BTM_RMT_NAME_SEC, 0, NULL)) !=
-      BTM_CMD_STARTED) {
-    p_dev_rec->sec_state = tempstate;
-    return (false);
-  }
-
-  return (true);
+  SendRemoteNameRequest(p_dev_rec->bd_addr);
+  return true;
 }
 
 /*******************************************************************************
