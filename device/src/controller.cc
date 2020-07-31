@@ -309,6 +309,13 @@ static const bt_version_t* get_bt_version(void) {
   return &bt_version;
 }
 
+// TODO(zachoverflow): hide inside, move decoder inside too
+static const bt_device_features_t* get_features_classic(int index) {
+  CHECK(readable);
+  CHECK(index < MAX_FEATURES_CLASSIC_PAGE_COUNT);
+  return &features_classic[index];
+}
+
 static uint8_t* get_local_supported_codecs(uint8_t* number_of_codecs) {
   CHECK(readable);
   if (number_of_local_supported_codecs) {
@@ -316,6 +323,12 @@ static uint8_t* get_local_supported_codecs(uint8_t* number_of_codecs) {
     return local_supported_codecs;
   }
   return NULL;
+}
+
+static const bt_device_features_t* get_features_ble(void) {
+  CHECK(readable);
+  CHECK(ble_supported);
+  return &features_ble;
 }
 
 static const uint8_t* get_ble_supported_states(void) {
@@ -474,16 +487,6 @@ static bool supports_non_flushable_pb(void) {
   return HCI_NON_FLUSHABLE_PB_SUPPORTED(features_classic[0].as_array);
 }
 
-static bool supports_sniff_subrating(void) {
-  CHECK(readable);
-  return HCI_SNIFF_SUB_RATE_SUPPORTED(features_classic[0].as_array);
-}
-
-static bool supports_encryption_pause(void) {
-  CHECK(readable);
-  return HCI_ATOMIC_ENCRYPT_SUPPORTED(features_classic[0].as_array);
-}
-
 static bool supports_ble(void) {
   CHECK(readable);
   return ble_supported;
@@ -536,18 +539,6 @@ static bool supports_ble_periodic_advertising(void) {
   CHECK(readable);
   CHECK(ble_supported);
   return HCI_LE_PERIODIC_ADVERTISING_SUPPORTED(features_ble.as_array);
-}
-
-static bool supports_ble_peripheral_initiated_feature_exchange(void) {
-  CHECK(readable);
-  CHECK(ble_supported);
-  return HCI_LE_SLAVE_INIT_FEAT_EXC_SUPPORTED(features_ble.as_array);
-}
-
-static bool supports_ble_connection_parameter_request(void) {
-  CHECK(readable);
-  CHECK(ble_supported);
-  return HCI_LE_CONN_PARAM_REQ_SUPPORTED(features_ble.as_array);
 }
 
 static uint16_t get_acl_data_size_classic(void) {
@@ -642,6 +633,9 @@ static const controller_t interface = {
     get_address,
     get_bt_version,
 
+    get_features_classic,
+
+    get_features_ble,
     get_ble_supported_states,
 
     supports_simple_pairing,
@@ -674,8 +668,6 @@ static const controller_t interface = {
     supports_sniff_mode,
     supports_park_mode,
     supports_non_flushable_pb,
-    supports_sniff_subrating,
-    supports_encryption_pause,
 
     supports_ble,
     supports_ble_packet_extension,
@@ -686,8 +678,6 @@ static const controller_t interface = {
     supports_ble_coded_phy,
     supports_ble_extended_advertising,
     supports_ble_periodic_advertising,
-    supports_ble_peripheral_initiated_feature_exchange,
-    supports_ble_connection_parameter_request,
 
     get_acl_data_size_classic,
     get_acl_data_size_ble,
