@@ -69,7 +69,6 @@ typedef struct controller_t {
   bool (*supports_sniff_mode)(void);
   bool (*supports_park_mode)(void);
   bool (*supports_non_flushable_pb)(void);
-  bool (*supports_sniff_subrating)(void);
 
   bool (*supports_ble)(void);
   bool (*supports_ble_packet_extension)(void);
