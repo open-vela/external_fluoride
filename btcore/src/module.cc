@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,12 +26,9 @@
 #include <unordered_map>
 
 #include "btcore/include/module.h"
-#include "common/message_loop_thread.h"
 #include "osi/include/allocator.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-
-using bluetooth::common::MessageLoopThread;
 
 typedef enum {
   MODULE_STATE_NONE = 0,
@@ -65,7 +62,8 @@ bool module_init(const module_t* module) {
   CHECK(get_module_state(module) == MODULE_STATE_NONE);
 
   if (!call_lifecycle_function(module->init)) {
-    LOG_ERROR("%s Failed to initialize module \"%s\"", __func__, module->name);
+    LOG_ERROR(LOG_TAG, "%s Failed to initialize module \"%s\"", __func__,
+              module->name);
     return false;
   }
 
@@ -83,12 +81,13 @@ bool module_start_up(const module_t* module) {
   CHECK(get_module_state(module) == MODULE_STATE_INITIALIZED ||
         module->init == NULL);
 
-  LOG_INFO("%s Starting module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Starting module \"%s\"", __func__, module->name);
   if (!call_lifecycle_function(module->start_up)) {
-    LOG_ERROR("%s Failed to start up module \"%s\"", __func__, module->name);
+    LOG_ERROR(LOG_TAG, "%s Failed to start up module \"%s\"", __func__,
+              module->name);
     return false;
   }
-  LOG_INFO("%s Started module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Started module \"%s\"", __func__, module->name);
 
   set_module_state(module, MODULE_STATE_STARTED);
   return true;
@@ -102,12 +101,14 @@ void module_shut_down(const module_t* module) {
   // Only something to do if the module was actually started
   if (state < MODULE_STATE_STARTED) return;
 
-  LOG_INFO("%s Shutting down module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Shutting down module \"%s\"", __func__, module->name);
   if (!call_lifecycle_function(module->shut_down)) {
-    LOG_ERROR("%s Failed to shutdown module \"%s\". Continuing anyway.",
+    LOG_ERROR(LOG_TAG,
+              "%s Failed to shutdown module \"%s\". Continuing anyway.",
               __func__, module->name);
   }
-  LOG_INFO("%s Shutdown of module \"%s\" completed", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Shutdown of module \"%s\" completed", __func__,
+           module->name);
 
   set_module_state(module, MODULE_STATE_INITIALIZED);
 }
@@ -120,12 +121,13 @@ void module_clean_up(const module_t* module) {
   // Only something to do if the module was actually initialized
   if (state < MODULE_STATE_INITIALIZED) return;
 
-  LOG_INFO("%s Cleaning up module \"%s\"", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Cleaning up module \"%s\"", __func__, module->name);
   if (!call_lifecycle_function(module->clean_up)) {
-    LOG_ERROR("%s Failed to cleanup module \"%s\". Continuing anyway.",
+    LOG_ERROR(LOG_TAG, "%s Failed to cleanup module \"%s\". Continuing anyway.",
               __func__, module->name);
   }
-  LOG_INFO("%s Cleanup of module \"%s\" completed", __func__, module->name);
+  LOG_INFO(LOG_TAG, "%s Cleanup of module \"%s\" completed", __func__,
+           module->name);
 
   set_module_state(module, MODULE_STATE_NONE);
 }
@@ -157,45 +159,55 @@ static void set_module_state(const module_t* module, module_state_t state) {
 
 // TODO(zachoverflow): remove when everything modulized
 // Temporary callback-wrapper-related code
-class CallbackWrapper {
- public:
-  explicit CallbackWrapper(const module_t* module,
-                           MessageLoopThread* callback_thread,
-                           thread_fn callback)
-      : module(module),
-        lifecycle_thread("bt_module_lifecycle_thread"),
-        callback_thread(callback_thread),
-        callback(callback),
-        success(false) {}
+
+typedef struct {
   const module_t* module;
-  MessageLoopThread lifecycle_thread;
-  // we don't own this thread
-  MessageLoopThread* callback_thread;
+  thread_t* lifecycle_thread;
+  thread_t* callback_thread;  // we don't own this thread
   thread_fn callback;
   bool success;
-};
+} callbacked_wrapper_t;
 
-static void post_result_to_callback(std::shared_ptr<CallbackWrapper> wrapper) {
-  CHECK(wrapper);
-  wrapper->lifecycle_thread.ShutDown();
-  wrapper->callback(wrapper->success ? FUTURE_SUCCESS : FUTURE_FAIL);
-}
-
-static void run_wrapped_start_up(std::shared_ptr<CallbackWrapper> wrapper) {
-  CHECK(wrapper);
-  wrapper->success = module_start_up(wrapper->module);
-  // Post the result back to the callback
-  wrapper->callback_thread->DoInThread(
-      FROM_HERE, base::BindOnce(post_result_to_callback, wrapper));
-}
+static void run_wrapped_start_up(void* context);
+static void post_result_to_callback(void* context);
 
 void module_start_up_callbacked_wrapper(const module_t* module,
-                                        MessageLoopThread* callback_thread,
+                                        thread_t* callback_thread,
                                         thread_fn callback) {
-  std::shared_ptr<CallbackWrapper> wrapper =
-      std::make_shared<CallbackWrapper>(module, callback_thread, callback);
-  wrapper->lifecycle_thread.StartUp();
+  callbacked_wrapper_t* wrapper =
+      (callbacked_wrapper_t*)osi_calloc(sizeof(callbacked_wrapper_t));
+
+  wrapper->module = module;
+  wrapper->lifecycle_thread = thread_new("module_wrapper");
+  wrapper->callback_thread = callback_thread;
+  wrapper->callback = callback;
+
   // Run the actual module start up
-  wrapper->lifecycle_thread.DoInThread(
-      FROM_HERE, base::BindOnce(run_wrapped_start_up, wrapper));
+  thread_post(wrapper->lifecycle_thread, run_wrapped_start_up, wrapper);
+}
+
+static void run_wrapped_start_up(void* context) {
+  CHECK(context);
+
+  callbacked_wrapper_t* wrapper = (callbacked_wrapper_t*)context;
+  wrapper->success = module_start_up(wrapper->module);
+
+  // Post the result back to the callback
+  thread_post(wrapper->callback_thread, post_result_to_callback, wrapper);
+}
+
+static void post_result_to_callback(void* context) {
+  CHECK(context);
+
+  callbacked_wrapper_t* wrapper = (callbacked_wrapper_t*)context;
+
+  // Save the values we need for callback
+  void* result = wrapper->success ? FUTURE_SUCCESS : FUTURE_FAIL;
+  thread_fn callback = wrapper->callback;
+
+  // Clean up the resources we used
+  thread_free(wrapper->lifecycle_thread);
+  osi_free(wrapper);
+
+  callback(result);
 }

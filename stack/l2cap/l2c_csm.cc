@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@
 #include "bt_target.h"
 #include "btm_int.h"
 #include "btu.h"
-#include "common/time_util.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
@@ -139,6 +138,16 @@ static void l2c_csm_closed(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
     return;
   }
 
+#if (L2CAP_UCD_INCLUDED == TRUE)
+  if (local_cid == L2CAP_CONNECTIONLESS_CID) {
+    /* check if this event can be processed by UCD */
+    if (l2c_ucd_process_event(p_ccb, event, p_data)) {
+      /* The event is processed by UCD state machine */
+      return;
+    }
+  }
+#endif
+
   disconnect_ind = p_ccb->p_rcb->api.pL2CA_DisconnectInd_Cb;
   connect_cfm = p_ccb->p_rcb->api.pL2CA_ConnectCfm_Cb;
 
@@ -186,21 +195,22 @@ static void l2c_csm_closed(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
                              true, &l2c_link_sec_comp2, p_ccb);
       } else {
         /* Cancel sniff mode if needed */
-        tBTM_PM_PWR_MD settings;
-        memset((void*)&settings, 0, sizeof(settings));
-        settings.mode = BTM_PM_MD_ACTIVE;
+        {
+          tBTM_PM_PWR_MD settings;
+          memset((void*)&settings, 0, sizeof(settings));
+          settings.mode = BTM_PM_MD_ACTIVE;
 
-        BTM_SetPowerMode(BTM_PM_SET_ONLY_ID, p_ccb->p_lcb->remote_bd_addr,
-                         &settings);
+          BTM_SetPowerMode(BTM_PM_SET_ONLY_ID, p_ccb->p_lcb->remote_bd_addr,
+                           &settings);
+        }
 
         /* If sec access does not result in started SEC_COM or COMP_NEG are
          * already processed */
         if (btm_sec_l2cap_access_req(p_ccb->p_lcb->remote_bd_addr,
                                      p_ccb->p_rcb->psm, p_ccb->p_lcb->handle,
                                      true, &l2c_link_sec_comp,
-                                     p_ccb) == BTM_CMD_STARTED) {
+                                     p_ccb) == BTM_CMD_STARTED)
           p_ccb->chnl_state = CST_ORIG_W4_SEC_COMP;
-        }
       }
       break;
 
@@ -239,19 +249,8 @@ static void l2c_csm_closed(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
 
       if (p_ccb->p_lcb->transport == BT_TRANSPORT_LE) {
         p_ccb->chnl_state = CST_TERM_W4_SEC_COMP;
-        tL2CAP_LE_RESULT_CODE result = l2ble_sec_access_req(
-            p_ccb->p_lcb->remote_bd_addr, p_ccb->p_rcb->psm, false,
-            &l2c_link_sec_comp2, p_ccb);
-
-        switch (result) {
-          case L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION:
-          case L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP_KEY_SIZE:
-          case L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP:
-            l2cu_reject_ble_connection(p_ccb->p_lcb, p_ccb->remote_id, result);
-            l2cu_release_ccb(p_ccb);
-            break;
-            // TODO: Handle the other return codes
-        }
+        l2ble_sec_access_req(p_ccb->p_lcb->remote_bd_addr, p_ccb->p_rcb->psm,
+                             false, &l2c_link_sec_comp2, p_ccb);
       } else {
         /* Cancel sniff mode if needed */
         {
@@ -291,6 +290,11 @@ static void l2c_csm_closed(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
     case L2CEVT_L2CA_DISCONNECT_REQ: /* Upper wants to disconnect */
       l2cu_release_ccb(p_ccb);
       break;
+
+    case L2CEVT_L2CA_SEND_FLOW_CONTROL_CREDIT:
+    case L2CEVT_L2CAP_RECV_FLOW_CONTROL_CREDIT:
+      osi_free(p_data);
+      break;
   }
 }
 
@@ -311,11 +315,18 @@ static void l2c_csm_orig_w4_sec_comp(tL2C_CCB* p_ccb, uint16_t event,
   tL2CA_CONNECT_CFM_CB* connect_cfm = p_ccb->p_rcb->api.pL2CA_ConnectCfm_Cb;
   uint16_t local_cid = p_ccb->local_cid;
 
-  L2CAP_TRACE_EVENT(
-      "%s: %sL2CAP - LCID: 0x%04x  st: ORIG_W4_SEC_COMP  evt: %s", __func__,
-      ((p_ccb->p_lcb) && (p_ccb->p_lcb->transport == BT_TRANSPORT_LE)) ? "LE "
-                                                                       : "",
-      p_ccb->local_cid, l2c_csm_get_event_name(event));
+  L2CAP_TRACE_EVENT("L2CAP - LCID: 0x%04x  st: ORIG_W4_SEC_COMP  evt: %s",
+                    p_ccb->local_cid, l2c_csm_get_event_name(event));
+
+#if (L2CAP_UCD_INCLUDED == TRUE)
+  if (local_cid == L2CAP_CONNECTIONLESS_CID) {
+    /* check if this event can be processed by UCD */
+    if (l2c_ucd_process_event(p_ccb, event, p_data)) {
+      /* The event is processed by UCD state machine */
+      return;
+    }
+  }
+#endif
 
   switch (event) {
     case L2CEVT_LP_DISCONNECT_IND: /* Link was disconnected */
@@ -407,6 +418,16 @@ static void l2c_csm_term_w4_sec_comp(tL2C_CCB* p_ccb, uint16_t event,
   L2CAP_TRACE_EVENT("L2CAP - LCID: 0x%04x  st: TERM_W4_SEC_COMP  evt: %s",
                     p_ccb->local_cid, l2c_csm_get_event_name(event));
 
+#if (L2CAP_UCD_INCLUDED == TRUE)
+  if (p_ccb->local_cid == L2CAP_CONNECTIONLESS_CID) {
+    /* check if this event can be processed by UCD */
+    if (l2c_ucd_process_event(p_ccb, event, p_data)) {
+      /* The event is processed by UCD state machine */
+      return;
+    }
+  }
+#endif
+
   switch (event) {
     case L2CEVT_LP_DISCONNECT_IND: /* Link was disconnected */
       /* Tell security manager to abort */
@@ -454,9 +475,8 @@ static void l2c_csm_term_w4_sec_comp(tL2C_CCB* p_ccb, uint16_t event,
                            l2c_ccb_timer_timeout, p_ccb);
       } else {
         if (p_ccb->p_lcb->transport == BT_TRANSPORT_LE)
-          l2cu_reject_ble_connection(
-              p_ccb->p_lcb, p_ccb->remote_id,
-              L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION);
+          l2cu_reject_ble_connection(p_ccb->p_lcb, p_ccb->remote_id,
+                                     L2CAP_LE_INSUFFICIENT_AUTHENTICATION);
         else
           l2cu_send_peer_connect_rsp(p_ccb, L2CAP_CONN_SECURITY_BLOCK, 0);
         l2cu_release_ccb(p_ccb);
@@ -564,16 +584,16 @@ static void l2c_csm_w4_l2cap_connect_rsp(tL2C_CCB* p_ccb, uint16_t event,
       break;
 
     case L2CEVT_L2CAP_CONNECT_RSP_NEG: /* Peer rejected connection */
-      LOG(WARNING) << __func__ << ": L2CAP connection rejected, lcid="
-                   << loghex(p_ccb->local_cid)
-                   << ", reason=" << loghex(p_ci->l2cap_result);
+      L2CAP_TRACE_API(
+          "L2CAP - Calling Connect_Cfm_Cb(), CID: 0x%04x, Failure Code: %d",
+          p_ccb->local_cid, p_ci->l2cap_result);
       l2cu_release_ccb(p_ccb);
       (*connect_cfm)(local_cid, p_ci->l2cap_result);
       break;
 
     case L2CEVT_TIMEOUT:
-      LOG(WARNING) << __func__ << ": L2CAP connection timeout, lcid="
-                   << loghex(p_ccb->local_cid);
+      L2CAP_TRACE_API("L2CAP - Calling Connect_Cfm_Cb(), CID: 0x%04x, Timeout",
+                      p_ccb->local_cid);
       l2cu_release_ccb(p_ccb);
       (*connect_cfm)(local_cid, L2CAP_CONN_TIMEOUT);
       break;
@@ -614,6 +634,11 @@ static void l2c_csm_w4_l2cap_connect_rsp(tL2C_CCB* p_ccb, uint16_t event,
                            l2c_ccb_timer_timeout, p_ccb);
         l2cu_send_peer_connect_req(p_ccb); /* Start Connection     */
       }
+      break;
+
+    case L2CEVT_L2CA_SEND_FLOW_CONTROL_CREDIT:
+    case L2CEVT_L2CAP_RECV_FLOW_CONTROL_CREDIT:
+      osi_free(p_data);
       break;
   }
 }
@@ -763,7 +788,7 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
         /* Disconnect if channels are incompatible */
         L2CAP_TRACE_EVENT("L2CAP - incompatible configurations disconnect");
         l2cu_disconnect_chnl(p_ccb);
-      } else /* Return error to peer so it can renegotiate if possible */
+      } else /* Return error to peer so he can renegotiate if possible */
       {
         L2CAP_TRACE_EVENT(
             "L2CAP - incompatible configurations trying reconfig");
@@ -816,6 +841,9 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
             l2c_fcr_adj_monitor_retran_timeout(p_ccb);
           }
 
+#if (L2CAP_ERTM_STATS == TRUE)
+          p_ccb->fcrb.connect_tick_count = time_get_os_boottime_ms();
+#endif
           /* See if we can forward anything on the hold queue */
           if (!fixed_queue_is_empty(p_ccb->xmit_hold_q)) {
             l2c_link_check_send_pkts(p_ccb->p_lcb, NULL, NULL);
@@ -833,7 +861,7 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
       alarm_cancel(p_ccb->l2c_ccb_timer);
 
       /* If failure was channel mode try to renegotiate */
-      if (!l2c_fcr_renegotiate_chan(p_ccb, p_cfg)) {
+      if (l2c_fcr_renegotiate_chan(p_ccb, p_cfg) == false) {
         L2CAP_TRACE_API(
             "L2CAP - Calling Config_Rsp_Cb(), CID: 0x%04x, Failure: %d",
             p_ccb->local_cid, p_cfg->result);
@@ -900,6 +928,10 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
 
       /* If using eRTM and waiting for an ACK, restart the ACK timer */
       if (p_ccb->fcrb.wait_ack) l2c_fcr_start_timer(p_ccb);
+
+#if (L2CAP_ERTM_STATS == TRUE)
+      p_ccb->fcrb.connect_tick_count = time_get_os_boottime_ms();
+#endif
 
       /* See if we can forward anything on the hold queue */
       if ((p_ccb->chnl_state == CST_OPEN) &&
@@ -982,6 +1014,16 @@ static void l2c_csm_open(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
   L2CAP_TRACE_EVENT("L2CAP - LCID: 0x%04x  st: OPEN  evt: %s", p_ccb->local_cid,
                     l2c_csm_get_event_name(event));
 
+#if (L2CAP_UCD_INCLUDED == TRUE)
+  if (local_cid == L2CAP_CONNECTIONLESS_CID) {
+    /* check if this event can be processed by UCD */
+    if (l2c_ucd_process_event(p_ccb, event, p_data)) {
+      /* The event is processed by UCD state machine */
+      return;
+    }
+  }
+#endif
+
   switch (event) {
     case L2CEVT_LP_DISCONNECT_IND: /* Link was disconnected */
       L2CAP_TRACE_API(
@@ -992,13 +1034,20 @@ static void l2c_csm_open(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
         (*p_ccb->p_rcb->api.pL2CA_DisconnectInd_Cb)(local_cid, false);
       break;
 
+    case L2CEVT_LP_QOS_VIOLATION_IND: /* QOS violation         */
+      /* Tell upper layer. If service guaranteed, then clear the channel   */
+      if (p_ccb->p_rcb->api.pL2CA_QoSViolationInd_Cb)
+        (*p_ccb->p_rcb->api.pL2CA_QoSViolationInd_Cb)(
+            p_ccb->p_lcb->remote_bd_addr);
+      break;
+
     case L2CEVT_L2CAP_CONFIG_REQ: /* Peer config request   */
       p_cfg = (tL2CAP_CFG_INFO*)p_data;
 
       tempstate = p_ccb->chnl_state;
       tempcfgdone = p_ccb->config_done;
       p_ccb->chnl_state = CST_CONFIG;
-      p_ccb->config_done &= ~IB_CFG_DONE;
+      p_ccb->config_done &= ~CFG_DONE_MASK;
 
       alarm_set_on_mloop(p_ccb->l2c_ccb_timer, L2CAP_CHNL_CFG_TIMEOUT_MS,
                          l2c_ccb_timer_timeout, p_ccb);
@@ -1107,19 +1156,13 @@ static void l2c_csm_open(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
     case L2CEVT_L2CAP_RECV_FLOW_CONTROL_CREDIT:
       credit = (uint16_t*)p_data;
       L2CAP_TRACE_DEBUG("%s Credits received %d", __func__, *credit);
-      if ((p_ccb->peer_conn_cfg.credits + *credit) > L2CAP_LE_CREDIT_MAX) {
+      if ((p_ccb->peer_conn_cfg.credits + *credit) > L2CAP_LE_MAX_CREDIT) {
         /* we have received credits more than max coc credits,
          * so disconnecting the Le Coc Channel
          */
         l2cble_send_peer_disc_req(p_ccb);
       } else {
         p_ccb->peer_conn_cfg.credits += *credit;
-
-        tL2CA_CREDITS_RECEIVED_CB* cr_cb =
-            p_ccb->p_rcb->api.pL2CA_CreditsReceived_Cb;
-        if (p_ccb->p_lcb->transport == BT_TRANSPORT_LE && (cr_cb)) {
-          (*cr_cb)(p_ccb->local_cid, *credit, p_ccb->peer_conn_cfg.credits);
-        }
         l2c_link_check_send_pkts(p_ccb->p_lcb, NULL, NULL);
       }
       break;
@@ -1178,6 +1221,11 @@ static void l2c_csm_w4_l2cap_disconnect_rsp(tL2C_CCB* p_ccb, uint16_t event,
 
     case L2CEVT_L2CAP_DATA:      /* Peer data packet rcvd    */
     case L2CEVT_L2CA_DATA_WRITE: /* Upper layer data to send */
+      osi_free(p_data);
+      break;
+
+    case L2CEVT_L2CA_SEND_FLOW_CONTROL_CREDIT:
+    case L2CEVT_L2CAP_RECV_FLOW_CONTROL_CREDIT:
       osi_free(p_data);
       break;
   }
@@ -1256,6 +1304,12 @@ static const char* l2c_csm_get_event_name(uint16_t event) {
       return ("LOWER_LAYER_CONNECT_IND");
     case L2CEVT_LP_DISCONNECT_IND: /* Lower layer disconnect indication    */
       return ("LOWER_LAYER_DISCONNECT_IND");
+    case L2CEVT_LP_QOS_CFM: /* Lower layer QOS confirmation         */
+      return ("LOWER_LAYER_QOS_CFM");
+    case L2CEVT_LP_QOS_CFM_NEG: /* Lower layer QOS confirmation (failed)*/
+      return ("LOWER_LAYER_QOS_CFM_NEG");
+    case L2CEVT_LP_QOS_VIOLATION_IND: /* Lower layer QOS violation indication */
+      return ("LOWER_LAYER_QOS_VIOLATION_IND");
 
     case L2CEVT_SEC_COMP: /* Security cleared successfully        */
       return ("SECURITY_COMPLETE");
