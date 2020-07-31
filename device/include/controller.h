@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,19 +21,24 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "bdaddr.h"
 #include "device_features.h"
-#include "hci/include/hci_layer.h"
-#include "hci/include/hci_packet_factory.h"
-#include "hci/include/hci_packet_parser.h"
+#include "hci_layer.h"
+#include "hci_packet_factory.h"
+#include "hci_packet_parser.h"
 
 static const char CONTROLLER_MODULE[] = "controller_module";
 
 typedef struct controller_t {
   bool (*get_is_ready)(void);
 
-  const RawAddress* (*get_address)(void);
+  const bt_bdaddr_t* (*get_address)(void);
   const bt_version_t* (*get_bt_version)(void);
 
+  const bt_device_features_t* (*get_features_classic)(int index);
+  uint8_t (*get_last_features_classic_index)(void);
+
+  const bt_device_features_t* (*get_features_ble)(void);
   const uint8_t* (*get_ble_supported_states)(void);
 
   bool (*supports_simple_pairing)(void);
@@ -46,40 +51,15 @@ typedef struct controller_t {
   bool (*supports_master_slave_role_switch)(void);
   bool (*supports_enhanced_setup_synchronous_connection)(void);
   bool (*supports_enhanced_accept_synchronous_connection)(void);
-  bool (*supports_3_slot_packets)(void);
-  bool (*supports_5_slot_packets)(void);
-  bool (*supports_classic_2m_phy)(void);
-  bool (*supports_classic_3m_phy)(void);
-  bool (*supports_3_slot_edr_packets)(void);
-  bool (*supports_5_slot_edr_packets)(void);
-  bool (*supports_sco)(void);
-  bool (*supports_hv2_packets)(void);
-  bool (*supports_hv3_packets)(void);
-  bool (*supports_ev3_packets)(void);
-  bool (*supports_ev4_packets)(void);
-  bool (*supports_ev5_packets)(void);
-  bool (*supports_esco_2m_phy)(void);
-  bool (*supports_esco_3m_phy)(void);
-  bool (*supports_3_slot_esco_edr_packets)(void);
-  bool (*supports_role_switch)(void);
-  bool (*supports_hold_mode)(void);
-  bool (*supports_sniff_mode)(void);
-  bool (*supports_park_mode)(void);
-  bool (*supports_non_flushable_pb)(void);
-  bool (*supports_sniff_subrating)(void);
-  bool (*supports_encryption_pause)(void);
 
   bool (*supports_ble)(void);
   bool (*supports_ble_packet_extension)(void);
   bool (*supports_ble_connection_parameters_request)(void);
   bool (*supports_ble_privacy)(void);
-  bool (*supports_ble_set_privacy_mode)(void);
   bool (*supports_ble_2m_phy)(void);
   bool (*supports_ble_coded_phy)(void);
   bool (*supports_ble_extended_advertising)(void);
   bool (*supports_ble_periodic_advertising)(void);
-  bool (*supports_ble_peripheral_initiated_feature_exchange)(void);
-  bool (*supports_ble_connection_parameter_request)(void);
 
   // Get the cached acl data sizes for the controller.
   uint16_t (*get_acl_data_size_classic)(void);
@@ -92,7 +72,6 @@ typedef struct controller_t {
   uint16_t (*get_acl_packet_size_ble)(void);
 
   uint16_t (*get_ble_default_data_packet_length)(void);
-  uint16_t (*get_ble_maximum_tx_data_length)(void);
   uint16_t (*get_ble_maxium_advertising_data_length)(void);
   uint8_t (*get_ble_number_of_supported_advertising_sets)(void);
 
@@ -108,12 +87,6 @@ typedef struct controller_t {
   uint8_t (*get_le_all_initiating_phys)(void);
 
 } controller_t;
-
-namespace bluetooth {
-namespace legacy {
-const controller_t* controller_get_interface();
-}  // namespace legacy
-}  // namespace bluetooth
 
 const controller_t* controller_get_interface();
 

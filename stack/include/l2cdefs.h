@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -100,8 +100,10 @@
 
 /* Define the packet boundary flags
 */
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 #define L2CAP_PKT_START_FLUSHABLE 2
 #define L2CAP_PKT_START_NON_FLUSHABLE 0
+#endif
 #define L2CAP_COMPLETE_AMP_PKT 3 /* complete L2CAP packet on AMP HCI */
 #define L2CAP_PKT_START 2
 #define L2CAP_PKT_CONTINUE 1
@@ -123,20 +125,18 @@
 #define L2CAP_CONN_NO_LINK 255
 #define L2CAP_CONN_CANCEL 256 /* L2CAP connection cancelled */
 
-/* Define the LE L2CAP Connection Response Result codes
- */
-#define L2CAP_LE_RESULT_CONN_OK 0
-#define L2CAP_LE_RESULT_NO_PSM 2
-#define L2CAP_LE_RESULT_NO_RESOURCES 4
-#define L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION 5
-#define L2CAP_LE_RESULT_INSUFFICIENT_AUTHORIZATION 6
-#define L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP_KEY_SIZE 7
-#define L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP 8
+/* Define the LE L2CAP connection result codes
+*/
+#define L2CAP_LE_CONN_OK 0
+#define L2CAP_LE_NO_PSM 2
+#define L2CAP_LE_NO_RESOURCES 4
+#define L2CAP_LE_INSUFFICIENT_AUTHENTICATION 5
+#define L2CAP_LE_INSUFFICIENT_AUTHORIZATION 6
+#define L2CAP_LE_INSUFFICIENT_ENCRYP_KEY_SIZE 7
+#define L2CAP_LE_INSUFFICIENT_ENCRYP 8
 /* We don't like peer device response */
-#define L2CAP_LE_RESULT_INVALID_SOURCE_CID 9
-#define L2CAP_LE_RESULT_SOURCE_CID_ALREADY_ALLOCATED 0x0A
-
-typedef uint8_t tL2CAP_LE_RESULT_CODE;
+#define L2CAP_LE_INVALID_SOURCE_CID 9
+#define L2CAP_LE_SOURCE_CID_ALREADY_ALLOCATED 0x0A
 
 /* Define L2CAP Move Channel Response result codes
 */
@@ -322,14 +322,13 @@ typedef uint8_t tL2CAP_LE_RESULT_CODE;
   (L2CAP_PKT_OVERHEAD + L2CAP_EXT_CONTROL_OVERHEAD + L2CAP_SDU_LEN_OVERHEAD + \
    L2CAP_FCS_LEN)
 
-/* TODO: This value can probably be optimized per transport, and per L2CAP
- * socket type, but this should not bring any big performance improvements. For
- * LE CoC, it should be biggest multiple of "PDU length" smaller than 0xffff (so
- * depend on controller buffer size), for Classic, making it multiple of PDU
- * length and also of the 3DH5 air including the l2cap headers in each packet.
+/* To optimize this, it must be a multiple of the L2CAP PDU length AND match
+ * the 3DH5 air including the l2cap headers in each packet. To match the latter,
+ * the -5 is added.
+ * Changed it to  8087 to have same value between BTIF and L2cap layers
  */
-#define L2CAP_SDU_LENGTH_MAX (8080 + 26 - (L2CAP_MIN_OFFSET + 6))
-constexpr uint16_t L2CAP_SDU_LENGTH_LE_MAX = 0xffff;
+#define L2CAP_MAX_SDU_LENGTH (8080 + 26 - (L2CAP_MIN_OFFSET + 6))
+#define L2CAP_MAX_BUF_SIZE (10240 + 24)
 
 /* Part of L2CAP_MIN_OFFSET that is not part of L2CAP
 */
