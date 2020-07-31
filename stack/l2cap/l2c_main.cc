@@ -196,7 +196,10 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
     /* only process fixed channel data when link is open or wait for data
      * indication */
     if (!p_lcb || p_lcb->link_state == LST_DISCONNECTING ||
-        !l2cu_initialize_fixed_ccb(p_lcb, rcv_cid)) {
+        !l2cu_initialize_fixed_ccb(
+            p_lcb, rcv_cid,
+            &l2cb.fixed_reg[rcv_cid - L2CAP_FIRST_FIXED_CHNL]
+                 .fixed_chnl_opts)) {
       osi_free(p_msg);
       return;
     }
@@ -875,8 +878,10 @@ void l2c_init(void) {
     l2cb.ccb_pool[xx].p_next_ccb = &l2cb.ccb_pool[xx + 1];
   }
 
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   /* it will be set to L2CAP_PKT_START_NON_FLUSHABLE if controller supports */
   l2cb.non_flushable_pbf = L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT;
+#endif
 
   l2cb.p_free_ccb_first = &l2cb.ccb_pool[0];
   l2cb.p_free_ccb_last = &l2cb.ccb_pool[MAX_L2CAP_CHANNELS - 1];

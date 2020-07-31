@@ -30,7 +30,7 @@ using std::vector;
 namespace test_vendor_lib {
 
 int TestChannelTransport::SetUp(int port) {
-  struct sockaddr_in listen_address {};
+  struct sockaddr_in listen_address;
   socklen_t sockaddr_in_size = sizeof(struct sockaddr_in);
   memset(&listen_address, 0, sockaddr_in_size);
 
@@ -74,17 +74,17 @@ void TestChannelTransport::CleanUp() {
   listen_fd_ = -1;
 }
 
-int TestChannelTransport::Accept(int listen_fd) {
-  int accept_fd;
+int TestChannelTransport::Accept(int listen_fd_) {
+  int accept_fd = -1;
 
-  OSI_NO_INTR(accept_fd = accept(listen_fd, NULL, NULL));
+  OSI_NO_INTR(accept_fd = accept(listen_fd_, NULL, NULL));
 
   if (accept_fd < 0) {
     LOG_INFO("Error accepting test channel connection errno=%d (%s).", errno, strerror(errno));
 
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      LOG_ERROR("Closing listen_fd (won't try again).");
-      close(listen_fd);
+      LOG_ERROR("Closing listen_fd_ (won't try again).");
+      close(listen_fd_);
       return -1;
     }
   }

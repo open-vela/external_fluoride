@@ -299,6 +299,11 @@
 #define BTM_INQ_DB_SIZE 40
 #endif
 
+/* The default scan mode */
+#ifndef BTM_DEFAULT_SCAN_TYPE
+#define BTM_DEFAULT_SCAN_TYPE BTM_SCAN_TYPE_INTERLACED
+#endif
+
 /* Should connections to unknown devices be allowed when not discoverable? */
 #ifndef BTM_ALLOW_CONN_IF_NONDISCOVER
 #define BTM_ALLOW_CONN_IF_NONDISCOVER TRUE
@@ -530,6 +535,11 @@
 /* Whether link wants to be the master or the slave. */
 #ifndef L2CAP_DESIRED_LINK_ROLE
 #define L2CAP_DESIRED_LINK_ROLE HCI_ROLE_MASTER
+#endif
+
+/* Include Non-Flushable Packet Boundary Flag feature of Lisbon */
+#ifndef L2CAP_NON_FLUSHABLE_PB_INCLUDED
+#define L2CAP_NON_FLUSHABLE_PB_INCLUDED TRUE
 #endif
 
 /* Minimum number of ACL credit for high priority link */

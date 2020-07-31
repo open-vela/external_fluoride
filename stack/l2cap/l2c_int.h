@@ -110,6 +110,9 @@ typedef enum {
 #define L2CEVT_LP_CONNECT_CFM_NEG 1   /* connect confirm (failed) */
 #define L2CEVT_LP_CONNECT_IND 2       /* connect indication */
 #define L2CEVT_LP_DISCONNECT_IND 3    /* disconnect indication */
+#define L2CEVT_LP_QOS_CFM 4           /* QOS confirmation */
+#define L2CEVT_LP_QOS_CFM_NEG 5       /* QOS confirmation (failed)*/
+#define L2CEVT_LP_QOS_VIOLATION_IND 6 /* QOS violation indication */
 
 /* Security */
 #define L2CEVT_SEC_COMP 7     /* cleared successfully */
@@ -189,6 +192,7 @@ typedef struct {
   uint8_t max_held_acks;     /* Max acks we can hold before sending */
 
   bool remote_busy; /* true if peer has flowed us off */
+  bool local_busy;  /* true if we have flowed off the peer */
 
   bool rej_sent;       /* Reject was sent */
   bool srej_sent;      /* Selective Reject was sent */
@@ -328,7 +332,9 @@ typedef struct t_l2c_ccb {
 #define L2CAP_BYPASS_FCS (L2CAP_CFG_FCS_OUR | L2CAP_CFG_FCS_PEER)
   uint8_t bypass_fcs;
 
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   bool is_flushable; /* true if channel is flushable */
+#endif
 
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
   uint16_t fixed_chnl_idle_tout; /* Idle timeout to use for the fixed channel */
@@ -484,10 +490,12 @@ typedef struct {
   tL2C_LCB* p_cur_hcit_lcb;  /* Current HCI Transport buffer */
   uint16_t num_links_active; /* Number of links active */
 
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   uint16_t non_flushable_pbf; /* L2CAP_PKT_START_NON_FLUSHABLE if controller
                                  supports */
   /* Otherwise, L2CAP_PKT_START */
   bool is_flush_active; /* true if an HCI_Enhanced_Flush has been sent */
+#endif
 
 #if (L2CAP_CONFORMANCE_TESTING == TRUE)
   uint32_t test_info_resp; /* Conformance testing needs a dynamic response */
@@ -632,7 +640,9 @@ extern void l2cu_disconnect_chnl(tL2C_CCB* p_ccb);
 
 extern void l2cu_tx_complete(tL2C_TX_COMPLETE_CB_INFO* p_cbi);
 
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 extern void l2cu_set_non_flushable_pbf(bool);
+#endif
 
 extern void l2cu_send_peer_ble_par_req(tL2C_LCB* p_lcb, uint16_t min_int,
                                        uint16_t max_int, uint16_t latency,
@@ -648,7 +658,8 @@ extern void l2cu_send_peer_ble_flow_control_credit(tL2C_CCB* p_ccb,
                                                    uint16_t credit_value);
 extern void l2cu_send_peer_ble_credit_based_disconn_req(tL2C_CCB* p_ccb);
 
-extern bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid);
+extern bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
+                                      tL2CAP_FCR_OPTS* p_fcr);
 extern void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb);
 extern void l2cu_process_fixed_chnl_resp(tL2C_LCB* p_lcb);
 extern bool l2cu_is_ccb_active(tL2C_CCB* p_ccb);
@@ -696,6 +707,7 @@ extern bool l2c_link_hci_conn_req(const RawAddress& bd_addr);
 extern bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
                                    const RawAddress& p_bda);
 extern bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason);
+extern bool l2c_link_hci_qos_violation(uint16_t handle);
 extern void l2c_link_timeout(tL2C_LCB* p_lcb);
 extern void l2c_info_resp_timer_timeout(void* data);
 extern void l2c_link_check_send_pkts(tL2C_LCB* p_lcb, tL2C_CCB* p_ccb,
