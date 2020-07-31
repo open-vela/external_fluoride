@@ -18,6 +18,11 @@
 
 #define LOG_TAG "bt_btm_ble"
 
+#include <base/bind.h>
+#include <string.h>
+#include <algorithm>
+#include <vector>
+
 #include "bt_target.h"
 
 #include "bt_types.h"
@@ -28,13 +33,6 @@
 #include "device/include/controller.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
-
-#include <string.h>
-#include <algorithm>
-#include <vector>
-
-#include <base/bind.h>
-#include <base/bind_helpers.h>
 
 using base::Bind;
 using bluetooth::Uuid;
@@ -596,6 +594,8 @@ void BTM_LE_PF_uuid_filter(tBTM_BLE_SCAN_COND_OP action,
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
 }
 
+void DoNothing(uint8_t a, uint8_t b, uint8_t c) {}
+
 void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
                    std::vector<ApcfCommand> commands,
                    tBTM_BLE_PF_CFG_CBACK cb) {
@@ -620,8 +620,7 @@ void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
         target_addr.bda = cmd.address;
         target_addr.type = cmd.addr_type;
 
-        BTM_LE_PF_addr_filter(action, filt_index, target_addr,
-                              base::DoNothing());
+        BTM_LE_PF_addr_filter(action, filt_index, target_addr, Bind(DoNothing));
         break;
       }
 
@@ -633,24 +632,24 @@ void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
       case BTM_BLE_PF_SRVC_SOL_UUID: {
         BTM_LE_PF_uuid_filter(action, filt_index, cmd.type, cmd.uuid,
                               BTM_BLE_PF_LOGIC_AND, cmd.uuid_mask,
-                              base::DoNothing());
+                              Bind(DoNothing));
         break;
       }
 
       case BTM_BLE_PF_LOCAL_NAME: {
-        BTM_LE_PF_local_name(action, filt_index, cmd.name, base::DoNothing());
+        BTM_LE_PF_local_name(action, filt_index, cmd.name, Bind(DoNothing));
         break;
       }
 
       case BTM_BLE_PF_MANU_DATA: {
         BTM_LE_PF_manu_data(action, filt_index, cmd.company, cmd.company_mask,
-                            cmd.data, cmd.data_mask, base::DoNothing());
+                            cmd.data, cmd.data_mask, Bind(DoNothing));
         break;
       }
 
       case BTM_BLE_PF_SRVC_DATA_PATTERN: {
         BTM_LE_PF_srvc_data_pattern(action, filt_index, cmd.data, cmd.data_mask,
-                                    base::DoNothing());
+                                    Bind(DoNothing));
         break;
       }
 
