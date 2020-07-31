@@ -1009,6 +1009,17 @@ uint8_t* BTM_ReadDeviceClass(void);
 
 /*******************************************************************************
  *
+ * Function         BTM_ReadLocalFeatures
+ *
+ * Description      This function is called to read the local features
+ *
+ * Returns          pointer to the local features string
+ *
+ ******************************************************************************/
+uint8_t* BTM_ReadLocalFeatures(void);
+
+/*******************************************************************************
+ *
  * Function         BTM_RegisterForDeviceStatusNotif
  *
  * Description      This function is called to register for device status
