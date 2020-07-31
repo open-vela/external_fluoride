@@ -91,7 +91,7 @@ void avdt_scb_transport_channel_timer_timeout(void* data) {
 void AVDT_Register(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback) {
   /* register PSM with L2CAP */
   L2CA_Register(AVDT_PSM, (tL2CAP_APPL_INFO*)&avdt_l2c_appl,
-                true /* enable_snoop */, nullptr, L2CAP_DEFAULT_MTU);
+                true /* enable_snoop */);
 
   /* set security level */
   BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask,
@@ -141,14 +141,13 @@ void AVDT_Deregister(void) {
 }
 
 void AVDT_AbortReq(uint8_t handle) {
-  AVDT_TRACE_WARNING("%s: avdt_handle=%d", __func__, handle);
+  AVDT_TRACE_WARNING("%s: handle=%d", __func__, handle);
 
   AvdtpScb* p_scb = avdt_scb_by_hdl(handle);
   if (p_scb != NULL) {
     avdt_scb_event(p_scb, AVDT_SCB_API_ABORT_REQ_EVT, NULL);
   } else {
-    AVDT_TRACE_ERROR("%s Improper avdp_handle=%d, can not abort the stream",
-                     __func__, handle);
+    AVDT_TRACE_ERROR("%s Improper SCB, can not abort the stream", __func__);
   }
 }
 
@@ -188,10 +187,8 @@ uint16_t AVDT_CreateStream(uint8_t peer_id, uint8_t* p_handle,
     }
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d peer_id=%d scb_index=%d", __func__, result,
-                     peer_id, avdtp_stream_config.scb_index);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d handle=%d scb_index=%d", __func__, result,
+                   *p_handle, avdtp_stream_config.scb_index);
 
   return result;
 }
@@ -214,7 +211,7 @@ uint16_t AVDT_RemoveStream(uint8_t handle) {
   uint16_t result = AVDT_SUCCESS;
   AvdtpScb* p_scb;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d", __func__, handle);
+  AVDT_TRACE_DEBUG("%s: handle=%d", __func__, handle);
 
   /* look up scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -225,9 +222,7 @@ uint16_t AVDT_RemoveStream(uint8_t handle) {
     avdt_scb_event(p_scb, AVDT_SCB_API_REMOVE_EVT, NULL);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
 
   return result;
 }
@@ -291,10 +286,8 @@ uint16_t AVDT_DiscoverReq(const RawAddress& bd_addr, uint8_t channel_index,
     }
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d address=%s", __func__, result,
-                     bd_addr.ToString().c_str());
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -344,10 +337,8 @@ static uint16_t avdt_get_cap_req(const RawAddress& bd_addr,
     }
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d address=%s", __func__, result,
-                     bd_addr.ToString().c_str());
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -393,10 +384,8 @@ uint16_t AVDT_GetCapReq(const RawAddress& bd_addr, uint8_t channel_index,
   getcap.p_cback = p_cback;
   result = avdt_get_cap_req(bd_addr, channel_index, &getcap);
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d address=%s", __func__, result,
-                     bd_addr.ToString().c_str());
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -416,8 +405,8 @@ uint16_t AVDT_DelayReport(uint8_t handle, uint8_t seid, uint16_t delay) {
   uint16_t result = AVDT_SUCCESS;
   tAVDT_SCB_EVT evt;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d seid=%d delay=%d", __func__, handle,
-                   seid, delay);
+  AVDT_TRACE_DEBUG("%s: handle=%d ceid=%d delay=%d", __func__, handle, seid,
+                   delay);
 
   /* map handle to scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -431,10 +420,8 @@ uint16_t AVDT_DelayReport(uint8_t handle, uint8_t seid, uint16_t delay) {
     avdt_scb_event(p_scb, AVDT_SCB_API_DELAY_RPT_REQ_EVT, &evt);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d seid=%d", __func__, result,
-                     handle, seid);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -460,8 +447,7 @@ uint16_t AVDT_OpenReq(uint8_t handle, const RawAddress& bd_addr,
   uint16_t result = AVDT_SUCCESS;
   tAVDT_SCB_EVT evt;
 
-  AVDT_TRACE_API("%s: address=%s avdt_handle=%d seid=%d", __func__,
-                 bd_addr.ToString().c_str(), handle, seid);
+  AVDT_TRACE_DEBUG("%s: handle=%d seid=%d", __func__, handle, seid);
 
   /* verify SEID */
   if ((seid < AVDT_SEID_MIN) || (seid > AVDT_SEID_MAX)) {
@@ -496,10 +482,9 @@ uint16_t AVDT_OpenReq(uint8_t handle, const RawAddress& bd_addr,
     evt.msg.config_cmd.int_seid = handle;
     evt.msg.config_cmd.p_cfg = p_cfg;
     avdt_scb_event(p_scb, AVDT_SCB_API_SETCONFIG_REQ_EVT, &evt);
-  } else {
-    AVDT_TRACE_ERROR("%s: result=%d address=%s avdt_handle=%d", __func__,
-                     result, bd_addr.ToString().c_str(), handle);
   }
+
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
 
   return result;
 }
@@ -523,7 +508,7 @@ uint16_t AVDT_ConfigRsp(uint8_t handle, uint8_t label, uint8_t error_code,
   uint16_t result = AVDT_SUCCESS;
   uint8_t event_code;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d label=%d error_code=0x%x category=%d",
+  AVDT_TRACE_DEBUG("%s: handle=%d label=%d error_code=0x%x category=%d",
                    __func__, handle, label, error_code, category);
 
   /* map handle to scb */
@@ -550,9 +535,8 @@ uint16_t AVDT_ConfigRsp(uint8_t handle, uint8_t label, uint8_t error_code,
     avdt_scb_event(p_scb, event_code, &evt);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -603,16 +587,8 @@ uint16_t AVDT_StartReq(uint8_t* p_handles, uint8_t num_handles) {
     }
   }
 
-  if (result != AVDT_SUCCESS) {
-    if ((num_handles == 0) || (num_handles > AVDT_NUM_SEPS)) {
-      AVDT_TRACE_ERROR("%s: result=%d num_handles=%d invalid", __func__, result,
-                       num_handles);
-    } else {
-      AVDT_TRACE_ERROR(
-          "%s: result=%d avdt_handle=%d", __func__, result,
-          (i < num_handles ? p_handles[i] : p_handles[num_handles - 1]));
-    }
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -663,16 +639,8 @@ uint16_t AVDT_SuspendReq(uint8_t* p_handles, uint8_t num_handles) {
     }
   }
 
-  if (result != AVDT_SUCCESS) {
-    if ((num_handles == 0) || (num_handles > AVDT_NUM_SEPS)) {
-      AVDT_TRACE_ERROR("%s: result=%d num_handles=%d invalid", __func__, result,
-                       num_handles);
-    } else {
-      AVDT_TRACE_ERROR(
-          "%s: result=%d avdt_handle=%d", __func__, result,
-          (i < num_handles ? p_handles[i] : p_handles[num_handles - 1]));
-    }
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -694,7 +662,7 @@ uint16_t AVDT_CloseReq(uint8_t handle) {
   AvdtpScb* p_scb;
   uint16_t result = AVDT_SUCCESS;
 
-  AVDT_TRACE_API("%s: avdt_handle=%d", __func__, handle);
+  AVDT_TRACE_DEBUG("%s: handle=%d", __func__, handle);
 
   /* map handle to scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -706,9 +674,8 @@ uint16_t AVDT_CloseReq(uint8_t handle) {
     avdt_scb_event(p_scb, AVDT_SCB_API_CLOSE_REQ_EVT, NULL);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -734,7 +701,7 @@ uint16_t AVDT_ReconfigReq(uint8_t handle, AvdtpSepConfig* p_cfg) {
   uint16_t result = AVDT_SUCCESS;
   tAVDT_SCB_EVT evt;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d", __func__, handle);
+  AVDT_TRACE_DEBUG("%s: handle=%d", __func__, handle);
 
   /* map handle to scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -749,9 +716,8 @@ uint16_t AVDT_ReconfigReq(uint8_t handle, AvdtpSepConfig* p_cfg) {
     avdt_scb_event(p_scb, AVDT_SCB_API_RECONFIG_REQ_EVT, &evt);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -773,7 +739,7 @@ uint16_t AVDT_ReconfigRsp(uint8_t handle, uint8_t label, uint8_t error_code,
   tAVDT_SCB_EVT evt;
   uint16_t result = AVDT_SUCCESS;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d label=%d error_code=0x%x category=%d",
+  AVDT_TRACE_DEBUG("%s: handle=%d label=%d error_code=0x%x category=%d",
                    __func__, handle, label, error_code, category);
 
   /* map handle to scb */
@@ -789,9 +755,8 @@ uint16_t AVDT_ReconfigRsp(uint8_t handle, uint8_t label, uint8_t error_code,
     avdt_scb_event(p_scb, AVDT_SCB_API_RECONFIG_RSP_EVT, &evt);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -814,7 +779,7 @@ uint16_t AVDT_SecurityReq(uint8_t handle, uint8_t* p_data, uint16_t len) {
   uint16_t result = AVDT_SUCCESS;
   tAVDT_SCB_EVT evt;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d len=%d", __func__, handle, len);
+  AVDT_TRACE_DEBUG("%s: handle=%d len=%d", __func__, handle, len);
 
   /* map handle to scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -828,9 +793,8 @@ uint16_t AVDT_SecurityReq(uint8_t handle, uint8_t* p_data, uint16_t len) {
     avdt_scb_event(p_scb, AVDT_SCB_API_SECURITY_REQ_EVT, &evt);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -854,8 +818,8 @@ uint16_t AVDT_SecurityRsp(uint8_t handle, uint8_t label, uint8_t error_code,
   uint16_t result = AVDT_SUCCESS;
   tAVDT_SCB_EVT evt;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d label=%d error_code=0x%x len=%d",
-                   __func__, handle, label, error_code, len);
+  AVDT_TRACE_DEBUG("%s: handle=%d label=%d error_code=0x%x len=%d", __func__,
+                   handle, label, error_code, len);
 
   /* map handle to scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -871,9 +835,8 @@ uint16_t AVDT_SecurityRsp(uint8_t handle, uint8_t label, uint8_t error_code,
     avdt_scb_event(p_scb, AVDT_SCB_API_SECURITY_RSP_EVT, &evt);
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_ERROR("%s: result=%d avdt_handle=%d", __func__, result, handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -920,8 +883,8 @@ uint16_t AVDT_WriteReqOpt(uint8_t handle, BT_HDR* p_pkt, uint32_t time_stamp,
   tAVDT_SCB_EVT evt;
   uint16_t result = AVDT_SUCCESS;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d timestamp=%d m_pt=0x%x opt=0x%x",
-                   __func__, handle, time_stamp, m_pt, opt);
+  AVDT_TRACE_DEBUG("%s: handle=%d timestamp=%d m_pt=0x%x opt=0x%x", __func__,
+                   handle, time_stamp, m_pt, opt);
 
   /* map handle to scb */
   p_scb = avdt_scb_by_hdl(handle);
@@ -935,7 +898,8 @@ uint16_t AVDT_WriteReqOpt(uint8_t handle, BT_HDR* p_pkt, uint32_t time_stamp,
     avdt_scb_event(p_scb, AVDT_SCB_API_WRITE_REQ_EVT, &evt);
   }
 
-  AVDT_TRACE_DEBUG("%s: result=%d avdt_handle=%d", __func__, result, handle);
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
+
   return result;
 }
 
@@ -1060,10 +1024,10 @@ uint16_t AVDT_DisconnectReq(const RawAddress& bd_addr,
     /* send event to ccb */
     evt.disconnect.p_cback = p_cback;
     avdt_ccb_event(p_ccb, AVDT_CCB_API_DISCONNECT_REQ_EVT, &evt);
-  } else {
-    AVDT_TRACE_ERROR("%s: address=%s result=%d", __func__,
-                     bd_addr.ToString().c_str(), result);
   }
+
+  AVDT_TRACE_DEBUG("%s: address=%s result=%d", __func__,
+                   bd_addr.ToString().c_str(), result);
 
   return result;
 }
@@ -1097,6 +1061,36 @@ uint16_t AVDT_GetL2CapChannel(uint8_t handle) {
 
 /*******************************************************************************
  *
+ * Function         AVDT_GetSignalChannel
+ *
+ * Description      Get the L2CAP CID used by the signal channel of the given
+ *                  handle.
+ *
+ * Returns          CID if successful, otherwise 0.
+ *
+ ******************************************************************************/
+uint16_t AVDT_GetSignalChannel(uint8_t handle, const RawAddress& bd_addr) {
+  AvdtpScb* p_scb;
+  AvdtpCcb* p_ccb;
+  uint8_t tcid = 0; /* tcid is always 0 for signal channel */
+  uint16_t lcid = 0;
+
+  /* map handle to scb */
+  if (((p_scb = avdt_scb_by_hdl(handle)) != NULL) &&
+      ((p_ccb = p_scb->p_ccb) != NULL)) {
+    lcid = avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
+  } else {
+    p_ccb = avdt_ccb_by_bd(bd_addr);
+    if (p_ccb != NULL) {
+      lcid = avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
+    }
+  }
+
+  return (lcid);
+}
+
+/*******************************************************************************
+ *
  * Function         AVDT_SendReport
  *
  * Description
@@ -1115,7 +1109,7 @@ uint16_t AVDT_SendReport(uint8_t handle, AVDT_REPORT_TYPE type,
   uint32_t ssrc;
   uint16_t len;
 
-  AVDT_TRACE_DEBUG("%s: avdt_handle=%d type=%d", __func__, handle, type);
+  AVDT_TRACE_DEBUG("%s: handle=%d type=%d", __func__, handle, type);
 
   /* map handle to scb && verify parameters */
   if (((p_scb = avdt_scb_by_hdl(handle)) != NULL) && (p_scb->p_ccb != NULL) &&
@@ -1186,10 +1180,7 @@ uint16_t AVDT_SendReport(uint8_t handle, AVDT_REPORT_TYPE type,
     }
   }
 
-  if (result != AVDT_SUCCESS) {
-    AVDT_TRACE_WARNING("%s: result=%d avdt_handle=%d", __func__, result,
-                       handle);
-  }
+  AVDT_TRACE_DEBUG("%s: result=%d", __func__, result);
 
   return result;
 }
@@ -1261,7 +1252,7 @@ void stack_debug_avdtp_api_dump(int fd) {
       dprintf(fd, "      SEP type: 0x%x\n", scb.stream_config.tsep);
       dprintf(fd, "      Media type: 0x%x\n", scb.stream_config.media_type);
       dprintf(fd, "      MTU: %d\n", scb.stream_config.mtu);
-      dprintf(fd, "      AVDT SCB handle: %d\n", scb.ScbHandle());
+      dprintf(fd, "      SCB handle: %d\n", scb.ScbHandle());
       dprintf(fd, "      SCB index: %d\n", scb.stream_config.scb_index);
       dprintf(fd, "      Configured codec: %s\n",
               A2DP_CodecName(scb.curr_cfg.codec_info));

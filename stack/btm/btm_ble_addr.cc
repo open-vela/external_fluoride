@@ -72,7 +72,7 @@ void btm_gen_resolve_paddr_low(const RawAddress& address) {
   p_cb->own_addr_type = BLE_ADDR_RANDOM;
 
   /* start a periodical timer to refresh random addr */
-  uint64_t interval_ms = btm_get_next_private_addrress_interval_ms();
+  uint64_t interval_ms = BTM_BLE_PRIVATE_ADDR_INT_MS;
 #if (BTM_BLE_CONFORMANCE_TESTING == TRUE)
   interval_ms = btm_cb.ble_ctr_cb.rpa_tout * 1000;
 #endif
@@ -93,12 +93,55 @@ void btm_gen_resolvable_private_addr(
       std::move(cb)));
 }
 
-uint64_t btm_get_next_private_addrress_interval_ms() {
-  /* 7 minutes minimum, 15 minutes maximum for random address refreshing */
-  const uint64_t interval_min_ms = (7 * 60 * 1000);
-  const uint64_t interval_random_part_max_ms = (8 * 60 * 1000);
+/*******************************************************************************
+ *
+ * Function         btm_gen_non_resolve_paddr_cmpl
+ *
+ * Description      This is the callback function when non-resolvable private
+ *                  function is generated and write to controller.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+static void btm_gen_non_resolve_paddr_cmpl(BT_OCTET8 rand) {
+  tBTM_LE_RANDOM_CB* p_cb = &btm_cb.ble_ctr_cb.addr_mgnt_cb;
+  tBTM_BLE_ADDR_CBACK* p_cback = p_cb->p_generate_cback;
+  void* p_data = p_cb->p;
+  uint8_t* pp;
+  RawAddress static_random;
 
-  return interval_min_ms + std::rand() % interval_random_part_max_ms;
+  BTM_TRACE_EVENT("btm_gen_non_resolve_paddr_cmpl");
+
+  p_cb->p_generate_cback = NULL;
+  pp = rand;
+  STREAM_TO_BDADDR(static_random, pp);
+  /* mask off the 2 MSB */
+  static_random.address[0] &= BLE_STATIC_PRIVATE_MSB_MASK;
+
+  /* report complete */
+  if (p_cback) (*p_cback)(static_random, p_data);
+}
+/*******************************************************************************
+ *
+ * Function         btm_gen_non_resolvable_private_addr
+ *
+ * Description      This function generate a non-resolvable private address.
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_gen_non_resolvable_private_addr(tBTM_BLE_ADDR_CBACK* p_cback,
+                                         void* p) {
+  tBTM_LE_RANDOM_CB* p_mgnt_cb = &btm_cb.ble_ctr_cb.addr_mgnt_cb;
+
+  BTM_TRACE_EVENT("btm_gen_non_resolvable_private_addr");
+
+  if (p_mgnt_cb->p_generate_cback != NULL) return;
+
+  p_mgnt_cb->p_generate_cback = p_cback;
+  p_mgnt_cb->p = p;
+  btsnd_hcic_ble_rand(base::Bind(&btm_gen_non_resolve_paddr_cmpl));
 }
 
 /*******************************************************************************

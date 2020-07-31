@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include "os/log.h"
-
-#include <android/hardware/bluetooth/1.1/IBluetoothHci.h>
+#include <android/hardware/bluetooth/1.0/IBluetoothHci.h>
 
 #include <hidl/MQDescriptor.h>
 
@@ -33,7 +31,7 @@
 namespace android {
 namespace hardware {
 namespace bluetooth {
-namespace V1_1 {
+namespace V1_0 {
 namespace sim {
 
 class BluetoothDeathRecipient;
@@ -42,19 +40,13 @@ class BluetoothHci : public IBluetoothHci {
  public:
   BluetoothHci();
 
-  ::android::hardware::Return<void> initialize(
-      const sp<V1_0::IBluetoothHciCallbacks>& cb) override;
-  ::android::hardware::Return<void> initialize_1_1(
-      const sp<V1_1::IBluetoothHciCallbacks>& cb) override;
+  ::android::hardware::Return<void> initialize(const sp<IBluetoothHciCallbacks>& cb) override;
 
   ::android::hardware::Return<void> sendHciCommand(const ::android::hardware::hidl_vec<uint8_t>& packet) override;
 
   ::android::hardware::Return<void> sendAclData(const ::android::hardware::hidl_vec<uint8_t>& packet) override;
 
   ::android::hardware::Return<void> sendScoData(const ::android::hardware::hidl_vec<uint8_t>& packet) override;
-
-  ::android::hardware::Return<void> sendIsoData(
-      const ::android::hardware::hidl_vec<uint8_t>& packet) override;
 
   ::android::hardware::Return<void> close() override;
 
@@ -63,10 +55,6 @@ class BluetoothHci : public IBluetoothHci {
   static BluetoothHci* get();
 
  private:
-  ::android::hardware::Return<void> initialize_impl(
-      const sp<V1_0::IBluetoothHciCallbacks>& cb,
-      const sp<V1_1::IBluetoothHciCallbacks>& cb_1_1);
-
   sp<BluetoothDeathRecipient> death_recipient_;
 
   std::function<void(sp<BluetoothDeathRecipient>&)> unlink_cb_;
@@ -86,33 +74,19 @@ class BluetoothHci : public IBluetoothHci {
   test_vendor_lib::TestChannelTransport remote_hci_transport_;
   test_vendor_lib::TestChannelTransport remote_link_layer_transport_;
 
-  test_vendor_lib::AsyncUserId user_id_ = async_manager_.GetNextUserId();
   test_vendor_lib::TestModel test_model_{
-      [this]() { return async_manager_.GetNextUserId(); },
-      [this](test_vendor_lib::AsyncUserId user_id,
-             std::chrono::milliseconds delay,
+      [this](std::chrono::milliseconds delay, const test_vendor_lib::TaskCallback& task) {
+        return async_manager_.ExecAsync(delay, task);
+      },
+
+      [this](std::chrono::milliseconds delay, std::chrono::milliseconds period,
              const test_vendor_lib::TaskCallback& task) {
-        return async_manager_.ExecAsync(user_id, delay, task);
+        return async_manager_.ExecAsyncPeriodically(delay, period, task);
       },
 
-      [this](test_vendor_lib::AsyncUserId user_id,
-             std::chrono::milliseconds delay, std::chrono::milliseconds period,
-             const test_vendor_lib::TaskCallback& task) {
-        return async_manager_.ExecAsyncPeriodically(user_id, delay, period,
-                                                    task);
-      },
+      [this](test_vendor_lib::AsyncTaskId task) { async_manager_.CancelAsyncTask(task); },
 
-      [this](test_vendor_lib::AsyncUserId user_id) {
-        async_manager_.CancelAsyncTasksFromUser(user_id);
-      },
-
-      [this](test_vendor_lib::AsyncTaskId task) {
-        async_manager_.CancelAsyncTask(task);
-      },
-
-      [this](const std::string& server, int port) {
-        return ConnectToRemoteServer(server, port);
-      }};
+      [this](const std::string& server, int port) { return ConnectToRemoteServer(server, port); }};
 
   test_vendor_lib::TestCommandHandler test_channel_{test_model_};
 };
@@ -120,7 +94,7 @@ class BluetoothHci : public IBluetoothHci {
 extern "C" IBluetoothHci* HIDL_FETCH_IBluetoothHci(const char* name);
 
 }  // namespace sim
-}  // namespace V1_1
+}  // namespace V1_0
 }  // namespace bluetooth
 }  // namespace hardware
 }  // namespace android
