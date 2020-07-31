@@ -25,12 +25,14 @@
 #ifndef BTM_API_H
 #define BTM_API_H
 
-#include <cstdint>
+#include "bt_target.h"
+#include "device/include/esco_parameters.h"
+#include "hcidefs.h"
+#include "sdp_api.h"
 
-#include "stack/include/btm_api_types.h"
-#include "stack/include/btm_status.h"
-#include "stack/include/sdp_api.h"
-#include "types/raw_address.h"
+#include "smp_api.h"
+
+#include "btm_api_types.h"
 
 /*****************************************************************************
  *  DEVICE CONTROL and COMMON
@@ -44,9 +46,18 @@
  *  DEVICE CONTROL and COMMON FUNCTIONS
  ****************************************************************************/
 
-void BTM_db_reset(void);
-
-void BTM_reset_complete();
+/*******************************************************************************
+ *
+ * Function         BTM_DeviceReset
+ *
+ * Description      This function is called to reset the controller.  The
+ *                  Callback function if provided is called when startup of the
+ *                  device has completed.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTM_DeviceReset(tBTM_CMPL_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -57,7 +68,7 @@ void BTM_reset_complete();
  * Returns          true if device is up, else false
  *
  ******************************************************************************/
-bool BTM_IsDeviceUp(void);
+extern bool BTM_IsDeviceUp(void);
 
 /*******************************************************************************
  *
@@ -68,7 +79,7 @@ bool BTM_IsDeviceUp(void);
  * Returns          BTM_CMD_STARTED if successful, otherwise an error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetLocalDeviceName(char* p_name);
+extern tBTM_STATUS BTM_SetLocalDeviceName(char* p_name);
 
 /*******************************************************************************
  *
@@ -79,7 +90,7 @@ tBTM_STATUS BTM_SetLocalDeviceName(char* p_name);
  * Returns          BTM_SUCCESS if successful, otherwise an error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetDeviceClass(DEV_CLASS dev_class);
+extern tBTM_STATUS BTM_SetDeviceClass(DEV_CLASS dev_class);
 
 /*******************************************************************************
  *
@@ -94,7 +105,7 @@ tBTM_STATUS BTM_SetDeviceClass(DEV_CLASS dev_class);
  *                              is returned and p_name is set to NULL
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ReadLocalDeviceName(char** p_name);
+extern tBTM_STATUS BTM_ReadLocalDeviceName(char** p_name);
 
 /*******************************************************************************
  *
@@ -106,7 +117,7 @@ tBTM_STATUS BTM_ReadLocalDeviceName(char** p_name);
  * Returns          BTM_CMD_STARTED if successful, otherwise an error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ReadLocalDeviceNameFromController(
+extern tBTM_STATUS BTM_ReadLocalDeviceNameFromController(
     tBTM_CMPL_CB* p_rln_cmpl_cback);
 
 /*******************************************************************************
@@ -118,7 +129,32 @@ tBTM_STATUS BTM_ReadLocalDeviceNameFromController(
  * Returns          pointer to the device class
  *
  ******************************************************************************/
-uint8_t* BTM_ReadDeviceClass(void);
+extern uint8_t* BTM_ReadDeviceClass(void);
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadLocalFeatures
+ *
+ * Description      This function is called to read the local features
+ *
+ * Returns          pointer to the local features string
+ *
+ ******************************************************************************/
+extern uint8_t* BTM_ReadLocalFeatures(void);
+
+/*******************************************************************************
+ *
+ * Function         BTM_RegisterForDeviceStatusNotif
+ *
+ * Description      This function is called to register for device status
+ *                  change notifications.
+ *
+ * Returns          pointer to previous caller's callback function or NULL if
+ *                  first registration.
+ *
+ ******************************************************************************/
+extern tBTM_DEV_STATUS_CB* BTM_RegisterForDeviceStatusNotif(
+    tBTM_DEV_STATUS_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -135,7 +171,8 @@ uint8_t* BTM_ReadDeviceClass(void);
  *                           registered.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb, bool is_register);
+extern tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb,
+                                           bool is_register);
 
 /*******************************************************************************
  *
@@ -144,8 +181,9 @@ tBTM_STATUS BTM_RegisterForVSEvents(tBTM_VS_EVT_CB* p_cb, bool is_register);
  * Description      Send a vendor specific HCI command to the controller.
  *
  ******************************************************************************/
-void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
-                               uint8_t* p_param_buf, tBTM_VSC_CMPL_CB* p_cb);
+extern void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
+                                      uint8_t* p_param_buf,
+                                      tBTM_VSC_CMPL_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -157,7 +195,7 @@ void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len,
  * Returns          Allocated SCN number or 0 if none.
  *
  ******************************************************************************/
-uint8_t BTM_AllocateSCN(void);
+extern uint8_t BTM_AllocateSCN(void);
 
 /*******************************************************************************
  *
@@ -168,7 +206,7 @@ uint8_t BTM_AllocateSCN(void);
  * Returns          Returns true if server channel was available
  *
  ******************************************************************************/
-bool BTM_TryAllocateSCN(uint8_t scn);
+extern bool BTM_TryAllocateSCN(uint8_t scn);
 
 /*******************************************************************************
  *
@@ -179,7 +217,7 @@ bool BTM_TryAllocateSCN(uint8_t scn);
  * Returns          true if successful, false if SCN is not in use or invalid
  *
  ******************************************************************************/
-bool BTM_FreeSCN(uint8_t scn);
+extern bool BTM_FreeSCN(uint8_t scn);
 
 /*******************************************************************************
  *
@@ -191,7 +229,7 @@ bool BTM_FreeSCN(uint8_t scn);
  * Returns          The new or current trace level
  *
  ******************************************************************************/
-uint8_t BTM_SetTraceLevel(uint8_t new_level);
+extern uint8_t BTM_SetTraceLevel(uint8_t new_level);
 
 /*******************************************************************************
  *
@@ -200,7 +238,7 @@ uint8_t BTM_SetTraceLevel(uint8_t new_level);
  * Description      Send HCI Wite Page Timeout.
  *
  ******************************************************************************/
-void BTM_WritePageTimeout(uint16_t timeout);
+extern void BTM_WritePageTimeout(uint16_t timeout);
 
 /*******************************************************************************
  *
@@ -210,7 +248,7 @@ void BTM_WritePageTimeout(uint16_t timeout);
  *                  See hcidefs.h for settings bitmask values.
  *
  ******************************************************************************/
-void BTM_WriteVoiceSettings(uint16_t settings);
+extern void BTM_WriteVoiceSettings(uint16_t settings);
 
 /*******************************************************************************
  *
@@ -227,7 +265,7 @@ void BTM_WriteVoiceSettings(uint16_t settings);
  *
  *
  ******************************************************************************/
-tBTM_STATUS BTM_EnableTestMode(void);
+extern tBTM_STATUS BTM_EnableTestMode(void);
 
 /*******************************************************************************
  * DEVICE DISCOVERY FUNCTIONS - Inquiry, Remote Name, Discovery, Class of Device
@@ -249,8 +287,8 @@ tBTM_STATUS BTM_EnableTestMode(void);
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetDiscoverability(uint16_t inq_mode, uint16_t window,
-                                   uint16_t interval);
+extern tBTM_STATUS BTM_SetDiscoverability(uint16_t inq_mode, uint16_t window,
+                                          uint16_t interval);
 
 /*******************************************************************************
  *
@@ -266,7 +304,8 @@ tBTM_STATUS BTM_SetDiscoverability(uint16_t inq_mode, uint16_t window,
  *                  BTM_GENERAL_DISCOVERABLE
  *
  ******************************************************************************/
-uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval);
+extern uint16_t BTM_ReadDiscoverability(uint16_t* p_window,
+                                        uint16_t* p_interval);
 
 /*******************************************************************************
  *
@@ -304,9 +343,9 @@ uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval);
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
-                             tBTM_INQ_RESULTS_CB* p_results_cb,
-                             tBTM_CMPL_CB* p_cmpl_cb);
+extern tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
+                                    tBTM_INQ_RESULTS_CB* p_results_cb,
+                                    tBTM_CMPL_CB* p_cmpl_cb);
 
 /*******************************************************************************
  *
@@ -320,7 +359,7 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_PARMS* p_inqparms,
  *                  BTM_PERIODIC_INQUIRY_ACTIVE if a periodic inquiry is active
  *
  ******************************************************************************/
-uint16_t BTM_IsInquiryActive(void);
+extern uint16_t BTM_IsInquiryActive(void);
 
 /*******************************************************************************
  *
@@ -333,7 +372,7 @@ uint16_t BTM_IsInquiryActive(void);
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_CancelInquiry(void);
+extern tBTM_STATUS BTM_CancelInquiry(void);
 
 /*******************************************************************************
  *
@@ -347,7 +386,7 @@ tBTM_STATUS BTM_CancelInquiry(void);
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_CancelPeriodicInquiry(void);
+extern tBTM_STATUS BTM_CancelPeriodicInquiry(void);
 
 /*******************************************************************************
  *
@@ -363,8 +402,8 @@ tBTM_STATUS BTM_CancelPeriodicInquiry(void);
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetConnectability(uint16_t page_mode, uint16_t window,
-                                  uint16_t interval);
+extern tBTM_STATUS BTM_SetConnectability(uint16_t page_mode, uint16_t window,
+                                         uint16_t interval);
 
 /*******************************************************************************
  *
@@ -378,7 +417,8 @@ tBTM_STATUS BTM_SetConnectability(uint16_t page_mode, uint16_t window,
  * Returns          BTM_NON_CONNECTABLE or BTM_CONNECTABLE
  *
  ******************************************************************************/
-uint16_t BTM_ReadConnectability(uint16_t* p_window, uint16_t* p_interval);
+extern uint16_t BTM_ReadConnectability(uint16_t* p_window,
+                                       uint16_t* p_interval);
 
 /*******************************************************************************
  *
@@ -396,11 +436,40 @@ uint16_t BTM_ReadConnectability(uint16_t* p_window, uint16_t* p_interval);
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetInquiryMode(uint8_t mode);
+extern tBTM_STATUS BTM_SetInquiryMode(uint8_t mode);
 
-void BTM_EnableInterlacedInquiryScan();
+/*******************************************************************************
+ *
+ * Function         BTM_SetInquiryScanType
+ *
+ * Description      This function is called to set the iquiry scan-type to
+ *                  standard or interlaced.
+ *
+ * Input Params:    BTM_SCAN_TYPE_STANDARD or BTM_SCAN_TYPE_INTERLACED
+ *
+ * Returns          BTM_SUCCESS if successful
+ *                  BTM_MODE_UNSUPPORTED if not a 1.2 device
+ *                  BTM_WRONG_MODE if the device is not up.
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_SetInquiryScanType(uint16_t scan_type);
 
-void BTM_EnableInterlacedPageScan();
+/*******************************************************************************
+ *
+ * Function         BTM_SetPageScanType
+ *
+ * Description      This function is called to set the page scan-type to
+ *                  standard or interlaced.
+ *
+ * Input Params:    BTM_SCAN_TYPE_STANDARD or BTM_SCAN_TYPE_INTERLACED
+ *
+ * Returns          BTM_SUCCESS if successful
+ *                  BTM_MODE_UNSUPPORTED if not a 1.2 device
+ *                  BTM_WRONG_MODE if the device is not up.
+ *
+ ******************************************************************************/
+
+extern tBTM_STATUS BTM_SetPageScanType(uint16_t scan_type);
 
 /*******************************************************************************
  *
@@ -426,9 +495,9 @@ void BTM_EnableInterlacedPageScan();
  *                  BTM_WRONG_MODE if the device is not up.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ReadRemoteDeviceName(const RawAddress& remote_bda,
-                                     tBTM_CMPL_CB* p_cb,
-                                     tBT_TRANSPORT transport);
+extern tBTM_STATUS BTM_ReadRemoteDeviceName(const RawAddress& remote_bda,
+                                            tBTM_CMPL_CB* p_cb,
+                                            tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -447,7 +516,7 @@ tBTM_STATUS BTM_ReadRemoteDeviceName(const RawAddress& remote_bda,
  *                  BTM_WRONG_MODE if there is no active remote name request.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_CancelRemoteDeviceName(void);
+extern tBTM_STATUS BTM_CancelRemoteDeviceName(void);
 
 /*******************************************************************************
  *
@@ -458,9 +527,10 @@ tBTM_STATUS BTM_CancelRemoteDeviceName(void);
  * Returns          BTM_SUCCESS if successful, otherwise an error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
-                                  uint16_t* manufacturer,
-                                  uint16_t* lmp_sub_version);
+extern tBTM_STATUS BTM_ReadRemoteVersion(const RawAddress& addr,
+                                         uint8_t* lmp_version,
+                                         uint16_t* manufacturer,
+                                         uint16_t* lmp_sub_version);
 
 /*******************************************************************************
  *
@@ -475,7 +545,7 @@ tBTM_STATUS BTM_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
  * Returns          pointer to the remote supported features mask
  *
  ******************************************************************************/
-uint8_t* BTM_ReadRemoteFeatures(const RawAddress& addr);
+extern uint8_t* BTM_ReadRemoteFeatures(const RawAddress& addr);
 
 /*******************************************************************************
  *
@@ -489,7 +559,7 @@ uint8_t* BTM_ReadRemoteFeatures(const RawAddress& addr);
  * Returns          pointer to entry, or NULL if not found
  *
  ******************************************************************************/
-tBTM_INQ_INFO* BTM_InqDbRead(const RawAddress& p_bda);
+extern tBTM_INQ_INFO* BTM_InqDbRead(const RawAddress& p_bda);
 
 /*******************************************************************************
  *
@@ -503,7 +573,7 @@ tBTM_INQ_INFO* BTM_InqDbRead(const RawAddress& p_bda);
  * Returns          pointer to first in-use entry, or NULL if DB is empty
  *
  ******************************************************************************/
-tBTM_INQ_INFO* BTM_InqDbFirst(void);
+extern tBTM_INQ_INFO* BTM_InqDbFirst(void);
 
 /*******************************************************************************
  *
@@ -516,7 +586,7 @@ tBTM_INQ_INFO* BTM_InqDbFirst(void);
  * Returns          pointer to next in-use entry, or NULL if no more found.
  *
  ******************************************************************************/
-tBTM_INQ_INFO* BTM_InqDbNext(tBTM_INQ_INFO* p_cur);
+extern tBTM_INQ_INFO* BTM_InqDbNext(tBTM_INQ_INFO* p_cur);
 
 /*******************************************************************************
  *
@@ -532,7 +602,216 @@ tBTM_INQ_INFO* BTM_InqDbNext(tBTM_INQ_INFO* p_cur);
  *                          is active, otherwise BTM_SUCCESS
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ClearInqDb(const RawAddress* p_bda);
+extern tBTM_STATUS BTM_ClearInqDb(const RawAddress* p_bda);
+
+/*****************************************************************************
+ *  ACL CHANNEL MANAGEMENT FUNCTIONS
+ ****************************************************************************/
+/*******************************************************************************
+ *
+ * Function         BTM_SetLinkPolicy
+ *
+ * Description      Create and send HCI "Write Policy Set" command
+ *
+ * Returns          BTM_CMD_STARTED if successfully initiated, otherwise error
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_SetLinkPolicy(const RawAddress& remote_bda,
+                                     uint16_t* settings);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetDefaultLinkPolicy
+ *
+ * Description      Set the default value for HCI "Write Policy Set" command
+ *                  to use when an ACL link is created.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTM_SetDefaultLinkPolicy(uint16_t settings);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetDefaultLinkSuperTout
+ *
+ * Description      Set the default value for HCI "Write Link Supervision
+ *                  Timeout" command to use when an ACL link is created.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTM_SetDefaultLinkSuperTout(uint16_t timeout);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetLinkSuperTout
+ *
+ * Description      Create and send HCI "Write Link Supervision Timeout" command
+ *
+ * Returns          BTM_CMD_STARTED if successfully initiated, otherwise error
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_SetLinkSuperTout(const RawAddress& remote_bda,
+                                        uint16_t timeout);
+/*******************************************************************************
+ *
+ * Function         BTM_GetLinkSuperTout
+ *
+ * Description      Read the link supervision timeout value of the connection
+ *
+ * Returns          status of the operation
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_GetLinkSuperTout(const RawAddress& remote_bda,
+                                        uint16_t* p_timeout);
+
+/*******************************************************************************
+ *
+ * Function         BTM_IsAclConnectionUp
+ *
+ * Description      This function is called to check if an ACL connection exists
+ *                  to a specific remote BD Address.
+ *
+ * Returns          true if connection is up, else false.
+ *
+ ******************************************************************************/
+extern bool BTM_IsAclConnectionUp(const RawAddress& remote_bda,
+                                  tBT_TRANSPORT transport);
+
+/*******************************************************************************
+ *
+ * Function         BTM_GetRole
+ *
+ * Description      This function is called to get the role of the local device
+ *                  for the ACL connection with the specified remote device
+ *
+ * Returns          BTM_SUCCESS if connection exists.
+ *                  BTM_UNKNOWN_ADDR if no active link with bd addr specified
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr,
+                               uint8_t* p_role);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SwitchRole
+ *
+ * Description      This function is called to switch role between master and
+ *                  slave.  If role is already set it will do nothing.  If the
+ *                  command was initiated, the callback function is called upon
+ *                  completion.
+ *
+ * Returns          BTM_SUCCESS if already in specified role.
+ *                  BTM_CMD_STARTED if command issued to controller.
+ *                  BTM_NO_RESOURCES if memory couldn't be allocated to issue
+ *                                   the command
+ *                  BTM_UNKNOWN_ADDR if no active link with bd addr specified
+ *                  BTM_MODE_UNSUPPORTED if the local device does not support
+ *                                       role switching
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr,
+                                  uint8_t new_role, tBTM_CMPL_CB* p_cb);
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadRSSI
+ *
+ * Description      This function is called to read the link policy settings.
+ *                  The address of link policy results are returned in the
+ *                  callback. (tBTM_RSSI_RESULT)
+ *
+ * Returns          BTM_CMD_STARTED if command issued to controller.
+ *                  BTM_NO_RESOURCES if memory couldn't be allocated to issue
+ *                                   the command
+ *                  BTM_UNKNOWN_ADDR if no active link with bd addr specified
+ *                  BTM_BUSY if command is already in progress
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_ReadRSSI(const RawAddress& remote_bda,
+                                tBTM_CMPL_CB* p_cb);
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadFailedContactCounter
+ *
+ * Description      This function is called to read the failed contact counter.
+ *                  The result is returned in the callback.
+ *                  (tBTM_FAILED_CONTACT_COUNTER_RESULT)
+ *
+ * Returns          BTM_CMD_STARTED if command issued to controller.
+ *                  BTM_NO_RESOURCES if memory couldn't be allocated to issue
+ *                                   the command
+ *                  BTM_UNKNOWN_ADDR if no active link with bd addr specified
+ *                  BTM_BUSY if command is already in progress
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_ReadFailedContactCounter(const RawAddress& remote_bda,
+                                                tBTM_CMPL_CB* p_cb);
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadAutomaticFlushTimeout
+ *
+ * Description      This function is called to read the automatic flush timeout.
+ *                  The result is returned in the callback.
+ *                  (tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT)
+ *
+ * Returns          BTM_CMD_STARTED if command issued to controller.
+ *                  BTM_NO_RESOURCES if memory couldn't be allocated to issue
+ *                                   the command
+ *                  BTM_UNKNOWN_ADDR if no active link with bd addr specified
+ *                  BTM_BUSY if command is already in progress
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_ReadAutomaticFlushTimeout(const RawAddress& remote_bda,
+                                                 tBTM_CMPL_CB* p_cb);
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadTxPower
+ *
+ * Description      This function is called to read the current connection
+ *                  TX power of the connection. The TX power level results
+ *                  are returned in the callback.
+ *                  (tBTM_RSSI_RESULT)
+ *
+ * Returns          BTM_CMD_STARTED if command issued to controller.
+ *                  BTM_NO_RESOURCES if memory couldn't be allocated to issue
+ *                                   the command
+ *                  BTM_UNKNOWN_ADDR if no active link with bd addr specified
+ *                  BTM_BUSY if command is already in progress
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_ReadTxPower(const RawAddress& remote_bda,
+                                   tBT_TRANSPORT transport, tBTM_CMPL_CB* p_cb);
+
+/*******************************************************************************
+ *
+ * Function         BTM_RegBusyLevelNotif
+ *
+ * Description      This function is called to register a callback to receive
+ *                  busy level change events.
+ *
+ * Returns          BTM_SUCCESS if successfully registered, otherwise error
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb,
+                                         uint8_t* p_level,
+                                         tBTM_BL_EVENT_MASK evt_mask);
+
+/*******************************************************************************
+ *
+ * Function         BTM_GetNumAclLinks
+ *
+ * Description      This function is called to count the number of
+ *                  ACL links that are active.
+ *
+ * Returns          uint16_t Number of active ACL links
+ *
+ ******************************************************************************/
+extern uint16_t BTM_GetNumAclLinks(void);
 
 /*****************************************************************************
  *  (e)SCO CHANNEL MANAGEMENT FUNCTIONS
@@ -554,9 +833,10 @@ tBTM_STATUS BTM_ClearInqDb(const RawAddress* p_bda);
  *                                   with the sco index used for the connection.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
-                          uint16_t pkt_types, uint16_t* p_sco_inx,
-                          tBTM_SCO_CB* p_conn_cb, tBTM_SCO_CB* p_disc_cb);
+extern tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
+                                 uint16_t pkt_types, uint16_t* p_sco_inx,
+                                 tBTM_SCO_CB* p_conn_cb,
+                                 tBTM_SCO_CB* p_disc_cb);
 
 /*******************************************************************************
  *
@@ -567,8 +847,7 @@ tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
  * Returns          BTM_CMD_STARTED if successfully initiated, otherwise error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_RemoveSco(uint16_t sco_inx);
-void BTM_RemoveSco(const RawAddress& bda);
+extern tBTM_STATUS BTM_RemoveSco(uint16_t sco_inx);
 
 /*******************************************************************************
  *
@@ -580,7 +859,7 @@ void BTM_RemoveSco(const RawAddress& bda);
  * Returns          pointer to BD address or NULL if not known
  *
  ******************************************************************************/
-const RawAddress* BTM_ReadScoBdAddr(uint16_t sco_inx);
+extern const RawAddress* BTM_ReadScoBdAddr(uint16_t sco_inx);
 
 /*******************************************************************************
  *
@@ -595,7 +874,7 @@ const RawAddress* BTM_ReadScoBdAddr(uint16_t sco_inx);
  *                  BTM_BUSY if there are one or more active (e)SCO links.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetEScoMode(enh_esco_params_t* p_parms);
+extern tBTM_STATUS BTM_SetEScoMode(enh_esco_params_t* p_parms);
 
 /*******************************************************************************
  *
@@ -610,7 +889,8 @@ tBTM_STATUS BTM_SetEScoMode(enh_esco_params_t* p_parms);
  *                  BTM_ILLEGAL_VALUE if there is an illegal sco_inx
  *
  ******************************************************************************/
-tBTM_STATUS BTM_RegForEScoEvts(uint16_t sco_inx, tBTM_ESCO_CBACK* p_esco_cback);
+extern tBTM_STATUS BTM_RegForEScoEvts(uint16_t sco_inx,
+                                      tBTM_ESCO_CBACK* p_esco_cback);
 
 /*******************************************************************************
  *
@@ -631,8 +911,8 @@ tBTM_STATUS BTM_RegForEScoEvts(uint16_t sco_inx, tBTM_ESCO_CBACK* p_esco_cback);
  *                      1.2 specification.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ChangeEScoLinkParms(uint16_t sco_inx,
-                                    tBTM_CHG_ESCO_PARAMS* p_parms);
+extern tBTM_STATUS BTM_ChangeEScoLinkParms(uint16_t sco_inx,
+                                           tBTM_CHG_ESCO_PARAMS* p_parms);
 
 /*******************************************************************************
  *
@@ -652,8 +932,8 @@ tBTM_STATUS BTM_ChangeEScoLinkParms(uint16_t sco_inx,
  * Returns          void
  *
  ******************************************************************************/
-void BTM_EScoConnRsp(uint16_t sco_inx, uint8_t hci_status,
-                     enh_esco_params_t* p_parms);
+extern void BTM_EScoConnRsp(uint16_t sco_inx, uint8_t hci_status,
+                            enh_esco_params_t* p_parms);
 
 /*******************************************************************************
  *
@@ -664,7 +944,7 @@ void BTM_EScoConnRsp(uint16_t sco_inx, uint8_t hci_status,
  * Returns          uint8_t
  *
  ******************************************************************************/
-uint8_t BTM_GetNumScoLinks(void);
+extern uint8_t BTM_GetNumScoLinks(void);
 
 /*****************************************************************************
  *  SECURITY MANAGEMENT FUNCTIONS
@@ -681,7 +961,7 @@ uint8_t BTM_GetNumScoLinks(void);
  * Returns          true if registered OK, else false
  *
  ******************************************************************************/
-bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info);
+extern bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info);
 
 /*******************************************************************************
  *
@@ -694,7 +974,7 @@ bool BTM_SecRegister(const tBTM_APPL_INFO* p_cb_info);
  * Returns          true if registered OK, else false
  *
  ******************************************************************************/
-bool BTM_SecAddRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback);
+extern bool BTM_SecAddRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback);
 
 /*******************************************************************************
  *
@@ -706,7 +986,8 @@ bool BTM_SecAddRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback);
  * Returns          true if OK, else false
  *
  ******************************************************************************/
-bool BTM_SecDeleteRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback);
+extern bool BTM_SecDeleteRmtNameNotifyCallback(
+    tBTM_RMT_NAME_CALLBACK* p_callback);
 
 /*******************************************************************************
  *
@@ -717,7 +998,8 @@ bool BTM_SecDeleteRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback);
  * Returns          bool    true or false is device found
  *
  ******************************************************************************/
-bool BTM_GetSecurityFlags(const RawAddress& bd_addr, uint8_t* p_sec_flags);
+extern bool BTM_GetSecurityFlags(const RawAddress& bd_addr,
+                                 uint8_t* p_sec_flags);
 
 /*******************************************************************************
  *
@@ -734,9 +1016,9 @@ bool BTM_GetSecurityFlags(const RawAddress& bd_addr, uint8_t* p_sec_flags);
  * Returns          bool    true or false is device found
  *
  ******************************************************************************/
-bool BTM_GetSecurityFlagsByTransport(const RawAddress& bd_addr,
-                                     uint8_t* p_sec_flags,
-                                     tBT_TRANSPORT transport);
+extern bool BTM_GetSecurityFlagsByTransport(const RawAddress& bd_addr,
+                                            uint8_t* p_sec_flags,
+                                            tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -748,7 +1030,7 @@ bool BTM_GetSecurityFlagsByTransport(const RawAddress& bd_addr,
  *                  otherwise, the trusted mask
  *
  ******************************************************************************/
-uint32_t* BTM_ReadTrustedMask(const RawAddress& bd_addr);
+extern uint32_t* BTM_ReadTrustedMask(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -759,7 +1041,8 @@ uint32_t* BTM_ReadTrustedMask(const RawAddress& bd_addr);
  * Returns          void
  *
  ******************************************************************************/
-void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len);
+extern void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code,
+                           uint8_t pin_code_len);
 
 /*******************************************************************************
  *
@@ -775,7 +1058,7 @@ void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len);
  * Returns          void
  *
  ******************************************************************************/
-void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired);
+extern void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired);
 
 /*******************************************************************************
  *
@@ -789,9 +1072,10 @@ void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired);
  * Returns          true if registered OK, else false
  *
  ******************************************************************************/
-bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
-                          uint8_t service_id, uint16_t sec_level, uint16_t psm,
-                          uint32_t mx_proto_id, uint32_t mx_chan_id);
+extern bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
+                                 uint8_t service_id, uint16_t sec_level,
+                                 uint16_t psm, uint32_t mx_proto_id,
+                                 uint32_t mx_chan_id);
 
 /*******************************************************************************
  *
@@ -803,8 +1087,8 @@ bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
  * Returns          void
  *
  ******************************************************************************/
-void BTM_SetOutService(const RawAddress& bd_addr, uint8_t service_id,
-                       uint32_t mx_chan_id);
+extern void BTM_SetOutService(const RawAddress& bd_addr, uint8_t service_id,
+                              uint32_t mx_chan_id);
 
 /*******************************************************************************
  *
@@ -818,7 +1102,7 @@ void BTM_SetOutService(const RawAddress& bd_addr, uint8_t service_id,
  * Returns          Number of records that were freed.
  *
  ******************************************************************************/
-uint8_t BTM_SecClrService(uint8_t service_id);
+extern uint8_t BTM_SecClrService(uint8_t service_id);
 
 /*******************************************************************************
  *
@@ -833,10 +1117,11 @@ uint8_t BTM_SecClrService(uint8_t service_id);
  * Returns          true if added OK, else false
  *
  ******************************************************************************/
-bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                      BD_NAME bd_name, uint8_t* features,
-                      uint32_t trusted_mask[], LinkKey* link_key,
-                      uint8_t key_type, tBTM_IO_CAP io_cap, uint8_t pin_length);
+extern bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
+                             BD_NAME bd_name, uint8_t* features,
+                             uint32_t trusted_mask[], LinkKey* link_key,
+                             uint8_t key_type, tBTM_IO_CAP io_cap,
+                             uint8_t pin_length);
 
 /** Free resources associated with the device associated with |bd_addr| address.
  *
@@ -848,7 +1133,7 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
  *
  * Returns true if removed OK, false if not found or ACL link is active.
  */
-bool BTM_SecDeleteDevice(const RawAddress& bd_addr);
+extern bool BTM_SecDeleteDevice(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -858,7 +1143,7 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr);
  *                  remove device.
  *
  ******************************************************************************/
-void BTM_SecClearSecurityFlags(const RawAddress& bd_addr);
+extern void BTM_SecClearSecurityFlags(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -874,7 +1159,8 @@ void BTM_SecClearSecurityFlags(const RawAddress& bd_addr);
  *                  otherwise.
  *
  ******************************************************************************/
-tBTM_LINK_KEY_TYPE BTM_SecGetDeviceLinkKeyType(const RawAddress& bd_addr);
+extern tBTM_LINK_KEY_TYPE BTM_SecGetDeviceLinkKeyType(
+    const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -895,8 +1181,9 @@ tBTM_LINK_KEY_TYPE BTM_SecGetDeviceLinkKeyType(const RawAddress& bd_addr);
  * Returns          void
  *
  ******************************************************************************/
-void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
-                      uint8_t* p_pin, uint32_t trusted_mask[]);
+extern void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res,
+                             uint8_t pin_len, uint8_t* p_pin,
+                             uint32_t trusted_mask[]);
 
 /*******************************************************************************
  *
@@ -916,10 +1203,10 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
  * Returns          BTM_CMD_STARTED if successfully initiated, otherwise error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                        tBT_TRANSPORT transport, int device_type,
-                        uint8_t pin_len, uint8_t* p_pin,
-                        uint32_t trusted_mask[]);
+extern tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr,
+                               tBLE_ADDR_TYPE addr_type,
+                               tBT_TRANSPORT transport, uint8_t pin_len,
+                               uint8_t* p_pin, uint32_t trusted_mask[]);
 
 /*******************************************************************************
  *
@@ -931,18 +1218,7 @@ tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
  * Returns          BTM_CMD_STARTED if successfully initiated, otherwise error
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SecBondCancel(const RawAddress& bd_addr);
-
-/*******************************************************************************
- *
- * Function         btm_sec_is_a_bonded_dev
- *
- * Description       Is the specified device is a bonded device
- *
- * Returns          true - dev is bonded
- *
- ******************************************************************************/
-extern bool btm_sec_is_a_bonded_dev(const RawAddress& bda);
+extern tBTM_STATUS BTM_SecBondCancel(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -972,15 +1248,11 @@ extern bool btm_sec_is_a_bonded_dev(const RawAddress& bda);
  *                  BTM_MODE_UNSUPPORTED - if security manager not linked in.
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr,
-                              tBT_TRANSPORT transport,
-                              tBTM_SEC_CBACK* p_callback, void* p_ref_data,
-                              tBTM_BLE_SEC_ACT sec_act);
-
-/**
- * Return true if the device has a pending encryption or authentication
- */
-extern bool BTM_SecIsSecurityPending(const RawAddress& bd_addr);
+extern tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr,
+                                     tBT_TRANSPORT transport,
+                                     tBTM_SEC_CBACK* p_callback,
+                                     void* p_ref_data,
+                                     tBTM_BLE_SEC_ACT sec_act);
 
 /*******************************************************************************
  *
@@ -994,7 +1266,7 @@ extern bool BTM_SecIsSecurityPending(const RawAddress& bd_addr);
  *                  bd_addr       - Address of the peer device
  *
  ******************************************************************************/
-void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr);
+extern void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -1010,8 +1282,25 @@ void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr);
  *                                  0 - 999999(0xF423F).
  *
  ******************************************************************************/
-void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
-                         uint32_t passkey);
+extern void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
+                                uint32_t passkey);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SendKeypressNotif
+ *
+ * Description      This function is used during the passkey entry model
+ *                  by a device with KeyboardOnly IO capabilities
+ *                  (very likely to be a HID Device).
+ *                  It is called by a HID Device to inform the remote device
+ *                  when a key has been entered or erased.
+ *
+ * Parameters:      bd_addr - Address of the peer device
+ *                  type - notification type
+ *
+ ******************************************************************************/
+extern void BTM_SendKeypressNotif(const RawAddress& bd_addr,
+                                  tBTM_SP_KEY_TYPE type);
 
 /*******************************************************************************
  *
@@ -1028,8 +1317,8 @@ void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
  *                  auth_req- MITM protection required or not.
  *
  ******************************************************************************/
-void BTM_IoCapRsp(const RawAddress& bd_addr, tBTM_IO_CAP io_cap,
-                  tBTM_OOB_DATA oob, tBTM_AUTH_REQ auth_req);
+extern void BTM_IoCapRsp(const RawAddress& bd_addr, tBTM_IO_CAP io_cap,
+                         tBTM_OOB_DATA oob, tBTM_AUTH_REQ auth_req);
 
 /*******************************************************************************
  *
@@ -1039,7 +1328,7 @@ void BTM_IoCapRsp(const RawAddress& bd_addr, tBTM_IO_CAP io_cap,
  *                  LM
  *
  ******************************************************************************/
-void BTM_ReadLocalOobData(void);
+extern void BTM_ReadLocalOobData(void);
 
 /*******************************************************************************
  *
@@ -1053,8 +1342,8 @@ void BTM_ReadLocalOobData(void);
  *                  r           - simple pairing Randomizer  C.
  *
  ******************************************************************************/
-void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
-                            const Octet16& c, const Octet16& r);
+extern void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
+                                   const Octet16& c, const Octet16& r);
 
 /*******************************************************************************
  *
@@ -1071,7 +1360,7 @@ void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
  *                  else false.
  *
  ******************************************************************************/
-bool BTM_BothEndsSupportSecureConnections(const RawAddress& bd_addr);
+extern bool BTM_BothEndsSupportSecureConnections(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -1086,7 +1375,7 @@ bool BTM_BothEndsSupportSecureConnections(const RawAddress& bd_addr);
  *                  else false.
  *
  ******************************************************************************/
-bool BTM_PeerSupportsSecureConnections(const RawAddress& bd_addr);
+extern bool BTM_PeerSupportsSecureConnections(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -1098,7 +1387,7 @@ bool BTM_PeerSupportsSecureConnections(const RawAddress& bd_addr);
  * Returns          Pointer to the name or NULL
  *
  ******************************************************************************/
-char* BTM_SecReadDevName(const RawAddress& bd_addr);
+extern char* BTM_SecReadDevName(const RawAddress& bd_addr);
 
 /*****************************************************************************
  *  POWER MANAGEMENT FUNCTIONS
@@ -1114,8 +1403,8 @@ char* BTM_SecReadDevName(const RawAddress& bd_addr);
  *                  BTM_ILLEGAL_VALUE
  *
  ******************************************************************************/
-tBTM_STATUS BTM_PmRegister(uint8_t mask, uint8_t* p_pm_id,
-                           tBTM_PM_STATUS_CBACK* p_cb);
+extern tBTM_STATUS BTM_PmRegister(uint8_t mask, uint8_t* p_pm_id,
+                                  tBTM_PM_STATUS_CBACK* p_cb);
 
 /*******************************************************************************
  *
@@ -1128,8 +1417,8 @@ tBTM_STATUS BTM_PmRegister(uint8_t mask, uint8_t* p_pm_id,
  *                  BTM_UNKNOWN_ADDR if bd addr is not active or bad
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
-                             const tBTM_PM_PWR_MD* p_mode);
+extern tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
+                                    const tBTM_PM_PWR_MD* p_mode);
 
 /*******************************************************************************
  *
@@ -1151,8 +1440,8 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
  *                  BTM_UNKNOWN_ADDR if bd addr is not active or bad
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ReadPowerMode(const RawAddress& remote_bda,
-                              tBTM_PM_MODE* p_mode);
+extern tBTM_STATUS BTM_ReadPowerMode(const RawAddress& remote_bda,
+                                     tBTM_PM_MODE* p_mode);
 
 /*******************************************************************************
  *
@@ -1172,8 +1461,9 @@ tBTM_STATUS BTM_ReadPowerMode(const RawAddress& remote_bda,
  *                  BTM_CMD_STORED if the command is stored
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SetSsrParams(const RawAddress& remote_bda, uint16_t max_lat,
-                             uint16_t min_rmt_to, uint16_t min_loc_to);
+extern tBTM_STATUS BTM_SetSsrParams(const RawAddress& remote_bda,
+                                    uint16_t max_lat, uint16_t min_rmt_to,
+                                    uint16_t min_loc_to);
 
 /*******************************************************************************
  *
@@ -1185,8 +1475,8 @@ tBTM_STATUS BTM_SetSsrParams(const RawAddress& remote_bda, uint16_t max_lat,
  * Returns          the handle of the connection, or 0xFFFF if none.
  *
  ******************************************************************************/
-uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
-                              tBT_TRANSPORT transport);
+extern uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
+                                     tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -1201,8 +1491,8 @@ uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
  *                                 the results
  *
  ******************************************************************************/
-tBTM_STATUS BTM_DeleteStoredLinkKey(const RawAddress* bd_addr,
-                                    tBTM_CMPL_CB* p_cb);
+extern tBTM_STATUS BTM_DeleteStoredLinkKey(const RawAddress* bd_addr,
+                                           tBTM_CMPL_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -1217,7 +1507,7 @@ tBTM_STATUS BTM_DeleteStoredLinkKey(const RawAddress* bd_addr,
  *                  BTM_MODE_UNSUPPORTED - if local device cannot support it
  *
  ******************************************************************************/
-tBTM_STATUS BTM_WriteEIR(BT_HDR* p_buff);
+extern tBTM_STATUS BTM_WriteEIR(BT_HDR* p_buff);
 
 /*******************************************************************************
  *
@@ -1232,7 +1522,7 @@ tBTM_STATUS BTM_WriteEIR(BT_HDR* p_buff);
  *                  false - if not found
  *
  ******************************************************************************/
-bool BTM_HasEirService(const uint32_t* p_eir_uuid, uint16_t uuid16);
+extern bool BTM_HasEirService(const uint32_t* p_eir_uuid, uint16_t uuid16);
 
 /*******************************************************************************
  *
@@ -1248,8 +1538,8 @@ bool BTM_HasEirService(const uint32_t* p_eir_uuid, uint16_t uuid16);
  *                  BTM_EIR_UNKNOWN - if not found and it is not complete list
  *
  ******************************************************************************/
-tBTM_EIR_SEARCH_RESULT BTM_HasInquiryEirService(tBTM_INQ_RESULTS* p_results,
-                                                uint16_t uuid16);
+extern tBTM_EIR_SEARCH_RESULT BTM_HasInquiryEirService(
+    tBTM_INQ_RESULTS* p_results, uint16_t uuid16);
 
 /*******************************************************************************
  *
@@ -1264,7 +1554,7 @@ tBTM_EIR_SEARCH_RESULT BTM_HasInquiryEirService(tBTM_INQ_RESULTS* p_results,
  * Returns          None
  *
  ******************************************************************************/
-void BTM_AddEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
+extern void BTM_AddEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
 
 /*******************************************************************************
  *
@@ -1279,7 +1569,7 @@ void BTM_AddEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
  * Returns          None
  *
  ******************************************************************************/
-void BTM_RemoveEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
+extern void BTM_RemoveEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
 
 /*******************************************************************************
  *
@@ -1297,9 +1587,9 @@ void BTM_RemoveEirService(uint32_t* p_eir_uuid, uint16_t uuid16);
  *                  BTM_EIR_COMPLETE_16BITS_UUID_TYPE, otherwise
  *
  ******************************************************************************/
-uint8_t BTM_GetEirSupportedServices(uint32_t* p_eir_uuid, uint8_t** p,
-                                    uint8_t max_num_uuid16,
-                                    uint8_t* p_num_uuid16);
+extern uint8_t BTM_GetEirSupportedServices(uint32_t* p_eir_uuid, uint8_t** p,
+                                           uint8_t max_num_uuid16,
+                                           uint8_t* p_num_uuid16);
 
 /*******************************************************************************
  *
@@ -1324,9 +1614,9 @@ uint8_t BTM_GetEirSupportedServices(uint32_t* p_eir_uuid, uint8_t** p,
  *                  BTM_EIR_MORE_128BITS_UUID_TYPE
  *
  ******************************************************************************/
-uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len, uint8_t uuid_size,
-                           uint8_t* p_num_uuid, uint8_t* p_uuid_list,
-                           uint8_t max_num_uuid);
+extern uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len,
+                                  uint8_t uuid_size, uint8_t* p_num_uuid,
+                                  uint8_t* p_uuid_list, uint8_t max_num_uuid);
 
 /*******************************************************************************
  *
@@ -1338,40 +1628,6 @@ uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len, uint8_t uuid_size,
  *                                    BTM_CONTRL_IDLE)
  *
  ******************************************************************************/
-tBTM_CONTRL_STATE BTM_PM_ReadControllerState(void);
-
-/**
- * Send remote name request, either to legacy HCI, or to GD shim Name module
- */
-void SendRemoteNameRequest(const RawAddress& raw_address);
-
-uint8_t BTM_SecClrServiceByPsm(uint16_t psm);
-
-void BTM_SecClrTempAuthService(const RawAddress& bda);
-
-bool BTM_IsScoActiveByBdaddr(const RawAddress& remote_bda);
-
-uint16_t BTM_GetClockOffset(const RawAddress& remote_bda);
-
-/* Read maximum data packet that can be sent over current connection */
-uint16_t BTM_GetMaxPacketSize(const RawAddress& addr);
-
-extern tBTM_STATUS BTM_BT_Quality_Report_VSE_Register(
-    bool is_register, tBTM_BT_QUALITY_REPORT_RECEIVER* p_bqr_report_receiver);
-
-extern void BTM_VendorCleanup();
-
-extern tBTM_STATUS btm_sec_mx_access_request(const RawAddress& bd_addr,
-                                             uint16_t psm, bool is_originator,
-                                             uint32_t mx_proto_id,
-                                             uint32_t mx_chan_id,
-                                             tBTM_SEC_CALLBACK* p_callback,
-                                             void* p_ref_data);
-
-extern tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr,
-                                            uint16_t psm, uint16_t handle,
-                                            bool is_originator,
-                                            tBTM_SEC_CALLBACK* p_callback,
-                                            void* p_ref_data);
+extern tBTM_CONTRL_STATE BTM_PM_ReadControllerState(void);
 
 #endif /* BTM_API_H */

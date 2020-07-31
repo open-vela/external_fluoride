@@ -111,9 +111,9 @@ typedef struct {
 typedef struct {
   BT_HDR hdr;
   RawAddress bd_addr;
-  tBTM_IO_CAP io_cap;
-  tBTM_OOB_DATA oob_data;
-  tBTM_AUTH_REQ auth_req;
+  tBTA_IO_CAP io_cap;
+  tBTA_OOB_DATA oob_data;
+  tBTA_AUTH_REQ auth_req;
 } tBTA_DM_CI_IO_REQ;
 
 typedef struct {
@@ -154,12 +154,12 @@ typedef struct {
   tBTA_SERVICE_MASK tm;
   bool is_trusted;
   uint8_t key_type;
-  tBTM_IO_CAP io_cap;
+  tBTA_IO_CAP io_cap;
   bool link_key_known;
   bool dc_known;
   BD_NAME bd_name;
   uint8_t
-      features[HCI_FEATURE_BYTES_PER_PAGE * (HCI_EXT_FEATURES_PAGE_MAX + 1)];
+      features[BTA_FEATURE_BYTES_PER_PAGE * (BTA_EXT_FEATURES_PAGE_MAX + 1)];
   uint8_t pin_length;
 } tBTA_DM_API_ADD_DEVICE;
 
@@ -216,6 +216,7 @@ typedef uint8_t tBTA_DM_PM_REQ;
 
 typedef struct {
   RawAddress peer_bdaddr;
+  uint16_t link_policy;
   tBTA_DM_CONN_STATE conn_state;
   tBTA_PREF_ROLES pref_role;
   bool in_use;
@@ -295,6 +296,11 @@ typedef struct {
   uint8_t num_master_only;
   uint8_t pm_id;
   tBTA_PM_TIMER pm_timer[BTA_DM_NUM_PM_TIMER];
+  uint32_t
+      role_policy_mask;   /* the bits set indicates the modules that wants to
+                             remove role switch from the default link policy */
+  uint16_t cur_policy;    /* current default link policy */
+  uint16_t rs_event;      /* the event waiting for role switch */
   uint8_t cur_av_count;   /* current AV connecions */
   bool disable_pair_mode; /* disable pair mode or not */
   bool conn_paired_only;  /* allow connectable to paired device only or not */
@@ -308,10 +314,10 @@ typedef struct {
   RawAddress pin_bd_addr;
   DEV_CLASS pin_dev_class;
   tBTA_DM_SEC_EVT pin_evt;
-  tBTM_IO_CAP loc_io_caps;    /* IO Capabilities of local device */
-  tBTM_IO_CAP rmt_io_caps;    /* IO Capabilities of remote device */
-  tBTM_AUTH_REQ loc_auth_req; /* Authentication required for local device */
-  tBTM_AUTH_REQ rmt_auth_req;
+  tBTA_IO_CAP loc_io_caps;    /* IO Capabilities of local device */
+  tBTA_IO_CAP rmt_io_caps;    /* IO Capabilities of remote device */
+  tBTA_AUTH_REQ loc_auth_req; /* Authentication required for local device */
+  tBTA_AUTH_REQ rmt_auth_req;
   uint32_t num_val; /* the numeric value for comparison. If just_works, do not
                        show this number to UI */
   bool just_works;  /* true, if "Just Works" association model */
@@ -387,6 +393,8 @@ enum {
 
 typedef struct {
   DEV_CLASS dev_class; /* local device class */
+  uint16_t
+      policy_settings;   /* link policy setting hold, sniff, park, MS switch */
   uint16_t page_timeout; /* timeout for page in slots */
   uint16_t link_timeout; /* link supervision timeout in slots */
   bool avoid_scatter; /* true to avoid scatternet when av is streaming (be the
@@ -472,7 +480,7 @@ extern void bta_dm_set_dev_name(const std::vector<uint8_t>&);
 extern void bta_dm_set_visibility(tBTA_DM_DISC, tBTA_DM_CONN, uint8_t, uint8_t);
 extern void bta_dm_set_scan_config(tBTA_DM_MSG* p_data);
 extern void bta_dm_vendor_spec_command(tBTA_DM_MSG* p_data);
-extern void bta_dm_bond(const RawAddress&, tBLE_ADDR_TYPE, tBTA_TRANSPORT, int);
+extern void bta_dm_bond(const RawAddress&, tBLE_ADDR_TYPE, tBTA_TRANSPORT);
 extern void bta_dm_bond_cancel(const RawAddress&);
 extern void bta_dm_pin_reply(std::unique_ptr<tBTA_DM_API_PIN_REPLY> msg);
 extern void bta_dm_add_device(std::unique_ptr<tBTA_DM_API_ADD_DEVICE> msg);
@@ -495,6 +503,7 @@ extern void bta_dm_ble_passkey_reply(const RawAddress& bd_addr, bool accept,
 extern void bta_dm_ble_confirm_reply(const RawAddress&, bool);
 extern void bta_dm_ble_set_conn_params(const RawAddress&, uint16_t, uint16_t,
                                        uint16_t, uint16_t);
+extern void bta_dm_ble_set_conn_scan_params(uint32_t, uint32_t);
 extern void bta_dm_close_gatt_conn(tBTA_DM_MSG* p_data);
 extern void bta_dm_ble_observe(bool, uint8_t, tBTA_DM_SEARCH_CBACK*);
 extern void bta_dm_ble_update_conn_params(const RawAddress&, uint16_t, uint16_t,
@@ -507,11 +516,11 @@ extern void bta_dm_ble_set_data_length(const RawAddress&, uint16_t);
 extern void bta_dm_ble_get_energy_info(tBTA_BLE_ENERGY_INFO_CBACK*);
 
 extern void bta_dm_set_encryption(const RawAddress&, tBTA_TRANSPORT,
-                                  tBTA_DM_ENCRYPT_CBACK*, tBTM_BLE_SEC_ACT);
+                                  tBTA_DM_ENCRYPT_CBACK*, tBTA_DM_BLE_SEC_ACT);
 extern void bta_dm_confirm(const RawAddress&, bool);
-extern void bta_dm_ci_io_req_act(const RawAddress& bd_addr, tBTM_IO_CAP io_cap,
-                                 tBTM_OOB_DATA oob_data,
-                                 tBTM_AUTH_REQ auth_req);
+extern void bta_dm_ci_io_req_act(const RawAddress& bd_addr, tBTA_IO_CAP io_cap,
+                                 tBTA_OOB_DATA oob_data,
+                                 tBTA_AUTH_REQ auth_req);
 extern void bta_dm_ci_rmt_oob_act(std::unique_ptr<tBTA_DM_CI_RMT_OOB> msg);
 
 extern void bta_dm_init_pm(void);
@@ -541,4 +550,6 @@ extern tBTA_DM_PEER_DEVICE* bta_dm_find_peer_device(
     const RawAddress& peer_addr);
 
 void bta_dm_eir_update_uuid(uint16_t uuid16, bool adding);
+
+extern void bta_dm_remove_all_acl(const tBTA_DM_LINK_TYPE);
 #endif /* BTA_DM_INT_H */

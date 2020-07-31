@@ -38,7 +38,6 @@
 #include "l2c_api.h"
 #include "main/shim/btm_api.h"
 #include "main/shim/shim.h"
-#include "stack/include/acl_api.h"
 
 /*******************************************************************************
  *
@@ -289,7 +288,7 @@ bool btm_dev_support_switch(const RawAddress& bd_addr) {
   bool feature_empty = true;
 
   /* Role switch is not allowed if a SCO is up */
-  if (BTM_IsScoActiveByBdaddr(bd_addr)) return (false);
+  if (btm_is_sco_active_by_bdaddr(bd_addr)) return (false);
   p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec &&
       controller_get_interface()->supports_master_slave_role_switch()) {

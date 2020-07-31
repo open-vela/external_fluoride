@@ -215,10 +215,6 @@
 #define BT_EVT_BTIF 0xA000
 #define BT_EVT_CONTEXT_SWITCH_EVT (0x0001 | BT_EVT_BTIF)
 
-/* ISO Layer specific */
-#define BT_ISO_HDR_CONTAINS_TS (0x0001)
-#define BT_ISO_HDR_OFFSET_POINTS_DATA (0x0002)
-
 /* Define the header of each buffer used in the Bluetooth stack.
  */
 typedef struct {
@@ -422,10 +418,6 @@ typedef struct {
   do {                        \
     (p) += 2;                 \
   } while (0)
-#define STREAM_SKIP_UINT32(p) \
-  do {                        \
-    (p) += 4;                 \
-  } while (0)
 
 /*******************************************************************************
  * Macros to get and put bytes to and from a field (Little Endian format).
@@ -593,9 +585,7 @@ typedef Octet16 LinkKey; /* Link Key */
  * 0x4C68384139F574D836BCF34E9DFB01BF */
 constexpr Octet16 SAMPLE_LTK = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
                                 0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
-inline bool is_sample_ltk(const Octet16& ltk) {
-  return ltk == SAMPLE_LTK;
-}
+inline bool is_sample_ltk(const Octet16& ltk) { return ltk == SAMPLE_LTK; }
 
 #endif
 

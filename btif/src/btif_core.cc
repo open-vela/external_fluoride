@@ -266,8 +266,10 @@ int btif_is_enabled(void) {
           (stack_manager_get_interface()->get_stack_is_running()));
 }
 
-void btif_init_ok() {
+void btif_init_ok(UNUSED_ATTR uint16_t event, UNUSED_ATTR char* p_param) {
+  BTIF_TRACE_DEBUG("btif_task: received trigger stack init event");
   btif_dm_load_ble_local_keys();
+  BTA_EnableBluetooth(bte_dm_evt);
 }
 
 /*******************************************************************************
@@ -320,12 +322,12 @@ void btif_sendmsg(void* p_msg) {
  *
  ******************************************************************************/
 bt_status_t btif_init_bluetooth() {
-  LOG_INFO("%s entered", __func__);
+  LOG_INFO(LOG_TAG, "%s entered", __func__);
   exit_manager = new base::AtExitManager();
   bte_main_boot_entry();
   jni_thread.StartUp();
   jni_thread.DoInThread(FROM_HERE, base::Bind(btif_jni_associate));
-  LOG_INFO("%s finished", __func__);
+  LOG_INFO(LOG_TAG, "%s finished", __func__);
   return BT_STATUS_SUCCESS;
 }
 
@@ -341,7 +343,7 @@ bt_status_t btif_init_bluetooth() {
  ******************************************************************************/
 
 void btif_enable_bluetooth_evt(tBTA_STATUS status) {
-  LOG_INFO("%s entered: status %d", __func__, status);
+  LOG_INFO(LOG_TAG, "%s entered: status %d", __func__, status);
 
   /* Fetch the local BD ADDR */
   RawAddress local_bd_addr = *controller_get_interface()->get_address();
@@ -365,6 +367,8 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status) {
     HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, BT_STATUS_SUCCESS, 1,
               &prop);
   }
+
+  bte_main_postload_cfg();
 
   /* callback to HAL */
   if (status == BTA_SUCCESS) {
@@ -395,7 +399,7 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status) {
     future_ready(stack_manager_get_hack_future(), FUTURE_FAIL);
   }
 
-  LOG_INFO("%s finished", __func__);
+  LOG_INFO(LOG_TAG, "%s finished", __func__);
 }
 
 /*******************************************************************************
@@ -410,7 +414,7 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status) {
  *
  ******************************************************************************/
 bt_status_t btif_disable_bluetooth() {
-  LOG_INFO("%s entered", __func__);
+  LOG_INFO(LOG_TAG, "%s entered", __func__);
 
   do_in_main_thread(FROM_HERE, base::Bind(&btm_ble_multi_adv_cleanup));
   // TODO(jpawlowski): this should do whole BTA_VendorCleanup(), but it would
@@ -422,7 +426,7 @@ bt_status_t btif_disable_bluetooth() {
   btif_pan_cleanup();
   BTA_DisableBluetooth();
 
-  LOG_INFO("%s finished", __func__);
+  LOG_INFO(LOG_TAG, "%s finished", __func__);
 
   return BT_STATUS_SUCCESS;
 }
@@ -440,14 +444,14 @@ bt_status_t btif_disable_bluetooth() {
  ******************************************************************************/
 
 void btif_disable_bluetooth_evt() {
-  LOG_INFO("%s entered", __func__);
+  LOG_INFO(LOG_TAG, "%s entered", __func__);
 
   bte_main_disable();
 
   /* callback to HAL */
   future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
 
-  LOG_INFO("%s finished", __func__);
+  LOG_INFO(LOG_TAG, "%s finished", __func__);
 }
 
 /*******************************************************************************
@@ -461,7 +465,7 @@ void btif_disable_bluetooth_evt() {
  ******************************************************************************/
 
 bt_status_t btif_cleanup_bluetooth() {
-  LOG_INFO("%s entered", __func__);
+  LOG_INFO(LOG_TAG, "%s entered", __func__);
   do_in_main_thread(FROM_HERE, base::Bind(&BTA_VendorCleanup));
   btif_dm_cleanup();
   jni_thread.DoInThread(FROM_HERE, base::BindOnce(btif_jni_disassociate));
@@ -471,7 +475,7 @@ bt_status_t btif_cleanup_bluetooth() {
   delete exit_manager;
   exit_manager = nullptr;
   btif_dut_mode = 0;
-  LOG_INFO("%s finished", __func__);
+  LOG_INFO(LOG_TAG, "%s finished", __func__);
   return BT_STATUS_SUCCESS;
 }
 
@@ -511,8 +515,7 @@ bt_status_t btif_dut_mode_configure(uint8_t enable) {
   if (enable == 1) {
     BTA_EnableTestMode();
   } else {
-    // Can't do in process reset anyways - just quit
-    kill(getpid(), SIGKILL);
+    BTA_DisableTestMode();
   }
   return BT_STATUS_SUCCESS;
 }

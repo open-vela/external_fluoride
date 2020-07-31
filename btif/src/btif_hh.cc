@@ -75,6 +75,10 @@ static int btif_hh_keylockstates = 0;  // The current key state of each key
 
 #define BTIF_TIMEOUT_VUP_MS (3 * 1000)
 
+#ifndef BTUI_HH_SECURITY
+#define BTUI_HH_SECURITY (BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)
+#endif
+
 /* HH request events */
 typedef enum {
   BTIF_HH_CONNECT_REQ_EVT = 0,
@@ -456,7 +460,7 @@ void btif_hh_remove_device(RawAddress bd_addr) {
     p_added_dev = &btif_hh_cb.added_devices[i];
     if (p_added_dev->bd_addr == bd_addr) {
       BTA_HhRemoveDev(p_added_dev->dev_handle);
-      btif_storage_remove_hid_info(p_added_dev->bd_addr);
+      btif_storage_remove_hid_info(&(p_added_dev->bd_addr));
       memset(&(p_added_dev->bd_addr), 0, 6);
       p_added_dev->dev_handle = BTA_HH_INVALID_HANDLE;
       break;
@@ -607,7 +611,7 @@ bt_status_t btif_hh_connect(const RawAddress* bd_addr) {
    pagescan mode, we will do 2 retries to connect before giving up */
   btif_hh_cb.status = BTIF_HH_DEV_CONNECTING;
   btif_hh_cb.pending_conn_address = *bd_addr;
-  BTA_HhOpen(*bd_addr);
+  BTA_HhOpen(*bd_addr, BTA_HH_PROTO_RPT_MODE, BTUI_HH_SECURITY);
 
   // TODO(jpawlowski); make cback accept const and remove tmp!
   auto tmp = *bd_addr;
@@ -676,7 +680,7 @@ void btif_hh_service_registration(bool enable) {
       btif_hd_service_registration();
     }
   } else if (enable) {
-    BTA_HhEnable(bte_hh_evt);
+    BTA_HhEnable(BTA_SEC_ENCRYPT, bte_hh_evt);
   } else {
     btif_hh_cb.service_dereg_active = TRUE;
     BTA_HhDisable();
@@ -956,7 +960,7 @@ static void btif_hh_upstreams_evt(uint16_t event, char* p_param) {
       }
       if (p_dev->fd < 0) {
         LOG_ERROR(
-
+            LOG_TAG,
             "BTA_HH_GET_DSCP_EVT: Error, failed to find the uhid driver...");
         return;
       }
@@ -1080,7 +1084,7 @@ static void btif_hh_upstreams_evt(uint16_t event, char* p_param) {
       break;
 
     case BTA_HH_API_ERR_EVT:
-      LOG_INFO("BTA_HH API_ERR");
+      LOG_INFO(LOG_TAG, "BTA_HH API_ERR");
       break;
 
     default:
@@ -1546,7 +1550,7 @@ static bt_status_t set_report(RawAddress* bd_addr,
     /* Build a SetReport data buffer */
     // TODO
     hex_bytes_filled = ascii_2_hex(report, len, hexbuf);
-    LOG_INFO("Hex bytes filled, hex value: %d", hex_bytes_filled);
+    LOG_INFO(LOG_TAG, "Hex bytes filled, hex value: %d", hex_bytes_filled);
     if (hex_bytes_filled) {
       BT_HDR* p_buf = create_pbuf(hex_bytes_filled, hexbuf);
       if (p_buf == NULL) {
@@ -1688,7 +1692,7 @@ static const bthh_interface_t bthhInterface = {
 bt_status_t btif_hh_execute_service(bool b_enable) {
   if (b_enable) {
     /* Enable and register with BTA-HH */
-    BTA_HhEnable(bte_hh_evt);
+    BTA_HhEnable(BTUI_HH_SECURITY, bte_hh_evt);
   } else {
     /* Disable HH */
     BTA_HhDisable();

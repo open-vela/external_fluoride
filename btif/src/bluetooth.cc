@@ -27,6 +27,11 @@
 #define LOG_TAG "bt_btif"
 
 #include <base/logging.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <hardware/bluetooth.h>
 #include <hardware/bluetooth_headset_interface.h>
 #include <hardware/bt_av.h>
@@ -40,10 +45,6 @@
 #include <hardware/bt_rc.h>
 #include <hardware/bt_sdp.h>
 #include <hardware/bt_sock.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 #include "bt_utils.h"
 #include "bta/include/bta_hearing_aid_api.h"
@@ -66,7 +67,6 @@
 #include "common/metric_id_allocator.h"
 #include "common/metrics.h"
 #include "device/include/interop.h"
-#include "gd/common/init_flags.h"
 #include "main/shim/dumpsys.h"
 #include "main/shim/shim.h"
 #include "osi/include/alarm.h"
@@ -88,6 +88,7 @@ bool restricted_mode = false;
 bool niap_mode = false;
 const int CONFIG_COMPARE_ALL_PASS = 0b11;
 int niap_config_compare_result = CONFIG_COMPARE_ALL_PASS;
+bool is_local_device_atv = false;
 
 /*******************************************************************************
  *  Externs
@@ -140,12 +141,16 @@ static bool is_profile(const char* p1, const char* p2) {
  ****************************************************************************/
 
 static int init(bt_callbacks_t* callbacks, bool start_restricted,
-                bool is_niap_mode, int config_compare_result,
-                const char** init_flags) {
-  LOG_INFO("%s: start restricted = %d ; niap = %d, config compare result = %d",
+                bool is_niap_mode, int config_compare_result, bool is_atv) {
+  LOG_INFO(LOG_TAG,
+           "%s: start restricted = %d ; niap = %d, config compare result = %d",
            __func__, start_restricted, is_niap_mode, config_compare_result);
 
-  bluetooth::common::InitFlags::Load(init_flags);
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    LOG_INFO(LOG_TAG, "%s Enable Gd bluetooth functionality", __func__);
+  } else {
+    LOG_INFO(LOG_TAG, "%s Preserving legacy bluetooth functionality", __func__);
+  }
 
   if (interface_ready()) return BT_STATUS_DONE;
 
@@ -157,6 +162,7 @@ static int init(bt_callbacks_t* callbacks, bool start_restricted,
   restricted_mode = start_restricted;
   niap_mode = is_niap_mode;
   niap_config_compare_result = config_compare_result;
+  is_local_device_atv = is_atv;
 
   stack_manager_get_interface()->init_stack();
   btif_debug_init();
@@ -186,6 +192,8 @@ bool is_niap_mode() { return niap_mode; }
 int get_niap_config_compare_result() {
   return niap_mode ? niap_config_compare_result : CONFIG_COMPARE_ALL_PASS;
 }
+
+bool is_atv_device() { return is_local_device_atv; }
 
 static int get_adapter_properties(void) {
   /* sanity check */
@@ -337,8 +345,8 @@ static void dump(int fd, const char** arguments) {
   HearingAid::DebugDump(fd);
   connection_manager::dump(fd);
   bluetooth::bqr::DebugDump(fd);
-  if (bluetooth::shim::is_any_gd_enabled()) {
-    bluetooth::shim::Dump(fd, arguments);
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    bluetooth::shim::Dump(fd);
   } else {
 #if (BTSNOOP_MEM == TRUE)
     btif_debug_btsnoop_dump(fd);
@@ -351,7 +359,7 @@ static void dumpMetrics(std::string* output) {
 }
 
 static const void* get_profile_interface(const char* profile_id) {
-  LOG_INFO("%s: id = %s", __func__, profile_id);
+  LOG_INFO(LOG_TAG, "%s: id = %s", __func__, profile_id);
 
   /* sanity check */
   if (!interface_ready()) return NULL;
@@ -402,7 +410,7 @@ static const void* get_profile_interface(const char* profile_id) {
 }
 
 int dut_mode_configure(uint8_t enable) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
 
   /* sanity check */
   if (!interface_ready()) return BT_STATUS_NOT_READY;
@@ -411,7 +419,7 @@ int dut_mode_configure(uint8_t enable) {
 }
 
 int dut_mode_send(uint16_t opcode, uint8_t* buf, uint8_t len) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
 
   /* sanity check */
   if (!interface_ready()) return BT_STATUS_NOT_READY;
@@ -420,7 +428,7 @@ int dut_mode_send(uint16_t opcode, uint8_t* buf, uint8_t len) {
 }
 
 int le_test_mode(uint16_t opcode, uint8_t* buf, uint8_t len) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
 
   /* sanity check */
   if (!interface_ready()) return BT_STATUS_NOT_READY;
@@ -458,7 +466,7 @@ static int set_os_callouts(bt_os_callouts_t* callouts) {
 }
 
 static int config_clear(void) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   return btif_config_clear() ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;
 }
 
