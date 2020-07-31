@@ -35,6 +35,7 @@
 
 #include "bt_common.h"
 #include "bta_gattc_int.h"
+#include "bta_sys.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
 #include "btm_int.h"
@@ -675,7 +676,7 @@ void bta_gattc_get_gatt_db(uint16_t conn_id, uint16_t start_handle,
                            int* count) {
   tBTA_GATTC_CLCB* p_clcb = bta_gattc_find_clcb_by_conn_id(conn_id);
 
-  LOG_DEBUG("%s", __func__);
+  LOG_DEBUG(LOG_TAG, "%s", __func__);
   if (p_clcb == NULL) {
     LOG(ERROR) << "Unknown conn_id=" << loghex(conn_id);
     return;

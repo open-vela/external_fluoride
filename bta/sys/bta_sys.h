@@ -44,6 +44,16 @@ typedef bool(tBTA_SYS_EVT_HDLR)(BT_HDR* p_msg);
 /* disable function type */
 typedef void(tBTA_SYS_DISABLE)(void);
 
+/* HW modules */
+enum {
+  BTA_SYS_HW_BLUETOOTH,
+  BTA_SYS_HW_RT,
+
+  BTA_SYS_MAX_HW_MODULES
+};
+
+typedef uint16_t tBTA_SYS_HW_MODULE;
+
 #ifndef BTA_DM_NUM_JV_ID
 #define BTA_DM_NUM_JV_ID 2
 #endif
@@ -110,6 +120,11 @@ typedef uint8_t tBTA_SYS_ID;
 #define BTA_SYS_CONN_IDLE 0x06
 #define BTA_SYS_CONN_BUSY 0x07
 
+/* for link policy */
+#define BTA_SYS_PLCY_SET 0x10     /* set the link policy to the given addr */
+#define BTA_SYS_PLCY_CLR 0x11     /* clear the link policy to the given addr */
+#define BTA_SYS_PLCY_DEF_SET 0x12 /* set the default link policy */
+#define BTA_SYS_PLCY_DEF_CLR 0x13 /* clear the default link policy */
 #define BTA_SYS_ROLE_CHANGE 0x14  /* role change */
 
 typedef uint8_t tBTA_SYS_CONN_STATUS;
@@ -140,6 +155,12 @@ typedef struct {
   tBTA_SYS_DISABLE* disable;
 } tBTA_SYS_REG;
 
+/* data type to send events to BTA SYS HW manager */
+typedef struct {
+  BT_HDR hdr;
+  tBTA_SYS_HW_MODULE hw_module;
+} tBTA_SYS_HW_MSG;
+
 typedef void (*tBTA_SYS_REGISTER)(uint8_t id, const tBTA_SYS_REG* p_reg);
 
 /*****************************************************************************
@@ -165,27 +186,32 @@ extern uint8_t appl_trace_level;
 enum {
   /* device manager local device API events */
   BTA_SYS_API_ENABLE_EVT = BTA_SYS_EVT_START(BTA_ID_SYS),
+  BTA_SYS_EVT_ENABLED_EVT,
   BTA_SYS_EVT_STACK_ENABLED_EVT,
   BTA_SYS_API_DISABLE_EVT,
+  BTA_SYS_EVT_DISABLED_EVT,
   BTA_SYS_ERROR_EVT,
 
   BTA_SYS_MAX_EVT
 };
+
+/* SYS HW status events - returned by SYS HW manager to other modules. */
+enum {
+  BTA_SYS_HW_OFF_EVT,
+  BTA_SYS_HW_ON_EVT,
+  BTA_SYS_HW_STARTING_EVT,
+  BTA_SYS_HW_STOPPING_EVT,
+  BTA_SYS_HW_ERROR_EVT
+
+};
 typedef uint8_t tBTA_SYS_HW_EVT;
 
-/* SYS HW state */
-enum {
-  BTA_SYS_HW_OFF,
-  BTA_SYS_HW_STARTING,
-  BTA_SYS_HW_ON,
-  BTA_SYS_HW_STOPPING
-};
-typedef uint8_t tBTA_SYS_HW_STATE;
+/* HW enable callback type */
+typedef void(tBTA_SYS_HW_CBACK)(tBTA_SYS_HW_EVT status);
 
 /*****************************************************************************
  *  Function declarations
  ****************************************************************************/
-void bta_sys_set_state(tBTA_SYS_HW_STATE value);
 
 extern void bta_sys_init(void);
 extern void bta_sys_free(void);
@@ -194,12 +220,16 @@ extern void bta_sys_set_trace_level(uint8_t level);
 extern void bta_sys_register(uint8_t id, const tBTA_SYS_REG* p_reg);
 extern void bta_sys_deregister(uint8_t id);
 extern bool bta_sys_is_register(uint8_t id);
-extern void send_bta_sys_hw_event(tBTA_SYS_HW_EVT event);
+extern uint16_t bta_sys_get_sys_features(void);
 extern void bta_sys_sendmsg(void* p_msg);
 extern void bta_sys_sendmsg_delayed(void* p_msg, const base::TimeDelta& delay);
 extern void bta_sys_start_timer(alarm_t* alarm, uint64_t interval_ms,
                                 uint16_t event, uint16_t layer_specific);
-extern void bta_sys_disable();
+extern void bta_sys_disable(tBTA_SYS_HW_MODULE module);
+
+extern void bta_sys_hw_register(tBTA_SYS_HW_MODULE module,
+                                tBTA_SYS_HW_CBACK* cback);
+extern void bta_sys_hw_unregister(tBTA_SYS_HW_MODULE module);
 
 extern void bta_sys_rm_register(tBTA_SYS_CONN_CBACK* p_cback);
 extern void bta_sys_pm_register(tBTA_SYS_CONN_CBACK* p_cback);
@@ -250,5 +280,12 @@ extern void bta_sys_remove_uuid(uint16_t uuid16);
 #define bta_sys_add_uuid(ut)
 #define bta_sys_remove_uuid(ut)
 #endif
+
+extern void bta_sys_set_policy(uint8_t id, uint8_t policy,
+                               const RawAddress& peer_addr);
+extern void bta_sys_clear_policy(uint8_t id, uint8_t policy,
+                                 const RawAddress& peer_addr);
+extern void bta_sys_set_default_policy(uint8_t id, uint8_t policy);
+extern void bta_sys_clear_default_policy(uint8_t id, uint8_t policy);
 
 #endif /* BTA_SYS_H */

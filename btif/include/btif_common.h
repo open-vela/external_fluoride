@@ -36,12 +36,12 @@
  *  Constants & Macros
  ******************************************************************************/
 
-#define ASSERTC(cond, msg, val)                                               \
-  do {                                                                        \
-    if (!(cond)) {                                                            \
-      LOG_ERROR("### ASSERT : %s %s line %d %s (%d) ###", __FILE__, __func__, \
-                __LINE__, (msg), (val));                                      \
-    }                                                                         \
+#define ASSERTC(cond, msg, val)                                              \
+  do {                                                                       \
+    if (!(cond)) {                                                           \
+      LOG_ERROR(LOG_TAG, "### ASSERT : %s %s line %d %s (%d) ###", __FILE__, \
+                __func__, __LINE__, (msg), (val));                           \
+    }                                                                        \
   } while (0)
 
 /* Calculate start of event enumeration; id is top 8 bits of event */
@@ -212,13 +212,15 @@ void btif_remote_properties_evt(bt_status_t status, RawAddress* remote_addr,
 
 void bte_load_did_conf(const char* p_path);
 void bte_main_boot_entry(void);
+void bte_main_enable(void);
 void bte_main_disable(void);
 void bte_main_cleanup(void);
+void bte_main_postload_cfg(void);
 
 bt_status_t btif_transfer_context(tBTIF_CBACK* p_cback, uint16_t event,
                                   char* p_params, int param_len,
                                   tBTIF_COPY_CBACK* p_copy_cback);
 
-void btif_init_ok();
+void btif_init_ok(UNUSED_ATTR uint16_t event, UNUSED_ATTR char* p_param);
 
 #endif /* BTIF_COMMON_H */

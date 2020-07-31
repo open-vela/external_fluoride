@@ -19,6 +19,8 @@
 #define LOG_TAG "bt_task"
 
 #include <base/logging.h>
+#include <pthread.h>
+#include <string.h>
 
 #include "bt_target.h"
 #include "btm_int.h"
@@ -26,14 +28,45 @@
 #include "common/message_loop_thread.h"
 #include "device/include/controller.h"
 #include "gatt_api.h"
-#include "l2c_api.h"
+#include "gatt_int.h"
+#include "l2c_int.h"
+#include "osi/include/alarm.h"
+#include "osi/include/fixed_queue.h"
+#include "osi/include/log.h"
 #include "sdpint.h"
+#include "smp_int.h"
 
 using bluetooth::common::MessageLoopThread;
 
 MessageLoopThread bt_startup_thread("bt_startup_thread");
 
-void btu_task_shut_down();
+void btu_task_start_up(void* context);
+void btu_task_shut_down(void* context);
+
+/*****************************************************************************
+ *
+ * Function         btu_init_core
+ *
+ * Description      Initialize control block memory for each core component.
+ *
+ *
+ * Returns          void
+ *
+ *****************************************************************************/
+void btu_init_core() {
+  /* Initialize the mandatory core stack components */
+  btm_init();
+
+  l2c_init();
+
+  sdp_init();
+
+  gatt_init();
+
+  SMP_Init();
+
+  btm_ble_init();
+}
 
 /*****************************************************************************
  *
@@ -69,6 +102,7 @@ void btu_free_core() {
  *
  *****************************************************************************/
 void BTU_StartUp() {
+  btu_trace_level = HCI_INITIAL_TRACE_LEVEL;
   bt_startup_thread.StartUp();
   if (!bt_startup_thread.EnableRealTimeScheduling()) {
     LOG(ERROR) << __func__ << ": Unable to set real time scheduling policy for "
@@ -76,9 +110,16 @@ void BTU_StartUp() {
     BTU_ShutDown();
     return;
   }
+  if (!bt_startup_thread.DoInThread(FROM_HERE,
+                                    base::Bind(btu_task_start_up, nullptr))) {
+    LOG(ERROR) << __func__ << ": Unable to continue start-up on "
+               << bt_startup_thread;
+    BTU_ShutDown();
+    return;
+  }
 }
 
 void BTU_ShutDown() {
-  btu_task_shut_down();
+  btu_task_shut_down(nullptr);
   bt_startup_thread.ShutDown();
 }

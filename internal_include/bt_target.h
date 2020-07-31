@@ -299,6 +299,16 @@
 #define BTM_INQ_DB_SIZE 40
 #endif
 
+/* The default scan mode */
+#ifndef BTM_DEFAULT_SCAN_TYPE
+#define BTM_DEFAULT_SCAN_TYPE BTM_SCAN_TYPE_INTERLACED
+#endif
+
+/* Should connections to unknown devices be allowed when not discoverable? */
+#ifndef BTM_ALLOW_CONN_IF_NONDISCOVER
+#define BTM_ALLOW_CONN_IF_NONDISCOVER TRUE
+#endif
+
 /* Sets the Page_Scan_Window:  the length of time that the device is performing
  * a page scan. */
 #ifndef BTM_DEFAULT_CONN_WINDOW
@@ -522,6 +532,16 @@
 #define L2CAP_WAKE_PARKED_LINK TRUE
 #endif
 
+/* Whether link wants to be the master or the slave. */
+#ifndef L2CAP_DESIRED_LINK_ROLE
+#define L2CAP_DESIRED_LINK_ROLE HCI_ROLE_MASTER
+#endif
+
+/* Include Non-Flushable Packet Boundary Flag feature of Lisbon */
+#ifndef L2CAP_NON_FLUSHABLE_PB_INCLUDED
+#define L2CAP_NON_FLUSHABLE_PB_INCLUDED TRUE
+#endif
+
 /* Minimum number of ACL credit for high priority link */
 #ifndef L2CAP_HIGH_PRI_MIN_XMIT_QUOTA
 #define L2CAP_HIGH_PRI_MIN_XMIT_QUOTA 5
@@ -552,6 +572,11 @@
 /* Round Robin service channels in link */
 #ifndef L2CAP_ROUND_ROBIN_CHANNEL_SERVICE
 #define L2CAP_ROUND_ROBIN_CHANNEL_SERVICE TRUE
+#endif
+
+/* used for monitoring eL2CAP data flow */
+#ifndef L2CAP_ERTM_STATS
+#define L2CAP_ERTM_STATS FALSE
 #endif
 
 /* Used for conformance testing ONLY:  When TRUE lets scriptwrapper overwrite
@@ -918,6 +943,14 @@
 #define BNEP_SUPPORTS_STATUS_API TRUE
 #endif
 
+/*
+ * When BNEP connection changes roles after the connection is established
+ * we will do an authentication check again on the new role
+*/
+#ifndef BNEP_DO_AUTH_FOR_ROLE_SWITCH
+#define BNEP_DO_AUTH_FOR_ROLE_SWITCH TRUE
+#endif
+
 /* Maximum number of protocol filters supported. */
 #ifndef BNEP_MAX_PROT_FILTERS
 #define BNEP_MAX_PROT_FILTERS 5
@@ -1045,6 +1078,21 @@
 /* Default description for PANU role service */
 #ifndef PAN_PANU_DEFAULT_DESCRIPTION
 #define PAN_PANU_DEFAULT_DESCRIPTION "PANU"
+#endif
+
+/* Default Security level for PANU role. */
+#ifndef PAN_PANU_SECURITY_LEVEL
+#define PAN_PANU_SECURITY_LEVEL 0
+#endif
+
+/* Default Security level for GN role. */
+#ifndef PAN_GN_SECURITY_LEVEL
+#define PAN_GN_SECURITY_LEVEL 0
+#endif
+
+/* Default Security level for NAP role. */
+#ifndef PAN_NAP_SECURITY_LEVEL
+#define PAN_NAP_SECURITY_LEVEL 0
 #endif
 
 /******************************************************************************
@@ -1200,6 +1248,10 @@
 #define BTA_AG_CIND_INFO                                                       \
   "(\"call\",(0,1)),(\"callsetup\",(0-3)),(\"service\",(0-1)),(\"signal\",(0-" \
   "5)),(\"roam\",(0,1)),(\"battchg\",(0-5)),(\"callheld\",(0-2))"
+#endif
+
+#ifndef BTA_DM_AVOID_A2DP_ROLESWITCH_ON_INQUIRY
+#define BTA_DM_AVOID_A2DP_ROLESWITCH_ON_INQUIRY TRUE
 #endif
 
 /******************************************************************************
