@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google Inc.
+ *  Copyright (C) 2015 Google Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <time.h>
 
 #include "btif/include/btif_debug_conn.h"
-#include "common/time_util.h"
+#include "osi/include/time.h"
 
 #define NUM_CONNECTION_EVENTS 16
 #define TEMP_BUFFER_SIZE 30
@@ -69,7 +69,7 @@ void btif_debug_conn_state(const RawAddress& bda,
   next_event();
 
   conn_event_t* evt = &connection_events[current_event];
-  evt->ts = bluetooth::common::time_gettimeofday_us();
+  evt->ts = time_gettimeofday_us();
   evt->state = state;
   evt->disconnect_reason = disconnect_reason;
   evt->bda = bda;

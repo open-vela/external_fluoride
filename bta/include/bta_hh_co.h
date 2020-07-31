@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2005-2012 Broadcom Corporation
+ *  Copyright (C) 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ typedef struct {
   uint8_t rpt_id;
   tBTA_HH_RPT_TYPE rpt_type;
   uint8_t srvc_inst_id;
-  uint16_t char_inst_id;
+  uint8_t char_inst_id;
 } tBTA_HH_RPT_CACHE_ENTRY;
 
 /*******************************************************************************
@@ -76,31 +76,6 @@ extern void bta_hh_co_open(uint8_t dev_handle, uint8_t sub_class,
  *
  ******************************************************************************/
 extern void bta_hh_co_close(uint8_t dev_handle, uint8_t app_id);
-
-/*******************************************************************************
- *
- * Function         bta_hh_co_set_rpt_rsp
- *
- * Description      This callout function is executed by HH when Set Report
- *                  Response is received on Control Channel.
- *
- * Returns          void.
- *
- ******************************************************************************/
-extern void bta_hh_co_set_rpt_rsp(uint8_t dev_handle, uint8_t status);
-
-/*******************************************************************************
- *
- * Function         bta_hh_co_get_rpt_rsp
- *
- * Description      This callout function is executed by HH when Get Report
- *                  Response is received on Control Channel.
- *
- * Returns          void.
- *
- ******************************************************************************/
-extern void bta_hh_co_get_rpt_rsp(uint8_t dev_handle, uint8_t status,
-                                  uint8_t* p_rpt, uint16_t len);
 
 #if (BTA_HH_LE_INCLUDED == TRUE)
 /*******************************************************************************
