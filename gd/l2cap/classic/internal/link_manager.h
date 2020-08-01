@@ -36,8 +36,6 @@ namespace l2cap {
 namespace classic {
 namespace internal {
 
-class DumpsysHelper;
-
 class LinkManager : public hci::acl_manager::ConnectionCallbacks {
  public:
   LinkManager(os::Handler* l2cap_handler, hci::AclManager* acl_manager,
@@ -84,7 +82,6 @@ class LinkManager : public hci::acl_manager::ConnectionCallbacks {
  private:
   // Handles requests from LinkSecurityInterface
   friend class LinkSecurityInterfaceImpl;
-  friend class DumpsysHelper;
   void handle_link_security_hold(hci::Address remote);
   void handle_link_security_release(hci::Address remote);
   void handle_link_security_disconnect(hci::Address remote);

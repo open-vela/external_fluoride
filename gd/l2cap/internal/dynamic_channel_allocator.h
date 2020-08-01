@@ -29,13 +29,6 @@
 
 namespace bluetooth {
 namespace l2cap {
-
-namespace classic {
-namespace internal {
-class DumpsysHelper;
-}  // namespace internal
-}  // namespace classic
-
 namespace internal {
 
 class DynamicChannelImpl;
@@ -74,7 +67,6 @@ class DynamicChannelAllocator {
   void OnAclDisconnected(hci::ErrorCode hci_status);
 
  private:
-  friend class bluetooth::l2cap::classic::internal::DumpsysHelper;
   l2cap::internal::ILink* link_;
   os::Handler* l2cap_handler_;
   std::unordered_set<Cid> used_cid_;
