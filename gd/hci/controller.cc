@@ -18,7 +18,6 @@
 
 #include <future>
 #include <memory>
-#include <string>
 #include <utility>
 
 #include "hci/hci_layer.h"
@@ -47,6 +46,8 @@ struct Controller::impl {
                          handler->BindOnceOn(this, &Controller::impl::read_local_version_information_complete_handler));
     hci_->EnqueueCommand(ReadLocalSupportedCommandsBuilder::Create(),
                          handler->BindOnceOn(this, &Controller::impl::read_local_supported_commands_complete_handler));
+    hci_->EnqueueCommand(ReadLocalSupportedFeaturesBuilder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::read_local_supported_features_complete_handler));
 
     // Wait for all extended features read
     std::promise<void> features_promise;
@@ -168,6 +169,14 @@ struct Controller::impl {
     ErrorCode status = complete_view.GetStatus();
     ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
     local_supported_commands_ = complete_view.GetSupportedCommands();
+  }
+
+  void read_local_supported_features_complete_handler(CommandCompleteView view) {
+    auto complete_view = ReadLocalSupportedFeaturesCompleteView::Create(view);
+    ASSERT(complete_view.IsValid());
+    ErrorCode status = complete_view.GetStatus();
+    ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
+    local_supported_features_ = complete_view.GetLmpFeatures();
   }
 
   void read_local_extended_features_complete_handler(std::promise<void> promise, CommandCompleteView view) {
@@ -724,6 +733,7 @@ struct Controller::impl {
   CompletedAclPacketsCallback acl_credits_callback_{};
   LocalVersionInformation local_version_information_;
   std::array<uint8_t, 64> local_supported_commands_;
+  uint64_t local_supported_features_;
   uint8_t maximum_page_number_;
   std::vector<uint64_t> extended_lmp_features_array_;
   uint16_t acl_buffer_length_ = 0;
@@ -755,90 +765,50 @@ void Controller::UnregisterCompletedAclPacketsCallback() {
   CallOn(impl_.get(), &impl::unregister_completed_acl_packets_callback);
 }
 
-std::string Controller::GetLocalName() const {
+std::string Controller::GetControllerLocalName() const {
   return impl_->local_name_;
 }
 
-LocalVersionInformation Controller::GetLocalVersionInformation() const {
+LocalVersionInformation Controller::GetControllerLocalVersionInformation() const {
   return impl_->local_version_information_;
 }
 
-#define BIT(x) (0x1ULL << (x))
+std::array<uint8_t, 64> Controller::GetControllerLocalSupportedCommands() const {
+  return impl_->local_supported_commands_;
+}
 
-#define LOCAL_FEATURE_ACCESSOR(name, page, bit) \
-  bool Controller::name() const {               \
-    return GetLocalFeatures(page) & BIT(bit);   \
-  }
+uint8_t Controller::GetControllerLocalExtendedFeaturesMaxPageNumber() const {
+  return impl_->maximum_page_number_;
+}
 
-LOCAL_FEATURE_ACCESSOR(SupportsSimplePairing, 0, 51)
-LOCAL_FEATURE_ACCESSOR(SupportsSecureConnections, 2, 8)
-LOCAL_FEATURE_ACCESSOR(SupportsSimultaneousLeBrEdr, 0, 49)
-LOCAL_FEATURE_ACCESSOR(SupportsInterlacedInquiryScan, 0, 28)
-LOCAL_FEATURE_ACCESSOR(SupportsRssiWithInquiryResults, 0, 30)
-LOCAL_FEATURE_ACCESSOR(SupportsExtendedInquiryResponse, 0, 48)
-LOCAL_FEATURE_ACCESSOR(SupportsRoleSwitch, 0, 5)
-LOCAL_FEATURE_ACCESSOR(Supports3SlotPackets, 0, 0)
-LOCAL_FEATURE_ACCESSOR(Supports5SlotPackets, 0, 1)
-LOCAL_FEATURE_ACCESSOR(SupportsClassic2mPhy, 0, 25)
-LOCAL_FEATURE_ACCESSOR(SupportsClassic3mPhy, 0, 26)
-LOCAL_FEATURE_ACCESSOR(Supports3SlotEdrPackets, 0, 39)
-LOCAL_FEATURE_ACCESSOR(Supports5SlotEdrPackets, 0, 40)
-LOCAL_FEATURE_ACCESSOR(SupportsSco, 0, 11)
-LOCAL_FEATURE_ACCESSOR(SupportsHv2Packets, 0, 12)
-LOCAL_FEATURE_ACCESSOR(SupportsHv3Packets, 0, 13)
-LOCAL_FEATURE_ACCESSOR(SupportsEv3Packets, 0, 31)
-LOCAL_FEATURE_ACCESSOR(SupportsEv4Packets, 0, 32)
-LOCAL_FEATURE_ACCESSOR(SupportsEv5Packets, 0, 33)
-LOCAL_FEATURE_ACCESSOR(SupportsEsco2mPhy, 0, 45)
-LOCAL_FEATURE_ACCESSOR(SupportsEsco3mPhy, 0, 46)
-LOCAL_FEATURE_ACCESSOR(Supports3SlotEscoEdrPackets, 0, 47)
-LOCAL_FEATURE_ACCESSOR(SupportsHoldMode, 0, 6)
-LOCAL_FEATURE_ACCESSOR(SupportsSniffMode, 0, 7)
-LOCAL_FEATURE_ACCESSOR(SupportsParkMode, 0, 8)
-LOCAL_FEATURE_ACCESSOR(SupportsNonFlushablePb, 0, 54)
-LOCAL_FEATURE_ACCESSOR(SupportsSniffSubrating, 0, 41)
-LOCAL_FEATURE_ACCESSOR(SupportsEncryptionPause, 0, 42)
-LOCAL_FEATURE_ACCESSOR(SupportsBle, 0, 38)
+uint64_t Controller::GetControllerLocalSupportedFeatures() const {
+  return impl_->local_supported_features_;
+}
 
-#define LOCAL_LE_FEATURE_ACCESSOR(name, bit) \
-  bool Controller::name() const {            \
-    return GetLocalLeFeatures() & BIT(bit);  \
-  }
-
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePrivacy, 6)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePacketExtension, 5)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionParametersRequest, 2)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBle2mPhy, 8)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleCodedPhy, 11)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleExtendedAdvertising, 12)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertising, 13)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeripheralInitiatedFeatureExchange, 3)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionParameterRequest, 1)
-
-uint64_t Controller::GetLocalFeatures(uint8_t page_number) const {
+uint64_t Controller::GetControllerLocalExtendedFeatures(uint8_t page_number) const {
   if (page_number <= impl_->maximum_page_number_) {
     return impl_->extended_lmp_features_array_[page_number];
   }
   return 0x00;
 }
 
-uint16_t Controller::GetAclPacketLength() const {
+uint16_t Controller::GetControllerAclPacketLength() const {
   return impl_->acl_buffer_length_;
 }
 
-uint16_t Controller::GetNumAclPacketBuffers() const {
+uint16_t Controller::GetControllerNumAclPacketBuffers() const {
   return impl_->acl_buffers_;
 }
 
-uint8_t Controller::GetScoPacketLength() const {
+uint8_t Controller::GetControllerScoPacketLength() const {
   return impl_->sco_buffer_length_;
 }
 
-uint16_t Controller::GetNumScoPacketBuffers() const {
+uint16_t Controller::GetControllerNumScoPacketBuffers() const {
   return impl_->sco_buffers_;
 }
 
-Address Controller::GetMacAddress() const {
+Address Controller::GetControllerMacAddress() const {
   return impl_->mac_address_;
 }
 
@@ -916,39 +886,39 @@ void Controller::LeSetEventMask(uint64_t le_event_mask) {
   CallOn(impl_.get(), &impl::le_set_event_mask, le_event_mask);
 }
 
-LeBufferSize Controller::GetLeBufferSize() const {
+LeBufferSize Controller::GetControllerLeBufferSize() const {
   return impl_->le_buffer_size_;
 }
 
-uint64_t Controller::GetLocalLeFeatures() const {
+uint64_t Controller::GetControllerLeLocalSupportedFeatures() const {
   return impl_->le_local_supported_features_;
 }
 
-uint64_t Controller::GetLeSupportedStates() const {
+uint64_t Controller::GetControllerLeSupportedStates() const {
   return impl_->le_supported_states_;
 }
 
-uint8_t Controller::GetLeConnectListSize() const {
+uint8_t Controller::GetControllerLeConnectListSize() const {
   return impl_->le_connect_list_size_;
 }
 
-uint8_t Controller::GetLeResolvingListSize() const {
+uint8_t Controller::GetControllerLeResolvingListSize() const {
   return impl_->le_resolving_list_size_;
 }
 
-LeMaximumDataLength Controller::GetLeMaximumDataLength() const {
+LeMaximumDataLength Controller::GetControllerLeMaximumDataLength() const {
   return impl_->le_maximum_data_length_;
 }
 
-uint16_t Controller::GetLeMaximumAdvertisingDataLength() const {
+uint16_t Controller::GetControllerLeMaximumAdvertisingDataLength() const {
   return impl_->le_maximum_advertising_data_length_;
 }
 
-uint8_t Controller::GetLeNumberOfSupportedAdverisingSets() const {
+uint8_t Controller::GetControllerLeNumberOfSupportedAdverisingSets() const {
   return impl_->le_number_supported_advertising_sets_;
 }
 
-VendorCapabilities Controller::GetVendorCapabilities() const {
+VendorCapabilities Controller::GetControllerVendorCapabilities() const {
   return impl_->vendor_capabilities_;
 }
 
