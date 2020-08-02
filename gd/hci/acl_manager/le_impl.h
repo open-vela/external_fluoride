@@ -56,9 +56,9 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
     le_address_manager_ = new LeAddressManager(
         common::Bind(&le_impl::enqueue_command, common::Unretained(this)),
         handler_,
-        controller->GetMacAddress(),
-        controller->GetLeConnectListSize(),
-        controller->GetLeResolvingListSize());
+        controller->GetControllerMacAddress(),
+        controller->GetControllerLeConnectListSize(),
+        controller->GetControllerLeResolvingListSize());
   }
 
   ~le_impl() {
@@ -321,7 +321,8 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
 
     connecting_le_.insert(address_with_type);
 
-    if (controller_->IsSupported(OpCode::LE_EXTENDED_CREATE_CONNECTION)) {
+    // TODO: make features check nicer, like HCI_LE_EXTENDED_ADVERTISING_SUPPORTED
+    if (controller_->GetControllerLeLocalSupportedFeatures() & 0x0010) {
       LeCreateConnPhyScanParameters tmp;
       tmp.scan_interval_ = le_scan_interval;
       tmp.scan_window_ = le_scan_window;
