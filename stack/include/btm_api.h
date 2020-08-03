@@ -133,17 +133,6 @@ extern uint8_t* BTM_ReadDeviceClass(void);
 
 /*******************************************************************************
  *
- * Function         BTM_ReadLocalFeatures
- *
- * Description      This function is called to read the local features
- *
- * Returns          pointer to the local features string
- *
- ******************************************************************************/
-extern uint8_t* BTM_ReadLocalFeatures(void);
-
-/*******************************************************************************
- *
  * Function         BTM_RegisterForDeviceStatusNotif
  *
  * Description      This function is called to register for device status
@@ -1205,8 +1194,9 @@ extern void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res,
  ******************************************************************************/
 extern tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr,
                                tBLE_ADDR_TYPE addr_type,
-                               tBT_TRANSPORT transport, uint8_t pin_len,
-                               uint8_t* p_pin, uint32_t trusted_mask[]);
+                               tBT_TRANSPORT transport, int device_type,
+                               uint8_t pin_len, uint8_t* p_pin,
+                               uint32_t trusted_mask[]);
 
 /*******************************************************************************
  *
@@ -1284,23 +1274,6 @@ extern void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr);
  ******************************************************************************/
 extern void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
                                 uint32_t passkey);
-
-/*******************************************************************************
- *
- * Function         BTM_SendKeypressNotif
- *
- * Description      This function is used during the passkey entry model
- *                  by a device with KeyboardOnly IO capabilities
- *                  (very likely to be a HID Device).
- *                  It is called by a HID Device to inform the remote device
- *                  when a key has been entered or erased.
- *
- * Parameters:      bd_addr - Address of the peer device
- *                  type - notification type
- *
- ******************************************************************************/
-extern void BTM_SendKeypressNotif(const RawAddress& bd_addr,
-                                  tBTM_SP_KEY_TYPE type);
 
 /*******************************************************************************
  *
@@ -1629,5 +1602,10 @@ extern uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len,
  *
  ******************************************************************************/
 extern tBTM_CONTRL_STATE BTM_PM_ReadControllerState(void);
+
+/**
+ * Send remote name request, either to legacy HCI, or to GD shim Name module
+ */
+extern void SendRemoteNameRequest(const RawAddress& raw_address);
 
 #endif /* BTM_API_H */
