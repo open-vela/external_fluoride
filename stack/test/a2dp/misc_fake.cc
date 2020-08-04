@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include "flatbuffers/flatbuffers.h"
-#include "init_flags_generated.h"
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-namespace bluetooth {
-namespace dumpsys {
-
-class InitFlags {
- public:
-  static flatbuffers::Offset<common::InitFlagsData> Dump(flatbuffers::FlatBufferBuilder* fb_builder);
-};
-
-}  // namespace dumpsys
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
