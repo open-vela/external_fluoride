@@ -105,13 +105,6 @@ const reflection::Object* internal::FindReflectionObject(
   return nullptr;
 }
 
-bool internal::FilterTypeBool(const reflection::Field& field, flatbuffers::Table* table, PrivacyLevel privacy_level) {
-  ASSERT(table != nullptr);
-
-  // TODO(cmanton) Figure out boolean filtering
-  return kFieldHasBeenFiltered;
-}
-
 bool internal::FilterTypeInteger(
     const reflection::Field& field, flatbuffers::Table* table, PrivacyLevel privacy_level) {
   ASSERT(table != nullptr);
