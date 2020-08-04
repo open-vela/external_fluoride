@@ -22,10 +22,10 @@
  *
  ******************************************************************************/
 
-#include <cutils/log.h>
-
+#include <log/log.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "bnep_int.h"
 #include "bt_common.h"
 #include "bt_types.h"
@@ -685,7 +685,7 @@ void bnep_process_setup_conn_responce(tBNEP_CONN* p_bcb, uint8_t* p_setup) {
       alarm_cancel(p_bcb->conn_timer);
       p_bcb->re_transmits = 0;
 
-      /* Tell the user if he has a callback */
+      /* Tell the user if there is a callback */
       if (bnep_cb.p_conn_state_cb)
         (*bnep_cb.p_conn_state_cb)(p_bcb->handle, p_bcb->rem_bda, resp, true);
 
@@ -695,7 +695,7 @@ void bnep_process_setup_conn_responce(tBNEP_CONN* p_bcb, uint8_t* p_setup) {
 
       L2CA_DisconnectReq(p_bcb->l2cap_cid);
 
-      /* Tell the user if he has a callback */
+      /* Tell the user if there is a callback */
       if ((p_bcb->con_flags & BNEP_FLAGS_IS_ORIG) && (bnep_cb.p_conn_state_cb))
         (*bnep_cb.p_conn_state_cb)(p_bcb->handle, p_bcb->rem_bda, resp, false);
 
@@ -1194,7 +1194,7 @@ void bnep_sec_check_complete(UNUSED_ATTR const RawAddress* bd_addr,
 
       L2CA_DisconnectReq(p_bcb->l2cap_cid);
 
-      /* Tell the user if he has a callback */
+      /* Tell the user if there is a callback */
       if (bnep_cb.p_conn_state_cb)
         (*bnep_cb.p_conn_state_cb)(p_bcb->handle, p_bcb->rem_bda,
                                    BNEP_SECURITY_FAIL, is_role_change);
@@ -1259,22 +1259,32 @@ void bnep_sec_check_complete(UNUSED_ATTR const RawAddress* bd_addr,
 tBNEP_RESULT bnep_is_packet_allowed(tBNEP_CONN* p_bcb,
                                     const RawAddress& p_dest_addr,
                                     uint16_t protocol, bool fw_ext_present,
-                                    uint8_t* p_data) {
+                                    uint8_t* p_data, uint16_t org_len) {
   if (p_bcb->rcvd_num_filters) {
     uint16_t i, proto;
 
     /* Findout the actual protocol to check for the filtering */
     proto = protocol;
     if (proto == BNEP_802_1_P_PROTOCOL) {
+      uint16_t new_len = 0;
       if (fw_ext_present) {
         uint8_t len, ext;
         /* parse the extension headers and findout actual protocol */
         do {
+          if ((new_len + 2) > org_len) {
+            return BNEP_IGNORE_CMD;
+          }
+
           ext = *p_data++;
           len = *p_data++;
           p_data += len;
 
+          new_len += (len + 2);
+
         } while (ext & 0x80);
+      }
+      if ((new_len + 4) > org_len) {
+        return BNEP_IGNORE_CMD;
       }
       p_data += 2;
       BE_STREAM_TO_UINT16(proto, p_data);

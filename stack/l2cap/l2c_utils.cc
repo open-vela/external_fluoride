@@ -33,6 +33,7 @@
 #include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
+#include "hci/include/btsnoop.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
@@ -152,10 +153,8 @@ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
   /* Release any unfinished L2CAP packet on this link */
   osi_free_and_reset((void**)&p_lcb->p_hcit_rcv_acl);
 
-#if (BTM_SCO_INCLUDED == TRUE)
   if (p_lcb->transport == BT_TRANSPORT_BR_EDR) /* Release all SCO links */
     btm_remove_sco_links(p_lcb->remote_bd_addr);
-#endif
 
   if (p_lcb->sent_not_acked > 0) {
     if (p_lcb->transport == BT_TRANSPORT_LE) {
@@ -170,11 +169,6 @@ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
       }
     }
   }
-
-  // Reset BLE connecting flag only if the address matches
-  if (p_lcb->transport == BT_TRANSPORT_LE &&
-      l2cb.ble_connecting_bda == p_lcb->remote_bd_addr)
-    l2cb.is_ble_connecting = false;
 
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
   l2cu_process_fixed_disc_cback(p_lcb);
@@ -335,12 +329,7 @@ BT_HDR* l2cu_build_header(tL2C_LCB* p_lcb, uint16_t len, uint8_t cmd,
     UINT16_TO_STREAM(p, (p_lcb->handle | (L2CAP_PKT_START_NON_FLUSHABLE
                                           << L2CAP_PKT_TYPE_SHIFT)));
   } else {
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
     UINT16_TO_STREAM(p, p_lcb->handle | l2cb.non_flushable_pbf);
-#else
-    UINT16_TO_STREAM(
-        p, (p_lcb->handle | (L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT)));
-#endif
   }
 
   UINT16_TO_STREAM(p, len + L2CAP_PKT_OVERHEAD + L2CAP_CMD_OVERHEAD);
@@ -753,13 +742,13 @@ void l2cu_send_peer_config_rej(tL2C_CCB* p_ccb, uint8_t* p_data,
   p_buf->offset = L2CAP_SEND_CMD_OFFSET;
   p = (uint8_t*)(p_buf + 1) + L2CAP_SEND_CMD_OFFSET;
 
+  const controller_t* controller = controller_get_interface();
+
 /* Put in HCI header - handle + pkt boundary */
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
-  if (HCI_NON_FLUSHABLE_PB_SUPPORTED(BTM_ReadLocalFeatures())) {
+  if (controller->supports_non_flushable_pb()) {
     UINT16_TO_STREAM(p, (p_ccb->p_lcb->handle | (L2CAP_PKT_START_NON_FLUSHABLE
                                                  << L2CAP_PKT_TYPE_SHIFT)));
   } else
-#endif
   {
     UINT16_TO_STREAM(
         p, (p_ccb->p_lcb->handle | (L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT)));
@@ -1501,9 +1490,7 @@ tL2C_CCB* l2cu_allocate_ccb(tL2C_LCB* p_lcb, uint16_t cid) {
   p_ccb->tx_data_rate = L2CAP_CHNL_DATA_RATE_LOW;
   p_ccb->rx_data_rate = L2CAP_CHNL_DATA_RATE_LOW;
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   p_ccb->is_flushable = false;
-#endif
 
   alarm_free(p_ccb->l2c_ccb_timer);
   p_ccb->l2c_ccb_timer = alarm_new("l2c.l2c_ccb_timer");
@@ -1540,7 +1527,7 @@ bool l2cu_start_post_bond_timer(uint16_t handle) {
   if ((p_lcb->link_state == LST_CONNECTED) ||
       (p_lcb->link_state == LST_CONNECTING) ||
       (p_lcb->link_state == LST_DISCONNECTING)) {
-    period_ms_t timeout_ms = L2CAP_BONDING_TIMEOUT * 1000;
+    uint64_t timeout_ms = L2CAP_BONDING_TIMEOUT * 1000;
 
     if (p_lcb->idle_timeout == 0) {
       btsnd_hcic_disconnect(p_lcb->handle, HCI_ERR_PEER_USER);
@@ -1575,6 +1562,9 @@ void l2cu_release_ccb(tL2C_CCB* p_ccb) {
 
   /* If already released, could be race condition */
   if (!p_ccb->in_use) return;
+
+  btsnoop_get_interface()->clear_l2cap_whitelist(
+      p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
 
   if (p_rcb && (p_rcb->psm != p_rcb->real_psm)) {
     btm_sec_clr_service_by_psm(p_rcb->psm);
@@ -1622,18 +1612,28 @@ void l2cu_release_ccb(tL2C_CCB* p_ccb) {
   p_ccb->in_use = false;
 
   /* If no channels on the connection, start idle timeout */
-  if ((p_lcb) && p_lcb->in_use && (p_lcb->link_state == LST_CONNECTED)) {
-    if (!p_lcb->ccb_queue.p_first_ccb) {
-      // Closing a security channel on LE device should not start connection
-      // timeout
-      if (p_lcb->transport == BT_TRANSPORT_LE &&
-          p_ccb->local_cid == L2CAP_SMP_CID)
-        return;
+  if ((p_lcb) && p_lcb->in_use) {
+    if (p_lcb->link_state == LST_CONNECTED) {
+      if (!p_lcb->ccb_queue.p_first_ccb) {
+        // Closing a security channel on LE device should not start connection
+        // timeout
+        if (p_lcb->transport == BT_TRANSPORT_LE &&
+            p_ccb->local_cid == L2CAP_SMP_CID)
+          return;
 
-      l2cu_no_dynamic_ccbs(p_lcb);
-    } else {
-      /* Link is still active, adjust channel quotas. */
-      l2c_link_adjust_chnl_allocation();
+        l2cu_no_dynamic_ccbs(p_lcb);
+      } else {
+        /* Link is still active, adjust channel quotas. */
+        l2c_link_adjust_chnl_allocation();
+      }
+    } else if (p_lcb->link_state == LST_CONNECTING) {
+      if (!p_lcb->ccb_queue.p_first_ccb) {
+        if (p_lcb->transport == BT_TRANSPORT_LE &&
+            p_ccb->local_cid == L2CAP_ATT_CID) {
+          L2CAP_TRACE_WARNING("%s - disconnecting the LE link", __func__);
+          l2cu_no_dynamic_ccbs(p_lcb);
+        }
+      }
     }
   }
 }
@@ -1895,13 +1895,13 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     /* Make sure service type is not a reserved value; otherwise let upper
        layer decide if acceptable
     */
-    if (p_cfg->qos.service_type <= GUARANTEED) {
+    if (p_cfg->qos.service_type <= SVC_TYPE_GUARANTEED) {
       p_ccb->peer_cfg.qos = p_cfg->qos;
       p_ccb->peer_cfg.qos_present = true;
       p_ccb->peer_cfg_bits |= L2CAP_CH_CFG_MASK_QOS;
     } else /* Illegal service type value */
     {
-      p_cfg->qos.service_type = BEST_EFFORT;
+      p_cfg->qos.service_type = SVC_TYPE_BEST_EFFORT;
       qos_type_ok = false;
     }
   }
@@ -2009,9 +2009,6 @@ void l2cu_process_our_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
       /*                 timer value in config response shall be greater than
        * received processing time */
       p_cfg->fcr.mon_tout = p_cfg->fcr.rtrans_tout = 0;
-
-      if (p_cfg->fcr.mode == L2CAP_FCR_STREAM_MODE)
-        p_cfg->fcr.max_transmit = p_cfg->fcr.tx_win_sz = 0;
     }
 
     /* Set the threshold to send acks (may be updated in the cfg response) */
@@ -2100,45 +2097,37 @@ void l2cu_device_reset(void) {
       l2c_link_hci_disc_comp(p_lcb->handle, (uint8_t)-1);
     }
   }
-  l2cb.is_ble_connecting = false;
 }
 
-/*******************************************************************************
- *
- * Function         l2cu_create_conn
- *
- * Description      This function initiates an acl connection via HCI
- *
- * Returns          true if successful, false if get buffer fails.
- *
- ******************************************************************************/
-bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport) {
+bool l2cu_create_conn_le(tL2C_LCB* p_lcb) {
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
-  return l2cu_create_conn(p_lcb, transport, phy);
+  return l2cu_create_conn_le(p_lcb, phy);
 }
 
-bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
-                      uint8_t initiating_phys) {
-  int xx;
-  tL2C_LCB* p_lcb_cur = &l2cb.lcb_pool[0];
-#if (BTM_SCO_INCLUDED == TRUE)
-  bool is_sco_active;
-#endif
-
+/* This function initiates an acl connection to a LE device.
+ * Returns true if request started successfully, false otherwise. */
+bool l2cu_create_conn_le(tL2C_LCB* p_lcb, uint8_t initiating_phys) {
   tBT_DEVICE_TYPE dev_type;
   tBLE_ADDR_TYPE addr_type;
 
   BTM_ReadDevInfo(p_lcb->remote_bd_addr, &dev_type, &addr_type);
 
-  if (transport == BT_TRANSPORT_LE) {
-    if (!controller_get_interface()->supports_ble()) return false;
+  if (!controller_get_interface()->supports_ble()) return false;
 
-    p_lcb->ble_addr_type = addr_type;
-    p_lcb->transport = BT_TRANSPORT_LE;
-    p_lcb->initiating_phys = initiating_phys;
+  p_lcb->ble_addr_type = addr_type;
+  p_lcb->transport = BT_TRANSPORT_LE;
+  p_lcb->initiating_phys = initiating_phys;
 
-    return (l2cble_create_conn(p_lcb));
-  }
+  return (l2cble_create_conn(p_lcb));
+}
+
+/* This function initiates an acl connection to a Classic device via HCI.
+ * Returns true on success, false otherwise. */
+bool l2cu_create_conn_br_edr(tL2C_LCB* p_lcb) {
+  int xx;
+  tL2C_LCB* p_lcb_cur = &l2cb.lcb_pool[0];
+  bool is_sco_active;
+  const controller_t* controller = controller_get_interface();
 
   /* If there is a connection where we perform as a slave, try to switch roles
      for this connection */
@@ -2147,7 +2136,6 @@ bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
     if (p_lcb_cur == p_lcb) continue;
 
     if ((p_lcb_cur->in_use) && (p_lcb_cur->link_role == HCI_ROLE_SLAVE)) {
-#if (BTM_SCO_INCLUDED == TRUE)
       /* The LMP_switch_req shall be sent only if the ACL logical transport
       is in active mode, when encryption is disabled, and all synchronous
       logical transports on the same physical link are disabled." */
@@ -2161,9 +2149,8 @@ bool l2cu_create_conn(tL2C_LCB* p_lcb, tBT_TRANSPORT transport,
 
       if (is_sco_active)
         continue; /* No Master Slave switch not allowed when SCO Active */
-#endif
       /*4_1_TODO check  if btm_cb.devcb.local_features to be used instead */
-      if (HCI_SWITCH_SUPPORTED(BTM_ReadLocalFeatures())) {
+      if (controller->supports_role_switch()) {
         /* mark this lcb waiting for switch to be completed and
            start switch on the other one */
         p_lcb->link_state = LST_CONNECTING_WAIT_SWITCH;
@@ -2224,12 +2211,10 @@ bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
   uint8_t page_scan_rep_mode;
   uint8_t page_scan_mode;
   uint16_t clock_offset;
-  uint8_t* p_features;
   uint16_t num_acl = BTM_GetNumAclLinks();
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(p_lcb->remote_bd_addr);
   uint8_t no_hi_prio_chs = l2cu_get_num_hi_priority();
-
-  p_features = BTM_ReadLocalFeatures();
+  const controller_t* controller = controller_get_interface();
 
   L2CAP_TRACE_DEBUG(
       "l2cu_create_conn_after_switch :%d num_acl:%d no_hi: %d is_bonding:%d",
@@ -2239,7 +2224,7 @@ bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
    * We can enhance the code to count the number of piconets later. */
   if (((!l2cb.disallow_switch && (num_acl < 3)) ||
        (p_lcb->is_bonding && (no_hi_prio_chs == 0))) &&
-      HCI_SWITCH_SUPPORTED(p_features))
+      controller->supports_role_switch())
     allow_switch = HCI_CR_CONN_ALLOW_SWITCH;
   else
     allow_switch = HCI_CR_CONN_NOT_ALLOW_SWITCH;
@@ -2248,7 +2233,8 @@ bool l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
 
   /* Check with the BT manager if details about remote device are known */
   p_inq_info = BTM_InqDbRead(p_lcb->remote_bd_addr);
-  if (p_inq_info != NULL) {
+  if ((p_inq_info != NULL) &&
+      (p_inq_info->results.inq_result_type & BTM_INQ_RESULT_BR)) {
     page_scan_rep_mode = p_inq_info->results.page_scan_rep_mode;
     page_scan_mode = p_inq_info->results.page_scan_mode;
     clock_offset = (uint16_t)(p_inq_info->results.clock_offset);
@@ -2397,7 +2383,6 @@ bool l2cu_set_acl_priority(const RawAddress& bd_addr, uint8_t priority,
   return (true);
 }
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 /******************************************************************************
  *
  * Function         l2cu_set_non_flushable_pbf
@@ -2414,7 +2399,6 @@ void l2cu_set_non_flushable_pbf(bool is_supported) {
   else
     l2cb.non_flushable_pbf = (L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT);
 }
-#endif
 
 /*******************************************************************************
  *
@@ -2535,8 +2519,7 @@ void l2cu_adjust_out_mps(tL2C_CCB* p_ccb) {
  * Returns          true or false
  *
  ******************************************************************************/
-bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
-                               tL2CAP_FCR_OPTS* p_fcr) {
+bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid) {
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
   tL2C_CCB* p_ccb;
 
@@ -2560,18 +2543,6 @@ bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
   p_ccb->remote_cid = fixed_cid;
 
   p_ccb->is_flushable = false;
-
-  if (p_fcr) {
-    /* Set the FCR parameters. For now, we will use default pools */
-    p_ccb->our_cfg.fcr = p_ccb->peer_cfg.fcr = *p_fcr;
-
-    p_ccb->ertm_info.fcr_rx_buf_size = L2CAP_FCR_RX_BUF_SIZE;
-    p_ccb->ertm_info.fcr_tx_buf_size = L2CAP_FCR_TX_BUF_SIZE;
-    p_ccb->ertm_info.user_rx_buf_size = L2CAP_USER_RX_BUF_SIZE;
-    p_ccb->ertm_info.user_tx_buf_size = L2CAP_USER_TX_BUF_SIZE;
-
-    p_ccb->fcrb.max_held_acks = p_fcr->tx_win_sz / 3;
-  }
 
   /* Link ccb to lcb and lcb to ccb */
   p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL] = p_ccb;
@@ -2601,7 +2572,7 @@ bool l2cu_initialize_fixed_ccb(tL2C_LCB* p_lcb, uint16_t fixed_cid,
  ******************************************************************************/
 void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb) {
   tBTM_STATUS rc;
-  period_ms_t timeout_ms = p_lcb->idle_timeout * 1000;
+  uint64_t timeout_ms = p_lcb->idle_timeout * 1000;
   bool start_timeout = true;
 
 #if (L2CAP_NUM_FIXED_CHNLS > 0)
@@ -2610,6 +2581,12 @@ void l2cu_no_dynamic_ccbs(tL2C_LCB* p_lcb) {
   for (xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
     if ((p_lcb->p_fixed_ccbs[xx] != NULL) &&
         (p_lcb->p_fixed_ccbs[xx]->fixed_chnl_idle_tout * 1000 > timeout_ms)) {
+
+      if (p_lcb->p_fixed_ccbs[xx]->fixed_chnl_idle_tout == L2CAP_NO_IDLE_TIMEOUT) {
+         L2CAP_TRACE_DEBUG("%s NO IDLE timeout set for fixed cid 0x%04x", __func__,
+            p_lcb->p_fixed_ccbs[xx]->local_cid);
+         start_timeout = false;
+      }
       timeout_ms = p_lcb->p_fixed_ccbs[xx]->fixed_chnl_idle_tout * 1000;
     }
   }
@@ -2674,28 +2651,34 @@ void l2cu_process_fixed_chnl_resp(tL2C_LCB* p_lcb) {
 
   /* Tell all registered fixed channels about the connection */
   for (int xx = 0; xx < L2CAP_NUM_FIXED_CHNLS; xx++) {
+    uint16_t channel_id = xx + L2CAP_FIRST_FIXED_CHNL;
+
+    /* See BT Spec Ver 5.0 | Vol 3, Part A 2.1 table 2.1 and 2.2 */
+
     /* skip sending LE fix channel callbacks on BR/EDR links */
     if (p_lcb->transport == BT_TRANSPORT_BR_EDR &&
-        xx + L2CAP_FIRST_FIXED_CHNL >= L2CAP_ATT_CID &&
-        xx + L2CAP_FIRST_FIXED_CHNL <= L2CAP_SMP_CID)
+        channel_id >= L2CAP_ATT_CID && channel_id <= L2CAP_SMP_CID)
       continue;
-    if (l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb != NULL) {
-      if (p_lcb->peer_chnl_mask[(xx + L2CAP_FIRST_FIXED_CHNL) / 8] &
-          (1 << ((xx + L2CAP_FIRST_FIXED_CHNL) % 8))) {
-        if (p_lcb->p_fixed_ccbs[xx])
-          p_lcb->p_fixed_ccbs[xx]->chnl_state = CST_OPEN;
-        (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(xx + L2CAP_FIRST_FIXED_CHNL,
-                                                 p_lcb->remote_bd_addr, true, 0,
-                                                 p_lcb->transport);
-      } else {
-        (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(
-            xx + L2CAP_FIRST_FIXED_CHNL, p_lcb->remote_bd_addr, false,
-            p_lcb->disc_reason, p_lcb->transport);
 
-        if (p_lcb->p_fixed_ccbs[xx]) {
-          l2cu_release_ccb(p_lcb->p_fixed_ccbs[xx]);
-          p_lcb->p_fixed_ccbs[xx] = NULL;
-        }
+    /* skip sending BR fix channel callbacks on LE links */
+    if (p_lcb->transport == BT_TRANSPORT_LE && channel_id == L2CAP_SMP_BR_CID)
+      continue;
+
+    if (!l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb) continue;
+
+    if (p_lcb->peer_chnl_mask[(channel_id) / 8] & (1 << ((channel_id) % 8))) {
+      if (p_lcb->p_fixed_ccbs[xx])
+        p_lcb->p_fixed_ccbs[xx]->chnl_state = CST_OPEN;
+      (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(
+          channel_id, p_lcb->remote_bd_addr, true, 0, p_lcb->transport);
+    } else {
+      (*l2cb.fixed_reg[xx].pL2CA_FixedConn_Cb)(
+          channel_id, p_lcb->remote_bd_addr, false, p_lcb->disc_reason,
+          p_lcb->transport);
+
+      if (p_lcb->p_fixed_ccbs[xx]) {
+        l2cu_release_ccb(p_lcb->p_fixed_ccbs[xx]);
+        p_lcb->p_fixed_ccbs[xx] = NULL;
       }
     }
   }
@@ -3366,7 +3349,6 @@ void l2cu_set_acl_hci_header(BT_HDR* p_buf, tL2C_CCB* p_ccb) {
       UINT16_TO_STREAM(p, p_buf->len);
     }
   } else {
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
     if ((((p_buf->layer_specific & L2CAP_FLUSHABLE_MASK) ==
           L2CAP_FLUSHABLE_CH_BASED) &&
          (p_ccb->is_flushable)) ||
@@ -3377,10 +3359,6 @@ void l2cu_set_acl_hci_header(BT_HDR* p_buf, tL2C_CCB* p_ccb) {
     } else {
       UINT16_TO_STREAM(p, p_ccb->p_lcb->handle | l2cb.non_flushable_pbf);
     }
-#else
-    UINT16_TO_STREAM(
-        p, p_ccb->p_lcb->handle | (L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT));
-#endif
 
     uint16_t acl_data_size =
         controller_get_interface()->get_acl_data_size_classic();
