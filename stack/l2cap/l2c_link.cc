@@ -803,8 +803,7 @@ void l2c_link_adjust_chnl_allocation(void) {
  *
  ******************************************************************************/
 void l2c_link_processs_num_bufs(uint16_t num_lm_acl_bufs) {
-  l2cb.num_lm_acl_bufs = num_lm_acl_bufs;
-  l2cb.controller_xmit_window = num_lm_acl_bufs;
+  l2cb.num_lm_acl_bufs = l2cb.controller_xmit_window = num_lm_acl_bufs;
 }
 
 /*******************************************************************************
@@ -1054,17 +1053,6 @@ void l2c_link_check_send_pkts(tL2C_LCB* p_lcb, tL2C_CCB* p_ccb, BT_HDR* p_buf) {
                          L2CAP_LINK_FLOW_CONTROL_TIMEOUT_MS,
                          l2c_lcb_timer_timeout, p_lcb);
     }
-  }
-}
-
-void l2c_OnHciModeChangeSendPendingPackets(RawAddress remote) {
-  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(remote, BT_TRANSPORT_BR_EDR);
-  if (p_lcb != NULL) {
-    /* There might be any pending packets due to SNIFF or PENDING state */
-    /* Trigger L2C to start transmission of the pending packets. */
-    BTM_TRACE_DEBUG(
-        "btm mode change to active; check l2c_link for outgoing packets");
-    l2c_link_check_send_pkts(p_lcb, NULL, NULL);
   }
 }
 
