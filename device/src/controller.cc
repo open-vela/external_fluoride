@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,11 +27,20 @@
 #include "btcore/include/module.h"
 #include "btcore/include/version.h"
 #include "hcimsgs.h"
+#include "main/shim/controller.h"
+#include "main/shim/shim.h"
 #include "osi/include/future.h"
 #include "stack/include/btm_ble_api.h"
 
-const bt_event_mask_t BLE_EVENT_MASK = {
-    {0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x1E, 0x7f}};
+const bt_event_mask_t BLE_EVENT_MASK = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+#if (BLE_PRIVACY_SPT == TRUE)
+                                         0x1E,
+#else
+                                         /* Disable "LE Enhanced Connection
+                                            Complete" when privacy is off */
+                                         0x1C,
+#endif
+                                         0x7f}};
 
 const bt_event_mask_t CLASSIC_EVENT_MASK = {HCI_DUMO_EVENT_MASK_EXT};
 
@@ -44,7 +53,7 @@ const uint8_t SCO_HOST_BUFFER_SIZE = 0xff;
 #define BLE_SUPPORTED_FEATURES_SIZE 8
 #define MAX_LOCAL_SUPPORTED_CODECS_SIZE 8
 
-static const hci_t* hci;
+static const hci_t* local_hci;
 static const hci_packet_factory_t* packet_factory;
 static const hci_packet_parser_t* packet_parser;
 
@@ -65,6 +74,11 @@ static uint8_t ble_resolving_list_max_size;
 static uint8_t ble_supported_states[BLE_SUPPORTED_STATES_SIZE];
 static bt_device_features_t features_ble;
 static uint16_t ble_suggested_default_data_length;
+static uint16_t ble_supported_max_tx_octets;
+static uint16_t ble_supported_max_tx_time;
+static uint16_t ble_supported_max_rx_octets;
+static uint16_t ble_supported_max_rx_time;
+
 static uint16_t ble_maxium_advertising_data_length;
 static uint8_t ble_number_of_supported_advertising_sets;
 static uint8_t local_supported_codecs[MAX_LOCAL_SUPPORTED_CODECS_SIZE];
@@ -76,7 +90,8 @@ static bool simple_pairing_supported;
 static bool secure_connections_supported;
 
 #define AWAIT_COMMAND(command) \
-  static_cast<BT_HDR*>(future_await(hci->transmit_command_futured(command)))
+  static_cast<BT_HDR*>(        \
+      future_await(local_hci->transmit_command_futured(command)))
 
 // Module lifecycle functions
 
@@ -212,6 +227,12 @@ static future_t* start_up(void) {
     }
 
     if (HCI_LE_DATA_LEN_EXT_SUPPORTED(features_ble.as_array)) {
+      response =
+          AWAIT_COMMAND(packet_factory->make_ble_read_maximum_data_length());
+      packet_parser->parse_ble_read_maximum_data_length_response(
+          response, &ble_supported_max_tx_octets, &ble_supported_max_tx_time,
+          &ble_supported_max_rx_octets, &ble_supported_max_rx_time);
+
       response = AWAIT_COMMAND(
           packet_factory->make_ble_read_suggested_default_data_length());
       packet_parser->parse_ble_read_suggested_default_data_length_response(
@@ -288,18 +309,6 @@ static const bt_version_t* get_bt_version(void) {
   return &bt_version;
 }
 
-// TODO(zachoverflow): hide inside, move decoder inside too
-static const bt_device_features_t* get_features_classic(int index) {
-  CHECK(readable);
-  CHECK(index < MAX_FEATURES_CLASSIC_PAGE_COUNT);
-  return &features_classic[index];
-}
-
-static uint8_t get_last_features_classic_index(void) {
-  CHECK(readable);
-  return last_features_classic_page_index;
-}
-
 static uint8_t* get_local_supported_codecs(uint8_t* number_of_codecs) {
   CHECK(readable);
   if (number_of_local_supported_codecs) {
@@ -307,12 +316,6 @@ static uint8_t* get_local_supported_codecs(uint8_t* number_of_codecs) {
     return local_supported_codecs;
   }
   return NULL;
-}
-
-static const bt_device_features_t* get_features_ble(void) {
-  CHECK(readable);
-  CHECK(ble_supported);
-  return &features_ble;
 }
 
 static const uint8_t* get_ble_supported_states(void) {
@@ -371,6 +374,116 @@ static bool supports_enhanced_accept_synchronous_connection(void) {
   return HCI_ENH_ACCEPT_SYNCH_CONN_SUPPORTED(supported_commands);
 }
 
+static bool supports_3_slot_packets(void) {
+  CHECK(readable);
+  return HCI_3_SLOT_PACKETS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_5_slot_packets(void) {
+  CHECK(readable);
+  return HCI_5_SLOT_PACKETS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_classic_2m_phy(void) {
+  CHECK(readable);
+  return HCI_EDR_ACL_2MPS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_classic_3m_phy(void) {
+  CHECK(readable);
+  return HCI_EDR_ACL_3MPS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_3_slot_edr_packets(void) {
+  CHECK(readable);
+  return HCI_3_SLOT_EDR_ACL_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_5_slot_edr_packets(void) {
+  CHECK(readable);
+  return HCI_5_SLOT_EDR_ACL_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_sco(void) {
+  CHECK(readable);
+  return HCI_SCO_LINK_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_hv2_packets(void) {
+  CHECK(readable);
+  return HCI_HV2_PACKETS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_hv3_packets(void) {
+  CHECK(readable);
+  return HCI_HV3_PACKETS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_ev3_packets(void) {
+  CHECK(readable);
+  return HCI_ESCO_EV3_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_ev4_packets(void) {
+  CHECK(readable);
+  return HCI_ESCO_EV4_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_ev5_packets(void) {
+  CHECK(readable);
+  return HCI_ESCO_EV5_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_esco_2m_phy(void) {
+  CHECK(readable);
+  return HCI_EDR_ESCO_2MPS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_esco_3m_phy(void) {
+  CHECK(readable);
+  return HCI_EDR_ESCO_3MPS_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_3_slot_esco_edr_packets(void) {
+  CHECK(readable);
+  return HCI_3_SLOT_EDR_ESCO_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_role_switch(void) {
+  CHECK(readable);
+  return HCI_SWITCH_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_hold_mode(void) {
+  CHECK(readable);
+  return HCI_HOLD_MODE_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_sniff_mode(void) {
+  CHECK(readable);
+  return HCI_SNIFF_MODE_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_park_mode(void) {
+  CHECK(readable);
+  return HCI_PARK_MODE_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_non_flushable_pb(void) {
+  CHECK(readable);
+  return HCI_NON_FLUSHABLE_PB_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_sniff_subrating(void) {
+  CHECK(readable);
+  return HCI_SNIFF_SUB_RATE_SUPPORTED(features_classic[0].as_array);
+}
+
+static bool supports_encryption_pause(void) {
+  CHECK(readable);
+  return HCI_ATOMIC_ENCRYPT_SUPPORTED(features_classic[0].as_array);
+}
+
 static bool supports_ble(void) {
   CHECK(readable);
   return ble_supported;
@@ -425,6 +538,18 @@ static bool supports_ble_periodic_advertising(void) {
   return HCI_LE_PERIODIC_ADVERTISING_SUPPORTED(features_ble.as_array);
 }
 
+static bool supports_ble_peripheral_initiated_feature_exchange(void) {
+  CHECK(readable);
+  CHECK(ble_supported);
+  return HCI_LE_SLAVE_INIT_FEAT_EXC_SUPPORTED(features_ble.as_array);
+}
+
+static bool supports_ble_connection_parameter_request(void) {
+  CHECK(readable);
+  CHECK(ble_supported);
+  return HCI_LE_CONN_PARAM_REQ_SUPPORTED(features_ble.as_array);
+}
+
 static uint16_t get_acl_data_size_classic(void) {
   CHECK(readable);
   return acl_data_size_classic;
@@ -450,6 +575,12 @@ static uint16_t get_ble_suggested_default_data_length(void) {
   CHECK(readable);
   CHECK(ble_supported);
   return ble_suggested_default_data_length;
+}
+
+static uint16_t get_ble_maximum_tx_data_length(void) {
+  CHECK(readable);
+  CHECK(ble_supported);
+  return ble_supported_max_tx_octets;
 }
 
 static uint16_t get_ble_maxium_advertising_data_length(void) {
@@ -511,10 +642,6 @@ static const controller_t interface = {
     get_address,
     get_bt_version,
 
-    get_features_classic,
-    get_last_features_classic_index,
-
-    get_features_ble,
     get_ble_supported_states,
 
     supports_simple_pairing,
@@ -527,6 +654,28 @@ static const controller_t interface = {
     supports_master_slave_role_switch,
     supports_enhanced_setup_synchronous_connection,
     supports_enhanced_accept_synchronous_connection,
+    supports_3_slot_packets,
+    supports_5_slot_packets,
+    supports_classic_2m_phy,
+    supports_classic_3m_phy,
+    supports_3_slot_edr_packets,
+    supports_5_slot_edr_packets,
+    supports_sco,
+    supports_hv2_packets,
+    supports_hv3_packets,
+    supports_ev3_packets,
+    supports_ev4_packets,
+    supports_ev5_packets,
+    supports_esco_2m_phy,
+    supports_esco_3m_phy,
+    supports_3_slot_esco_edr_packets,
+    supports_role_switch,
+    supports_hold_mode,
+    supports_sniff_mode,
+    supports_park_mode,
+    supports_non_flushable_pb,
+    supports_sniff_subrating,
+    supports_encryption_pause,
 
     supports_ble,
     supports_ble_packet_extension,
@@ -537,6 +686,8 @@ static const controller_t interface = {
     supports_ble_coded_phy,
     supports_ble_extended_advertising,
     supports_ble_periodic_advertising,
+    supports_ble_peripheral_initiated_feature_exchange,
+    supports_ble_connection_parameter_request,
 
     get_acl_data_size_classic,
     get_acl_data_size_ble,
@@ -544,6 +695,7 @@ static const controller_t interface = {
     get_acl_packet_size_classic,
     get_acl_packet_size_ble,
     get_ble_suggested_default_data_length,
+    get_ble_maximum_tx_data_length,
     get_ble_maxium_advertising_data_length,
     get_ble_number_of_supported_advertising_sets,
 
@@ -557,12 +709,12 @@ static const controller_t interface = {
     get_local_supported_codecs,
     get_le_all_initiating_phys};
 
-const controller_t* controller_get_interface() {
+const controller_t* bluetooth::legacy::controller_get_interface() {
   static bool loaded = false;
   if (!loaded) {
     loaded = true;
 
-    hci = hci_layer_get_interface();
+    local_hci = hci_layer_get_interface();
     packet_factory = hci_packet_factory_get_interface();
     packet_parser = hci_packet_parser_get_interface();
   }
@@ -570,11 +722,19 @@ const controller_t* controller_get_interface() {
   return &interface;
 }
 
+const controller_t* controller_get_interface() {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::controller_get_interface();
+  } else {
+    return bluetooth::legacy::controller_get_interface();
+  }
+}
+
 const controller_t* controller_get_test_interface(
     const hci_t* hci_interface,
     const hci_packet_factory_t* packet_factory_interface,
     const hci_packet_parser_t* packet_parser_interface) {
-  hci = hci_interface;
+  local_hci = hci_interface;
   packet_factory = packet_factory_interface;
   packet_parser = packet_parser_interface;
   return &interface;

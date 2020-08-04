@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,28 @@
 #ifndef A2DP_AAC_ENCODER_H
 #define A2DP_AAC_ENCODER_H
 
+#include "a2dp_aac_constants.h"
 #include "a2dp_codec_api.h"
-#include "osi/include/time.h"
+
+// Is used in btav_a2dp_codec_config_t.codec_specific_1 when codec is AAC
+enum class AacEncoderBitrateMode : int64_t {
+  // Variable bitrate mode unsupported when used in a codec report, and upper
+  // layer can use this value as system default (keep current settings)
+  AACENC_BR_MODE_CBR = A2DP_AAC_VARIABLE_BIT_RATE_DISABLED,
+  // Constant bitrate mode when Variable bitrate mode is supported. This can
+  // also be used to disable Variable bitrate mode by upper layer
+  AACENC_BR_MODE_VBR_C = (A2DP_AAC_VARIABLE_BIT_RATE_ENABLED | 0x00),
+  // Variable bitrate mode (very low bitrate for software encoding).
+  AACENC_BR_MODE_VBR_1 = (A2DP_AAC_VARIABLE_BIT_RATE_ENABLED | 0x01),
+  // Variable bitrate mode (low bitrate for software encoding).
+  AACENC_BR_MODE_VBR_2 = (A2DP_AAC_VARIABLE_BIT_RATE_ENABLED | 0x02),
+  // Variable bitrate mode (medium bitrate for software encoding).
+  AACENC_BR_MODE_VBR_3 = (A2DP_AAC_VARIABLE_BIT_RATE_ENABLED | 0x03),
+  // Variable bitrate mode (high bitrate for software encoding).
+  AACENC_BR_MODE_VBR_4 = (A2DP_AAC_VARIABLE_BIT_RATE_ENABLED | 0x04),
+  // Variable bitrate mode (very high bitrate for software encoding).
+  AACENC_BR_MODE_VBR_5 = (A2DP_AAC_VARIABLE_BIT_RATE_ENABLED | 0x05),
+};
 
 // Loads the A2DP AAC encoder.
 // Return true on success, otherwise false.
@@ -51,7 +71,7 @@ void a2dp_aac_feeding_reset(void);
 void a2dp_aac_feeding_flush(void);
 
 // Get the A2DP AAC encoder interval (in milliseconds).
-period_ms_t a2dp_aac_get_encoder_interval_ms(void);
+uint64_t a2dp_aac_get_encoder_interval_ms(void);
 
 // Prepare and send A2DP AAC encoded frames.
 // |timestamp_us| is the current timestamp (in microseconds).
