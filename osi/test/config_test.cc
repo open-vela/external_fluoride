@@ -1,12 +1,33 @@
-#include <gtest/gtest.h>
-
-#include "AllocationTestHarness.h"
+/*
+ *  Copyright 2020 The Android Open Source Project
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
 
 #include "osi/include/config.h"
 
-static const char CONFIG_FILE[] = "/data/local/tmp/config_test.conf";
+#include <base/files/file_util.h>
+#include <gtest/gtest.h>
+
+#include <filesystem>
+
+#include "AllocationTestHarness.h"
+
+static const std::filesystem::path kConfigFile =
+    std::filesystem::temp_directory_path() / "config_test.conf";
+static const char* CONFIG_FILE = kConfigFile.c_str();
 static const char CONFIG_FILE_CONTENT[] =
-    "                                                                                    \n\
+    "                                                                                \n\
 first_key=value                                                                      \n\
                                                                                      \n\
 # Device ID (DID) configuration                                                      \n\
@@ -44,159 +65,213 @@ version = 0x1111                                                                
 [DID]                                                                                \n\
 [DID]                                                                                \n\
 version = 0x1436                                                                     \n\
+                                                                                     \n\
+HiSyncId = 18446744073709551615                                                      \n\
+HiSyncId2 = 15001900                                                                 \n\
 ";
 
 class ConfigTest : public AllocationTestHarness {
  protected:
-  virtual void SetUp() {
+  void SetUp() override {
     AllocationTestHarness::SetUp();
     FILE* fp = fopen(CONFIG_FILE, "wt");
-    fwrite(CONFIG_FILE_CONTENT, 1, sizeof(CONFIG_FILE_CONTENT), fp);
-    fclose(fp);
+    ASSERT_NE(fp, nullptr);
+    ASSERT_EQ(fwrite(CONFIG_FILE_CONTENT, 1, sizeof(CONFIG_FILE_CONTENT), fp),
+              sizeof(CONFIG_FILE_CONTENT));
+    ASSERT_EQ(fclose(fp), 0);
+  }
+
+  void TearDown() override {
+    EXPECT_TRUE(std::filesystem::remove(kConfigFile));
+    AllocationTestHarness::TearDown();
   }
 };
 
+TEST_F(ConfigTest, config_find) {
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  ASSERT_NE(config, nullptr);
+  EXPECT_TRUE(config->Has("DID"));
+  auto section_iter = config->Find("DID");
+  ASSERT_NE(section_iter, config->sections.end());
+  EXPECT_FALSE(config->Has("random"));
+  EXPECT_EQ(config->Find("random"), config->sections.end());
+}
+
+TEST_F(ConfigTest, section_find) {
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  ASSERT_NE(config, nullptr);
+  EXPECT_TRUE(config->Has("DID"));
+  auto section_iter = config->Find("DID");
+  ASSERT_NE(section_iter, config->sections.end());
+  EXPECT_EQ(section_iter->name, "DID");
+  EXPECT_TRUE(section_iter->Has("version"));
+  auto entry_iter = section_iter->Find("version");
+  ASSERT_NE(entry_iter, section_iter->entries.end());
+  EXPECT_EQ(entry_iter->key, "version");
+  EXPECT_EQ(entry_iter->value, "0x1436");
+  EXPECT_EQ(section_iter->Find("random"), section_iter->entries.end());
+  EXPECT_FALSE(section_iter->Has("random"));
+}
+
+TEST_F(ConfigTest, section_set) {
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  ASSERT_NE(config, nullptr);
+  EXPECT_TRUE(config->Has("DID"));
+  auto section_iter = config->Find("DID");
+  ASSERT_NE(section_iter, config->sections.end());
+  EXPECT_EQ(section_iter->name, "DID");
+  EXPECT_FALSE(section_iter->Has("random"));
+  section_iter->Set("random", "foo");
+  EXPECT_TRUE(section_iter->Has("random"));
+  auto entry_iter = section_iter->Find("random");
+  ASSERT_NE(entry_iter, section_iter->entries.end());
+  EXPECT_EQ(entry_iter->key, "random");
+  EXPECT_EQ(entry_iter->value, "foo");
+  section_iter->Set("random", "bar");
+  EXPECT_EQ(entry_iter->value, "bar");
+  entry_iter = section_iter->Find("random");
+  ASSERT_NE(entry_iter, section_iter->entries.end());
+  EXPECT_EQ(entry_iter->value, "bar");
+}
+
 TEST_F(ConfigTest, config_new_empty) {
-  config_t* config = config_new_empty();
-  EXPECT_TRUE(config != NULL);
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new_empty();
+  EXPECT_TRUE(config.get() != NULL);
 }
 
 TEST_F(ConfigTest, config_new_no_file) {
-  config_t* config = config_new("/meow");
-  EXPECT_TRUE(config == NULL);
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new("/meow");
+  EXPECT_TRUE(config.get() == NULL);
 }
 
 TEST_F(ConfigTest, config_new) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_TRUE(config != NULL);
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_TRUE(config.get() != NULL);
 }
 
-TEST_F(ConfigTest, config_free_null) { config_free(NULL); }
-
 TEST_F(ConfigTest, config_new_clone) {
-  config_t* config = config_new(CONFIG_FILE);
-  config_t* clone = config_new_clone(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  std::unique_ptr<config_t> clone = config_new_clone(*config);
 
-  config_set_string(clone, CONFIG_DEFAULT_SECTION, "first_key", "not_value");
+  config_set_string(clone.get(), CONFIG_DEFAULT_SECTION, "first_key",
+                    "not_value");
 
+  std::string one = std::string("one");
   EXPECT_STRNE(
-      config_get_string(config, CONFIG_DEFAULT_SECTION, "first_key", "one"),
-      config_get_string(clone, CONFIG_DEFAULT_SECTION, "first_key", "one"));
-
-  config_free(config);
-  config_free(clone);
+      config_get_string(*config, CONFIG_DEFAULT_SECTION, "first_key", &one)
+          ->c_str(),
+      config_get_string(*clone, CONFIG_DEFAULT_SECTION, "first_key", &one)
+          ->c_str());
 }
 
 TEST_F(ConfigTest, config_has_section) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_TRUE(config_has_section(config, "DID"));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_TRUE(config_has_section(*config, "DID"));
 }
 
 TEST_F(ConfigTest, config_has_key_in_default_section) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_TRUE(config_has_key(config, CONFIG_DEFAULT_SECTION, "first_key"));
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_TRUE(config_has_key(*config, CONFIG_DEFAULT_SECTION, "first_key"));
   EXPECT_STREQ(
-      config_get_string(config, CONFIG_DEFAULT_SECTION, "first_key", "meow"),
+      config_get_string(*config, CONFIG_DEFAULT_SECTION, "first_key", nullptr)
+          ->c_str(),
       "value");
-  config_free(config);
 }
 
 TEST_F(ConfigTest, config_has_keys) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_TRUE(config_has_key(config, "DID", "recordNumber"));
-  EXPECT_TRUE(config_has_key(config, "DID", "primaryRecord"));
-  EXPECT_TRUE(config_has_key(config, "DID", "productId"));
-  EXPECT_TRUE(config_has_key(config, "DID", "version"));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_TRUE(config_has_key(*config, "DID", "recordNumber"));
+  EXPECT_TRUE(config_has_key(*config, "DID", "primaryRecord"));
+  EXPECT_TRUE(config_has_key(*config, "DID", "productId"));
+  EXPECT_TRUE(config_has_key(*config, "DID", "version"));
 }
 
 TEST_F(ConfigTest, config_no_bad_keys) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_FALSE(config_has_key(config, "DID_BAD", "primaryRecord"));
-  EXPECT_FALSE(config_has_key(config, "DID", "primaryRecord_BAD"));
-  EXPECT_FALSE(config_has_key(config, CONFIG_DEFAULT_SECTION, "primaryRecord"));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_FALSE(config_has_key(*config, "DID_BAD", "primaryRecord"));
+  EXPECT_FALSE(config_has_key(*config, "DID", "primaryRecord_BAD"));
+  EXPECT_FALSE(
+      config_has_key(*config, CONFIG_DEFAULT_SECTION, "primaryRecord"));
 }
 
 TEST_F(ConfigTest, config_get_int_version) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_EQ(config_get_int(config, "DID", "version", 0), 0x1436);
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_EQ(config_get_int(*config, "DID", "version", 0), 0x1436);
 }
 
 TEST_F(ConfigTest, config_get_int_default) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_EQ(config_get_int(config, "DID", "primaryRecord", 123), 123);
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_EQ(config_get_int(*config, "DID", "primaryRecord", 123), 123);
+}
+
+TEST_F(ConfigTest, config_get_uint64) {
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_EQ(config_get_uint64(*config, "DID", "HiSyncId", 0),
+            0xFFFFFFFFFFFFFFFF);
+  EXPECT_EQ(config_get_uint64(*config, "DID", "HiSyncId2", 0),
+            uint64_t(15001900));
+}
+
+TEST_F(ConfigTest, config_get_uint64_default) {
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_EQ(config_get_uint64(*config, "DID", "primaryRecord", 123),
+            uint64_t(123));
 }
 
 TEST_F(ConfigTest, config_remove_section) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_TRUE(config_remove_section(config, "DID"));
-  EXPECT_FALSE(config_has_section(config, "DID"));
-  EXPECT_FALSE(config_has_key(config, "DID", "productId"));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_TRUE(config_remove_section(config.get(), "DID"));
+  EXPECT_FALSE(config_has_section(*config, "DID"));
+  EXPECT_FALSE(config_has_key(*config, "DID", "productId"));
 }
 
 TEST_F(ConfigTest, config_remove_section_missing) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_FALSE(config_remove_section(config, "not a section"));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_FALSE(config_remove_section(config.get(), "not a section"));
 }
 
 TEST_F(ConfigTest, config_remove_key) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_EQ(config_get_int(config, "DID", "productId", 999), 0x1200);
-  EXPECT_TRUE(config_remove_key(config, "DID", "productId"));
-  EXPECT_FALSE(config_has_key(config, "DID", "productId"));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_EQ(config_get_int(*config, "DID", "productId", 999), 0x1200);
+  EXPECT_TRUE(config_remove_key(config.get(), "DID", "productId"));
+  EXPECT_FALSE(config_has_key(*config, "DID", "productId"));
 }
 
 TEST_F(ConfigTest, config_remove_key_missing) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_EQ(config_get_int(config, "DID", "productId", 999), 0x1200);
-  EXPECT_TRUE(config_remove_key(config, "DID", "productId"));
-  EXPECT_EQ(config_get_int(config, "DID", "productId", 999), 999);
-  config_free(config);
-}
-
-TEST_F(ConfigTest, config_section_begin) {
-  config_t* config = config_new(CONFIG_FILE);
-  const config_section_node_t* section = config_section_begin(config);
-  EXPECT_TRUE(section != NULL);
-  const char* section_name = config_section_name(section);
-  EXPECT_TRUE(section != NULL);
-  EXPECT_TRUE(!strcmp(section_name, CONFIG_DEFAULT_SECTION));
-  config_free(config);
-}
-
-TEST_F(ConfigTest, config_section_next) {
-  config_t* config = config_new(CONFIG_FILE);
-  const config_section_node_t* section = config_section_begin(config);
-  EXPECT_TRUE(section != NULL);
-  section = config_section_next(section);
-  EXPECT_TRUE(section != NULL);
-  const char* section_name = config_section_name(section);
-  EXPECT_TRUE(section != NULL);
-  EXPECT_TRUE(!strcmp(section_name, "DID"));
-  config_free(config);
-}
-
-TEST_F(ConfigTest, config_section_end) {
-  config_t* config = config_new(CONFIG_FILE);
-  const config_section_node_t* section = config_section_begin(config);
-  section = config_section_next(section);
-  section = config_section_next(section);
-  EXPECT_EQ(section, config_section_end(config));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_EQ(config_get_int(*config, "DID", "productId", 999), 0x1200);
+  EXPECT_TRUE(config_remove_key(config.get(), "DID", "productId"));
+  EXPECT_EQ(config_get_int(*config, "DID", "productId", 999), 999);
 }
 
 TEST_F(ConfigTest, config_save_basic) {
-  config_t* config = config_new(CONFIG_FILE);
-  EXPECT_TRUE(config_save(config, CONFIG_FILE));
-  config_free(config);
+  std::unique_ptr<config_t> config = config_new(CONFIG_FILE);
+  EXPECT_TRUE(config_save(*config, CONFIG_FILE));
+}
+
+TEST_F(ConfigTest, checksum_read) {
+  auto tmp_dir = std::filesystem::temp_directory_path();
+  auto filename = tmp_dir / "test.checksum";
+  std::string checksum = "0x1234";
+  base::FilePath file_path(filename.string());
+
+  EXPECT_EQ(base::WriteFile(file_path, checksum.data(), checksum.size()),
+            (int)checksum.size());
+
+  EXPECT_EQ(checksum_read(filename.c_str()), checksum.c_str());
+
+  EXPECT_TRUE(std::filesystem::remove(filename));
+}
+
+TEST_F(ConfigTest, checksum_save) {
+  auto tmp_dir = std::filesystem::temp_directory_path();
+  auto filename = tmp_dir / "test.checksum";
+  std::string checksum = "0x1234";
+  base::FilePath file_path(filename.string());
+
+  EXPECT_TRUE(checksum_save(checksum, filename));
+
+  EXPECT_TRUE(base::PathExists(file_path));
+
+  EXPECT_TRUE(std::filesystem::remove(filename));
 }
