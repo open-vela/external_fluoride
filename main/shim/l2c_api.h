@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "stack/include/l2c_api.h"
+#include "stack/l2cap/l2c_int.h"
 
 namespace bluetooth {
 namespace shim {
