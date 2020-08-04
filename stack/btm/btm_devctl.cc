@@ -25,10 +25,12 @@
 
 #include <base/logging.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "bt_types.h"
+#include "bt_utils.h"
 #include "btcore/include/module.h"
 #include "btm_int.h"
 #include "btu.h"
@@ -36,10 +38,11 @@
 #include "device/include/controller.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
+#include "l2c_int.h"
 #include "osi/include/osi.h"
 #include "stack/gatt/connection_manager.h"
-#include "stack/include/l2cap_controller_interface.h"
 
+#include "gatt_int.h"
 #include "main/shim/btm_api.h"
 #include "main/shim/controller.h"
 #include "main/shim/shim.h"
@@ -383,7 +386,10 @@ static void decode_controller_support() {
       BTM_SetInquiryMode(BTM_INQ_RESULT_WITH_RSSI);
   }
 
-  l2cu_set_non_flushable_pbf(controller->supports_non_flushable_pb());
+  if (controller->supports_non_flushable_pb())
+    l2cu_set_non_flushable_pbf(true);
+  else
+    l2cu_set_non_flushable_pbf(false);
   BTM_EnableInterlacedPageScan();
   BTM_EnableInterlacedInquiryScan();
 }
