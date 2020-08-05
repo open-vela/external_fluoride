@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2014 The Android Open Source Project
- *  Copyright 2003-2012 Broadcom Corporation
+ *  Copyright (c) 2014 The Android Open Source Project
+ *  Copyright (C) 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
  ******************************************************************************/
 
 #include <string.h>
-#include <base/logging.h>
 
 #include "bt_utils.h"
 #include "bta_api.h"
@@ -33,9 +32,6 @@
 #include "bta_hf_client_int.h"
 #include "bta_sys.h"
 #include "osi/include/osi.h"
-#include "osi/include/properties.h"
-
-using bluetooth::Uuid;
 
 /* Number of protocol elements in protocol element list. */
 #define BTA_HF_CLIENT_NUM_PROTO_ELEMS 2
@@ -122,9 +118,6 @@ bool bta_hf_client_add_record(const char* p_service_name, uint8_t scn,
   /* add profile descriptor list */
   profile_uuid = UUID_SERVCLASS_HF_HANDSFREE;
   version = HFP_VERSION_1_6;
-
-  if (osi_property_get_bool("persist.bluetooth.hfpclient.sco_s4_supported", false))
-    version = HFP_VERSION_1_7;
 
   result &= SDP_AddProfileDescriptorList(sdp_handle, profile_uuid, version);
 
@@ -296,7 +289,7 @@ bool bta_hf_client_sdp_find_attr(tBTA_HF_CLIENT_CB* client_cb) {
  *
  ******************************************************************************/
 void bta_hf_client_do_disc(tBTA_HF_CLIENT_CB* client_cb) {
-  Uuid uuid_list[1];
+  tSDP_UUID uuid_list[2];
   uint16_t num_uuid = 1;
   uint16_t attr_list[4];
   uint8_t num_attr;
@@ -309,7 +302,7 @@ void bta_hf_client_do_disc(tBTA_HF_CLIENT_CB* client_cb) {
     attr_list[2] = ATTR_ID_BT_PROFILE_DESC_LIST;
     attr_list[3] = ATTR_ID_SUPPORTED_FEATURES;
     num_attr = 4;
-    uuid_list[0] = Uuid::From16Bit(UUID_SERVCLASS_AG_HANDSFREE);
+    uuid_list[0].uu.uuid16 = UUID_SERVCLASS_AG_HANDSFREE;
   }
   /* acceptor; get features */
   else {
@@ -317,13 +310,15 @@ void bta_hf_client_do_disc(tBTA_HF_CLIENT_CB* client_cb) {
     attr_list[1] = ATTR_ID_BT_PROFILE_DESC_LIST;
     attr_list[2] = ATTR_ID_SUPPORTED_FEATURES;
     num_attr = 3;
-    uuid_list[0] = Uuid::From16Bit(UUID_SERVCLASS_AG_HANDSFREE);
+    uuid_list[0].uu.uuid16 = UUID_SERVCLASS_AG_HANDSFREE;
   }
 
   /* allocate buffer for sdp database */
   client_cb->p_disc_db = (tSDP_DISCOVERY_DB*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
 
   /* set up service discovery database; attr happens to be attr_list len */
+  uuid_list[0].len = LEN_UUID_16;
+  uuid_list[1].len = LEN_UUID_16;
   db_inited = SDP_InitDiscoveryDb(client_cb->p_disc_db, BT_DEFAULT_BUFFER_SIZE,
                                   num_uuid, uuid_list, num_attr, attr_list);
 
@@ -336,7 +331,7 @@ void bta_hf_client_do_disc(tBTA_HF_CLIENT_CB* client_cb) {
 
   if (!db_inited) {
     /*free discover db */
-    osi_free_and_reset((void**)&client_cb->p_disc_db);
+    bta_hf_client_free_db(NULL);
     /* sent failed event */
     tBTA_HF_CLIENT_DATA msg;
     msg.hdr.layer_specific = client_cb->handle;
@@ -355,7 +350,6 @@ void bta_hf_client_do_disc(tBTA_HF_CLIENT_CB* client_cb) {
  *
  ******************************************************************************/
 void bta_hf_client_free_db(tBTA_HF_CLIENT_DATA* p_data) {
-  CHECK(p_data != NULL);
   tBTA_HF_CLIENT_CB* client_cb =
       bta_hf_client_find_cb_by_handle(p_data->hdr.layer_specific);
   if (client_cb == NULL) {

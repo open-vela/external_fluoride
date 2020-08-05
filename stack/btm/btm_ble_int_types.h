@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -81,9 +81,14 @@ typedef uint8_t tBTM_BLE_SEC_REQ_ACT;
 #define BLE_RESOLVE_ADDR_MSB 0x40
 /* bit 6, and bit7 */
 #define BLE_RESOLVE_ADDR_MASK 0xc0
-inline bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x) {
-  return ((x.address)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB;
-}
+#define BTM_BLE_IS_RESOLVE_BDA(x) \
+  (((x)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB)
+
+#define BLE_PUBLIC_ADDR_MSB_MASK 0xC0
+/*  most significant bit, bit7, bit6 is 10 to be public address*/
+#define BLE_PUBLIC_ADDR_MSB 0x80
+#define BTM_IS_PUBLIC_BDA(x) \
+  (((x)[0] & BLE_PUBLIC_ADDR_MSB_MASK) == BLE_PUBLIC_ADDR_MSB)
 
 /* LE scan activity bit mask, continue with LE inquiry bits */
 /* observe is in progress */
@@ -118,6 +123,9 @@ typedef struct {
 
 #define BTM_BLE_ISVALID_PARAM(x, min, max) \
   (((x) >= (min) && (x) <= (max)) || ((x) == BTM_BLE_CONN_PARAM_UNDEF))
+
+/* 15 minutes minimum for random address refreshing */
+#define BTM_BLE_PRIVATE_ADDR_INT_MS (15 * 60 * 1000)
 
 typedef struct {
   uint16_t discoverable_mode;
@@ -154,13 +162,13 @@ typedef struct {
 /* random address resolving complete callback */
 typedef void(tBTM_BLE_RESOLVE_CBACK)(void* match_rec, void* p);
 
-typedef void(tBTM_BLE_ADDR_CBACK)(const RawAddress& static_random, void* p);
+typedef void(tBTM_BLE_ADDR_CBACK)(BD_ADDR_PTR static_random, void* p);
 
 /* random address management control block */
 typedef struct {
   tBLE_ADDR_TYPE own_addr_type; /* local device LE address type */
-  RawAddress private_addr;
-  RawAddress random_bda;
+  BD_ADDR private_addr;
+  BD_ADDR random_bda;
   tBTM_BLE_ADDR_CBACK* p_generate_cback;
   void* p;
   alarm_t* refresh_raddr_timer;
@@ -175,15 +183,16 @@ typedef struct {
 } tBTM_LE_CONN_PRAMS;
 
 typedef struct {
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint8_t attr;
   bool is_connected;
   bool in_use;
 } tBTM_LE_BG_CONN_DEV;
 
 /* white list using state as a bit mask */
-constexpr uint8_t BTM_BLE_WL_IDLE = 0;
-constexpr uint8_t BTM_BLE_WL_INIT = 1;
+#define BTM_BLE_WL_IDLE 0
+#define BTM_BLE_WL_INIT 1
+typedef uint8_t tBTM_BLE_WL_STATE;
 
 /* resolving list using state as a bit mask */
 #define BTM_BLE_RL_IDLE 0
@@ -194,7 +203,8 @@ typedef uint8_t tBTM_BLE_RL_STATE;
 
 /* BLE connection state */
 #define BLE_CONN_IDLE 0
-#define BLE_CONNECTING 2
+#define BLE_DIR_CONN 1
+#define BLE_BG_CONN 2
 #define BLE_CONN_CANCEL 3
 typedef uint8_t tBTM_BLE_CONN_ST;
 
@@ -202,8 +212,18 @@ typedef struct { void* p_param; } tBTM_BLE_CONN_REQ;
 
 /* LE state request */
 #define BTM_BLE_STATE_INVALID 0
+#define BTM_BLE_STATE_CONN_ADV 1
 #define BTM_BLE_STATE_INIT 2
+#define BTM_BLE_STATE_MASTER 3
+#define BTM_BLE_STATE_SLAVE 4
+#define BTM_BLE_STATE_LO_DUTY_DIR_ADV 5
+#define BTM_BLE_STATE_HI_DUTY_DIR_ADV 6
+#define BTM_BLE_STATE_NON_CONN_ADV 7
+#define BTM_BLE_STATE_PASSIVE_SCAN 8
+#define BTM_BLE_STATE_ACTIVE_SCAN 9
+#define BTM_BLE_STATE_SCAN_ADV 10
 #define BTM_BLE_STATE_MAX 11
+typedef uint8_t tBTM_BLE_STATE;
 
 #define BTM_BLE_STATE_CONN_ADV_BIT 0x0001
 #define BTM_BLE_STATE_INIT_BIT 0x0002
@@ -221,6 +241,8 @@ typedef uint16_t tBTM_BLE_STATE_MASK;
 #define BTM_BLE_STATE_ALL_ADV_MASK                                  \
   (BTM_BLE_STATE_CONN_ADV_BIT | BTM_BLE_STATE_LO_DUTY_DIR_ADV_BIT | \
    BTM_BLE_STATE_HI_DUTY_DIR_ADV_BIT | BTM_BLE_STATE_SCAN_ADV_BIT)
+#define BTM_BLE_STATE_ALL_SCAN_MASK \
+  (BTM_BLE_STATE_PASSIVE_SCAN_BIT | BTM_BLE_STATE_ACTIVE_SCAN_BIT)
 #define BTM_BLE_STATE_ALL_CONN_MASK \
   (BTM_BLE_STATE_MASTER_BIT | BTM_BLE_STATE_SLAVE_BIT)
 
@@ -229,7 +251,7 @@ typedef uint16_t tBTM_BLE_STATE_MASK;
 #endif
 
 typedef struct {
-  RawAddress* resolve_q_random_pseudo;
+  BD_ADDR* resolve_q_random_pseudo;
   uint8_t* resolve_q_action;
   uint8_t q_next;
   uint8_t q_pending;
@@ -238,7 +260,7 @@ typedef struct {
 typedef struct {
   bool in_use;
   bool to_add;
-  RawAddress bd_addr;
+  BD_ADDR bd_addr;
   uint8_t attr;
 } tBTM_BLE_WL_OP;
 
@@ -249,6 +271,10 @@ typedef struct {
 #define BTM_PRIVACY_MIXED \
   3 /* BLE privacy mixed mode, broadcom propietary mode */
 typedef uint8_t tBTM_PRIVACY_MODE;
+
+/* data length change event callback */
+typedef void(tBTM_DATA_LENGTH_CHANGE_CBACK)(uint16_t max_tx_length,
+                                            uint16_t max_rx_length);
 
 /* Define BLE Device Management control structure
 */
@@ -266,12 +292,14 @@ typedef struct {
   alarm_t* observer_timer;
 
   /* background connection procedure cb value */
-  uint16_t scan_int;
-  uint16_t scan_win;
+  tBTM_BLE_CONN_TYPE bg_conn_type;
+  uint32_t scan_int;
+  uint32_t scan_win;
 
   /* white list information */
-  uint8_t wl_state;
+  tBTM_BLE_WL_STATE wl_state;
 
+  fixed_queue_t* conn_pending_q;
   tBTM_BLE_CONN_ST conn_state;
 
   /* random address management control block */
