@@ -390,43 +390,41 @@
 #define HCI_BLE_RM_DEVICE_FROM_PERIODIC_ADVERTISING_LIST \
   (0x0048 | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_CLEAR_PERIODIC_ADVERTISING_LIST (0x0049 | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_READ_PERIODIC_ADVERTISER_LIST_SIZE (0x004A | HCI_GRP_BLE_CMDS)
+#define HCI_BLE_READ_PERIODIC_ADVERTISING_LIST_SIZE (0x004A | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_READ_TRANSMIT_POWER (0x004B | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_READ_RF_COMPENS_POWER (0x004C | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_WRITE_RF_COMPENS_POWER (0x004D | HCI_GRP_BLE_CMDS)
 #define HCI_BLE_SET_PRIVACY_MODE (0x004E | HCI_GRP_BLE_CMDS)
-#define HCI_BLE_READ_BUFFER_SIZE_V2 (0x0060 | HCI_GRP_BLE_CMDS)
-#define HCI_LE_SET_HOST_FEATURE (0x0074 | HCI_GRP_BLE_CMDS)
 
-/* LE Get Vendor Capabilities Command opcode */
-#define HCI_BLE_VENDOR_CAP (0x0153 | HCI_GRP_VENDOR_SPECIFIC)
+/* LE Get Vendor Capabilities Command OCF */
+#define HCI_BLE_VENDOR_CAP_OCF (0x0153 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Multi adv opcode */
-#define HCI_BLE_MULTI_ADV (0x0154 | HCI_GRP_VENDOR_SPECIFIC)
+/* Multi adv OCF */
+#define HCI_BLE_MULTI_ADV_OCF (0x0154 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Batch scan opcode */
-#define HCI_BLE_BATCH_SCAN (0x0156 | HCI_GRP_VENDOR_SPECIFIC)
+/* Batch scan OCF */
+#define HCI_BLE_BATCH_SCAN_OCF (0x0156 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* ADV filter opcode */
-#define HCI_BLE_ADV_FILTER (0x0157 | HCI_GRP_VENDOR_SPECIFIC)
+/* ADV filter OCF */
+#define HCI_BLE_ADV_FILTER_OCF (0x0157 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Tracking opcode */
-#define HCI_BLE_TRACK_ADV (0x0158 | HCI_GRP_VENDOR_SPECIFIC)
+/* Tracking OCF */
+#define HCI_BLE_TRACK_ADV_OCF (0x0158 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Energy info opcode */
-#define HCI_BLE_ENERGY_INFO (0x0159 | HCI_GRP_VENDOR_SPECIFIC)
+/* Energy info OCF */
+#define HCI_BLE_ENERGY_INFO_OCF (0x0159 | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Extended BLE Scan parameters opcode */
-#define HCI_BLE_EXTENDED_SCAN_PARAMS (0x015A | HCI_GRP_VENDOR_SPECIFIC)
+/* Extended BLE Scan parameters OCF */
+#define HCI_BLE_EXTENDED_SCAN_PARAMS_OCF (0x015A | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Controller debug info opcode */
-#define HCI_CONTROLLER_DEBUG_INFO (0x015B | HCI_GRP_VENDOR_SPECIFIC)
+/* Controller debug info OCF */
+#define HCI_CONTROLLER_DEBUG_INFO_OCF (0x015B | HCI_GRP_VENDOR_SPECIFIC)
 
-/* A2DP offload opcode */
-#define HCI_CONTROLLER_A2DP (0x015D | HCI_GRP_VENDOR_SPECIFIC)
+/* A2DP offload OCF */
+#define HCI_CONTROLLER_A2DP_OPCODE_OCF (0x015D | HCI_GRP_VENDOR_SPECIFIC)
 
-/* Bluetooth Quality Report opcode */
-#define HCI_CONTROLLER_BQR (0x015E | HCI_GRP_VENDOR_SPECIFIC)
+/* Bluetooth Quality Report OCF */
+#define HCI_CONTROLLER_BQR_OPCODE_OCF (0x015E | HCI_GRP_VENDOR_SPECIFIC)
 
 /* subcode for multi adv feature */
 #define BTM_BLE_MULTI_ADV_SET_PARAM 0x01
@@ -1008,7 +1006,7 @@ constexpr uint8_t HCI_LE_STATES_INIT_MASTER_SLAVE_BIT = 41;
 #define HCI_ENABLE_PARK_MODE 0x0008
 
 /* By default allow switch, because host can not allow that */
-/* that until it created the connection */
+/* that until he created the connection */
 #define HCI_DEFAULT_POLICY_SETTINGS HCI_DISABLE_ALL_LM_MODES
 
 /* Filters that are sent in set filter command */
@@ -1426,12 +1424,6 @@ typedef struct {
 #define HCI_LE_CODED_PHY_SUPPORTED(x) ((x)[1] & 0x08)
 #define HCI_LE_EXTENDED_ADVERTISING_SUPPORTED(x) ((x)[1] & 0x10)
 #define HCI_LE_PERIODIC_ADVERTISING_SUPPORTED(x) ((x)[1] & 0x20)
-#define HCI_LE_PERIODIC_ADVERTISING_SYNC_TRANSFER_SENDER(x) ((x)[3] & 0x01)
-#define HCI_LE_PERIODIC_ADVERTISING_SYNC_TRANSFER_RECIPIENT(x) ((x)[3] & 0x02)
-#define HCI_LE_CIS_MASTER(x) ((x)[3] & 0x10)
-#define HCI_LE_CIS_SLAVE(x) ((x)[3] & 0x20)
-#define HCI_LE_ISO_BROADCASTER(x) ((x)[3] & 0x40)
-#define HCI_LE_SYNCHRONIZED_RECEIVER(x) ((x)[3] & 0x80)
 
 /* Supported Commands*/
 #define HCI_NUM_SUPP_COMMANDS_BYTES 64
@@ -1673,7 +1665,5 @@ typedef struct {
 #define HCI_LE_ENH_TX_TEST_SUPPORTED(x) ((x)[36] & 0x01)
 
 #define HCI_LE_SET_PRIVACY_MODE_SUPPORTED(x) ((x)[39] & 0x04)
-
-#define HCI_LE_SET_HOST_FEATURE_SUPPORTED(x) ((x)[44] & 0x02)
 
 #endif
