@@ -60,7 +60,8 @@ class PsmManager {
 class L2cap {
  public:
   uint16_t RegisterService(uint16_t psm, const tL2CAP_APPL_INFO* callbacks,
-                           bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info);
+                           bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
+                           uint16_t required_mtu);
   void UnregisterService(uint16_t psm);
 
   uint16_t CreateConnection(uint16_t psm, const RawAddress& raw_address);
@@ -69,9 +70,10 @@ class L2cap {
 
   void OnLocalInitiatedConnectionCreated(std::string string_address,
                                          uint16_t psm, uint16_t cid,
-                                         bool connected);
+                                         uint16_t remote_cid, bool connected);
   void OnRemoteInitiatedConnectionCreated(std::string string_addresss,
-                                          uint16_t psm, uint16_t cid);
+                                          uint16_t psm, uint16_t cid,
+                                          uint16_t remote_cid);
 
   uint16_t GetNextDynamicClassicPsm();
   uint16_t GetNextDynamicLePsm();
@@ -89,6 +91,8 @@ class L2cap {
   bool ConfigResponse(uint16_t cid, const tL2CAP_CFG_INFO* config_info);
   bool DisconnectRequest(uint16_t cid);
   bool DisconnectResponse(uint16_t cid);
+
+  bool GetRemoteCid(uint16_t cid, uint16_t* remote_cid);
 
   L2cap();
   ~L2cap();
@@ -118,6 +122,7 @@ class L2cap {
   std::set<uint16_t> cid_closing_set_;
 
   std::unordered_map<uint16_t, uint16_t> cid_to_psm_map_;
+  std::unordered_map<uint16_t, uint16_t> cid_to_remote_cid_map_;
   std::unordered_map<uint16_t, uint16_t> client_psm_to_real_psm_map_;
 };
 
