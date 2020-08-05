@@ -40,6 +40,12 @@
 
 #define L2CAP_MIN_MTU 48 /* Minimum acceptable MTU is 48 bytes */
 
+/* LE credit based L2CAP connection parameters */
+constexpr uint16_t L2CAP_LE_MIN_MTU = 23;  // Minimum SDU size
+constexpr uint16_t L2CAP_LE_MIN_MPS = 23;
+constexpr uint16_t L2CAP_LE_MAX_MPS = 65533;
+constexpr uint16_t L2CAP_LE_CREDIT_MAX = 65535;
+
 #define L2CAP_NO_IDLE_TIMEOUT 0xFFFF
 
 /*
@@ -709,6 +715,10 @@ extern void l2c_fcr_stop_timer(tL2C_CCB* p_ccb);
 extern bool l2cble_create_conn(tL2C_LCB* p_lcb);
 extern void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p,
                                    uint16_t pkt_len);
+extern void l2cble_conn_comp(uint16_t handle, uint8_t role,
+                             const RawAddress& bda, tBLE_ADDR_TYPE type,
+                             uint16_t conn_interval, uint16_t conn_latency,
+                             uint16_t conn_timeout);
 extern void l2cble_notify_le_connection(const RawAddress& bda);
 extern void l2c_ble_link_adjust_allocation(void);
 
