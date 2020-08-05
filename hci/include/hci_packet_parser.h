@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -53,11 +53,6 @@ typedef struct {
   void (*parse_ble_read_buffer_size_response)(BT_HDR* response,
                                               uint16_t* data_size_ptr,
                                               uint8_t* acl_buffer_count_ptr);
-  void (*parse_ble_read_buffer_size_v2_response)(BT_HDR* response,
-                                                 uint16_t* acl_data_size_ptr,
-                                                 uint8_t* acl_buffer_count_ptr,
-                                                 uint16_t* iso_data_size_ptr,
-                                                 uint8_t* iso_buffer_count_ptr);
 
   void (*parse_ble_read_supported_states_response)(
       BT_HDR* response, uint8_t* supported_states,
@@ -72,20 +67,11 @@ typedef struct {
   void (*parse_ble_read_suggested_default_data_length_response)(
       BT_HDR* response, uint16_t* ble_default_packet_length_ptr);
 
-  void (*parse_ble_read_maximum_data_length_response)(
-      BT_HDR* response, uint16_t* ble_supported_max_tx_octets,
-      uint16_t* ble_supported_max_tx_time,
-      uint16_t* ble_supported_max_rx_octets,
-      uint16_t* ble_supported_max_rx_time);
-
   void (*parse_ble_read_maximum_advertising_data_length)(
       BT_HDR* response, uint16_t* ble_maximum_advertising_data_length_ptr);
 
   void (*parse_ble_read_number_of_supported_advertising_sets)(
       BT_HDR* response, uint8_t* ble_number_of_supported_advertising_sets_ptr);
-
-  void (*parse_ble_read_size_of_advertiser_list)(
-      BT_HDR* response, uint8_t* ble_size_of_advertiser_list_ptr);
 
   void (*parse_read_local_supported_codecs_response)(
       BT_HDR* response, uint8_t* number_of_local_supported_codecs,

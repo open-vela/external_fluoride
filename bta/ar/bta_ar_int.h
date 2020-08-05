@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2008-2012 Broadcom Corporation
+ *  Copyright (C) 2008-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,6 +26,10 @@
 #define BTA_AR_INT_H
 
 #include "bta_av_api.h"
+
+#ifndef BTA_AR_DEBUG
+#define BTA_AR_DEBUG TRUE
+#endif
 
 #define BTA_AR_AV_MASK 0x01
 #define BTA_AR_AVK_MASK 0x02
