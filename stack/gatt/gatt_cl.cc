@@ -297,7 +297,7 @@ void gatt_send_queue_write_cancel(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 bool gatt_check_write_long_terminate(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                                      tGATT_VALUE* p_rsp_value) {
   tGATT_VALUE* p_attr = (tGATT_VALUE*)p_clcb->p_attr_buf;
-  bool terminate = false;
+  bool exec = false;
   tGATT_EXEC_FLAG flag = GATT_PREP_WRITE_EXEC;
 
   VLOG(1) << __func__;
@@ -310,18 +310,19 @@ bool gatt_check_write_long_terminate(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
       /* data does not match    */
       p_clcb->status = GATT_ERROR;
       flag = GATT_PREP_WRITE_CANCEL;
-      terminate = true;
+      exec = true;
     } else /* response checking is good */
     {
       p_clcb->status = GATT_SUCCESS;
       /* update write offset and check if end of attribute value */
-      if ((p_attr->offset += p_rsp_value->len) >= p_attr->len) terminate = true;
+      if ((p_attr->offset += p_rsp_value->len) >= p_attr->len) exec = true;
     }
   }
-  if (terminate && p_clcb->op_subtype != GATT_WRITE_PREPARE) {
+  if (exec) {
     gatt_send_queue_write_cancel(tcb, p_clcb, flag);
+    return true;
   }
-  return terminate;
+  return false;
 }
 
 /** Send prepare write */
@@ -585,15 +586,15 @@ void gatt_process_prep_write_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 
   memcpy(value.value, p, value.len);
 
-  if (!gatt_check_write_long_terminate(tcb, p_clcb, &value)) {
-    gatt_send_prepare_write(tcb, p_clcb);
-    return;
-  }
-
   if (p_clcb->op_subtype == GATT_WRITE_PREPARE) {
+    p_clcb->status = GATT_SUCCESS;
     /* application should verify handle offset
        and value are matched or not */
+
     gatt_end_operation(p_clcb, p_clcb->status, &value);
+  } else if (p_clcb->op_subtype == GATT_WRITE) {
+    if (!gatt_check_write_long_terminate(tcb, p_clcb, &value))
+      gatt_send_prepare_write(tcb, p_clcb);
   }
 }
 /*******************************************************************************
@@ -627,10 +628,6 @@ void gatt_process_notification(tGATT_TCB& tcb, uint8_t op_code, uint16_t len,
   memset(&value, 0, sizeof(value));
   STREAM_TO_UINT16(value.handle, p);
   value.len = len - 2;
-  if (value.len > GATT_MAX_ATTR_LEN) {
-    LOG(ERROR) << "value.len larger than GATT_MAX_ATTR_LEN, discard";
-    return;
-  }
   memcpy(value.value, p, value.len);
 
   if (!GATT_HANDLE_IS_VALID(value.handle)) {
