@@ -28,7 +28,7 @@
 #include "bt_common.h"
 #include "bt_utils.h"
 #include "gatt_int.h"
-#include "l2c_api.h"
+#include "l2c_int.h"
 #include "log/log.h"
 #include "osi/include/osi.h"
 
@@ -771,6 +771,12 @@ void gatt_process_read_by_type_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
     /* discover included service */
     else if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY &&
              p_clcb->op_subtype == GATT_DISC_INC_SRVC) {
+      if (value_len < 4) {
+        android_errorWriteLog(0x534e4554, "158833854");
+        LOG(ERROR) << __func__ << " Illegal Response length, must be at least 4.";
+        gatt_end_operation(p_clcb, GATT_INVALID_PDU, NULL);
+        return;
+      }
       STREAM_TO_UINT16(record_value.incl_service.s_handle, p);
       STREAM_TO_UINT16(record_value.incl_service.e_handle, p);
 
@@ -824,6 +830,12 @@ void gatt_process_read_by_type_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
       return;
     } else /* discover characterisitic */
     {
+      if (value_len < 3) {
+        android_errorWriteLog(0x534e4554, "158778659");
+        LOG(ERROR) << __func__ << " Illegal Response length, must be at least 3.";
+        gatt_end_operation(p_clcb, GATT_INVALID_PDU, NULL);
+        return;
+      }
       STREAM_TO_UINT8(record_value.dclr_value.char_prop, p);
       STREAM_TO_UINT16(record_value.dclr_value.val_handle, p);
       if (!GATT_HANDLE_IS_VALID(record_value.dclr_value.val_handle)) {
@@ -913,18 +925,11 @@ void gatt_process_read_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 
         memcpy(p_clcb->p_attr_buf + offset, p, len);
 
-        /* full packet for read or read blob rsp */
-        bool packet_is_full;
-        if (tcb.payload_size == p_clcb->read_req_current_mtu) {
-          packet_is_full = (len == (tcb.payload_size - 1));
-        } else {
-          packet_is_full = (len == (p_clcb->read_req_current_mtu - 1) ||
-                            len == (tcb.payload_size - 1));
-          p_clcb->read_req_current_mtu = tcb.payload_size;
-        }
-
         /* send next request if needed  */
-        if (packet_is_full && (len + offset < GATT_MAX_ATTR_LEN)) {
+
+        if (len == (tcb.payload_size -
+                    1) && /* full packet for read or read blob rsp */
+            len + offset < GATT_MAX_ATTR_LEN) {
           VLOG(1) << StringPrintf(
               "full pkt issue read blob for remianing bytes old offset=%d "
               "len=%d new offset=%d",
@@ -1001,8 +1006,8 @@ void gatt_process_mtu_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb, uint16_t len,
       tcb.payload_size = mtu;
   }
 
-  L2CA_SetLeFixedChannelTxDataLength(tcb.peer_bda, L2CAP_ATT_CID,
-                                     tcb.payload_size);
+  l2cble_set_fixed_channel_tx_data_length(tcb.peer_bda, L2CAP_ATT_CID,
+                                          tcb.payload_size);
   gatt_end_operation(p_clcb, status, NULL);
 }
 /*******************************************************************************
