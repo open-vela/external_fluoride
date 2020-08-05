@@ -26,6 +26,8 @@
 
 #include <base/bind.h>
 #include <base/logging.h>
+#include <base/threading/thread.h>
+#include <pthread.h>
 #include <string.h>
 
 #include "bt_common.h"
@@ -38,6 +40,7 @@
 #include "osi/include/fixed_queue.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
+#include "osi/include/thread.h"
 #include "utl.h"
 
 #if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
@@ -46,6 +49,8 @@
 
 /* system manager control block definition */
 tBTA_SYS_CB bta_sys_cb;
+
+extern thread_t* bt_workqueue_thread;
 
 /* trace level */
 /* TODO Hard-coded trace levels -  Needs to be configurable */
@@ -525,19 +530,77 @@ bool bta_sys_is_register(uint8_t id) { return bta_sys_cb.is_reg[id]; }
  *
  ******************************************************************************/
 void bta_sys_sendmsg(void* p_msg) {
-  if (do_in_main_thread(
-          FROM_HERE, base::Bind(&bta_sys_event, static_cast<BT_HDR*>(p_msg))) !=
-      BT_STATUS_SUCCESS) {
-    LOG(ERROR) << __func__ << ": do_in_main_thread failed";
+  base::MessageLoop* bta_message_loop = get_message_loop();
+
+  if (!bta_message_loop || !bta_message_loop->task_runner().get()) {
+    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
+    return;
   }
+
+  bta_message_loop->task_runner()->PostTask(
+      FROM_HERE, base::Bind(&bta_sys_event, static_cast<BT_HDR*>(p_msg)));
 }
 
-void bta_sys_sendmsg_delayed(void* p_msg, const base::TimeDelta& delay) {
-  if (do_in_main_thread_delayed(
-          FROM_HERE, base::Bind(&bta_sys_event, static_cast<BT_HDR*>(p_msg)),
-          delay) != BT_STATUS_SUCCESS) {
-    LOG(ERROR) << __func__ << ": do_in_main_thread_delayed failed";
+/*******************************************************************************
+ *
+ * Function         do_in_bta_thread
+ *
+ * Description      Post a closure to be ran in the bta thread
+ *
+ * Returns          BT_STATUS_SUCCESS on success
+ *
+ ******************************************************************************/
+bt_status_t do_in_bta_thread(const tracked_objects::Location& from_here,
+                             const base::Closure& task) {
+  base::MessageLoop* bta_message_loop = get_message_loop();
+  if (!bta_message_loop) {
+    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
+    return BT_STATUS_FAIL;
   }
+
+  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
+      bta_message_loop->task_runner();
+  if (!task_runner.get()) {
+    APPL_TRACE_ERROR("%s: task runner is dead", __func__);
+    return BT_STATUS_FAIL;
+  }
+
+  if (!task_runner->PostTask(from_here, task)) {
+    APPL_TRACE_ERROR("%s: Post task to task runner failed!", __func__);
+    return BT_STATUS_FAIL;
+  }
+  return BT_STATUS_SUCCESS;
+}
+
+/*******************************************************************************
+ *
+ * Function         do_in_bta_thread_once
+ *
+ * Description      Post a closure to be ran in the bta thread once
+ *
+ * Returns          BT_STATUS_SUCCESS on success
+ *
+ ******************************************************************************/
+bt_status_t do_in_bta_thread_once(const tracked_objects::Location& from_here,
+                                  base::OnceClosure task) {
+  base::MessageLoop* bta_message_loop = get_message_loop();
+  if (!bta_message_loop) {
+    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
+    return BT_STATUS_FAIL;
+  }
+
+  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
+      bta_message_loop->task_runner();
+  if (!task_runner.get()) {
+    APPL_TRACE_ERROR("%s: task runner is dead", __func__);
+    return BT_STATUS_FAIL;
+  }
+
+  if (!task_runner->PostTask(from_here, std::move(task))) {
+    APPL_TRACE_ERROR("%s: Post task to task runner failed!", __func__);
+    return BT_STATUS_FAIL;
+  }
+  return BT_STATUS_SUCCESS;
 }
 
 /*******************************************************************************
@@ -550,14 +613,14 @@ void bta_sys_sendmsg_delayed(void* p_msg, const base::TimeDelta& delay) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_sys_start_timer(alarm_t* alarm, uint64_t interval_ms, uint16_t event,
+void bta_sys_start_timer(alarm_t* alarm, period_ms_t interval, uint16_t event,
                          uint16_t layer_specific) {
   BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
 
   p_buf->event = event;
   p_buf->layer_specific = layer_specific;
 
-  alarm_set_on_mloop(alarm, interval_ms, bta_sys_sendmsg, p_buf);
+  alarm_set_on_mloop(alarm, interval, bta_sys_sendmsg, p_buf);
 }
 
 /*******************************************************************************

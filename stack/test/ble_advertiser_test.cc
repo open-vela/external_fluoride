@@ -47,16 +47,24 @@ bool BTM_BleLocalPrivacyEnabled() { return true; }
 uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval) {
   return true;
 }
+bool SMP_Encrypt(uint8_t* key, uint8_t key_len, uint8_t* plain_text,
+                 uint8_t pt_len, tSMP_ENC* p_out) {
+  return true;
+}
+void BTM_GetDeviceIDRoot(BT_OCTET16 irk) {}
+void btm_ble_update_dmt_flag_bits(uint8_t* flag_value,
+                                  const uint16_t connect_mode,
+                                  const uint16_t disc_mode) {}
 void btm_acl_update_conn_addr(uint16_t conn_handle, const RawAddress& address) {
 }
-void btm_gen_resolvable_private_addr(
-    base::Callback<void(const RawAddress& rpa)> cb) {
-  cb.Run(RawAddress::kEmpty);
+void btm_gen_resolvable_private_addr(base::Callback<void(uint8_t[8])> cb) {
+  uint8_t fake_rand[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  cb.Run(fake_rand);
 }
 
 alarm_callback_t last_alarm_cb = nullptr;
 void* last_alarm_data = nullptr;
-void alarm_set_on_mloop(alarm_t* alarm, uint64_t interval_ms,
+void alarm_set_on_mloop(alarm_t* alarm, period_ms_t interval_ms,
                         alarm_callback_t cb, void* data) {
   last_alarm_cb = cb;
   last_alarm_data = data;
@@ -67,8 +75,6 @@ alarm_t* alarm_new_periodic(const char* name) { return nullptr; }
 alarm_t* alarm_new(const char* name) { return nullptr; }
 void alarm_free(alarm_t* alarm) {}
 const controller_t* controller_get_interface() { return nullptr; }
-
-uint64_t btm_get_next_private_addrress_interval_ms() { return 15 * 60 * 1000; }
 
 namespace {
 void DoNothing(uint8_t) {}
@@ -133,7 +139,7 @@ class AdvertiserHciMock : public BleAdvertiserHciInterface {
                    cmd_complete);
   };
 
-  bool QuirkAdvertiserZeroHandle() override { return false; }
+  bool QuirkAdvertiserZeroHandle() { return false; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(AdvertiserHciMock);
@@ -155,7 +161,7 @@ class BleAdvertisingManagerTest : public testing::Test {
 
   std::unique_ptr<AdvertiserHciMock> hci_mock;
 
-  void SetUp() override {
+  virtual void SetUp() {
     hci_mock.reset(new AdvertiserHciMock());
 
     base::Callback<void(uint8_t)> inst_cnt_Cb;
@@ -170,7 +176,7 @@ class BleAdvertisingManagerTest : public testing::Test {
     inst_cnt_Cb.Run(num_adv_instances);
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     BleAdvertisingManager::CleanUp();
     hci_mock.reset();
   }
