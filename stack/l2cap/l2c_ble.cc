@@ -36,6 +36,7 @@
 #include "l2c_int.h"
 #include "l2cdefs.h"
 #include "log/log.h"
+#include "main/shim/shim.h"
 #include "osi/include/osi.h"
 #include "stack/gatt/connection_manager.h"
 #include "stack_config.h"
@@ -147,6 +148,11 @@ bool L2CA_UpdateBleConnParams(const RawAddress& rem_bda, uint16_t min_int,
  *
  ******************************************************************************/
 bool L2CA_EnableUpdateBleConnParams(const RawAddress& rem_bda, bool enable) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    LOG(ERROR) << "NOT IMPLEMENTED";
+    return true;
+  }
+
   if (stack_config_get_interface()->get_pts_conn_updates_disabled())
     return false;
 
@@ -279,10 +285,7 @@ void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
       LOG(ERROR) << __func__ << "failed to allocate LCB";
       return;
     } else {
-      if (!l2cu_initialize_fixed_ccb(
-              p_lcb, L2CAP_ATT_CID,
-              &l2cb.fixed_reg[L2CAP_ATT_CID - L2CAP_FIRST_FIXED_CHNL]
-                   .fixed_chnl_opts)) {
+      if (!l2cu_initialize_fixed_ccb(p_lcb, L2CAP_ATT_CID)) {
         btm_sec_disconnect(handle, HCI_ERR_NO_CONNECTION);
         LOG(WARNING) << __func__ << "LCB but no CCB";
         return;
@@ -324,8 +327,8 @@ void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
 #endif
 
   if (role == HCI_ROLE_SLAVE) {
-    if (!HCI_LE_SLAVE_INIT_FEAT_EXC_SUPPORTED(
-            controller_get_interface()->get_features_ble()->as_array)) {
+    if (!controller_get_interface()
+             ->supports_ble_peripheral_initiated_feature_exchange()) {
       p_lcb->link_state = LST_CONNECTED;
       l2cu_process_fixed_chnl_resp(p_lcb);
     }
@@ -378,11 +381,11 @@ static void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
       /* if both side 4.1, or we are master device, send HCI command */
       if (p_lcb->link_role == HCI_ROLE_MASTER
 #if (BLE_LLT_INCLUDED == TRUE)
-          || (HCI_LE_CONN_PARAM_REQ_SUPPORTED(
-                  controller_get_interface()->get_features_ble()->as_array) &&
+          || (controller_get_interface()
+                  ->supports_ble_connection_parameter_request() &&
               HCI_LE_CONN_PARAM_REQ_SUPPORTED(p_acl_cb->peer_le_features))
 #endif
-              ) {
+      ) {
         btsnd_hcic_ble_upd_ll_conn_params(p_lcb->handle, min_conn_int,
                                           max_conn_int, slave_latency,
                                           supervision_tout, 0, 0);
@@ -400,11 +403,11 @@ static void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
       /* if both side 4.1, or we are master device, send HCI command */
       if (p_lcb->link_role == HCI_ROLE_MASTER
 #if (BLE_LLT_INCLUDED == TRUE)
-          || (HCI_LE_CONN_PARAM_REQ_SUPPORTED(
-                  controller_get_interface()->get_features_ble()->as_array) &&
+          || (controller_get_interface()
+                  ->supports_ble_connection_parameter_request() &&
               HCI_LE_CONN_PARAM_REQ_SUPPORTED(p_acl_cb->peer_le_features))
 #endif
-              ) {
+      ) {
         btsnd_hcic_ble_upd_ll_conn_params(p_lcb->handle, p_lcb->min_interval,
                                           p_lcb->max_interval, p_lcb->latency,
                                           p_lcb->timeout, p_lcb->min_ce_len,
@@ -790,7 +793,8 @@ void l2c_link_processs_ble_num_bufs(uint16_t num_lm_ble_bufs) {
     l2cb.num_lm_acl_bufs -= L2C_DEF_NUM_BLE_BUF_SHARED;
   }
 
-  l2cb.num_lm_ble_bufs = l2cb.controller_le_xmit_window = num_lm_ble_bufs;
+  l2cb.num_lm_ble_bufs = num_lm_ble_bufs;
+  l2cb.controller_le_xmit_window = num_lm_ble_bufs;
 }
 
 /*******************************************************************************
@@ -1288,4 +1292,9 @@ void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
                       __func__, *max_interval, phone_min_interval);
     *max_interval = phone_min_interval;
   }
+}
+
+void L2CA_SetLeFixedChannelTxDataLength(const RawAddress& remote_bda,
+                                        uint16_t fix_cid, uint16_t tx_mtu) {
+  l2cble_set_fixed_channel_tx_data_length(remote_bda, fix_cid, tx_mtu);
 }
