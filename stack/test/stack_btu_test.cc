@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2017 The Android Open Source Project
+ *  Copyright (C) 2017 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@
 #include <unistd.h>
 
 #include "btcore/include/module.h"
-#include "common/message_loop_thread.h"
 #include "osi/include/alarm.h"
 #include "osi/include/fixed_queue.h"
+#include "osi/include/thread.h"
 #include "stack/include/btu.h"
 
 class TimeoutHelper {
@@ -60,17 +60,17 @@ class TimeoutHelper {
 TimeoutHelper helper;
 
 // External function definitions
+void btu_message_loop_run(void* context);
 void btu_task_start_up(void* context);
 void btu_task_shut_down(void* context);
 
 /* Below are methods and variables that must be implemented if we don't want to
  * compile the whole stack. They will be removed, or changed into mocks one by
  * one in the future, as the refactoring progresses */
-bt_status_t do_in_jni_thread(const base::Location& from_here,
-                             base::OnceClosure task) {
+void btif_transfer_context(void (*)(unsigned short, char*), uint16_t, char*,
+                           int, void (*)(unsigned short, char*, char*)) {
   helper.notify();
-  return BT_STATUS_SUCCESS;
-}
+};
 
 void btu_init_core(){};
 void btif_init_ok(unsigned short, char*){};
@@ -82,17 +82,20 @@ const module_t* get_module(const char*) { return nullptr; };
 bool module_init(module_t const*) { return true; };
 void module_clean_up(module_t const*){};
 
-bluetooth::common::MessageLoopThread bt_startup_thread("test alarm thread");
+thread_t* bt_workqueue_thread;
+fixed_queue_t* btu_general_alarm_queue;
 
 class BtuMessageLoopTest : public testing::Test {
  public:
   MOCK_METHOD0(TestCallback, void(void));
   base::MessageLoop* message_loop;
 
-  void SetUp() override {
+  virtual void SetUp() {
     // Initialize alarms to prevent btu_task_shut_down from crashing
     alarm_new("test alarm");
-    bt_startup_thread.StartUp();
+    btu_general_alarm_queue = fixed_queue_new(SIZE_MAX);
+    bt_workqueue_thread = thread_new("test alarm thread");
+
     // btu_task_start_up calls btif_transfer_context to let the stack know
     // start up is finished
     btu_task_start_up(nullptr);
@@ -100,17 +103,16 @@ class BtuMessageLoopTest : public testing::Test {
                               "BTU startup timed out"));
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     btu_task_shut_down(nullptr);
     alarm_cleanup();
-    bt_startup_thread.ShutDown();
   }
 
   void Fail(std::string message) { FAIL() << message; }
 };
 
 TEST_F(BtuMessageLoopTest, send_message) {
-  message_loop = get_main_message_loop();
+  message_loop = get_message_loop();
   EXPECT_FALSE(message_loop == nullptr);
 
   EXPECT_CALL(*this, TestCallback()).Times(1);

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -105,47 +105,6 @@ bool is_restricted_mode(void);
 
 /*******************************************************************************
  *
- * Function         is_niap_mode_
- *
- * Description      Checks if BT was enabled in single user mode. In this
- *                  mode, use of keystore for key attestation of LTK is limitee
- *                  to this mode defined by UserManager.
- *
- * Returns          bool
- *
- ******************************************************************************/
-bool is_niap_mode(void);
-
-/*******************************************************************************
- *
- * Function         get_niap_config_compare_result
- *
- * Description      Get the niap config compare result for confirming the config
- *                  checksum compare result. When the niap mode doesn't enable,
- *                  it should be all pass (0b11).
- *                  Bit define:
- *                    CONFIG_FILE_COMPARE_PASS = 0b01
- *                    CONFIG_BACKUP_COMPARE_PASS = 0b10
- *
- * Returns          int
- *
- ******************************************************************************/
-int get_niap_config_compare_result(void);
-
-/*******************************************************************************
- *
- * Function         is_atv_device
- *
- * Description      Returns true if the local device is an Android TV
- *                  device, false if it is not.
- *
- * Returns          bool
- *
- ******************************************************************************/
-bool is_atv_device(void);
-
-/*******************************************************************************
- *
  * Function         btif_get_adapter_properties
  *
  * Description      Fetches all local adapter properties
@@ -187,7 +146,7 @@ bt_status_t btif_set_adapter_property(const bt_property_t* property);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
+bt_status_t btif_get_remote_device_property(bt_bdaddr_t* remote_addr,
                                             bt_property_type_t type);
 
 /*******************************************************************************
@@ -199,7 +158,7 @@ bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr);
+bt_status_t btif_get_remote_device_properties(bt_bdaddr_t* remote_addr);
 
 /*******************************************************************************
  *
@@ -212,7 +171,7 @@ bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
+bt_status_t btif_set_remote_device_property(bt_bdaddr_t* remote_addr,
                                             const bt_property_t* property);
 
 /*******************************************************************************
@@ -225,8 +184,8 @@ bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
-                                           const bluetooth::Uuid& uuid);
+bt_status_t btif_get_remote_service_record(bt_bdaddr_t* remote_addr,
+                                           bt_uuid_t* uuid);
 
 /*******************************************************************************
  *  BTIF DM API
@@ -264,7 +223,7 @@ bt_status_t btif_dm_cancel_discovery(void);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_create_bond(const RawAddress* bd_addr, int transport);
+bt_status_t btif_dm_create_bond(const bt_bdaddr_t* bd_addr, int transport);
 
 /*******************************************************************************
  *
@@ -276,7 +235,7 @@ bt_status_t btif_dm_create_bond(const RawAddress* bd_addr, int transport);
  *
  ******************************************************************************/
 bt_status_t btif_dm_create_bond_out_of_band(
-    const RawAddress* bd_addr, int transport,
+    const bt_bdaddr_t* bd_addr, int transport,
     const bt_out_of_band_data_t* oob_data);
 
 /*******************************************************************************
@@ -288,7 +247,7 @@ bt_status_t btif_dm_create_bond_out_of_band(
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_cancel_bond(const RawAddress* bd_addr);
+bt_status_t btif_dm_cancel_bond(const bt_bdaddr_t* bd_addr);
 
 /*******************************************************************************
  *
@@ -299,7 +258,7 @@ bt_status_t btif_dm_cancel_bond(const RawAddress* bd_addr);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_remove_bond(const RawAddress* bd_addr);
+bt_status_t btif_dm_remove_bond(const bt_bdaddr_t* bd_addr);
 
 /*******************************************************************************
  *
@@ -310,7 +269,7 @@ bt_status_t btif_dm_remove_bond(const RawAddress* bd_addr);
  * Returns          0 if not connected
  *
  ******************************************************************************/
-uint16_t btif_dm_get_connection_state(const RawAddress* bd_addr);
+uint16_t btif_dm_get_connection_state(const bt_bdaddr_t* bd_addr);
 
 /*******************************************************************************
  *
@@ -321,7 +280,7 @@ uint16_t btif_dm_get_connection_state(const RawAddress* bd_addr);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_pin_reply(const RawAddress* bd_addr, uint8_t accept,
+bt_status_t btif_dm_pin_reply(const bt_bdaddr_t* bd_addr, uint8_t accept,
                               uint8_t pin_len, bt_pin_code_t* pin_code);
 
 /*******************************************************************************
@@ -333,7 +292,7 @@ bt_status_t btif_dm_pin_reply(const RawAddress* bd_addr, uint8_t accept,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_passkey_reply(const RawAddress* bd_addr, uint8_t accept,
+bt_status_t btif_dm_passkey_reply(const bt_bdaddr_t* bd_addr, uint8_t accept,
                                   uint32_t passkey);
 
 /*******************************************************************************
@@ -346,7 +305,7 @@ bt_status_t btif_dm_passkey_reply(const RawAddress* bd_addr, uint8_t accept,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_ssp_reply(const RawAddress* bd_addr,
+bt_status_t btif_dm_ssp_reply(const bt_bdaddr_t* bd_addr,
                               bt_ssp_variant_t variant, uint8_t accept,
                               uint32_t passkey);
 
@@ -370,8 +329,8 @@ bt_status_t btif_dm_get_adapter_property(bt_property_t* prop);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_service_record(const RawAddress& remote_addr,
-                                              const bluetooth::Uuid& uuid);
+bt_status_t btif_dm_get_remote_service_record(bt_bdaddr_t* remote_addr,
+                                              bt_uuid_t* uuid);
 
 /*******************************************************************************
  *
@@ -382,7 +341,7 @@ bt_status_t btif_dm_get_remote_service_record(const RawAddress& remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_services(const RawAddress& remote_addr);
+bt_status_t btif_dm_get_remote_services(bt_bdaddr_t* remote_addr);
 
 /*******************************************************************************
  *
@@ -393,7 +352,7 @@ bt_status_t btif_dm_get_remote_services(const RawAddress& remote_addr);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
+bt_status_t btif_dm_get_remote_services_by_transport(bt_bdaddr_t* remote_addr,
                                                      int transport);
 
 /*******************************************************************************
