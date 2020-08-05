@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2008-2012 Broadcom Corporation
+ *  Copyright 2008-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,8 +31,9 @@
 
 #include "btm_int.h"
 #include "hcimsgs.h"
-#include "l2c_int.h"
+#include "l2c_api.h"
 #include "l2cdefs.h"
+#include "main/shim/shim.h"
 #include "smp_api.h"
 #include "smp_int.h"
 
@@ -49,6 +50,11 @@
  *
  ******************************************************************************/
 void SMP_Init(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    LOG(INFO) << "Skipping legacy SMP_Init because GD is enabled";
+    return;
+  }
+
   memset(&smp_cb, 0, sizeof(tSMP_CB));
   smp_cb.smp_rsp_timer_ent = alarm_new("smp.smp_rsp_timer_ent");
   smp_cb.delayed_auth_timer_ent = alarm_new("smp.delayed_auth_timer_ent");
@@ -62,7 +68,7 @@ void SMP_Init(void) {
 
   smp_l2cap_if_init();
   /* initialization of P-256 parameters */
-  p_256_init_curve(KEY_LENGTH_DWORDS_P256);
+  p_256_init_curve();
 
   /* Initialize failure case for certification */
   smp_cb.cert_failure =
@@ -108,6 +114,9 @@ extern uint8_t SMP_SetTraceLevel(uint8_t new_level) {
  *
  ******************************************************************************/
 bool SMP_Register(tSMP_CALLBACK* p_cback) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   SMP_TRACE_EVENT("SMP_Register state=%d", smp_cb.state);
 
   if (smp_cb.p_callback != NULL) {
@@ -131,11 +140,14 @@ bool SMP_Register(tSMP_CALLBACK* p_cback) {
  *
  ******************************************************************************/
 tSMP_STATUS SMP_Pair(const RawAddress& bd_addr) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
   tSMP_CB* p_cb = &smp_cb;
-  uint8_t status = SMP_PAIR_INTERNAL_ERR;
 
-  SMP_TRACE_EVENT("%s state=%d br_state=%d flag=0x%x ", __func__, p_cb->state,
-                  p_cb->br_state, p_cb->flags);
+  SMP_TRACE_EVENT("%s: state=%d br_state=%d flag=0x%x, bd_addr=%s", __func__,
+                  p_cb->state, p_cb->br_state, p_cb->flags,
+                  bd_addr.ToString().c_str());
+
   if (p_cb->state != SMP_STATE_IDLE ||
       p_cb->flags & SMP_PAIR_FLAGS_WE_STARTED_DD || p_cb->smp_over_br) {
     /* pending security on going, reject this one */
@@ -145,9 +157,12 @@ tSMP_STATUS SMP_Pair(const RawAddress& bd_addr) {
     p_cb->pairing_bda = bd_addr;
 
     if (!L2CA_ConnectFixedChnl(L2CAP_SMP_CID, bd_addr)) {
+      tSMP_INT_DATA smp_int_data;
+      smp_int_data.status = SMP_PAIR_INTERNAL_ERR;
+      p_cb->status = SMP_PAIR_INTERNAL_ERR;
       SMP_TRACE_ERROR("%s: L2C connect fixed channel failed.", __func__);
-      smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &status);
-      return status;
+      smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+      return SMP_PAIR_INTERNAL_ERR;
     }
 
     return SMP_STARTED;
@@ -168,11 +183,14 @@ tSMP_STATUS SMP_Pair(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 tSMP_STATUS SMP_BR_PairWith(const RawAddress& bd_addr) {
-  tSMP_CB* p_cb = &smp_cb;
-  uint8_t status = SMP_PAIR_INTERNAL_ERR;
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
 
-  SMP_TRACE_EVENT("%s state=%d br_state=%d flag=0x%x ", __func__, p_cb->state,
-                  p_cb->br_state, p_cb->flags);
+  tSMP_CB* p_cb = &smp_cb;
+
+  SMP_TRACE_EVENT("%s: state=%d br_state=%d flag=0x%x, bd_addr=%s", __func__,
+                  p_cb->state, p_cb->br_state, p_cb->flags,
+                  bd_addr.ToString().c_str());
 
   if (p_cb->state != SMP_STATE_IDLE || p_cb->smp_over_br ||
       p_cb->flags & SMP_PAIR_FLAGS_WE_STARTED_DD) {
@@ -187,8 +205,11 @@ tSMP_STATUS SMP_BR_PairWith(const RawAddress& bd_addr) {
 
   if (!L2CA_ConnectFixedChnl(L2CAP_SMP_BR_CID, bd_addr)) {
     SMP_TRACE_ERROR("%s: L2C connect fixed channel failed.", __func__);
-    smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &status);
-    return status;
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_INTERNAL_ERR;
+    p_cb->status = SMP_PAIR_INTERNAL_ERR;
+    smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
+    return SMP_PAIR_INTERNAL_ERR;
   }
 
   return SMP_STARTED;
@@ -206,9 +227,11 @@ tSMP_STATUS SMP_BR_PairWith(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 bool SMP_PairCancel(const RawAddress& bd_addr) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   tSMP_CB* p_cb = &smp_cb;
   uint8_t err_code = SMP_PAIR_FAIL_UNKNOWN;
-  bool status = false;
 
   // PTS SMP failure test cases
   if (p_cb->cert_failure == SMP_PASSKEY_ENTRY_FAIL ||
@@ -220,11 +243,13 @@ bool SMP_PairCancel(const RawAddress& bd_addr) {
   if (p_cb->state != SMP_STATE_IDLE && p_cb->pairing_bda == bd_addr) {
     p_cb->is_pair_cancel = true;
     SMP_TRACE_DEBUG("Cancel Pairing: set fail reason Unknown");
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &err_code);
-    status = true;
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PAIR_FAIL_UNKNOWN;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+    return true;
   }
 
-  return status;
+  return false;
 }
 /*******************************************************************************
  *
@@ -241,38 +266,10 @@ bool SMP_PairCancel(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 void SMP_SecurityGrant(const RawAddress& bd_addr, uint8_t res) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   SMP_TRACE_EVENT("SMP_SecurityGrant ");
-
-  // If JUSTWORKS, this is used to display the consent dialog
-  if (smp_cb.selected_association_model == SMP_MODEL_SEC_CONN_JUSTWORKS) {
-    if (res == SMP_SUCCESS) {
-      smp_sm_event(&smp_cb, SMP_SC_NC_OK_EVT, NULL);
-    } else {
-      SMP_TRACE_WARNING("%s() - Consent dialog fails for JUSTWORKS", __func__);
-      /* send pairing failure */
-      uint8_t failure = SMP_NUMERIC_COMPAR_FAIL;
-      smp_sm_event(&smp_cb, SMP_AUTH_CMPL_EVT, &failure);
-    }
-  } else if (smp_cb.selected_association_model == SMP_MODEL_ENCRYPTION_ONLY) {
-    if (res == SMP_SUCCESS) {
-      smp_cb.sec_level = SMP_SEC_UNAUTHENTICATE;
-
-      tSMP_KEY key;
-      tSMP_INT_DATA smp_int_data;
-      key.key_type = SMP_KEY_TYPE_TK;
-      key.p_data = smp_cb.tk;
-      smp_int_data.key = key;
-
-      memset(smp_cb.tk, 0, BT_OCTET16_LEN);
-      smp_sm_event(&smp_cb, SMP_KEY_READY_EVT, &smp_int_data);
-    } else {
-      SMP_TRACE_WARNING("%s() - Consent dialog fails for ENCRYPTION_ONLY",
-                        __func__);
-      /* send pairing failure */
-      uint8_t failure = SMP_NUMERIC_COMPAR_FAIL;
-      smp_sm_event(&smp_cb, SMP_AUTH_CMPL_EVT, &failure);
-    }
-  }
 
   if (smp_cb.smp_over_br) {
     if (smp_cb.br_state != SMP_BR_STATE_WAIT_APP_RSP ||
@@ -283,7 +280,10 @@ void SMP_SecurityGrant(const RawAddress& bd_addr, uint8_t res) {
     /* clear the SMP_SEC_REQUEST_EVT event after get grant */
     /* avoid generating duplicate pair request */
     smp_cb.cb_evt = 0;
-    smp_br_state_machine_event(&smp_cb, SMP_BR_API_SEC_GRANT_EVT, &res);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = res;
+    smp_br_state_machine_event(&smp_cb, SMP_BR_API_SEC_GRANT_EVT,
+                               &smp_int_data);
     return;
   }
 
@@ -293,7 +293,9 @@ void SMP_SecurityGrant(const RawAddress& bd_addr, uint8_t res) {
   /* clear the SMP_SEC_REQUEST_EVT event after get grant */
   /* avoid generate duplicate pair request */
   smp_cb.cb_evt = 0;
-  smp_sm_event(&smp_cb, SMP_API_SEC_GRANT_EVT, &res);
+  tSMP_INT_DATA smp_int_data;
+  smp_int_data.status = res;
+  smp_sm_event(&smp_cb, SMP_API_SEC_GRANT_EVT, &smp_int_data);
 }
 
 /*******************************************************************************
@@ -313,8 +315,10 @@ void SMP_SecurityGrant(const RawAddress& bd_addr, uint8_t res) {
  ******************************************************************************/
 void SMP_PasskeyReply(const RawAddress& bd_addr, uint8_t res,
                       uint32_t passkey) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   tSMP_CB* p_cb = &smp_cb;
-  uint8_t failure = SMP_PASSKEY_ENTRY_FAIL;
 
   SMP_TRACE_EVENT("SMP_PasskeyReply: Key: %d  Result:%d", passkey, res);
 
@@ -339,13 +343,17 @@ void SMP_PasskeyReply(const RawAddress& bd_addr, uint8_t res,
         "SMP_PasskeyReply() - Wrong key len: %d or passkey entry fail",
         passkey);
     /* send pairing failure */
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &failure);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_PASSKEY_ENTRY_FAIL;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
 
   } else if (p_cb->selected_association_model ==
              SMP_MODEL_SEC_CONN_PASSKEY_ENT) {
-    smp_sm_event(&smp_cb, SMP_SC_KEY_READY_EVT, &passkey);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.passkey = passkey;
+    smp_sm_event(&smp_cb, SMP_SC_KEY_READY_EVT, &smp_int_data);
   } else {
-    smp_convert_string_to_tk(p_cb->tk, passkey);
+    smp_convert_string_to_tk(&p_cb->tk, passkey);
   }
 
   return;
@@ -364,8 +372,10 @@ void SMP_PasskeyReply(const RawAddress& bd_addr, uint8_t res,
  *
  ******************************************************************************/
 void SMP_ConfirmReply(const RawAddress& bd_addr, uint8_t res) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   tSMP_CB* p_cb = &smp_cb;
-  uint8_t failure = SMP_NUMERIC_COMPAR_FAIL;
 
   SMP_TRACE_EVENT("%s: Result:%d", __func__, res);
 
@@ -388,7 +398,9 @@ void SMP_ConfirmReply(const RawAddress& bd_addr, uint8_t res) {
   if (res != SMP_SUCCESS) {
     SMP_TRACE_WARNING("%s() - Numeric Comparison fails", __func__);
     /* send pairing failure */
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &failure);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_NUMERIC_COMPAR_FAIL;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
   } else {
     smp_sm_event(p_cb, SMP_SC_NC_OK_EVT, NULL);
   }
@@ -408,8 +420,10 @@ void SMP_ConfirmReply(const RawAddress& bd_addr, uint8_t res) {
  ******************************************************************************/
 void SMP_OobDataReply(const RawAddress& bd_addr, tSMP_STATUS res, uint8_t len,
                       uint8_t* p_data) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   tSMP_CB* p_cb = &smp_cb;
-  uint8_t failure = SMP_OOB_FAIL;
   tSMP_KEY key;
 
   SMP_TRACE_EVENT("%s State: %d  res:%d", __func__, smp_cb.state, res);
@@ -419,16 +433,20 @@ void SMP_OobDataReply(const RawAddress& bd_addr, tSMP_STATUS res, uint8_t len,
     return;
 
   if (res != SMP_SUCCESS || len == 0 || !p_data) {
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &failure);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_OOB_FAIL;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
   } else {
-    if (len > BT_OCTET16_LEN) len = BT_OCTET16_LEN;
+    if (len > OCTET16_LEN) len = OCTET16_LEN;
 
-    memcpy(p_cb->tk, p_data, len);
+    memcpy(p_cb->tk.data(), p_data, len);
 
     key.key_type = SMP_KEY_TYPE_TK;
-    key.p_data = p_cb->tk;
+    key.p_data = p_cb->tk.data();
 
-    smp_sm_event(&smp_cb, SMP_KEY_READY_EVT, &key);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.key = key;
+    smp_sm_event(&smp_cb, SMP_KEY_READY_EVT, &smp_int_data);
   }
 }
 
@@ -443,13 +461,17 @@ void SMP_OobDataReply(const RawAddress& bd_addr, tSMP_STATUS res, uint8_t len,
  *
  ******************************************************************************/
 void SMP_SecureConnectionOobDataReply(uint8_t* p_data) {
+  LOG_ASSERT(!bluetooth::shim::is_gd_shim_enabled())
+      << "Legacy SMP API should not be invoked when GD Security is used";
+
   tSMP_CB* p_cb = &smp_cb;
 
-  uint8_t failure = SMP_OOB_FAIL;
   tSMP_SC_OOB_DATA* p_oob = (tSMP_SC_OOB_DATA*)p_data;
   if (!p_oob) {
     SMP_TRACE_ERROR("%s received no data", __func__);
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &failure);
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_OOB_FAIL;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
     return;
   }
 
@@ -481,118 +503,15 @@ void SMP_SecureConnectionOobDataReply(uint8_t* p_data) {
       break;
   }
 
+  tSMP_INT_DATA smp_int_data;
   if (data_missing) {
-    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &failure);
+    smp_int_data.status = SMP_OOB_FAIL;
+    smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
     return;
   }
 
   p_cb->sc_oob_data = *p_oob;
 
-  smp_sm_event(&smp_cb, SMP_SC_OOB_DATA_EVT, p_data);
-}
-
-/*******************************************************************************
- *
- * Function         SMP_Encrypt
- *
- * Description      This function is called to encrypt the data with the
- *                  specified key
- *
- * Parameters:      key                 - Pointer to key key[0] conatins the MSB
- *                  key_len             - key length
- *                  plain_text          - Pointer to data to be encrypted
- *                                        plain_text[0] conatins the MSB
- *                  pt_len              - plain text length
- *                  p_out                - output of the encrypted texts
- *
- *  Returns         Boolean - request is successful
- ******************************************************************************/
-bool SMP_Encrypt(uint8_t* key, uint8_t key_len, uint8_t* plain_text,
-                 uint8_t pt_len, tSMP_ENC* p_out)
-
-{
-  bool status = false;
-  status = smp_encrypt_data(key, key_len, plain_text, pt_len, p_out);
-  return status;
-}
-
-/*******************************************************************************
- *
- * Function         SMP_KeypressNotification
- *
- * Description      This function is called to notify Security Manager about
- *                  Keypress Notification.
- *
- * Parameters:     bd_addr      Address of the device to send keypress
- *                              notification to
- *                 value        Keypress notification parameter value
- *
- ******************************************************************************/
-void SMP_KeypressNotification(const RawAddress& bd_addr, uint8_t value) {
-  tSMP_CB* p_cb = &smp_cb;
-
-  SMP_TRACE_EVENT("%s: Value: %d", __func__, value);
-
-  if (bd_addr != p_cb->pairing_bda) {
-    SMP_TRACE_ERROR("%s() - Wrong BD Addr", __func__);
-    return;
-  }
-
-  if (btm_find_dev(bd_addr) == NULL) {
-    SMP_TRACE_ERROR("%s() - no dev CB", __func__);
-    return;
-  }
-
-  /* Keypress Notification is used by a device with KeyboardOnly IO capabilities
-   * during the passkey entry protocol */
-  if (p_cb->local_io_capability != SMP_IO_CAP_IN) {
-    SMP_TRACE_ERROR("%s() - wrong local IO capabilities %d", __func__,
-                    p_cb->local_io_capability);
-    return;
-  }
-
-  if (p_cb->selected_association_model != SMP_MODEL_SEC_CONN_PASSKEY_ENT) {
-    SMP_TRACE_ERROR("%s() - wrong protocol %d", __func__,
-                    p_cb->selected_association_model);
-    return;
-  }
-
-  smp_sm_event(p_cb, SMP_KEYPRESS_NOTIFICATION_EVENT, &value);
-}
-
-/*******************************************************************************
- *
- * Function         SMP_CreateLocalSecureConnectionsOobData
- *
- * Description      This function is called to start creation of local SC OOB
- *                  data set (tSMP_LOC_OOB_DATA).
- *
- * Parameters:      bd_addr - Address of the device to send OOB data block to
- *
- *  Returns         Boolean - true: creation of local SC OOB data set started.
- ******************************************************************************/
-bool SMP_CreateLocalSecureConnectionsOobData(tBLE_BD_ADDR* addr_to_send_to) {
-  tSMP_CB* p_cb = &smp_cb;
-
-  if (addr_to_send_to == NULL) {
-    SMP_TRACE_ERROR("%s addr_to_send_to is not provided", __func__);
-    return false;
-  }
-
-  VLOG(2) << __func__ << " addr type:" << +addr_to_send_to->type
-          << ", BDA:" << addr_to_send_to->bda << ", state:" << p_cb->state
-          << ", br_state: " << p_cb->br_state;
-
-  if ((p_cb->state != SMP_STATE_IDLE) || (p_cb->smp_over_br)) {
-    SMP_TRACE_WARNING(
-        "%s creation of local OOB data set "
-        "starts only in IDLE state",
-        __func__);
-    return false;
-  }
-
-  p_cb->sc_oob_data.loc_oob_data.addr_sent_to = *addr_to_send_to;
-  smp_sm_event(p_cb, SMP_CR_LOC_SC_OOB_DATA_EVT, NULL);
-
-  return true;
+  smp_int_data.p_data = p_data;
+  smp_sm_event(&smp_cb, SMP_SC_OOB_DATA_EVT, &smp_int_data);
 }

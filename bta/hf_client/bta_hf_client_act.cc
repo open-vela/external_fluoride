@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -103,12 +103,12 @@ void bta_hf_client_start_open(tBTA_HF_CLIENT_DATA* p_data) {
   }
 
   /* Check if RFCOMM has any incoming connection to avoid collision. */
-  RawAddress pending_bd_addr;
-  if (PORT_IsOpening(pending_bd_addr)) {
+  RawAddress pending_bd_addr = RawAddress::kEmpty;
+  if (PORT_IsOpening(&pending_bd_addr)) {
     /* Let the incoming connection goes through.                        */
     /* Issue collision for now.                                         */
     /* We will decide what to do when we find incoming connection later.*/
-    bta_hf_client_collision_cback(0, BTA_ID_HS, 0, &client_cb->peer_addr);
+    bta_hf_client_collision_cback(0, BTA_ID_HS, 0, client_cb->peer_addr);
     return;
   }
 
@@ -164,21 +164,17 @@ void bta_hf_client_rfc_acp_open(tBTA_HF_CLIENT_DATA* p_data) {
                      p_data->hdr.layer_specific);
     return;
   }
-
-  uint16_t lcid;
-  RawAddress dev_addr;
-  int status;
-
   /* set role */
   client_cb->role = BTA_HF_CLIENT_ACP;
 
   APPL_TRACE_DEBUG("%s: conn_handle %d", __func__, client_cb->conn_handle);
 
   /* get bd addr of peer */
-  if (PORT_SUCCESS != (status = PORT_CheckConnection(client_cb->conn_handle,
-                                                     dev_addr, &lcid))) {
-    APPL_TRACE_DEBUG("%s: error PORT_CheckConnection returned status %d",
-                     __func__, status);
+  uint16_t lcid = 0;
+  RawAddress dev_addr = RawAddress::kEmpty;
+  int status = PORT_CheckConnection(client_cb->conn_handle, &dev_addr, &lcid);
+  if (status != PORT_SUCCESS) {
+    LOG(ERROR) << __func__ << ": PORT_CheckConnection returned " << status;
   }
 
   /* Collision Handling */
@@ -303,7 +299,7 @@ void bta_hf_client_rfc_close(tBTA_HF_CLIENT_DATA* p_data) {
   evt.conn.bd_addr = client_cb->peer_addr;
 
   /* if not deregistering reopen server */
-  if (bta_hf_client_cb_arr.deregister == false) {
+  if (!bta_hf_client_cb_arr.deregister) {
     /* Make sure SCO is shutdown */
     bta_hf_client_sco_shutdown(client_cb);
 
