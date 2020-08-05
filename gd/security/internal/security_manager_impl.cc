@@ -37,13 +37,13 @@ void SecurityManagerImpl::DispatchPairingHandler(
     std::shared_ptr<record::SecurityRecord> record, bool locally_initiated) {
   common::OnceCallback<void(hci::Address, PairingResultOrFailure)> callback =
       common::BindOnce(&SecurityManagerImpl::OnPairingHandlerComplete, common::Unretained(this));
-  auto entry = pairing_handler_map_.find(record->GetPseudoAddress()->GetAddress());
+  auto entry = pairing_handler_map_.find(record->GetPseudoAddress().GetAddress());
   if (entry != pairing_handler_map_.end()) {
     LOG_WARN("Device already has a pairing handler, and is in the middle of pairing!");
     return;
   }
   std::shared_ptr<pairing::PairingHandler> pairing_handler = nullptr;
-  switch (record->GetPseudoAddress()->GetAddressType()) {
+  switch (record->GetPseudoAddress().GetAddressType()) {
     case hci::AddressType::PUBLIC_DEVICE_ADDRESS: {
       pairing_handler = std::make_shared<security::pairing::ClassicPairingHandler>(
           security_manager_channel_,
@@ -56,10 +56,10 @@ void SecurityManagerImpl::DispatchPairingHandler(
       break;
     }
     default:
-      ASSERT_LOG(false, "Pairing type %hhu not implemented!", record->GetPseudoAddress()->GetAddressType());
+      ASSERT_LOG(false, "Pairing type %hhu not implemented!", record->GetPseudoAddress().GetAddressType());
   }
   auto new_entry = std::pair<hci::Address, std::shared_ptr<pairing::PairingHandler>>(
-      record->GetPseudoAddress()->GetAddress(), pairing_handler);
+      record->GetPseudoAddress().GetAddress(), pairing_handler);
   pairing_handler_map_.insert(std::move(new_entry));
   pairing_handler->Initiate(locally_initiated, this->local_io_capability_, this->local_oob_data_present_,
                             this->local_authentication_requirements_);
@@ -69,9 +69,8 @@ void SecurityManagerImpl::Init() {
   security_manager_channel_->SetChannelListener(this);
   security_manager_channel_->SendCommand(hci::WriteSimplePairingModeBuilder::Create(hci::Enable::ENABLED));
   security_manager_channel_->SendCommand(hci::WriteSecureConnectionsHostSupportBuilder::Create(hci::Enable::ENABLED));
-
   ASSERT_LOG(storage_module_ != nullptr, "Storage module must not be null!");
-  security_database_.LoadRecordsFromStorage();
+  // TODO(optedoblivion): Populate security record memory map from disk
 
   // TODO(b/161543441): read the privacy policy from device-specific configuration, and IRK from config file.
   hci::LeAddressManager::AddressPolicy address_policy = hci::LeAddressManager::AddressPolicy::USE_RESOLVABLE_ADDRESS;
@@ -103,7 +102,7 @@ void SecurityManagerImpl::CreateBond(hci::AddressWithType device) {
 
 void SecurityManagerImpl::CreateBondLe(hci::AddressWithType address) {
   auto record = security_database_.FindOrCreate(address);
-  if (record->IsPaired()) {
+  if (record->IsBonded()) {
     NotifyDeviceBondFailed(address, PairingFailure("Already bonded"));
     return;
   }
@@ -230,8 +229,6 @@ void SecurityManagerImpl::HandleEvent(T packet) {
       return;
     }
 
-    auto device = storage_module_->GetDeviceByClassicMacAddress(bd_addr);
-
     auto record =
         security_database_.FindOrCreate(hci::AddressWithType{bd_addr, hci::AddressType::PUBLIC_DEVICE_ADDRESS});
     LOG_WARN("Dispatch #2");
@@ -309,10 +306,6 @@ void SecurityManagerImpl::OnConnectionClosed(hci::Address address) {
     LOG_DEBUG("Cancelling pairing handler for '%s'", address.ToString().c_str());
     entry->second->Cancel();
   }
-  auto record = security_database_.FindOrCreate(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS));
-  if (record->IsTemporary()) {
-    security_database_.Remove(hci::AddressWithType(address, hci::AddressType::PUBLIC_DEVICE_ADDRESS));
-  }
 }
 
 void SecurityManagerImpl::OnHciLeEvent(hci::LeMetaEventView event) {
@@ -374,7 +367,6 @@ void SecurityManagerImpl::OnPairingHandlerComplete(hci::Address address, Pairing
   }
   auto record = this->security_database_.FindOrCreate(remote);
   record->CancelPairing();
-  security_database_.SaveRecordsToStorage();
 }
 
 void SecurityManagerImpl::OnL2capRegistrationCompleteLe(
@@ -599,9 +591,7 @@ SecurityManagerImpl::SecurityManagerImpl(
           hci_layer->GetLeSecurityInterface(security_handler_->BindOn(this, &SecurityManagerImpl::OnHciLeEvent))),
       security_manager_channel_(security_manager_channel),
       acl_manager_(acl_manager),
-      storage_module_(storage_module),
-      security_record_storage_(storage_module, security_handler),
-      security_database_(security_record_storage_) {
+      storage_module_(storage_module) {
   Init();
 
   l2cap_manager_le_->RegisterService(
@@ -630,7 +620,6 @@ void SecurityManagerImpl::OnPairingFinished(security::PairingResultOrFailure pai
   NotifyDeviceBonded(result.connection_address);
 
   security_handler_->CallOn(this, &SecurityManagerImpl::WipeLePairingHandler);
-  security_database_.SaveRecordsToStorage();
 }
 
 void SecurityManagerImpl::WipeLePairingHandler() {
