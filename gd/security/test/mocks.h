@@ -45,10 +45,12 @@ class UIMock : public UI {
 
 class LeSecurityInterfaceMock : public hci::LeSecurityInterface {
  public:
-  MOCK_METHOD2(EnqueueCommand, void(std::unique_ptr<hci::LeSecurityCommandBuilder> command,
-                                    common::ContextualOnceCallback<void(hci::CommandCompleteView)> on_complete));
-  MOCK_METHOD2(EnqueueCommand, void(std::unique_ptr<hci::LeSecurityCommandBuilder> command,
-                                    common::ContextualOnceCallback<void(hci::CommandStatusView)> on_status));
+  MOCK_METHOD3(EnqueueCommand,
+               void(std::unique_ptr<hci::LeSecurityCommandBuilder> command,
+                    common::OnceCallback<void(hci::CommandCompleteView)> on_complete, os::Handler* handler));
+  MOCK_METHOD3(EnqueueCommand,
+               void(std::unique_ptr<hci::LeSecurityCommandBuilder> command,
+                    common::OnceCallback<void(hci::CommandStatusView)> on_status, os::Handler* handler));
 };
 
 }  // namespace security
