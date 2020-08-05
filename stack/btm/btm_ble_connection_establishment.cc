@@ -23,9 +23,9 @@
 #include "btm_int.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
-#include "l2c_int.h"
 #include "stack/gatt/connection_manager.h"
 #include "stack/include/hcimsgs.h"
+#include "stack/include/l2cap_hci_link_interface.h"
 
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
@@ -159,6 +159,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         if (!btm_ble_init_pseudo_addr(match_rec, bda)) {
           /* assign the original address to be the current report address */
           bda = match_rec->ble.pseudo_addr;
+          bda_type = match_rec->ble.ble_addr_type;
         } else {
           bda = match_rec->bd_addr;
         }
