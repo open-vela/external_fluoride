@@ -1045,15 +1045,15 @@ bt_status_t btif_hf_client_execute_service(bool b_enable) {
   BTIF_TRACE_EVENT("%s: enable: %d", __func__, b_enable);
 
   tBTA_HF_CLIENT_FEAT features = BTIF_HF_CLIENT_FEATURES;
-  if (osi_property_get_bool("persist.bluetooth.hfpclient.sco_s4_supported",
-                            false))
+  if (osi_property_get_bool("persist.bluetooth.hfpclient.sco_s4_supported", false))
     features |= BTA_HF_CLIENT_FEAT_S4;
 
   if (b_enable) {
     /* Enable and register with BTA-HFClient */
-    BTIF_TRACE_EVENT("%s: support codec negotiation %d ", __func__, features);
-    BTA_HfClientEnable(bta_hf_client_evt, BTIF_HF_CLIENT_SECURITY, features,
-                       BTIF_HF_CLIENT_SERVICE_NAME);
+    BTIF_TRACE_EVENT("%s: support codec negotiation %d ", __func__,
+                     features);
+    BTA_HfClientEnable(bta_hf_client_evt, BTIF_HF_CLIENT_SECURITY,
+                       features, BTIF_HF_CLIENT_SERVICE_NAME);
   } else {
     BTA_HfClientDisable();
   }
