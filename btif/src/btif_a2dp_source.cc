@@ -30,7 +30,6 @@
 #include <algorithm>
 
 #include "audio_a2dp_hw/include/audio_a2dp_hw.h"
-#include "audio_hal_interface/a2dp_encoding.h"
 #include "bt_common.h"
 #include "bta_av_ci.h"
 #include "btif_a2dp.h"
@@ -40,19 +39,19 @@
 #include "btif_av.h"
 #include "btif_av_co.h"
 #include "btif_util.h"
-#include "common/message_loop_thread.h"
-#include "common/metrics.h"
-#include "common/repeating_timer.h"
-#include "common/time_util.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/log.h"
+#include "osi/include/metrics.h"
 #include "osi/include/osi.h"
-#include "osi/include/wakelock.h"
+#include "osi/include/thread.h"
+#include "osi/include/time.h"
 #include "uipc.h"
 
-using bluetooth::common::A2dpSessionMetrics;
-using bluetooth::common::BluetoothMetricsLogger;
-using bluetooth::common::RepeatingTimer;
+#include <condition_variable>
+#include <mutex>
+
+using system_bt_osi::BluetoothMetricsLogger;
+using system_bt_osi::A2dpSessionMetrics;
 
 extern std::unique_ptr<tUIPC_STATE> a2dp_uipc;
 
@@ -166,6 +165,95 @@ class BtifMediaStats {
   int codec_index = -1;
 };
 
+class BtWorkerThread {
+ public:
+  BtWorkerThread(const std::string& thread_name)
+      : thread_name_(thread_name),
+        message_loop_(nullptr),
+        run_loop_(nullptr),
+        message_loop_thread_(nullptr),
+        started_(false) {}
+
+  void StartUp() {
+    if (message_loop_thread_ != nullptr) {
+      return;  // Already started up
+    }
+    message_loop_thread_ = thread_new(thread_name_.c_str());
+    CHECK(message_loop_thread_ != nullptr);
+    started_ = false;
+    thread_post(message_loop_thread_, &BtWorkerThread::RunThread, this);
+    {
+      // Block until run_loop_ is allocated and ready to run
+      std::unique_lock<std::mutex> start_lock(start_up_mutex_);
+      while (!started_) {
+        start_up_cv_.wait(start_lock);
+      }
+    }
+  }
+
+  bool DoInThread(const tracked_objects::Location& from_here,
+                  const base::Closure& task) {
+    if ((message_loop_ == nullptr) || !message_loop_->task_runner().get()) {
+      LOG_ERROR(
+          LOG_TAG,
+          "%s: Dropping message for thread %s: message loop is not initialized",
+          __func__, thread_name_.c_str());
+      return false;
+    }
+    if (!message_loop_->task_runner()->PostTask(from_here, task)) {
+      LOG_ERROR(LOG_TAG,
+                "%s: Posting task to message loop for thread %s failed",
+                __func__, thread_name_.c_str());
+      return false;
+    }
+    return true;
+  }
+
+  void ShutDown() {
+    if ((run_loop_ != nullptr) && (message_loop_ != nullptr)) {
+      message_loop_->task_runner()->PostTask(FROM_HERE,
+                                             run_loop_->QuitClosure());
+    }
+    thread_free(message_loop_thread_);
+    message_loop_thread_ = nullptr;
+  }
+
+ private:
+  static void RunThread(void* context) {
+    auto wt = static_cast<BtWorkerThread*>(context);
+    wt->Run();
+  }
+
+  void Run() {
+    LOG_INFO(LOG_TAG, "%s: message loop for thread %s started", __func__,
+             thread_name_.c_str());
+    message_loop_ = new base::MessageLoop();
+    run_loop_ = new base::RunLoop();
+    {
+      std::unique_lock<std::mutex> start_lock(start_up_mutex_);
+      started_ = true;
+      start_up_cv_.notify_all();
+    }
+    // Blocking util ShutDown() is called
+    run_loop_->Run();
+    delete message_loop_;
+    message_loop_ = nullptr;
+    delete run_loop_;
+    run_loop_ = nullptr;
+    LOG_INFO(LOG_TAG, "%s: message loop for thread %s finished", __func__,
+             thread_name_.c_str());
+  }
+
+  std::string thread_name_;
+  base::MessageLoop* message_loop_;
+  base::RunLoop* run_loop_;
+  thread_t* message_loop_thread_;
+  // For start-up
+  bool started_;
+  std::mutex start_up_mutex_;
+  std::condition_variable start_up_cv_;
+};
+
 class BtifA2dpSource {
  public:
   enum RunState {
@@ -178,6 +266,7 @@ class BtifA2dpSource {
   BtifA2dpSource()
       : tx_audio_queue(nullptr),
         tx_flush(false),
+        media_alarm(nullptr),
         encoder_interface(nullptr),
         encoder_interval_ms(0),
         state_(kStateOff) {}
@@ -186,8 +275,8 @@ class BtifA2dpSource {
     fixed_queue_free(tx_audio_queue, nullptr);
     tx_audio_queue = nullptr;
     tx_flush = false;
-    media_alarm.CancelAndWait();
-    wakelock_release();
+    alarm_free(media_alarm);
+    media_alarm = nullptr;
     encoder_interface = nullptr;
     encoder_interval_ms = 0;
     stats.Reset();
@@ -213,9 +302,9 @@ class BtifA2dpSource {
 
   fixed_queue_t* tx_audio_queue;
   bool tx_flush; /* Discards any outgoing data when true */
-  RepeatingTimer media_alarm;
+  alarm_t* media_alarm;
   const tA2DP_ENCODER_INTERFACE* encoder_interface;
-  uint64_t encoder_interval_ms; /* Local copy of the encoder interval */
+  period_ms_t encoder_interval_ms; /* Local copy of the encoder interval */
   BtifMediaStats stats;
   BtifMediaStats accumulated_stats;
 
@@ -223,14 +312,13 @@ class BtifA2dpSource {
   BtifA2dpSource::RunState state_;
 };
 
-static bluetooth::common::MessageLoopThread btif_a2dp_source_thread(
-    "bt_a2dp_source_worker_thread");
+static BtWorkerThread btif_a2dp_source_thread("btif_a2dp_source_thread");
 static BtifA2dpSource btif_a2dp_source_cb;
 
 static void btif_a2dp_source_init_delayed(void);
 static void btif_a2dp_source_startup_delayed(void);
 static void btif_a2dp_source_start_session_delayed(
-    const RawAddress& peer_address, std::promise<void> start_session_promise);
+    const RawAddress& peer_address);
 static void btif_a2dp_source_end_session_delayed(
     const RawAddress& peer_address);
 static void btif_a2dp_source_shutdown_delayed(void);
@@ -246,11 +334,11 @@ static void btif_a2dp_source_setup_codec_delayed(
     const RawAddress& peer_address);
 static void btif_a2dp_source_encoder_user_config_update_event(
     const RawAddress& peer_address,
-    const std::vector<btav_a2dp_codec_config_t>& codec_user_preferences,
-    std::promise<void> peer_ready_promise);
+    const btav_a2dp_codec_config_t& codec_user_config);
 static void btif_a2dp_source_audio_feeding_update_event(
     const btav_a2dp_codec_config_t& codec_audio_config);
 static bool btif_a2dp_source_audio_tx_flush_req(void);
+static void btif_a2dp_source_alarm_cb(void* context);
 static void btif_a2dp_source_audio_handle_timer(void);
 static uint32_t btif_a2dp_source_read_callback(uint8_t* p_buf, uint32_t len);
 static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
@@ -317,7 +405,7 @@ void btif_a2dp_source_accumulate_stats(BtifMediaStats* src,
 }
 
 bool btif_a2dp_source_init(void) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
 
   // Start A2DP Source media task
   btif_a2dp_source_thread.StartUp();
@@ -327,15 +415,16 @@ bool btif_a2dp_source_init(void) {
 }
 
 static void btif_a2dp_source_init_delayed(void) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   // Nothing to do
 }
 
 bool btif_a2dp_source_startup(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   if (btif_a2dp_source_cb.State() != BtifA2dpSource::kStateOff) {
-    LOG_ERROR("%s: A2DP Source media task already running", __func__);
+    LOG_ERROR(LOG_TAG, "%s: A2DP Source media task already running", __func__);
     return false;
   }
 
@@ -350,74 +439,52 @@ bool btif_a2dp_source_startup(void) {
   return true;
 }
 
-static void btif_a2dp_source_startup_delayed() {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
-  if (!btif_a2dp_source_thread.EnableRealTimeScheduling()) {
-    LOG(FATAL) << __func__ << ": unable to enable real time scheduling";
-  }
-  if (!bluetooth::audio::a2dp::init(&btif_a2dp_source_thread)) {
-    if (btif_av_is_a2dp_offload_enabled()) {
-      // TODO: BluetoothA2dp@1.0 is deprecated
-      LOG(WARNING) << __func__ << ": Using BluetoothA2dp HAL";
-    } else {
-      LOG(WARNING) << __func__ << ": Using legacy HAL";
-      btif_a2dp_control_init();
-    }
-  }
+static void btif_a2dp_source_startup_delayed(void) {
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
+
+  raise_priority_a2dp(TASK_HIGH_MEDIA);
+  btif_a2dp_control_init();
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateRunning);
 }
 
-bool btif_a2dp_source_start_session(const RawAddress& peer_address,
-                                    std::promise<void> peer_ready_promise) {
-  LOG(INFO) << __func__ << ": peer_address=" << peer_address
-            << " state=" << btif_a2dp_source_cb.StateStr();
+bool btif_a2dp_source_start_session(const RawAddress& peer_address) {
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
+           peer_address.ToString().c_str(),
+           btif_a2dp_source_cb.StateStr().c_str());
   btif_a2dp_source_setup_codec(peer_address);
-  if (btif_a2dp_source_thread.DoInThread(
-          FROM_HERE,
-          base::BindOnce(&btif_a2dp_source_start_session_delayed, peer_address,
-                         std::move(peer_ready_promise)))) {
-    return true;
-  } else {
-    // cannot set promise but triggers crash
-    LOG(FATAL) << __func__ << ": peer_address=" << peer_address
-               << " state=" << btif_a2dp_source_cb.StateStr()
-               << " fails to context switch";
-    return false;
-  }
+  btif_a2dp_source_thread.DoInThread(
+      FROM_HERE,
+      base::Bind(&btif_a2dp_source_start_session_delayed, peer_address));
+  return true;
 }
 
 static void btif_a2dp_source_start_session_delayed(
-    const RawAddress& peer_address, std::promise<void> peer_ready_promise) {
-  LOG(INFO) << __func__ << ": peer_address=" << peer_address
-            << " state=" << btif_a2dp_source_cb.StateStr();
+    const RawAddress& peer_address) {
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
+           peer_address.ToString().c_str(),
+           btif_a2dp_source_cb.StateStr().c_str());
   if (btif_a2dp_source_cb.State() != BtifA2dpSource::kStateRunning) {
-    LOG(ERROR) << __func__ << ": A2DP Source media task is not running";
-    peer_ready_promise.set_value();
+    LOG_ERROR(LOG_TAG, "%s: A2DP Source media task is not running", __func__);
     return;
   }
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    bluetooth::audio::a2dp::start_session();
-    bluetooth::audio::a2dp::set_remote_delay(btif_av_get_audio_delay());
-    BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
-        bluetooth::common::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
-  } else if (btif_av_is_a2dp_offload_enabled()) {
-    // TODO: BluetoothA2dp@1.0 is deprecated
+  if (btif_av_is_a2dp_offload_enabled()) {
     btif_a2dp_audio_interface_start_session();
   } else {
     BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
-        bluetooth::common::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
+        system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
   }
-  peer_ready_promise.set_value();
 }
 
 bool btif_a2dp_source_restart_session(const RawAddress& old_peer_address,
-                                      const RawAddress& new_peer_address,
-                                      std::promise<void> peer_ready_promise) {
-  bool is_streaming = btif_a2dp_source_cb.media_alarm.IsScheduled();
-  LOG(INFO) << __func__ << ": old_peer_address=" << old_peer_address
-            << " new_peer_address=" << new_peer_address
-            << " is_streaming=" << logbool(is_streaming)
-            << " state=" << btif_a2dp_source_cb.StateStr();
+                                      const RawAddress& new_peer_address) {
+  bool is_streaming = alarm_is_scheduled(btif_a2dp_source_cb.media_alarm);
+  LOG_INFO(LOG_TAG,
+           "%s: old_peer_address=%s new_peer_address=%s is_streaming=%s "
+           "state=%s",
+           __func__, old_peer_address.ToString().c_str(),
+           new_peer_address.ToString().c_str(), logbool(is_streaming).c_str(),
+           btif_a2dp_source_cb.StateStr().c_str());
 
   CHECK(!new_peer_address.IsEmpty());
 
@@ -435,15 +502,16 @@ bool btif_a2dp_source_restart_session(const RawAddress& old_peer_address,
   }
 
   // Start the session.
-  btif_a2dp_source_start_session(new_peer_address,
-                                 std::move(peer_ready_promise));
-  // If audio was streaming before, DON'T start audio streaming, but leave the
-  // control to the audio HAL.
+  // If audio was streaming before, start audio streaming as well.
+  btif_a2dp_source_start_session(new_peer_address);
+  if (is_streaming) {
+    btif_a2dp_source_start_audio_req();
+  }
   return true;
 }
 
 bool btif_a2dp_source_end_session(const RawAddress& peer_address) {
-  LOG_INFO("%s: peer_address=%s state=%s", __func__,
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
            peer_address.ToString().c_str(),
            btif_a2dp_source_cb.StateStr().c_str());
   btif_a2dp_source_thread.DoInThread(
@@ -454,30 +522,27 @@ bool btif_a2dp_source_end_session(const RawAddress& peer_address) {
 
 static void btif_a2dp_source_end_session_delayed(
     const RawAddress& peer_address) {
-  LOG_INFO("%s: peer_address=%s state=%s", __func__,
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
            peer_address.ToString().c_str(),
            btif_a2dp_source_cb.StateStr().c_str());
+  if (!btif_av_is_a2dp_offload_enabled()) {
+    BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
+        system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
+  }
   if ((btif_a2dp_source_cb.State() == BtifA2dpSource::kStateRunning) ||
       (btif_a2dp_source_cb.State() == BtifA2dpSource::kStateShuttingDown)) {
     btif_av_stream_stop(peer_address);
   } else {
-    LOG_ERROR("%s: A2DP Source media task is not running", __func__);
+    LOG_ERROR(LOG_TAG, "%s: A2DP Source media task is not running", __func__);
   }
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    bluetooth::audio::a2dp::end_session();
-    BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
-        bluetooth::common::DISCONNECT_REASON_UNKNOWN, 0);
-  } else if (btif_av_is_a2dp_offload_enabled()) {
-    // TODO: BluetoothA2dp@1.0 is deprecated
+  if (btif_av_is_a2dp_offload_enabled()) {
     btif_a2dp_audio_interface_end_session();
-  } else {
-    BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
-        bluetooth::common::DISCONNECT_REASON_UNKNOWN, 0);
   }
 }
 
 void btif_a2dp_source_shutdown(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   if ((btif_a2dp_source_cb.State() == BtifA2dpSource::kStateOff) ||
       (btif_a2dp_source_cb.State() == BtifA2dpSource::kStateShuttingDown)) {
@@ -492,20 +557,16 @@ void btif_a2dp_source_shutdown(void) {
 }
 
 static void btif_a2dp_source_shutdown_delayed(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   // Stop the timer
-  btif_a2dp_source_cb.media_alarm.CancelAndWait();
-  wakelock_release();
+  alarm_free(btif_a2dp_source_cb.media_alarm);
+  btif_a2dp_source_cb.media_alarm = nullptr;
 
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    bluetooth::audio::a2dp::cleanup();
-  } else if (btif_av_is_a2dp_offload_enabled()) {
-    // TODO: BluetoothA2dp@1.0 is deprecated
+  btif_a2dp_control_cleanup();
+  if (btif_av_is_a2dp_offload_enabled())
     btif_a2dp_audio_interface_end_session();
-  } else {
-    btif_a2dp_control_cleanup();
-  }
   fixed_queue_free(btif_a2dp_source_cb.tx_audio_queue, nullptr);
   btif_a2dp_source_cb.tx_audio_queue = nullptr;
 
@@ -513,7 +574,8 @@ static void btif_a2dp_source_shutdown_delayed(void) {
 }
 
 void btif_a2dp_source_cleanup(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   // Make sure the source is shutdown
   btif_a2dp_source_shutdown();
@@ -526,7 +588,8 @@ void btif_a2dp_source_cleanup(void) {
 }
 
 static void btif_a2dp_source_cleanup_delayed(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
   // Nothing to do
 }
 
@@ -539,11 +602,11 @@ bool btif_a2dp_source_media_task_is_shutting_down(void) {
 }
 
 bool btif_a2dp_source_is_streaming(void) {
-  return btif_a2dp_source_cb.media_alarm.IsScheduled();
+  return alarm_is_scheduled(btif_a2dp_source_cb.media_alarm);
 }
 
 static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
-  LOG_INFO("%s: peer_address=%s state=%s", __func__,
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
            peer_address.ToString().c_str(),
            btif_a2dp_source_cb.StateStr().c_str());
 
@@ -559,7 +622,7 @@ static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
 
 static void btif_a2dp_source_setup_codec_delayed(
     const RawAddress& peer_address) {
-  LOG_INFO("%s: peer_address=%s state=%s", __func__,
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
            peer_address.ToString().c_str(),
            btif_a2dp_source_cb.StateStr().c_str());
 
@@ -567,19 +630,21 @@ static void btif_a2dp_source_setup_codec_delayed(
   bta_av_co_get_peer_params(peer_address, &peer_params);
 
   if (!bta_av_co_set_active_peer(peer_address)) {
-    LOG_ERROR("%s: Cannot stream audio: cannot set active peer to %s", __func__,
-              peer_address.ToString().c_str());
+    LOG_ERROR(LOG_TAG, "%s: Cannot stream audio: cannot set active peer to %s",
+              __func__, peer_address.ToString().c_str());
     return;
   }
   btif_a2dp_source_cb.encoder_interface = bta_av_co_get_encoder_interface();
   if (btif_a2dp_source_cb.encoder_interface == nullptr) {
-    LOG_ERROR("%s: Cannot stream audio: no source encoder interface", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Cannot stream audio: no source encoder interface",
+              __func__);
     return;
   }
 
   A2dpCodecConfig* a2dp_codec_config = bta_av_get_a2dp_current_codec();
   if (a2dp_codec_config == nullptr) {
-    LOG_ERROR("%s: Cannot stream audio: current codec is not set", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Cannot stream audio: current codec is not set",
+              __func__);
     return;
   }
 
@@ -590,21 +655,19 @@ static void btif_a2dp_source_setup_codec_delayed(
   // Save a local copy of the encoder_interval_ms
   btif_a2dp_source_cb.encoder_interval_ms =
       btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms();
-
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    bluetooth::audio::a2dp::setup_codec();
-  }
 }
 
 void btif_a2dp_source_start_audio_req(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_audio_tx_start_event));
 }
 
 void btif_a2dp_source_stop_audio_req(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_audio_tx_stop_event));
@@ -612,63 +675,30 @@ void btif_a2dp_source_stop_audio_req(void) {
 
 void btif_a2dp_source_encoder_user_config_update_req(
     const RawAddress& peer_address,
-    const std::vector<btav_a2dp_codec_config_t>& codec_user_preferences,
-    std::promise<void> peer_ready_promise) {
-  LOG(INFO) << __func__ << ": peer_address=" << peer_address
-            << " state=" << btif_a2dp_source_cb.StateStr() << " "
-            << codec_user_preferences.size() << " codec_preference(s)";
-  if (!btif_a2dp_source_thread.DoInThread(
-          FROM_HERE,
-          base::BindOnce(&btif_a2dp_source_encoder_user_config_update_event,
-                         peer_address, codec_user_preferences,
-                         std::move(peer_ready_promise)))) {
-    // cannot set promise but triggers crash
-    LOG(FATAL) << __func__ << ": peer_address=" << peer_address
-               << " state=" << btif_a2dp_source_cb.StateStr()
-               << " fails to context switch";
-  }
+    const btav_a2dp_codec_config_t& codec_user_config) {
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
+           peer_address.ToString().c_str(),
+           btif_a2dp_source_cb.StateStr().c_str());
+  btif_a2dp_source_thread.DoInThread(
+      FROM_HERE, base::Bind(&btif_a2dp_source_encoder_user_config_update_event,
+                            peer_address, codec_user_config));
 }
 
 static void btif_a2dp_source_encoder_user_config_update_event(
     const RawAddress& peer_address,
-    const std::vector<btav_a2dp_codec_config_t>& codec_user_preferences,
-    std::promise<void> peer_ready_promise) {
-  bool restart_output = false;
-  bool success = false;
-  for (auto codec_user_config : codec_user_preferences) {
-    success = bta_av_co_set_codec_user_config(peer_address, codec_user_config,
-                                              &restart_output);
-    if (success) {
-      LOG(INFO) << __func__ << ": peer_address=" << peer_address
-                << " state=" << btif_a2dp_source_cb.StateStr()
-                << " codec_preference={" << codec_user_config.ToString()
-                << "} restart_output=" << (restart_output ? "true" : "false");
-      break;
-    }
-  }
-  if (success && restart_output) {
-    // Codec reconfiguration is in progress, and it is safe to unlock since
-    // remaining tasks like starting audio session and reporting new codec
-    // will be handled by BTA_AV_RECONFIG_EVT later.
-    peer_ready_promise.set_value();
-    return;
-  }
-  if (!success) {
-    LOG(ERROR) << __func__ << ": cannot update codec user configuration(s)";
-  }
-  if (!peer_address.IsEmpty() && peer_address == btif_av_source_active_peer()) {
-    // No more actions needed with remote, and if succeed, user had changed the
-    // config like the bits per sample only. Let's resume the session now.
-    btif_a2dp_source_start_session(peer_address, std::move(peer_ready_promise));
-  } else {
-    // Unlock for non-active peer
-    peer_ready_promise.set_value();
+    const btav_a2dp_codec_config_t& codec_user_config) {
+  LOG_INFO(LOG_TAG, "%s: peer_address=%s state=%s", __func__,
+           peer_address.ToString().c_str(),
+           btif_a2dp_source_cb.StateStr().c_str());
+  if (!bta_av_co_set_codec_user_config(peer_address, codec_user_config)) {
+    LOG_ERROR(LOG_TAG, "%s: cannot update codec user configuration", __func__);
   }
 }
 
 void btif_a2dp_source_feeding_update_req(
     const btav_a2dp_codec_config_t& codec_audio_config) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_audio_feeding_update_event,
                             codec_audio_config));
@@ -676,14 +706,17 @@ void btif_a2dp_source_feeding_update_req(
 
 static void btif_a2dp_source_audio_feeding_update_event(
     const btav_a2dp_codec_config_t& codec_audio_config) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
   if (!bta_av_co_set_codec_audio_config(codec_audio_config)) {
-    LOG_ERROR("%s: cannot update codec audio feeding parameters", __func__);
+    LOG_ERROR(LOG_TAG, "%s: cannot update codec audio feeding parameters",
+              __func__);
   }
 }
 
 void btif_a2dp_source_on_idle(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
   if (btif_a2dp_source_cb.State() == BtifA2dpSource::kStateOff) return;
 
   /* Make sure media task is stopped */
@@ -691,87 +724,74 @@ void btif_a2dp_source_on_idle(void) {
 }
 
 void btif_a2dp_source_on_stopped(tBTA_AV_SUSPEND* p_av_suspend) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   if (btif_a2dp_source_cb.State() == BtifA2dpSource::kStateOff) return;
 
-  // allow using this API for other (acknowledgement and stopping media task)
-  // than suspend
-  if (p_av_suspend != nullptr && p_av_suspend->status != BTA_AV_SUCCESS) {
-    LOG_ERROR("%s: A2DP stop failed: status=%d, initiator=%s", __func__,
-              p_av_suspend->status,
-              (p_av_suspend->initiator ? "true" : "false"));
-    if (p_av_suspend->initiator) {
-      if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-        bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_FAILURE);
-      } else {
+  /* allow using this api for other than suspend */
+  if (p_av_suspend != nullptr) {
+    if (p_av_suspend->status != BTA_AV_SUCCESS) {
+      LOG_ERROR(LOG_TAG, "%s: A2DP stop request failed: status=%d", __func__,
+                p_av_suspend->status);
+      if (p_av_suspend->initiator) {
+        LOG_WARN(LOG_TAG, "%s: A2DP stop request failed: status=%d", __func__,
+                 p_av_suspend->status);
         btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
       }
+      return;
     }
-  } else if (btif_av_is_a2dp_offload_running()) {
-    bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_SUCCESS);
-    return;
   }
 
-  // ensure tx frames are immediately suspended
+  /* ensure tx frames are immediately suspended */
   btif_a2dp_source_cb.tx_flush = true;
-  // ensure tx frames are immediately flushed
-  btif_a2dp_source_audio_tx_flush_req();
 
-  // request to stop media task
+  /* request to stop media task */
+  btif_a2dp_source_audio_tx_flush_req();
   btif_a2dp_source_stop_audio_req();
 
-  // once software stream is fully stopped we will ack back
+  /* once stream is fully stopped we will ack back */
 }
 
 void btif_a2dp_source_on_suspended(tBTA_AV_SUSPEND* p_av_suspend) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   if (btif_a2dp_source_cb.State() == BtifA2dpSource::kStateOff) return;
 
-  CHECK(p_av_suspend != nullptr) << "Suspend result could not be nullptr";
-
-  // check for status failures
+  /* check for status failures */
   if (p_av_suspend->status != BTA_AV_SUCCESS) {
-    LOG_WARN("%s: A2DP suspend failed: status=%d, initiator=%s", __func__,
-             p_av_suspend->status,
-             (p_av_suspend->initiator ? "true" : "false"));
     if (p_av_suspend->initiator) {
-      if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-        bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_FAILURE);
-      } else {
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
-      }
+      LOG_WARN(LOG_TAG, "%s: A2DP suspend request failed: status=%d", __func__,
+               p_av_suspend->status);
+      btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
     }
-  } else if (btif_av_is_a2dp_offload_running()) {
-    bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_SUCCESS);
-    return;
   }
 
-  // ensure tx frames are immediately suspended
+  /* once stream is fully stopped we will ack back */
+
+  /* ensure tx frames are immediately flushed */
   btif_a2dp_source_cb.tx_flush = true;
 
-  // stop timer tick
+  /* stop timer tick */
   btif_a2dp_source_stop_audio_req();
-
-  // once software stream is fully stopped we will ack back
 }
 
 /* when true media task discards any tx frames */
 void btif_a2dp_source_set_tx_flush(bool enable) {
-  LOG_INFO("%s: enable=%s state=%s", __func__, (enable) ? "true" : "false",
-           btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: enable=%s state=%s", __func__,
+           (enable) ? "true" : "false", btif_a2dp_source_cb.StateStr().c_str());
   btif_a2dp_source_cb.tx_flush = enable;
 }
 
 static void btif_a2dp_source_audio_tx_start_event(void) {
-  LOG_INFO(
-      "%s: media_alarm is %s, streaming %s state=%s", __func__,
-      btif_a2dp_source_cb.media_alarm.IsScheduled() ? "running" : "stopped",
-      btif_a2dp_source_is_streaming() ? "true" : "false",
-      btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: media_alarm is %srunning, streaming %s state=%s",
+           __func__,
+           alarm_is_scheduled(btif_a2dp_source_cb.media_alarm) ? "" : "not ",
+           btif_a2dp_source_is_streaming() ? "true" : "false",
+           btif_a2dp_source_cb.StateStr().c_str());
 
-  if (btif_av_is_a2dp_offload_running()) return;
+  if (btif_av_is_a2dp_offload_enabled()) return;
 
   /* Reset the media feeding state */
   CHECK(btif_a2dp_source_cb.encoder_interface != nullptr);
@@ -780,23 +800,22 @@ static void btif_a2dp_source_audio_tx_start_event(void) {
   APPL_TRACE_EVENT(
       "%s: starting timer %" PRIu64 " ms", __func__,
       btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms());
+  alarm_free(btif_a2dp_source_cb.media_alarm);
+  btif_a2dp_source_cb.media_alarm =
+      alarm_new_periodic("btif.a2dp_source_media_alarm");
+  if (btif_a2dp_source_cb.media_alarm == nullptr) {
+    LOG_ERROR(LOG_TAG, "%s: unable to allocate media alarm", __func__);
+    return;
+  }
 
-  /* audio engine starting, reset tx suspended flag */
-  btif_a2dp_source_cb.tx_flush = false;
-
-  wakelock_acquire();
-  btif_a2dp_source_cb.media_alarm.SchedulePeriodic(
-      btif_a2dp_source_thread.GetWeakPtr(), FROM_HERE,
-      base::Bind(&btif_a2dp_source_audio_handle_timer),
-      base::TimeDelta::FromMilliseconds(
-          btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms()));
+  alarm_set(btif_a2dp_source_cb.media_alarm,
+            btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms(),
+            btif_a2dp_source_alarm_cb, nullptr);
 
   btif_a2dp_source_cb.stats.Reset();
-  // Assign session_start_us to 1 when
-  // bluetooth::common::time_get_os_boottime_us() is 0 to indicate
-  // btif_a2dp_source_start_audio_req() has been called
-  btif_a2dp_source_cb.stats.session_start_us =
-      bluetooth::common::time_get_os_boottime_us();
+  // Assign session_start_us to 1 when time_get_os_boottime_us() is 0 to
+  // indicate btif_a2dp_source_start_audio_req() has been called
+  btif_a2dp_source_cb.stats.session_start_us = time_get_os_boottime_us();
   if (btif_a2dp_source_cb.stats.session_start_us == 0) {
     btif_a2dp_source_cb.stats.session_start_us = 1;
   }
@@ -808,16 +827,15 @@ static void btif_a2dp_source_audio_tx_start_event(void) {
 }
 
 static void btif_a2dp_source_audio_tx_stop_event(void) {
-  LOG_INFO(
-      "%s: media_alarm is %s, streaming %s state=%s", __func__,
-      btif_a2dp_source_cb.media_alarm.IsScheduled() ? "running" : "stopped",
-      btif_a2dp_source_is_streaming() ? "true" : "false",
-      btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: media_alarm is %srunning, streaming %s state=%s",
+           __func__,
+           alarm_is_scheduled(btif_a2dp_source_cb.media_alarm) ? "" : "not ",
+           btif_a2dp_source_is_streaming() ? "true" : "false",
+           btif_a2dp_source_cb.StateStr().c_str());
 
-  if (btif_av_is_a2dp_offload_running()) return;
+  if (btif_av_is_a2dp_offload_enabled()) return;
 
-  btif_a2dp_source_cb.stats.session_end_us =
-      bluetooth::common::time_get_os_boottime_us();
+  btif_a2dp_source_cb.stats.session_end_us = time_get_os_boottime_us();
   btif_a2dp_source_update_metrics();
   btif_a2dp_source_accumulate_stats(&btif_a2dp_source_cb.stats,
                                     &btif_a2dp_source_cb.accumulated_stats);
@@ -826,38 +844,29 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
   uint16_t event;
 
   // Keep track of audio data still left in the pipe
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    btif_a2dp_control_log_bytes_read(
-        bluetooth::audio::a2dp::read(p_buf, sizeof(p_buf)));
-  } else if (a2dp_uipc != nullptr) {
-    btif_a2dp_control_log_bytes_read(UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO,
-                                               &event, p_buf, sizeof(p_buf)));
-  }
+  btif_a2dp_control_log_bytes_read(
+      UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, &event, p_buf, sizeof(p_buf)));
 
   /* Stop the timer first */
-  btif_a2dp_source_cb.media_alarm.CancelAndWait();
-  wakelock_release();
+  alarm_free(btif_a2dp_source_cb.media_alarm);
+  btif_a2dp_source_cb.media_alarm = nullptr;
 
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_SUCCESS);
-  } else if (a2dp_uipc != nullptr) {
-    UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO);
+  UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO);
 
-    /*
-     * Try to send acknowledgement once the media stream is
-     * stopped. This will make sure that the A2DP HAL layer is
-     * un-blocked on wait for acknowledgment for the sent command.
-     * This resolves a corner cases AVDTP SUSPEND collision
-     * when the DUT and the remote device issue SUSPEND simultaneously
-     * and due to the processing of the SUSPEND request from the remote,
-     * the media path is torn down. If the A2DP HAL happens to wait
-     * for ACK for the initiated SUSPEND, it would never receive it casuing
-     * a block/wait. Due to this acknowledgement, the A2DP HAL is guranteed
-     * to get the ACK for any pending command in such cases.
-     */
+  /*
+   * Try to send acknowldegment once the media stream is
+   * stopped. This will make sure that the A2DP HAL layer is
+   * un-blocked on wait for acknowledgment for the sent command.
+   * This resolves a corner cases AVDTP SUSPEND collision
+   * when the DUT and the remote device issue SUSPEND simultaneously
+   * and due to the processing of the SUSPEND request from the remote,
+   * the media path is torn down. If the A2DP HAL happens to wait
+   * for ACK for the initiated SUSPEND, it would never receive it casuing
+   * a block/wait. Due to this acknowledgement, the A2DP HAL is guranteed
+   * to get the ACK for any pending command in such cases.
+   */
 
-    btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
-  }
+  btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
 
   /* audio engine stopped, reset tx suspended flag */
   btif_a2dp_source_cb.tx_flush = false;
@@ -867,14 +876,20 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
     btif_a2dp_source_cb.encoder_interface->feeding_reset();
 }
 
-static void btif_a2dp_source_audio_handle_timer(void) {
-  if (btif_av_is_a2dp_offload_running()) return;
+static void btif_a2dp_source_alarm_cb(UNUSED_ATTR void* context) {
+  btif_a2dp_source_thread.DoInThread(
+      FROM_HERE, base::Bind(&btif_a2dp_source_audio_handle_timer));
+}
 
-  uint64_t timestamp_us = bluetooth::common::time_get_os_boottime_us();
+static void btif_a2dp_source_audio_handle_timer(void) {
+  if (btif_av_is_a2dp_offload_enabled()) return;
+
+  uint64_t timestamp_us = time_get_os_boottime_us();
   log_tstamps_us("A2DP Source tx timer", timestamp_us);
 
-  if (!btif_a2dp_source_cb.media_alarm.IsScheduled()) {
-    LOG_ERROR("%s: ERROR Media task Scheduled after Suspend", __func__);
+  if (!alarm_is_scheduled(btif_a2dp_source_cb.media_alarm)) {
+    LOG_ERROR(LOG_TAG, "%s: ERROR Media task Scheduled after Suspend",
+              __func__);
     return;
   }
   CHECK(btif_a2dp_source_cb.encoder_interface != nullptr);
@@ -897,25 +912,17 @@ static void btif_a2dp_source_audio_handle_timer(void) {
 
 static uint32_t btif_a2dp_source_read_callback(uint8_t* p_buf, uint32_t len) {
   uint16_t event;
-  uint32_t bytes_read = 0;
-
-  if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
-    bytes_read = bluetooth::audio::a2dp::read(p_buf, len);
-  } else if (a2dp_uipc != nullptr) {
-    bytes_read = UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, &event, p_buf, len);
-  }
+  uint32_t bytes_read =
+      UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, &event, p_buf, len);
 
   if (bytes_read < len) {
-    LOG_WARN("%s: UNDERFLOW: ONLY READ %d BYTES OUT OF %d", __func__,
+    LOG_WARN(LOG_TAG, "%s: UNDERFLOW: ONLY READ %d BYTES OUT OF %d", __func__,
              bytes_read, len);
     btif_a2dp_source_cb.stats.media_read_total_underflow_bytes +=
         (len - bytes_read);
     btif_a2dp_source_cb.stats.media_read_total_underflow_count++;
     btif_a2dp_source_cb.stats.media_read_last_underflow_us =
-        bluetooth::common::time_get_os_boottime_us();
-    bluetooth::common::LogA2dpAudioUnderrunEvent(
-        btif_av_source_active_peer(), btif_a2dp_source_cb.encoder_interval_ms,
-        len - bytes_read);
+        time_get_os_boottime_us();
   }
 
   return bytes_read;
@@ -923,18 +930,18 @@ static uint32_t btif_a2dp_source_read_callback(uint8_t* p_buf, uint32_t len) {
 
 static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
                                               uint32_t bytes_read) {
-  uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
+  uint64_t now_us = time_get_os_boottime_us();
   btif_a2dp_control_log_bytes_read(bytes_read);
 
   /* Check if timer was stopped (media task stopped) */
-  if (!btif_a2dp_source_cb.media_alarm.IsScheduled()) {
+  if (!alarm_is_scheduled(btif_a2dp_source_cb.media_alarm)) {
     osi_free(p_buf);
     return false;
   }
 
   /* Check if the transmission queue has been flushed */
   if (btif_a2dp_source_cb.tx_flush) {
-    LOG_VERBOSE("%s: tx suspended, discarded frame", __func__);
+    LOG_VERBOSE(LOG_TAG, "%s: tx suspended, discarded frame", __func__);
 
     btif_a2dp_source_cb.stats.tx_queue_total_flushed_messages +=
         fixed_queue_length(btif_a2dp_source_cb.tx_audio_queue);
@@ -949,7 +956,8 @@ static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
   // TODO: Using frames_n here is probably wrong: should be "+ 1" instead.
   if (fixed_queue_length(btif_a2dp_source_cb.tx_audio_queue) + frames_n >
       MAX_OUTPUT_A2DP_FRAME_QUEUE_SZ) {
-    LOG_WARN("%s: TX queue buffer size now=%u adding=%u max=%d", __func__,
+    LOG_WARN(LOG_TAG, "%s: TX queue buffer size now=%u adding=%u max=%d",
+             __func__,
              (uint32_t)fixed_queue_length(btif_a2dp_source_cb.tx_audio_queue),
              (uint32_t)frames_n, MAX_OUTPUT_A2DP_FRAME_QUEUE_SZ);
     // Keep track of drop-outs
@@ -960,46 +968,34 @@ static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
     size_t drop_n = fixed_queue_length(btif_a2dp_source_cb.tx_audio_queue);
     btif_a2dp_source_cb.stats.tx_queue_max_dropped_messages = std::max(
         drop_n, btif_a2dp_source_cb.stats.tx_queue_max_dropped_messages);
-    int num_dropped_encoded_bytes = 0;
-    int num_dropped_encoded_frames = 0;
     while (fixed_queue_length(btif_a2dp_source_cb.tx_audio_queue)) {
       btif_a2dp_source_cb.stats.tx_queue_total_dropped_messages++;
-      void* p_data =
-          fixed_queue_try_dequeue(btif_a2dp_source_cb.tx_audio_queue);
-      if (p_data != nullptr) {
-        auto p_dropped_buf = static_cast<BT_HDR*>(p_data);
-        num_dropped_encoded_bytes += p_dropped_buf->len;
-        num_dropped_encoded_frames += p_dropped_buf->layer_specific;
-        osi_free(p_data);
-      }
+      osi_free(fixed_queue_try_dequeue(btif_a2dp_source_cb.tx_audio_queue));
     }
-    bluetooth::common::LogA2dpAudioOverrunEvent(
-        btif_av_source_active_peer(), drop_n,
-        btif_a2dp_source_cb.encoder_interval_ms, num_dropped_encoded_frames,
-        num_dropped_encoded_bytes);
 
     // Request additional debug info if we had to flush buffers
     RawAddress peer_bda = btif_av_source_active_peer();
     tBTM_STATUS status = BTM_ReadRSSI(peer_bda, btm_read_rssi_cb);
     if (status != BTM_CMD_STARTED) {
-      LOG_WARN("%s: Cannot read RSSI: status %d", __func__, status);
+      LOG_WARN(LOG_TAG, "%s: Cannot read RSSI: status %d", __func__, status);
     }
     status = BTM_ReadFailedContactCounter(peer_bda,
                                           btm_read_failed_contact_counter_cb);
     if (status != BTM_CMD_STARTED) {
-      LOG_WARN("%s: Cannot read Failed Contact Counter: status %d", __func__,
-               status);
+      LOG_WARN(LOG_TAG, "%s: Cannot read Failed Contact Counter: status %d",
+               __func__, status);
     }
     status = BTM_ReadAutomaticFlushTimeout(peer_bda,
                                            btm_read_automatic_flush_timeout_cb);
     if (status != BTM_CMD_STARTED) {
-      LOG_WARN("%s: Cannot read Automatic Flush Timeout: status %d", __func__,
-               status);
+      LOG_WARN(LOG_TAG, "%s: Cannot read Automatic Flush Timeout: status %d",
+               __func__, status);
     }
     status =
         BTM_ReadTxPower(peer_bda, BT_TRANSPORT_BR_EDR, btm_read_tx_power_cb);
     if (status != BTM_CMD_STARTED) {
-      LOG_WARN("%s: Cannot read Tx Power: status %d", __func__, status);
+      LOG_WARN(LOG_TAG, "%s: Cannot read Tx Power: status %d", __func__,
+               status);
     }
   }
 
@@ -1016,8 +1012,9 @@ static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
 
 static void btif_a2dp_source_audio_tx_flush_event(void) {
   /* Flush all enqueued audio buffers (encoded) */
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
-  if (btif_av_is_a2dp_offload_running()) return;
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
+  if (btif_av_is_a2dp_offload_enabled()) return;
 
   if (btif_a2dp_source_cb.encoder_interface != nullptr)
     btif_a2dp_source_cb.encoder_interface->feeding_flush();
@@ -1025,16 +1022,15 @@ static void btif_a2dp_source_audio_tx_flush_event(void) {
   btif_a2dp_source_cb.stats.tx_queue_total_flushed_messages +=
       fixed_queue_length(btif_a2dp_source_cb.tx_audio_queue);
   btif_a2dp_source_cb.stats.tx_queue_last_flushed_us =
-      bluetooth::common::time_get_os_boottime_us();
+      time_get_os_boottime_us();
   fixed_queue_flush(btif_a2dp_source_cb.tx_audio_queue, osi_free);
 
-  if (!bluetooth::audio::a2dp::is_hal_2_0_enabled() && a2dp_uipc != nullptr) {
-    UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_REQ_RX_FLUSH, nullptr);
-  }
+  UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_REQ_RX_FLUSH, nullptr);
 }
 
 static bool btif_a2dp_source_audio_tx_flush_req(void) {
-  LOG_INFO("%s: state=%s", __func__, btif_a2dp_source_cb.StateStr().c_str());
+  LOG_INFO(LOG_TAG, "%s: state=%s", __func__,
+           btif_a2dp_source_cb.StateStr().c_str());
 
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_audio_tx_flush_event));
@@ -1042,7 +1038,7 @@ static bool btif_a2dp_source_audio_tx_flush_req(void) {
 }
 
 BT_HDR* btif_a2dp_source_audio_readbuf(void) {
-  uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
+  uint64_t now_us = time_get_os_boottime_us();
   BT_HDR* p_buf =
       (BT_HDR*)fixed_queue_try_dequeue(btif_a2dp_source_cb.tx_audio_queue);
 
@@ -1109,7 +1105,7 @@ static void update_scheduling_stats(SchedulingStats* stats, uint64_t now_us,
 void btif_a2dp_source_debug_dump(int fd) {
   btif_a2dp_source_accumulate_stats(&btif_a2dp_source_cb.stats,
                                     &btif_a2dp_source_cb.accumulated_stats);
-  uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
+  uint64_t now_us = time_get_os_boottime_us();
   BtifMediaStats* accumulated_stats = &btif_a2dp_source_cb.accumulated_stats;
   SchedulingStats* enqueue_stats = &accumulated_stats->tx_queue_enqueue_stats;
   SchedulingStats* dequeue_stats = &accumulated_stats->tx_queue_dequeue_stats;
@@ -1276,12 +1272,12 @@ static void btif_a2dp_source_update_metrics(void) {
   SchedulingStats enqueue_stats = stats.tx_queue_enqueue_stats;
   A2dpSessionMetrics metrics;
   metrics.codec_index = stats.codec_index;
-  metrics.is_a2dp_offload = btif_av_is_a2dp_offload_running();
+  metrics.is_a2dp_offload = btif_av_is_a2dp_offload_enabled();
   // session_start_us is 0 when btif_a2dp_source_start_audio_req() is not called
   // mark the metric duration as invalid (-1) in this case
   if (stats.session_start_us != 0) {
     int64_t session_end_us = stats.session_end_us == 0
-                                 ? bluetooth::common::time_get_os_boottime_us()
+                                 ? time_get_os_boottime_us()
                                  : stats.session_end_us;
     if (static_cast<uint64_t>(session_end_us) > stats.session_start_us) {
       metrics.audio_duration_ms =
@@ -1320,79 +1316,72 @@ static void btif_a2dp_source_update_metrics(void) {
 
 static void btm_read_rssi_cb(void* data) {
   if (data == nullptr) {
-    LOG_ERROR("%s: Read RSSI request timed out", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Read RSSI request timed out", __func__);
     return;
   }
 
   tBTM_RSSI_RESULT* result = (tBTM_RSSI_RESULT*)data;
   if (result->status != BTM_SUCCESS) {
-    LOG_ERROR("%s: unable to read remote RSSI (status %d)", __func__,
+    LOG_ERROR(LOG_TAG, "%s: unable to read remote RSSI (status %d)", __func__,
               result->status);
     return;
   }
-  bluetooth::common::LogReadRssiResult(
-      result->rem_bda, bluetooth::common::kUnknownConnectionHandle,
-      result->hci_status, result->rssi);
 
-  LOG_WARN("%s: device: %s, rssi: %d", __func__,
+  LOG_WARN(LOG_TAG, "%s: device: %s, rssi: %d", __func__,
            result->rem_bda.ToString().c_str(), result->rssi);
 }
 
 static void btm_read_failed_contact_counter_cb(void* data) {
   if (data == nullptr) {
-    LOG_ERROR("%s: Read Failed Contact Counter request timed out", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Read Failed Contact Counter request timed out",
+              __func__);
     return;
   }
 
   tBTM_FAILED_CONTACT_COUNTER_RESULT* result =
       (tBTM_FAILED_CONTACT_COUNTER_RESULT*)data;
   if (result->status != BTM_SUCCESS) {
-    LOG_ERROR("%s: unable to read Failed Contact Counter (status %d)", __func__,
-              result->status);
+    LOG_ERROR(LOG_TAG, "%s: unable to read Failed Contact Counter (status %d)",
+              __func__, result->status);
     return;
   }
-  bluetooth::common::LogReadFailedContactCounterResult(
-      result->rem_bda, bluetooth::common::kUnknownConnectionHandle,
-      result->hci_status, result->failed_contact_counter);
 
-  LOG_WARN("%s: device: %s, Failed Contact Counter: %u", __func__,
+  LOG_WARN(LOG_TAG, "%s: device: %s, Failed Contact Counter: %u", __func__,
            result->rem_bda.ToString().c_str(), result->failed_contact_counter);
 }
 
 static void btm_read_automatic_flush_timeout_cb(void* data) {
   if (data == nullptr) {
-    LOG_ERROR("%s: Read Automatic Flush Timeout request timed out", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Read Automatic Flush Timeout request timed out",
+              __func__);
     return;
   }
 
   tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT* result =
       (tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT*)data;
   if (result->status != BTM_SUCCESS) {
-    LOG_ERROR("%s: unable to read Automatic Flush Timeout (status %d)",
+    LOG_ERROR(LOG_TAG, "%s: unable to read Automatic Flush Timeout (status %d)",
               __func__, result->status);
     return;
   }
 
-  LOG_WARN("%s: device: %s, Automatic Flush Timeout: %u", __func__,
+  LOG_WARN(LOG_TAG, "%s: device: %s, Automatic Flush Timeout: %u", __func__,
            result->rem_bda.ToString().c_str(), result->automatic_flush_timeout);
 }
 
 static void btm_read_tx_power_cb(void* data) {
   if (data == nullptr) {
-    LOG_ERROR("%s: Read Tx Power request timed out", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Read Tx Power request timed out", __func__);
     return;
   }
 
   tBTM_TX_POWER_RESULT* result = (tBTM_TX_POWER_RESULT*)data;
   if (result->status != BTM_SUCCESS) {
-    LOG_ERROR("%s: unable to read Tx Power (status %d)", __func__,
+    LOG_ERROR(LOG_TAG, "%s: unable to read Tx Power (status %d)", __func__,
               result->status);
     return;
   }
-  bluetooth::common::LogReadTxPowerLevelResult(
-      result->rem_bda, bluetooth::common::kUnknownConnectionHandle,
-      result->hci_status, result->tx_power);
 
-  LOG_WARN("%s: device: %s, Tx Power: %d", __func__,
+  LOG_WARN(LOG_TAG, "%s: device: %s, Tx Power: %d", __func__,
            result->rem_bda.ToString().c_str(), result->tx_power);
 }

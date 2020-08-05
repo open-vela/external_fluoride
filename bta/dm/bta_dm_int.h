@@ -118,8 +118,8 @@ typedef struct {
 
 typedef struct {
   RawAddress bd_addr;
-  Octet16 c;
-  Octet16 r;
+  BT_OCTET16 c;
+  BT_OCTET16 r;
   bool accept;
 } tBTA_DM_CI_RMT_OOB;
 
@@ -150,7 +150,7 @@ typedef struct {
 typedef struct {
   RawAddress bd_addr;
   DEV_CLASS dc;
-  LinkKey link_key;
+  LINK_KEY link_key;
   tBTA_SERVICE_MASK tm;
   bool is_trusted;
   uint8_t key_type;
@@ -250,7 +250,7 @@ typedef struct {
 } tBTA_DM_SRVCS;
 
 #ifndef BTA_DM_NUM_CONN_SRVS
-#define BTA_DM_NUM_CONN_SRVS 30
+#define BTA_DM_NUM_CONN_SRVS 10
 #endif
 
 typedef struct {
@@ -480,7 +480,7 @@ extern void bta_dm_set_dev_name(const std::vector<uint8_t>&);
 extern void bta_dm_set_visibility(tBTA_DM_DISC, tBTA_DM_CONN, uint8_t, uint8_t);
 extern void bta_dm_set_scan_config(tBTA_DM_MSG* p_data);
 extern void bta_dm_vendor_spec_command(tBTA_DM_MSG* p_data);
-extern void bta_dm_bond(const RawAddress&, tBLE_ADDR_TYPE, tBTA_TRANSPORT, int);
+extern void bta_dm_bond(const RawAddress&, tBTA_TRANSPORT);
 extern void bta_dm_bond_cancel(const RawAddress&);
 extern void bta_dm_pin_reply(std::unique_ptr<tBTA_DM_API_PIN_REPLY> msg);
 extern void bta_dm_add_device(std::unique_ptr<tBTA_DM_API_ADD_DEVICE> msg);
@@ -503,12 +503,16 @@ extern void bta_dm_ble_passkey_reply(const RawAddress& bd_addr, bool accept,
 extern void bta_dm_ble_confirm_reply(const RawAddress&, bool);
 extern void bta_dm_ble_set_conn_params(const RawAddress&, uint16_t, uint16_t,
                                        uint16_t, uint16_t);
+extern void bta_dm_ble_set_conn_scan_params(uint32_t, uint32_t);
 extern void bta_dm_close_gatt_conn(tBTA_DM_MSG* p_data);
 extern void bta_dm_ble_observe(bool, uint8_t, tBTA_DM_SEARCH_CBACK*);
 extern void bta_dm_ble_update_conn_params(const RawAddress&, uint16_t, uint16_t,
                                           uint16_t, uint16_t, uint16_t,
                                           uint16_t);
 extern void bta_dm_ble_config_local_privacy(bool);
+extern void bta_dm_ble_set_adv_params(uint16_t adv_int_min,
+                                      uint16_t adv_int_max,
+                                      tBLE_BD_ADDR* p_dir_bda);
 
 extern void bta_dm_ble_set_data_length(const RawAddress&, uint16_t);
 
