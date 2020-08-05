@@ -61,11 +61,10 @@ using base::StringPrintf;
  *
  ******************************************************************************/
 uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
-                       uint16_t required_mtu) {
+                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_Register(psm, p_cb_info, enable_snoop,
-                                          p_ertm_info, required_mtu);
+                                          p_ertm_info);
   }
 
   tL2C_RCB* p_rcb;
@@ -596,7 +595,7 @@ uint16_t L2CA_ConnectLECocReq(uint16_t psm, const RawAddress& p_bd_addr,
 
   /* Save the configuration */
   if (p_cfg) {
-    p_ccb->local_conn_cfg = *p_cfg;
+    memcpy(&p_ccb->local_conn_cfg, p_cfg, sizeof(tL2CAP_LE_CFG_INFO));
     p_ccb->remote_credit_count = p_cfg->credits;
   }
 
@@ -674,7 +673,7 @@ bool L2CA_ConnectLECocRsp(const RawAddress& p_bd_addr, uint8_t id,
   }
 
   if (p_cfg) {
-    p_ccb->local_conn_cfg = *p_cfg;
+    memcpy(&p_ccb->local_conn_cfg, p_cfg, sizeof(tL2CAP_LE_CFG_INFO));
     p_ccb->remote_credit_count = p_cfg->credits;
   }
 
@@ -993,15 +992,16 @@ bool L2CA_DisconnectRsp(uint16_t cid) {
   return (true);
 }
 
-bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid) {
+bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_GetRemoteCid(lcid, rcid);
+    return bluetooth::shim::L2CA_GetIdentifiers(lcid, rcid, handle);
   }
 
   tL2C_CCB* control_block = l2cu_find_ccb_by_cid(NULL, lcid);
   if (!control_block) return false;
 
   if (rcid) *rcid = control_block->remote_cid;
+  if (handle) *handle = control_block->p_lcb->handle;
 
   return true;
 }
@@ -1403,6 +1403,7 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_ConnectFixedChnl(fixed_cid, rem_bda);
   }
+
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
   return L2CA_ConnectFixedChnl(fixed_cid, rem_bda, phy);
 }
@@ -1459,7 +1460,10 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda,
     }
 
     // Get a CCB and link the lcb to it
-    if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
+    if (!l2cu_initialize_fixed_ccb(
+            p_lcb, fixed_cid,
+            &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
+                 .fixed_chnl_opts)) {
       L2CAP_TRACE_WARNING("%s(0x%04x) - LCB but no CCB", __func__, fixed_cid);
       return false;
     }
@@ -1486,7 +1490,9 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda,
   }
 
   // Get a CCB and link the lcb to it
-  if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
+  if (!l2cu_initialize_fixed_ccb(
+          p_lcb, fixed_cid, &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
+                                 .fixed_chnl_opts)) {
     p_lcb->disc_reason = L2CAP_CONN_NO_RESOURCES;
     L2CAP_TRACE_WARNING("%s(0x%04x) - no CCB", __func__, fixed_cid);
     l2cu_release_lcb(p_lcb);
@@ -1582,7 +1588,10 @@ uint16_t L2CA_SendFixedChnlData(uint16_t fixed_cid, const RawAddress& rem_bda,
   p_buf->layer_specific = L2CAP_FLUSHABLE_CH_BASED;
 
   if (!p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL]) {
-    if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
+    if (!l2cu_initialize_fixed_ccb(
+            p_lcb, fixed_cid,
+            &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
+                 .fixed_chnl_opts)) {
       L2CAP_TRACE_WARNING("L2CA_SendFixedChnlData() - no CCB for chnl: 0x%4x",
                           fixed_cid);
       osi_free(p_buf);
@@ -1777,6 +1786,7 @@ bool L2CA_SetChnlFlushability(uint16_t cid, bool is_flushable) {
     return bluetooth::shim::L2CA_SetChnlFlushability(cid, is_flushable);
   }
 
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   tL2C_CCB* p_ccb;
 
   /* Find the channel control block. We don't know the link it is on. */
@@ -1791,6 +1801,8 @@ bool L2CA_SetChnlFlushability(uint16_t cid, bool is_flushable) {
 
   L2CAP_TRACE_API("L2CA_SetChnlFlushability()  CID: 0x%04x  is_flushable: %d",
                   cid, is_flushable);
+
+#endif
 
   return (true);
 }
@@ -1839,11 +1851,11 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
 
   /* Cannot flush eRTM buffers once they have a sequence number */
   if (p_ccb->peer_cfg.fcr.mode != L2CAP_FCR_ERTM_MODE) {
-    const controller_t* controller = controller_get_interface();
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
     if (num_to_flush != L2CAP_FLUSH_CHANS_GET) {
       /* If the controller supports enhanced flush, flush the data queued at the
        * controller */
-      if (controller->supports_non_flushable_pb() &&
+      if ((HCI_NON_FLUSHABLE_PB_SUPPORTED(BTM_ReadLocalFeatures())) &&
           (BTM_GetNumScoLinks() == 0)) {
         if (!l2cb.is_flush_active) {
           l2cb.is_flush_active = true;
@@ -1853,6 +1865,7 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
         }
       }
     }
+#endif
 
     // Iterate though list and flush the amount requested from
     // the transmit data queue that satisfy the layer and event conditions.
@@ -1878,7 +1891,7 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
     num_flushed2++;
   }
 
-  /* If app needs to track all packets, call it */
+  /* If app needs to track all packets, call him */
   if ((p_ccb->p_rcb) && (p_ccb->p_rcb->api.pL2CA_TxComplete_Cb) &&
       (num_flushed2))
     (*p_ccb->p_rcb->api.pL2CA_TxComplete_Cb)(p_ccb->local_cid, num_flushed2);
@@ -1901,13 +1914,4 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
   l2cu_check_channel_congestion(p_ccb);
 
   return (num_left);
-}
-
-bool L2CA_IsLinkEstablished(const RawAddress& bd_addr,
-                            tBT_TRANSPORT transport) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_IsLinkEstablished(bd_addr, transport);
-  }
-
-  return l2cu_find_lcb_by_bd_addr(bd_addr, transport) != nullptr;
 }
