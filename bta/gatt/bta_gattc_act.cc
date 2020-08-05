@@ -37,6 +37,7 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "stack/include/btu.h"
+#include "stack/l2cap/l2c_int.h"
 #include "utl.h"
 
 #if (BTA_HH_LE_INCLUDED == TRUE)
@@ -212,7 +213,7 @@ void bta_gattc_deregister(tBTA_GATTC_RCB* p_clreg) {
   }
 
   /* remove bg connection associated with this rcb */
-  for (uint8_t i = 0; i < BTM_GetWhiteListSize(); i++) {
+  for (uint8_t i = 0; i < BTA_GATTC_KNOWN_SR_MAX; i++) {
     if (!bta_gattc_cb.bg_track[i].in_use) continue;
 
     if (bta_gattc_cb.bg_track[i].cif_mask & (1 << (p_clreg->client_if - 1))) {
@@ -711,7 +712,8 @@ void bta_gattc_disc_cmpl(tBTA_GATTC_CLCB* p_clcb,
   else if (p_q_cmd != NULL) {
     p_clcb->p_q_cmd = NULL;
     /* execute pending operation of link block still present */
-    if (L2CA_IsLinkEstablished(p_clcb->p_srcb->server_bda, p_clcb->transport)) {
+    if (l2cu_find_lcb_by_bd_addr(p_clcb->p_srcb->server_bda,
+                                 p_clcb->transport)) {
       bta_gattc_sm_execute(p_clcb, p_q_cmd->hdr.event, p_q_cmd);
     }
     /* if the command executed requeued the cmd, we don't

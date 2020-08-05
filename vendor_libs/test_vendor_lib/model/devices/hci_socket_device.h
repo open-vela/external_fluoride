@@ -45,18 +45,10 @@ class HciSocketDevice : public DualModeController {
 
   void SendHci(hci::PacketType packet_type, const std::shared_ptr<std::vector<uint8_t>> packet);
 
-  void RegisterCloseCallback(std::function<void()>);
-
  private:
   int socket_file_descriptor_{-1};
-  hci::H4Packetizer h4_{socket_file_descriptor_,
-                        [](const std::vector<uint8_t>&) {},
-                        [](const std::vector<uint8_t>&) {},
-                        [](const std::vector<uint8_t>&) {},
-                        [](const std::vector<uint8_t>&) {},
-                        [] {}};
-
-  std::function<void()> close_callback_;
+  hci::H4Packetizer h4_{socket_file_descriptor_, [](const std::vector<uint8_t>&) {}, [](const std::vector<uint8_t>&) {},
+                        [](const std::vector<uint8_t>&) {}, [](const std::vector<uint8_t>&) {}};
 };
 
 }  // namespace test_vendor_lib
