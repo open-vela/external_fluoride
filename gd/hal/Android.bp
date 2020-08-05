@@ -39,3 +39,10 @@ filegroup {
         "facade.cc",
     ],
 }
+
+filegroup {
+    name: "BluetoothHalFuzzSources",
+    srcs: [
+        "fuzz/fuzz_hci_hal.cc",
+    ],
+}
