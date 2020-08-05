@@ -59,6 +59,23 @@ void SecurityManager::SetUserInterfaceHandler(UI* user_interface, os::Handler* h
                                            common::Unretained(security_manager_impl_), user_interface, handler));
 }
 
+// TODO(jpawlowski): remove once we have config file abstraction in cert tests
+void SecurityManager::SetLeInitiatorAddressPolicyForTest(
+    hci::LeAddressManager::AddressPolicy address_policy,
+    hci::AddressWithType fixed_address,
+    crypto_toolbox::Octet16 rotation_irk,
+    std::chrono::milliseconds minimum_rotation_time,
+    std::chrono::milliseconds maximum_rotation_time) {
+  security_handler_->Post(common::BindOnce(
+      &internal::SecurityManagerImpl::SetLeInitiatorAddressPolicyForTest,
+      common::Unretained(security_manager_impl_),
+      address_policy,
+      fixed_address,
+      rotation_irk,
+      minimum_rotation_time,
+      maximum_rotation_time));
+}
+
 void SecurityManager::RegisterCallbackListener(ISecurityManagerListener* listener, os::Handler* handler) {
   security_handler_->Post(common::BindOnce(&internal::SecurityManagerImpl::RegisterCallbackListener,
                                            common::Unretained(security_manager_impl_), listener, handler));
