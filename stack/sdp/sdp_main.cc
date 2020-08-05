@@ -105,17 +105,19 @@ void sdp_init(void) {
 
   sdp_cb.reg_info.pL2CA_ConnectInd_Cb = sdp_connect_ind;
   sdp_cb.reg_info.pL2CA_ConnectCfm_Cb = sdp_connect_cfm;
+  sdp_cb.reg_info.pL2CA_ConnectPnd_Cb = NULL;
   sdp_cb.reg_info.pL2CA_ConfigInd_Cb = sdp_config_ind;
   sdp_cb.reg_info.pL2CA_ConfigCfm_Cb = sdp_config_cfm;
   sdp_cb.reg_info.pL2CA_DisconnectInd_Cb = sdp_disconnect_ind;
   sdp_cb.reg_info.pL2CA_DisconnectCfm_Cb = sdp_disconnect_cfm;
+  sdp_cb.reg_info.pL2CA_QoSViolationInd_Cb = NULL;
   sdp_cb.reg_info.pL2CA_DataInd_Cb = sdp_data_ind;
   sdp_cb.reg_info.pL2CA_CongestionStatus_Cb = NULL;
   sdp_cb.reg_info.pL2CA_TxComplete_Cb = NULL;
 
   /* Now, register with L2CAP */
   if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info, true /* enable_snoop */,
-                     nullptr, sdp_cb.l2cap_my_cfg.mtu)) {
+                     nullptr)) {
     SDP_TRACE_ERROR("SDP Registration failed");
   }
 }
@@ -235,7 +237,7 @@ static void sdp_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
     SDP_TRACE_WARNING("SDP - Rcvd conn cnf with error: 0x%x  CID 0x%x", result,
                       p_ccb->connection_id);
 
-    /* Tell the user if there is a callback */
+    /* Tell the user if he has a callback */
     if (p_ccb->p_cb || p_ccb->p_cb2) {
       uint16_t err = -1;
       if ((result == HCI_ERR_HOST_REJECT_SECURITY) ||
@@ -424,7 +426,7 @@ static void sdp_disconnect_ind(uint16_t l2cap_cid, bool ack_needed) {
   if (ack_needed) L2CA_DisconnectRsp(l2cap_cid);
 
   SDP_TRACE_EVENT("SDP - Rcvd L2CAP disc, CID: 0x%x", l2cap_cid);
-  /* Tell the user if there is a callback */
+  /* Tell the user if he has a callback */
   if (p_ccb->p_cb)
     (*p_ccb->p_cb)((uint16_t)((p_ccb->con_state == SDP_STATE_CONNECTED)
                                   ? SDP_SUCCESS
@@ -584,7 +586,7 @@ void sdp_disconnect(tCONN_CB* p_ccb, uint16_t reason) {
   /* If at setup state, we may not get callback ind from L2CAP */
   /* Call user callback immediately */
   if (p_ccb->con_state == SDP_STATE_CONN_SETUP) {
-    /* Tell the user if there is a callback */
+    /* Tell the user if he has a callback */
     if (p_ccb->p_cb)
       (*p_ccb->p_cb)(reason);
     else if (p_ccb->p_cb2)
@@ -617,7 +619,7 @@ static void sdp_disconnect_cfm(uint16_t l2cap_cid,
 
   SDP_TRACE_EVENT("SDP - Rcvd L2CAP disc cfm, CID: 0x%x", l2cap_cid);
 
-  /* Tell the user if there is a callback */
+  /* Tell the user if he has a callback */
   if (p_ccb->p_cb)
     (*p_ccb->p_cb)(p_ccb->disconnect_reason);
   else if (p_ccb->p_cb2)
@@ -644,7 +646,7 @@ void sdp_conn_timer_timeout(void* data) {
                   p_ccb->connection_id);
 
   L2CA_DisconnectReq(p_ccb->connection_id);
-  /* Tell the user if there is a callback */
+  /* Tell the user if he has a callback */
   if (p_ccb->p_cb)
     (*p_ccb->p_cb)(SDP_CONN_FAILED);
   else if (p_ccb->p_cb2)
