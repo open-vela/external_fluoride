@@ -47,10 +47,11 @@ typedef char tBTM_LOC_BD_NAME[BTM_MAX_LOC_BD_NAME_LEN + 1];
    HCI_PKT_TYPES_MASK_NO_2_DH3 | HCI_PKT_TYPES_MASK_NO_3_DH3 | \
    HCI_PKT_TYPES_MASK_NO_2_DH5 | HCI_PKT_TYPES_MASK_NO_3_DH5)
 
-#define BTM_EPR_AVAILABLE(p)                                        \
-  ((HCI_ATOMIC_ENCRYPT_SUPPORTED((p)->peer_lmp_feature_pages[0]) && \
-    controller_get_interface()->supports_encryption_pause())        \
-       ? true                                                       \
+#define BTM_EPR_AVAILABLE(p)                                            \
+  ((HCI_ATOMIC_ENCRYPT_SUPPORTED((p)->peer_lmp_feature_pages[0]) &&     \
+    HCI_ATOMIC_ENCRYPT_SUPPORTED(                                       \
+        controller_get_interface()->get_features_classic(0)->as_array)) \
+       ? true                                                           \
        : false)
 
 #define BTM_IS_BRCM_CONTROLLER()                                 \
@@ -147,6 +148,10 @@ typedef struct {
       p_inq_tx_power_cmpl_cb; /* Callback function to be called when  */
                               /* read inq tx power function completes  */
 
+  alarm_t* qos_setup_timer;          /* QoS setup timer */
+  tBTM_CMPL_CB* p_qos_setup_cmpl_cb; /* Callback function to be called when  */
+                                     /* qos setup function completes         */
+
   tBTM_ROLE_SWITCH_CMPL switch_role_ref_data;
   tBTM_CMPL_CB* p_switch_role_cb; /* Callback function to be called when  */
                                   /* requested switch role is completed   */
@@ -239,7 +244,10 @@ typedef struct {
   tBTM_INQ_TYPE scan_type;
 
   RawAddress remname_bda; /* Name of bd addr for active remote name request */
+#define BTM_RMT_NAME_INACTIVE 0
 #define BTM_RMT_NAME_EXT 0x1 /* Initiated through API */
+#define BTM_RMT_NAME_SEC 0x2 /* Initiated internally by security manager */
+#define BTM_RMT_NAME_INQ 0x4 /* Remote name initiated internally by inquiry */
   bool remname_active; /* State of a remote name request by external API */
 
   tBTM_CMPL_CB* p_inq_cmpl_cb;
@@ -275,6 +283,7 @@ typedef struct {
   2 /* Sets the new filter (or turns off filtering) in this state */
 #define BTM_INQ_ACTIVE_STATE \
   3 /* Actual inquiry or periodic inquiry is in progress */
+#define BTM_INQ_REMNAME_STATE 4 /* Remote name requests are active  */
 
   uint8_t state;      /* Current state that the inquiry process is in */
   uint8_t inq_active; /* Bit Mask indicating type of inquiry is active */
@@ -288,6 +297,8 @@ typedef struct {
 */
 
 #define BTM_SEC_INVALID_HANDLE 0xFFFF
+
+typedef uint8_t* BTM_BD_NAME_PTR; /* Pointer to Device name */
 
 /* Security callback is called by this unit when security
  *   procedures are completed.  Parameters are
@@ -306,6 +317,8 @@ typedef void(tBTM_SCO_IND_CBACK)(uint16_t sco_inx);
 #define BTM_ESCO_PKT_TYPE_MASK \
   (ESCO_PKT_TYPES_MASK_HV1 | ESCO_PKT_TYPES_MASK_HV2 | ESCO_PKT_TYPES_MASK_HV3)
 
+#define BTM_SCO_2_ESCO(scotype) \
+  ((uint16_t)(((scotype)&BTM_SCO_PKT_TYPE_MASK) >> 5))
 #define BTM_ESCO_2_SCO(escotype) \
   ((uint16_t)(((escotype)&BTM_ESCO_PKT_TYPE_MASK) << 5))
 
@@ -319,6 +332,8 @@ typedef void(tBTM_SCO_IND_CBACK)(uint16_t sco_inx);
 #define BTM_SCO_EXCEPTION_PKTS_MASK                              \
   (ESCO_PKT_TYPES_MASK_NO_2_EV3 | ESCO_PKT_TYPES_MASK_NO_3_EV3 | \
    ESCO_PKT_TYPES_MASK_NO_2_EV5 | ESCO_PKT_TYPES_MASK_NO_3_EV5)
+
+#define BTM_SCO_ROUTE_UNKNOWN 0xff
 
 /* Define the structure that contains (e)SCO data */
 typedef struct {
@@ -589,6 +604,35 @@ enum {
 };
 typedef uint8_t tBTM_PM_STATE;
 
+enum {
+  BTM_PM_SET_MODE_EVT, /* Set power mode API is called. */
+  BTM_PM_UPDATE_EVT,
+  BTM_PM_RD_MODE_EVT /* Read power mode API is called. */
+};
+typedef uint8_t tBTM_PM_EVENT;
+
+typedef struct {
+  uint16_t event;
+  uint16_t len;
+  uint8_t link_ind;
+} tBTM_PM_MSG_DATA;
+
+typedef struct {
+  uint8_t hci_status;
+  uint8_t mode;
+  uint16_t interval;
+} tBTM_PM_MD_CHG_DATA;
+
+typedef struct {
+  uint8_t pm_id; /* the entity that calls SetPowerMode API */
+  tBTM_PM_PWR_MD* p_pmd;
+} tBTM_PM_SET_MD_DATA;
+
+typedef struct {
+  void* p_data;
+  uint8_t link_ind;
+} tBTM_PM_SM_DATA;
+
 typedef struct {
   tBTM_PM_PWR_MD req_mode[BTM_MAX_PM_RECORDS + 1]; /* the desired mode and
                                                       parameters of the
@@ -673,6 +717,8 @@ typedef struct {
   tBTM_BLE_SEC_ACT sec_act;
 } tBTM_SEC_QUEUE_ENTRY;
 
+#define CONN_ORIENT_TERM false
+#define CONN_ORIENT_ORIG true
 typedef bool CONNECTION_TYPE;
 
 // Bluetooth Quality Report - Report receiver
