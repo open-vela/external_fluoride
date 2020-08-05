@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "polled_socket"
+
 #include "polled_socket.h"
 
+#include <base/logging.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -23,7 +26,7 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 
-#include "os/log.h"
+#include "osi/include/log.h"
 
 namespace test_vendor_lib {
 namespace net {
@@ -45,13 +48,19 @@ void PolledSocket::CleanUp() {
   file_descriptor_ = -1;
 }
 
-size_t PolledSocket::TrySend(const std::vector<uint8_t>& packet) {
+size_t PolledSocket::TrySend(packets::PacketView<true> packet) {
   if (file_descriptor_ == -1) {
     return 0;
   }
-  int ret = write(file_descriptor_, packet.data(), packet.size());
+  // Could skip this copy if the packet is guaranteed to be contiguous.
+  std::vector<uint8_t> copy;
+  copy.reserve(packet.size());
+  for (const auto&& c : packet) {
+    copy.push_back(c);
+  }
+  int ret = write(file_descriptor_, copy.data(), copy.size());
   if (ret == -1) {
-    LOG_WARN("%s error %s", __func__, strerror(errno));
+    ALOGW("%s error %s", __func__, strerror(errno));
     return 0;
   } else {
     return static_cast<size_t>(ret);
@@ -91,7 +100,7 @@ size_t PolledSocket::TryReceive(size_t num_bytes, uint8_t* data) {
     if (errno == EAGAIN) {
       return 0;
     } else {
-      LOG_WARN("%s error %s", __func__, strerror(errno));
+      ALOGW("%s error %s", __func__, strerror(errno));
       CleanUp();
       return 0;
     }
