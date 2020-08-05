@@ -205,7 +205,7 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
       btm_acl_created(ci.bd_addr, NULL, NULL, handle, p_lcb->link_role,
                       BT_TRANSPORT_BR_EDR);
 
-    BTM_SetLinkSuperTout(ci.bd_addr, btm_cb.btm_def_link_super_tout);
+    BTM_SetLinkSuperTout(ci.bd_addr, btm_cb.acl_cb_.btm_def_link_super_tout);
 
     /* If dedicated bonding do not process any further */
     if (p_lcb->is_bonding) {
@@ -366,10 +366,10 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
   } else {
     /* There can be a case when we rejected PIN code authentication */
     /* otherwise save a new reason */
-    if (btm_cb.acl_disc_reason != HCI_ERR_HOST_REJECT_SECURITY)
-      btm_cb.acl_disc_reason = reason;
+    if (btm_cb.acl_cb_.acl_disc_reason != HCI_ERR_HOST_REJECT_SECURITY)
+      btm_cb.acl_cb_.acl_disc_reason = reason;
 
-    p_lcb->disc_reason = btm_cb.acl_disc_reason;
+    p_lcb->disc_reason = btm_cb.acl_cb_.acl_disc_reason;
 
     /* Just in case app decides to try again in the callback context */
     p_lcb->link_state = LST_DISCONNECTING;
@@ -453,8 +453,8 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
         if (l2cu_create_conn_le(p_lcb))
           lcb_is_free = false; /* still using this lcb */
       } else {
-        if (l2cu_create_conn_br_edr(p_lcb))
-          lcb_is_free = false; /* still using this lcb */
+        l2cu_create_conn_br_edr(p_lcb);
+        lcb_is_free = false; /* still using this lcb */
       }
     }
 
@@ -472,35 +472,6 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
   }
 
   return status;
-}
-
-/*******************************************************************************
- *
- * Function         l2c_link_hci_qos_violation
- *
- * Description      This function is called when an HCI QOS Violation
- *                  event is received.
- *
- * Returns          true if the link is known about, else false
- *
- ******************************************************************************/
-bool l2c_link_hci_qos_violation(uint16_t handle) {
-  tL2C_LCB* p_lcb;
-  tL2C_CCB* p_ccb;
-
-  /* See if we have a link control block for the connection */
-  p_lcb = l2cu_find_lcb_by_handle(handle);
-
-  /* If we don't have one, maybe an SCO link. */
-  if (!p_lcb) return (false);
-
-  /* For all channels, tell the upper layer about it */
-  for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb; p_ccb = p_ccb->p_next_ccb) {
-    if (p_ccb->p_rcb->api.pL2CA_QoSViolationInd_Cb)
-      l2c_csm_execute(p_ccb, L2CEVT_LP_QOS_VIOLATION_IND, NULL);
-  }
-
-  return (true);
 }
 
 /*******************************************************************************
@@ -832,26 +803,8 @@ void l2c_link_adjust_chnl_allocation(void) {
  *
  ******************************************************************************/
 void l2c_link_processs_num_bufs(uint16_t num_lm_acl_bufs) {
-  l2cb.num_lm_acl_bufs = l2cb.controller_xmit_window = num_lm_acl_bufs;
-}
-
-/*******************************************************************************
- *
- * Function         l2c_link_pkts_rcvd
- *
- * Description      This function is called from the HCI transport when it is
- *                  time to send a "Host ready for packets" command. This is
- *                  only when host to controller flow control is used. It fills
- *                  in the arrays of numbers of packets and handles.
- *
- * Returns          count of number of entries filled in
- *
- ******************************************************************************/
-uint8_t l2c_link_pkts_rcvd(UNUSED_ATTR uint16_t* num_pkts,
-                           UNUSED_ATTR uint16_t* handles) {
-  uint8_t num_found = 0;
-
-  return (num_found);
+  l2cb.num_lm_acl_bufs = num_lm_acl_bufs;
+  l2cb.controller_xmit_window = num_lm_acl_bufs;
 }
 
 /*******************************************************************************
@@ -1104,6 +1057,17 @@ void l2c_link_check_send_pkts(tL2C_LCB* p_lcb, tL2C_CCB* p_ccb, BT_HDR* p_buf) {
   }
 }
 
+void l2c_OnHciModeChangeSendPendingPackets(RawAddress remote) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(remote, BT_TRANSPORT_BR_EDR);
+  if (p_lcb != NULL) {
+    /* There might be any pending packets due to SNIFF or PENDING state */
+    /* Trigger L2C to start transmission of the pending packets. */
+    BTM_TRACE_DEBUG(
+        "btm mode change to active; check l2c_link for outgoing packets");
+    l2c_link_check_send_pkts(p_lcb, NULL, NULL);
+  }
+}
+
 /*******************************************************************************
  *
  * Function         l2c_link_send_to_lower
@@ -1239,6 +1203,8 @@ void l2c_link_process_num_completed_pkts(uint8_t* p, uint8_t evt_len) {
 
   for (xx = 0; xx < num_handles; xx++) {
     STREAM_TO_UINT16(handle, p);
+    /* Extract the handle */
+    handle = HCID_GET_HANDLE(handle);
     STREAM_TO_UINT16(num_sent, p);
 
     p_lcb = l2cu_find_lcb_by_handle(handle);
