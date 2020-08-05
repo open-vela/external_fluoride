@@ -34,14 +34,11 @@
 #define LOG_TAG "btm_acl"
 
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_target.h"
 #include "bt_types.h"
-#include "bt_utils.h"
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btu.h"
@@ -51,6 +48,8 @@
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "l2c_int.h"
+#include "main/shim/btm_api.h"
+#include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -280,8 +279,8 @@ void btm_acl_created(const RawAddress& bda, DEV_CLASS dc, BD_NAME bdn,
                                     &p->active_remote_addr_type);
 #endif
 
-        if (HCI_LE_SLAVE_INIT_FEAT_EXC_SUPPORTED(
-                controller_get_interface()->get_features_ble()->as_array) ||
+        if (controller_get_interface()
+                ->supports_ble_peripheral_initiated_feature_exchange() ||
             link_role == HCI_ROLE_MASTER) {
           btsnd_hcic_ble_read_remote_feat(p->hci_handle);
         } else {
@@ -543,8 +542,8 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
   tBTM_PM_MODE pwr_mode;
   tBTM_PM_PWR_MD settings;
 
-  LOG_INFO(LOG_TAG, "%s: peer %s new_role=0x%x p_cb=%p p_switch_role_cb=%p",
-           __func__, remote_bd_addr.ToString().c_str(), new_role, p_cb,
+  LOG_INFO("%s: peer %s new_role=0x%x p_cb=%p p_switch_role_cb=%p", __func__,
+           remote_bd_addr.ToString().c_str(), new_role, p_cb,
            btm_cb.devcb.p_switch_role_cb);
 
   /* Make sure the local device supports switching */
@@ -715,6 +714,31 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
 #endif
   }
 }
+
+void check_link_policy(uint16_t* settings) {
+  const controller_t* controller = controller_get_interface();
+
+  if ((*settings & HCI_ENABLE_MASTER_SLAVE_SWITCH) &&
+      (!controller->supports_role_switch())) {
+    *settings &= (~HCI_ENABLE_MASTER_SLAVE_SWITCH);
+    BTM_TRACE_API("switch not supported (settings: 0x%04x)", *settings);
+  }
+  if ((*settings & HCI_ENABLE_HOLD_MODE) &&
+      (!controller->supports_hold_mode())) {
+    *settings &= (~HCI_ENABLE_HOLD_MODE);
+    BTM_TRACE_API("hold not supported (settings: 0x%04x)", *settings);
+  }
+  if ((*settings & HCI_ENABLE_SNIFF_MODE) &&
+      (!controller->supports_sniff_mode())) {
+    *settings &= (~HCI_ENABLE_SNIFF_MODE);
+    BTM_TRACE_API("sniff not supported (settings: 0x%04x)", *settings);
+  }
+  if ((*settings & HCI_ENABLE_PARK_MODE) &&
+      (!controller->supports_park_mode())) {
+    *settings &= (~HCI_ENABLE_PARK_MODE);
+    BTM_TRACE_API("park not supported (settings: 0x%04x)", *settings);
+  }
+}
 /*******************************************************************************
  *
  * Function         BTM_SetLinkPolicy
@@ -727,36 +751,11 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
 tBTM_STATUS BTM_SetLinkPolicy(const RawAddress& remote_bda,
                               uint16_t* settings) {
   tACL_CONN* p;
-  uint8_t* localFeatures = BTM_ReadLocalFeatures();
   BTM_TRACE_DEBUG("%s", __func__);
-  /*  BTM_TRACE_API ("%s: requested settings: 0x%04x", __func__, *settings ); */
 
   /* First, check if hold mode is supported */
   if (*settings != HCI_DISABLE_ALL_LM_MODES) {
-    if ((*settings & HCI_ENABLE_MASTER_SLAVE_SWITCH) &&
-        (!HCI_SWITCH_SUPPORTED(localFeatures))) {
-      *settings &= (~HCI_ENABLE_MASTER_SLAVE_SWITCH);
-      BTM_TRACE_API("BTM_SetLinkPolicy switch not supported (settings: 0x%04x)",
-                    *settings);
-    }
-    if ((*settings & HCI_ENABLE_HOLD_MODE) &&
-        (!HCI_HOLD_MODE_SUPPORTED(localFeatures))) {
-      *settings &= (~HCI_ENABLE_HOLD_MODE);
-      BTM_TRACE_API("BTM_SetLinkPolicy hold not supported (settings: 0x%04x)",
-                    *settings);
-    }
-    if ((*settings & HCI_ENABLE_SNIFF_MODE) &&
-        (!HCI_SNIFF_MODE_SUPPORTED(localFeatures))) {
-      *settings &= (~HCI_ENABLE_SNIFF_MODE);
-      BTM_TRACE_API("BTM_SetLinkPolicy sniff not supported (settings: 0x%04x)",
-                    *settings);
-    }
-    if ((*settings & HCI_ENABLE_PARK_MODE) &&
-        (!HCI_PARK_MODE_SUPPORTED(localFeatures))) {
-      *settings &= (~HCI_ENABLE_PARK_MODE);
-      BTM_TRACE_API("BTM_SetLinkPolicy park not supported (settings: 0x%04x)",
-                    *settings);
-    }
+    check_link_policy(settings);
   }
 
   p = btm_bda_to_acl(remote_bda, BT_TRANSPORT_BR_EDR);
@@ -780,41 +779,11 @@ tBTM_STATUS BTM_SetLinkPolicy(const RawAddress& remote_bda,
  *
  ******************************************************************************/
 void BTM_SetDefaultLinkPolicy(uint16_t settings) {
-  uint8_t* localFeatures = BTM_ReadLocalFeatures();
-
   BTM_TRACE_DEBUG("BTM_SetDefaultLinkPolicy setting:0x%04x", settings);
 
-  if ((settings & HCI_ENABLE_MASTER_SLAVE_SWITCH) &&
-      (!HCI_SWITCH_SUPPORTED(localFeatures))) {
-    settings &= ~HCI_ENABLE_MASTER_SLAVE_SWITCH;
-    BTM_TRACE_DEBUG(
-        "BTM_SetDefaultLinkPolicy switch not supported (settings: 0x%04x)",
-        settings);
-  }
-  if ((settings & HCI_ENABLE_HOLD_MODE) &&
-      (!HCI_HOLD_MODE_SUPPORTED(localFeatures))) {
-    settings &= ~HCI_ENABLE_HOLD_MODE;
-    BTM_TRACE_DEBUG(
-        "BTM_SetDefaultLinkPolicy hold not supported (settings: 0x%04x)",
-        settings);
-  }
-  if ((settings & HCI_ENABLE_SNIFF_MODE) &&
-      (!HCI_SNIFF_MODE_SUPPORTED(localFeatures))) {
-    settings &= ~HCI_ENABLE_SNIFF_MODE;
-    BTM_TRACE_DEBUG(
-        "BTM_SetDefaultLinkPolicy sniff not supported (settings: 0x%04x)",
-        settings);
-  }
-  if ((settings & HCI_ENABLE_PARK_MODE) &&
-      (!HCI_PARK_MODE_SUPPORTED(localFeatures))) {
-    settings &= ~HCI_ENABLE_PARK_MODE;
-    BTM_TRACE_DEBUG(
-        "BTM_SetDefaultLinkPolicy park not supported (settings: 0x%04x)",
-        settings);
-  }
-  BTM_TRACE_DEBUG("Set DefaultLinkPolicy:0x%04x", settings);
-
+  check_link_policy(&settings);
   btm_cb.btm_def_link_policy = settings;
+  BTM_TRACE_DEBUG("Set DefaultLinkPolicy:0x%04x", settings);
 
   /* Set the default Link Policy of the controller */
   btsnd_hcic_write_def_policy_set(settings);
@@ -1225,7 +1194,7 @@ void btm_establish_continue(tACL_CONN* p_acl_cb) {
   }
   p_acl_cb->link_up_issued = true;
 
-  /* If anyone cares, tell him database changed */
+  /* If anyone cares, tell them that the database changed */
   if (btm_cb.p_bl_changed_cb) {
     evt_data.event = BTM_BL_CONN_EVT;
     evt_data.conn.p_bda = &p_acl_cb->remote_addr;
@@ -1382,6 +1351,10 @@ uint16_t btm_get_acl_disc_reason_code(void) {
  ******************************************************************************/
 uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
                               tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_GetHCIConnHandle(remote_bda, transport);
+  }
+
   tACL_CONN* p;
   BTM_TRACE_DEBUG("BTM_GetHCIConnHandle");
   p = btm_bda_to_acl(remote_bda, transport);
@@ -1793,59 +1766,6 @@ tBTM_STATUS BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb, uint8_t* p_level,
     btm_cb.p_bl_changed_cb = p_cb;
 
   return (BTM_SUCCESS);
-}
-
-/*******************************************************************************
- *
- * Function         btm_qos_setup_timeout
- *
- * Description      Callback when QoS setup times out.
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_qos_setup_timeout(UNUSED_ATTR void* data) {
-  tBTM_CMPL_CB* p_cb = btm_cb.devcb.p_qos_setup_cmpl_cb;
-  btm_cb.devcb.p_qos_setup_cmpl_cb = NULL;
-  if (p_cb) (*p_cb)((void*)NULL);
-}
-
-/*******************************************************************************
- *
- * Function         btm_qos_setup_complete
- *
- * Description      This function is called when the command complete message
- *                  is received from the HCI for the qos setup request.
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_qos_setup_complete(uint8_t status, uint16_t handle,
-                            FLOW_SPEC* p_flow) {
-  tBTM_CMPL_CB* p_cb = btm_cb.devcb.p_qos_setup_cmpl_cb;
-  tBTM_QOS_SETUP_CMPL qossu;
-
-  BTM_TRACE_DEBUG("%s", __func__);
-  alarm_cancel(btm_cb.devcb.qos_setup_timer);
-  btm_cb.devcb.p_qos_setup_cmpl_cb = NULL;
-
-  /* If there was a registered callback, call it */
-  if (p_cb) {
-    memset(&qossu, 0, sizeof(tBTM_QOS_SETUP_CMPL));
-    qossu.status = status;
-    qossu.handle = handle;
-    if (p_flow != NULL) {
-      qossu.flow.qos_flags = p_flow->qos_flags;
-      qossu.flow.service_type = p_flow->service_type;
-      qossu.flow.token_rate = p_flow->token_rate;
-      qossu.flow.peak_bandwidth = p_flow->peak_bandwidth;
-      qossu.flow.latency = p_flow->latency;
-      qossu.flow.delay_variation = p_flow->delay_variation;
-    }
-    BTM_TRACE_DEBUG("BTM: p_flow->delay_variation: 0x%02x",
-                    qossu.flow.delay_variation);
-    (*p_cb)(&qossu);
-  }
 }
 
 /*******************************************************************************
