@@ -49,8 +49,6 @@ class ScalarField : public PacketField {
 
   virtual void GenValidator(std::ostream&) const override;
 
-  virtual void GenStringRepresentation(std::ostream& s, std::string accessor) const override;
-
  private:
   const int size_;
 };
