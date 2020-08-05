@@ -38,12 +38,16 @@
 #include "bta_jv_int.h"
 #include "bta_sys.h"
 #include "btm_api.h"
+#include "btm_int.h"
+#include "device/include/controller.h"
 #include "gap_api.h"
 #include "l2c_api.h"
 #include "osi/include/allocator.h"
 #include "port_api.h"
 #include "rfcdefs.h"
 #include "sdp_api.h"
+#include "stack/l2cap/l2c_int.h"
+#include "utl.h"
 
 #include "osi/include/osi.h"
 
@@ -1886,6 +1890,15 @@ static struct fc_channel* fcchan_get(uint16_t chan, char create) {
   static tL2CAP_FIXED_CHNL_REG fcr = {
       .pL2CA_FixedConn_Cb = fcchan_conn_chng_cbk,
       .pL2CA_FixedData_Cb = fcchan_data_cbk,
+      .fixed_chnl_opts =
+          {
+              .mode = L2CAP_FCR_BASIC_MODE,
+              .tx_win_sz = 1,
+              .max_transmit = 0xFF,
+              .rtrans_tout = 2000,
+              .mon_tout = 12000,
+              .mps = 670,
+          },
       .default_idle_tout = 0xffff,
   };
 
