@@ -35,7 +35,8 @@
  * should eventually be
  * deleted using BtifAvrcpAudioTrackDelete (see below).
  */
-void* BtifAvrcpAudioTrackCreate(int trackFreq, int channelType);
+void* BtifAvrcpAudioTrackCreate(int trackFreq, int bitsPerSample,
+                                int channelCount);
 
 /**
  * Starts the audio track.
@@ -65,4 +66,4 @@ void BtifAvrcpAudioTrackDelete(void* handle);
  * Used only for debugging.
  */
 int BtifAvrcpAudioTrackWriteData(void* handle, void* audioBuffer,
-                                 int bufferlen);
+                                 int bufferLength);

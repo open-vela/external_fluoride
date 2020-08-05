@@ -30,6 +30,7 @@
 #include "bt_target.h"
 #include "btm_int.h"
 #include "btu.h"
+#include "osi/include/fixed_queue.h"
 
 /* BNEP frame types
 */
@@ -229,7 +230,7 @@ extern void bnep_sec_check_complete(const RawAddress* bd_addr,
 extern tBNEP_RESULT bnep_is_packet_allowed(tBNEP_CONN* p_bcb,
                                            const RawAddress& p_dest_addr,
                                            uint16_t protocol,
-                                           bool fw_ext_present,
-                                           uint8_t* p_data);
+                                           bool fw_ext_present, uint8_t* p_data,
+                                           uint16_t org_len);
 
 #endif

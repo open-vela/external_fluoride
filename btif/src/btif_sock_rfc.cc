@@ -30,6 +30,7 @@
 
 #include <mutex>
 
+#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_sock.h>
 
@@ -47,6 +48,7 @@
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btu.h"
+#include "common/metrics.h"
 #include "hcimsgs.h"
 #include "osi/include/compat.h"
 #include "osi/include/list.h"
@@ -97,6 +99,10 @@ typedef struct {
   int rfc_port_handle;
   int role;
   list_t* incoming_queue;
+  // Cumulative number of bytes transmitted on this socket
+  int64_t tx_bytes;
+  // Cumulative number of bytes received on this socket
+  int64_t rx_bytes;
 } rfc_slot_t;
 
 static rfc_slot_t rfc_slots[MAX_RFC_CHANNEL];
@@ -159,7 +165,7 @@ static rfc_slot_t* find_rfc_slot_by_id(uint32_t id) {
   for (size_t i = 0; i < ARRAY_SIZE(rfc_slots); ++i)
     if (rfc_slots[i].id == id) return &rfc_slots[i];
 
-  LOG_ERROR(LOG_TAG, "%s unable to find RFCOMM slot id: %u", __func__, id);
+  LOG_ERROR("%s unable to find RFCOMM slot id: %u", __func__, id);
   return NULL;
 }
 
@@ -197,14 +203,13 @@ static rfc_slot_t* alloc_rfc_slot(const RawAddress* addr, const char* name,
 
   rfc_slot_t* slot = find_free_slot();
   if (!slot) {
-    LOG_ERROR(LOG_TAG, "%s unable to find free RFCOMM slot.", __func__);
+    LOG_ERROR("%s unable to find free RFCOMM slot.", __func__);
     return NULL;
   }
 
   int fds[2] = {INVALID_FD, INVALID_FD};
   if (socketpair(AF_LOCAL, SOCK_STREAM, 0, fds) == -1) {
-    LOG_ERROR(LOG_TAG, "%s error creating socketpair: %s", __func__,
-              strerror(errno));
+    LOG_ERROR("%s error creating socketpair: %s", __func__, strerror(errno));
     return NULL;
   }
 
@@ -225,11 +230,15 @@ static rfc_slot_t* alloc_rfc_slot(const RawAddress* addr, const char* name,
   } else {
     memset(slot->service_name, 0, sizeof(slot->service_name));
   }
-  if (addr) slot->addr = *addr;
-
+  if (addr) {
+    slot->addr = *addr;
+  } else {
+    slot->addr = RawAddress::kEmpty;
+  }
   slot->id = rfc_slot_id;
   slot->f.server = server;
-
+  slot->tx_bytes = 0;
+  slot->rx_bytes = 0;
   return slot;
 }
 
@@ -240,7 +249,7 @@ static rfc_slot_t* create_srv_accept_rfc_slot(rfc_slot_t* srv_rs,
   rfc_slot_t* accept_rs = alloc_rfc_slot(
       addr, srv_rs->service_name, srv_rs->service_uuid, srv_rs->scn, 0, false);
   if (!accept_rs) {
-    LOG_ERROR(LOG_TAG, "%s unable to allocate RFCOMM slot.", __func__);
+    LOG_ERROR("%s unable to allocate RFCOMM slot.", __func__);
     return NULL;
   }
 
@@ -304,7 +313,7 @@ bt_status_t btsock_rfc_listen(const char* service_name,
   rfc_slot_t* slot =
       alloc_rfc_slot(NULL, service_name, *service_uuid, channel, flags, true);
   if (!slot) {
-    LOG_ERROR(LOG_TAG, "%s unable to allocate RFCOMM slot.", __func__);
+    LOG_ERROR("%s unable to allocate RFCOMM slot.", __func__);
     return BT_STATUS_FAIL;
   }
   APPL_TRACE_DEBUG("BTA_JvGetChannelId: service_name: %s - channel: %d",
@@ -346,7 +355,7 @@ bt_status_t btsock_rfc_connect(const RawAddress* bd_addr,
   rfc_slot_t* slot =
       alloc_rfc_slot(bd_addr, NULL, *service_uuid, channel, flags, false);
   if (!slot) {
-    LOG_ERROR(LOG_TAG, "%s unable to allocate RFCOMM slot.", __func__);
+    LOG_ERROR("%s unable to allocate RFCOMM slot.", __func__);
     return BT_STATUS_FAIL;
   }
 
@@ -355,14 +364,13 @@ bt_status_t btsock_rfc_connect(const RawAddress* bd_addr,
         BTA_JvRfcommConnect(slot->security, slot->role, slot->scn, slot->addr,
                             rfcomm_cback, slot->id);
     if (ret != BTA_JV_SUCCESS) {
-      LOG_ERROR(LOG_TAG, "%s unable to initiate RFCOMM connection: %d",
-                __func__, ret);
+      LOG_ERROR("%s unable to initiate RFCOMM connection: %d", __func__, ret);
       cleanup_rfc_slot(slot);
       return BT_STATUS_FAIL;
     }
 
     if (!send_app_scn(slot)) {
-      LOG_ERROR(LOG_TAG, "%s unable to send channel number.", __func__);
+      LOG_ERROR("%s unable to send channel number.", __func__);
       cleanup_rfc_slot(slot);
       return BT_STATUS_FAIL;
     }
@@ -411,6 +419,12 @@ static void cleanup_rfc_slot(rfc_slot_t* slot) {
   if (slot->fd != INVALID_FD) {
     shutdown(slot->fd, SHUT_RDWR);
     close(slot->fd);
+    bluetooth::common::LogSocketConnectionState(
+        slot->addr, slot->id, BTSOCK_RFCOMM,
+        android::bluetooth::SOCKET_CONNECTION_STATE_DISCONNECTED,
+        slot->tx_bytes, slot->rx_bytes, slot->app_uid, slot->scn,
+        slot->f.server ? android::bluetooth::SOCKET_ROLE_LISTEN
+                       : android::bluetooth::SOCKET_ROLE_CONNECTION);
     slot->fd = INVALID_FD;
   }
 
@@ -436,6 +450,8 @@ static void cleanup_rfc_slot(rfc_slot_t* slot) {
   memset(&slot->f, 0, sizeof(slot->f));
   slot->id = 0;
   slot->scn_notified = false;
+  slot->tx_bytes = 0;
+  slot->rx_bytes = 0;
 }
 
 static bool send_app_scn(rfc_slot_t* slot) {
@@ -484,6 +500,13 @@ static void on_srv_rfc_listen_started(tBTA_JV_RFCOMM_START* p_start,
 
   if (p_start->status == BTA_JV_SUCCESS) {
     slot->rfc_handle = p_start->handle;
+    bluetooth::common::LogSocketConnectionState(
+        slot->addr, slot->id, BTSOCK_RFCOMM,
+        android::bluetooth::SocketConnectionstateEnum::
+            SOCKET_CONNECTION_STATE_LISTENING,
+        0, 0, slot->app_uid, slot->scn,
+        slot->f.server ? android::bluetooth::SOCKET_ROLE_LISTEN
+                       : android::bluetooth::SOCKET_ROLE_CONNECTION);
   } else {
     cleanup_rfc_slot(slot);
   }
@@ -499,6 +522,13 @@ static uint32_t on_srv_rfc_connect(tBTA_JV_RFCOMM_SRV_OPEN* p_open,
   accept_rs = create_srv_accept_rfc_slot(
       srv_rs, &p_open->rem_bda, p_open->handle, p_open->new_listen_handle);
   if (!accept_rs) return 0;
+
+  bluetooth::common::LogSocketConnectionState(
+      accept_rs->addr, accept_rs->id, BTSOCK_RFCOMM,
+      android::bluetooth::SOCKET_CONNECTION_STATE_CONNECTED, 0, 0,
+      accept_rs->app_uid, accept_rs->scn,
+      accept_rs->f.server ? android::bluetooth::SOCKET_ROLE_LISTEN
+                          : android::bluetooth::SOCKET_ROLE_CONNECTION);
 
   // Start monitoring the socket.
   btsock_thread_add_fd(pth, srv_rs->fd, BTSOCK_RFCOMM, SOCK_THREAD_FD_EXCEPTION,
@@ -525,10 +555,17 @@ static void on_cli_rfc_connect(tBTA_JV_RFCOMM_OPEN* p_open, uint32_t id) {
   slot->rfc_port_handle = BTA_JvRfcommGetPortHdl(p_open->handle);
   slot->addr = p_open->rem_bda;
 
+  bluetooth::common::LogSocketConnectionState(
+      slot->addr, slot->id, BTSOCK_RFCOMM,
+      android::bluetooth::SOCKET_CONNECTION_STATE_CONNECTED, 0, 0,
+      slot->app_uid, slot->scn,
+      slot->f.server ? android::bluetooth::SOCKET_ROLE_LISTEN
+                     : android::bluetooth::SOCKET_ROLE_CONNECTION);
+
   if (send_app_connect_signal(slot->fd, &slot->addr, slot->scn, 0, -1)) {
     slot->f.connected = true;
   } else {
-    LOG_ERROR(LOG_TAG, "%s unable to send connect completion signal to caller.",
+    LOG_ERROR("%s unable to send connect completion signal to caller.",
               __func__);
   }
 }
@@ -539,13 +576,21 @@ static void on_rfc_close(UNUSED_ATTR tBTA_JV_RFCOMM_CLOSE* p_close,
 
   // rfc_handle already closed when receiving rfcomm close event from stack.
   rfc_slot_t* slot = find_rfc_slot_by_id(id);
-  if (slot) cleanup_rfc_slot(slot);
+  if (slot) {
+    bluetooth::common::LogSocketConnectionState(
+        slot->addr, slot->id, BTSOCK_RFCOMM,
+        android::bluetooth::SOCKET_CONNECTION_STATE_DISCONNECTING, 0, 0,
+        slot->app_uid, slot->scn,
+        slot->f.server ? android::bluetooth::SOCKET_ROLE_LISTEN
+                       : android::bluetooth::SOCKET_ROLE_CONNECTION);
+    cleanup_rfc_slot(slot);
+  }
 }
 
 static void on_rfc_write_done(tBTA_JV_RFCOMM_WRITE* p, uint32_t id) {
   if (p->status != BTA_JV_SUCCESS) {
-    LOG_ERROR(LOG_TAG, "%s error writing to RFCOMM socket with slot %u.",
-              __func__, p->req_id);
+    LOG_ERROR("%s error writing to RFCOMM socket with slot %u.", __func__,
+              p->req_id);
     return;
   }
 
@@ -559,6 +604,7 @@ static void on_rfc_write_done(tBTA_JV_RFCOMM_WRITE* p, uint32_t id) {
       btsock_thread_add_fd(pth, slot->fd, BTSOCK_RFCOMM, SOCK_THREAD_FD_RD,
                            slot->id);
     }
+    slot->tx_bytes += p->len;
   }
 
   uid_set_add_tx(uid_set, app_uid, p->len);
@@ -620,7 +666,7 @@ static uint32_t rfcomm_cback(tBTA_JV_EVT event, tBTA_JV* p_data,
       break;
 
     default:
-      LOG_ERROR(LOG_TAG, "%s unhandled event %d, slot id: %u", __func__, event,
+      LOG_ERROR("%s unhandled event %d, slot id: %u", __func__, event,
                 rfcomm_slot_id);
       break;
   }
@@ -715,10 +761,10 @@ static void jv_dm_cback(tBTA_JV_EVT event, tBTA_JV* p_data, uint32_t id) {
         } else if (slot) {
           // TODO(sharvil): this is really a logic error and we should probably
           // assert.
-          LOG_ERROR(LOG_TAG,
-                    "%s SDP response returned but RFCOMM slot %d did not "
-                    "request SDP record.",
-                    __func__, id);
+          LOG_ERROR(
+              "%s SDP response returned but RFCOMM slot %d did not "
+              "request SDP record.",
+              __func__, id);
         }
       } else if (slot) {
         cleanup_rfc_slot(slot);
@@ -756,7 +802,7 @@ static sent_status_t send_data_to_app(int fd, BT_HDR* p_buf) {
 
   if (sent == -1) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) return SENT_NONE;
-    LOG_ERROR(LOG_TAG, "%s error writing RFCOMM data back to app: %s", __func__,
+    LOG_ERROR("%s error writing RFCOMM data back to app: %s", __func__,
               strerror(errno));
     return SENT_FAILED;
   }
@@ -816,10 +862,10 @@ void btsock_rfc_signaled(UNUSED_ATTR int fd, int flags, uint32_t user_id) {
         BTA_JvRfcommWrite(slot->rfc_handle, slot->id);
       }
     } else {
-      LOG_ERROR(LOG_TAG,
-                "%s socket signaled for read while disconnected, slot: %d, "
-                "channel: %d",
-                __func__, slot->id, slot->scn);
+      LOG_ERROR(
+          "%s socket signaled for read while disconnected, slot: %d, "
+          "channel: %d",
+          __func__, slot->id, slot->scn);
       need_close = true;
     }
   }
@@ -827,10 +873,10 @@ void btsock_rfc_signaled(UNUSED_ATTR int fd, int flags, uint32_t user_id) {
   if (flags & SOCK_THREAD_FD_WR) {
     // App is ready to receive more data, tell stack to enable data flow.
     if (!slot->f.connected || !flush_incoming_que_on_wr_signal(slot)) {
-      LOG_ERROR(LOG_TAG,
-                "%s socket signaled for write while disconnected (or write "
-                "failure), slot: %d, channel: %d",
-                __func__, slot->id, slot->scn);
+      LOG_ERROR(
+          "%s socket signaled for write while disconnected (or write "
+          "failure), slot: %d, channel: %d",
+          __func__, slot->id, slot->scn);
       need_close = true;
     }
   }
@@ -877,6 +923,7 @@ int bta_co_rfc_data_incoming(uint32_t id, BT_HDR* p_buf) {
     list_append(slot->incoming_queue, p_buf);
   }
 
+  slot->rx_bytes += bytes_rx;
   uid_set_add_rx(uid_set, app_uid, bytes_rx);
 
   return ret;  // Return 0 to disable data flow.
@@ -889,8 +936,7 @@ int bta_co_rfc_data_outgoing_size(uint32_t id, int* size) {
   if (!slot) return false;
 
   if (ioctl(slot->fd, FIONREAD, size) != 0) {
-    LOG_ERROR(LOG_TAG,
-              "%s unable to determine bytes remaining to be read on fd %d: %s",
+    LOG_ERROR("%s unable to determine bytes remaining to be read on fd %d: %s",
               __func__, slot->fd, strerror(errno));
     cleanup_rfc_slot(slot);
     return false;
@@ -908,7 +954,7 @@ int bta_co_rfc_data_outgoing(uint32_t id, uint8_t* buf, uint16_t size) {
   OSI_NO_INTR(received = recv(slot->fd, buf, size, 0));
 
   if (received != size) {
-    LOG_ERROR(LOG_TAG, "%s error receiving RFCOMM data from app: %s", __func__,
+    LOG_ERROR("%s error receiving RFCOMM data from app: %s", __func__,
               strerror(errno));
     cleanup_rfc_slot(slot);
     return false;
