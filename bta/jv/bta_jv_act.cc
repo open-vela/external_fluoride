@@ -38,12 +38,16 @@
 #include "bta_jv_int.h"
 #include "bta_sys.h"
 #include "btm_api.h"
+#include "btm_int.h"
+#include "device/include/controller.h"
 #include "gap_api.h"
 #include "l2c_api.h"
 #include "osi/include/allocator.h"
 #include "port_api.h"
 #include "rfcdefs.h"
 #include "sdp_api.h"
+#include "stack/l2cap/l2c_int.h"
+#include "utl.h"
 
 #include "osi/include/osi.h"
 
@@ -358,8 +362,6 @@ tBTA_JV_STATUS bta_jv_free_l2c_cb(tBTA_JV_L2C_CB* p_cb) {
   p_cb->cong = false;
   bta_jv_free_sec_id(&p_cb->sec_id);
   p_cb->p_cback = NULL;
-  p_cb->handle = 0;
-  p_cb->l2cap_socket_id = 0;
   return status;
 }
 
@@ -1119,7 +1121,7 @@ void bta_jv_l2cap_start_server(int32_t type, tBTA_SEC sec_mask,
 /* stops an L2CAP server */
 void bta_jv_l2cap_stop_server(uint16_t local_psm, uint32_t l2cap_socket_id) {
   for (int i = 0; i < BTA_JV_MAX_L2C_CONN; i++) {
-    if (bta_jv_cb.l2c_cb[i].l2cap_socket_id == l2cap_socket_id) {
+    if (bta_jv_cb.l2c_cb[i].psm == local_psm) {
       tBTA_JV_L2C_CB* p_cb = &bta_jv_cb.l2c_cb[i];
       tBTA_JV_L2CAP_CBACK* p_cback = p_cb->p_cback;
       tBTA_JV_L2CAP_CLOSE evt_data;
@@ -1618,9 +1620,6 @@ static tBTA_JV_PCB* bta_jv_add_rfc_port(tBTA_JV_RFC_CB* p_cb,
         p_pcb->handle = BTA_JV_RFC_H_S_TO_HDL(p_cb->handle, si);
         VLOG(2) << __func__ << ": p_pcb->handle=" << loghex(p_pcb->handle)
                 << ", curr_sess=" << p_cb->curr_sess;
-      } else {
-        LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
-        return NULL;
       }
     } else {
       LOG(ERROR) << __func__ << ": cannot create new rfc listen port";
@@ -1887,6 +1886,15 @@ static struct fc_channel* fcchan_get(uint16_t chan, char create) {
       .pL2CA_FixedConn_Cb = fcchan_conn_chng_cbk,
       .pL2CA_FixedData_Cb = fcchan_data_cbk,
       .default_idle_tout = 0xffff,
+      .fixed_chnl_opts =
+          {
+              .mode = L2CAP_FCR_BASIC_MODE,
+              .max_transmit = 0xFF,
+              .rtrans_tout = 2000,
+              .mon_tout = 12000,
+              .mps = 670,
+              .tx_win_sz = 1,
+          },
   };
 
   while (t && t->chan != chan) t = t->next;
