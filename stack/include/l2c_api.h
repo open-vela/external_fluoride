@@ -61,12 +61,16 @@
 
 /* Values for priority parameter to L2CA_SetTxPriority */
 #define L2CAP_CHNL_PRIORITY_HIGH 0
+#define L2CAP_CHNL_PRIORITY_MEDIUM 1
 #define L2CAP_CHNL_PRIORITY_LOW 2
 
 typedef uint8_t tL2CAP_CHNL_PRIORITY;
 
 /* Values for Tx/Rx data rate parameter to L2CA_SetChnlDataRate */
+#define L2CAP_CHNL_DATA_RATE_HIGH 3
+#define L2CAP_CHNL_DATA_RATE_MEDIUM 2
 #define L2CAP_CHNL_DATA_RATE_LOW 1
+#define L2CAP_CHNL_DATA_RATE_NO_TRAFFIC 0
 
 typedef uint8_t tL2CAP_CHNL_DATA_RATE;
 
@@ -91,9 +95,11 @@ typedef uint8_t tL2CAP_CHNL_DATA_RATE;
  */
 #define L2CAP_FCR_CHAN_OPT_BASIC (1 << L2CAP_FCR_BASIC_MODE)
 #define L2CAP_FCR_CHAN_OPT_ERTM (1 << L2CAP_FCR_ERTM_MODE)
+#define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
 
-#define L2CAP_FCR_CHAN_OPT_ALL_MASK \
-  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM)
+#define L2CAP_FCR_CHAN_OPT_ALL_MASK                     \
+  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM | \
+   L2CAP_FCR_CHAN_OPT_STREAM)
 
 /* Validity check for PSM.  PSM values must be odd.  Also, all PSM values must
  * be assigned such that the least significant bit of the most sigificant
@@ -143,31 +149,14 @@ typedef struct {
   uint16_t flags; /* bit 0: 0-no continuation, 1-continuation */
 } tL2CAP_CFG_INFO;
 
-/* LE credit based L2CAP connection parameters */
-constexpr uint16_t L2CAP_LE_MIN_MTU = 23;  // Minimum SDU size
-constexpr uint16_t L2CAP_LE_MIN_MPS = 23;
-constexpr uint16_t L2CAP_LE_MAX_MPS = 65533;
-constexpr uint16_t L2CAP_LE_CREDIT_MAX = 65535;
-
-// This is initial amout of credits we send, and amount to which we increase
-// credits once they fall below threshold
-constexpr uint16_t L2CAP_LE_CREDIT_DEFAULT = 0xffff;
-
-// If credit count on remote fall below this value, we send back credits to
-// reach default value.
-constexpr uint16_t L2CAP_LE_CREDIT_THRESHOLD = 0x0040;
-
-static_assert(L2CAP_LE_CREDIT_THRESHOLD < L2CAP_LE_CREDIT_DEFAULT,
-              "Threshold must be smaller than default credits");
-
 /* Define a structure to hold the configuration parameter for LE L2CAP
  * connection oriented channels.
  */
-struct tL2CAP_LE_CFG_INFO {
+typedef struct {
   uint16_t mtu;
   uint16_t mps;
-  uint16_t credits = L2CAP_LE_CREDIT_DEFAULT;
-};
+  uint16_t credits;
+} tL2CAP_LE_CFG_INFO;
 
 /* L2CAP channel configured field bitmap */
 #define L2CAP_CH_CFG_MASK_MTU 0x0001
@@ -292,10 +281,12 @@ typedef void(tL2CA_CREDITS_RECEIVED_CB)(uint16_t local_cid,
 typedef struct {
   tL2CA_CONNECT_IND_CB* pL2CA_ConnectInd_Cb;
   tL2CA_CONNECT_CFM_CB* pL2CA_ConnectCfm_Cb;
+  tL2CA_CONNECT_PND_CB* pL2CA_ConnectPnd_Cb;
   tL2CA_CONFIG_IND_CB* pL2CA_ConfigInd_Cb;
   tL2CA_CONFIG_CFM_CB* pL2CA_ConfigCfm_Cb;
   tL2CA_DISCONNECT_IND_CB* pL2CA_DisconnectInd_Cb;
   tL2CA_DISCONNECT_CFM_CB* pL2CA_DisconnectCfm_Cb;
+  tL2CA_QOS_VIOLATION_IND_CB* pL2CA_QoSViolationInd_Cb;
   tL2CA_DATA_IND_CB* pL2CA_DataInd_Cb;
   tL2CA_CONGESTION_STATUS_CB* pL2CA_CongestionStatus_Cb;
   tL2CA_TX_COMPLETE_CB* pL2CA_TxComplete_Cb;
@@ -314,12 +305,6 @@ typedef struct {
   uint16_t fcr_tx_buf_size;
 
 } tL2CAP_ERTM_INFO;
-
-/**
- * Stack management declarations
- */
-void l2c_init();
-void l2c_free();
 
 /*****************************************************************************
  *  External Function Declarations
@@ -340,8 +325,7 @@ void l2c_free();
  *
  ******************************************************************************/
 extern uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                              bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
-                              uint16_t required_mtu);
+                              bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info);
 
 /*******************************************************************************
  *
@@ -582,10 +566,11 @@ extern bool L2CA_DisconnectRsp(uint16_t cid);
 extern uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
 
 // Given a local channel identifier, |lcid|, this function returns the bound
-// remote channel identifier, |rcid|. If
+// remote channel identifier, |rcid|, and the ACL link handle, |handle|. If
 // |lcid| is not known or is invalid, this function returns false and does not
-// modify the value pointed at by |rcid|. |rcid| may be NULL.
-bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid);
+// modify the values pointed at by |rcid| and |handle|. |rcid| and |handle| may
+// be NULL.
+bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle);
 
 /*******************************************************************************
  *
@@ -789,6 +774,7 @@ typedef struct {
   tL2CA_FIXED_CHNL_CB* pL2CA_FixedConn_Cb;
   tL2CA_FIXED_DATA_CB* pL2CA_FixedData_Cb;
   tL2CA_FIXED_CONGESTION_STATUS_CB* pL2CA_FixedCong_Cb;
+  tL2CAP_FCR_OPTS fixed_chnl_opts;
 
   uint16_t default_idle_tout;
   tL2CA_TX_COMPLETE_CB*
@@ -959,18 +945,4 @@ extern uint16_t L2CA_GetDisconnectReason(const RawAddress& remote_bda,
 extern void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
                                            uint16_t* max_interval,
                                            uint16_t floor_interval);
-
-/**
- * Update max fixed channel tx data length if applicable
- */
-extern void L2CA_SetLeFixedChannelTxDataLength(const RawAddress& remote_bda,
-                                               uint16_t fix_cid,
-                                               uint16_t tx_mtu);
-
-/**
- * Check whether an ACL or LE link to the remote device is established
- */
-extern bool L2CA_IsLinkEstablished(const RawAddress& bd_addr,
-                                   tBT_TRANSPORT transport);
-
 #endif /* L2C_API_H */
