@@ -91,7 +91,7 @@ void avdt_scb_transport_channel_timer_timeout(void* data) {
 void AVDT_Register(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback) {
   /* register PSM with L2CAP */
   L2CA_Register(AVDT_PSM, (tL2CAP_APPL_INFO*)&avdt_l2c_appl,
-                true /* enable_snoop */, nullptr);
+                true /* enable_snoop */, nullptr, L2CAP_DEFAULT_MTU);
 
   /* set security level */
   BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask,
@@ -1090,36 +1090,6 @@ uint16_t AVDT_GetL2CapChannel(uint8_t handle) {
     tcid = avdt_ad_type_to_tcid(AVDT_CHAN_MEDIA, p_scb);
 
     lcid = avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
-  }
-
-  return (lcid);
-}
-
-/*******************************************************************************
- *
- * Function         AVDT_GetSignalChannel
- *
- * Description      Get the L2CAP CID used by the signal channel of the given
- *                  handle.
- *
- * Returns          CID if successful, otherwise 0.
- *
- ******************************************************************************/
-uint16_t AVDT_GetSignalChannel(uint8_t handle, const RawAddress& bd_addr) {
-  AvdtpScb* p_scb;
-  AvdtpCcb* p_ccb;
-  uint8_t tcid = 0; /* tcid is always 0 for signal channel */
-  uint16_t lcid = 0;
-
-  /* map handle to scb */
-  if (((p_scb = avdt_scb_by_hdl(handle)) != NULL) &&
-      ((p_ccb = p_scb->p_ccb) != NULL)) {
-    lcid = avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
-  } else {
-    p_ccb = avdt_ccb_by_bd(bd_addr);
-    if (p_ccb != NULL) {
-      lcid = avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid;
-    }
   }
 
   return (lcid);
