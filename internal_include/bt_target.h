@@ -299,16 +299,6 @@
 #define BTM_INQ_DB_SIZE 40
 #endif
 
-/* The default scan mode */
-#ifndef BTM_DEFAULT_SCAN_TYPE
-#define BTM_DEFAULT_SCAN_TYPE BTM_SCAN_TYPE_INTERLACED
-#endif
-
-/* Should connections to unknown devices be allowed when not discoverable? */
-#ifndef BTM_ALLOW_CONN_IF_NONDISCOVER
-#define BTM_ALLOW_CONN_IF_NONDISCOVER TRUE
-#endif
-
 /* Sets the Page_Scan_Window:  the length of time that the device is performing
  * a page scan. */
 #ifndef BTM_DEFAULT_CONN_WINDOW
@@ -534,12 +524,7 @@
 
 /* Whether link wants to be the master or the slave. */
 #ifndef L2CAP_DESIRED_LINK_ROLE
-#define L2CAP_DESIRED_LINK_ROLE HCI_ROLE_SLAVE
-#endif
-
-/* Include Non-Flushable Packet Boundary Flag feature of Lisbon */
-#ifndef L2CAP_NON_FLUSHABLE_PB_INCLUDED
-#define L2CAP_NON_FLUSHABLE_PB_INCLUDED TRUE
+#define L2CAP_DESIRED_LINK_ROLE HCI_ROLE_MASTER
 #endif
 
 /* Minimum number of ACL credit for high priority link */
@@ -572,11 +557,6 @@
 /* Round Robin service channels in link */
 #ifndef L2CAP_ROUND_ROBIN_CHANNEL_SERVICE
 #define L2CAP_ROUND_ROBIN_CHANNEL_SERVICE TRUE
-#endif
-
-/* used for monitoring eL2CAP data flow */
-#ifndef L2CAP_ERTM_STATS
-#define L2CAP_ERTM_STATS FALSE
 #endif
 
 /* Used for conformance testing ONLY:  When TRUE lets scriptwrapper overwrite
@@ -771,11 +751,6 @@
 /* The name for security authorization. */
 #ifndef SDP_SERVICE_NAME
 #define SDP_SERVICE_NAME "Service Discovery"
-#endif
-
-/* The security level for BTM. */
-#ifndef SDP_SECURITY_LEVEL
-#define SDP_SECURITY_LEVEL BTM_SEC_NONE
 #endif
 
 /******************************************************************************

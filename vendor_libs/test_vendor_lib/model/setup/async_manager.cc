@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "async_manager"
-
 #include "async_manager.h"
-
-#include "osi/include/log.h"
 
 #include <algorithm>
 #include <atomic>
@@ -26,7 +22,9 @@
 #include <mutex>
 #include <thread>
 #include <vector>
+
 #include "fcntl.h"
+#include "os/log.h"
 #include "sys/select.h"
 #include "unistd.h"
 
@@ -105,7 +103,7 @@ class AsyncManager::AsyncFdWatcher {
     // start the thread if not started yet
     int started = tryStartThread();
     if (started != 0) {
-      LOG_ERROR(LOG_TAG, "%s: Unable to start thread", __func__);
+      LOG_ERROR("%s: Unable to start thread", __func__);
       return started;
     }
 
@@ -121,6 +119,8 @@ class AsyncManager::AsyncFdWatcher {
   }
 
   AsyncFdWatcher() = default;
+  AsyncFdWatcher(const AsyncFdWatcher&) = delete;
+  AsyncFdWatcher& operator=(const AsyncFdWatcher&) = delete;
 
   ~AsyncFdWatcher() = default;
 
@@ -134,7 +134,7 @@ class AsyncManager::AsyncFdWatcher {
     if (std::this_thread::get_id() != thread_.get_id()) {
       thread_.join();
     } else {
-      LOG_WARN(LOG_TAG, "%s: Starting thread stop from inside the reading thread itself", __func__);
+      LOG_WARN("%s: Starting thread stop from inside the reading thread itself", __func__);
     }
 
     {
@@ -146,9 +146,6 @@ class AsyncManager::AsyncFdWatcher {
   }
 
  private:
-  AsyncFdWatcher(const AsyncFdWatcher&) = delete;
-  AsyncFdWatcher& operator=(const AsyncFdWatcher&) = delete;
-
   // Make sure to call this with at least one file descriptor ready to be
   // watched upon or the thread routine will return immediately
   int tryStartThread() {
@@ -158,10 +155,10 @@ class AsyncManager::AsyncFdWatcher {
     // set up the communication channel
     int pipe_fds[2];
     if (pipe2(pipe_fds, O_NONBLOCK)) {
-      LOG_ERROR(LOG_TAG,
-                "%s:Unable to establish a communication channel to the reading "
-                "thread",
-                __func__);
+      LOG_ERROR(
+          "%s:Unable to establish a communication channel to the reading "
+          "thread",
+          __func__);
       return -1;
     }
     notification_listen_fd_ = pipe_fds[0];
@@ -169,7 +166,7 @@ class AsyncManager::AsyncFdWatcher {
 
     thread_ = std::thread([this]() { ThreadRoutine(); });
     if (!thread_.joinable()) {
-      LOG_ERROR(LOG_TAG, "%s: Unable to start reading thread", __func__);
+      LOG_ERROR("%s: Unable to start reading thread", __func__);
       return -1;
     }
     return 0;
@@ -178,7 +175,7 @@ class AsyncManager::AsyncFdWatcher {
   int notifyThread() {
     char buffer = '0';
     if (TEMP_FAILURE_RETRY(write(notification_write_fd_, &buffer, 1)) < 0) {
-      LOG_ERROR(LOG_TAG, "%s: Unable to send message to reading thread", __func__);
+      LOG_ERROR("%s: Unable to send message to reading thread", __func__);
       return -1;
     }
     return 0;
@@ -239,10 +236,10 @@ class AsyncManager::AsyncFdWatcher {
       // wait until there is data available to read on some FD
       int retval = select(nfds + 1, &read_fds, NULL, NULL, NULL);
       if (retval <= 0) {  // there was some error or a timeout
-        LOG_ERROR(LOG_TAG,
-                  "%s: There was an error while waiting for data on the file "
-                  "descriptors: %s",
-                  __func__, strerror(errno));
+        LOG_ERROR(
+            "%s: There was an error while waiting for data on the file "
+            "descriptors: %s",
+            __func__, strerror(errno));
         continue;
       }
 
@@ -264,41 +261,64 @@ class AsyncManager::AsyncFdWatcher {
   std::map<int, ReadCallback> watched_shared_fds_;
 
   // A pair of FD to send information to the reading thread
-  int notification_listen_fd_;
-  int notification_write_fd_;
+  int notification_listen_fd_{};
+  int notification_write_fd_{};
 };
 
 // Async task manager implementation
 class AsyncManager::AsyncTaskManager {
  public:
-  AsyncTaskId ExecAsync(std::chrono::milliseconds delay, const TaskCallback& callback) {
-    return scheduleTask(std::make_shared<Task>(std::chrono::steady_clock::now() + delay, callback));
+  AsyncUserId GetNextUserId() { return lastUserId_++; }
+
+  AsyncTaskId ExecAsync(AsyncUserId user_id, std::chrono::milliseconds delay,
+                        const TaskCallback& callback) {
+    return scheduleTask(std::make_shared<Task>(
+        std::chrono::steady_clock::now() + delay, callback, user_id));
   }
 
-  AsyncTaskId ExecAsyncPeriodically(std::chrono::milliseconds delay, std::chrono::milliseconds period,
+  AsyncTaskId ExecAsyncPeriodically(AsyncUserId user_id,
+                                    std::chrono::milliseconds delay,
+                                    std::chrono::milliseconds period,
                                     const TaskCallback& callback) {
-    return scheduleTask(std::make_shared<Task>(std::chrono::steady_clock::now() + delay, period, callback));
+    return scheduleTask(std::make_shared<Task>(
+        std::chrono::steady_clock::now() + delay, period, callback, user_id));
   }
 
   bool CancelAsyncTask(AsyncTaskId async_task_id) {
-    // remove task from queue (and task id asociation) while holding lock
+    // remove task from queue (and task id association) while holding lock
     std::unique_lock<std::mutex> guard(internal_mutex_);
-    if (tasks_by_id.count(async_task_id) == 0) {
+    if (tasks_by_id_.count(async_task_id) == 0) {
       return false;
     }
-    task_queue_.erase(tasks_by_id[async_task_id]);
-    tasks_by_id.erase(async_task_id);
+    task_queue_.erase(tasks_by_id_[async_task_id]);
+    tasks_by_id_.erase(async_task_id);
+    return true;
+  }
+
+  bool CancelAsyncTasksFromUser(AsyncUserId user_id) {
+    // remove task from queue (and task id association) while holding lock
+    std::unique_lock<std::mutex> guard(internal_mutex_);
+    if (tasks_by_user_id_.count(user_id) == 0) {
+      return false;
+    }
+    for (auto task : tasks_by_user_id_[user_id]) {
+      if (tasks_by_id_.count(task) != 0) {
+        tasks_by_id_.erase(task);
+      }
+    }
     return true;
   }
 
   AsyncTaskManager() = default;
+  AsyncTaskManager(const AsyncTaskManager&) = delete;
+  AsyncTaskManager& operator=(const AsyncTaskManager&) = delete;
 
   ~AsyncTaskManager() = default;
 
   int stopThread() {
     {
       std::unique_lock<std::mutex> guard(internal_mutex_);
-      tasks_by_id.clear();
+      tasks_by_id_.clear();
       task_queue_.clear();
       if (!running_) {
         return 0;
@@ -310,7 +330,7 @@ class AsyncManager::AsyncTaskManager {
     if (std::this_thread::get_id() != thread_.get_id()) {
       thread_.join();
     } else {
-      LOG_WARN(LOG_TAG, "%s: Starting thread stop from inside the task thread itself", __func__);
+      LOG_WARN("%s: Starting thread stop from inside the task thread itself", __func__);
     }
     return 0;
   }
@@ -319,10 +339,22 @@ class AsyncManager::AsyncTaskManager {
   // Holds the data for each task
   class Task {
    public:
-    Task(std::chrono::steady_clock::time_point time, std::chrono::milliseconds period, const TaskCallback& callback)
-        : time(time), periodic(true), period(period), callback(callback), task_id(kInvalidTaskId) {}
-    Task(std::chrono::steady_clock::time_point time, const TaskCallback& callback)
-        : time(time), periodic(false), callback(callback), task_id(kInvalidTaskId) {}
+    Task(std::chrono::steady_clock::time_point time,
+         std::chrono::milliseconds period, const TaskCallback& callback,
+         AsyncUserId user)
+        : time(time),
+          periodic(true),
+          period(period),
+          callback(callback),
+          task_id(kInvalidTaskId),
+          user_id(user) {}
+    Task(std::chrono::steady_clock::time_point time,
+         const TaskCallback& callback, AsyncUserId user)
+        : time(time),
+          periodic(false),
+          callback(callback),
+          task_id(kInvalidTaskId),
+          user_id(user) {}
 
     // Operators needed to be in a collection
     bool operator<(const Task& another) const {
@@ -337,9 +369,10 @@ class AsyncManager::AsyncTaskManager {
     // public or gets more complex
     std::chrono::steady_clock::time_point time;
     bool periodic;
-    std::chrono::milliseconds period;
+    std::chrono::milliseconds period{};
     TaskCallback callback;
     AsyncTaskId task_id;
+    AsyncUserId user_id;
   };
 
   // A comparator class to put shared pointers to tasks in an ordered set
@@ -349,39 +382,35 @@ class AsyncManager::AsyncTaskManager {
     }
   };
 
-  AsyncTaskManager(const AsyncTaskManager&) = delete;
-  AsyncTaskManager& operator=(const AsyncTaskManager&) = delete;
-
   AsyncTaskId scheduleTask(const std::shared_ptr<Task>& task) {
-    AsyncTaskId task_id = kInvalidTaskId;
     {
       std::unique_lock<std::mutex> guard(internal_mutex_);
       // no more room for new tasks, we need a larger type for IDs
-      if (tasks_by_id.size() == kMaxTaskId)  // TODO potentially type unsafe
+      if (tasks_by_id_.size() == kMaxTaskId)  // TODO potentially type unsafe
         return kInvalidTaskId;
       do {
         lastTaskId_ = NextAsyncTaskId(lastTaskId_);
       } while (isTaskIdInUse(lastTaskId_));
       task->task_id = lastTaskId_;
       // add task to the queue and map
-      tasks_by_id[lastTaskId_] = task;
+      tasks_by_id_[lastTaskId_] = task;
+      tasks_by_user_id_[task->user_id].insert(task->task_id);
       task_queue_.insert(task);
-      task_id = lastTaskId_;
     }
     // start thread if necessary
     int started = tryStartThread();
     if (started != 0) {
-      LOG_ERROR(LOG_TAG, "%s: Unable to start thread", __func__);
+      LOG_ERROR("%s: Unable to start thread", __func__);
       return kInvalidTaskId;
     }
     // notify the thread so that it knows of the new task
     internal_cond_var_.notify_one();
     // return task id
-    return task_id;
+    return task->task_id;
   }
 
   bool isTaskIdInUse(const AsyncTaskId& task_id) const {
-    return tasks_by_id.count(task_id) != 0;
+    return tasks_by_id_.count(task_id) != 0;
   }
 
   int tryStartThread() {
@@ -395,14 +424,14 @@ class AsyncManager::AsyncTaskManager {
     running_ = true;
     thread_ = std::thread([this]() { ThreadRoutine(); });
     if (!thread_.joinable()) {
-      LOG_ERROR(LOG_TAG, "%s: Unable to start task thread", __func__);
+      LOG_ERROR("%s: Unable to start task thread", __func__);
       return -1;
     }
     return 0;
   }
 
   void ThreadRoutine() {
-    while (1) {
+    while (running_) {
       TaskCallback callback;
       bool run_it = false;
       {
@@ -418,7 +447,8 @@ class AsyncManager::AsyncTaskManager {
               task_p->time += task_p->period;
               task_queue_.insert(task_p);
             } else {
-              tasks_by_id.erase(task_p->task_id);
+              tasks_by_user_id_[task_p->user_id].erase(task_p->task_id);
+              tasks_by_id_.erase(task_p->task_id);
             }
           }
         }
@@ -428,15 +458,14 @@ class AsyncManager::AsyncTaskManager {
       }
       {
         std::unique_lock<std::mutex> guard(internal_mutex_);
-        // wait on condition variable with timeout just in time for next task if
-        // any
+        // check for termination right before waiting
+        if (!running_) break;
+        // wait until time for the next task (if any)
         if (task_queue_.size() > 0) {
           internal_cond_var_.wait_until(guard, (*task_queue_.begin())->time);
         } else {
           internal_cond_var_.wait(guard);
         }
-        // check for termination right after being notified (and maybe before?)
-        if (!running_) break;
       }
     }
   }
@@ -447,7 +476,9 @@ class AsyncManager::AsyncTaskManager {
   std::condition_variable internal_cond_var_;
 
   AsyncTaskId lastTaskId_ = kInvalidTaskId;
-  std::map<AsyncTaskId, std::shared_ptr<Task> > tasks_by_id;
+  AsyncUserId lastUserId_{1};
+  std::map<AsyncTaskId, std::shared_ptr<Task> > tasks_by_id_;
+  std::map<AsyncUserId, std::set<AsyncTaskId>> tasks_by_user_id_;
   std::set<std::shared_ptr<Task>, task_p_comparator> task_queue_;
 };
 
@@ -473,17 +504,30 @@ void AsyncManager::StopWatchingFileDescriptor(int file_descriptor) {
   fdWatcher_p_->StopWatchingFileDescriptor(file_descriptor);
 }
 
-AsyncTaskId AsyncManager::ExecAsync(std::chrono::milliseconds delay, const TaskCallback& callback) {
-  return taskManager_p_->ExecAsync(delay, callback);
+AsyncUserId AsyncManager::GetNextUserId() {
+  return taskManager_p_->GetNextUserId();
 }
 
-AsyncTaskId AsyncManager::ExecAsyncPeriodically(std::chrono::milliseconds delay, std::chrono::milliseconds period,
-                                                const TaskCallback& callback) {
-  return taskManager_p_->ExecAsyncPeriodically(delay, period, callback);
+AsyncTaskId AsyncManager::ExecAsync(AsyncUserId user_id,
+                                    std::chrono::milliseconds delay,
+                                    const TaskCallback& callback) {
+  return taskManager_p_->ExecAsync(user_id, delay, callback);
+}
+
+AsyncTaskId AsyncManager::ExecAsyncPeriodically(
+    AsyncUserId user_id, std::chrono::milliseconds delay,
+    std::chrono::milliseconds period, const TaskCallback& callback) {
+  return taskManager_p_->ExecAsyncPeriodically(user_id, delay, period,
+                                               callback);
 }
 
 bool AsyncManager::CancelAsyncTask(AsyncTaskId async_task_id) {
   return taskManager_p_->CancelAsyncTask(async_task_id);
+}
+
+bool AsyncManager::CancelAsyncTasksFromUser(
+    test_vendor_lib::AsyncUserId user_id) {
+  return taskManager_p_->CancelAsyncTasksFromUser(user_id);
 }
 
 void AsyncManager::Synchronize(const CriticalCallback& critical) {
