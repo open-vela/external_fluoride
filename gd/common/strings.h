@@ -1,0 +1,74 @@
+/*
+ * Copyright 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include <charconv>
+#include <iomanip>
+#include <iterator>
+#include <limits>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+#include "common/type_helper.h"
+#include "os/log.h"
+
+namespace bluetooth {
+namespace common {
+
+// Convert value into a hex decimal formatted string in lower case, prefixed with 0s
+template <class InputIt>
+std::string ToHexString(InputIt first, InputIt last) {
+  static_assert(
+      std::is_same_v<typename std::iterator_traits<InputIt>::value_type, uint8_t>, "Must use uint8_t iterator");
+  std::stringstream ss;
+  for (InputIt it = first; it != last; ++it) {
+    // +(byte) to prevent an uint8_t to be interpreted as a char
+    ss << std::hex << std::setw(2) << std::setfill('0') << +(*it);
+  }
+  return ss.str();
+}
+// Convenience method for normal cases and initializer list, e.g. ToHexString({0x12, 0x34, 0x56, 0xab})
+std::string ToHexString(const std::vector<uint8_t>& value);
+
+// Return true if |str| is a valid hex demical strings contains only hex decimal chars [0-9a-fA-F]
+bool IsValidHexString(const std::string& str);
+
+// Parse |str| into a vector of uint8_t, |str| must contains only hex decimal
+std::optional<std::vector<uint8_t>> FromHexString(const std::string& str);
+
+// Remove whitespace from both ends of the |str|, returning a copy
+std::string StringTrim(std::string str);
+
+// Split |str| into at most |max_token| tokens delimited by |delim|, unlimited tokens when |max_token| is 0
+std::vector<std::string> StringSplit(const std::string& str, const std::string& delim, size_t max_token = 0);
+
+// Join |strings| into a single string using |delim|
+std::string StringJoin(const std::vector<std::string>& strings, const std::string& delim);
+
+// Various number comparison functions, only base 10 is supported
+std::optional<int64_t> Int64FromString(const std::string& str);
+std::string ToString(int64_t value);
+std::optional<uint64_t> Uint64FromString(const std::string& str);
+std::string ToString(uint64_t value);
+std::optional<bool> BoolFromString(const std::string& str);
+std::string ToString(bool value);
+
+}  // namespace common
+}  // namespace bluetooth

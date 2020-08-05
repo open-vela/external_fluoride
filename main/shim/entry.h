@@ -46,20 +46,25 @@ class PageModule;
 namespace hci {
 class Controller;
 class HciLayer;
+class AclManager;
 class LeAdvertisingManager;
 class LeScanningManager;
 }
+
+namespace l2cap {
+namespace le {
+class L2capLeModule;
+}  // namespace le
+}  // namespace l2cap
 
 namespace security {
 class SecurityModule;
 }
 namespace storage {
-class LegacyModule;
+class StorageModule;
 }
 
 namespace shim {
-future_t* StartGabeldorscheStack();
-future_t* StopGabeldorscheStack();
 
 /* This returns a handler that might be used in shim to receive callbacks from
  * within the stack. */
@@ -72,11 +77,13 @@ Dumpsys* GetDumpsys();
 neighbor::InquiryModule* GetInquiry();
 hci::HciLayer* GetHciLayer();
 L2cap* GetL2cap();
+l2cap::le::L2capLeModule* GetL2capLeModule();
 neighbor::NameModule* GetName();
 neighbor::PageModule* GetPage();
 hci::LeScanningManager* GetScanning();
 bluetooth::security::SecurityModule* GetSecurityModule();
-storage::LegacyModule* GetStorage();
+storage::StorageModule* GetStorage();
+hci::AclManager* GetAclManager();
 
 }  // namespace shim
 }  // namespace bluetooth
