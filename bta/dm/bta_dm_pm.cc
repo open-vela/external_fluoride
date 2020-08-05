@@ -35,7 +35,6 @@
 #include "bta_dm_int.h"
 #include "bta_sys.h"
 #include "btm_api.h"
-#include "device/include/controller.h"
 #include "stack/include/btu.h"
 
 static void bta_dm_pm_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
@@ -456,9 +455,9 @@ static void bta_dm_pm_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
       ) {
     bta_dm_pm_ssr(peer_addr, index);
   } else {
-    const controller_t* controller = controller_get_interface();
     uint8_t* p = NULL;
-    if (controller->supports_sniff_subrating() &&
+    if (((NULL != (p = BTM_ReadLocalFeatures())) &&
+         HCI_SNIFF_SUB_RATE_SUPPORTED(p)) &&
         ((NULL != (p = BTM_ReadRemoteFeatures(peer_addr))) &&
          HCI_SNIFF_SUB_RATE_SUPPORTED(p)) &&
         (index == BTA_DM_PM_SSR0)) {
@@ -707,9 +706,8 @@ static bool bta_dm_pm_sniff(tBTA_DM_PEER_DEVICE* p_peer_dev, uint8_t index) {
   uint8_t* p_rem_feat = BTM_ReadRemoteFeatures(p_peer_dev->peer_bdaddr);
   APPL_TRACE_DEBUG("bta_dm_pm_sniff cur:%d, idx:%d, info:x%x", mode, index,
                    p_peer_dev->info);
-  const controller_t* controller = controller_get_interface();
   if (mode != BTM_PM_MD_SNIFF ||
-      (controller->supports_sniff_subrating() && p_rem_feat &&
+      (HCI_SNIFF_SUB_RATE_SUPPORTED(BTM_ReadLocalFeatures()) && p_rem_feat &&
        HCI_SNIFF_SUB_RATE_SUPPORTED(p_rem_feat) &&
        !(p_peer_dev->info & BTA_DM_DI_USE_SSR))) {
     /* Dont initiate Sniff if controller has alreay accepted
