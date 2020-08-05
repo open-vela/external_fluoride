@@ -47,7 +47,6 @@ static void RFCOMM_ConnectCnf(uint16_t lcid, uint16_t err);
 static void RFCOMM_ConfigInd(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg);
 static void RFCOMM_ConfigCnf(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg);
 static void RFCOMM_DisconnectInd(uint16_t lcid, bool is_clear);
-static void RFCOMM_QoSViolationInd(UNUSED_ATTR const RawAddress& bd_addr);
 static void RFCOMM_BufDataInd(uint16_t lcid, BT_HDR* p_buf);
 static void RFCOMM_CongestionStatusInd(uint16_t lcid, bool is_congested);
 
@@ -64,17 +63,16 @@ void rfcomm_l2cap_if_init(void) {
 
   p_l2c->pL2CA_ConnectInd_Cb = RFCOMM_ConnectInd;
   p_l2c->pL2CA_ConnectCfm_Cb = RFCOMM_ConnectCnf;
-  p_l2c->pL2CA_ConnectPnd_Cb = NULL;
   p_l2c->pL2CA_ConfigInd_Cb = RFCOMM_ConfigInd;
   p_l2c->pL2CA_ConfigCfm_Cb = RFCOMM_ConfigCnf;
   p_l2c->pL2CA_DisconnectInd_Cb = RFCOMM_DisconnectInd;
   p_l2c->pL2CA_DisconnectCfm_Cb = NULL;
-  p_l2c->pL2CA_QoSViolationInd_Cb = RFCOMM_QoSViolationInd;
   p_l2c->pL2CA_DataInd_Cb = RFCOMM_BufDataInd;
   p_l2c->pL2CA_CongestionStatus_Cb = RFCOMM_CongestionStatusInd;
   p_l2c->pL2CA_TxComplete_Cb = NULL;
 
-  L2CA_Register(BT_PSM_RFCOMM, p_l2c, true /* enable_snoop */, nullptr);
+  L2CA_Register(BT_PSM_RFCOMM, p_l2c, true /* enable_snoop */, nullptr,
+                RFCOMM_DEFAULT_MTU);
 }
 
 /*******************************************************************************
@@ -182,7 +180,7 @@ void RFCOMM_ConnectCnf(uint16_t lcid, uint16_t result) {
       RFCOMM_TRACE_DEBUG("RFCOMM_ConnectCnf peer gave up pending LCID(0x%x)",
                          p_mcb->pending_lcid);
 
-      /* Peer gave up his connection request, make sure cleaning up L2CAP
+      /* Peer gave up its connection request, make sure cleaning up L2CAP
        * channel */
       L2CA_ConnectRsp(p_mcb->bd_addr, p_mcb->pending_id, p_mcb->pending_lcid,
                       L2CAP_CONN_NO_RESOURCES, 0);
@@ -236,17 +234,6 @@ void RFCOMM_ConfigCnf(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg) {
 
   rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_CONF_CNF, (void*)p_cfg);
 }
-
-/*******************************************************************************
- *
- * Function         RFCOMM_QoSViolationInd
- *
- * Description      This is a callback function called by L2CAP when
- *                  L2CA_QoSViolationIndInd received.  Dispatch event to the
- *                  FSM.
- *
- ******************************************************************************/
-void RFCOMM_QoSViolationInd(UNUSED_ATTR const RawAddress& bd_addr) {}
 
 /*******************************************************************************
  *
