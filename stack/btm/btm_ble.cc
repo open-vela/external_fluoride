@@ -281,7 +281,7 @@ bool BTM_IsBleConnection(uint16_t conn_handle) {
   xx = btm_handle_to_acl_index(conn_handle);
   if (xx >= MAX_L2CAP_LINKS) return false;
 
-  p = &btm_cb.acl_cb_.acl_db[xx];
+  p = &btm_cb.acl_db[xx];
 
   return (p->transport == BT_TRANSPORT_LE);
 }
@@ -1931,7 +1931,6 @@ uint8_t btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr,
         p_dev_rec->sec_flags |= BTM_SEC_LE_AUTHENTICATED;
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
-      case SMP_CONSENT_REQ_EVT:
       case SMP_SEC_REQUEST_EVT:
         if (event == SMP_SEC_REQUEST_EVT &&
             btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) {
@@ -1939,9 +1938,7 @@ uint8_t btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr,
           break;
         }
         btm_cb.pairing_bda = bd_addr;
-        if (event != SMP_CONSENT_REQ_EVT) {
-          p_dev_rec->sec_state = BTM_SEC_STATE_AUTHENTICATING;
-        }
+        p_dev_rec->sec_state = BTM_SEC_STATE_AUTHENTICATING;
         btm_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
