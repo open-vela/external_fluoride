@@ -25,6 +25,7 @@
  *
  ******************************************************************************/
 
+#include <log/log.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -914,10 +915,9 @@ tBTM_STATUS BTM_CancelRemoteDeviceName(void) {
   /* Make sure there is not already one in progress */
   if (p_inq->remname_active) {
     if (BTM_UseLeLink(p_inq->remname_bda)) {
-      if (btm_ble_cancel_remote_name(p_inq->remname_bda))
-        return (BTM_CMD_STARTED);
-      else
-        return (BTM_UNKNOWN_ADDR);
+      /* Cancel remote name request for LE device, and process remote name
+       * callback. */
+      btm_inq_rmt_name_failed_cancelled();
     } else
       btsnd_hcic_rmt_name_req_cancel(p_inq->remname_bda);
     return (BTM_CMD_STARTED);
@@ -1602,7 +1602,8 @@ static void btm_initiate_inquiry(tBTM_INQUIRY_VAR_ST* p_inq) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_process_inq_results(uint8_t* p, uint8_t inq_res_mode) {
+void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
+                             uint8_t inq_res_mode) {
   uint8_t num_resp, xx;
   RawAddress bda;
   tINQ_DB_ENT* p_i;
@@ -1631,10 +1632,29 @@ void btm_process_inq_results(uint8_t* p, uint8_t inq_res_mode) {
 
   STREAM_TO_UINT8(num_resp, p);
 
-  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED && (num_resp > 1)) {
-    BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
-                    num_resp);
-    return;
+  if (inq_res_mode == BTM_INQ_RESULT_EXTENDED) {
+    if (num_resp > 1) {
+      BTM_TRACE_ERROR("btm_process_inq_results() extended results (%d) > 1",
+                      num_resp);
+      return;
+    }
+
+    constexpr uint16_t extended_inquiry_result_size = 254;
+    if (hci_evt_len - 1 != extended_inquiry_result_size) {
+      android_errorWriteLog(0x534e4554, "141620271");
+      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
+                      num_resp, hci_evt_len);
+      return;
+    }
+  } else if (inq_res_mode == BTM_INQ_RESULT_STANDARD ||
+             inq_res_mode == BTM_INQ_RESULT_WITH_RSSI) {
+    constexpr uint16_t inquiry_result_size = 14;
+    if (hci_evt_len < num_resp * inquiry_result_size) {
+      android_errorWriteLog(0x534e4554, "141620271");
+      BTM_TRACE_ERROR("%s: can't fit %d results in %d bytes", __func__,
+                      num_resp, hci_evt_len);
+      return;
+    }
   }
 
   for (xx = 0; xx < num_resp; xx++) {
@@ -2070,22 +2090,22 @@ void btm_process_remote_name(const RawAddress* bda, BD_NAME bdn,
 }
 
 void btm_inq_remote_name_timer_timeout(UNUSED_ATTR void* data) {
-  btm_inq_rmt_name_failed();
+  btm_inq_rmt_name_failed_cancelled();
 }
 
 /*******************************************************************************
  *
- * Function         btm_inq_rmt_name_failed
+ * Function         btm_inq_rmt_name_failed_cancelled
  *
- * Description      This function is if timeout expires while getting remote
- *                  name.  This is done for devices that incorrectly do not
- *                  report operation failure
+ * Description      This function is if timeout expires or request is cancelled
+ *                  while getting remote name.  This is done for devices that
+ *                  incorrectly do not report operation failure
  *
  * Returns          void
  *
  ******************************************************************************/
-void btm_inq_rmt_name_failed(void) {
-  BTM_TRACE_ERROR("btm_inq_rmt_name_failed()  remname_active=%d",
+void btm_inq_rmt_name_failed_cancelled(void) {
+  BTM_TRACE_ERROR("btm_inq_rmt_name_failed_cancelled()  remname_active=%d",
                   btm_cb.btm_inq_vars.remname_active);
 
   if (btm_cb.btm_inq_vars.remname_active)
