@@ -194,7 +194,9 @@ tBTA_JV_RFC_CB* bta_jv_alloc_rfc_cb(uint16_t port_handle,
     }
   }
   if (p_cb == NULL) {
-    LOG(ERROR) << __func__ << "port_handle=" << port_handle << " ctrl block exceeds limit:" << BTA_JV_MAX_RFC_CONN;
+    LOG(ERROR) << __func__ << "port_handle=" << port_handle
+               << " ctrl block exceeds limit:" << port_handle,
+        BTA_JV_MAX_RFC_CONN;
   }
   return p_cb;
 }
@@ -362,8 +364,6 @@ tBTA_JV_STATUS bta_jv_free_l2c_cb(tBTA_JV_L2C_CB* p_cb) {
   p_cb->cong = false;
   bta_jv_free_sec_id(&p_cb->sec_id);
   p_cb->p_cback = NULL;
-  p_cb->handle = 0;
-  p_cb->l2cap_socket_id = 0;
   return status;
 }
 
@@ -480,7 +480,7 @@ static tBTA_JV_STATUS bta_jv_free_set_pm_profile_cb(uint32_t jv_handle) {
 static tBTA_JV_PM_CB* bta_jv_alloc_set_pm_profile_cb(uint32_t jv_handle,
                                                      tBTA_JV_PM_ID app_id) {
   bool bRfcHandle = (jv_handle & BTA_JV_RFCOMM_MASK) != 0;
-  RawAddress peer_bd_addr = RawAddress::kEmpty;
+  RawAddress peer_bd_addr;
   int i, j;
   tBTA_JV_PM_CB** pp_cb;
 
@@ -494,9 +494,8 @@ static tBTA_JV_PM_CB* bta_jv_alloc_set_pm_profile_cb(uint32_t jv_handle,
             pp_cb = &bta_jv_cb.port_cb[j].p_pm_cb;
             if (PORT_SUCCESS !=
                 PORT_CheckConnection(bta_jv_cb.port_cb[j].port_handle,
-                                     &peer_bd_addr, NULL)) {
+                                     peer_bd_addr, NULL))
               i = BTA_JV_PM_MAX_NUM;
-            }
             break;
           }
         }
@@ -605,7 +604,7 @@ void bta_jv_enable(tBTA_JV_DM_CBACK* p_cback) {
 }
 
 /** Disables the BT device manager free the resources used by java */
-void bta_jv_disable() { LOG(INFO) << __func__; }
+void bta_jv_disable() { LOG(ERROR) << __func__; }
 
 /**
  * We keep a list of PSM's that have been freed from JAVA, for reuse.
@@ -789,7 +788,7 @@ void bta_jv_start_discovery(const RawAddress& bd_addr, uint16_t num_uuid,
   }
 
   /* init the database/set up the filter */
-  VLOG(2) << __func__ << ": call SDP_InitDiscoveryDb, num_uuid=" << num_uuid;
+  VLOG(2) << __func__ << ": call SDP_InitDiscoveryDb, num_uuid=", num_uuid;
   SDP_InitDiscoveryDb(p_bta_jv_cfg->p_sdp_db, p_bta_jv_cfg->sdp_db_size,
                       num_uuid, uuid_list, 0, NULL);
 
@@ -1123,7 +1122,7 @@ void bta_jv_l2cap_start_server(int32_t type, tBTA_SEC sec_mask,
 /* stops an L2CAP server */
 void bta_jv_l2cap_stop_server(uint16_t local_psm, uint32_t l2cap_socket_id) {
   for (int i = 0; i < BTA_JV_MAX_L2C_CONN; i++) {
-    if (bta_jv_cb.l2c_cb[i].l2cap_socket_id == l2cap_socket_id) {
+    if (bta_jv_cb.l2c_cb[i].psm == local_psm) {
       tBTA_JV_L2C_CB* p_cb = &bta_jv_cb.l2c_cb[i];
       tBTA_JV_L2CAP_CBACK* p_cback = p_cb->p_cback;
       tBTA_JV_L2CAP_CLOSE evt_data;
@@ -1255,7 +1254,7 @@ static void bta_jv_port_mgmt_cl_cback(uint32_t code, uint16_t port_handle) {
   tBTA_JV_RFC_CB* p_cb = bta_jv_rfc_port_to_cb(port_handle);
   tBTA_JV_PCB* p_pcb = bta_jv_rfc_port_to_pcb(port_handle);
   tBTA_JV evt_data;
-  RawAddress rem_bda = RawAddress::kEmpty;
+  RawAddress rem_bda;
   uint16_t lcid;
   tBTA_JV_RFCOMM_CBACK* p_cback; /* the callback function */
 
@@ -1265,7 +1264,7 @@ static void bta_jv_port_mgmt_cl_cback(uint32_t code, uint16_t port_handle) {
   VLOG(2) << __func__ << ": code=" << code << ", port_handle=" << port_handle
           << ", handle=" << p_cb->handle;
 
-  PORT_CheckConnection(port_handle, &rem_bda, &lcid);
+  PORT_CheckConnection(port_handle, rem_bda, &lcid);
 
   if (code == PORT_SUCCESS) {
     evt_data.rfc_open.handle = p_cb->handle;
@@ -1452,7 +1451,7 @@ static void bta_jv_port_mgmt_sr_cback(uint32_t code, uint16_t port_handle) {
   tBTA_JV_PCB* p_pcb = bta_jv_rfc_port_to_pcb(port_handle);
   tBTA_JV_RFC_CB* p_cb = bta_jv_rfc_port_to_cb(port_handle);
   tBTA_JV evt_data;
-  RawAddress rem_bda = RawAddress::kEmpty;
+  RawAddress rem_bda;
   uint16_t lcid;
   VLOG(2) << __func__ << ": code=" << code << ", port_handle=" << port_handle;
   if (NULL == p_cb || NULL == p_cb->p_cback) {
@@ -1466,13 +1465,9 @@ static void bta_jv_port_mgmt_sr_cback(uint32_t code, uint16_t port_handle) {
           << ", handle=" << loghex(p_cb->handle) << ", p_pcb" << p_pcb
           << ", user=" << p_pcb->rfcomm_slot_id;
 
-  int status = PORT_CheckConnection(port_handle, &rem_bda, &lcid);
+  PORT_CheckConnection(port_handle, rem_bda, &lcid);
   int failed = true;
   if (code == PORT_SUCCESS) {
-    if (status != PORT_SUCCESS) {
-      LOG(ERROR) << __func__ << ": PORT_CheckConnection returned " << status
-                 << ", although port is supposed to be connected";
-    }
     evt_data.rfc_srv_open.handle = p_pcb->handle;
     evt_data.rfc_srv_open.status = BTA_JV_SUCCESS;
     evt_data.rfc_srv_open.rem_bda = rem_bda;
@@ -1526,11 +1521,7 @@ static void bta_jv_port_event_sr_cback(uint32_t code, uint16_t port_handle) {
   tBTA_JV_RFC_CB* p_cb = bta_jv_rfc_port_to_cb(port_handle);
   tBTA_JV evt_data;
 
-  if (NULL == p_cb || NULL == p_cb->p_cback) {
-    LOG(ERROR) << __func__ << ": p_cb=" << p_cb
-               << ", p_cb->p_cback=" << (p_cb ? p_cb->p_cback : 0);
-    return;
-  }
+  if (NULL == p_cb || NULL == p_cb->p_cback) return;
 
   VLOG(2) << __func__ << ": code=" << loghex(code)
           << ", port_handle=" << port_handle << ", handle=" << p_cb->handle;
@@ -1622,9 +1613,6 @@ static tBTA_JV_PCB* bta_jv_add_rfc_port(tBTA_JV_RFC_CB* p_cb,
         p_pcb->handle = BTA_JV_RFC_H_S_TO_HDL(p_cb->handle, si);
         VLOG(2) << __func__ << ": p_pcb->handle=" << loghex(p_pcb->handle)
                 << ", curr_sess=" << p_cb->curr_sess;
-      } else {
-        LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
-        return NULL;
       }
     } else {
       LOG(ERROR) << __func__ << ": cannot create new rfc listen port";
@@ -1891,6 +1879,15 @@ static struct fc_channel* fcchan_get(uint16_t chan, char create) {
       .pL2CA_FixedConn_Cb = fcchan_conn_chng_cbk,
       .pL2CA_FixedData_Cb = fcchan_data_cbk,
       .default_idle_tout = 0xffff,
+      .fixed_chnl_opts =
+          {
+              .mode = L2CAP_FCR_BASIC_MODE,
+              .max_transmit = 0xFF,
+              .rtrans_tout = 2000,
+              .mon_tout = 12000,
+              .mps = 670,
+              .tx_win_sz = 1,
+          },
   };
 
   while (t && t->chan != chan) t = t->next;
@@ -2113,12 +2110,11 @@ static void fcchan_data_cbk(uint16_t chan, const RawAddress& bd_addr,
   if (tc) {
     // try to find an open socked for that addr and channel
     t = fcclient_find_by_addr(tc->clients, &bd_addr);
+    if (!t) {
+      // no socket -> drop it
+      return;
+    }
   }
-  if (!t) {
-    // no socket -> drop it
-    return;
-  }
-
 
   sock_cback = t->p_cback;
   sock_id = t->l2cap_socket_id;
@@ -2161,17 +2157,13 @@ void bta_jv_l2cap_connect_le(uint16_t remote_chan,
   // it could have been deleted/moved from under us, so re-find it */
   t = fcclient_find_by_id(id);
   if (t) {
-    if (evt.l2c_cl_init.status == BTA_JV_SUCCESS) {
+    if (evt.l2c_cl_init.status == BTA_JV_SUCCESS)
       call_init_f = !t->init_called;
-    } else {
+    else
       fcclient_free(t);
-      t = NULL;
-    }
   }
   if (call_init_f) p_cback(BTA_JV_L2CAP_CL_INIT_EVT, &evt, l2cap_socket_id);
-  if (t) {
-    t->init_called = true;
-  }
+  t->init_called = true;
 }
 
 /* stops an LE L2CAP server */

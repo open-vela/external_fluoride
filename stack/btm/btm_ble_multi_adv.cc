@@ -17,6 +17,16 @@
  *
  ******************************************************************************/
 
+#include <base/bind.h>
+#include <base/location.h>
+#include <base/logging.h>
+#include <base/memory/weak_ptr.h>
+#include <base/strings/string_number_conversions.h>
+#include <base/time/time.h>
+#include <string.h>
+#include <queue>
+#include <vector>
+
 #include "bt_target.h"
 #include "device/include/controller.h"
 #include "osi/include/alarm.h"
@@ -24,19 +34,6 @@
 #include "ble_advertiser.h"
 #include "ble_advertiser_hci_interface.h"
 #include "btm_int_types.h"
-#include "stack/btm/btm_ble_int.h"
-
-#include <string.h>
-#include <queue>
-#include <vector>
-
-#include <base/bind.h>
-#include <base/bind_helpers.h>
-#include <base/location.h>
-#include <base/logging.h>
-#include <base/memory/weak_ptr.h>
-#include <base/strings/string_number_conversions.h>
-#include <base/time/time.h>
 
 using base::Bind;
 using base::TimeDelta;
@@ -47,7 +44,7 @@ using IdTxPowerStatusCb = base::Callback<void(
     uint8_t /* inst_id */, int8_t /* tx_power */, uint8_t /* status */)>;
 using SetEnableData = BleAdvertiserHciInterface::SetEnableData;
 extern void btm_gen_resolvable_private_addr(
-    base::Callback<void(const RawAddress& rpa)> cb);
+    base::Callback<void(uint8_t[8])> cb);
 
 constexpr int ADV_DATA_LEN_MAX = 251;
 
@@ -116,9 +113,12 @@ struct AdvertisingInstance {
 
 void btm_ble_adv_raddr_timer_timeout(void* data);
 
+void DoNothing(uint8_t) {}
+void DoNothing2(uint8_t, uint8_t) {}
+
 struct closure_data {
   base::Closure user_task;
-  base::Location posted_from;
+  tracked_objects::Location posted_from;
 };
 
 static void alarm_closure_cb(void* p) {
@@ -129,8 +129,9 @@ static void alarm_closure_cb(void* p) {
 }
 
 // Periodic alarms are not supported, because we clean up data in callback
-void alarm_set_closure(const base::Location& posted_from, alarm_t* alarm,
-                       uint64_t interval_ms, base::Closure user_task) {
+void alarm_set_closure(const tracked_objects::Location& posted_from,
+                       alarm_t* alarm, period_ms_t interval_ms,
+                       base::Closure user_task) {
   closure_data* data = new closure_data;
   data->posted_from = posted_from;
   data->user_task = std::move(user_task);
@@ -171,7 +172,7 @@ class BleAdvertisingManagerImpl
                    weak_factory_.GetWeakPtr()));
   }
 
-  ~BleAdvertisingManagerImpl() override { adv_inst.clear(); }
+  ~BleAdvertisingManagerImpl() { adv_inst.clear(); }
 
   void GetOwnAddress(uint8_t inst_id, GetAddressCallback cb) override {
     cb.Run(adv_inst[inst_id].own_address_type, adv_inst[inst_id].own_address);
@@ -186,8 +187,38 @@ class BleAdvertisingManagerImpl
     }
   }
 
-  void GenerateRpa(base::Callback<void(const RawAddress&)> cb) {
-    btm_gen_resolvable_private_addr(std::move(cb));
+  void OnRpaGenerationComplete(base::Callback<void(RawAddress)> cb,
+                               uint8_t rand[8]) {
+    VLOG(1) << __func__;
+
+    RawAddress bda;
+
+    rand[2] &= (~BLE_RESOLVE_ADDR_MASK);
+    rand[2] |= BLE_RESOLVE_ADDR_MSB;
+
+    bda.address[2] = rand[0];
+    bda.address[1] = rand[1];
+    bda.address[0] = rand[2];
+
+    BT_OCTET16 irk;
+    BTM_GetDeviceIDRoot(irk);
+    tSMP_ENC output;
+
+    if (!SMP_Encrypt(irk, BT_OCTET16_LEN, rand, 3, &output))
+      LOG_ASSERT(false) << "SMP_Encrypt failed";
+
+    /* set hash to be LSB of rpAddress */
+    bda.address[5] = output.param_buf[0];
+    bda.address[4] = output.param_buf[1];
+    bda.address[3] = output.param_buf[2];
+
+    cb.Run(bda);
+  }
+
+  void GenerateRpa(base::Callback<void(RawAddress)> cb) {
+    btm_gen_resolvable_private_addr(
+        Bind(&BleAdvertisingManagerImpl::OnRpaGenerationComplete,
+             weak_factory_.GetWeakPtr(), std::move(cb)));
   }
 
   void ConfigureRpa(AdvertisingInstance* p_inst, MultiAdvCb configuredCb) {
@@ -205,7 +236,7 @@ class BleAdvertisingManagerImpl
 
     GenerateRpa(Bind(
         [](AdvertisingInstance* p_inst, MultiAdvCb configuredCb,
-           const RawAddress& bda) {
+           RawAddress bda) {
           /* Connectable advertising set must be disabled when updating RPA */
           bool restart = p_inst->IsEnabled() && p_inst->IsConnectable();
 
@@ -215,7 +246,7 @@ class BleAdvertisingManagerImpl
           if (restart) {
             p_inst->enable_status = false;
             hci_interface->Enable(false, p_inst->inst_id, 0x00, 0x00,
-                                  base::DoNothing());
+                                  Bind(DoNothing));
           }
 
           /* set it to controller */
@@ -232,7 +263,7 @@ class BleAdvertisingManagerImpl
           if (restart) {
             p_inst->enable_status = true;
             hci_interface->Enable(true, p_inst->inst_id, 0x00, 0x00,
-                                  base::DoNothing());
+                                  Bind(DoNothing));
           }
         },
         p_inst, std::move(configuredCb)));
@@ -254,11 +285,11 @@ class BleAdvertisingManagerImpl
             [](AdvertisingInstance* p_inst,
                base::Callback<void(uint8_t /* inst_id */, uint8_t /* status */)>
                    cb,
-               const RawAddress& bda) {
+               RawAddress bda) {
               p_inst->own_address = bda;
 
               alarm_set_on_mloop(p_inst->adv_raddr_timer,
-                                 btm_get_next_private_addrress_interval_ms(),
+                                 BTM_BLE_PRIVATE_ADDR_INT_MS,
                                  btm_ble_adv_raddr_timer_timeout, p_inst);
               cb.Run(p_inst->inst_id, BTM_BLE_MULTI_ADV_SUCCESS);
             },
@@ -430,8 +461,7 @@ class BleAdvertisingManagerImpl
             c->self->adv_inst[c->inst_id].tx_power = tx_power;
 
             if (c->self->adv_inst[c->inst_id].own_address_type == BLE_ADDR_PUBLIC) {
-              auto self = c->self;
-              self->StartAdvertisingSetAfterAddressPart(std::move(c));
+              c->self->StartAdvertisingSetAfterAddressPart(std::move(c));
               return;
             }
 
@@ -451,8 +481,7 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                auto self = c->self;
-                self->StartAdvertisingSetAfterAddressPart(std::move(c));
+                c->self->StartAdvertisingSetAfterAddressPart(std::move(c));
           }, base::Passed(&c)));
         }, base::Passed(&c)));
     }, base::Passed(&c)));
@@ -495,11 +524,11 @@ class BleAdvertisingManagerImpl
                           return;
                         }
 
-                        auto self = c->self;
                         if (c->periodic_params.enable) {
-                          self->StartAdvertisingSetPeriodicPart(std::move(c));
+                          c->self->StartAdvertisingSetPeriodicPart(
+                              std::move(c));
                         } else {
-                          self->StartAdvertisingSetFinish(std::move(c));
+                          c->self->StartAdvertisingSetFinish(std::move(c));
                         }
                       },
                       base::Passed(&c)));
@@ -553,8 +582,7 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                auto self = c->self;
-                self->StartAdvertisingSetFinish(std::move(c));
+                c->self->StartAdvertisingSetFinish(std::move(c));
 
               }, base::Passed(&c)));
         }, base::Passed(&c)));
@@ -602,7 +630,7 @@ class BleAdvertisingManagerImpl
 
     base::Closure cb = Bind(
         &BleAdvertisingManagerImpl::Enable, weak_factory_.GetWeakPtr(), inst_id,
-        0 /* disable */, std::move(timeout_cb), 0, 0, base::DoNothing());
+        0 /* disable */, std::move(timeout_cb), 0, 0, base::Bind(DoNothing));
 
     // schedule disable when the timeout passes
     alarm_set_closure(FROM_HERE, p_inst->timeout_timer, duration * 10,
@@ -686,16 +714,12 @@ class BleAdvertisingManagerImpl
     // TODO: disable only if was enabled, currently no use scenario needs
     // that,
     // we always set parameters before enabling
-    // GetHciInterface()->Enable(false, inst_id, base::DoNothing());
+    // GetHciInterface()->Enable(false, inst_id, Bind(DoNothing));
     p_inst->advertising_event_properties =
         p_params->advertising_event_properties;
     p_inst->tx_power = p_params->tx_power;
     p_inst->advertising_interval = p_params->adv_int_min;
     const RawAddress& peer_address = RawAddress::kEmpty;
-
-    // sid must be in range 0x00 to 0x0F. Since no controller supports more than
-    // 16 advertisers, it's safe to make sid equal to inst_id.
-    uint8_t sid = p_inst->inst_id % 0x0F;
 
     GetHciInterface()->SetParameters(
         p_inst->inst_id, p_params->advertising_event_properties,
@@ -703,7 +727,7 @@ class BleAdvertisingManagerImpl
         p_inst->own_address_type, p_inst->own_address, 0x00, peer_address,
         p_params->adv_filter_policy, p_inst->tx_power,
         p_params->primary_advertising_phy, 0x00,
-        p_params->secondary_advertising_phy, sid,
+        p_params->secondary_advertising_phy, 0x01 /* TODO: proper SID */,
         p_params->scan_request_notification_enable, cb);
 
     // TODO: re-enable only if it was enabled, properly call
@@ -736,13 +760,16 @@ class BleAdvertisingManagerImpl
       data.insert(data.begin(), flags.begin(), flags.end());
     }
 
-    // Find and fill TX Power with the correct value.
-    // The TX Power section is a 3 byte section.
-    for (size_t i = 0; (i + 2) < data.size();) {
-      if (data[i + 1] == HCI_EIR_TX_POWER_LEVEL_TYPE) {
-        data[i + 2] = adv_inst[inst_id].tx_power;
+    // Find and fill TX Power with the correct value
+    if (data.size()) {
+      size_t i = 0;
+      while (i < data.size()) {
+        uint8_t type = data[i + 1];
+        if (type == HCI_EIR_TX_POWER_LEVEL_TYPE) {
+          data[i + 2] = adv_inst[inst_id].tx_power;
+        }
+        i += data[i] + 1;
       }
-      i += data[i] + 1;
     }
 
     VLOG(1) << "data is: " << base::HexEncode(data.data(), data.size());
@@ -796,9 +823,8 @@ class BleAdvertisingManagerImpl
     int length = moreThanOnePacket ? ADV_DATA_LEN_MAX : dataSize - offset;
     int newOffset = offset + length;
 
-    auto dataData = data.data();
     sender.Run(
-        inst_id, operation, length, dataData + offset,
+        inst_id, operation, length, data.data() + offset,
         Bind(&BleAdvertisingManagerImpl::DivideAndSendDataRecursively, false,
              inst_id, std::move(data), newOffset, std::move(done_cb), sender));
   }
@@ -863,18 +889,18 @@ class BleAdvertisingManagerImpl
 
     if (adv_inst[inst_id].IsEnabled()) {
       p_inst->enable_status = false;
-      GetHciInterface()->Enable(false, inst_id, 0x00, 0x00, base::DoNothing());
+      GetHciInterface()->Enable(false, inst_id, 0x00, 0x00, Bind(DoNothing));
     }
 
     if (p_inst->periodic_enabled) {
       p_inst->periodic_enabled = false;
       GetHciInterface()->SetPeriodicAdvertisingEnable(false, inst_id,
-                                                      base::DoNothing());
+                                                      Bind(DoNothing));
     }
 
     alarm_cancel(p_inst->adv_raddr_timer);
     p_inst->in_use = false;
-    GetHciInterface()->RemoveAdvertisingSet(inst_id, base::DoNothing());
+    GetHciInterface()->RemoveAdvertisingSet(inst_id, Bind(DoNothing));
     p_inst->address_update_required = false;
   }
 
@@ -905,7 +931,7 @@ class BleAdvertisingManagerImpl
     }
   }
 
-  void Suspend() override {
+  void Suspend() {
     std::vector<SetEnableData> sets;
 
     for (AdvertisingInstance& inst : adv_inst) {
@@ -917,8 +943,7 @@ class BleAdvertisingManagerImpl
       sets.emplace_back(SetEnableData{.handle = inst.inst_id});
     }
 
-    if (!sets.empty())
-      GetHciInterface()->Enable(false, sets, base::DoNothing());
+    if (!sets.empty()) GetHciInterface()->Enable(false, sets, Bind(DoNothing));
   }
 
   void Resume() override {
@@ -933,7 +958,7 @@ class BleAdvertisingManagerImpl
       }
     }
 
-    if (!sets.empty()) GetHciInterface()->Enable(true, sets, base::DoNothing());
+    if (!sets.empty()) GetHciInterface()->Enable(true, sets, Bind(DoNothing));
   }
 
   void OnAdvertisingSetTerminated(
@@ -974,7 +999,7 @@ class BleAdvertisingManagerImpl
         RecomputeTimeout(p_inst, TimeTicks::Now());
         if (p_inst->enable_status) {
           GetHciInterface()->Enable(true, advertising_handle, p_inst->duration,
-                                    p_inst->maxExtAdvEvents, base::DoNothing());
+                                    p_inst->maxExtAdvEvents, Bind(DoNothing));
         }
 
       } else {
@@ -1015,7 +1040,7 @@ class BleAdvertisingManagerImpl
 
 void btm_ble_adv_raddr_timer_timeout(void* data) {
   BleAdvertisingManagerImpl* ptr = instance_weakptr.get();
-  if (ptr) ptr->ConfigureRpa((AdvertisingInstance*)data, base::DoNothing());
+  if (ptr) ptr->ConfigureRpa((AdvertisingInstance*)data, base::Bind(DoNothing));
 }
 }  // namespace
 
@@ -1048,7 +1073,7 @@ void btm_ble_adv_init() {
 
   if (BleAdvertiserHciInterface::Get()->QuirkAdvertiserZeroHandle()) {
     // If handle 0 can't be used, register advertiser for it, but never use it.
-    BleAdvertisingManager::Get().get()->RegisterAdvertiser(base::DoNothing());
+    BleAdvertisingManager::Get().get()->RegisterAdvertiser(Bind(DoNothing2));
   }
 }
 

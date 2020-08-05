@@ -22,13 +22,12 @@
  *
  ******************************************************************************/
 
+#include <log/log.h>
 #include "bt_target.h"
 #include "bt_utils.h"
 #include "osi/include/osi.h"
 
-#include <log/log.h>
 #include <string.h>
-
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "l2c_int.h"
@@ -336,7 +335,7 @@ void gatt_process_exec_write_req(tGATT_TCB& tcb, uint8_t op_code, uint16_t len,
   } else /* nothing needs to be executed , send response now */
   {
     LOG(ERROR) << "gatt_process_exec_write_req: no prepare write pending";
-    gatt_send_error_rsp(tcb, GATT_ERROR, GATT_REQ_EXEC_WRITE, 0, false);
+    gatt_send_error_rsp(tcb, GATT_INVALID_OFFSET, GATT_REQ_EXEC_WRITE, 0, false);
   }
 }
 
@@ -750,7 +749,7 @@ static void gatts_process_mtu_req(tGATT_TCB& tcb, uint16_t len,
   else
     tcb.payload_size = mtu;
 
-  LOG(INFO) << "MTU request PDU with MTU size " << +tcb.payload_size;
+  LOG(ERROR) << "MTU request PDU with MTU size " << +tcb.payload_size;
 
   l2cble_set_fixed_channel_tx_data_length(tcb.peer_bda, L2CAP_ATT_CID,
                                           tcb.payload_size);
@@ -861,10 +860,10 @@ void gatts_process_read_by_type_req(tGATT_TCB& tcb, uint8_t op_code,
 /**
  * This function is called to process the write request from client.
  */
-static void gatts_process_write_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
-                                    uint16_t handle, uint8_t op_code,
-                                    uint16_t len, uint8_t* p_data,
-                                    bt_gatt_db_attribute_type_t gatt_type) {
+void gatts_process_write_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
+                             uint16_t handle, uint8_t op_code, uint16_t len,
+                             uint8_t* p_data,
+                             bt_gatt_db_attribute_type_t gatt_type) {
   tGATTS_DATA sr_data;
   uint32_t trans_id;
   tGATT_STATUS status;
@@ -875,7 +874,7 @@ static void gatts_process_write_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
 
   switch (op_code) {
     case GATT_REQ_PREPARE_WRITE:
-      if (len < 2 || p == nullptr) {
+      if (len < 2) {
         LOG(ERROR) << __func__
                    << ": Prepare write request was invalid - missing offset, "
                       "sending error response";
@@ -885,21 +884,20 @@ static void gatts_process_write_req(tGATT_TCB& tcb, tGATT_SRV_LIST_ELEM& el,
       sr_data.write_req.is_prep = true;
       STREAM_TO_UINT16(sr_data.write_req.offset, p);
       len -= 2;
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* fall through */
     case GATT_SIGN_CMD_WRITE:
       if (op_code == GATT_SIGN_CMD_WRITE) {
         VLOG(1) << "Write CMD with data sigining";
         len -= GATT_AUTH_SIGN_LEN;
       }
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    /* fall through */
     case GATT_CMD_WRITE:
     case GATT_REQ_WRITE:
       if (op_code == GATT_REQ_WRITE || op_code == GATT_REQ_PREPARE_WRITE)
         sr_data.write_req.need_rsp = true;
       sr_data.write_req.handle = handle;
-      if (len > GATT_MAX_ATTR_LEN) len = GATT_MAX_ATTR_LEN;
       sr_data.write_req.len = len;
-      if (len != 0 && p != nullptr) {
+      if (len != 0 && p != NULL) {
         memcpy(sr_data.write_req.value, p, len);
       }
       break;
@@ -1078,7 +1076,7 @@ void gatts_process_attribute_req(tGATT_TCB& tcb, uint8_t op_code, uint16_t len,
  * Returns          void
  *
  ******************************************************************************/
-void gatts_proc_srv_chg_ind_ack(tGATT_TCB tcb) {
+static void gatts_proc_srv_chg_ind_ack(tGATT_TCB tcb) {
   tGATTS_SRV_CHG_REQ req;
   tGATTS_SRV_CHG* p_buf = NULL;
 
