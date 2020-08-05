@@ -117,10 +117,12 @@ void gap_conn_init(void) {
   memset(&conn, 0, sizeof(tGAP_CONN));
   conn.reg_info.pL2CA_ConnectInd_Cb = gap_connect_ind;
   conn.reg_info.pL2CA_ConnectCfm_Cb = gap_connect_cfm;
+  conn.reg_info.pL2CA_ConnectPnd_Cb = NULL;
   conn.reg_info.pL2CA_ConfigInd_Cb = gap_config_ind;
   conn.reg_info.pL2CA_ConfigCfm_Cb = gap_config_cfm;
   conn.reg_info.pL2CA_DisconnectInd_Cb = gap_disconnect_ind;
   conn.reg_info.pL2CA_DisconnectCfm_Cb = NULL;
+  conn.reg_info.pL2CA_QoSViolationInd_Cb = NULL;
   conn.reg_info.pL2CA_DataInd_Cb = gap_data_ind;
   conn.reg_info.pL2CA_CongestionStatus_Cb = gap_congestion_ind;
   conn.reg_info.pL2CA_TxComplete_Cb = gap_tx_complete_ind;
@@ -231,23 +233,10 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
   else
     conn.reg_info.pL2CA_ConnectInd_Cb = gap_connect_ind;
 
-  /* Fill in eL2CAP parameter data */
-  if (p_ccb->cfg.fcr_present) {
-    if (ertm_info == NULL) {
-      p_ccb->ertm_info.preferred_mode = p_ccb->cfg.fcr.mode;
-      p_ccb->ertm_info.user_rx_buf_size = GAP_DATA_BUF_SIZE;
-      p_ccb->ertm_info.user_tx_buf_size = GAP_DATA_BUF_SIZE;
-      p_ccb->ertm_info.fcr_rx_buf_size = L2CAP_INVALID_ERM_BUF_SIZE;
-      p_ccb->ertm_info.fcr_tx_buf_size = L2CAP_INVALID_ERM_BUF_SIZE;
-    } else {
-      p_ccb->ertm_info = *ertm_info;
-    }
-  }
-
   /* Register the PSM with L2CAP */
   if (transport == BT_TRANSPORT_BR_EDR) {
-    p_ccb->psm = L2CA_Register(psm, &conn.reg_info, false /* enable_snoop */,
-                               &p_ccb->ertm_info, L2CAP_MTU_SIZE);
+    p_ccb->psm = L2CA_REGISTER(
+        psm, &conn.reg_info, AMP_AUTOSWITCH_ALLOWED | AMP_USE_AMP_IF_POSSIBLE);
     if (p_ccb->psm == 0) {
       LOG(ERROR) << StringPrintf("%s: Failure registering PSM 0x%04x", __func__,
                                  psm);
@@ -257,7 +246,8 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
   }
 
   if (transport == BT_TRANSPORT_LE) {
-    p_ccb->psm = L2CA_RegisterLECoc(psm, (tL2CAP_APPL_INFO*)&conn.reg_info);
+    p_ccb->psm = L2CA_REGISTER_COC(
+        psm, &conn.reg_info, AMP_AUTOSWITCH_ALLOWED | AMP_USE_AMP_IF_POSSIBLE);
     if (p_ccb->psm == 0) {
       LOG(ERROR) << StringPrintf("%s: Failure registering PSM 0x%04x", __func__,
                                  psm);
@@ -272,6 +262,19 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
     LOG(ERROR) << "GAP_CONN - Security Error";
     gap_release_ccb(p_ccb);
     return (GAP_INVALID_HANDLE);
+  }
+
+  /* Fill in eL2CAP parameter data */
+  if (p_ccb->cfg.fcr_present) {
+    if (ertm_info == NULL) {
+      p_ccb->ertm_info.preferred_mode = p_ccb->cfg.fcr.mode;
+      p_ccb->ertm_info.user_rx_buf_size = GAP_DATA_BUF_SIZE;
+      p_ccb->ertm_info.user_tx_buf_size = GAP_DATA_BUF_SIZE;
+      p_ccb->ertm_info.fcr_rx_buf_size = L2CAP_INVALID_ERM_BUF_SIZE;
+      p_ccb->ertm_info.fcr_tx_buf_size = L2CAP_INVALID_ERM_BUF_SIZE;
+    } else {
+      p_ccb->ertm_info = *ertm_info;
+    }
   }
 
   /* optional FCR channel modes */
@@ -300,7 +303,7 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
 
     /* Check if L2CAP started the connection process */
     if (p_rem_bda && (transport == BT_TRANSPORT_BR_EDR)) {
-      cid = L2CA_ErtmConnectReq(p_ccb->psm, *p_rem_bda, &p_ccb->ertm_info);
+      cid = L2CA_CONNECT_REQ(p_ccb->psm, *p_rem_bda, &p_ccb->ertm_info);
       if (cid != 0) {
         p_ccb->connection_id = cid;
         return (p_ccb->gap_handle);
@@ -308,7 +311,7 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
     }
 
     if (p_rem_bda && (transport == BT_TRANSPORT_LE)) {
-      cid = L2CA_ConnectLECocReq(p_ccb->psm, *p_rem_bda, &p_ccb->local_coc_cfg);
+      cid = L2CA_CONNECT_COC_REQ(p_ccb->psm, *p_rem_bda, &p_ccb->local_coc_cfg);
       if (cid != 0) {
         p_ccb->connection_id = cid;
         return (p_ccb->gap_handle);
@@ -340,7 +343,7 @@ uint16_t GAP_ConnClose(uint16_t gap_handle) {
   if (p_ccb) {
     /* Check if we have a connection ID */
     if (p_ccb->con_state != GAP_CCB_STATE_LISTENING)
-      L2CA_DisconnectReq(p_ccb->connection_id);
+      L2CA_DISCONNECT_REQ(p_ccb->connection_id);
 
     gap_release_ccb(p_ccb);
 
@@ -486,7 +489,7 @@ static bool gap_try_write_queued_data(tGAP_CCB* p_ccb) {
   /* Send the buffer through L2CAP */
   BT_HDR* p_buf;
   while ((p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_ccb->tx_queue)) != NULL) {
-    uint8_t status = L2CA_DataWrite(p_ccb->connection_id, p_buf);
+    uint8_t status = L2CA_DATA_WRITE(p_ccb->connection_id, p_buf);
 
     if (status == L2CAP_DW_CONGESTED) {
       p_ccb->is_congested = true;
@@ -563,7 +566,7 @@ uint16_t GAP_ConnReconfig(uint16_t gap_handle, tL2CAP_CFG_INFO* p_cfg) {
   p_ccb->cfg = *p_cfg;
 
   if (p_ccb->con_state == GAP_CCB_STATE_CONNECTED)
-    L2CA_ConfigReq(p_ccb->connection_id, p_cfg);
+    L2CA_CONFIG_REQ(p_ccb->connection_id, p_cfg);
 
   return (BT_PASS);
 }
@@ -731,7 +734,7 @@ static void gap_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
     LOG(WARNING) << "*******";
 
     /* Disconnect because it is an unexpected connection */
-    L2CA_DisconnectReq(l2cap_cid);
+    L2CA_DISCONNECT_REQ(l2cap_cid);
     return;
   }
 
@@ -745,15 +748,15 @@ static void gap_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
 
   /* Send response to the L2CAP layer. */
   if (p_ccb->transport == BT_TRANSPORT_BR_EDR)
-    L2CA_ErtmConnectRsp(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_OK,
-                        L2CAP_CONN_OK, &p_ccb->ertm_info);
+    L2CA_CONNECT_RSP(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_OK, L2CAP_CONN_OK,
+                     &p_ccb->ertm_info);
 
   if (p_ccb->transport == BT_TRANSPORT_LE) {
-    L2CA_ConnectLECocRsp(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_OK,
+    L2CA_CONNECT_COC_RSP(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_OK,
                          L2CAP_CONN_OK, &p_ccb->local_coc_cfg);
 
     /* get the remote coc configuration */
-    L2CA_GetPeerLECocConfig(l2cap_cid, &p_ccb->peer_coc_cfg);
+    L2CA_GET_PEER_COC_CONFIG(l2cap_cid, &p_ccb->peer_coc_cfg);
     p_ccb->rem_mtu_size = p_ccb->peer_coc_cfg.mtu;
 
     /* configuration is not required for LE COC */
@@ -767,7 +770,7 @@ static void gap_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
 
   /* Send a Configuration Request. */
   if (p_ccb->transport == BT_TRANSPORT_BR_EDR)
-    L2CA_ConfigReq(l2cap_cid, &p_ccb->cfg);
+    L2CA_CONFIG_REQ(l2cap_cid, &p_ccb->cfg);
 }
 
 /*******************************************************************************
@@ -814,7 +817,7 @@ static void gap_sec_check_complete(const RawAddress*, tBT_TRANSPORT,
     gap_checks_con_flags(p_ccb);
   } else {
     /* security failed - disconnect the channel */
-    L2CA_DisconnectReq(p_ccb->connection_id);
+    L2CA_DISCONNECT_REQ(p_ccb->connection_id);
   }
 }
 
@@ -851,12 +854,12 @@ static void gap_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
       p_ccb->con_state = GAP_CCB_STATE_CFG_SETUP;
 
       /* Send a Configuration Request. */
-      L2CA_ConfigReq(l2cap_cid, &p_ccb->cfg);
+      L2CA_CONFIG_REQ(l2cap_cid, &p_ccb->cfg);
     }
 
     if (p_ccb->transport == BT_TRANSPORT_LE) {
       /* get the remote coc configuration */
-      L2CA_GetPeerLECocConfig(l2cap_cid, &p_ccb->peer_coc_cfg);
+      L2CA_GET_PEER_COC_CONFIG(l2cap_cid, &p_ccb->peer_coc_cfg);
       p_ccb->rem_mtu_size = p_ccb->peer_coc_cfg.mtu;
 
       /* configuration is not required for LE COC */
@@ -866,7 +869,7 @@ static void gap_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
       gap_checks_con_flags(p_ccb);
     }
   } else {
-    /* Tell the user if there is a callback */
+    /* Tell the user if he has a callback */
     if (p_ccb->p_callback)
       (*p_ccb->p_callback)(p_ccb->gap_handle, GAP_EVT_CONN_CLOSED, nullptr);
 
@@ -911,7 +914,7 @@ static void gap_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg) {
   p_cfg->result = L2CAP_CFG_OK;
   p_cfg->fcs_present = false;
 
-  L2CA_ConfigRsp(l2cap_cid, p_cfg);
+  L2CA_CONFIG_RSP(l2cap_cid, p_cfg);
 
   p_ccb->con_flags |= GAP_CCB_FLAGS_HIS_CFG_DONE;
 
@@ -969,7 +972,7 @@ static void gap_disconnect_ind(uint16_t l2cap_cid, bool ack_needed) {
   p_ccb = gap_find_ccb_by_cid(l2cap_cid);
   if (p_ccb == NULL) return;
 
-  if (ack_needed) L2CA_DisconnectRsp(l2cap_cid);
+  if (ack_needed) L2CA_DISCONNECT_RSP(l2cap_cid);
 
   p_ccb->p_callback(p_ccb->gap_handle, GAP_EVT_CONN_CLOSED, nullptr);
   gap_release_ccb(p_ccb);
@@ -1152,8 +1155,8 @@ static void gap_release_ccb(tGAP_CCB* p_ccb) {
 
   /* Free the security record for this PSM */
   BTM_SecClrService(p_ccb->service_id);
-  if (p_ccb->transport == BT_TRANSPORT_BR_EDR) L2CA_Deregister(p_ccb->psm);
-  if (p_ccb->transport == BT_TRANSPORT_LE) L2CA_DeregisterLECoc(p_ccb->psm);
+  if (p_ccb->transport == BT_TRANSPORT_BR_EDR) L2CA_DEREGISTER(p_ccb->psm);
+  if (p_ccb->transport == BT_TRANSPORT_LE) L2CA_DEREGISTER_COC(p_ccb->psm);
 }
 
 extern void gap_attr_db_init(void);
