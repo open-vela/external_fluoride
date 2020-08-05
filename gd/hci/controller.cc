@@ -59,15 +59,8 @@ struct Controller::impl {
     hci_->EnqueueCommand(ReadBufferSizeBuilder::Create(),
                          handler->BindOnceOn(this, &Controller::impl::read_buffer_size_complete_handler));
 
-    if (is_supported(OpCode::LE_READ_BUFFER_SIZE_V2)) {
-      hci_->EnqueueCommand(
-          LeReadBufferSizeV2Builder::Create(),
-          handler->BindOnceOn(this, &Controller::impl::le_read_buffer_size_v2_handler));
-    } else {
-      hci_->EnqueueCommand(
-          LeReadBufferSizeV1Builder::Create(),
-          handler->BindOnceOn(this, &Controller::impl::le_read_buffer_size_handler));
-    }
+    hci_->EnqueueCommand(LeReadBufferSizeV1Builder::Create(),
+                         handler->BindOnceOn(this, &Controller::impl::le_read_buffer_size_handler));
 
     hci_->EnqueueCommand(LeReadLocalSupportedFeaturesBuilder::Create(),
                          handler->BindOnceOn(this, &Controller::impl::le_read_local_supported_features_handler));
@@ -110,11 +103,6 @@ struct Controller::impl {
           handler->BindOnceOn(this, &Controller::impl::le_read_number_of_supported_advertising_sets_handler));
     } else {
       le_number_supported_advertising_sets_ = 1;
-    }
-    if (is_supported(OpCode::LE_READ_PERIODIC_ADVERTISING_LIST_SIZE)) {
-      hci_->EnqueueCommand(
-          LeReadPeriodicAdvertiserListSizeBuilder::Create(),
-          handler->BindOnceOn(this, &Controller::impl::le_read_periodic_advertiser_list_size_handler));
     }
 
     hci_->EnqueueCommand(LeGetVendorCapabilitiesBuilder::Create(),
@@ -245,23 +233,6 @@ struct Controller::impl {
     }
   }
 
-  void le_read_buffer_size_v2_handler(CommandCompleteView view) {
-    auto complete_view = LeReadBufferSizeV2CompleteView::Create(view);
-    ASSERT(complete_view.IsValid());
-    ErrorCode status = complete_view.GetStatus();
-    ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
-    le_buffer_size_ = complete_view.GetLeBufferSize();
-    iso_buffer_size_ = complete_view.GetIsoBufferSize();
-
-    // If LE buffer size is zero, then buffers returned by Read_Buffer_Size are shared between BR/EDR and LE.
-    if (le_buffer_size_.total_num_le_packets_ == 0) {
-      ASSERT(acl_buffers_ != 0);
-      le_buffer_size_.total_num_le_packets_ = acl_buffers_ / 2;
-      acl_buffers_ -= le_buffer_size_.total_num_le_packets_;
-      le_buffer_size_.le_data_packet_length_ = acl_buffer_length_;
-    }
-  }
-
   void le_read_local_supported_features_handler(CommandCompleteView view) {
     auto complete_view = LeReadLocalSupportedFeaturesCompleteView::Create(view);
     ASSERT(complete_view.IsValid());
@@ -324,14 +295,6 @@ struct Controller::impl {
     ErrorCode status = complete_view.GetStatus();
     ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
     le_number_supported_advertising_sets_ = complete_view.GetNumberSupportedAdvertisingSets();
-  }
-
-  void le_read_periodic_advertiser_list_size_handler(CommandCompleteView view) {
-    auto complete_view = LeReadPeriodicAdvertiserListSizeCompleteView::Create(view);
-    ASSERT(complete_view.IsValid());
-    ErrorCode status = complete_view.GetStatus();
-    ASSERT_LOG(status == ErrorCode::SUCCESS, "Status 0x%02hhx, %s", status, ErrorCodeText(status).c_str());
-    le_periodic_advertiser_list_size_ = complete_view.GetPeriodicAdvertiserListSize();
   }
 
   void le_get_vendor_capabilities_handler(CommandCompleteView view) {
@@ -783,7 +746,6 @@ struct Controller::impl {
   Address mac_address_;
   std::string local_name_;
   LeBufferSize le_buffer_size_;
-  LeBufferSize iso_buffer_size_;
   uint64_t le_local_supported_features_;
   uint64_t le_supported_states_;
   uint8_t le_connect_list_size_;
@@ -792,7 +754,6 @@ struct Controller::impl {
   uint16_t le_maximum_advertising_data_length_;
   uint16_t le_suggested_default_data_length_;
   uint8_t le_number_supported_advertising_sets_;
-  uint8_t le_periodic_advertiser_list_size_;
   VendorCapabilities vendor_capabilities_;
 };  // namespace hci
 
@@ -858,21 +819,15 @@ LOCAL_FEATURE_ACCESSOR(SupportsBle, 0, 38)
     return GetLocalLeFeatures() & BIT(bit);  \
   }
 
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionParameterRequest, 1)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionParametersRequest, 2)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeripheralInitiatedFeatureExchange, 3)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePacketExtension, 5)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePrivacy, 6)
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePacketExtension, 5)
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionParametersRequest, 2)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBle2mPhy, 8)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleCodedPhy, 11)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleExtendedAdvertising, 12)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertising, 13)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertisingSyncTransferSender, 24)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertisingSyncTransferRecipient, 25)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectedIsochronousStreamMaster, 28)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectedIsochronousStreamSlave, 29)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleIsochronousBroadcaster, 30)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleSynchronizedReceiver, 31)
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeripheralInitiatedFeatureExchange, 3)
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionParameterRequest, 1)
 
 uint64_t Controller::GetLocalFeatures(uint8_t page_number) const {
   if (page_number <= impl_->maximum_page_number_) {
@@ -983,14 +938,6 @@ uint64_t Controller::GetLocalLeFeatures() const {
   return impl_->le_local_supported_features_;
 }
 
-LeBufferSize Controller::GetControllerIsoBufferSize() const {
-  return impl_->iso_buffer_size_;
-}
-
-uint64_t Controller::GetControllerLeLocalSupportedFeatures() const {
-  return impl_->le_local_supported_features_;
-}
-
 uint64_t Controller::GetLeSupportedStates() const {
   return impl_->le_supported_states_;
 }
@@ -1021,10 +968,6 @@ uint8_t Controller::GetLeNumberOfSupportedAdverisingSets() const {
 
 VendorCapabilities Controller::GetVendorCapabilities() const {
   return impl_->vendor_capabilities_;
-}
-
-uint8_t Controller::GetLePeriodicAdvertiserListSize() const {
-  return impl_->le_periodic_advertiser_list_size_;
 }
 
 bool Controller::IsSupported(bluetooth::hci::OpCode op_code) const {
