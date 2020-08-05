@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -612,7 +612,7 @@ extern void btsnd_hcic_write_cur_iac_lap(
 
 extern void btsnd_hcic_get_link_quality(uint16_t handle); /* Get Link Quality */
 extern void btsnd_hcic_read_rssi(uint16_t handle);        /* Read RSSI */
-using ReadEncKeySizeCb = base::Callback<void(uint8_t, uint16_t, uint8_t)>;
+using ReadEncKeySizeCb = base::OnceCallback<void(uint8_t, uint16_t, uint8_t)>;
 extern void btsnd_hcic_read_encryption_key_size(uint16_t handle,
                                                 ReadEncKeySizeCb cb);
 extern void btsnd_hcic_read_failed_contact_counter(uint16_t handle);
