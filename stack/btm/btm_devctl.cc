@@ -25,10 +25,12 @@
 
 #include <base/logging.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "bt_types.h"
+#include "bt_utils.h"
 #include "btcore/include/module.h"
 #include "btm_int.h"
 #include "btu.h"
@@ -36,10 +38,11 @@
 #include "device/include/controller.h"
 #include "hci_layer.h"
 #include "hcimsgs.h"
+#include "l2c_int.h"
 #include "osi/include/osi.h"
 #include "stack/gatt/connection_manager.h"
-#include "stack/include/l2cap_controller_interface.h"
 
+#include "gatt_int.h"
 #include "main/shim/btm_api.h"
 #include "main/shim/controller.h"
 #include "main/shim/shim.h"
@@ -65,7 +68,8 @@ extern bluetooth::common::MessageLoopThread bt_startup_thread;
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
 /******************************************************************************/
 
-static void decode_controller_support();
+static void btm_decode_ext_features_page(uint8_t page_number,
+                                         const BD_FEATURES p_features);
 static void BTM_BT_Quality_Report_VSE_CBack(uint8_t length, uint8_t* p_stream);
 
 /*******************************************************************************
@@ -91,9 +95,10 @@ void btm_dev_init() {
       alarm_new("btm.read_link_quality_timer");
   btm_cb.devcb.read_inq_tx_power_timer =
       alarm_new("btm.read_inq_tx_power_timer");
+  btm_cb.devcb.qos_setup_timer = alarm_new("btm.qos_setup_timer");
   btm_cb.devcb.read_tx_power_timer = alarm_new("btm.read_tx_power_timer");
 
-  btm_cb.acl_cb_.btm_acl_pkt_types_supported =
+  btm_cb.btm_acl_pkt_types_supported =
       BTM_ACL_PKT_TYPES_MASK_DH1 + BTM_ACL_PKT_TYPES_MASK_DM1 +
       BTM_ACL_PKT_TYPES_MASK_DH3 + BTM_ACL_PKT_TYPES_MASK_DM3 +
       BTM_ACL_PKT_TYPES_MASK_DH5 + BTM_ACL_PKT_TYPES_MASK_DM5;
@@ -216,7 +221,10 @@ static void reset_complete(void* result) {
   BTM_SetPinType(btm_cb.cfg.pin_type, btm_cb.cfg.pin_code,
                  btm_cb.cfg.pin_code_len);
 
-  decode_controller_support();
+  for (int i = 0; i <= controller->get_last_features_classic_index(); i++) {
+    btm_decode_ext_features_page(i,
+                                 controller->get_features_classic(i)->as_array);
+  }
 
   btm_report_device_status(BTM_DEV_STATUS_UP);
 }
@@ -264,128 +272,155 @@ void btm_read_local_name_timeout(UNUSED_ATTR void* data) {
   if (p_cb) (*p_cb)((void*)NULL);
 }
 
-static void decode_controller_support() {
-  const controller_t* controller = controller_get_interface();
+/*******************************************************************************
+ *
+ * Function         btm_decode_ext_features_page
+ *
+ * Description      This function is decodes a features page.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+static void btm_decode_ext_features_page(uint8_t page_number,
+                                         const uint8_t* p_features) {
+  CHECK(p_features != nullptr);
+  BTM_TRACE_DEBUG("btm_decode_ext_features_page page: %d", page_number);
+  switch (page_number) {
+    /* Extended (Legacy) Page 0 */
+    case 0:
 
-  /* Create ACL supported packet types mask */
-  btm_cb.acl_cb_.btm_acl_pkt_types_supported =
-      (BTM_ACL_PKT_TYPES_MASK_DH1 + BTM_ACL_PKT_TYPES_MASK_DM1);
+      /* Create ACL supported packet types mask */
+      btm_cb.btm_acl_pkt_types_supported =
+          (BTM_ACL_PKT_TYPES_MASK_DH1 + BTM_ACL_PKT_TYPES_MASK_DM1);
 
-  if (controller->supports_3_slot_packets())
-    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
-        (BTM_ACL_PKT_TYPES_MASK_DH3 + BTM_ACL_PKT_TYPES_MASK_DM3);
+      if (HCI_3_SLOT_PACKETS_SUPPORTED(p_features))
+        btm_cb.btm_acl_pkt_types_supported |=
+            (BTM_ACL_PKT_TYPES_MASK_DH3 + BTM_ACL_PKT_TYPES_MASK_DM3);
 
-  if (controller->supports_5_slot_packets())
-    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
-        (BTM_ACL_PKT_TYPES_MASK_DH5 + BTM_ACL_PKT_TYPES_MASK_DM5);
+      if (HCI_5_SLOT_PACKETS_SUPPORTED(p_features))
+        btm_cb.btm_acl_pkt_types_supported |=
+            (BTM_ACL_PKT_TYPES_MASK_DH5 + BTM_ACL_PKT_TYPES_MASK_DM5);
 
-  /* Add in EDR related ACL types */
-  if (!controller->supports_classic_2m_phy()) {
-    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
-        (BTM_ACL_PKT_TYPES_MASK_NO_2_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 +
-         BTM_ACL_PKT_TYPES_MASK_NO_2_DH5);
+      /* Add in EDR related ACL types */
+      if (!HCI_EDR_ACL_2MPS_SUPPORTED(p_features)) {
+        btm_cb.btm_acl_pkt_types_supported |=
+            (BTM_ACL_PKT_TYPES_MASK_NO_2_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 +
+             BTM_ACL_PKT_TYPES_MASK_NO_2_DH5);
+      }
+
+      if (!HCI_EDR_ACL_3MPS_SUPPORTED(p_features)) {
+        btm_cb.btm_acl_pkt_types_supported |=
+            (BTM_ACL_PKT_TYPES_MASK_NO_3_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH3 +
+             BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
+      }
+
+      /* Check to see if 3 and 5 slot packets are available */
+      if (HCI_EDR_ACL_2MPS_SUPPORTED(p_features) ||
+          HCI_EDR_ACL_3MPS_SUPPORTED(p_features)) {
+        if (!HCI_3_SLOT_EDR_ACL_SUPPORTED(p_features))
+          btm_cb.btm_acl_pkt_types_supported |=
+              (BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 +
+               BTM_ACL_PKT_TYPES_MASK_NO_3_DH3);
+
+        if (!HCI_5_SLOT_EDR_ACL_SUPPORTED(p_features))
+          btm_cb.btm_acl_pkt_types_supported |=
+              (BTM_ACL_PKT_TYPES_MASK_NO_2_DH5 +
+               BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
+      }
+
+      BTM_TRACE_DEBUG("Local supported ACL packet types: 0x%04x",
+                      btm_cb.btm_acl_pkt_types_supported);
+
+      /* Create (e)SCO supported packet types mask */
+      btm_cb.btm_sco_pkt_types_supported = 0;
+      btm_cb.sco_cb.esco_supported = false;
+      if (HCI_SCO_LINK_SUPPORTED(p_features)) {
+        btm_cb.btm_sco_pkt_types_supported = ESCO_PKT_TYPES_MASK_HV1;
+
+        if (HCI_HV2_PACKETS_SUPPORTED(p_features))
+          btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV2;
+
+        if (HCI_HV3_PACKETS_SUPPORTED(p_features))
+          btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV3;
+      }
+
+      if (HCI_ESCO_EV3_SUPPORTED(p_features))
+        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV3;
+
+      if (HCI_ESCO_EV4_SUPPORTED(p_features))
+        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV4;
+
+      if (HCI_ESCO_EV5_SUPPORTED(p_features))
+        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV5;
+      if (btm_cb.btm_sco_pkt_types_supported & BTM_ESCO_LINK_ONLY_MASK) {
+        btm_cb.sco_cb.esco_supported = true;
+
+        /* Add in EDR related eSCO types */
+        if (HCI_EDR_ESCO_2MPS_SUPPORTED(p_features)) {
+          if (!HCI_3_SLOT_EDR_ESCO_SUPPORTED(p_features))
+            btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_2_EV5;
+        } else {
+          btm_cb.btm_sco_pkt_types_supported |=
+              (ESCO_PKT_TYPES_MASK_NO_2_EV3 + ESCO_PKT_TYPES_MASK_NO_2_EV5);
+        }
+
+        if (HCI_EDR_ESCO_3MPS_SUPPORTED(p_features)) {
+          if (!HCI_3_SLOT_EDR_ESCO_SUPPORTED(p_features))
+            btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_3_EV5;
+        } else {
+          btm_cb.btm_sco_pkt_types_supported |=
+              (ESCO_PKT_TYPES_MASK_NO_3_EV3 + ESCO_PKT_TYPES_MASK_NO_3_EV5);
+        }
+      }
+
+      BTM_TRACE_DEBUG("Local supported SCO packet types: 0x%04x",
+                      btm_cb.btm_sco_pkt_types_supported);
+
+      /* Create Default Policy Settings */
+      if (HCI_SWITCH_SUPPORTED(p_features))
+        btm_cb.btm_def_link_policy |= HCI_ENABLE_MASTER_SLAVE_SWITCH;
+      else
+        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_MASTER_SLAVE_SWITCH;
+
+      if (HCI_HOLD_MODE_SUPPORTED(p_features))
+        btm_cb.btm_def_link_policy |= HCI_ENABLE_HOLD_MODE;
+      else
+        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_HOLD_MODE;
+
+      if (HCI_SNIFF_MODE_SUPPORTED(p_features))
+        btm_cb.btm_def_link_policy |= HCI_ENABLE_SNIFF_MODE;
+      else
+        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_SNIFF_MODE;
+
+      if (HCI_PARK_MODE_SUPPORTED(p_features))
+        btm_cb.btm_def_link_policy |= HCI_ENABLE_PARK_MODE;
+      else
+        btm_cb.btm_def_link_policy &= ~HCI_ENABLE_PARK_MODE;
+
+      btm_sec_dev_reset();
+
+      if (HCI_LMP_INQ_RSSI_SUPPORTED(p_features)) {
+        if (HCI_EXT_INQ_RSP_SUPPORTED(p_features))
+          BTM_SetInquiryMode(BTM_INQ_RESULT_EXTENDED);
+        else
+          BTM_SetInquiryMode(BTM_INQ_RESULT_WITH_RSSI);
+      }
+
+#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
+      if (HCI_NON_FLUSHABLE_PB_SUPPORTED(p_features))
+        l2cu_set_non_flushable_pbf(true);
+      else
+        l2cu_set_non_flushable_pbf(false);
+#endif
+      BTM_SetPageScanType(BTM_DEFAULT_SCAN_TYPE);
+      BTM_SetInquiryScanType(BTM_DEFAULT_SCAN_TYPE);
+
+      break;
+
+    default:
+      BTM_TRACE_WARNING("%s: feature page %d ignored", __func__, page_number);
+      break;
   }
-
-  if (!controller->supports_classic_3m_phy()) {
-    btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
-        (BTM_ACL_PKT_TYPES_MASK_NO_3_DH1 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH3 +
-         BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
-  }
-
-  /* Check to see if 3 and 5 slot packets are available */
-  if (controller->supports_classic_2m_phy() ||
-      controller->supports_classic_3m_phy()) {
-    if (!controller->supports_3_slot_edr_packets())
-      btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
-          (BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH3);
-
-    if (!controller->supports_5_slot_edr_packets())
-      btm_cb.acl_cb_.btm_acl_pkt_types_supported |=
-          (BTM_ACL_PKT_TYPES_MASK_NO_2_DH5 + BTM_ACL_PKT_TYPES_MASK_NO_3_DH5);
-  }
-
-  BTM_TRACE_DEBUG("Local supported ACL packet types: 0x%04x",
-                  btm_cb.acl_cb_.btm_acl_pkt_types_supported);
-
-  /* Create (e)SCO supported packet types mask */
-  btm_cb.btm_sco_pkt_types_supported = 0;
-  btm_cb.sco_cb.esco_supported = false;
-  if (controller->supports_sco()) {
-    btm_cb.btm_sco_pkt_types_supported = ESCO_PKT_TYPES_MASK_HV1;
-
-    if (controller->supports_hv2_packets())
-      btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV2;
-
-    if (controller->supports_hv3_packets())
-      btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_HV3;
-  }
-
-  if (controller->supports_ev3_packets())
-    btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV3;
-
-  if (controller->supports_ev4_packets())
-    btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV4;
-
-  if (controller->supports_ev5_packets())
-    btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_EV5;
-
-  if (btm_cb.btm_sco_pkt_types_supported & BTM_ESCO_LINK_ONLY_MASK) {
-    btm_cb.sco_cb.esco_supported = true;
-
-    /* Add in EDR related eSCO types */
-    if (controller->supports_esco_2m_phy()) {
-      if (!controller->supports_3_slot_edr_packets())
-        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_2_EV5;
-    } else {
-      btm_cb.btm_sco_pkt_types_supported |=
-          (ESCO_PKT_TYPES_MASK_NO_2_EV3 + ESCO_PKT_TYPES_MASK_NO_2_EV5);
-    }
-
-    if (controller->supports_esco_3m_phy()) {
-      if (!controller->supports_3_slot_edr_packets())
-        btm_cb.btm_sco_pkt_types_supported |= ESCO_PKT_TYPES_MASK_NO_3_EV5;
-    } else {
-      btm_cb.btm_sco_pkt_types_supported |=
-          (ESCO_PKT_TYPES_MASK_NO_3_EV3 + ESCO_PKT_TYPES_MASK_NO_3_EV5);
-    }
-  }
-
-  BTM_TRACE_DEBUG("Local supported SCO packet types: 0x%04x",
-                  btm_cb.btm_sco_pkt_types_supported);
-
-  /* Create Default Policy Settings */
-  if (controller->supports_role_switch())
-    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_MASTER_SLAVE_SWITCH;
-  else
-    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_MASTER_SLAVE_SWITCH;
-
-  if (controller->supports_hold_mode())
-    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_HOLD_MODE;
-  else
-    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_HOLD_MODE;
-
-  if (controller->supports_sniff_mode())
-    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_SNIFF_MODE;
-  else
-    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_SNIFF_MODE;
-
-  if (controller->supports_park_mode())
-    btm_cb.acl_cb_.btm_def_link_policy |= HCI_ENABLE_PARK_MODE;
-  else
-    btm_cb.acl_cb_.btm_def_link_policy &= ~HCI_ENABLE_PARK_MODE;
-
-  btm_sec_dev_reset();
-
-  if (controller->supports_rssi_with_inquiry_results()) {
-    if (controller->supports_extended_inquiry_response())
-      BTM_SetInquiryMode(BTM_INQ_RESULT_EXTENDED);
-    else
-      BTM_SetInquiryMode(BTM_INQ_RESULT_WITH_RSSI);
-  }
-
-  l2cu_set_non_flushable_pbf(controller->supports_non_flushable_pb());
-  BTM_EnableInterlacedPageScan();
-  BTM_EnableInterlacedInquiryScan();
 }
 
 /*******************************************************************************
@@ -519,6 +554,23 @@ tBTM_STATUS BTM_SetDeviceClass(DEV_CLASS dev_class) {
  ******************************************************************************/
 uint8_t* BTM_ReadDeviceClass(void) {
   return ((uint8_t*)btm_cb.devcb.dev_class);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_ReadLocalFeatures
+ *
+ * Description      This function is called to read the local features
+ *
+ * Returns          pointer to the local features string
+ *
+ ******************************************************************************/
+// TODO(zachoverflow): get rid of this function
+uint8_t* BTM_ReadLocalFeatures(void) {
+  // Discarding const modifier for now, until this function dies
+  return (uint8_t*)controller_get_interface()
+      ->get_features_classic(0)
+      ->as_array;
 }
 
 /*******************************************************************************
