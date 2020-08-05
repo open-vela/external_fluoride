@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <array>
-#include <cstring>
 #include <string>
 
 /** Bluetooth Address */
@@ -30,7 +28,7 @@ class RawAddress final {
   uint8_t address[kLength];
 
   RawAddress() = default;
-  RawAddress(const uint8_t (&addr)[kLength]);
+  RawAddress(const uint8_t (&addr)[6]);
 
   bool operator<(const RawAddress& rhs) const {
     return (std::memcmp(address, rhs.address, sizeof(address)) < 0);
@@ -66,14 +64,3 @@ inline std::ostream& operator<<(std::ostream& os, const RawAddress& a) {
   os << a.ToString();
   return os;
 }
-
-template <>
-struct std::hash<RawAddress> {
-  std::size_t operator()(const RawAddress& val) const {
-    static_assert(sizeof(uint64_t) >= RawAddress::kLength);
-    uint64_t int_addr = 0;
-    memcpy(reinterpret_cast<uint8_t*>(&int_addr), val.address,
-           RawAddress::kLength);
-    return std::hash<uint64_t>{}(int_addr);
-  }
-};
