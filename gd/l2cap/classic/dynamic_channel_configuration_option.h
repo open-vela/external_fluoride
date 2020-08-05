@@ -30,7 +30,6 @@ struct DynamicChannelConfigurationOption {
   enum class RetransmissionAndFlowControlMode {
     L2CAP_BASIC,
     ENHANCED_RETRANSMISSION,
-    ENHANCED_RETRANSMISSION_OPTIONAL,
   };
   /**
    * Retransmission and flow control mode. Currently L2CAP_BASIC and ENHANCED_RETRANSMISSION.
