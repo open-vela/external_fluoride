@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -57,8 +57,6 @@ class BluetoothInterface {
                                                 RawAddress* remote_bd_addr,
                                                 int num_properties,
                                                 bt_property_t* properties);
-    virtual void DeviceFoundCallback(int num_properties,
-                                     bt_property_t* properties);
     virtual void DiscoveryStateChangedCallback(bt_discovery_state_t state);
     virtual void PinRequestCallback(RawAddress* remote_bd_addr,
                                     bt_bdname_t* bd_name, uint32_t cod,
@@ -112,6 +110,11 @@ class BluetoothInterface {
 
   // Returns the HAL callbacks that have been initialized previously.
   virtual bt_callbacks_t* GetHALCallbacks() const = 0;
+
+  // The HAL module pointer that represents the underlying Bluetooth adapter.
+  // This is implemented in and provided by the shared Bluetooth library, so
+  // this isn't owned by us.
+  virtual const bluetooth_device_t* GetHALAdapter() const = 0;
 
  protected:
   BluetoothInterface() = default;
