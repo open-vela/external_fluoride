@@ -40,7 +40,8 @@ namespace shim {
  *
  ******************************************************************************/
 uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info);
+                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
+                       uint16_t required_mtu);
 
 /*******************************************************************************
  *
@@ -288,11 +289,10 @@ bool L2CA_DisconnectRsp(uint16_t cid);
 uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
 
 // Given a local channel identifier, |lcid|, this function returns the bound
-// remote channel identifier, |rcid|, and the ACL link handle, |handle|. If
+// remote channel identifier, |rcid|. If
 // |lcid| is not known or is invalid, this function returns false and does not
-// modify the values pointed at by |rcid| and |handle|. |rcid| and |handle| may
-// be NULL.
-bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle);
+// modify the value pointed at by |rcid|. |rcid| may be NULL.
+bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid);
 
 /*******************************************************************************
  *
@@ -615,6 +615,11 @@ uint16_t L2CA_GetDisconnectReason(const RawAddress& remote_bda,
 void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
                                     uint16_t* max_interval,
                                     uint16_t floor_interval);
+
+/**
+ * Check whether an ACL or LE link to the remote device is established
+ */
+bool L2CA_IsLinkEstablished(const RawAddress& bd_addr, tBT_TRANSPORT transport);
 
 }  // namespace shim
 }  // namespace bluetooth
