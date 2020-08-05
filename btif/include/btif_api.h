@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -105,15 +105,32 @@ bool is_restricted_mode(void);
 
 /*******************************************************************************
  *
- * Function         is_atv_device
+ * Function         is_niap_mode_
  *
- * Description      Returns true if the local device is an Android TV
- *                  device, false if it is not.
+ * Description      Checks if BT was enabled in single user mode. In this
+ *                  mode, use of keystore for key attestation of LTK is limitee
+ *                  to this mode defined by UserManager.
  *
  * Returns          bool
  *
  ******************************************************************************/
-bool is_atv_device(void);
+bool is_niap_mode(void);
+
+/*******************************************************************************
+ *
+ * Function         get_niap_config_compare_result
+ *
+ * Description      Get the niap config compare result for confirming the config
+ *                  checksum compare result. When the niap mode doesn't enable,
+ *                  it should be all pass (0b11).
+ *                  Bit define:
+ *                    CONFIG_FILE_COMPARE_PASS = 0b01
+ *                    CONFIG_BACKUP_COMPARE_PASS = 0b10
+ *
+ * Returns          int
+ *
+ ******************************************************************************/
+int get_niap_config_compare_result(void);
 
 /*******************************************************************************
  *
@@ -196,8 +213,8 @@ bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_get_remote_service_record(RawAddress* remote_addr,
-                                           bt_uuid_t* uuid);
+bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
+                                           const bluetooth::Uuid& uuid);
 
 /*******************************************************************************
  *  BTIF DM API
@@ -341,8 +358,8 @@ bt_status_t btif_dm_get_adapter_property(bt_property_t* prop);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_service_record(RawAddress* remote_addr,
-                                              bt_uuid_t* uuid);
+bt_status_t btif_dm_get_remote_service_record(const RawAddress& remote_addr,
+                                              const bluetooth::Uuid& uuid);
 
 /*******************************************************************************
  *

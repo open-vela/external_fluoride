@@ -1,4 +1,4 @@
-// Copyright (C) 2016 The Android Open Source Project
+// Copyright 2016 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func fluorideDefaults(ctx android.LoadHookContext) {
 	ctx.AppendProperties(p)
 }
 
-func globalDefaults(ctx android.BaseContext) ([]string, []string) {
+func globalDefaults(ctx android.LoadHookContext) ([]string, []string) {
 	var cflags []string
 	var includeDirs []string
 
