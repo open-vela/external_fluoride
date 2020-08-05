@@ -3,9 +3,8 @@ cc_defaults {
     defaults: ["fluoride_defaults"],
     shared_libs: [
         "android.hardware.bluetooth@1.0",
+        "android.hardware.bluetooth@1.1",
         "libhidlbase",
-        "libhidltransport",
-        "libhwbinder",
     ],
 }
 
@@ -36,8 +35,16 @@ cc_library_static {
         "system/bt/stack/include",
         "system/bt/utils/include",
         "system/bt/bta/include",
+        "system/bt/btif/include",
         "system/libhwbinder/include",
     ],
+    product_variables: {
+        debuggable: {
+            cflags: [
+                "-DBT_NET_DEBUG=true",
+            ],
+        },
+    },
 }
 
 // HCI unit tests for target
