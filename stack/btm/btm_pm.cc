@@ -31,24 +31,34 @@
 #define LOG_TAG "bt_btm_pm"
 
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_types.h"
+#include "bt_utils.h"
 #include "btm_api.h"
 #include "btm_int.h"
 #include "btm_int_types.h"
-#include "device/include/controller.h"
+#include "btu.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
+#include "l2c_int.h"
+#include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "stack/include/l2cap_hci_link_interface.h"
 
 /*****************************************************************************/
 /*      to handle different modes                                            */
 /*****************************************************************************/
 #define BTM_PM_STORED_MASK 0x80 /* set this mask if the command is stored */
 #define BTM_PM_NUM_SET_MODES 3  /* only hold, sniff & park */
+
+/* Usage:  (ptr_features[ offset ] & mask )?true:false */
+/* offset to supported feature */
+const uint8_t btm_pm_mode_off[BTM_PM_NUM_SET_MODES] = {0, 0, 1};
+/* mask to supported feature */
+const uint8_t btm_pm_mode_msk[BTM_PM_NUM_SET_MODES] = {0x40, 0x80, 0x01};
 
 #define BTM_PM_GET_MD1 1
 #define BTM_PM_GET_MD2 2
@@ -136,7 +146,8 @@ tBTM_STATUS BTM_PmRegister(uint8_t mask, uint8_t* p_pm_id,
  ******************************************************************************/
 tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
                              const tBTM_PM_PWR_MD* p_mode) {
-  int acl_ind;
+  uint8_t* p_features;
+  int ind, acl_ind;
   tBTM_PM_MCB* p_cb = nullptr; /* per ACL link */
   tBTM_PM_MODE mode;
   int temp_pm_id;
@@ -163,10 +174,10 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
   p_cb = &(btm_cb.pm_mode_db[acl_ind]);
 
   if (mode != BTM_PM_MD_ACTIVE) {
-    const controller_t* controller = controller_get_interface();
-    if ((mode == BTM_PM_MD_HOLD && !controller->supports_hold_mode()) ||
-        (mode == BTM_PM_MD_SNIFF && !controller->supports_sniff_mode()) ||
-        (mode == BTM_PM_MD_PARK && !controller->supports_park_mode())) {
+    /* check if the requested mode is supported */
+    ind = mode - BTM_PM_MD_HOLD; /* make it base 0 */
+    p_features = BTM_ReadLocalFeatures();
+    if (!(p_features[btm_pm_mode_off[ind]] & btm_pm_mode_msk[ind])) {
       LOG(ERROR) << __func__ << ": pm_id " << unsigned(pm_id) << " mode "
                  << unsigned(mode) << " is not supported for " << remote_bda;
       return BTM_MODE_UNSUPPORTED;
@@ -742,6 +753,7 @@ void btm_pm_proc_mode_change(uint8_t hci_status, uint16_t hci_handle,
   tBTM_PM_MCB* p_cb = NULL;
   int xx, yy, zz;
   tBTM_PM_STATE old_state;
+  tL2C_LCB* p_lcb;
 
   /* get the index to acl_db */
   xx = btm_handle_to_acl_index(hci_handle);
@@ -758,8 +770,15 @@ void btm_pm_proc_mode_change(uint8_t hci_status, uint16_t hci_handle,
   BTM_TRACE_DEBUG("%s switched from %s to %s.", __func__,
                   mode_to_string(old_state), mode_to_string(p_cb->state));
 
-  if ((p_cb->state == BTM_PM_ST_ACTIVE) || (p_cb->state == BTM_PM_ST_SNIFF)) {
-    l2c_OnHciModeChangeSendPendingPackets(p->remote_addr);
+  p_lcb = l2cu_find_lcb_by_bd_addr(p->remote_addr, BT_TRANSPORT_BR_EDR);
+  if (p_lcb != NULL) {
+    if ((p_cb->state == BTM_PM_ST_ACTIVE) || (p_cb->state == BTM_PM_ST_SNIFF)) {
+      /* There might be any pending packets due to SNIFF or PENDING state */
+      /* Trigger L2C to start transmission of the pending packets. */
+      BTM_TRACE_DEBUG(
+          "btm mode change to active; check l2c_link for outgoing packets");
+      l2c_link_check_send_pkts(p_lcb, NULL, NULL);
+    }
   }
 
   /* notify registered parties */
