@@ -24,7 +24,6 @@
 
 #include <base/logging.h>
 
-#include "bdaddr.h"
 #include "mca_api.h"
 
 #include "mcap_test_mcl.h"
@@ -71,7 +70,7 @@ class McapTestApp {
    * @param sec_mask Security mask
    * @return True on success
    */
-  bool ConnectMcl(const bt_bdaddr_t& bd_addr, uint16_t ctrl_psm,
+  bool ConnectMcl(const RawAddress& bd_addr, uint16_t ctrl_psm,
                   uint16_t sec_mask);
   /**
    * Create MCAP Data End Point
@@ -84,7 +83,7 @@ class McapTestApp {
                   tMCA_DATA_CBACK* data_callback);
   // Simple methods that are self-explanatory
   uint8_t GetHandle();
-  McapMcl* FindMclByPeerAddress(const bt_bdaddr_t& bd_addr);
+  McapMcl* FindMclByPeerAddress(const RawAddress& bd_addr);
   McapMcl* FindMclByHandle(tMCA_CL mcl_handle);
   McapMdep* FindMdepByHandle(tMCA_DEP mdep_handle);
   void RemoveMclByHandle(tMCA_CL mcl_handle);
