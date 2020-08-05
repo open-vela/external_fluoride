@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 #include "bt_target.h"
+#include "bt_utils.h"
 #include "osi/include/osi.h"
 
 #include <log/log.h>
