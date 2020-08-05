@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,22 +22,17 @@
  *
  ******************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_target.h"
-#include "bt_utils.h"
 #include "hcidefs.h"
-#include "hcimsgs.h"
 
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
 
 #include "btm_api.h"
-#include "btu.h"
 
 #include "sdp_api.h"
 #include "sdpint.h"
@@ -89,7 +84,7 @@ void sdp_init(void) {
 #if (SDP_SERVER_ENABLED == TRUE)
   /* Register with Security Manager for the specific security level */
   if (!BTM_SetSecurityLevel(false, SDP_SERVICE_NAME, BTM_SEC_SERVICE_SDP_SERVER,
-                            SDP_SECURITY_LEVEL, SDP_PSM, 0, 0)) {
+                            BTM_SEC_NONE, SDP_PSM, 0, 0)) {
     SDP_TRACE_ERROR("Security Registration Server failed");
     return;
   }
@@ -97,7 +92,7 @@ void sdp_init(void) {
 
   /* Register with Security Manager for the specific security level */
   if (!BTM_SetSecurityLevel(true, SDP_SERVICE_NAME, BTM_SEC_SERVICE_SDP_SERVER,
-                            SDP_SECURITY_LEVEL, SDP_PSM, 0, 0)) {
+                            BTM_SEC_NONE, SDP_PSM, 0, 0)) {
     SDP_TRACE_ERROR("Security Registration for Client failed");
     return;
   }
@@ -110,18 +105,17 @@ void sdp_init(void) {
 
   sdp_cb.reg_info.pL2CA_ConnectInd_Cb = sdp_connect_ind;
   sdp_cb.reg_info.pL2CA_ConnectCfm_Cb = sdp_connect_cfm;
-  sdp_cb.reg_info.pL2CA_ConnectPnd_Cb = NULL;
   sdp_cb.reg_info.pL2CA_ConfigInd_Cb = sdp_config_ind;
   sdp_cb.reg_info.pL2CA_ConfigCfm_Cb = sdp_config_cfm;
   sdp_cb.reg_info.pL2CA_DisconnectInd_Cb = sdp_disconnect_ind;
   sdp_cb.reg_info.pL2CA_DisconnectCfm_Cb = sdp_disconnect_cfm;
-  sdp_cb.reg_info.pL2CA_QoSViolationInd_Cb = NULL;
   sdp_cb.reg_info.pL2CA_DataInd_Cb = sdp_data_ind;
   sdp_cb.reg_info.pL2CA_CongestionStatus_Cb = NULL;
   sdp_cb.reg_info.pL2CA_TxComplete_Cb = NULL;
 
   /* Now, register with L2CAP */
-  if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info)) {
+  if (!L2CA_Register(SDP_PSM, &sdp_cb.reg_info, true /* enable_snoop */,
+                     nullptr, sdp_cb.l2cap_my_cfg.mtu)) {
     SDP_TRACE_ERROR("SDP Registration failed");
   }
 }
@@ -132,26 +126,6 @@ void sdp_free(void) {
     sdp_cb.ccb[i].sdp_conn_timer = NULL;
   }
 }
-
-#if (SDP_DEBUG == TRUE)
-/*******************************************************************************
- *
- * Function         sdp_set_max_attr_list_size
- *
- * Description      This function sets the max attribute list size to use
- *
- * Returns          void
- *
- ******************************************************************************/
-uint16_t sdp_set_max_attr_list_size(uint16_t max_size) {
-  if (max_size > (sdp_cb.l2cap_my_cfg.mtu - 16))
-    max_size = sdp_cb.l2cap_my_cfg.mtu - 16;
-
-  sdp_cb.max_attr_list_size = max_size;
-
-  return sdp_cb.max_attr_list_size;
-}
-#endif
 
 /*******************************************************************************
  *
@@ -261,7 +235,7 @@ static void sdp_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
     SDP_TRACE_WARNING("SDP - Rcvd conn cnf with error: 0x%x  CID 0x%x", result,
                       p_ccb->connection_id);
 
-    /* Tell the user if he has a callback */
+    /* Tell the user if there is a callback */
     if (p_ccb->p_cb || p_ccb->p_cb2) {
       uint16_t err = -1;
       if ((result == HCI_ERR_HOST_REJECT_SECURITY) ||
@@ -450,7 +424,7 @@ static void sdp_disconnect_ind(uint16_t l2cap_cid, bool ack_needed) {
   if (ack_needed) L2CA_DisconnectRsp(l2cap_cid);
 
   SDP_TRACE_EVENT("SDP - Rcvd L2CAP disc, CID: 0x%x", l2cap_cid);
-  /* Tell the user if he has a callback */
+  /* Tell the user if there is a callback */
   if (p_ccb->p_cb)
     (*p_ccb->p_cb)((uint16_t)((p_ccb->con_state == SDP_STATE_CONNECTED)
                                   ? SDP_SUCCESS
@@ -519,18 +493,19 @@ tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   /* Allocate a new CCB. Return if none available. */
   p_ccb = sdpu_allocate_ccb();
   if (p_ccb == NULL) {
-    SDP_TRACE_WARNING("SDP - no spare CCB for orig");
+    SDP_TRACE_WARNING("%s: no spare CCB for peer %s", __func__,
+                      p_bd_addr.ToString().c_str());
     return (NULL);
   }
 
-  SDP_TRACE_EVENT("SDP - Originate started");
+  SDP_TRACE_EVENT("%s: SDP - Originate started for peer %s", __func__,
+                  p_bd_addr.ToString().c_str());
 
   /* We are the originator of this connection */
   p_ccb->con_flags |= SDP_FLAGS_IS_ORIG;
 
   /* Save the BD Address and Channel ID. */
   p_ccb->device_address = p_bd_addr;
-  ;
 
   /* Transition to the next appropriate state, waiting for connection confirm.
    */
@@ -539,15 +514,14 @@ tCONN_CB* sdp_conn_originate(const RawAddress& p_bd_addr) {
   cid = L2CA_ConnectReq(SDP_PSM, p_bd_addr);
 
   /* Check if L2CAP started the connection process */
-  if (cid != 0) {
-    p_ccb->connection_id = cid;
-
-    return (p_ccb);
-  } else {
-    SDP_TRACE_WARNING("SDP - Originate failed");
+  if (cid == 0) {
+    SDP_TRACE_WARNING("%s: SDP - Originate failed for peer %s", __func__,
+                      p_bd_addr.ToString().c_str());
     sdpu_release_ccb(p_ccb);
     return (NULL);
   }
+  p_ccb->connection_id = cid;
+  return (p_ccb);
 }
 
 /*******************************************************************************
@@ -610,7 +584,7 @@ void sdp_disconnect(tCONN_CB* p_ccb, uint16_t reason) {
   /* If at setup state, we may not get callback ind from L2CAP */
   /* Call user callback immediately */
   if (p_ccb->con_state == SDP_STATE_CONN_SETUP) {
-    /* Tell the user if he has a callback */
+    /* Tell the user if there is a callback */
     if (p_ccb->p_cb)
       (*p_ccb->p_cb)(reason);
     else if (p_ccb->p_cb2)
@@ -643,7 +617,7 @@ static void sdp_disconnect_cfm(uint16_t l2cap_cid,
 
   SDP_TRACE_EVENT("SDP - Rcvd L2CAP disc cfm, CID: 0x%x", l2cap_cid);
 
-  /* Tell the user if he has a callback */
+  /* Tell the user if there is a callback */
   if (p_ccb->p_cb)
     (*p_ccb->p_cb)(p_ccb->disconnect_reason);
   else if (p_ccb->p_cb2)
@@ -670,7 +644,7 @@ void sdp_conn_timer_timeout(void* data) {
                   p_ccb->connection_id);
 
   L2CA_DisconnectReq(p_ccb->connection_id);
-  /* Tell the user if he has a callback */
+  /* Tell the user if there is a callback */
   if (p_ccb->p_cb)
     (*p_ccb->p_cb)(SDP_CONN_FAILED);
   else if (p_ccb->p_cb2)

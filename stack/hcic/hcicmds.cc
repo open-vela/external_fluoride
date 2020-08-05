@@ -1,20 +1,20 @@
 /******************************************************************************
-*
-*  Copyright (C) 1999-2012 Broadcom Corporation
-*
-*  Licensed under the Apache License, Version 2.0 (the "License");
-*  you may not use this file except in compliance with the License.
-*  You may obtain a copy of the License at:
-*
-*  http://www.apache.org/licenses/LICENSE-2.0
-*
-*  Unless required by applicable law or agreed to in writing, software
-*  distributed under the License is distributed on an "AS IS" BASIS,
-*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-*  See the License for the specific language governing permissions and
-*  limitations under the License.
-*
-******************************************************************************/
+ *
+ *  Copyright 1999-2012 Broadcom Corporation
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -29,7 +29,6 @@
 #include "hcidefs.h"
 #include "hcimsgs.h"
 
-#include <base/bind.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -143,7 +142,6 @@ void btsnd_hcic_disconnect(uint16_t handle, uint8_t reason) {
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-#if (BTM_SCO_INCLUDED == TRUE)
 void btsnd_hcic_add_SCO_conn(uint16_t handle, uint16_t packet_types) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
@@ -159,7 +157,6 @@ void btsnd_hcic_add_SCO_conn(uint16_t handle, uint16_t packet_types) {
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
-#endif /* BTM_SCO_INCLUDED */
 
 void btsnd_hcic_create_conn_cancel(const RawAddress& dest) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
@@ -208,7 +205,7 @@ void btsnd_hcic_reject_conn(const RawAddress& dest, uint8_t reason) {
 }
 
 void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
-                                   LINK_KEY link_key) {
+                                   const LinkKey& link_key) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -219,7 +216,7 @@ void btsnd_hcic_link_key_req_reply(const RawAddress& bd_addr,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_LINK_KEY_REQ_REPLY);
 
   BDADDR_TO_STREAM(pp, bd_addr);
-  ARRAY16_TO_STREAM(pp, link_key);
+  ARRAY16_TO_STREAM(pp, link_key.data());
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
@@ -1197,8 +1194,8 @@ void btsnd_hcic_user_passkey_neg_reply(const RawAddress& bd_addr) {
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, uint8_t* p_c,
-                              uint8_t* p_r) {
+void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, const Octet16& c,
+                              const Octet16& r) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -1209,8 +1206,8 @@ void btsnd_hcic_rem_oob_reply(const RawAddress& bd_addr, uint8_t* p_c,
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_REM_OOB_REPLY);
 
   BDADDR_TO_STREAM(pp, bd_addr);
-  ARRAY16_TO_STREAM(pp, p_c);
-  ARRAY16_TO_STREAM(pp, p_r);
+  ARRAY16_TO_STREAM(pp, c.data());
+  ARRAY16_TO_STREAM(pp, r.data());
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
@@ -1261,7 +1258,6 @@ void btsnd_hcic_send_keypress_notif(const RawAddress& bd_addr, uint8_t notif) {
 
 /**** end of Simple Pairing Commands ****/
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
@@ -1276,7 +1272,6 @@ void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type) {
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
-#endif
 
 /*************************
  * End of Lisbon Commands
@@ -1312,9 +1307,8 @@ void btsnd_hcic_read_rssi(uint16_t handle) {
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
-static void read_encryption_key_size_complete(
-    ReadEncKeySizeCb cb, uint8_t* return_parameters,
-    uint16_t return_parameters_length) {
+static void read_encryption_key_size_complete(ReadEncKeySizeCb cb, uint8_t* return_parameters,
+                                              uint16_t return_parameters_length) {
   uint8_t status;
   uint16_t handle;
   uint8_t key_size;
@@ -1333,9 +1327,8 @@ void btsnd_hcic_read_encryption_key_size(uint16_t handle, ReadEncKeySizeCb cb) {
   uint8_t* p = param;
   UINT16_TO_STREAM(p, handle);
 
-  btu_hcif_send_cmd_with_cb(
-      FROM_HERE, HCI_READ_ENCR_KEY_SIZE, param, len,
-      base::Bind(&read_encryption_key_size_complete, base::Passed(&cb)));
+  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_READ_ENCR_KEY_SIZE, param, len,
+                            base::Bind(&read_encryption_key_size_complete, base::Passed(&cb)));
 }
 
 void btsnd_hcic_read_failed_contact_counter(uint16_t handle) {
