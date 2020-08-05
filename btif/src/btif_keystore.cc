@@ -1,110 +1,148 @@
-/*
- * Copyright 2020 The Android Open Source Project
+/******************************************************************************
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Copyright 2019 Google, Inc.
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
-/* BluetoothKeystore Interface */
+#include "btif_keystore.h"
+#include "keystore_client.pb.h"
+#include "string.h"
 
-#include <btif_common.h>
-#include <btif_keystore.h>
-
-#include <base/bind.h>
-#include <base/location.h>
+#include <base/files/file_util.h>
 #include <base/logging.h>
-#include <hardware/bluetooth.h>
-#include <map>
+#include <base/strings/string_number_conversions.h>
+#include <base/strings/string_split.h>
+#include <base/strings/string_util.h>
+#include <base/strings/utf_string_conversions.h>
+#include <sys/stat.h>
 
-using base::Bind;
-using base::Unretained;
-using bluetooth::bluetooth_keystore::BluetoothKeystoreCallbacks;
-using bluetooth::bluetooth_keystore::BluetoothKeystoreInterface;
+using namespace keystore;
+using namespace bluetooth;
+
+const std::string kKeyStore = "bluetooth-key-encrypted";
+constexpr uint32_t kAESKeySize = 256;     // bits
+constexpr uint32_t kMACOutputSize = 128;  // bits
 
 namespace bluetooth {
-namespace bluetooth_keystore {
-class BluetoothKeystoreInterfaceImpl;
-std::unique_ptr<BluetoothKeystoreInterface> bluetoothKeystoreInstance;
 
-class BluetoothKeystoreInterfaceImpl
-    : public bluetooth::bluetooth_keystore::BluetoothKeystoreInterface,
-      public bluetooth::bluetooth_keystore::BluetoothKeystoreCallbacks {
-  ~BluetoothKeystoreInterfaceImpl() override = default;
+BtifKeystore::BtifKeystore(keystore::KeystoreClient* keystore_client)
+    : keystore_client_(keystore_client) {}
 
-  void init(BluetoothKeystoreCallbacks* callbacks) override {
-    VLOG(2) << __func__;
-    this->callbacks = callbacks;
+std::string BtifKeystore::Encrypt(const std::string& data, int32_t flags) {
+  std::lock_guard<std::mutex> lock(api_mutex_);
+  std::string output;
+  if (data.empty()) {
+    LOG(ERROR) << __func__ << ": empty data";
+    return output;
+  }
+  if (!GenerateKey(kKeyStore, flags)) {
+    return output;
   }
 
-  void set_encrypt_key_or_remove_key(std::string prefix,
-                                     std::string decryptedString) override {
-    VLOG(2) << __func__ << " prefix: " << prefix;
-
-    if (!callbacks) {
-      LOG(WARNING) << __func__ << " callback isn't ready. prefix: " << prefix;
-      return;
-    }
-
-    // Save the value into a map.
-    key_map[prefix] = decryptedString;
-
-    do_in_jni_thread(
-        base::Bind(&bluetooth::bluetooth_keystore::BluetoothKeystoreCallbacks::
-                       set_encrypt_key_or_remove_key,
-                   base::Unretained(callbacks), prefix, decryptedString));
+  AuthorizationSetBuilder encrypt_params;
+  encrypt_params.Authorization(TAG_BLOCK_MODE, BlockMode::GCM)
+      .Authorization(TAG_MAC_LENGTH, kMACOutputSize)
+      .Padding(PaddingMode::NONE);
+  AuthorizationSet output_params;
+  std::string raw_encrypted_data;
+  if (!keystore_client_->oneShotOperation(
+          KeyPurpose::ENCRYPT, kKeyStore, encrypt_params, data,
+          std::string() /* signature_to_verify */, &output_params,
+          &raw_encrypted_data)) {
+    LOG(ERROR) << __func__ << ": AES operation failed.";
+    return output;
+  }
+  auto init_vector_blob = output_params.GetTagValue(TAG_NONCE);
+  if (!init_vector_blob.isOk()) {
+    LOG(ERROR) << __func__ << ": Missing initialization vector.";
+    return output;
   }
 
-  std::string get_key(std::string prefix) override {
-    VLOG(2) << __func__ << " prefix: " << prefix;
+  const hidl_vec<uint8_t>& value = init_vector_blob.value();
+  std::string init_vector =
+      std::string(reinterpret_cast<const std::string::value_type*>(&value[0]),
+                  value.size());
 
-    if (!callbacks) {
-      LOG(WARNING) << __func__ << " callback isn't ready. prefix: " << prefix;
-      return "";
-    }
-
-    std::string decryptedString;
-    // try to find the key.
-    std::map<std::string, std::string>::iterator iter = key_map.find(prefix);
-    if (iter == key_map.end()) {
-      decryptedString = callbacks->get_key(prefix);
-      // Save the value into a map.
-      key_map[prefix] = decryptedString;
-      VLOG(2) << __func__ << ": get key from bluetoothkeystore.";
-    } else {
-      decryptedString = iter->second;
-    }
-    return decryptedString;
+  if (memcmp(&init_vector_blob, &init_vector, init_vector.length()) == 0) {
+    LOG(ERROR) << __func__
+               << ": Protobuf nonce data doesn't match the actual nonce.";
   }
 
-  void clear_map() override {
-    VLOG(2) << __func__;
-
-    std::map<std::string, std::string> empty_map;
-    key_map.swap(empty_map);
-    key_map.clear();
+  EncryptedData protobuf;
+  protobuf.set_init_vector(init_vector);
+  protobuf.set_encrypted_data(raw_encrypted_data);
+  if (!protobuf.SerializeToString(&output)) {
+    LOG(ERROR) << __func__ << ": Failed to serialize EncryptedData protobuf.";
   }
-
- private:
-  BluetoothKeystoreCallbacks* callbacks = nullptr;
-  std::map<std::string, std::string> key_map;
-};
-
-BluetoothKeystoreInterface* getBluetoothKeystoreInterface() {
-  if (!bluetoothKeystoreInstance) {
-    bluetoothKeystoreInstance.reset(new BluetoothKeystoreInterfaceImpl());
-  }
-
-  return bluetoothKeystoreInstance.get();
+  return output;
 }
 
-}  // namespace bluetooth_keystore
+std::string BtifKeystore::Decrypt(const std::string& input) {
+  std::lock_guard<std::mutex> lock(api_mutex_);
+  if (input.empty()) {
+    LOG(ERROR) << __func__ << ": empty input data";
+    return "";
+  }
+  std::string output;
+  EncryptedData protobuf;
+  if (!protobuf.ParseFromString(input)) {
+    LOG(ERROR) << __func__ << ": Failed to parse EncryptedData protobuf.";
+    return output;
+  }
+  AuthorizationSetBuilder encrypt_params;
+  encrypt_params.Authorization(TAG_BLOCK_MODE, BlockMode::GCM)
+      .Authorization(TAG_MAC_LENGTH, kMACOutputSize)
+      .Authorization(TAG_NONCE, protobuf.init_vector().data(),
+                     protobuf.init_vector().size())
+      .Padding(PaddingMode::NONE);
+  AuthorizationSet output_params;
+  if (!keystore_client_->oneShotOperation(
+          KeyPurpose::DECRYPT, kKeyStore, encrypt_params,
+          protobuf.encrypted_data(), std::string() /* signature_to_verify */,
+          &output_params, &output)) {
+    LOG(ERROR) << __func__ << ": AES operation failed.";
+  }
+  return output;
+}
+
+bool BtifKeystore::GenerateKey(const std::string& name, int32_t flags) {
+  if (!DoesKeyExist()) {
+    AuthorizationSetBuilder params;
+    params.AesEncryptionKey(kAESKeySize)
+        .Authorization(TAG_NO_AUTH_REQUIRED)
+        .Authorization(TAG_BLOCK_MODE, BlockMode::GCM)
+        .Authorization(TAG_PURPOSE, KeyPurpose::ENCRYPT)
+        .Authorization(TAG_PURPOSE, KeyPurpose::DECRYPT)
+        .Padding(PaddingMode::NONE)
+        .Authorization(TAG_MIN_MAC_LENGTH, kMACOutputSize);
+    AuthorizationSet hardware_enforced_characteristics;
+    AuthorizationSet software_enforced_characteristics;
+    auto result = keystore_client_->generateKey(
+        name, params, flags, &hardware_enforced_characteristics,
+        &software_enforced_characteristics);
+    if (!result.isOk()) {
+      LOG(FATAL) << __func__ << "Failed to generate key: name: " << name
+                 << ", error code: " << result.getErrorCode();
+      return false;
+    }
+  }
+  return true;
+}
+
+bool BtifKeystore::DoesKeyExist() {
+  return keystore_client_->doesKeyExist(kKeyStore);
+}
+
 }  // namespace bluetooth
