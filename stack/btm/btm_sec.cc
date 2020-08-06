@@ -53,6 +53,7 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -1622,13 +1623,28 @@ static void btm_sec_check_upgrade(tBTM_SEC_DEV_REC* p_dev_rec,
 
   if (btm_sec_is_upgrade_possible(p_dev_rec, is_originator)) {
     BTM_TRACE_DEBUG("need upgrade!! sec_flags:0x%x", p_dev_rec->sec_flags);
-    /* if the application confirms the upgrade, set the upgrade bit */
-    p_dev_rec->sm4 |= BTM_SM4_UPGRADE;
+    /* upgrade is possible: check if the application wants the upgrade.
+     * If the application is configured to use a global MITM flag,
+     * it probably would not want to upgrade the link key based on the security
+     * level database */
+    tBTM_SP_UPGRADE evt_data;
+    evt_data.bd_addr = p_dev_rec->bd_addr;
+    evt_data.upgrade = true;
+    if (btm_cb.api.p_sp_callback)
+      (*btm_cb.api.p_sp_callback)(BTM_SP_UPGRADE_EVT,
+                                  (tBTM_SP_EVT_DATA*)&evt_data);
 
-    /* Clear the link key known to go through authentication/pairing again */
-    p_dev_rec->sec_flags &= ~(BTM_SEC_LINK_KEY_KNOWN | BTM_SEC_LINK_KEY_AUTHED);
-    p_dev_rec->sec_flags &= ~BTM_SEC_AUTHENTICATED;
-    BTM_TRACE_DEBUG("sec_flags:0x%x", p_dev_rec->sec_flags);
+    BTM_TRACE_DEBUG("evt_data.upgrade:0x%x", evt_data.upgrade);
+    if (evt_data.upgrade) {
+      /* if the application confirms the upgrade, set the upgrade bit */
+      p_dev_rec->sm4 |= BTM_SM4_UPGRADE;
+
+      /* Clear the link key known to go through authentication/pairing again */
+      p_dev_rec->sec_flags &=
+          ~(BTM_SEC_LINK_KEY_KNOWN | BTM_SEC_LINK_KEY_AUTHED);
+      p_dev_rec->sec_flags &= ~BTM_SEC_AUTHENTICATED;
+      BTM_TRACE_DEBUG("sec_flags:0x%x", p_dev_rec->sec_flags);
+    }
   }
 }
 
@@ -2833,6 +2849,13 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
+
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
 
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
@@ -4250,7 +4273,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
