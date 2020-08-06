@@ -54,16 +54,8 @@ EXPORT_SYMBOL extern const module_t gd_shim_module = {
     .clean_up = kUnusedModuleApi,
     .dependencies = {kUnusedModuleDependencies}};
 
-bool bluetooth::shim::is_gd_hci_enabled() {
-  return bluetooth::common::InitFlags::GdHciEnabled();
-}
-
 bool bluetooth::shim::is_gd_shim_enabled() {
-  return bluetooth::common::InitFlags::GdCoreEnabled();
-}
-
-bool bluetooth::shim::is_any_gd_enabled() {
-  return bluetooth::common::InitFlags::GdHciEnabled();
+  return common::InitFlags::GdCoreEnabled();
 }
 
 bool bluetooth::shim::is_gd_stack_started_up() {
