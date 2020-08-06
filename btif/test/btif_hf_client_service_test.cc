@@ -6,6 +6,7 @@
 
 static tBTA_HF_CLIENT_FEAT gFeatures;
 
+
 uint8_t btif_trace_level = BT_TRACE_LEVEL_WARNING;
 void LogMsg(uint32_t trace_set_mask, const char* fmt_str, ...) {}
 tBTA_STATUS BTA_HfClientEnable(tBTA_HF_CLIENT_CBACK* p_cback, tBTA_SEC sec_mask,
@@ -14,18 +15,22 @@ tBTA_STATUS BTA_HfClientEnable(tBTA_HF_CLIENT_CBACK* p_cback, tBTA_SEC sec_mask,
   gFeatures = features;
   return BTA_SUCCESS;
 }
-void BTA_HfClientDisable(void) {}
+void BTA_HfClientDisable(void) { }
 bt_status_t btif_transfer_context(tBTIF_CBACK* p_cback, uint16_t event,
                                   char* p_params, int param_len,
                                   tBTIF_COPY_CBACK* p_copy_cback) {
   return BT_STATUS_SUCCESS;
 }
 void btif_queue_advance() {}
-const char* dump_hf_client_event(uint16_t event) { return "UNKNOWN MSG ID"; }
+const char* dump_hf_client_event(uint16_t event) {
+  return "UNKNOWN MSG ID";
+}
 
 class BtifHfClientTest : public ::testing::Test {
  protected:
-  void SetUp() override { gFeatures = BTIF_HF_CLIENT_FEATURES; }
+  void SetUp() override {
+    gFeatures = BTIF_HF_CLIENT_FEATURES;
+  }
 
   void TearDown() override {}
 };

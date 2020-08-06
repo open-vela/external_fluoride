@@ -30,7 +30,6 @@
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hcimsgs.h"
-#include "l2c_int.h"
 
 extern void btm_send_hci_create_connection(
     uint16_t scan_int, uint16_t scan_win, uint8_t init_filter_policy,
@@ -370,7 +369,7 @@ bool btm_ble_start_auto_conn() {
   }
 
   if (btm_ble_get_conn_st() != BLE_CONN_IDLE ||
-      !background_connections_pending() || !l2cu_can_allocate_lcb()) {
+      !background_connections_pending()) {
     return false;
   }
 
