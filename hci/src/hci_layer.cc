@@ -874,7 +874,15 @@ const hci_t* hci_layer_get_interface();
 }  // namespace shim
 }  // namespace bluetooth
 
-const hci_t* hci_layer_get_interface_legacy() {
+const hci_t* hci_layer_get_interface() {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::hci_layer_get_interface();
+  } else {
+    return bluetooth::legacy::hci_layer_get_interface();
+  }
+}
+
+const hci_t* bluetooth::legacy::hci_layer_get_interface() {
   buffer_allocator = buffer_allocator_get_interface();
   btsnoop = btsnoop_get_interface();
   packet_fragmenter = packet_fragmenter_get_interface();
@@ -882,14 +890,6 @@ const hci_t* hci_layer_get_interface_legacy() {
   init_layer_interface();
 
   return &interface;
-}
-
-const hci_t* hci_layer_get_interface() {
-  if (bluetooth::shim::is_gd_hci_enabled()) {
-    return bluetooth::shim::hci_layer_get_interface();
-  } else {
-    return hci_layer_get_interface_legacy();
-  }
 }
 
 const hci_t* hci_layer_get_test_interface(
