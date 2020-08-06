@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,40 +24,33 @@
 
 #define LOG_TAG "bt_bta_sys_main"
 
+#include <base/bind.h>
 #include <base/logging.h>
-#include <pthread.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bta_api.h"
-#include "bta_closure_int.h"
 #include "bta_sys.h"
 #include "bta_sys_int.h"
 #include "btm_api.h"
+#include "btu.h"
 #include "osi/include/alarm.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "osi/include/thread.h"
 #include "utl.h"
 
-#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == true)
+#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
 #include "bta_ar_api.h"
 #endif
 
 /* system manager control block definition */
 tBTA_SYS_CB bta_sys_cb;
 
-fixed_queue_t* btu_bta_alarm_queue;
-extern thread_t* bt_workqueue_thread;
-
 /* trace level */
 /* TODO Hard-coded trace levels -  Needs to be configurable */
 uint8_t appl_trace_level = BT_TRACE_LEVEL_WARNING;  // APPL_INITIAL_TRACE_LEVEL;
 uint8_t btif_trace_level = BT_TRACE_LEVEL_WARNING;
-
-// Communication queue between btu_task and bta.
-extern fixed_queue_t* btu_bta_msg_queue;
 
 static const tBTA_SYS_REG bta_sys_hw_reg = {bta_sys_sm_execute, NULL};
 
@@ -161,8 +154,12 @@ const uint8_t bta_sys_hw_stopping[][BTA_SYS_NUM_COLS] = {
 typedef const uint8_t (*tBTA_SYS_ST_TBL)[BTA_SYS_NUM_COLS];
 
 /* state table */
-const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {bta_sys_hw_off, bta_sys_hw_starting,
-                                          bta_sys_hw_on, bta_sys_hw_stopping};
+const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {
+    bta_sys_hw_off,      /* BTA_SYS_HW_OFF */
+    bta_sys_hw_starting, /* BTA_SYS_HW_STARTING */
+    bta_sys_hw_on,       /* BTA_SYS_HW_ON */
+    bta_sys_hw_stopping  /* BTA_SYS_HW_STOPPING */
+};
 
 /*******************************************************************************
  *
@@ -177,29 +174,20 @@ const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {bta_sys_hw_off, bta_sys_hw_starting,
 void bta_sys_init(void) {
   memset(&bta_sys_cb, 0, sizeof(tBTA_SYS_CB));
 
-  btu_bta_alarm_queue = fixed_queue_new(SIZE_MAX);
-
-  alarm_register_processing_queue(btu_bta_alarm_queue, bt_workqueue_thread);
-
   appl_trace_level = APPL_INITIAL_TRACE_LEVEL;
 
   /* register BTA SYS message handler */
   bta_sys_register(BTA_ID_SYS, &bta_sys_hw_reg);
 
   /* register for BTM notifications */
-  BTM_RegisterForDeviceStatusNotif((tBTM_DEV_STATUS_CB*)&bta_sys_hw_btm_cback);
+  BTM_RegisterForDeviceStatusNotif(&bta_sys_hw_btm_cback);
 
-#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == true)
+#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
   bta_ar_init();
 #endif
-
-  bta_closure_init(bta_sys_register, bta_sys_sendmsg);
 }
 
 void bta_sys_free(void) {
-  alarm_unregister_processing_queue(btu_bta_alarm_queue);
-  fixed_queue_free(btu_bta_alarm_queue, NULL);
-  btu_bta_alarm_queue = NULL;
 }
 
 /*******************************************************************************
@@ -529,16 +517,27 @@ bool bta_sys_is_register(uint8_t id) { return bta_sys_cb.is_reg[id]; }
  *                  optimize sending of messages to BTA.  It is called by BTA
  *                  API functions and call-in functions.
  *
+ *                  TODO (apanicke): Add location object as parameter for easier
+ *                  future debugging when doing alarm refactor
+ *
  *
  * Returns          void
  *
  ******************************************************************************/
 void bta_sys_sendmsg(void* p_msg) {
-  // There is a race condition that occurs if the stack is shut down while
-  // there is a procedure in progress that can schedule a task via this
-  // message queue. This causes |btu_bta_msg_queue| to get cleaned up before
-  // it gets used here; hence we check for NULL before using it.
-  if (btu_bta_msg_queue) fixed_queue_enqueue(btu_bta_msg_queue, p_msg);
+  if (do_in_main_thread(
+          FROM_HERE, base::Bind(&bta_sys_event, static_cast<BT_HDR*>(p_msg))) !=
+      BT_STATUS_SUCCESS) {
+    LOG(ERROR) << __func__ << ": do_in_main_thread failed";
+  }
+}
+
+void bta_sys_sendmsg_delayed(void* p_msg, const base::TimeDelta& delay) {
+  if (do_in_main_thread_delayed(
+          FROM_HERE, base::Bind(&bta_sys_event, static_cast<BT_HDR*>(p_msg)),
+          delay) != BT_STATUS_SUCCESS) {
+    LOG(ERROR) << __func__ << ": do_in_main_thread_delayed failed";
+  }
 }
 
 /*******************************************************************************
@@ -551,14 +550,14 @@ void bta_sys_sendmsg(void* p_msg) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_sys_start_timer(alarm_t* alarm, period_ms_t interval, uint16_t event,
+void bta_sys_start_timer(alarm_t* alarm, uint64_t interval_ms, uint16_t event,
                          uint16_t layer_specific) {
   BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
 
   p_buf->event = event;
   p_buf->layer_specific = layer_specific;
-  alarm_set_on_queue(alarm, interval, bta_sys_sendmsg, p_buf,
-                     btu_bta_alarm_queue);
+
+  alarm_set_on_mloop(alarm, interval_ms, bta_sys_sendmsg, p_buf);
 }
 
 /*******************************************************************************
@@ -578,7 +577,7 @@ void bta_sys_disable(tBTA_SYS_HW_MODULE module) {
 
   switch (module) {
     case BTA_SYS_HW_BLUETOOTH:
-      bta_id = BTA_ID_DM;
+      bta_id = BTA_ID_DM_SEARCH;
       bta_id_max = BTA_ID_BLUETOOTH_MAX;
       break;
     default:
@@ -588,7 +587,7 @@ void bta_sys_disable(tBTA_SYS_HW_MODULE module) {
 
   for (; bta_id <= bta_id_max; bta_id++) {
     if (bta_sys_cb.reg[bta_id] != NULL) {
-      if (bta_sys_cb.is_reg[bta_id] == true &&
+      if (bta_sys_cb.is_reg[bta_id] &&
           bta_sys_cb.reg[bta_id]->disable != NULL) {
         (*bta_sys_cb.reg[bta_id]->disable)();
       }

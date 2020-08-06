@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,50 +27,44 @@
 #ifndef BTU_H
 #define BTU_H
 
-#include <base/callback.h>
-#include <base/location.h>
 #include "bt_common.h"
 #include "bt_target.h"
+#include "common/message_loop_thread.h"
 #include "osi/include/alarm.h"
 
-// HACK(zachoverflow): temporary dark magic
-#define BTU_POST_TO_TASK_NO_GOOD_HORRIBLE_HACK \
-  0x1700  // didn't look used in bt_types...here goes nothing
-typedef struct { void (*callback)(BT_HDR*); } post_to_task_hack_t;
-
-typedef struct {
-  void (*callback)(BT_HDR*);
-  BT_HDR* response;
-  void* context;
-} command_complete_hack_t;
-
-typedef struct {
-  void (*callback)(BT_HDR*);
-  uint8_t status;
-  BT_HDR* command;
-  void* context;
-} command_status_hack_t;
+#include <base/callback.h>
+#include <base/location.h>
+#include <base/threading/thread.h>
 
 /* Global BTU data */
 extern uint8_t btu_trace_level;
 
-extern const BD_ADDR BT_BD_ANY;
-
 /* Functions provided by btu_hcif.cc
  ***********************************
 */
-extern void btu_hcif_process_event(uint8_t controller_id, BT_HDR* p_buf);
-extern void btu_hcif_send_cmd(uint8_t controller_id, BT_HDR* p_msg);
-extern void btu_hcif_send_cmd_with_cb(
-    const tracked_objects::Location& posted_from, uint16_t opcode,
-    uint8_t* params, uint8_t params_len,
-    base::Callback<void(uint8_t*, uint16_t)> cb);
+void btu_hcif_process_event(uint8_t controller_id, BT_HDR* p_buf);
+void btu_hcif_send_cmd(uint8_t controller_id, BT_HDR* p_msg);
+void btu_hcif_send_cmd_with_cb(const base::Location& posted_from,
+                               uint16_t opcode, uint8_t* params,
+                               uint8_t params_len,
+                               base::OnceCallback<void(uint8_t*, uint16_t)> cb);
 
 /* Functions provided by btu_init.cc
  ***********************************
 */
-extern void btu_init_core(void);
-extern void btu_free_core(void);
+void btu_init_core(void);
+void btu_free_core(void);
+
+/* Functions provided by btu_task.cc
+ ***********************************
+*/
+bluetooth::common::MessageLoopThread* get_main_thread();
+base::MessageLoop* get_main_message_loop();
+bt_status_t do_in_main_thread(const base::Location& from_here,
+                              base::OnceClosure task);
+bt_status_t do_in_main_thread_delayed(const base::Location& from_here,
+                                      base::OnceClosure task,
+                                      const base::TimeDelta& delay);
 
 void BTU_StartUp(void);
 void BTU_ShutDown(void);

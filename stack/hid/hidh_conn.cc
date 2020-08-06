@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,16 +45,15 @@
 #include "log/log.h"
 #include "osi/include/osi.h"
 
-extern fixed_queue_t* btu_general_alarm_queue;
-
 static uint8_t find_conn_by_cid(uint16_t cid);
 static void hidh_conn_retry(uint8_t dhandle);
 
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
 /******************************************************************************/
-static void hidh_l2cif_connect_ind(BD_ADDR bd_addr, uint16_t l2cap_cid,
-                                   uint16_t psm, uint8_t l2cap_id);
+static void hidh_l2cif_connect_ind(const RawAddress& bd_addr,
+                                   uint16_t l2cap_cid, uint16_t psm,
+                                   uint8_t l2cap_id);
 static void hidh_l2cif_connect_cfm(uint16_t l2cap_cid, uint16_t result);
 static void hidh_l2cif_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg);
 static void hidh_l2cif_config_cfm(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg);
@@ -66,16 +65,14 @@ static void hidh_l2cif_cong_ind(uint16_t l2cap_cid, bool congested);
 static const tL2CAP_APPL_INFO hst_reg_info = {
     hidh_l2cif_connect_ind,
     hidh_l2cif_connect_cfm,
-    NULL,
     hidh_l2cif_config_ind,
     hidh_l2cif_config_cfm,
     hidh_l2cif_disconnect_ind,
     hidh_l2cif_disconnect_cfm,
-    NULL,
     hidh_l2cif_data_ind,
     hidh_l2cif_cong_ind,
-    NULL /* tL2CA_TX_COMPLETE_CB */
-};
+    NULL, /* tL2CA_TX_COMPLETE_CB */
+    NULL /* tL2CA_CREDITS_RECEIVED_CB */};
 
 /*******************************************************************************
  *
@@ -98,11 +95,13 @@ tHID_STATUS hidh_conn_reg(void) {
   hh_cb.l2cap_cfg.flush_to = HID_HOST_FLUSH_TO;
 
   /* Now, register with L2CAP */
-  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&hst_reg_info)) {
+  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&hst_reg_info,
+                     false /* enable_snoop */, nullptr, hh_cb.l2cap_cfg.mtu)) {
     HIDH_TRACE_ERROR("HID-Host Control Registration failed");
     return (HID_ERR_L2CAP_FAILED);
   }
-  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&hst_reg_info)) {
+  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&hst_reg_info,
+                     false /* enable_snoop */, nullptr, hh_cb.l2cap_cfg.mtu)) {
     L2CA_Deregister(HID_PSM_CONTROL);
     HIDH_TRACE_ERROR("HID-Host Interrupt Registration failed");
     return (HID_ERR_L2CAP_FAILED);
@@ -159,7 +158,7 @@ tHID_STATUS hidh_conn_disconnect(uint8_t dhandle) {
  *                  send security block L2C connection response.
  *
  ******************************************************************************/
-void hidh_sec_check_complete_term(UNUSED_ATTR BD_ADDR bd_addr,
+void hidh_sec_check_complete_term(UNUSED_ATTR const RawAddress* bd_addr,
                                   UNUSED_ATTR tBT_TRANSPORT transport,
                                   void* p_ref_data, uint8_t res) {
   tHID_HOST_DEV_CTB* p_dev = (tHID_HOST_DEV_CTB*)p_ref_data;
@@ -200,8 +199,9 @@ void hidh_sec_check_complete_term(UNUSED_ATTR BD_ADDR bd_addr,
  * Returns          void
  *
  ******************************************************************************/
-static void hidh_l2cif_connect_ind(BD_ADDR bd_addr, uint16_t l2cap_cid,
-                                   uint16_t psm, uint8_t l2cap_id) {
+static void hidh_l2cif_connect_ind(const RawAddress& bd_addr,
+                                   uint16_t l2cap_cid, uint16_t psm,
+                                   uint8_t l2cap_id) {
   tHID_CONN* p_hcon;
   bool bAccept = true;
   uint8_t i = HID_HOST_MAX_DEVICES;
@@ -322,7 +322,7 @@ void hidh_try_repage(uint8_t dhandle) {
  * Returns          void
  *
  ******************************************************************************/
-void hidh_sec_check_complete_orig(UNUSED_ATTR BD_ADDR bd_addr,
+void hidh_sec_check_complete_orig(UNUSED_ATTR const RawAddress* bd_addr,
                                   UNUSED_ATTR tBT_TRANSPORT transport,
                                   void* p_ref_data, uint8_t res) {
   tHID_HOST_DEV_CTB* p_dev = (tHID_HOST_DEV_CTB*)p_ref_data;
@@ -656,10 +656,10 @@ static void hidh_l2cif_disconnect_ind(uint16_t l2cap_cid, bool ack_needed) {
         (!(hh_cb.devices[dhandle].attr_mask & HID_RECONN_INIT)) &&
         (hh_cb.devices[dhandle].attr_mask & HID_NORMALLY_CONNECTABLE)) {
       hh_cb.devices[dhandle].conn_tries = 0;
-      period_ms_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
-      alarm_set_on_queue(hh_cb.devices[dhandle].conn.process_repage_timer,
+      uint64_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
+      alarm_set_on_mloop(hh_cb.devices[dhandle].conn.process_repage_timer,
                          interval_ms, hidh_process_repage_timer_timeout,
-                         UINT_TO_PTR(dhandle), btu_general_alarm_queue);
+                         UINT_TO_PTR(dhandle));
       hh_cb.callback(dhandle, hh_cb.devices[dhandle].addr, HID_HDEV_EVT_CLOSE,
                      disc_res, NULL);
     } else
@@ -1073,10 +1073,9 @@ static void hidh_conn_retry(uint8_t dhandle) {
 
   p_dev->conn.conn_state = HID_CONN_STATE_UNUSED;
 #if (HID_HOST_REPAGE_WIN > 0)
-  period_ms_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
-  alarm_set_on_queue(p_dev->conn.process_repage_timer, interval_ms,
-                     hidh_process_repage_timer_timeout, UINT_TO_PTR(dhandle),
-                     btu_general_alarm_queue);
+  uint64_t interval_ms = HID_HOST_REPAGE_WIN * 1000;
+  alarm_set_on_mloop(p_dev->conn.process_repage_timer, interval_ms,
+                     hidh_process_repage_timer_timeout, UINT_TO_PTR(dhandle));
 #else
   hidh_try_repage(dhandle);
 #endif
