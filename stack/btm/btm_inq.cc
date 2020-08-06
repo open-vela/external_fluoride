@@ -127,14 +127,6 @@ static const uint8_t* btm_eir_get_uuid_list(uint8_t* p_eir, size_t eir_len,
                                             uint8_t* p_num_uuid,
                                             uint8_t* p_uuid_list_type);
 
-void SendRemoteNameRequest(const RawAddress& raw_address) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::SendRemoteNameRequest(raw_address);
-  } else {
-    btsnd_hcic_rmt_name_req(raw_address, HCI_PAGE_SCAN_REP_MODE_R1,
-                            HCI_MANDATARY_PAGE_SCAN_MODE, 0);
-  }
-}
 /*******************************************************************************
  *
  * Function         BTM_SetDiscoverability
@@ -254,35 +246,78 @@ tBTM_STATUS BTM_SetDiscoverability(uint16_t inq_mode, uint16_t window,
   return (BTM_SUCCESS);
 }
 
-void BTM_EnableInterlacedInquiryScan() {
+/*******************************************************************************
+ *
+ * Function         BTM_SetInquiryScanType
+ *
+ * Description      This function is called to set the iquiry scan-type to
+ *                  standard or interlaced.
+ *
+ * Returns          BTM_SUCCESS if successful
+ *                  BTM_MODE_UNSUPPORTED if not a 1.2 device
+ *                  BTM_WRONG_MODE if the device is not up.
+ *
+ ******************************************************************************/
+tBTM_STATUS BTM_SetInquiryScanType(uint16_t scan_type) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    bluetooth::shim::BTM_EnableInterlacedInquiryScan();
+    return bluetooth::shim::BTM_SetInquiryScanType(scan_type);
   }
 
-  BTM_TRACE_API("BTM_EnableInterlacedInquiryScan");
-  if (!controller_get_interface()->supports_interlaced_inquiry_scan() ||
-      btm_cb.btm_inq_vars.inq_scan_type == BTM_SCAN_TYPE_INTERLACED) {
-    return;
-  }
+  BTM_TRACE_API("BTM_SetInquiryScanType");
+  if (scan_type != BTM_SCAN_TYPE_STANDARD &&
+      scan_type != BTM_SCAN_TYPE_INTERLACED)
+    return (BTM_ILLEGAL_VALUE);
 
-  btsnd_hcic_write_inqscan_type(BTM_SCAN_TYPE_INTERLACED);
-  btm_cb.btm_inq_vars.inq_scan_type = BTM_SCAN_TYPE_INTERLACED;
+  /* whatever app wants if device is not 1.2 scan type should be STANDARD */
+  if (!controller_get_interface()->supports_interlaced_inquiry_scan())
+    return (BTM_MODE_UNSUPPORTED);
+
+  /* Check for scan type if configuration has been changed */
+  if (scan_type != btm_cb.btm_inq_vars.inq_scan_type) {
+    if (BTM_IsDeviceUp()) {
+      btsnd_hcic_write_inqscan_type((uint8_t)scan_type);
+      btm_cb.btm_inq_vars.inq_scan_type = scan_type;
+    } else
+      return (BTM_WRONG_MODE);
+  }
+  return (BTM_SUCCESS);
 }
 
-void BTM_EnableInterlacedPageScan() {
+/*******************************************************************************
+ *
+ * Function         BTM_SetPageScanType
+ *
+ * Description      This function is called to set the page scan-type to
+ *                  standard or interlaced.
+ *
+ * Returns          BTM_SUCCESS if successful
+ *                  BTM_MODE_UNSUPPORTED if not a 1.2 device
+ *                  BTM_WRONG_MODE if the device is not up.
+ *
+ ******************************************************************************/
+tBTM_STATUS BTM_SetPageScanType(uint16_t scan_type) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    bluetooth::shim::BTM_EnableInterlacedPageScan();
-    return;
+    return bluetooth::shim::BTM_SetPageScanType(scan_type);
   }
 
-  BTM_TRACE_API("BTM_EnableInterlacedPageScan");
-  if (!controller_get_interface()->supports_interlaced_inquiry_scan() ||
-      btm_cb.btm_inq_vars.page_scan_type == BTM_SCAN_TYPE_INTERLACED) {
-    return;
-  }
+  BTM_TRACE_API("BTM_SetPageScanType");
+  if (scan_type != BTM_SCAN_TYPE_STANDARD &&
+      scan_type != BTM_SCAN_TYPE_INTERLACED)
+    return (BTM_ILLEGAL_VALUE);
 
-  btsnd_hcic_write_pagescan_type(BTM_SCAN_TYPE_INTERLACED);
-  btm_cb.btm_inq_vars.page_scan_type = BTM_SCAN_TYPE_INTERLACED;
+  /* whatever app wants if device is not 1.2 scan type should be STANDARD */
+  if (!controller_get_interface()->supports_interlaced_inquiry_scan())
+    return (BTM_MODE_UNSUPPORTED);
+
+  /* Check for scan type if configuration has been changed */
+  if (scan_type != btm_cb.btm_inq_vars.page_scan_type) {
+    if (BTM_IsDeviceUp()) {
+      btsnd_hcic_write_pagescan_type((uint8_t)scan_type);
+      btm_cb.btm_inq_vars.page_scan_type = scan_type;
+    } else
+      return (BTM_WRONG_MODE);
+  }
+  return (BTM_SUCCESS);
 }
 
 /*******************************************************************************
@@ -1834,7 +1869,15 @@ tBTM_STATUS btm_initiate_rem_name(const RawAddress& remote_bda, uint8_t origin,
 
   /*** Make sure the device is ready ***/
   if (!BTM_IsDeviceUp()) return (BTM_WRONG_MODE);
-  if (origin == BTM_RMT_NAME_EXT) {
+
+  if (origin == BTM_RMT_NAME_SEC) {
+    btsnd_hcic_rmt_name_req(remote_bda, HCI_PAGE_SCAN_REP_MODE_R1,
+                            HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+    return BTM_CMD_STARTED;
+  }
+  /* Make sure there are no two remote name requests from external API in
+     progress */
+  else if (origin == BTM_RMT_NAME_EXT) {
     if (p_inq->remname_active) {
       return (BTM_BUSY);
     } else {
@@ -2353,7 +2396,7 @@ static uint16_t btm_convert_uuid_to_uuid16(const uint8_t* p_uuid,
       if (uuid32 < 0x10000) uuid16 = (uint16_t)uuid32;
       break;
     case Uuid::kNumBytes128:
-      /* See if we can compress the UUID down to 16 or 32bit UUIDs */
+      /* See if we can compress his UUID down to 16 or 32bit UUIDs */
       is_base_uuid = true;
       for (xx = 0; xx < Uuid::kNumBytes128 - 4; xx++) {
         if (p_uuid[xx] != base_uuid[xx]) {

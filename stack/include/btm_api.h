@@ -133,6 +133,17 @@ extern uint8_t* BTM_ReadDeviceClass(void);
 
 /*******************************************************************************
  *
+ * Function         BTM_ReadLocalFeatures
+ *
+ * Description      This function is called to read the local features
+ *
+ * Returns          pointer to the local features string
+ *
+ ******************************************************************************/
+extern uint8_t* BTM_ReadLocalFeatures(void);
+
+/*******************************************************************************
+ *
  * Function         BTM_RegisterForDeviceStatusNotif
  *
  * Description      This function is called to register for device status
@@ -427,9 +438,38 @@ extern uint16_t BTM_ReadConnectability(uint16_t* p_window,
  ******************************************************************************/
 extern tBTM_STATUS BTM_SetInquiryMode(uint8_t mode);
 
-extern void BTM_EnableInterlacedInquiryScan();
+/*******************************************************************************
+ *
+ * Function         BTM_SetInquiryScanType
+ *
+ * Description      This function is called to set the iquiry scan-type to
+ *                  standard or interlaced.
+ *
+ * Input Params:    BTM_SCAN_TYPE_STANDARD or BTM_SCAN_TYPE_INTERLACED
+ *
+ * Returns          BTM_SUCCESS if successful
+ *                  BTM_MODE_UNSUPPORTED if not a 1.2 device
+ *                  BTM_WRONG_MODE if the device is not up.
+ *
+ ******************************************************************************/
+extern tBTM_STATUS BTM_SetInquiryScanType(uint16_t scan_type);
 
-extern void BTM_EnableInterlacedPageScan();
+/*******************************************************************************
+ *
+ * Function         BTM_SetPageScanType
+ *
+ * Description      This function is called to set the page scan-type to
+ *                  standard or interlaced.
+ *
+ * Input Params:    BTM_SCAN_TYPE_STANDARD or BTM_SCAN_TYPE_INTERLACED
+ *
+ * Returns          BTM_SUCCESS if successful
+ *                  BTM_MODE_UNSUPPORTED if not a 1.2 device
+ *                  BTM_WRONG_MODE if the device is not up.
+ *
+ ******************************************************************************/
+
+extern tBTM_STATUS BTM_SetPageScanType(uint16_t scan_type);
 
 /*******************************************************************************
  *
@@ -808,7 +848,6 @@ extern tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
  *
  ******************************************************************************/
 extern tBTM_STATUS BTM_RemoveSco(uint16_t sco_inx);
-extern void BTM_RemoveSco(const RawAddress& bda);
 
 /*******************************************************************************
  *
@@ -1166,9 +1205,8 @@ extern void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res,
  ******************************************************************************/
 extern tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr,
                                tBLE_ADDR_TYPE addr_type,
-                               tBT_TRANSPORT transport, int device_type,
-                               uint8_t pin_len, uint8_t* p_pin,
-                               uint32_t trusted_mask[]);
+                               tBT_TRANSPORT transport, uint8_t pin_len,
+                               uint8_t* p_pin, uint32_t trusted_mask[]);
 
 /*******************************************************************************
  *
@@ -1246,6 +1284,23 @@ extern void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr);
  ******************************************************************************/
 extern void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
                                 uint32_t passkey);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SendKeypressNotif
+ *
+ * Description      This function is used during the passkey entry model
+ *                  by a device with KeyboardOnly IO capabilities
+ *                  (very likely to be a HID Device).
+ *                  It is called by a HID Device to inform the remote device
+ *                  when a key has been entered or erased.
+ *
+ * Parameters:      bd_addr - Address of the peer device
+ *                  type - notification type
+ *
+ ******************************************************************************/
+extern void BTM_SendKeypressNotif(const RawAddress& bd_addr,
+                                  tBTM_SP_KEY_TYPE type);
 
 /*******************************************************************************
  *
@@ -1574,16 +1629,5 @@ extern uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len,
  *
  ******************************************************************************/
 extern tBTM_CONTRL_STATE BTM_PM_ReadControllerState(void);
-
-/**
- * Send remote name request, either to legacy HCI, or to GD shim Name module
- */
-extern void SendRemoteNameRequest(const RawAddress& raw_address);
-
-extern uint8_t BTM_SecClrServiceByPsm(uint16_t psm);
-
-extern void BTM_SecClrTempAuthService(const RawAddress& bda);
-
-extern bool BTM_IsScoActiveByBdaddr(const RawAddress& remote_bda);
 
 #endif /* BTM_API_H */
