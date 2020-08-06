@@ -23,38 +23,10 @@
 #include "device/include/esco_parameters.h"
 #include "hcidefs.h"
 #include "smp_api_types.h"
+#include "stack/include/btm_status.h"
 
 /* Maximum number of bytes allowed for vendor specific command parameters */
 #define BTM_MAX_VENDOR_SPECIFIC_LEN HCI_COMMAND_SIZE
-
-/* BTM application return status codes */
-enum {
-  BTM_SUCCESS = 0,         /* 0  Command succeeded                 */
-  BTM_CMD_STARTED,         /* 1  Command started OK.               */
-  BTM_BUSY,                /* 2  Device busy with another command  */
-  BTM_NO_RESOURCES,        /* 3  No resources to issue command     */
-  BTM_MODE_UNSUPPORTED,    /* 4  Request for 1 or more unsupported modes */
-  BTM_ILLEGAL_VALUE,       /* 5  Illegal parameter value           */
-  BTM_WRONG_MODE,          /* 6  Device in wrong mode for request  */
-  BTM_UNKNOWN_ADDR,        /* 7  Unknown remote BD address         */
-  BTM_DEVICE_TIMEOUT,      /* 8  Device timeout                    */
-  BTM_BAD_VALUE_RET,       /* 9  A bad value was received from HCI */
-  BTM_ERR_PROCESSING,      /* 10 Generic error                     */
-  BTM_NOT_AUTHORIZED,      /* 11 Authorization failed              */
-  BTM_DEV_RESET,           /* 12 Device has been reset             */
-  BTM_CMD_STORED,          /* 13 request is stored in control block */
-  BTM_ILLEGAL_ACTION,      /* 14 state machine gets illegal command */
-  BTM_DELAY_CHECK,         /* 15 delay the check on encryption */
-  BTM_SCO_BAD_LENGTH,      /* 16 Bad SCO over HCI data length */
-  BTM_SUCCESS_NO_SECURITY, /* 17 security passed, no security set  */
-  BTM_FAILED_ON_SECURITY,  /* 18 security failed                   */
-  BTM_REPEATED_ATTEMPTS,   /* 19 repeated attempts for LE security requests */
-  BTM_MODE4_LEVEL4_NOT_SUPPORTED, /* 20 Secure Connections Only Mode can't be
-                                     supported */
-  BTM_DEV_BLACKLISTED             /* 21 The device is Blacklisted */
-};
-
-typedef uint8_t tBTM_STATUS;
 
 /* Device name of peer (may be truncated to save space in BTM database) */
 typedef uint8_t tBTM_BD_NAME[BTM_MAX_REM_BD_NAME_LEN + 1];
@@ -564,6 +536,11 @@ typedef void(tBTM_INQ_RESULTS_CB)(tBTM_INQ_RESULTS* p_inq_results,
  *  ACL Constants
  ******************/
 
+/* Returned with structure in role switch callback (tBTM_ROLE_SWITCH_CMPL) */
+#define BTM_ROLE_MASTER HCI_ROLE_MASTER
+#define BTM_ROLE_SLAVE HCI_ROLE_SLAVE
+#define BTM_ROLE_UNDEFINED 0xff /* undefined value (error status) */
+
 /* ACL Packet Types */
 #define BTM_ACL_PKT_TYPES_MASK_DM1 HCI_PKT_TYPES_MASK_DM1
 #define BTM_ACL_PKT_TYPES_MASK_DH1 HCI_PKT_TYPES_MASK_DH1
@@ -587,7 +564,7 @@ typedef void(tBTM_INQ_RESULTS_CB)(tBTM_INQ_RESULTS* p_inq_results,
 */
 typedef struct {
   uint8_t hci_status;     /* HCI status returned with the event */
-  uint8_t role;           /* HCI_ROLE_MASTER or HCI_ROLE_SLAVE */
+  uint8_t role;           /* BTM_ROLE_MASTER or BTM_ROLE_SLAVE */
   RawAddress remote_bd_addr; /* Remote BD addr involved with the switch */
 } tBTM_ROLE_SWITCH_CMPL;
 
@@ -1273,7 +1250,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
