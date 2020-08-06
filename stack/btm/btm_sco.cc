@@ -264,7 +264,7 @@ static tBTM_STATUS btm_send_connect_request(uint16_t acl_handle,
     btm_handle_to_acl_index(acl_handle);
     uint8_t acl_index = btm_handle_to_acl_index(acl_handle);
     if (acl_index < MAX_L2CAP_LINKS) {
-      p_acl = &btm_cb.acl_db[acl_index];
+      p_acl = &btm_cb.acl_cb_.acl_db[acl_index];
       if (!HCI_EDR_ESCO_2MPS_SUPPORTED(p_acl->peer_lmp_feature_pages[0])) {
         BTM_TRACE_DEBUG("BTM Remote does not support 2-EDR eSCO");
         temp_packet_types |=
@@ -698,7 +698,7 @@ void btm_sco_conn_req(const RawAddress& bda, DEV_CLASS dev_class,
     if (((p->state == SCO_ST_CONNECTING) && rem_bd_matches) ||
         ((p->state == SCO_ST_LISTENING) &&
          (rem_bd_matches || !p->rem_bd_known))) {
-      /* If this guy was a wildcard, he is not one any more */
+      /* If this was a wildcard, it is not one any more */
       p->rem_bd_known = true;
       p->esco.data.link_type = link_type;
       p->state = SCO_ST_W4_CONN_RSP;
@@ -845,31 +845,6 @@ void btm_sco_connected(uint8_t hci_status, const RawAddress* bda,
     }
   }
 #endif
-}
-
-/*******************************************************************************
- *
- * Function         btm_find_scb_by_handle
- *
- * Description      Look through all active SCO connection for a match based on
- *                  the HCI handle.
- *
- * Returns          index to matched SCO connection CB, or BTM_MAX_SCO_LINKS if
- *                  no match.
- *
- ******************************************************************************/
-uint16_t btm_find_scb_by_handle(uint16_t handle) {
-  int xx;
-  tSCO_CONN* p = &btm_cb.sco_cb.sco_db[0];
-
-  for (xx = 0; xx < BTM_MAX_SCO_LINKS; xx++, p++) {
-    if ((p->state == SCO_ST_CONNECTED) && (p->hci_handle == handle)) {
-      return (xx);
-    }
-  }
-
-  /* If here, no match found */
-  return (xx);
 }
 
 /*******************************************************************************
@@ -1242,22 +1217,6 @@ void BTM_EScoConnRsp(uint16_t sco_inx, uint8_t hci_status,
     btm_esco_conn_rsp(sco_inx, hci_status,
                       btm_cb.sco_cb.sco_db[sco_inx].esco.data.bd_addr, p_parms);
   }
-#endif
-}
-
-/*******************************************************************************
- *
- * Function         btm_read_def_esco_mode
- *
- * Description      This function copies the current default esco settings into
- *                  the return buffer.
- *
- * Returns          tBTM_SCO_TYPE
- *
- ******************************************************************************/
-void btm_read_def_esco_mode(enh_esco_params_t* p_parms) {
-#if (BTM_MAX_SCO_LINKS > 0)
-  *p_parms = btm_cb.sco_cb.def_esco_parms;
 #endif
 }
 

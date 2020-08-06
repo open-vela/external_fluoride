@@ -16,6 +16,12 @@
 #pragma once
 
 #include "hci/acl_manager.h"
+#include "hci/acl_manager/classic_acl_connection.h"
+#include "hci/acl_manager/connection_callbacks.h"
+#include "hci/acl_manager/connection_management_callbacks.h"
+#include "hci/acl_manager/le_acl_connection.h"
+#include "hci/acl_manager/le_connection_callbacks.h"
+#include "hci/acl_manager/le_connection_management_callbacks.h"
 
 #include <gmock/gmock.h>
 
@@ -24,16 +30,32 @@ namespace bluetooth {
 namespace hci {
 namespace testing {
 
-class MockAclConnection : public AclConnection {
+using acl_manager::LeAclConnection;
+using acl_manager::LeConnectionCallbacks;
+using acl_manager::LeConnectionManagementCallbacks;
+
+using acl_manager::ClassicAclConnection;
+using acl_manager::ConnectionCallbacks;
+using acl_manager::ConnectionManagementCallbacks;
+
+class MockClassicAclConnection : public ClassicAclConnection {
  public:
   MOCK_METHOD(Address, GetAddress, (), (const, override));
-  MOCK_METHOD(AddressType, GetAddressType, (), (const, override));
-  MOCK_METHOD(void, RegisterDisconnectCallback,
-              (common::OnceCallback<void(ErrorCode)> on_disconnect, os::Handler* handler), (override));
   MOCK_METHOD(bool, Disconnect, (DisconnectReason reason), (override));
-  MOCK_METHOD(void, Finish, (), (override));
   MOCK_METHOD(void, RegisterCallbacks, (ConnectionManagementCallbacks * callbacks, os::Handler* handler), (override));
-  MOCK_METHOD(void, UnregisterCallbacks, (ConnectionManagementCallbacks * callbacks), (override));
+
+  QueueUpEnd* GetAclQueueEnd() const override {
+    return acl_queue_.GetUpEnd();
+  }
+  mutable common::BidiQueue<PacketView<kLittleEndian>, BasePacketBuilder> acl_queue_{10};
+};
+
+class MockLeAclConnection : public LeAclConnection {
+ public:
+  MOCK_METHOD(AddressWithType, GetLocalAddress, (), (const, override));
+  MOCK_METHOD(AddressWithType, GetRemoteAddress, (), (const, override));
+  MOCK_METHOD(void, Disconnect, (DisconnectReason reason), (override));
+  MOCK_METHOD(void, RegisterCallbacks, (LeConnectionManagementCallbacks * callbacks, os::Handler* handler), (override));
 
   QueueUpEnd* GetAclQueueEnd() const override {
     return acl_queue_.GetUpEnd();
@@ -48,6 +70,15 @@ class MockAclManager : public AclManager {
   MOCK_METHOD(void, CreateConnection, (Address address), (override));
   MOCK_METHOD(void, CreateLeConnection, (AddressWithType address_with_type), (override));
   MOCK_METHOD(void, CancelConnect, (Address address), (override));
+  MOCK_METHOD(
+      void,
+      SetPrivacyPolicyForInitiatorAddress,
+      (LeAddressManager::AddressPolicy address_policy,
+       AddressWithType fixed_address,
+       crypto_toolbox::Octet16 rotation_irk,
+       std::chrono::milliseconds minimum_rotation_time,
+       std::chrono::milliseconds maximum_rotation_time),
+      (override));
 };
 
 }  // namespace testing
