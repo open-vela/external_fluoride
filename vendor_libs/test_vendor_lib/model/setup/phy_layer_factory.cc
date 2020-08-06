@@ -41,20 +41,18 @@ std::shared_ptr<PhyLayer> PhyLayerFactory::GetPhyLayer(
 }
 
 void PhyLayerFactory::UnregisterPhyLayer(uint32_t id) {
-  for (auto phy : phy_layers_) {
-    if (phy->GetId() == id) {
-      phy_layers_.remove(phy);
-      return;
+  for (auto it = phy_layers_.begin(); it != phy_layers_.end();) {
+    if ((*it)->GetId() == id) {
+      it = phy_layers_.erase(it);
+    } else {
+      it++;
     }
   }
 }
 
 void PhyLayerFactory::UnregisterAllPhyLayers() {
-  while (!phy_layers_.empty()) {
-    if (phy_layers_.begin() != phy_layers_.end()) {
-      auto id = (*phy_layers_.begin())->GetId();
-      UnregisterPhyLayer(id);
-    }
+  for (const auto& phy : phy_layers_) {
+    UnregisterPhyLayer(phy->GetId());
   }
 }
 
@@ -118,6 +116,7 @@ PhyLayerImpl::PhyLayerImpl(
     : PhyLayer(phy_type, id, device_receive, device_id), factory_(factory) {}
 
 PhyLayerImpl::~PhyLayerImpl() {
+  Unregister();
 }
 
 void PhyLayerImpl::Send(
