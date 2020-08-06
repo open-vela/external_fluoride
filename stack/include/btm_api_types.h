@@ -1086,6 +1086,8 @@ enum {
   BTM_SP_LOC_OOB_EVT,   /* received result for READ_LOCAL_OOB_DATA command */
   BTM_SP_RMT_OOB_EVT,   /* received REMOTE_OOB_DATA_REQUEST event */
   BTM_SP_COMPLT_EVT,    /* received SIMPLE_PAIRING_COMPLETE event */
+  BTM_SP_UPGRADE_EVT /* check if the application wants to upgrade the link key
+                        */
 };
 typedef uint8_t tBTM_SP_EVT;
 
@@ -1219,6 +1221,12 @@ typedef struct {
   tBTM_STATUS status;   /* status of the simple pairing process */
 } tBTM_SP_COMPLT;
 
+/* data type for BTM_SP_UPGRADE_EVT */
+typedef struct {
+  RawAddress bd_addr; /* peer address */
+  bool upgrade;    /* true, to upgrade the link key */
+} tBTM_SP_UPGRADE;
+
 typedef union {
   tBTM_SP_IO_REQ io_req;       /* BTM_SP_IO_REQ_EVT      */
   tBTM_SP_IO_RSP io_rsp;       /* BTM_SP_IO_RSP_EVT      */
@@ -1229,6 +1237,7 @@ typedef union {
   tBTM_SP_LOC_OOB loc_oob;     /* BTM_SP_LOC_OOB_EVT     */
   tBTM_SP_RMT_OOB rmt_oob;     /* BTM_SP_RMT_OOB_EVT     */
   tBTM_SP_COMPLT complt;       /* BTM_SP_COMPLT_EVT      */
+  tBTM_SP_UPGRADE upgrade;     /* BTM_SP_UPGRADE_EVT      */
 } tBTM_SP_EVT_DATA;
 
 /* Simple Pairing Events.  Called by the stack when Simple Pairing related
@@ -1282,7 +1291,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
