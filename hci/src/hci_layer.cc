@@ -636,11 +636,12 @@ static bool filter_incoming_event(BT_HDR* packet) {
   waiting_command_t* wait_entry = NULL;
   uint8_t* stream = packet->data;
   uint8_t event_code;
+  uint8_t length;
   int credits = 0;
   command_opcode_t opcode;
 
   STREAM_TO_UINT8(event_code, stream);
-  STREAM_SKIP_UINT8(stream);  // Skip the parameter total length field
+  STREAM_TO_UINT8(length, stream);
 
   if (event_code == HCI_COMMAND_COMPLETE_EVT) {
     STREAM_TO_UINT8(credits, stream);
@@ -668,6 +669,9 @@ static bool filter_incoming_event(BT_HDR* packet) {
 
     goto intercepted;
   } else if (event_code == HCI_COMMAND_STATUS_EVT) {
+    if (length < (sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t))) {
+      goto intercepted;
+    }
     uint8_t status;
     STREAM_TO_UINT8(status, stream);
     STREAM_TO_UINT8(credits, stream);
@@ -870,15 +874,7 @@ const hci_t* hci_layer_get_interface();
 }  // namespace shim
 }  // namespace bluetooth
 
-const hci_t* hci_layer_get_interface() {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::hci_layer_get_interface();
-  } else {
-    return bluetooth::legacy::hci_layer_get_interface();
-  }
-}
-
-const hci_t* bluetooth::legacy::hci_layer_get_interface() {
+const hci_t* hci_layer_get_interface_legacy() {
   buffer_allocator = buffer_allocator_get_interface();
   btsnoop = btsnoop_get_interface();
   packet_fragmenter = packet_fragmenter_get_interface();
@@ -886,6 +882,14 @@ const hci_t* bluetooth::legacy::hci_layer_get_interface() {
   init_layer_interface();
 
   return &interface;
+}
+
+const hci_t* hci_layer_get_interface() {
+  if (bluetooth::shim::is_gd_hci_enabled()) {
+    return bluetooth::shim::hci_layer_get_interface();
+  } else {
+    return hci_layer_get_interface_legacy();
+  }
 }
 
 const hci_t* hci_layer_get_test_interface(
