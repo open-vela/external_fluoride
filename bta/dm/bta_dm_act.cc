@@ -2682,7 +2682,7 @@ static void handle_role_change(const RawAddress& bd_addr, uint8_t new_role,
       /* more than one connections and the AV connection is role switched
        * to slave
        * switch it back to master and remove the switch policy */
-      BTM_SwitchRole(bd_addr, BTM_ROLE_MASTER, NULL);
+      BTM_SwitchRole(bd_addr, HCI_ROLE_MASTER, NULL);
       need_policy_change = true;
     } else if (p_bta_dm_cfg->avoid_scatter && (new_role == HCI_ROLE_MASTER)) {
       /* if the link updated to be master include AV activities, remove
@@ -3798,16 +3798,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
 
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:

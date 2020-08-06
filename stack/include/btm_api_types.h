@@ -536,11 +536,6 @@ typedef void(tBTM_INQ_RESULTS_CB)(tBTM_INQ_RESULTS* p_inq_results,
  *  ACL Constants
  ******************/
 
-/* Returned with structure in role switch callback (tBTM_ROLE_SWITCH_CMPL) */
-#define BTM_ROLE_MASTER HCI_ROLE_MASTER
-#define BTM_ROLE_SLAVE HCI_ROLE_SLAVE
-#define BTM_ROLE_UNDEFINED 0xff /* undefined value (error status) */
-
 /* ACL Packet Types */
 #define BTM_ACL_PKT_TYPES_MASK_DM1 HCI_PKT_TYPES_MASK_DM1
 #define BTM_ACL_PKT_TYPES_MASK_DH1 HCI_PKT_TYPES_MASK_DH1
@@ -564,7 +559,7 @@ typedef void(tBTM_INQ_RESULTS_CB)(tBTM_INQ_RESULTS* p_inq_results,
 */
 typedef struct {
   uint8_t hci_status;     /* HCI status returned with the event */
-  uint8_t role;           /* BTM_ROLE_MASTER or BTM_ROLE_SLAVE */
+  uint8_t role;           /* HCI_ROLE_MASTER or HCI_ROLE_SLAVE */
   RawAddress remote_bd_addr; /* Remote BD addr involved with the switch */
 } tBTM_ROLE_SWITCH_CMPL;
 
@@ -1250,7 +1245,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0

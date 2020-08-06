@@ -1538,7 +1538,7 @@ tBTM_STATUS btm_ble_set_encryption(const RawAddress& bd_addr,
 
   switch (sec_act) {
     case BTM_BLE_SEC_ENCRYPT:
-      if (link_role == BTM_ROLE_MASTER) {
+      if (link_role == HCI_ROLE_MASTER) {
         /* start link layer encryption using the security info stored */
         cmd = btm_ble_start_encrypt(bd_addr, false, NULL);
         break;
@@ -1558,7 +1558,7 @@ tBTM_STATUS btm_ble_set_encryption(const RawAddress& bd_addr,
         cmd = BTM_SUCCESS;
         break;
       }
-      if (link_role == BTM_ROLE_MASTER) {
+      if (link_role == HCI_ROLE_MASTER) {
         if (sec_req_act == BTM_BLE_SEC_REQ_ACT_ENCRYPT) {
           cmd = btm_ble_start_encrypt(bd_addr, false, NULL);
           break;
@@ -1930,7 +1930,6 @@ uint8_t btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr,
         p_dev_rec->sec_flags |= BTM_SEC_LE_AUTHENTICATED;
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
-      case SMP_CONSENT_REQ_EVT:
       case SMP_SEC_REQUEST_EVT:
         if (event == SMP_SEC_REQUEST_EVT &&
             btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) {
@@ -1938,9 +1937,7 @@ uint8_t btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr,
           break;
         }
         btm_cb.pairing_bda = bd_addr;
-        if (event != SMP_CONSENT_REQ_EVT) {
-          p_dev_rec->sec_state = BTM_SEC_STATE_AUTHENTICATING;
-        }
+        p_dev_rec->sec_state = BTM_SEC_STATE_AUTHENTICATING;
         btm_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
