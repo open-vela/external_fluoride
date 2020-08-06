@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 
 #include <string.h>
 
-#include <cutils/log.h>
+#include <log/log.h>
 
 #include "bt_common.h"
 #include "bta_api.h"
@@ -86,7 +86,7 @@ static void bta_pan_pm_conn_idle(tBTA_PAN_SCB* p_scb) {
  * Returns          void
  *
  ******************************************************************************/
-static void bta_pan_conn_state_cback(uint16_t handle, BD_ADDR bd_addr,
+static void bta_pan_conn_state_cback(uint16_t handle, const RawAddress& bd_addr,
                                      tPAN_RESULT state, bool is_role_change,
                                      uint8_t src_role, uint8_t dst_role) {
   tBTA_PAN_SCB* p_scb;
@@ -109,7 +109,7 @@ static void bta_pan_conn_state_cback(uint16_t handle, BD_ADDR bd_addr,
     p_scb->local_role = src_role;
     p_scb->peer_role = dst_role;
     p_scb->pan_flow_enable = true;
-    bdcpy(p_scb->bd_addr, bd_addr);
+    p_scb->bd_addr = bd_addr;
     p_scb->data_queue = fixed_queue_new(SIZE_MAX);
 
     if (src_role == PAN_ROLE_CLIENT)
@@ -168,8 +168,8 @@ static void bta_pan_data_flow_cb(uint16_t handle, tPAN_RESULT result) {
  * Returns          void
  *
  ******************************************************************************/
-static void bta_pan_data_buf_ind_cback(uint16_t handle, BD_ADDR src,
-                                       BD_ADDR dst, uint16_t protocol,
+static void bta_pan_data_buf_ind_cback(uint16_t handle, const RawAddress& src,
+                                       const RawAddress& dst, uint16_t protocol,
                                        BT_HDR* p_buf, bool ext, bool forward) {
   tBTA_PAN_SCB* p_scb = bta_pan_scb_by_handle(handle);
   if (p_scb == NULL) {
@@ -191,8 +191,8 @@ static void bta_pan_data_buf_ind_cback(uint16_t handle, BD_ADDR src,
   p_new_buf->offset = sizeof(tBTA_PAN_DATA_PARAMS);
 
   /* copy params into the space before the data */
-  bdcpy(((tBTA_PAN_DATA_PARAMS*)p_new_buf)->src, src);
-  bdcpy(((tBTA_PAN_DATA_PARAMS*)p_new_buf)->dst, dst);
+  ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->src = src;
+  ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->dst = dst;
   ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->protocol = protocol;
   ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->ext = ext;
   ((tBTA_PAN_DATA_PARAMS*)p_new_buf)->forward = forward;
@@ -258,28 +258,28 @@ static void bta_pan_mfilt_ind_cback(uint16_t handle, bool indication,
 static bool bta_pan_has_multiple_connections(uint8_t app_id) {
   tBTA_PAN_SCB* p_scb = NULL;
   bool found = false;
-  BD_ADDR bd_addr;
+  RawAddress bd_addr;
 
   for (uint8_t index = 0; index < BTA_PAN_NUM_CONN; index++) {
     p_scb = &bta_pan_cb.scb[index];
-    if (p_scb->in_use == true && app_id == p_scb->app_id) {
+    if (p_scb->in_use && app_id == p_scb->app_id) {
       /* save temp bd_addr */
-      bdcpy(bd_addr, p_scb->bd_addr);
+      bd_addr = p_scb->bd_addr;
       found = true;
       break;
     }
   }
 
   /* If cannot find a match then there is no connection at all */
-  if (found == false) return false;
+  if (!found) return false;
 
   /* Find whether there is another connection with different device other than
      PANU.
       Could be same service or different service */
   for (uint8_t index = 0; index < BTA_PAN_NUM_CONN; index++) {
     p_scb = &bta_pan_cb.scb[index];
-    if (p_scb->in_use == true && p_scb->app_id != bta_pan_cb.app_id[0] &&
-        bdcmp(bd_addr, p_scb->bd_addr)) {
+    if (p_scb->in_use && p_scb->app_id != bta_pan_cb.app_id[0] &&
+        bd_addr != p_scb->bd_addr) {
       return true;
     }
   }
@@ -445,16 +445,16 @@ void bta_pan_open(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data) {
   APPL_TRACE_DEBUG("%s pan connect status: %d", __func__, status);
 
   if (status == PAN_SUCCESS) {
-    bdcpy(p_scb->bd_addr, p_data->api_open.bd_addr);
+    p_scb->bd_addr = p_data->api_open.bd_addr;
     p_scb->local_role = p_data->api_open.local_role;
     p_scb->peer_role = p_data->api_open.peer_role;
-    bdcpy(bta_pan.opening.bd_addr, p_data->api_open.bd_addr);
+    bta_pan.opening.bd_addr = p_data->api_open.bd_addr;
     bta_pan.opening.handle = p_scb->handle;
     bta_pan_cb.p_cback(BTA_PAN_OPENING_EVT, &bta_pan);
 
   } else {
     bta_pan_scb_dealloc(p_scb);
-    bdcpy(bta_pan.open.bd_addr, p_data->api_open.bd_addr);
+    bta_pan.open.bd_addr = p_data->api_open.bd_addr;
     bta_pan.open.status = BTA_PAN_FAIL;
     bta_pan.open.local_role = p_data->api_open.local_role;
     bta_pan.open.peer_role = p_data->api_open.peer_role;
@@ -503,7 +503,7 @@ void bta_pan_conn_open(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data) {
   APPL_TRACE_DEBUG("%s pan connection result: %d", __func__,
                    p_data->conn.result);
 
-  bdcpy(bta_pan.open.bd_addr, p_scb->bd_addr);
+  bta_pan.open.bd_addr = p_scb->bd_addr;
   bta_pan.open.handle = p_scb->handle;
   bta_pan.open.local_role = p_scb->local_role;
   bta_pan.open.peer_role = p_scb->peer_role;
@@ -577,7 +577,7 @@ void bta_pan_rx_path(tBTA_PAN_SCB* p_scb, UNUSED_ATTR tBTA_PAN_DATA* p_data) {
   /* if data path configured for rx pull */
   if ((bta_pan_cb.flow_mask & BTA_PAN_RX_MASK) == BTA_PAN_RX_PULL) {
     /* if we can accept data */
-    if (p_scb->pan_flow_enable == true) {
+    if (p_scb->pan_flow_enable) {
       /* call application callout function for rx path */
       bta_pan_co_rx_path(p_scb->handle, p_scb->app_id);
     }
@@ -598,48 +598,19 @@ void bta_pan_rx_path(tBTA_PAN_SCB* p_scb, UNUSED_ATTR tBTA_PAN_DATA* p_data) {
  *
  ******************************************************************************/
 void bta_pan_tx_path(tBTA_PAN_SCB* p_scb, UNUSED_ATTR tBTA_PAN_DATA* p_data) {
-  /* if data path configured for tx pull */
-  if ((bta_pan_cb.flow_mask & BTA_PAN_TX_MASK) == BTA_PAN_TX_PULL) {
-    bta_pan_pm_conn_busy(p_scb);
-    /* call application callout function for tx path */
-    bta_pan_co_tx_path(p_scb->handle, p_scb->app_id);
+  bta_pan_pm_conn_busy(p_scb);
+  /* call application callout function for tx path */
+  bta_pan_co_tx_path(p_scb->handle, p_scb->app_id);
 
-    /* free data that exceeds queue level */
-    while (fixed_queue_length(p_scb->data_queue) > bta_pan_cb.q_level)
-      osi_free(fixed_queue_try_dequeue(p_scb->data_queue));
-    bta_pan_pm_conn_idle(p_scb);
-  }
-  /* if configured for zero copy push */
-  else if ((bta_pan_cb.flow_mask & BTA_PAN_TX_MASK) == BTA_PAN_TX_PUSH_BUF) {
-    /* if app can accept data */
-    if (p_scb->app_flow_enable == true) {
-      BT_HDR* p_buf;
-
-      /* read data from the queue */
-      p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_scb->data_queue);
-      if (p_buf != NULL) {
-        /* send data to application */
-        bta_pan_co_tx_writebuf(p_scb->handle, p_scb->app_id,
-                               ((tBTA_PAN_DATA_PARAMS*)p_buf)->src,
-                               ((tBTA_PAN_DATA_PARAMS*)p_buf)->dst,
-                               ((tBTA_PAN_DATA_PARAMS*)p_buf)->protocol, p_buf,
-                               ((tBTA_PAN_DATA_PARAMS*)p_buf)->ext,
-                               ((tBTA_PAN_DATA_PARAMS*)p_buf)->forward);
-      }
-      /* free data that exceeds queue level  */
-      while (fixed_queue_length(p_scb->data_queue) > bta_pan_cb.q_level)
-        osi_free(fixed_queue_try_dequeue(p_scb->data_queue));
-
-      /* if there is more data to be passed to
-      upper layer */
-      if (!fixed_queue_is_empty(p_scb->data_queue)) {
-        p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
-        p_buf->layer_specific = p_scb->handle;
-        p_buf->event = BTA_PAN_RX_FROM_BNEP_READY_EVT;
-        bta_sys_sendmsg(p_buf);
-      }
+  /* free data that exceeds queue level */
+  while (fixed_queue_length(p_scb->data_queue) > bta_pan_cb.q_level) {
+    BT_HDR* p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_scb->data_queue);
+    if (p_buf != nullptr) {
+      osi_free(p_buf);
     }
   }
+
+  bta_pan_pm_conn_idle(p_scb);
 }
 
 /*******************************************************************************
