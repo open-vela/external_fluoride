@@ -53,6 +53,7 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -591,7 +592,7 @@ uint8_t BTM_SecClrService(uint8_t service_id) {
 
 /*******************************************************************************
  *
- * Function         BTM_SecClrServiceByPsm
+ * Function         btm_sec_clr_service_by_psm
  *
  * Description      Removes specified service record from the security database.
  *                  All service records with the specified psm are removed.
@@ -605,7 +606,7 @@ uint8_t BTM_SecClrService(uint8_t service_id) {
  * Returns          Number of records that were freed.
  *
  ******************************************************************************/
-uint8_t BTM_SecClrServiceByPsm(uint16_t psm) {
+uint8_t btm_sec_clr_service_by_psm(uint16_t psm) {
   tBTM_SEC_SERV_REC* p_srec = &btm_cb.sec_serv_rec[0];
   uint8_t num_freed = 0;
   int i;
@@ -618,14 +619,15 @@ uint8_t BTM_SecClrServiceByPsm(uint16_t psm) {
       num_freed++;
     }
   }
-  BTM_TRACE_API("BTM_SecClrServiceByPsm psm:0x%x num_freed:%d", psm, num_freed);
+  BTM_TRACE_API("btm_sec_clr_service_by_psm psm:0x%x num_freed:%d", psm,
+                num_freed);
 
   return (num_freed);
 }
 
 /*******************************************************************************
  *
- * Function         BTM_SecClrTempAuthService
+ * Function         btm_sec_clr_temp_auth_service
  *
  * Description      Removes specified device record's temporary authorization
  *                  flag from the security database.
@@ -635,12 +637,12 @@ uint8_t BTM_SecClrServiceByPsm(uint16_t psm) {
  * Returns          void.
  *
  ******************************************************************************/
-void BTM_SecClrTempAuthService(const RawAddress& bda) {
+void btm_sec_clr_temp_auth_service(const RawAddress& bda) {
   tBTM_SEC_DEV_REC* p_dev_rec;
 
   p_dev_rec = btm_find_dev(bda);
   if (p_dev_rec == NULL) {
-    BTM_TRACE_WARNING("BTM_SecClrTempAuthService() - no dev CB");
+    BTM_TRACE_WARNING("btm_sec_clr_temp_auth_service() - no dev CB");
     return;
   }
 
@@ -2833,6 +2835,13 @@ void btm_io_capabilities_req(const RawAddress& p) {
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
 
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
@@ -4249,7 +4258,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }

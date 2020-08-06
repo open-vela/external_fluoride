@@ -897,7 +897,17 @@ tBTM_STATUS BTM_RemoveSco(uint16_t sco_inx) {
 #endif
 }
 
-void BTM_RemoveSco(const RawAddress& bda) {
+/*******************************************************************************
+ *
+ * Function         btm_remove_sco_links
+ *
+ * Description      This function is called to remove all sco links for an ACL
+ *                  link.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_remove_sco_links(const RawAddress& bda) {
 #if (BTM_MAX_SCO_LINKS > 0)
   tSCO_CONN* p = &btm_cb.sco_cb.sco_db[0];
   uint16_t xx;
@@ -1308,7 +1318,7 @@ uint8_t BTM_GetNumScoLinks(void) {
 
 /*******************************************************************************
  *
- * Function         BTM_IsScoActiveByBdaddr
+ * Function         btm_is_sco_active_by_bdaddr
  *
  * Description      This function is called to see if a SCO connection is active
  *                  for a bd address.
@@ -1316,7 +1326,7 @@ uint8_t BTM_GetNumScoLinks(void) {
  * Returns          bool
  *
  ******************************************************************************/
-bool BTM_IsScoActiveByBdaddr(const RawAddress& remote_bda) {
+bool btm_is_sco_active_by_bdaddr(const RawAddress& remote_bda) {
 #if (BTM_MAX_SCO_LINKS > 0)
   uint8_t xx;
   tSCO_CONN* p = &btm_cb.sco_cb.sco_db[0];
