@@ -26,9 +26,5 @@ namespace shim {
 
 const hci_t* hci_layer_get_interface();
 
-void hci_on_reset_complete();
-
-void hci_on_shutting_down();
-
 }  // namespace shim
 }  // namespace bluetooth
