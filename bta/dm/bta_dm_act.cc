@@ -426,7 +426,8 @@ static void bta_dm_sys_hw_cback(tBTA_SYS_HW_EVT status) {
     BTM_WritePageTimeout(p_bta_dm_cfg->page_timeout);
     bta_dm_cb.cur_policy = p_bta_dm_cfg->policy_settings;
     BTM_SetDefaultLinkPolicy(bta_dm_cb.cur_policy);
-    BTM_RegBusyLevelNotif(bta_dm_bl_change_cback);
+    BTM_RegBusyLevelNotif(bta_dm_bl_change_cback, NULL,
+                          BTM_BL_UPDATE_MASK | BTM_BL_ROLE_CHG_MASK);
 
 #if (BLE_VND_INCLUDED == TRUE)
     BTM_BleReadControllerFeatures(bta_dm_ctrl_features_rd_cmpl_cback);
@@ -3798,6 +3799,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
 
+      break;
+
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:

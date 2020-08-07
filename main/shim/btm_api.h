@@ -1317,8 +1317,11 @@ tBTM_STATUS BTM_ReadTxPower(const RawAddress& remote_bda,
  * Description      This function is called to register a callback to receive
  *                  busy level change events.
  *
+ * Returns          BTM_SUCCESS if successfully registered, otherwise error
+ *
  ******************************************************************************/
-void BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb);
+tBTM_STATUS BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb, uint8_t* p_level,
+                                  tBTM_BL_EVENT_MASK evt_mask);
 
 /*******************************************************************************
  *
