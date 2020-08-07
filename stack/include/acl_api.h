@@ -33,7 +33,8 @@
  *                  busy level change events.
  *
  ******************************************************************************/
-void BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb);
+void BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb,
+                           tBTM_BL_EVENT_MASK evt_mask);
 
 /*****************************************************************************
  *  ACL CHANNEL MANAGEMENT FUNCTIONS
