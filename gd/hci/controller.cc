@@ -21,7 +21,6 @@
 #include <string>
 #include <utility>
 
-#include "common/init_flags.h"
 #include "hci/hci_layer.h"
 
 namespace bluetooth {
@@ -35,10 +34,8 @@ struct Controller::impl {
   void Start(hci::HciLayer* hci) {
     hci_ = hci;
     Handler* handler = module_.GetHandler();
-    if (bluetooth::common::InitFlags::GdCoreEnabled()) {
-      hci_->RegisterEventHandler(
-          EventCode::NUMBER_OF_COMPLETED_PACKETS, handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
-    }
+    hci_->RegisterEventHandler(EventCode::NUMBER_OF_COMPLETED_PACKETS,
+                               handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
 
     set_event_mask(kDefaultEventMask);
     write_simple_pairing_mode(Enable::ENABLED);
@@ -133,9 +130,7 @@ struct Controller::impl {
   }
 
   void Stop() {
-    if (bluetooth::common::InitFlags::GdCoreEnabled()) {
-      hci_->UnregisterEventHandler(EventCode::NUMBER_OF_COMPLETED_PACKETS);
-    }
+    hci_->UnregisterEventHandler(EventCode::NUMBER_OF_COMPLETED_PACKETS);
     hci_ = nullptr;
   }
 
@@ -739,7 +734,6 @@ struct Controller::impl {
       OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CODEC_CAPABILITIES)
       OP_CODE_MAPPING(READ_LOCAL_SUPPORTED_CONTROLLER_DELAY)
       OP_CODE_MAPPING(CONFIGURE_DATA_PATH)
-      OP_CODE_MAPPING(ENHANCED_FLUSH)
 
       // vendor specific
       case OpCode::LE_GET_VENDOR_CAPABILITIES:
