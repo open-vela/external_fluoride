@@ -450,7 +450,6 @@ void btm_acl_set_paging(bool value) { btm_cb.is_paging = value; }
  *
  ******************************************************************************/
 void btm_acl_update_busy_level(tBTM_BLI_EVENT event) {
-  bool old_inquiry_state = btm_cb.is_inquiry;
   tBTM_BL_UPDATE_DATA evt;
   evt.busy_level_flags = 0;
   switch (event) {
@@ -471,22 +470,11 @@ void btm_acl_update_busy_level(tBTM_BLI_EVENT event) {
       break;
   }
 
-  uint8_t busy_level;
-  if (btm_cb.is_paging || btm_cb.is_inquiry)
-    busy_level = 10;
-  else
-    busy_level = BTM_GetNumAclLinks();
-
-  if ((busy_level != btm_cb.busy_level) ||
-      (old_inquiry_state != btm_cb.is_inquiry)) {
-    evt.event = BTM_BL_UPDATE_EVT;
-    btm_cb.busy_level = busy_level;
-    if (btm_cb.acl_cb_.p_bl_changed_cb &&
-        (btm_cb.acl_cb_.bl_evt_mask & BTM_BL_UPDATE_MASK)) {
-      tBTM_BL_EVENT_DATA btm_bl_event_data;
-      btm_bl_event_data.update = evt;
-      (*btm_cb.acl_cb_.p_bl_changed_cb)(&btm_bl_event_data);
-    }
+  evt.event = BTM_BL_UPDATE_EVT;
+  if (btm_cb.acl_cb_.p_bl_changed_cb) {
+    tBTM_BL_EVENT_DATA btm_bl_event_data;
+    btm_bl_event_data.update = evt;
+    (*btm_cb.acl_cb_.p_bl_changed_cb)(&btm_bl_event_data);
   }
 }
 
@@ -682,8 +670,7 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
                                &p->remote_addr);
 
     /* if role change event is registered, report it now */
-    if (btm_cb.acl_cb_.p_bl_changed_cb &&
-        (btm_cb.acl_cb_.bl_evt_mask & BTM_BL_ROLE_CHG_MASK)) {
+    if (btm_cb.acl_cb_.p_bl_changed_cb) {
       tBTM_BL_ROLE_CHG_DATA evt;
       evt.event = BTM_BL_ROLE_CHG_EVT;
       evt.new_role = btm_cb.devcb.switch_role_ref_data.role;
@@ -1474,8 +1461,7 @@ void btm_acl_role_changed(uint8_t hci_status, const RawAddress* bd_addr,
   btm_acl_report_role_change(hci_status, bd_addr);
 
   /* if role change event is registered, report it now */
-  if (btm_cb.acl_cb_.p_bl_changed_cb &&
-      (btm_cb.acl_cb_.bl_evt_mask & BTM_BL_ROLE_CHG_MASK)) {
+  if (btm_cb.acl_cb_.p_bl_changed_cb) {
     tBTM_BL_ROLE_CHG_DATA evt;
     evt.event = BTM_BL_ROLE_CHG_EVT;
     evt.new_role = new_role;
@@ -1714,24 +1700,10 @@ uint8_t* BTM_ReadRemoteFeatures(const RawAddress& addr) {
  * Description      This function is called to register a callback to receive
  *                  busy level change events.
  *
- * Returns          BTM_SUCCESS if successfully registered, otherwise error
- *
  ******************************************************************************/
-tBTM_STATUS BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb, uint8_t* p_level,
-                                  tBTM_BL_EVENT_MASK evt_mask) {
+void BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb) {
   BTM_TRACE_DEBUG("BTM_RegBusyLevelNotif");
-  if (p_level) *p_level = btm_cb.busy_level;
-
-  btm_cb.acl_cb_.bl_evt_mask = evt_mask;
-
-  if (!p_cb)
-    btm_cb.acl_cb_.p_bl_changed_cb = NULL;
-  else if (btm_cb.acl_cb_.p_bl_changed_cb)
-    return (BTM_BUSY);
-  else
-    btm_cb.acl_cb_.p_bl_changed_cb = p_cb;
-
-  return (BTM_SUCCESS);
+  btm_cb.acl_cb_.p_bl_changed_cb = p_cb;
 }
 
 /*******************************************************************************
