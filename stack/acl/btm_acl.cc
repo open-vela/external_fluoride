@@ -1619,17 +1619,17 @@ tBTM_STATUS btm_set_packet_types(tACL_CONN* p, uint16_t pkt_types) {
 
 /*******************************************************************************
  *
- * Function         BTM_GetMaxPacketSize
+ * Function         btm_get_max_packet_size
  *
  * Returns          Returns maximum packet size that can be used for current
  *                  connection, 0 if connection is not established
  *
  ******************************************************************************/
-uint16_t BTM_GetMaxPacketSize(const RawAddress& addr) {
+uint16_t btm_get_max_packet_size(const RawAddress& addr) {
   tACL_CONN* p = btm_bda_to_acl(addr, BT_TRANSPORT_BR_EDR);
   uint16_t pkt_types = 0;
   uint16_t pkt_size = 0;
-  BTM_TRACE_DEBUG("BTM_GetMaxPacketSize");
+  BTM_TRACE_DEBUG("btm_get_max_packet_size");
   if (p != NULL) {
     pkt_types = p->pkt_types_mask;
   } else {
