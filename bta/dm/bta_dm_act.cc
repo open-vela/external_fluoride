@@ -426,7 +426,8 @@ static void bta_dm_sys_hw_cback(tBTA_SYS_HW_EVT status) {
     BTM_WritePageTimeout(p_bta_dm_cfg->page_timeout);
     bta_dm_cb.cur_policy = p_bta_dm_cfg->policy_settings;
     BTM_SetDefaultLinkPolicy(bta_dm_cb.cur_policy);
-    BTM_RegBusyLevelNotif(bta_dm_bl_change_cback);
+    BTM_RegBusyLevelNotif(bta_dm_bl_change_cback,
+                          BTM_BL_UPDATE_MASK | BTM_BL_ROLE_CHG_MASK);
 
 #if (BLE_VND_INCLUDED == TRUE)
     BTM_BleReadControllerFeatures(bta_dm_ctrl_features_rd_cmpl_cback);
@@ -2652,11 +2653,13 @@ static void bta_dm_local_name_cback(UNUSED_ATTR void* p_name) {
     bta_dm_cb.p_sec_cback(BTA_DM_ENABLE_EVT, &sec_event);
 }
 
-static void send_busy_level_update(uint8_t busy_level_flags) {
+static void send_busy_level_update(uint8_t busy_level,
+                                   uint8_t busy_level_flags) {
   if (!bta_dm_cb.p_sec_cback) return;
 
   tBTA_DM_SEC conn;
   memset(&conn, 0, sizeof(tBTA_DM_SEC));
+  conn.busy_level.level = busy_level;
   conn.busy_level.level_flags = busy_level_flags;
   bta_dm_cb.p_sec_cback(BTA_DM_BUSY_LEVEL_EVT, &conn);
 }
@@ -2857,6 +2860,7 @@ static void bta_dm_bl_change_cback(tBTM_BL_EVENT_DATA* p_data) {
     case BTM_BL_UPDATE_EVT: {
       /* busy level update */
       do_in_main_thread(FROM_HERE, base::Bind(send_busy_level_update,
+                                              p_data->update.busy_level,
                                               p_data->update.busy_level_flags));
       return;
     }
@@ -3795,6 +3799,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
 
+      break;
+
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
