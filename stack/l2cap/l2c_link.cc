@@ -49,8 +49,10 @@ static bool l2c_link_send_to_lower(tL2C_LCB* p_lcb, BT_HDR* p_buf,
  * Description      This function is called when an HCI Connection Request
  *                  event is received.
  *
+ * Returns          true, if accept conn
+ *
  ******************************************************************************/
-void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
+bool l2c_link_hci_conn_req(const RawAddress& bd_addr) {
   tL2C_LCB* p_lcb;
   tL2C_LCB* p_lcb_cur;
   int xx;
@@ -65,7 +67,7 @@ void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
     if (!p_lcb) {
       btsnd_hcic_reject_conn(bd_addr, HCI_ERR_HOST_REJECT_RESOURCES);
       L2CAP_TRACE_ERROR("L2CAP failed to allocate LCB");
-      return;
+      return false;
     }
 
     no_links = true;
@@ -97,13 +99,15 @@ void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
     /* Start a timer waiting for connect complete */
     alarm_set_on_mloop(p_lcb->l2c_lcb_timer, L2CAP_LINK_CONNECT_TIMEOUT_MS,
                        l2c_lcb_timer_timeout, p_lcb);
-    return;
+    return (true);
   }
 
-  /* We already had a link control block. Check what state it is in
+  /* We already had a link control block to the guy. Check what state it is in
    */
   if ((p_lcb->link_state == LST_CONNECTING) ||
       (p_lcb->link_state == LST_CONNECT_HOLDING)) {
+    /* Connection collision. Accept the connection anyways. */
+
     if (!btm_dev_support_switch(bd_addr))
       p_lcb->link_role = HCI_ROLE_SLAVE;
     else
@@ -112,14 +116,18 @@ void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
     btsnd_hcic_accept_conn(bd_addr, p_lcb->link_role);
 
     p_lcb->link_state = LST_CONNECTING;
+    return (true);
   } else if (p_lcb->link_state == LST_DISCONNECTING) {
+    /* In disconnecting state, reject the connection. */
     btsnd_hcic_reject_conn(bd_addr, HCI_ERR_HOST_REJECT_DEVICE);
   } else {
     L2CAP_TRACE_ERROR(
         "L2CAP got conn_req while connected (state:%d). Reject it",
         p_lcb->link_state);
+    /* Reject the connection with ACL Connection Already exist reason */
     btsnd_hcic_reject_conn(bd_addr, HCI_ERR_CONNECTION_EXISTS);
   }
+  return (false);
 }
 
 void btm_acl_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
@@ -748,11 +756,20 @@ void l2c_link_adjust_chnl_allocation(void) {
   }
 }
 
-void l2c_link_init() {
-  const controller_t* controller = controller_get_interface();
-
-  l2cb.num_lm_acl_bufs = controller->get_acl_buffer_count_classic();
-  l2cb.controller_xmit_window = controller->get_acl_buffer_count_classic();
+/*******************************************************************************
+ *
+ * Function         l2c_link_processs_num_bufs
+ *
+ * Description      This function is called when a "controller buffer size"
+ *                  event is first received from the controller. It updates
+ *                  the L2CAP values.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void l2c_link_processs_num_bufs(uint16_t num_lm_acl_bufs) {
+  l2cb.num_lm_acl_bufs = num_lm_acl_bufs;
+  l2cb.controller_xmit_window = num_lm_acl_bufs;
 }
 
 /*******************************************************************************
