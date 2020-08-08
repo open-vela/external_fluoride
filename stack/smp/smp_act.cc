@@ -19,16 +19,15 @@
 #include <cutils/log.h>
 #include <log/log.h>
 #include <string.h>
+#include "btif_api.h"
 #include "btif_common.h"
 #include "btif_storage.h"
 #include "device/include/interop.h"
 #include "internal_include/bt_target.h"
 #include "stack/btm/btm_int.h"
-#include "stack/include/acl_api.h"
 #include "stack/include/l2c_api.h"
 #include "stack/smp/p_256_ecc_pp.h"
 #include "stack/smp/smp_int.h"
-#include "types/raw_address.h"
 #include "utils/include/bt_utils.h"
 
 #define SMP_KEY_DIST_TYPE_MAX 4
@@ -39,6 +38,17 @@ const tSMP_ACT smp_distribute_act[] = {
     smp_generate_csrk,      /* SMP_SEC_KEY_TYPE_CSRK - '1' bit index */
     smp_set_derive_link_key /* SMP_SEC_KEY_TYPE_LK - '1' bit index */
 };
+
+static bool lmp_version_below(const RawAddress& bda, uint8_t version) {
+  tACL_CONN* acl = btm_bda_to_acl(bda, BT_TRANSPORT_LE);
+  if (acl == NULL || acl->lmp_version == 0) {
+    SMP_TRACE_WARNING("%s cannot retrieve LMP version...", __func__);
+    return false;
+  }
+  SMP_TRACE_WARNING("%s LMP version %d < %d", __func__, acl->lmp_version,
+                    version);
+  return acl->lmp_version < version;
+}
 
 static bool pts_test_send_authentication_complete_failure(tSMP_CB* p_cb) {
   uint8_t reason = p_cb->cert_failure;
@@ -1292,18 +1302,28 @@ void smp_decide_association_model(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
         smp_int_data.status = SMP_PAIR_AUTH_FAIL;
         int_evt = SMP_AUTH_CMPL_EVT;
       } else {
-        p_cb->sec_level = SMP_SEC_UNAUTHENTICATE;
-        SMP_TRACE_EVENT("p_cb->sec_level =%d (SMP_SEC_UNAUTHENTICATE) ",
-                        p_cb->sec_level);
+        if (!is_atv_device() &&
+            (p_cb->local_io_capability == SMP_IO_CAP_IO ||
+             p_cb->local_io_capability == SMP_IO_CAP_KBDISP)) {
+          /* display consent dialog if this device has a display */
+          SMP_TRACE_DEBUG("ENCRYPTION_ONLY showing Consent Dialog");
+          p_cb->cb_evt = SMP_CONSENT_REQ_EVT;
+          smp_set_state(SMP_STATE_WAIT_NONCE);
+          smp_sm_event(p_cb, SMP_SC_DSPL_NC_EVT, NULL);
+        } else {
+          p_cb->sec_level = SMP_SEC_UNAUTHENTICATE;
+          SMP_TRACE_EVENT("p_cb->sec_level =%d (SMP_SEC_UNAUTHENTICATE) ",
+                          p_cb->sec_level);
 
-        tSMP_KEY key;
-        key.key_type = SMP_KEY_TYPE_TK;
-        key.p_data = p_cb->tk.data();
-        smp_int_data.key = key;
+          tSMP_KEY key;
+          key.key_type = SMP_KEY_TYPE_TK;
+          key.p_data = p_cb->tk.data();
+          smp_int_data.key = key;
 
-        p_cb->tk = {0};
-        /* TK, ready  */
-        int_evt = SMP_KEY_READY_EVT;
+          p_cb->tk = {0};
+          /* TK, ready  */
+          int_evt = SMP_KEY_READY_EVT;
+        }
       }
       break;
 
@@ -1638,8 +1658,18 @@ void smp_process_peer_nonce(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
       }
 
       if (p_cb->selected_association_model == SMP_MODEL_SEC_CONN_JUSTWORKS) {
-        /* go directly to phase 2 */
-        smp_sm_event(p_cb, SMP_SC_PHASE1_CMPLT_EVT, NULL);
+        if (!is_atv_device() &&
+            (p_cb->local_io_capability == SMP_IO_CAP_IO ||
+             p_cb->local_io_capability == SMP_IO_CAP_KBDISP)) {
+          /* display consent dialog */
+          SMP_TRACE_DEBUG("JUST WORKS showing Consent Dialog");
+          p_cb->cb_evt = SMP_CONSENT_REQ_EVT;
+          smp_set_state(SMP_STATE_WAIT_NONCE);
+          smp_sm_event(p_cb, SMP_SC_DSPL_NC_EVT, NULL);
+        } else {
+          /* go directly to phase 2 */
+          smp_sm_event(p_cb, SMP_SC_PHASE1_CMPLT_EVT, NULL);
+        }
       } else /* numeric comparison */
       {
         smp_set_state(SMP_STATE_WAIT_NONCE);

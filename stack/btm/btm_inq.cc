@@ -572,6 +572,11 @@ tBTM_STATUS BTM_CancelInquiry(void) {
         btm_ble_stop_inquiry();
     }
 
+    /* Do not send the BUSY_LEVEL event yet. Wait for the cancel_complete event
+     * and then send the BUSY_LEVEL event
+     * btm_acl_update_busy_level (BTM_BLI_INQ_DONE_EVT);
+     */
+
     p_inq->inq_counter++;
     btm_clr_inq_result_flt();
   }
@@ -1419,7 +1424,7 @@ static void btm_initiate_inquiry(tBTM_INQUIRY_VAR_ST* p_inq) {
       btm_cb.btm_inq_vars.inq_active, btm_cb.btm_inq_vars.state,
       btm_cb.btm_inq_vars.inqfilt_active);
 #endif
-  btm_acl_update_inquiry_status(BTM_INQUIRY_STARTED);
+  btm_acl_update_busy_level(BTM_BLI_INQ_EVT);
 
   if (p_inq->inq_active & BTM_SSP_INQUIRY_ACTIVE) {
     btm_process_inq_complete(BTM_NO_RESOURCES,
@@ -1649,7 +1654,7 @@ void btm_process_inq_results(uint8_t* p, uint8_t hci_evt_len,
 
         if ((p_inq->inqparms.mode & BTM_BLE_INQUIRY_MASK) != 0)
           btm_ble_stop_inquiry();
-        btm_acl_update_inquiry_status(BTM_INQUIRY_COMPLETE);
+        btm_acl_update_busy_level(BTM_BLI_INQ_DONE_EVT);
       }
       /* Initialize flag to false. This flag is set/used by application */
       p_i->inq_info.appl_knows_rem_name = false;
@@ -1738,7 +1743,7 @@ void btm_process_inq_complete(uint8_t status, uint8_t mode) {
       btm_cb.btm_inq_vars.inq_active, btm_cb.btm_inq_vars.state,
       btm_cb.btm_inq_vars.inqfilt_active);
 #endif
-  btm_acl_update_inquiry_status(BTM_INQUIRY_COMPLETE);
+  btm_acl_update_busy_level(BTM_BLI_INQ_DONE_EVT);
   /* Ignore any stray or late complete messages if the inquiry is not active */
   if (p_inq->inq_active) {
     p_inq->inq_cmpl_info.status = (tBTM_STATUS)(
@@ -1799,7 +1804,7 @@ void btm_process_inq_complete(uint8_t status, uint8_t mode) {
  *
  ******************************************************************************/
 void btm_process_cancel_complete(uint8_t status, uint8_t mode) {
-  btm_acl_update_inquiry_status(BTM_INQUIRY_CANCELLED);
+  btm_acl_update_busy_level(BTM_BLI_INQ_CANCEL_EVT);
   btm_process_inq_complete(status, mode);
 }
 /*******************************************************************************
