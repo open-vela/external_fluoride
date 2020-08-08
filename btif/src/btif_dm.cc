@@ -986,8 +986,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   uint32_t cod;
+  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1641,20 +1641,20 @@ static void btif_dm_remote_service_record_evt(uint16_t event, char* p_param) {
   }
 }
 
-static void report_inquiry_status_change(uint8_t status) {
-  if (status == BTM_INQUIRY_STARTED) {
+static void report_busy_level_change(uint8_t busy_level_flags) {
+  if (busy_level_flags == BTM_BL_INQUIRY_STARTED) {
     HAL_CBACK(bt_hal_cbacks, discovery_state_changed_cb, BT_DISCOVERY_STARTED);
     btif_dm_inquiry_in_progress = true;
-  } else if (status == BTM_INQUIRY_CANCELLED) {
+  } else if (busy_level_flags == BTM_BL_INQUIRY_CANCELLED) {
     HAL_CBACK(bt_hal_cbacks, discovery_state_changed_cb, BT_DISCOVERY_STOPPED);
     btif_dm_inquiry_in_progress = false;
-  } else if (status == BTM_INQUIRY_COMPLETE) {
+  } else if (busy_level_flags == BTM_BL_INQUIRY_COMPLETE) {
     btif_dm_inquiry_in_progress = false;
   }
 }
 
-void BTIF_dm_report_inquiry_status_change(uint8_t status) {
-  do_in_jni_thread(base::Bind(report_inquiry_status_change, status));
+void BTIF_dm_report_busy_level_change(uint8_t busy_level_flags) {
+  do_in_jni_thread(base::Bind(report_busy_level_change, busy_level_flags));
 }
 
 /*******************************************************************************
@@ -1864,13 +1864,9 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
           break;
       }
       break;
-    case BTA_DM_BLE_CONSENT_REQ_EVT:
-      BTIF_TRACE_DEBUG("BTA_DM_BLE_CONSENT_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, true);
-      break;
     case BTA_DM_BLE_SEC_REQ_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_SEC_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, false);
+      btif_dm_ble_sec_req_evt(&p_data->ble_req);
       break;
     case BTA_DM_BLE_PASSKEY_NOTIF_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_PASSKEY_NOTIF_EVT. ");
@@ -3107,14 +3103,14 @@ void btif_dm_remove_ble_bonding_keys(void) {
  * Returns          void
  *
  ******************************************************************************/
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent) {
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req) {
   bt_bdname_t bd_name;
   uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
 
-  if (!is_consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
+  if (pairing_cb.state == BT_BOND_STATE_BONDING) {
     BTIF_TRACE_DEBUG("%s Discard security request", __func__);
     return;
   }
