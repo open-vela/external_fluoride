@@ -54,7 +54,6 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2833,13 +2832,6 @@ void btm_io_capabilities_req(const RawAddress& p) {
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
 
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
@@ -3818,7 +3810,6 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
   uint8_t res;
   bool is_pairing_device = false;
   bool addr_matched;
-  tACL_CONN* p_acl_cb;
   uint8_t bit_shift = 0;
 
   btm_acl_resubmit_page();
@@ -4065,21 +4056,19 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
    */
   /* notify btm_acl that link is up, so starting of rmt name request will not */
   /* set paging flag up */
-  p_acl_cb = btm_bda_to_acl(bda, BT_TRANSPORT_BR_EDR);
-  if (p_acl_cb) {
 /* whatever is in btm_establish_continue() without reporting the BTM_BL_CONN_EVT
  * event */
 #if (BTM_BYPASS_EXTRA_ACL_SETUP == FALSE)
     /* For now there are a some devices that do not like sending */
     /* commands events and data at the same time. */
     /* Set the packet types to the default allowed by the device */
-    btm_set_packet_types(p_acl_cb, btm_cb.acl_cb_.btm_acl_pkt_types_supported);
+    btm_set_packet_types_from_address(
+        bda, BT_TRANSPORT_BR_EDR, btm_cb.acl_cb_.btm_acl_pkt_types_supported);
 
     if (btm_cb.acl_cb_.btm_def_link_policy)
-      BTM_SetLinkPolicy(p_acl_cb->remote_addr,
-                        &btm_cb.acl_cb_.btm_def_link_policy);
+      BTM_SetLinkPolicy(bda, &btm_cb.acl_cb_.btm_def_link_policy);
 #endif
-  }
+
   btm_acl_created(bda, p_dev_rec->dev_class, p_dev_rec->sec_bd_name, handle,
                   HCI_ROLE_SLAVE, BT_TRANSPORT_BR_EDR);
 
@@ -4256,8 +4245,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
