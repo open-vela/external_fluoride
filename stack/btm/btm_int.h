@@ -85,7 +85,7 @@ extern void btm_acl_created(const RawAddress& bda, DEV_CLASS dc, BD_NAME bdn,
 extern void btm_acl_removed(const RawAddress& bda, tBT_TRANSPORT transport);
 extern void btm_acl_device_down(void);
 extern void btm_acl_set_paging(bool value);
-extern void btm_acl_update_inquiry_status(uint8_t state);
+extern void btm_acl_update_busy_level(tBTM_BLI_EVENT event);
 
 extern void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec,
                              uint8_t hci_status);
@@ -102,6 +102,7 @@ extern void btm_read_tx_power_complete(uint8_t* p, bool is_ble);
 
 extern void btm_read_link_quality_complete(uint8_t* p);
 
+extern tBTM_STATUS btm_set_packet_types(tACL_CONN* p, uint16_t pkt_types);
 extern void btm_process_clk_off_comp_evt(uint16_t hci_handle,
                                          uint16_t clock_offset);
 extern void btm_blacklist_role_change_device(const RawAddress& bd_addr,
