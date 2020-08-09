@@ -54,6 +54,7 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2832,6 +2833,13 @@ void btm_io_capabilities_req(const RawAddress& p) {
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
 
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
@@ -3194,6 +3202,31 @@ void btm_proc_sp_req_evt(tBTM_SP_EVT event, uint8_t* p) {
 
 /*******************************************************************************
  *
+ * Function         btm_keypress_notif_evt
+ *
+ * Description      This function is called when a key press notification is
+ *                  received
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_keypress_notif_evt(uint8_t* p) {
+  tBTM_SP_KEYPRESS evt_data;
+
+  /* parse & report BTM_SP_KEYPRESS_EVT */
+  if (btm_cb.api.p_sp_callback) {
+    RawAddress& p_bda = evt_data.bd_addr;
+
+    STREAM_TO_BDADDR(p_bda, p);
+    evt_data.notif_type = *p;
+
+    (*btm_cb.api.p_sp_callback)(BTM_SP_KEYPRESS_EVT,
+                                (tBTM_SP_EVT_DATA*)&evt_data);
+  }
+}
+
+/*******************************************************************************
+ *
  * Function         btm_simple_pair_complete
  *
  * Description      This function is called when simple pairing process is
@@ -3203,17 +3236,17 @@ void btm_proc_sp_req_evt(tBTM_SP_EVT event, uint8_t* p) {
  *
  ******************************************************************************/
 void btm_simple_pair_complete(uint8_t* p) {
-  RawAddress bd_addr;
+  tBTM_SP_COMPLT evt_data;
   tBTM_SEC_DEV_REC* p_dev_rec;
   uint8_t status;
   bool disc = false;
 
   status = *p++;
-  STREAM_TO_BDADDR(bd_addr, p);
+  STREAM_TO_BDADDR(evt_data.bd_addr, p);
 
-  p_dev_rec = btm_find_dev(bd_addr);
+  p_dev_rec = btm_find_dev(evt_data.bd_addr);
   if (p_dev_rec == NULL) {
-    LOG(ERROR) << __func__ << " with unknown BDA: " << bd_addr;
+    LOG(ERROR) << __func__ << " with unknown BDA: " << evt_data.bd_addr;
     return;
   }
 
@@ -3221,7 +3254,9 @@ void btm_simple_pair_complete(uint8_t* p) {
       "btm_simple_pair_complete()  Pair State: %s  Status:%d  sec_state: %u",
       btm_pair_state_descr(btm_cb.pairing_state), status, p_dev_rec->sec_state);
 
+  evt_data.status = BTM_ERR_PROCESSING;
   if (status == HCI_SUCCESS) {
+    evt_data.status = BTM_SUCCESS;
     p_dev_rec->sec_flags |= BTM_SEC_AUTHENTICATED;
   } else {
     if (status == HCI_ERR_PAIRING_NOT_ALLOWED) {
@@ -3231,7 +3266,7 @@ void btm_simple_pair_complete(uint8_t* p) {
       /* Change the timer to 1 second */
       alarm_set_on_mloop(btm_cb.pairing_timer, BT_1SEC_TIMEOUT_MS,
                          btm_sec_pairing_timeout, NULL);
-    } else if (btm_cb.pairing_bda == bd_addr) {
+    } else if (btm_cb.pairing_bda == evt_data.bd_addr) {
       /* stop the timer */
       alarm_cancel(btm_cb.pairing_timer);
 
@@ -3243,6 +3278,15 @@ void btm_simple_pair_complete(uint8_t* p) {
     } else
       disc = true;
   }
+
+  /* Let the pairing state stay active, p_auth_complete_callback will report the
+   * failure */
+  evt_data.bd_addr = p_dev_rec->bd_addr;
+  memcpy(evt_data.dev_class, p_dev_rec->dev_class, DEV_CLASS_LEN);
+
+  if (btm_cb.api.p_sp_callback)
+    (*btm_cb.api.p_sp_callback)(BTM_SP_COMPLT_EVT,
+                                (tBTM_SP_EVT_DATA*)&evt_data);
 
   if (disc) {
     /* simple pairing failed */
@@ -4209,7 +4253,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -4874,21 +4919,32 @@ static void btm_sec_start_encryption(tBTM_SEC_DEV_REC* p_dev_rec) {
  ******************************************************************************/
 static uint8_t btm_sec_start_authorization(tBTM_SEC_DEV_REC* p_dev_rec) {
   uint8_t result;
+  uint8_t* p_service_name = NULL;
   uint8_t service_id;
 
   if ((p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) ||
       (p_dev_rec->hci_handle == BTM_SEC_INVALID_HANDLE)) {
     if (!btm_cb.api.p_authorize_callback) return (BTM_MODE_UNSUPPORTED);
 
-    service_id =
-        p_dev_rec->p_cur_service ? p_dev_rec->p_cur_service->service_id : 0;
+    if (p_dev_rec->p_cur_service) {
+#if BTM_SEC_SERVICE_NAME_LEN > 0
+      if (p_dev_rec->is_originator)
+        p_service_name = p_dev_rec->p_cur_service->orig_service_name;
+      else
+        p_service_name = p_dev_rec->p_cur_service->term_service_name;
+#endif
+      service_id = p_dev_rec->p_cur_service->service_id;
+    } else
+      service_id = 0;
 
     /* Send authorization request if not already sent during this service
      * connection */
     if (p_dev_rec->last_author_service_id == BTM_SEC_NO_LAST_SERVICE_ID ||
         p_dev_rec->last_author_service_id != service_id) {
       p_dev_rec->sec_state = BTM_SEC_STATE_AUTHORIZING;
-      result = (*btm_cb.api.p_authorize_callback)(service_id);
+      result = (*btm_cb.api.p_authorize_callback)(
+          p_dev_rec->bd_addr, p_dev_rec->dev_class, p_dev_rec->sec_bd_name,
+          p_service_name, service_id, p_dev_rec->is_originator);
     }
 
     else /* Already authorized once for this L2CAP bringup */
