@@ -91,7 +91,7 @@ void BTA_EnableTestMode(void) {
 
 /** Disable bluetooth device under test mode */
 void BTA_DisableTestMode(void) {
-  do_in_main_thread(FROM_HERE, base::Bind(BTM_DeviceReset));
+  do_in_main_thread(FROM_HERE, base::Bind(BTM_DeviceReset, nullptr));
 }
 
 /** This function sets the Bluetooth name of local device */
