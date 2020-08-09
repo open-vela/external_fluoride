@@ -34,7 +34,6 @@
 #define LOG_TAG "btm_acl"
 
 #include <cstdint>
-#include "bta/sys/bta_sys.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
 #include "device/include/interop.h"
@@ -1641,6 +1640,19 @@ uint8_t* BTM_ReadRemoteFeatures(const RawAddress& addr) {
 
 /*******************************************************************************
  *
+ * Function         BTM_RegBusyLevelNotif
+ *
+ * Description      This function is called to register a callback to receive
+ *                  busy level change events.
+ *
+ ******************************************************************************/
+void BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb) {
+  BTM_TRACE_DEBUG("BTM_RegBusyLevelNotif");
+  btm_cb.acl_cb_.p_bl_changed_cb = p_cb;
+}
+
+/*******************************************************************************
+ *
  * Function         BTM_ReadRSSI
  *
  * Description      This function is called to read the link policy settings.
@@ -2318,10 +2330,25 @@ void btm_acl_paging(BT_HDR* p, const RawAddress& bda) {
  *
  * Description      Send connection collision event to upper layer if registered
  *
+ * Returns          true if sent out to upper layer,
+ *                  false if no one needs the notification.
  *
  ******************************************************************************/
-void btm_acl_notif_conn_collision(const RawAddress& bda) {
-  do_in_main_thread(FROM_HERE, base::Bind(bta_sys_notify_collision, bda));
+bool btm_acl_notif_conn_collision(const RawAddress& bda) {
+  /* Report possible collision to the upper layer. */
+  if (btm_cb.acl_cb_.p_bl_changed_cb) {
+    VLOG(1) << __func__ << " RemBdAddr: " << bda;
+
+    tBTM_BL_EVENT_DATA evt_data;
+    evt_data.event = BTM_BL_COLLISION_EVT;
+    evt_data.conn.p_bda = &bda;
+    evt_data.conn.transport = BT_TRANSPORT_BR_EDR;
+    evt_data.conn.handle = BTM_INVALID_HCI_HANDLE;
+    (*btm_cb.acl_cb_.p_bl_changed_cb)(&evt_data);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 /*******************************************************************************

@@ -350,11 +350,16 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
 #define BTA_DM_AUTHORIZE_EVT 4 /* Authorization request. */
 #define BTA_DM_LINK_UP_EVT 5   /* Connection UP event */
 #define BTA_DM_LINK_DOWN_EVT 6 /* Connection DOWN event */
+#define BTA_DM_SIG_STRENGTH_EVT                                             \
+  7                             /* Signal strength for bluetooth connection \
+                                   */
 #define BTA_DM_BOND_CANCEL_CMPL_EVT 9 /* Bond cancel complete indication */
 #define BTA_DM_SP_CFM_REQ_EVT                     \
   10 /* Simple Pairing User Confirmation request. \
         */
 #define BTA_DM_SP_KEY_NOTIF_EVT 11 /* Simple Pairing Passkey Notification */
+#define BTA_DM_SP_RMT_OOB_EVT 12   /* Simple Pairing Remote OOB Data request. */
+#define BTA_DM_SP_KEYPRESS_EVT 13  /* Key press notification event. */
 #define BTA_DM_BLE_KEY_EVT 15      /* BLE SMP key event for peer device keys */
 #define BTA_DM_BLE_SEC_REQ_EVT 16  /* BLE SMP security request */
 #define BTA_DM_BLE_PASSKEY_NOTIF_EVT 17 /* SMP passkey notification event */
@@ -504,6 +509,14 @@ typedef struct {
   tBT_DEVICE_TYPE dev_type;
 } tBTA_DM_AUTH_CMPL;
 
+/* Structure associated with BTA_DM_AUTHORIZE_EVT */
+typedef struct {
+  RawAddress bd_addr;      /* BD address peer device. */
+  BD_NAME bd_name;         /* Name of peer device. */
+  tBTA_SERVICE_ID service; /* Service ID to authorize. */
+  DEV_CLASS dev_class;
+} tBTA_DM_AUTHORIZE;
+
 /* Structure associated with BTA_DM_LINK_UP_EVT */
 typedef struct {
   RawAddress bd_addr; /* BD address peer device. */
@@ -598,6 +611,12 @@ enum {
 };
 typedef uint8_t tBTA_SP_KEY_TYPE;
 
+/* Structure associated with BTA_DM_SP_KEYPRESS_EVT */
+typedef struct {
+  RawAddress bd_addr; /* peer address */
+  tBTA_SP_KEY_TYPE notif_type;
+} tBTA_DM_SP_KEY_PRESS;
+
 /* Structure associated with BTA_DM_SP_KEY_NOTIF_EVT */
 typedef struct {
   /* Note: First 3 data members must be, bd_addr, dev_class, and bd_name in
@@ -628,6 +647,7 @@ typedef union {
   tBTA_DM_ENABLE enable;          /* BTA enabled */
   tBTA_DM_PIN_REQ pin_req;        /* PIN request. */
   tBTA_DM_AUTH_CMPL auth_cmpl;    /* Authentication complete indication. */
+  tBTA_DM_AUTHORIZE authorize;    /* Authorization request. */
   tBTA_DM_LINK_UP link_up;        /* ACL connection down event */
   tBTA_DM_LINK_DOWN link_down;    /* ACL connection down event */
   tBTA_DM_SP_CFM_REQ cfm_req;     /* user confirm request */
@@ -635,6 +655,7 @@ typedef union {
   tBTA_DM_SP_RMT_OOB rmt_oob;     /* remote oob */
   tBTA_DM_BOND_CANCEL_CMPL
       bond_cancel_cmpl;               /* Bond Cancel Complete indication */
+  tBTA_DM_SP_KEY_PRESS key_press;     /* key press notification event */
   tBTA_DM_BLE_SEC_REQ ble_req;        /* BLE SMP related request */
   tBTA_DM_BLE_KEY ble_key;            /* BLE SMP keys used when pairing */
   tBTA_BLE_LOCAL_ID_KEYS ble_id_keys; /* IR event */
