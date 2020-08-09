@@ -915,14 +915,15 @@ void bta_av_restore_switch(void) {
   tBTA_AV_CB* p_cb = &bta_av_cb;
   int i;
   uint8_t mask;
+  uint8_t set_policy = (HCI_ENABLE_SNIFF_MODE | HCI_ENABLE_MASTER_SLAVE_SWITCH);
 
   APPL_TRACE_DEBUG("%s: reg_audio: 0x%x", __func__, bta_av_cb.reg_audio);
   for (i = 0; i < BTA_AV_NUM_STRS; i++) {
     mask = BTA_AV_HNDL_TO_MSK(i);
     if (p_cb->conn_audio == mask) {
       if (p_cb->p_scb[i]) {
-        BTA_dm_set_policy(HCI_ENABLE_MASTER_SLAVE_SWITCH,
-                          p_cb->p_scb[i]->PeerAddress());
+        bta_sys_set_policy(BTA_ID_AV, set_policy,
+                           p_cb->p_scb[i]->PeerAddress());
       }
       break;
     }
@@ -945,6 +946,7 @@ static void bta_av_sys_rs_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
   tBTA_AV_SCB* p_scb = NULL;
   uint8_t cur_role;
   uint8_t peer_idx = 0;
+  uint8_t set_policy = (HCI_ENABLE_SNIFF_MODE | HCI_ENABLE_MASTER_SLAVE_SWITCH);
 
   APPL_TRACE_DEBUG(
       "%s: peer %s new_role:%d hci_status:0x%x bta_av_cb.rs_idx:%d", __func__,
@@ -961,6 +963,12 @@ static void bta_av_sys_rs_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
       APPL_TRACE_DEBUG(
           "%s: peer %s found: new_role:%d, hci_status:0x%x bta_handle:0x%x",
           __func__, peer_addr.ToString().c_str(), id, app_id, p_scb->hndl);
+      /*
+      if ((id != HCI_ROLE_MASTER) && (app_id != HCI_SUCCESS))
+      {
+          bta_sys_set_policy(BTA_ID_AV, set_policy, p_scb->PeerAddress());
+      }
+      */
       p_buf->hdr.event = BTA_AV_ROLE_CHANGE_EVT;
       p_buf->hdr.layer_specific = p_scb->hndl;
       p_buf->new_role = id;
@@ -975,7 +983,7 @@ static void bta_av_sys_rs_cback(UNUSED_ATTR tBTA_SYS_CONN_STATUS status,
   if ((HCI_SUCCESS != app_id) &&
       (BTM_GetRole(peer_addr, &cur_role) == BTM_SUCCESS) &&
       (cur_role == HCI_ROLE_SLAVE)) {
-    BTA_dm_set_policy(HCI_ENABLE_MASTER_SLAVE_SWITCH, peer_addr);
+    bta_sys_set_policy(BTA_ID_AV, set_policy, peer_addr);
   }
 
   /* if BTA_AvOpen() was called for other device, which caused the role switch
@@ -1101,7 +1109,7 @@ bool bta_av_switch_if_needed(tBTA_AV_SCB* p_scb) {
        */
       if (HCI_ROLE_MASTER != role) {
         if (bta_av_cb.features & BTA_AV_FEAT_MASTER)
-          BTA_dm_clear_policy(HCI_ENABLE_MASTER_SLAVE_SWITCH,
+          bta_sys_clear_policy(BTA_ID_AV, HCI_ENABLE_MASTER_SLAVE_SWITCH,
                                p_scbi->PeerAddress());
         if (BTM_CMD_STARTED !=
             BTM_SwitchRole(p_scbi->PeerAddress(), HCI_ROLE_MASTER, NULL)) {
@@ -1146,8 +1154,8 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
         (A2DP_BitsSet(bta_av_cb.conn_audio) > bits ||
          (bta_av_cb.features & BTA_AV_FEAT_MASTER))) {
       if (bta_av_cb.features & BTA_AV_FEAT_MASTER)
-        BTA_dm_clear_policy(HCI_ENABLE_MASTER_SLAVE_SWITCH,
-                            p_scb->PeerAddress());
+        bta_sys_clear_policy(BTA_ID_AV, HCI_ENABLE_MASTER_SLAVE_SWITCH,
+                             p_scb->PeerAddress());
 
       tBTM_STATUS status =
           BTM_SwitchRole(p_scb->PeerAddress(), HCI_ROLE_MASTER, NULL);
