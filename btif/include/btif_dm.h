@@ -43,22 +43,22 @@ void btif_dm_on_disable(void);
 /**
  * Callout for handling io_capabilities request
  */
-void btif_dm_proc_io_req(const RawAddress& bd_addr, tBTM_IO_CAP* p_io_cap,
-                         tBTM_OOB_DATA* p_oob_data, tBTM_AUTH_REQ* p_auth_req,
+void btif_dm_proc_io_req(const RawAddress& bd_addr, tBTA_IO_CAP* p_io_cap,
+                         tBTA_OOB_DATA* p_oob_data, tBTA_AUTH_REQ* p_auth_req,
                          bool is_orig);
 /**
  * Callout for handling io_capabilities response
  */
-void btif_dm_proc_io_rsp(const RawAddress& bd_addr, tBTM_IO_CAP io_cap,
-                         tBTM_OOB_DATA oob_data, tBTM_AUTH_REQ auth_req);
+void btif_dm_proc_io_rsp(const RawAddress& bd_addr, tBTA_IO_CAP io_cap,
+                         tBTA_OOB_DATA oob_data, tBTA_AUTH_REQ auth_req);
 
 /**
  * Out-of-band functions
  */
-void btif_dm_set_oob_for_io_req(tBTM_OOB_DATA* p_oob_data);
+void btif_dm_set_oob_for_io_req(tBTA_OOB_DATA* p_oob_data);
 void btif_dm_set_oob_for_le_io_req(const RawAddress& bd_addr,
-                                   tBTM_OOB_DATA* p_oob_data,
-                                   tBTM_LE_AUTH_REQ* p_auth_req);
+                                   tBTA_OOB_DATA* p_oob_data,
+                                   tBTA_LE_AUTH_REQ* p_auth_req);
 #ifdef BTIF_DM_OOB_TEST
 void btif_dm_load_local_oob(void);
 void btif_dm_proc_loc_oob(bool valid, const Octet16& c, const Octet16& r);
@@ -102,7 +102,7 @@ void btif_dm_get_ble_local_keys(tBTA_DM_BLE_LOCAL_KEY_MASK* p_key_mask,
                                 tBTA_BLE_LOCAL_ID_KEYS* p_id_keys);
 void btif_dm_save_ble_bonding_keys(RawAddress& bd_addr);
 void btif_dm_remove_ble_bonding_keys(void);
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req);
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent);
 
 void btif_dm_update_ble_remote_properties(const RawAddress& bd_addr,
                                           BD_NAME bd_name,
