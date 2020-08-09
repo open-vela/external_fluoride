@@ -25,6 +25,16 @@
 
 // Note: From stack/include/btm_api.h
 
+/*******************************************************************************
+ *
+ * Function         BTM_RegBusyLevelNotif
+ *
+ * Description      This function is called to register a callback to receive
+ *                  busy level change events.
+ *
+ ******************************************************************************/
+void BTM_RegBusyLevelNotif(tBTM_BL_CHANGE_CB* p_cb);
+
 /*****************************************************************************
  *  ACL CHANNEL MANAGEMENT FUNCTIONS
  ****************************************************************************/
