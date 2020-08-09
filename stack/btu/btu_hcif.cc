@@ -43,7 +43,6 @@
 #include "bt_common.h"
 #include "bt_types.h"
 #include "bt_utils.h"
-#include "bta/sys/bta_sys.h"
 #include "btif_config.h"
 #include "btm_api.h"
 #include "btm_int.h"
@@ -1536,10 +1535,11 @@ static void btu_hcif_hardware_error_evt(uint8_t* p) {
     return;
   }
 
-  send_bta_sys_hw_event(BTA_SYS_ERROR_EVT);
+  /* If anyone wants device status notifications, give them one. */
+  btm_report_device_status(BTM_DEV_STATUS_DOWN);
 
   /* Reset the controller */
-  if (BTM_IsDeviceUp()) BTM_DeviceReset();
+  if (BTM_IsDeviceUp()) BTM_DeviceReset(NULL);
 }
 
 /*******************************************************************************
