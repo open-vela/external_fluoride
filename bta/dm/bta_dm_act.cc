@@ -262,7 +262,7 @@ void bta_dm_enable(tBTA_DM_SEC_CBACK* p_sec_cback) {
   }
 
   /* first, register our callback to SYS HW manager */
-  bta_sys_hw_register(BTA_SYS_HW_BLUETOOTH, bta_dm_sys_hw_cback);
+  bta_sys_hw_register(bta_dm_sys_hw_cback);
 
   /* make sure security callback is saved - if no callback, do not erase the
   previous one,
@@ -271,13 +271,7 @@ void bta_dm_enable(tBTA_DM_SEC_CBACK* p_sec_cback) {
   /* notify BTA DM is now active */
   bta_dm_cb.is_bta_dm_active = true;
 
-  /* send a message to BTA SYS */
-  tBTA_SYS_HW_MSG* sys_enable_event =
-      (tBTA_SYS_HW_MSG*)osi_malloc(sizeof(tBTA_SYS_HW_MSG));
-  sys_enable_event->hdr.event = BTA_SYS_API_ENABLE_EVT;
-  sys_enable_event->hw_module = BTA_SYS_HW_BLUETOOTH;
-
-  bta_sys_sendmsg(sys_enable_event);
+  send_bta_sys_hw_event(BTA_SYS_API_ENABLE_EVT);
 
   btm_local_io_caps = btif_storage_get_local_io_caps();
 }
@@ -366,17 +360,10 @@ static void bta_dm_sys_hw_cback(tBTA_SYS_HW_EVT status) {
     memset(&bta_dm_search_cb, 0, sizeof(bta_dm_search_cb));
 
     /* unregister from SYS */
-    bta_sys_hw_unregister(BTA_SYS_HW_BLUETOOTH);
+    bta_sys_hw_unregister();
     /* notify BTA DM is now unactive */
     bta_dm_cb.is_bta_dm_active = false;
   } else if (status == BTA_SYS_HW_ON_EVT) {
-    /* FIXME: We should not unregister as the SYS shall invoke this callback on
-     * a H/W error.
-     * We need to revisit when this platform has more than one BLuetooth H/W
-     * chip
-     */
-    // bta_sys_hw_unregister( BTA_SYS_HW_BLUETOOTH);
-
     /* save security callback */
     temp_cback = bta_dm_cb.p_sec_cback;
     /* make sure the control block is properly initialized */
@@ -465,7 +452,7 @@ void bta_dm_disable() {
   L2CA_SetIdleTimeoutByBdAddr(RawAddress::kAny, 0, BT_TRANSPORT_LE);
 
   /* disable all active subsystems */
-  bta_sys_disable(BTA_SYS_HW_BLUETOOTH);
+  bta_sys_disable();
 
   BTM_SetDiscoverability(BTM_NON_DISCOVERABLE, 0, 0);
   BTM_SetConnectability(BTM_NON_CONNECTABLE, 0, 0);
@@ -2861,19 +2848,12 @@ static bool bta_dm_check_av(uint16_t event) {
  *
  ******************************************************************************/
 static void bta_dm_disable_conn_down_timer_cback(UNUSED_ATTR void* data) {
-  tBTA_SYS_HW_MSG* sys_enable_event =
-      (tBTA_SYS_HW_MSG*)osi_malloc(sizeof(tBTA_SYS_HW_MSG));
-
   /* disable the power managment module */
   bta_dm_disable_pm();
 
   /* register our callback to SYS HW manager */
-  bta_sys_hw_register(BTA_SYS_HW_BLUETOOTH, bta_dm_sys_hw_cback);
-
-  /* send a message to BTA SYS */
-  sys_enable_event->hdr.event = BTA_SYS_API_DISABLE_EVT;
-  sys_enable_event->hw_module = BTA_SYS_HW_BLUETOOTH;
-  bta_sys_sendmsg(sys_enable_event);
+  bta_sys_hw_register(bta_dm_sys_hw_cback);
+  send_bta_sys_hw_event(BTA_SYS_API_DISABLE_EVT);
 
   bta_dm_cb.disabling = false;
 }
@@ -3696,16 +3676,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
 
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
