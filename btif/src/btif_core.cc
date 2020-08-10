@@ -368,6 +368,8 @@ void btif_enable_bluetooth_evt(tBTA_STATUS status) {
               &prop);
   }
 
+  bte_main_postload_cfg();
+
   /* callback to HAL */
   if (status == BTA_SUCCESS) {
     uid_set = uid_set_create();
