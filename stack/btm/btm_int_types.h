@@ -96,6 +96,8 @@ typedef struct {
                               /* read inq tx power function completes  */
 
   tBTM_ROLE_SWITCH_CMPL switch_role_ref_data;
+  tBTM_CMPL_CB* p_switch_role_cb; /* Callback function to be called when  */
+                                  /* requested switch role is completed   */
 
   alarm_t* read_tx_power_timer;     /* Read tx power timer */
   tBTM_CMPL_CB* p_tx_power_cmpl_cb; /* Callback function to be called       */
@@ -369,12 +371,11 @@ typedef struct {
   uint8_t resolving_list_index;
 #if (BLE_PRIVACY_SPT == TRUE)
   RawAddress cur_rand_addr; /* current random address */
-
+  uint8_t active_addr_type;
+#endif
 #define BTM_BLE_ADDR_PSEUDO 0 /* address index device record */
 #define BTM_BLE_ADDR_RRA 1    /* cur_rand_addr */
 #define BTM_BLE_ADDR_STATIC 2 /* static_addr  */
-  uint8_t active_addr_type;
-#endif
 
   tBTM_LE_KEY_TYPE key_type; /* bit mask of valid key types in record */
   tBTM_SEC_BLE_KEYS keys;    /* LE device security info in slave rode */
