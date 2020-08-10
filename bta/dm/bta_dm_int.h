@@ -296,6 +296,7 @@ typedef struct {
   uint8_t num_master_only;
   uint8_t pm_id;
   tBTA_PM_TIMER pm_timer[BTA_DM_NUM_PM_TIMER];
+  uint16_t rs_event;      /* the event waiting for role switch */
   uint8_t cur_av_count;   /* current AV connecions */
   bool disable_pair_mode; /* disable pair mode or not */
   bool conn_paired_only;  /* allow connectable to paired device only or not */
@@ -544,6 +545,4 @@ extern tBTA_DM_PEER_DEVICE* bta_dm_find_peer_device(
     const RawAddress& peer_addr);
 
 void bta_dm_eir_update_uuid(uint16_t uuid16, bool adding);
-
-extern void bta_dm_remove_all_acl(const tBTA_DM_LINK_TYPE);
 #endif /* BTA_DM_INT_H */
