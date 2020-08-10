@@ -75,8 +75,6 @@ typedef struct {
                                       connection */
   BD_FEATURES peer_le_features; /* Peer LE Used features mask for the device */
 
-  uint16_t link_policy;
-
 } tACL_CONN;
 
 typedef struct {
