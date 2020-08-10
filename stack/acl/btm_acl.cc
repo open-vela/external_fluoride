@@ -222,8 +222,6 @@ void btm_acl_created(const RawAddress& bda, DEV_CLASS dc, BD_NAME bdn,
   BTM_TRACE_DEBUG("%s: peer %s hci_handle=%d link_role=%d  transport=%d",
                   __func__, bda.ToString().c_str(), hci_handle, link_role,
                   transport);
-
-  BTM_SetLinkPolicy(bda, &btm_cb.acl_cb_.btm_def_link_policy);
   /* Ensure we don't have duplicates */
   p = btm_bda_to_acl(bda, transport);
   if (p != (tACL_CONN*)NULL) {
@@ -231,6 +229,7 @@ void btm_acl_created(const RawAddress& bda, DEV_CLASS dc, BD_NAME bdn,
     p->link_role = link_role;
     p->transport = transport;
     VLOG(1) << "Duplicate btm_acl_created: RemBdAddr: " << bda;
+    BTM_SetLinkPolicy(p->remote_addr, &btm_cb.acl_cb_.btm_def_link_policy);
     return;
   }
 
@@ -1083,6 +1082,7 @@ void btm_read_remote_ext_features_failed(uint8_t status, uint16_t handle) {
  ******************************************************************************/
 void btm_establish_continue(tACL_CONN* p_acl_cb) {
   BTM_TRACE_DEBUG("btm_establish_continue");
+#if (BTM_BYPASS_EXTRA_ACL_SETUP == FALSE)
   if (p_acl_cb->transport == BT_TRANSPORT_BR_EDR) {
     /* For now there are a some devices that do not like sending */
     /* commands events and data at the same time. */
@@ -1093,6 +1093,7 @@ void btm_establish_continue(tACL_CONN* p_acl_cb) {
       BTM_SetLinkPolicy(p_acl_cb->remote_addr,
                         &btm_cb.acl_cb_.btm_def_link_policy);
   }
+#endif
   if (p_acl_cb->link_up_issued) {
     BTM_TRACE_ERROR("%s: Already link is up ", __func__);
     return;
