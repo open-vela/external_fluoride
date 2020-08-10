@@ -35,11 +35,9 @@
 #include "bt_types.h"
 #include "bta_api.h"
 #include "bta_dm_api.h"
-#include "bta_dm_ci.h"
 #include "bta_dm_co.h"
 #include "bta_dm_int.h"
 #include "bta_sys.h"
-#include "btif_dm.h"
 #include "btif_storage.h"
 #include "btm_api.h"
 #include "btm_int.h"
@@ -375,7 +373,7 @@ void BTA_dm_on_hw_on() {
 
   /* load BLE local information: ID keys, ER if available */
   Octet16 er;
-  btif_dm_get_ble_local_keys(&key_mask, &er, &id_key);
+  bta_dm_co_ble_load_local_keys(&key_mask, &er, &id_key);
 
   if (key_mask & BTA_BLE_LOCAL_KEY_TYPE_ER) {
     BTM_BleLoadLocalKeys(BTA_BLE_LOCAL_KEY_TYPE_ER, (tBTM_BLE_LOCAL_KEYS*)&er);
@@ -804,34 +802,6 @@ void bta_dm_pin_reply(std::unique_ptr<tBTA_DM_API_PIN_REPLY> msg) {
   } else {
     BTM_PINCodeReply(msg->bd_addr, BTM_NOT_AUTHORIZED, 0, NULL, trusted_mask);
   }
-}
-
-void BTA_dm_unblock_role_switch_for(const RawAddress& peer_addr) {
-  auto p_dev = bta_dm_find_peer_device(peer_addr);
-  if (!p_dev) {
-    return;
-  }
-  p_dev->link_policy |= HCI_ENABLE_MASTER_SLAVE_SWITCH;
-  BTM_SetLinkPolicy(p_dev->peer_bdaddr, &(p_dev->link_policy));
-}
-
-void BTA_dm_block_role_switch_for(const RawAddress& peer_addr) {
-  auto p_dev = bta_dm_find_peer_device(peer_addr);
-  if (!p_dev) {
-    return;
-  }
-  p_dev->link_policy &= (~HCI_ENABLE_MASTER_SLAVE_SWITCH);
-  BTM_SetLinkPolicy(p_dev->peer_bdaddr, &(p_dev->link_policy));
-}
-
-void BTA_dm_unblock_role_switch() {
-  BTM_SetDefaultLinkPolicy(btm_cb.acl_cb_.btm_def_link_policy |
-                           HCI_ENABLE_MASTER_SLAVE_SWITCH);
-}
-
-void BTA_dm_block_role_switch() {
-  BTM_SetDefaultLinkPolicy(btm_cb.acl_cb_.btm_def_link_policy &
-                           ~HCI_ENABLE_MASTER_SLAVE_SWITCH);
 }
 
 /** Send the user confirm request reply in response to a request from BTM */
@@ -2351,24 +2321,22 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
   APPL_TRACE_EVENT("bta_dm_sp_cback: %d", event);
   if (!bta_dm_cb.p_sec_cback) return BTM_NOT_AUTHORIZED;
 
-  bool sp_rmt_result = false;
   /* TODO_SP */
   switch (event) {
     case BTM_SP_IO_REQ_EVT:
       if (btm_local_io_caps != BTM_IO_CAP_NONE) {
         /* translate auth_req */
-        btif_dm_set_oob_for_io_req(&p_data->io_req.oob_data);
-        btif_dm_proc_io_req(p_data->io_req.bd_addr, &p_data->io_req.io_cap,
-                            &p_data->io_req.oob_data, &p_data->io_req.auth_req,
-                            p_data->io_req.is_orig);
+        bta_dm_co_io_req(p_data->io_req.bd_addr, &p_data->io_req.io_cap,
+                         &p_data->io_req.oob_data, &p_data->io_req.auth_req,
+                         p_data->io_req.is_orig);
       }
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
       break;
     case BTM_SP_IO_RSP_EVT:
       if (btm_local_io_caps != BTM_IO_CAP_NONE) {
-        btif_dm_proc_io_rsp(p_data->io_rsp.bd_addr, p_data->io_rsp.io_cap,
-                            p_data->io_rsp.oob_data, p_data->io_rsp.auth_req);
+        bta_dm_co_io_rsp(p_data->io_rsp.bd_addr, p_data->io_rsp.io_cap,
+                         p_data->io_rsp.oob_data, p_data->io_rsp.auth_req);
       }
       break;
 
@@ -2455,23 +2423,13 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
       break;
 
     case BTM_SP_LOC_OOB_EVT:
-#ifdef BTIF_DM_OOB_TEST
-      btif_dm_proc_loc_oob((bool)(p_data->loc_oob.status == BTM_SUCCESS),
-                           p_data->loc_oob.c, p_data->loc_oob.r);
-#endif
+      bta_dm_co_loc_oob((bool)(p_data->loc_oob.status == BTM_SUCCESS),
+                        p_data->loc_oob.c, p_data->loc_oob.r);
       break;
 
-    case BTM_SP_RMT_OOB_EVT: {
-      Octet16 c;
-      Octet16 r;
-      sp_rmt_result = false;
-#ifdef BTIF_DM_OOB_TEST
-      sp_rmt_result = btif_dm_proc_rmt_oob(p_data->rmt_oob.bd_addr, &c, &r);
-#endif
-      BTIF_TRACE_DEBUG("bta_dm_ci_rmt_oob: result=%d", sp_rmt_result);
-      bta_dm_ci_rmt_oob(sp_rmt_result, p_data->rmt_oob.bd_addr, c, r);
+    case BTM_SP_RMT_OOB_EVT:
+      bta_dm_co_rmt_oob(p_data->rmt_oob.bd_addr);
       break;
-    }
 
     default:
       status = BTM_NOT_AUTHORIZED;
@@ -2525,7 +2483,7 @@ static void handle_role_change(const RawAddress& bd_addr, uint8_t new_role,
     }
 
     if (need_policy_change) {
-      BTA_dm_block_role_switch_for(p_dev->peer_bdaddr);
+      BTM_block_role_switch_for(p_dev->peer_bdaddr);
     }
   } else {
     /* there's AV no activity on this link and role switch happened
@@ -2556,7 +2514,6 @@ static tBTA_DM_PEER_DEVICE* allocate_device_for(const RawAddress& bd_addr,
     auto device =
         &bta_dm_cb.device_list.peer_device[bta_dm_cb.device_list.count];
     device->peer_bdaddr = bd_addr;
-    device->link_policy = btm_cb.acl_cb_.btm_def_link_policy;
     bta_dm_cb.device_list.count++;
     device->conn_handle = handle;
     if (transport == BT_TRANSPORT_LE) {
@@ -2716,7 +2673,7 @@ static void bta_dm_check_av() {
         /* make master and take away the role switch policy */
         BTM_SwitchRole(p_dev->peer_bdaddr, HCI_ROLE_MASTER);
         /* else either already master or can not switch for some reasons */
-        BTA_dm_block_role_switch_for(p_dev->peer_bdaddr);
+        BTM_block_role_switch_for(p_dev->peer_bdaddr);
         break;
       }
     }
@@ -2886,28 +2843,13 @@ static void bta_dm_remove_sec_dev_entry(const RawAddress& remote_bd_addr) {
  ******************************************************************************/
 static void bta_dm_adjust_roles(bool delay_role_switch) {
   uint8_t i;
-  bool set_master_role = false;
   uint8_t br_count =
       bta_dm_cb.device_list.count - bta_dm_cb.device_list.le_count;
   if (br_count) {
-    /* the configuration is no scatternet
-     * or AV connection exists and there are more than one ACL link */
-    if ((p_bta_dm_rm_cfg[0].cfg == BTA_DM_NO_SCATTERNET) ||
-        (bta_dm_cb.cur_av_count && br_count > 1)) {
-      L2CA_SetDesireRole(HCI_ROLE_MASTER);
-      set_master_role = true;
-    }
-
     for (i = 0; i < bta_dm_cb.device_list.count; i++) {
       if (bta_dm_cb.device_list.peer_device[i].conn_state == BTA_DM_CONNECTED &&
           bta_dm_cb.device_list.peer_device[i].transport ==
               BT_TRANSPORT_BR_EDR) {
-        if (!set_master_role &&
-            (bta_dm_cb.device_list.peer_device[i].pref_role != BTA_ANY_ROLE) &&
-            (p_bta_dm_rm_cfg[0].cfg == BTA_DM_PARTIAL_SCATTERNET)) {
-          L2CA_SetDesireRole(HCI_ROLE_MASTER);
-          set_master_role = true;
-        }
 
         if ((bta_dm_cb.device_list.peer_device[i].pref_role ==
              BTA_MASTER_ROLE_ONLY) ||
@@ -2934,13 +2876,6 @@ static void bta_dm_adjust_roles(bool delay_role_switch) {
         }
       }
     }
-
-    if (!set_master_role) {
-      L2CA_SetDesireRole(L2CAP_DESIRED_LINK_ROLE);
-    }
-
-  } else {
-    L2CA_SetDesireRole(L2CAP_DESIRED_LINK_ROLE);
   }
 }
 
@@ -3533,46 +3468,6 @@ static void bta_dm_observe_cmpl_cb(void* p_result) {
   }
 }
 
-static void ble_io_req(const RawAddress& bd_addr, tBTM_IO_CAP* p_io_cap,
-                       tBTM_OOB_DATA* p_oob_data, tBTM_LE_AUTH_REQ* p_auth_req,
-                       uint8_t* p_max_key_size, tBTA_LE_KEY_TYPE* p_init_key,
-                       tBTA_LE_KEY_TYPE* p_resp_key) {
-  bte_appl_cfg.ble_io_cap = btif_storage_get_local_io_caps_ble();
-
-  /* Retrieve the properties from file system if possible */
-  tBTE_APPL_CFG nv_config;
-  if (btif_dm_get_smp_config(&nv_config)) bte_appl_cfg = nv_config;
-
-  /* *p_auth_req by default is false for devices with NoInputNoOutput; true for
-   * other devices. */
-
-  if (bte_appl_cfg.ble_auth_req)
-    *p_auth_req = bte_appl_cfg.ble_auth_req |
-                  (bte_appl_cfg.ble_auth_req & 0x04) | ((*p_auth_req) & 0x04);
-
-  /* if OOB is not supported, this call-out function does not need to do
-   * anything
-   * otherwise, look for the OOB data associated with the address and set
-   * *p_oob_data accordingly.
-   * If the answer can not be obtained right away,
-   * set *p_oob_data to BTA_OOB_UNKNOWN and call bta_dm_ci_io_req() when the
-   * answer is available.
-   */
-
-  btif_dm_set_oob_for_le_io_req(bd_addr, p_oob_data, p_auth_req);
-
-  if (bte_appl_cfg.ble_io_cap <= 4) *p_io_cap = bte_appl_cfg.ble_io_cap;
-
-  if (bte_appl_cfg.ble_init_key <= BTM_BLE_INITIATOR_KEY_SIZE)
-    *p_init_key = bte_appl_cfg.ble_init_key;
-
-  if (bte_appl_cfg.ble_resp_key <= BTM_BLE_RESPONDER_KEY_SIZE)
-    *p_resp_key = bte_appl_cfg.ble_resp_key;
-
-  if (bte_appl_cfg.ble_max_key_size > 7 && bte_appl_cfg.ble_max_key_size <= 16)
-    *p_max_key_size = bte_appl_cfg.ble_max_key_size;
-}
-
 /*******************************************************************************
  *
  * Function         bta_dm_ble_smp_cback
@@ -3594,11 +3489,13 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
   memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
   switch (event) {
     case BTM_LE_IO_REQ_EVT:
-      ble_io_req(bda, &p_data->io_req.io_cap, &p_data->io_req.oob_data,
-                 &p_data->io_req.auth_req, &p_data->io_req.max_key_size,
-                 &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
+      bta_dm_co_ble_io_req(
+          bda, &p_data->io_req.io_cap, &p_data->io_req.oob_data,
+          &p_data->io_req.auth_req, &p_data->io_req.max_key_size,
+          &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
+
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
