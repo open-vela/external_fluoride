@@ -40,10 +40,17 @@
  ******************************************************************************/
 tBTM_STATUS BTM_SetLinkPolicy(const RawAddress& remote_bda, uint16_t* settings);
 
-void BTM_default_unblock_role_switch();
-void BTM_default_block_role_switch();
-
-void BTM_acl_after_controller_started();
+/*******************************************************************************
+ *
+ * Function         BTM_SetDefaultLinkPolicy
+ *
+ * Description      Set the default value for HCI "Write Policy Set" command
+ *                  to use when an ACL link is created.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_SetDefaultLinkPolicy(uint16_t settings);
 
 /*******************************************************************************
  *
@@ -111,7 +118,9 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role);
  * Function         BTM_SwitchRole
  *
  * Description      This function is called to switch role between master and
- *                  slave.  If role is already set it will do nothing.
+ *                  slave.  If role is already set it will do nothing.  If the
+ *                  command was initiated, the callback function is called upon
+ *                  completion.
  *
  * Returns          BTM_SUCCESS if already in specified role.
  *                  BTM_CMD_STARTED if command issued to controller.
@@ -122,7 +131,8 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role);
  *                                       role switching
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role);
+tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
+                           tBTM_CMPL_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -240,3 +250,9 @@ bool acl_refresh_remote_address(const tBTM_SEC_DEV_REC* p_dev_rec,
                                 const RawAddress& remote_bda,
                                 tBT_TRANSPORT transport, uint8_t rra_type,
                                 const RawAddress& rpa);
+
+void btm_establish_continue_from_address(const RawAddress& remote_bda,
+                                         tBT_TRANSPORT transport);
+
+bool acl_peer_supports_ble_connection_parameters_request(
+    const RawAddress& remote_bda);
