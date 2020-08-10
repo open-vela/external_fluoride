@@ -747,7 +747,6 @@ typedef void(tBTA_DM_ENCRYPT_CBACK)(const RawAddress& bd_addr,
 #define BTA_DM_BLE_SEC_NO_MITM BTM_BLE_SEC_ENCRYPT_NO_MITM
 #define BTA_DM_BLE_SEC_MITM BTM_BLE_SEC_ENCRYPT_MITM
 
-typedef tBTM_BLE_TX_TIME_MS tBTA_DM_BLE_TX_TIME_MS;
 typedef tBTM_BLE_RX_TIME_MS tBTA_DM_BLE_RX_TIME_MS;
 typedef tBTM_BLE_IDLE_TIME_MS tBTA_DM_BLE_IDLE_TIME_MS;
 typedef tBTM_BLE_ENERGY_USED tBTA_DM_BLE_ENERGY_USED;
@@ -768,7 +767,7 @@ typedef uint8_t tBTA_DM_BLE_ADV_INFO_PRESENT;
 typedef uint8_t tBTA_DM_BLE_RSSI_VALUE;
 typedef uint16_t tBTA_DM_BLE_ADV_INFO_TIMESTAMP;
 
-typedef void(tBTA_BLE_ENERGY_INFO_CBACK)(tBTA_DM_BLE_TX_TIME_MS tx_time,
+typedef void(tBTA_BLE_ENERGY_INFO_CBACK)(tBTM_BLE_TX_TIME_MS tx_time,
                                          tBTA_DM_BLE_RX_TIME_MS rx_time,
                                          tBTA_DM_BLE_IDLE_TIME_MS idle_time,
                                          tBTA_DM_BLE_ENERGY_USED energy_used,
