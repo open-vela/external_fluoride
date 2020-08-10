@@ -31,6 +31,11 @@
 #include "osi/include/osi.h"
 #include "utl.h"
 
+void BTA_dm_set_policy(uint8_t policy, const RawAddress& peer_addr);
+void BTA_dm_clear_policy(uint8_t policy, const RawAddress& peer_addr);
+void BTA_dm_set_default_policy(uint8_t app_id);
+void BTA_dm_clear_default_policy(uint8_t app_id);
+
 /*******************************************************************************
  *
  * Function         bta_sys_rm_register
@@ -342,6 +347,69 @@ void bta_sys_chg_ssr_config(uint8_t id, uint8_t app_id, uint16_t max_latency,
   }
 }
 #endif
+/*******************************************************************************
+ *
+ * Function         bta_sys_set_policy
+ *
+ * Description      Called by BTA subsystems to indicate that the given link
+ *                  policy to peer device should be set
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_sys_set_policy(uint8_t id, uint8_t policy,
+                        const RawAddress& peer_addr) {
+  APPL_TRACE_DEBUG("%s: peer %s id:%d policy:0x%x", __func__,
+                   peer_addr.ToString().c_str(), id, policy);
+  BTA_dm_set_policy(policy, peer_addr);
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_sys_clear_policy
+ *
+ * Description      Called by BTA subsystems to indicate that the given link
+ *                  policy to peer device should be clear
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_sys_clear_policy(uint8_t id, uint8_t policy,
+                          const RawAddress& peer_addr) {
+  APPL_TRACE_DEBUG("%s: peer %s id:%d policy:0x%x", __func__,
+                   peer_addr.ToString().c_str(), id, policy);
+  BTA_dm_clear_policy(policy, peer_addr);
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_sys_set_default_policy
+ *
+ * Description      Called by BTA subsystems to indicate that the given default
+ *                  link policy should be set
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_sys_set_default_policy(uint8_t id, uint8_t policy) {
+  APPL_TRACE_DEBUG("%s: id:%d policy:0x%x", __func__, id, policy);
+  BTA_dm_set_default_policy(id);
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_sys_clear_default_policy
+ *
+ * Description      Called by BTA subsystems to indicate that the given default
+ *                  link policy should be clear
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_sys_clear_default_policy(uint8_t id, uint8_t policy) {
+  APPL_TRACE_DEBUG("%s: id:%d policy:0x%x", __func__, id, policy);
+  BTA_dm_clear_default_policy(id);
+}
 
 /*******************************************************************************
  *
