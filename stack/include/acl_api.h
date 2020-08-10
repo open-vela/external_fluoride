@@ -29,28 +29,17 @@
 /*****************************************************************************
  *  ACL CHANNEL MANAGEMENT FUNCTIONS
  ****************************************************************************/
-/*******************************************************************************
- *
- * Function         BTM_SetLinkPolicy
- *
- * Description      Create and send HCI "Write Policy Set" command
- *
- * Returns          BTM_CMD_STARTED if successfully initiated, otherwise error
- *
- ******************************************************************************/
-tBTM_STATUS BTM_SetLinkPolicy(const RawAddress& remote_bda, uint16_t* settings);
+bool BTM_is_sniff_allowed_for(const RawAddress& peer_addr);
 
-/*******************************************************************************
- *
- * Function         BTM_SetDefaultLinkPolicy
- *
- * Description      Set the default value for HCI "Write Policy Set" command
- *                  to use when an ACL link is created.
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTM_SetDefaultLinkPolicy(uint16_t settings);
+void BTM_unblock_sniff_mode_for(const RawAddress& peer_addr);
+void BTM_block_sniff_mode_for(const RawAddress& peer_addr);
+void BTM_unblock_role_switch_for(const RawAddress& peer_addr);
+void BTM_block_role_switch_for(const RawAddress& peer_addr);
+
+void BTM_default_unblock_role_switch();
+void BTM_default_block_role_switch();
+
+void BTM_acl_after_controller_started();
 
 /*******************************************************************************
  *
@@ -253,28 +242,3 @@ void btm_establish_continue_from_address(const RawAddress& remote_bda,
 
 bool acl_peer_supports_ble_connection_parameters_request(
     const RawAddress& remote_bda);
-
-/*******************************************************************************
- *
- * Function         BTM_ReadConnectionAddr
- *
- * Description      Read the local device random address.
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTM_ReadConnectionAddr(const RawAddress& remote_bda,
-                            RawAddress& local_conn_addr,
-                            tBLE_ADDR_TYPE* p_addr_type);
-
-/*******************************************************************************
- *
- * Function         BTM_IsBleConnection
- *
- * Description      This function is called to check if the connection handle
- *                  for an LE link
- *
- * Returns          true if connection is LE link, otherwise false.
- *
- ******************************************************************************/
-bool BTM_IsBleConnection(uint16_t hci_handle);
