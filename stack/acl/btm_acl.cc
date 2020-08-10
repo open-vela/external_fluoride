@@ -328,6 +328,31 @@ void btm_acl_update_conn_addr(uint16_t conn_handle, const RawAddress& address) {
 
 /*******************************************************************************
  *
+ * Function         btm_acl_report_role_change
+ *
+ * Description      This function is called when the local device is deemed
+ *                  to be down. It notifies L2CAP of the failure.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_acl_report_role_change(uint8_t hci_status, const RawAddress* bda) {
+  tBTM_ROLE_SWITCH_CMPL ref_data;
+  BTM_TRACE_DEBUG("btm_acl_report_role_change");
+  if (btm_cb.devcb.p_switch_role_cb &&
+      (bda && btm_cb.devcb.switch_role_ref_data.remote_bd_addr == *bda)) {
+    memcpy(&ref_data, &btm_cb.devcb.switch_role_ref_data,
+           sizeof(tBTM_ROLE_SWITCH_CMPL));
+    ref_data.hci_status = hci_status;
+    (*btm_cb.devcb.p_switch_role_cb)(&ref_data);
+    memset(&btm_cb.devcb.switch_role_ref_data, 0,
+           sizeof(tBTM_ROLE_SWITCH_CMPL));
+    btm_cb.devcb.p_switch_role_cb = NULL;
+  }
+}
+
+/*******************************************************************************
+ *
  * Function         btm_acl_removed
  *
  * Description      This function is called by L2CAP when an ACL connection
@@ -343,6 +368,9 @@ void btm_acl_removed(const RawAddress& bda, tBT_TRANSPORT transport) {
   tACL_CONN* p = btm_bda_to_acl(bda, transport);
   if (p != (tACL_CONN*)NULL) {
     p->in_use = false;
+
+    /* if the disconnected channel has a pending role switch, clear it now */
+    btm_acl_report_role_change(HCI_ERR_NO_CONNECTION, &bda);
 
     /* Only notify if link up has had a chance to be issued */
     if (p->link_up_issued) {
@@ -444,7 +472,9 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role) {
  * Function         BTM_SwitchRole
  *
  * Description      This function is called to switch role between master and
- *                  slave.  If role is already set it will do nothing.
+ *                  slave.  If role is already set it will do nothing.  If the
+ *                  command was initiated, the callback function is called upon
+ *                  completion.
  *
  * Returns          BTM_SUCCESS if already in specified role.
  *                  BTM_CMD_STARTED if command issued to controller.
@@ -456,7 +486,8 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role) {
  *                  BTM_BUSY if the previous command is not completed
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role) {
+tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role,
+                           tBTM_CMPL_CB* p_cb) {
   tACL_CONN* p;
   tBTM_SEC_DEV_REC* p_dev_rec = NULL;
   bool is_sco_active;
@@ -464,12 +495,19 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role) {
   tBTM_PM_MODE pwr_mode;
   tBTM_PM_PWR_MD settings;
 
-  LOG_INFO("%s: peer %s new_role=0x%x", __func__,
-           remote_bd_addr.ToString().c_str(), new_role);
+  LOG_INFO("%s: peer %s new_role=0x%x p_cb=%p p_switch_role_cb=%p", __func__,
+           remote_bd_addr.ToString().c_str(), new_role, p_cb,
+           btm_cb.devcb.p_switch_role_cb);
 
   /* Make sure the local device supports switching */
   if (!controller_get_interface()->supports_master_slave_role_switch())
     return (BTM_MODE_UNSUPPORTED);
+
+  if (btm_cb.devcb.p_switch_role_cb && p_cb) {
+    VLOG(2) << "Role switch on other device is in progress "
+            << btm_cb.devcb.switch_role_ref_data.remote_bd_addr;
+    return (BTM_BUSY);
+  }
 
   p = btm_bda_to_acl(remote_bd_addr, BT_TRANSPORT_BR_EDR);
   if (p == NULL) return (BTM_UNKNOWN_ADDR);
@@ -532,6 +570,14 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role) {
     }
   }
 
+  /* Initialize return structure in case request fails */
+  if (p_cb) {
+    btm_cb.devcb.switch_role_ref_data.remote_bd_addr = remote_bd_addr;
+    btm_cb.devcb.switch_role_ref_data.role = new_role;
+    /* initialized to an error code */
+    btm_cb.devcb.switch_role_ref_data.hci_status = HCI_ERR_UNSUPPORTED_VALUE;
+    btm_cb.devcb.p_switch_role_cb = p_cb;
+  }
   return (BTM_CMD_STARTED);
 }
 
@@ -586,6 +632,7 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
     p->encrypt_state = BTM_ACL_ENCRYPT_STATE_IDLE;
     auto new_role = btm_cb.devcb.switch_role_ref_data.role;
     auto hci_status = btm_cb.devcb.switch_role_ref_data.hci_status;
+    btm_acl_report_role_change(hci_status, &p->remote_addr);
     BTA_dm_report_role_change(btm_cb.devcb.switch_role_ref_data.remote_bd_addr,
                               new_role, hci_status);
 
@@ -1035,7 +1082,6 @@ void btm_read_remote_ext_features_failed(uint8_t status, uint16_t handle) {
  ******************************************************************************/
 void btm_establish_continue(tACL_CONN* p_acl_cb) {
   BTM_TRACE_DEBUG("btm_establish_continue");
-#if (BTM_BYPASS_EXTRA_ACL_SETUP == FALSE)
   if (p_acl_cb->transport == BT_TRANSPORT_BR_EDR) {
     /* For now there are a some devices that do not like sending */
     /* commands events and data at the same time. */
@@ -1046,7 +1092,6 @@ void btm_establish_continue(tACL_CONN* p_acl_cb) {
       BTM_SetLinkPolicy(p_acl_cb->remote_addr,
                         &btm_cb.acl_cb_.btm_def_link_policy);
   }
-#endif
   if (p_acl_cb->link_up_issued) {
     BTM_TRACE_ERROR("%s: Already link is up ", __func__);
     return;
@@ -1310,6 +1355,9 @@ void btm_acl_role_changed(uint8_t hci_status, const RawAddress* bd_addr,
                   hci_status, new_role);
   /* Ignore any stray events */
   if (p == NULL) {
+    /* it could be a failure */
+    if (hci_status != HCI_SUCCESS)
+      btm_acl_report_role_change(hci_status, bd_addr);
     return;
   }
 
@@ -1350,6 +1398,8 @@ void btm_acl_role_changed(uint8_t hci_status, const RawAddress* bd_addr,
     p->encrypt_state = BTM_ACL_ENCRYPT_STATE_IDLE;
   }
 
+  /* if role switch complete is needed, report it now */
+  btm_acl_report_role_change(hci_status, bd_addr);
   BTA_dm_report_role_change(*p_bda, new_role, hci_status);
 
   BTM_TRACE_DEBUG(
