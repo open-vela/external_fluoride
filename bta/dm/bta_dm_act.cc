@@ -387,8 +387,6 @@ void BTA_dm_on_hw_on() {
   BTM_SecRegister(&bta_security);
   BTM_SetDefaultLinkSuperTout(p_bta_dm_cfg->link_timeout);
   BTM_WritePageTimeout(p_bta_dm_cfg->page_timeout);
-  bta_dm_cb.cur_policy = p_bta_dm_cfg->policy_settings;
-  BTM_SetDefaultLinkPolicy(bta_dm_cb.cur_policy);
 
 #if (BLE_VND_INCLUDED == TRUE)
   BTM_BleReadControllerFeatures(bta_dm_ctrl_features_rd_cmpl_cback);
@@ -738,6 +736,27 @@ void bta_dm_close_acl(const RawAddress& bd_addr, bool remove_dev,
   /* otherwise, no action needed */
 }
 
+// TODO: this is unused. remove?
+/** This function forces to close all the ACL links specified by link type */
+void bta_dm_remove_all_acl(const tBTA_DM_LINK_TYPE link_type) {
+  tBT_TRANSPORT transport = BT_TRANSPORT_BR_EDR;
+
+  APPL_TRACE_DEBUG("%s link type = %d", __func__, link_type);
+
+  for (uint8_t i = 0; i < bta_dm_cb.device_list.count; i++) {
+    transport = bta_dm_cb.device_list.peer_device[i].transport;
+    if ((link_type == BTA_DM_LINK_TYPE_ALL) ||
+        ((link_type == BTA_DM_LINK_TYPE_LE) &&
+         (transport == BT_TRANSPORT_LE)) ||
+        ((link_type == BTA_DM_LINK_TYPE_BR_EDR) &&
+         (transport == BT_TRANSPORT_BR_EDR))) {
+      /* Disconnect the ACL link */
+      btm_remove_acl(bta_dm_cb.device_list.peer_device[i].peer_bdaddr,
+                     transport);
+    }
+  }
+}
+
 /** Bonds with peer device */
 void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
                  tBTA_TRANSPORT transport, int device_type) {
@@ -825,13 +844,13 @@ void BTA_dm_block_role_switch_for(const RawAddress& peer_addr) {
 }
 
 void BTA_dm_unblock_role_switch() {
-  bta_dm_cb.cur_policy |= HCI_ENABLE_MASTER_SLAVE_SWITCH;
-  BTM_SetDefaultLinkPolicy(bta_dm_cb.cur_policy);
+  BTM_SetDefaultLinkPolicy(btm_cb.acl_cb_.btm_def_link_policy |
+                           HCI_ENABLE_MASTER_SLAVE_SWITCH);
 }
 
 void BTA_dm_block_role_switch() {
-  bta_dm_cb.cur_policy &= ~HCI_ENABLE_MASTER_SLAVE_SWITCH;
-  BTM_SetDefaultLinkPolicy(bta_dm_cb.cur_policy);
+  BTM_SetDefaultLinkPolicy(btm_cb.acl_cb_.btm_def_link_policy &
+                           ~HCI_ENABLE_MASTER_SLAVE_SWITCH);
 }
 
 /** Send the user confirm request reply in response to a request from BTM */
@@ -2552,7 +2571,7 @@ static tBTA_DM_PEER_DEVICE* allocate_device_for(const RawAddress& bd_addr,
     auto device =
         &bta_dm_cb.device_list.peer_device[bta_dm_cb.device_list.count];
     device->peer_bdaddr = bd_addr;
-    device->link_policy = bta_dm_cb.cur_policy;
+    device->link_policy = btm_cb.acl_cb_.btm_def_link_policy;
     bta_dm_cb.device_list.count++;
     device->conn_handle = handle;
     if (transport == BT_TRANSPORT_LE) {
@@ -3596,16 +3615,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
 
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
