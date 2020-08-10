@@ -41,7 +41,6 @@
 #include "utl.h"
 
 
-void BTA_dm_on_hw_on();
 void BTA_dm_on_hw_error();
 void BTA_dm_on_hw_off();
 
@@ -88,25 +87,12 @@ static void bta_sys_sm_execute(tBTA_SYS_HW_EVT event) {
   switch (bta_sys_cb.state) {
     case BTA_SYS_HW_OFF:
       switch (event) {
-        case BTA_SYS_EVT_STACK_ENABLED_EVT:
-          bta_sys_set_state(BTA_SYS_HW_ON);
-          break;
-        case BTA_SYS_API_DISABLE_EVT:
-          BTA_dm_on_hw_off();
-          break;
         default:
           break;
       }
       break;
     case BTA_SYS_HW_STARTING:
       switch (event) {
-        case BTA_SYS_EVT_STACK_ENABLED_EVT:
-          bta_sys_set_state(BTA_SYS_HW_ON);
-          BTA_dm_on_hw_on();
-          break;
-        case BTA_SYS_API_DISABLE_EVT:
-          bta_sys_set_state(BTA_SYS_HW_STOPPING);
-          break;
         case BTA_SYS_ERROR_EVT:
           bta_sys_set_state(BTA_SYS_HW_ON);
           bta_sys_hw_error();
@@ -117,9 +103,6 @@ static void bta_sys_sm_execute(tBTA_SYS_HW_EVT event) {
       break;
     case BTA_SYS_HW_ON:
       switch (event) {
-        case BTA_SYS_API_DISABLE_EVT:
-          bta_sys_hw_api_disable();
-          break;
         case BTA_SYS_ERROR_EVT:
           bta_sys_hw_error();
           break;
@@ -129,10 +112,6 @@ static void bta_sys_sm_execute(tBTA_SYS_HW_EVT event) {
       break;
     case BTA_SYS_HW_STOPPING:
       switch (event) {
-        case BTA_SYS_EVT_STACK_ENABLED_EVT:
-          BTA_dm_on_hw_on();
-          bta_sys_hw_api_disable();
-          break;
         case BTA_SYS_ERROR_EVT:
           bta_sys_hw_api_disable();
           break;
