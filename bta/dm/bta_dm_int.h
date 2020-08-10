@@ -216,6 +216,7 @@ typedef uint8_t tBTA_DM_PM_REQ;
 
 typedef struct {
   RawAddress peer_bdaddr;
+  uint16_t link_policy;
   tBTA_DM_CONN_STATE conn_state;
   tBTA_PREF_ROLES pref_role;
   bool in_use;
@@ -387,6 +388,8 @@ enum {
 
 typedef struct {
   DEV_CLASS dev_class; /* local device class */
+  uint16_t
+      policy_settings;   /* link policy setting hold, sniff, park, MS switch */
   uint16_t page_timeout; /* timeout for page in slots */
   uint16_t link_timeout; /* link supervision timeout in slots */
   bool avoid_scatter; /* true to avoid scatternet when av is streaming (be the
