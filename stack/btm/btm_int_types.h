@@ -124,6 +124,9 @@ typedef struct {
 
   tBTM_IO_CAP loc_io_caps;      /* IO capability of the local device */
   tBTM_AUTH_REQ loc_auth_req;   /* the auth_req flag  */
+  bool secure_connections_only; /* Rejects service level 0 connections if */
+                                /* itself or peer device doesn't support */
+                                /* secure connections */
 } tBTM_DEVCB;
 
 /* Define the structures and constants used for inquiry
@@ -231,6 +234,13 @@ typedef struct {
 */
 
 #define BTM_SEC_INVALID_HANDLE 0xFFFF
+
+/* Security callback is called by this unit when security
+ *   procedures are completed.  Parameters are
+ *              BD Address of remote
+ *              Result of the operation
+*/
+typedef tBTM_SEC_CBACK tBTM_SEC_CALLBACK;
 
 typedef void(tBTM_SCO_IND_CBACK)(uint16_t sco_inx);
 
@@ -359,11 +369,12 @@ typedef struct {
   uint8_t resolving_list_index;
 #if (BLE_PRIVACY_SPT == TRUE)
   RawAddress cur_rand_addr; /* current random address */
-  uint8_t active_addr_type;
-#endif
+
 #define BTM_BLE_ADDR_PSEUDO 0 /* address index device record */
 #define BTM_BLE_ADDR_RRA 1    /* cur_rand_addr */
 #define BTM_BLE_ADDR_STATIC 2 /* static_addr  */
+  uint8_t active_addr_type;
+#endif
 
   tBTM_LE_KEY_TYPE key_type; /* bit mask of valid key types in record */
   tBTM_SEC_BLE_KEYS keys;    /* LE device security info in slave rode */
@@ -596,6 +607,8 @@ typedef struct {
   tBT_TRANSPORT transport;
   tBTM_BLE_SEC_ACT sec_act;
 } tBTM_SEC_QUEUE_ENTRY;
+
+typedef bool CONNECTION_TYPE;
 
 // Bluetooth Quality Report - Report receiver
 typedef void(tBTM_BT_QUALITY_REPORT_RECEIVER)(uint8_t len, uint8_t* p_stream);
