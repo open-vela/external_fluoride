@@ -515,8 +515,7 @@ bt_status_t btif_dut_mode_configure(uint8_t enable) {
   if (enable == 1) {
     BTA_EnableTestMode();
   } else {
-    // Can't do in process reset anyways - just quit
-    kill(getpid(), SIGKILL);
+    BTA_DisableTestMode();
   }
   return BT_STATUS_SUCCESS;
 }
