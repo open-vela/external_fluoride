@@ -54,7 +54,6 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2786,13 +2785,6 @@ void btm_io_capabilities_req(const RawAddress& p) {
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
 
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
@@ -4162,8 +4154,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -5327,42 +5318,6 @@ static bool btm_sec_queue_encrypt_request(const RawAddress& bd_addr,
   fixed_queue_enqueue(btm_cb.sec_pending_q, p_e);
 
   return true;
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_set_peer_sec_caps
- *
- * Description      This function is called to set sm4 and rmt_sec_caps fields
- *                  based on the available peer device features.
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_sec_set_peer_sec_caps(tACL_CONN* p_acl_cb,
-                               tBTM_SEC_DEV_REC* p_dev_rec) {
-  if ((btm_cb.security_mode == BTM_SEC_MODE_SP ||
-       btm_cb.security_mode == BTM_SEC_MODE_SC) &&
-      HCI_SSP_HOST_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[1])) {
-    p_dev_rec->sm4 = BTM_SM4_TRUE;
-    p_dev_rec->remote_supports_secure_connections =
-        (HCI_SC_HOST_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[1]));
-  } else {
-    p_dev_rec->sm4 = BTM_SM4_KNOWN;
-    p_dev_rec->remote_supports_secure_connections = false;
-  }
-
-  BTM_TRACE_API("%s: sm4: 0x%02x, rmt_support_for_secure_connections %d",
-                __func__, p_dev_rec->sm4,
-                p_dev_rec->remote_supports_secure_connections);
-
-  if (p_dev_rec->remote_features_needed) {
-    BTM_TRACE_EVENT(
-        "%s: Now device in SC Only mode, waiting for peer remote features!",
-        __func__);
-    btm_io_capabilities_req(p_dev_rec->bd_addr);
-    p_dev_rec->remote_features_needed = false;
-  }
 }
 
 /*******************************************************************************
