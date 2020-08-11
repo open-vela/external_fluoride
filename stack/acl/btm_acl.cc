@@ -64,6 +64,7 @@ void btm_io_capabilities_req(const RawAddress& p);
 
 static void btm_acl_chk_peer_pkt_type_support(tACL_CONN* p,
                                               uint16_t* p_pkt_type);
+static void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec);
 static void btm_establish_continue(tACL_CONN* p_acl_cb);
 static void btm_pm_sm_alloc(uint8_t ind);
 static void btm_read_automatic_flush_timeout_timeout(void* data);
@@ -1233,6 +1234,19 @@ bool BTM_IsAclConnectionUp(const RawAddress& remote_bda,
   return (false);
 }
 
+bool BTM_IsAclConnectionUpAndHandleValid(const RawAddress& remote_bda,
+                                         tBT_TRANSPORT transport) {
+  tACL_CONN* p_acl = btm_bda_to_acl(remote_bda, transport);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  return p_acl->hci_handle != HCI_INVALID_HANDLE;
+}
+
+bool BTM_IsAclConnectionUpFromHandle(uint16_t hci_handle) {
+  return acl_get_connection_from_handle(hci_handle) != nullptr;
+}
+
 /*******************************************************************************
  *
  * Function         BTM_GetNumAclLinks
@@ -1276,7 +1290,7 @@ uint16_t btm_get_acl_disc_reason_code(void) {
  * Description      This function is called to get the handle for an ACL
  *                  connection to a specific remote BD Address.
  *
- * Returns          the handle of the connection, or 0xFFFF if none.
+ * Returns          the handle of the connection, or HCI_INVALID_HANDLE if none.
  *
  ******************************************************************************/
 uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
@@ -1293,7 +1307,7 @@ uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
   }
 
   /* If here, no BD Addr found */
-  return (0xFFFF);
+  return HCI_INVALID_HANDLE;
 }
 
 /*******************************************************************************
@@ -2185,7 +2199,7 @@ tBTM_STATUS btm_remove_acl(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
   } else /* otherwise can disconnect right away */
 #endif
   {
-    if (hci_handle != 0xFFFF && p_dev_rec &&
+    if (hci_handle != HCI_INVALID_HANDLE && p_dev_rec &&
         p_dev_rec->sec_state != BTM_SEC_STATE_DISCONNECTING) {
       btsnd_hcic_disconnect(hci_handle, HCI_ERR_PEER_USER);
     } else {
@@ -2224,8 +2238,7 @@ uint8_t BTM_SetTraceLevel(uint8_t new_level) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec,
-                      UNUSED_ATTR uint8_t hci_status) {
+void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec) {
   BTM_TRACE_DEBUG("btm_cont_rswitch");
   /* Check to see if encryption needs to be turned off if pending
      change of link key or role switch */
@@ -2261,7 +2274,7 @@ void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
     BTM_TRACE_ERROR("%s role switch received but with no active ACL", __func__);
     return;
   }
-  btm_cont_rswitch(p_acl, btm_find_dev(p_acl->remote_addr), 0);
+  btm_cont_rswitch(p_acl, btm_find_dev(p_acl->remote_addr));
 }
 
 /*******************************************************************************
@@ -2644,4 +2657,90 @@ void btm_sec_set_peer_sec_caps(tACL_CONN* p_acl_cb,
     btm_io_capabilities_req(p_dev_rec->bd_addr);
     p_dev_rec->remote_features_needed = false;
   }
+}
+
+bool sco_peer_supports_esco_2m_phy(uint16_t hci_handle) {
+  tACL_CONN* p_acl = acl_get_connection_from_handle(hci_handle);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  return HCI_EDR_ESCO_2MPS_SUPPORTED(p_acl->peer_lmp_feature_pages[0]);
+}
+
+bool sco_peer_supports_esco_3m_phy(uint16_t hci_handle) {
+  tACL_CONN* p_acl = acl_get_connection_from_handle(hci_handle);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  return HCI_EDR_ESCO_3MPS_SUPPORTED(p_acl->peer_lmp_feature_pages[0]);
+}
+
+bool acl_is_switch_role_idle(const RawAddress& bd_addr,
+                             tBT_TRANSPORT transport) {
+  tACL_CONN* p_acl = btm_bda_to_acl(bd_addr, transport);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  return p_acl->switch_role_state == BTM_ACL_SWKEY_STATE_IDLE;
+}
+
+/*******************************************************************************
+ *
+ * Function       BTM_ReadRemoteConnectionAddr
+ *
+ * Description    This function is read the remote device address currently used
+ *
+ * Parameters     pseudo_addr: pseudo random address available
+ *                conn_addr:connection address used
+ *                p_addr_type : BD Address type, Public or Random of the address
+ *                              used
+ *
+ * Returns        bool, true if connection to remote device exists, else false
+ *
+ ******************************************************************************/
+bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr,
+                                  RawAddress& conn_addr,
+                                  tBLE_ADDR_TYPE* p_addr_type) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::BTM_ReadRemoteConnectionAddr(pseudo_addr, conn_addr,
+                                                         p_addr_type);
+  }
+  bool st = true;
+#if (BLE_PRIVACY_SPT == TRUE)
+  tACL_CONN* p_acl = btm_bda_to_acl(pseudo_addr, BT_TRANSPORT_LE);
+
+  if (p_acl == NULL) {
+    BTM_TRACE_ERROR(
+        "BTM_ReadRemoteConnectionAddr can not find connection"
+        " with matching address");
+    return false;
+  }
+
+  conn_addr = p_acl->active_remote_addr;
+  *p_addr_type = p_acl->active_remote_addr_type;
+#else
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(pseudo_addr);
+
+  conn_addr = pseudo_addr;
+  if (p_dev_rec != NULL) {
+    *p_addr_type = p_dev_rec->ble.ble_addr_type;
+  }
+#endif
+  return st;
+}
+
+uint8_t acl_link_role(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
+  tACL_CONN* p_acl = btm_bda_to_acl(bd_addr, transport);
+  if (p_acl == nullptr) {
+    return HCI_ROLE_UNKNOWN;
+  }
+  return p_acl->link_role;
+}
+
+bool acl_is_transport_le_from_handle(uint16_t handle) {
+  tACL_CONN* p_acl = acl_get_connection_from_handle(handle);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  return p_acl->transport == BT_TRANSPORT_LE;
 }

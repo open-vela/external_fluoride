@@ -534,7 +534,6 @@ typedef void(tBTM_INQ_RESULTS_CB)(tBTM_INQ_RESULTS* p_inq_results,
 
 /* Define an invalid SCO index and an invalid HCI handle */
 #define BTM_INVALID_SCO_INDEX 0xFFFF
-#define BTM_INVALID_HCI_HANDLE 0xFFFF
 
 /* Define an invalid SCO disconnect reason */
 #define BTM_INVALID_SCO_DISC_REASON 0xFFFF
@@ -1027,7 +1026,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
