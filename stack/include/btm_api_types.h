@@ -645,12 +645,8 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
  *******************************/
 
 /* Security Mode (BTM_SetSecurityMode) */
-#define BTM_SEC_MODE_UNDEFINED 0
-#define BTM_SEC_MODE_NONE 1
 #define BTM_SEC_MODE_SERVICE 2
-#define BTM_SEC_MODE_LINK 3
 #define BTM_SEC_MODE_SP 4
-#define BTM_SEC_MODE_SP_DEBUG 5
 #define BTM_SEC_MODE_SC 6
 
 /* Security Service Levels [bit mask] (BTM_SetSecurityLevel)
@@ -1031,7 +1027,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
