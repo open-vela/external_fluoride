@@ -27,12 +27,14 @@
 #include <string.h>
 
 #include <base/bind.h>
+#include <base/callback.h>
 
 #include "bta_gatt_api.h"
 #include "bta_gatt_queue.h"
 #include "bta_hh_co.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
+#include "btm_int.h"
 #include "device/include/interop.h"
 #include "osi/include/log.h"
 #include "srvc_api.h"
@@ -47,6 +49,9 @@ using std::vector;
 #endif
 
 #define BTA_HH_APP_ID_LE 0xff
+
+#define BTA_HH_LE_RPT_TYPE_VALID(x) \
+  ((x) <= BTA_LE_HID_RPT_FEATURE && (x) >= BTA_LE_HID_RPT_INPUT)
 
 #define BTA_HH_LE_PROTO_BOOT_MODE 0x00
 #define BTA_HH_LE_PROTO_REPORT_MODE 0x01
@@ -1073,11 +1078,16 @@ void bta_hh_clear_service_cache(tBTA_HH_DEV_CB* p_cb) {
 void bta_hh_start_security(tBTA_HH_DEV_CB* p_cb,
                            UNUSED_ATTR tBTA_HH_DATA* p_buf) {
   uint8_t sec_flag = 0;
+  tBTM_SEC_DEV_REC* p_dev_rec;
 
-  if (BTM_SecIsSecurityPending(p_cb->addr)) {
-    /* if security collision happened, wait for encryption done */
-    p_cb->security_pending = true;
-    return;
+  p_dev_rec = btm_find_dev(p_cb->addr);
+  if (p_dev_rec) {
+    if (p_dev_rec->sec_state == BTM_SEC_STATE_ENCRYPTING ||
+        p_dev_rec->sec_state == BTM_SEC_STATE_AUTHENTICATING) {
+      /* if security collision happened, wait for encryption done */
+      p_cb->security_pending = true;
+      return;
+    }
   }
 
   /* verify bond */

@@ -35,6 +35,7 @@
 
 #include "bt_common.h"
 #include "bta_gattc_int.h"
+#include "bta_sys.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
 #include "btm_int.h"
