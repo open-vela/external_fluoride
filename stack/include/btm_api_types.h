@@ -1031,7 +1031,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
@@ -1279,5 +1278,8 @@ typedef struct {
 #define BTM_CONTRL_IDLE 3
 
 typedef uint8_t tBTM_CONTRL_STATE;
+
+// Bluetooth Quality Report - Report receiver
+typedef void(tBTM_BT_QUALITY_REPORT_RECEIVER)(uint8_t len, uint8_t* p_stream);
 
 #endif  // BTM_API_TYPES_H
