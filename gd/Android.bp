@@ -285,7 +285,6 @@ cc_test {
         ":BluetoothCommonTestSources",
         ":BluetoothCryptoToolboxTestSources",
         ":BluetoothDumpsysTestSources",
-        ":BluetoothHalTestSources",
         ":BluetoothHciTestSources",
         ":BluetoothL2capTestSources",
         ":BluetoothNeighborTestSources",
