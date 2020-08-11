@@ -54,7 +54,6 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -100,7 +99,6 @@ static bool btm_dev_encrypted(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_dev_authorized(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_serv_trusted(tBTM_SEC_DEV_REC* p_dev_rec,
                              tBTM_SEC_SERV_REC* p_serv_rec);
-static bool btm_sec_is_serv_level0(uint16_t psm);
 static uint16_t btm_sec_set_serv_level4_flags(uint16_t cur_security,
                                               bool is_originator);
 
@@ -1686,8 +1684,7 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
   }
 
   /* Services level0 by default have no security */
-  if ((btm_sec_is_serv_level0(psm)) &&
-      (!btm_cb.devcb.secure_connections_only)) {
+  if (psm == BT_PSM_SDP) {
     (*p_callback)(&bd_addr, transport, p_ref_data, BTM_SUCCESS_NO_SECURITY);
     return (BTM_SUCCESS);
   }
@@ -2023,8 +2020,7 @@ tBTM_STATUS btm_sec_mx_access_request(const RawAddress& bd_addr, uint16_t psm,
     return BTM_NO_RESOURCES;
   }
 
-  if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
-      (!btm_sec_is_serv_level0(psm))) {
+  if ((btm_cb.security_mode == BTM_SEC_MODE_SC) && (psm == BT_PSM_SDP)) {
     security_required = btm_sec_set_serv_level4_flags(
         p_serv_rec->security_flags, is_originator);
   } else {
@@ -2831,13 +2827,6 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
 
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
@@ -4211,8 +4200,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -5416,24 +5404,6 @@ void btm_sec_set_peer_sec_caps(tACL_CONN* p_acl_cb,
     btm_io_capabilities_req(p_dev_rec->bd_addr);
     p_dev_rec->remote_features_needed = false;
   }
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_is_serv_level0
- *
- * Description      This function is called to check if the service
- *                  corresponding to PSM is security mode 4 level 0 service.
- *
- * Returns          true if the service is security mode 4 level 0 service
- *
- ******************************************************************************/
-static bool btm_sec_is_serv_level0(uint16_t psm) {
-  if (psm == BT_PSM_SDP) {
-    BTM_TRACE_DEBUG("%s: PSM: 0x%04x -> mode 4 level 0 service", __func__, psm);
-    return true;
-  }
-  return false;
 }
 
 /*******************************************************************************
