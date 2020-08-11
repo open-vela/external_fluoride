@@ -95,9 +95,21 @@ void AVDT_Register(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback) {
 
   /* set security level */
   BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask,
-                       AVDT_PSM, 0, 0);
+                       AVDT_PSM, BTM_SEC_PROTO_AVDT, AVDT_CHAN_SIG);
   BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask,
-                       AVDT_PSM, 0, 0);
+                       AVDT_PSM, BTM_SEC_PROTO_AVDT, AVDT_CHAN_SIG);
+
+  /* do not use security on the media channel */
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP_NOSEC, BTM_SEC_NONE,
+                       AVDT_PSM, BTM_SEC_PROTO_AVDT, AVDT_CHAN_MEDIA);
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_AVDTP_NOSEC, BTM_SEC_NONE,
+                       AVDT_PSM, BTM_SEC_PROTO_AVDT, AVDT_CHAN_MEDIA);
+
+  /* do not use security on the reporting channel */
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP_NOSEC, BTM_SEC_NONE,
+                       AVDT_PSM, BTM_SEC_PROTO_AVDT, AVDT_CHAN_REPORT);
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_AVDTP_NOSEC, BTM_SEC_NONE,
+                       AVDT_PSM, BTM_SEC_PROTO_AVDT, AVDT_CHAN_REPORT);
 
   /* initialize AVDTP data structures */
   avdt_scb_init();
