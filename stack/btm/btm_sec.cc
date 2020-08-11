@@ -54,6 +54,7 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2386,6 +2387,36 @@ void btm_sec_check_pending_reqs(void) {
 
 /*******************************************************************************
  *
+ * Function         btm_sec_init
+ *
+ * Description      This function is on the SEC startup
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_sec_init(uint8_t sec_mode) {
+  btm_cb.security_mode = sec_mode;
+  btm_cb.pairing_bda = RawAddress::kAny;
+}
+
+/*******************************************************************************
+ *
+ * Function         btm_sec_device_down
+ *
+ * Description      This function should be called when device is disabled or
+ *                  turned off
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_sec_device_down(void) {
+  BTM_TRACE_EVENT("%s() State: %s", __func__,
+                  btm_pair_state_descr(btm_cb.pairing_state));
+  btm_sec_change_pairing_state(BTM_PAIR_STATE_IDLE);
+}
+
+/*******************************************************************************
+ *
  * Function         btm_sec_dev_reset
  *
  * Description      This function should be called after device reset
@@ -2789,6 +2820,13 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
+
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
 
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
@@ -4159,7 +4197,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
