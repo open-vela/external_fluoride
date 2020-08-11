@@ -32,6 +32,15 @@
  *  state table
  ****************************************************************************/
 
+/* SYS HW state */
+enum {
+  BTA_SYS_HW_OFF,
+  BTA_SYS_HW_STARTING,
+  BTA_SYS_HW_ON,
+  BTA_SYS_HW_STOPPING
+};
+typedef uint8_t tBTA_SYS_HW_STATE;
+
 /* Collision callback */
 #define MAX_COLLISION_REG 5
 
@@ -44,7 +53,8 @@ typedef struct {
 typedef struct {
   tBTA_SYS_REG* reg[BTA_ID_MAX]; /* registration structures */
   bool is_reg[BTA_ID_MAX];       /* registration structures */
-  bool forward_hw_failures;
+  tBTA_SYS_HW_STATE state;
+  bool bluetooth_active;
   uint16_t sys_features;         /* Bitmask of sys features */
 
   tBTA_SYS_CONN_CBACK* prm_cb; /* role management callback registered by DM */
@@ -71,5 +81,11 @@ typedef struct {
 
 /* system manager control block */
 extern tBTA_SYS_CB bta_sys_cb;
+
+/* functions used for BTA SYS HW state machine */
+void bta_sys_hw_error();
+void bta_sys_hw_api_enable();
+void bta_sys_hw_api_disable();
+void bta_sys_hw_evt_enabled();
 
 #endif /* BTA_SYS_INT_H */

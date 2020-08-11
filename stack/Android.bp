@@ -398,6 +398,42 @@ cc_test {
     ],
 }
 
+// Bluetooth stack message loop tests for target
+// ========================================================
+cc_test {
+    name: "net_test_btu_message_loop",
+    defaults: ["fluoride_defaults"],
+    local_include_dirs: [
+        "include",
+        "btm",
+    ],
+    include_dirs: [
+        "system/bt/",
+        "system/bt/internal_include",
+        "system/bt/btcore/include",
+        "system/bt/bta/include",
+    ],
+    srcs: [
+        "btu/btu_task.cc",
+        "test/stack_btu_test.cc",
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libprotobuf-cpp-lite",
+    ],
+    static_libs: [
+        "libbt-common",
+        "libbluetooth-types",
+        "libgmock",
+        "libosi",
+        "libbt-protos-lite",
+    ],
+    sanitize: {
+        cfi: false,
+    },
+}
+
 // Bluetooth stack connection multiplexing
 // ========================================================
 cc_test {
@@ -429,6 +465,41 @@ cc_test {
     ],
     sanitize: {
         cfi: false,
+    },
+}
+
+cc_test {
+    name: "net_test_stack_gatt_native",
+    defaults: ["fluoride_defaults"],
+    test_suites: ["device-tests"],
+    host_supported: true,
+    include_dirs: [
+        "system/bt",
+        "system/bt/stack/include",
+        "system/bt/stack/l2cap",
+        "system/bt/stack/btm",
+        "system/bt/utils/include",
+    ],
+    srcs: [
+        "test/gatt/gatt_sr_test.cc",
+        "gatt/gatt_utils.cc",
+    ],
+    shared_libs: [
+        "libcutils",
+        "libprotobuf-cpp-lite",
+        "libcrypto",
+    ],
+    static_libs: [
+        "liblog",
+        "libosi",
+        "libbt-common",
+        "libbt-protos-lite",
+        "libosi-AllocationTestHarness",
+    ],
+    sanitize: {
+        address: true,
+        cfi: true,
+        misc_undefined: ["bounds"],
     },
 }
 
