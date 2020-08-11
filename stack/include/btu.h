@@ -52,6 +52,7 @@ void btu_hcif_send_cmd_with_cb(const base::Location& posted_from,
 /* Functions provided by btu_init.cc
  ***********************************
 */
+void btu_init_core(void);
 void btu_free_core(void);
 
 /* Functions provided by btu_task.cc
@@ -65,6 +66,7 @@ bt_status_t do_in_main_thread_delayed(const base::Location& from_here,
                                       base::OnceClosure task,
                                       const base::TimeDelta& delay);
 
+void BTU_StartUp(void);
 void BTU_ShutDown(void);
 
 #endif
