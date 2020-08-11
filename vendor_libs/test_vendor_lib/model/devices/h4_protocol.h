@@ -16,25 +16,33 @@
 
 #pragma once
 
-#include "hci.h"
-#include "hci_packetizer.h"
+#include "hci_protocol.h"
+#include "include/hci.h"
 
 namespace test_vendor_lib {
 namespace hci {
 
-using PacketReadCallback = std::function<void(const std::vector<uint8_t>&)>;
-
-// Implementation of HCI protocol bits common to different transports
-class HciProtocol {
+class H4Protocol : public HciProtocol {
  public:
-  HciProtocol() = default;
-  virtual ~HciProtocol(){};
+  H4Protocol(int fd, PacketReadCallback command_cb, PacketReadCallback event_cb, PacketReadCallback acl_cb,
+             PacketReadCallback sco_cb);
 
-  // Protocol-specific implementation of sending packets.
-  virtual size_t Send(uint8_t type, const uint8_t* data, size_t length) = 0;
+  size_t Send(uint8_t type, const uint8_t* data, size_t length);
 
- protected:
-  static size_t WriteSafely(int fd, const uint8_t* data, size_t length);
+  void OnPacketReady();
+
+  void OnDataReady(int fd);
+
+ private:
+  int uart_fd_;
+
+  PacketReadCallback command_cb_;
+  PacketReadCallback event_cb_;
+  PacketReadCallback acl_cb_;
+  PacketReadCallback sco_cb_;
+
+  hci::PacketType hci_packet_type_{hci::PacketType::UNKNOWN};
+  hci::HciPacketizer hci_packetizer_;
 };
 
 }  // namespace hci

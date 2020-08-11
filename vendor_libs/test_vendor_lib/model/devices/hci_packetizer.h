@@ -19,26 +19,20 @@
 #include <functional>
 #include <vector>
 
-#include "hci.h"
-#include "hci_protocol.h"
+#include "include/hci.h"
 
 namespace test_vendor_lib {
 namespace hci {
 
 using HciPacketReadyCallback = std::function<void(void)>;
-using ClientDisconnectCallback = std::function<void()>;
 
-class H4Packetizer : public HciProtocol {
+class HciPacketizer {
  public:
-  H4Packetizer(int fd, PacketReadCallback command_cb, PacketReadCallback event_cb, PacketReadCallback acl_cb,
-               PacketReadCallback sco_cb, ClientDisconnectCallback disconnect_cb);
+  HciPacketizer(HciPacketReadyCallback packet_cb) : packet_ready_cb_(packet_cb){};
+  void OnDataReady(int fd, hci::PacketType packet_type);
+  const std::vector<uint8_t>& GetPacket() const;
 
-  size_t Send(uint8_t type, const uint8_t* data, size_t length) override;
-
-  void OnPacketReady();
-
-  void OnDataReady(int fd);
-
+ private:
   // 2 bytes for opcode, 1 byte for parameter length (Volume 2, Part E, 5.4.1)
   static constexpr size_t COMMAND_PREAMBLE_SIZE = 3;
   static constexpr size_t COMMAND_LENGTH_OFFSET = 2;
@@ -56,24 +50,18 @@ class H4Packetizer : public HciProtocol {
   static constexpr size_t EVENT_PREAMBLE_SIZE = 2;
   static constexpr size_t EVENT_LENGTH_OFFSET = 1;
 
- private:
-  int uart_fd_;
+  static constexpr size_t PREAMBLE_SIZE_MAX = ACL_PREAMBLE_SIZE;
 
-  PacketReadCallback command_cb_;
-  PacketReadCallback event_cb_;
-  PacketReadCallback acl_cb_;
-  PacketReadCallback sco_cb_;
+  size_t HciGetPacketLengthForType(hci::PacketType type, const uint8_t* preamble);
 
-  ClientDisconnectCallback disconnect_cb_;
-  bool disconnected_{false};
-
-  hci::PacketType hci_packet_type_{hci::PacketType::UNKNOWN};
-
-  enum State { HCI_TYPE, HCI_PREAMBLE, HCI_PAYLOAD };
-  State state_{HCI_TYPE};
-  uint8_t packet_type_{};
+ protected:
+  enum State { HCI_PREAMBLE, HCI_PAYLOAD };
+  State state_{HCI_PREAMBLE};
+  uint8_t preamble_[PREAMBLE_SIZE_MAX]{};
   std::vector<uint8_t> packet_;
+  size_t bytes_remaining_{0};
   size_t bytes_read_{0};
+  HciPacketReadyCallback packet_ready_cb_;
 };
 
 }  // namespace hci
