@@ -370,7 +370,6 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
-#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_ENABLE_EVT */
@@ -996,18 +995,6 @@ extern tBTA_STATUS BTA_DisableBluetooth(void);
  *
  ******************************************************************************/
 extern void BTA_EnableTestMode(void);
-
-/*******************************************************************************
- *
- * Function         BTA_DisableTestMode
- *
- * Description      Disable bluetooth device under test mode
- *
- *
- * Returns          None
- *
- ******************************************************************************/
-extern void BTA_DisableTestMode(void);
 
 /*******************************************************************************
  *
