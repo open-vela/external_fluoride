@@ -126,9 +126,11 @@ uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
 
     /* Register with Security Manager for the specific security level */
     if ((!BTM_SetSecurityLevel(true, p_name, BTM_SEC_SERVICE_BNEP_NAP, sec_mask,
-                               BT_PSM_BNEP, 0, 0)) ||
+                               BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
+                               UUID_SERVCLASS_NAP)) ||
         (!BTM_SetSecurityLevel(false, p_name, BTM_SEC_SERVICE_BNEP_NAP,
-                               sec_mask, BT_PSM_BNEP, 0, 0))) {
+                               sec_mask, BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
+                               UUID_SERVCLASS_NAP))) {
       PAN_TRACE_ERROR("PAN Security Registration failed for PANU");
     }
   }
@@ -136,9 +138,11 @@ uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
 #if (PAN_SUPPORTS_ROLE_GN == TRUE)
   if (uuid == UUID_SERVCLASS_GN) {
     if ((!BTM_SetSecurityLevel(true, p_name, BTM_SEC_SERVICE_BNEP_GN, sec_mask,
-                               BT_PSM_BNEP, 0, 0)) ||
+                               BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
+                               UUID_SERVCLASS_GN)) ||
         (!BTM_SetSecurityLevel(false, p_name, BTM_SEC_SERVICE_BNEP_GN, sec_mask,
-                               BT_PSM_BNEP, 0, 0))) {
+                               BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
+                               UUID_SERVCLASS_GN))) {
       PAN_TRACE_ERROR("PAN Security Registration failed for GN");
     }
   }
@@ -146,9 +150,11 @@ uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
 #if (PAN_SUPPORTS_ROLE_PANU == TRUE)
   if (uuid == UUID_SERVCLASS_PANU) {
     if ((!BTM_SetSecurityLevel(true, p_name, BTM_SEC_SERVICE_BNEP_PANU,
-                               sec_mask, BT_PSM_BNEP, 0, 0)) ||
+                               sec_mask, BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
+                               UUID_SERVCLASS_PANU)) ||
         (!BTM_SetSecurityLevel(false, p_name, BTM_SEC_SERVICE_BNEP_PANU,
-                               sec_mask, BT_PSM_BNEP, 0, 0))) {
+                               sec_mask, BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
+                               UUID_SERVCLASS_PANU))) {
       PAN_TRACE_ERROR("PAN Security Registration failed for PANU");
     }
   }
