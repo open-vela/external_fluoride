@@ -45,11 +45,6 @@
 
 #define L2CAP_FCS_LENGTH 2
 
-/* ping result codes */
-#define L2CAP_PING_RESULT_OK 0      /* Ping reply received OK     */
-#define L2CAP_PING_RESULT_NO_LINK 1 /* Link could not be setup    */
-#define L2CAP_PING_RESULT_NO_RESP 2 /* Remote L2CAP did not reply */
-
 /* result code for L2CA_DataWrite() */
 #define L2CAP_DW_FAILED false
 #define L2CAP_DW_SUCCESS true
@@ -61,16 +56,12 @@
 
 /* Values for priority parameter to L2CA_SetTxPriority */
 #define L2CAP_CHNL_PRIORITY_HIGH 0
-#define L2CAP_CHNL_PRIORITY_MEDIUM 1
 #define L2CAP_CHNL_PRIORITY_LOW 2
 
 typedef uint8_t tL2CAP_CHNL_PRIORITY;
 
 /* Values for Tx/Rx data rate parameter to L2CA_SetChnlDataRate */
-#define L2CAP_CHNL_DATA_RATE_HIGH 3
-#define L2CAP_CHNL_DATA_RATE_MEDIUM 2
 #define L2CAP_CHNL_DATA_RATE_LOW 1
-#define L2CAP_CHNL_DATA_RATE_NO_TRAFFIC 0
 
 typedef uint8_t tL2CAP_CHNL_DATA_RATE;
 
@@ -85,21 +76,13 @@ typedef uint8_t tL2CAP_CHNL_DATA_RATE;
 #define L2CAP_FLUSH_CHANS_ALL 0xffff
 #define L2CAP_FLUSH_CHANS_GET 0x0000
 
-/* set this bit to allow switch at create conn */
-#define L2CAP_ROLE_ALLOW_SWITCH 0x80
-/* set this bit to disallow switch at create conn */
-#define L2CAP_ROLE_DISALLOW_SWITCH 0x40
-#define L2CAP_ROLE_CHECK_SWITCH 0xC0
-
 /* Values for 'allowed_modes' field passed in structure tL2CAP_ERTM_INFO
  */
 #define L2CAP_FCR_CHAN_OPT_BASIC (1 << L2CAP_FCR_BASIC_MODE)
 #define L2CAP_FCR_CHAN_OPT_ERTM (1 << L2CAP_FCR_ERTM_MODE)
-#define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
 
-#define L2CAP_FCR_CHAN_OPT_ALL_MASK                     \
-  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM | \
-   L2CAP_FCR_CHAN_OPT_STREAM)
+#define L2CAP_FCR_CHAN_OPT_ALL_MASK \
+  (L2CAP_FCR_CHAN_OPT_BASIC | L2CAP_FCR_CHAN_OPT_ERTM)
 
 /* Validity check for PSM.  PSM values must be odd.  Also, all PSM values must
  * be assigned such that the least significant bit of the most sigificant
@@ -149,14 +132,31 @@ typedef struct {
   uint16_t flags; /* bit 0: 0-no continuation, 1-continuation */
 } tL2CAP_CFG_INFO;
 
+/* LE credit based L2CAP connection parameters */
+constexpr uint16_t L2CAP_LE_MIN_MTU = 23;  // Minimum SDU size
+constexpr uint16_t L2CAP_LE_MIN_MPS = 23;
+constexpr uint16_t L2CAP_LE_MAX_MPS = 65533;
+constexpr uint16_t L2CAP_LE_CREDIT_MAX = 65535;
+
+// This is initial amout of credits we send, and amount to which we increase
+// credits once they fall below threshold
+constexpr uint16_t L2CAP_LE_CREDIT_DEFAULT = 0xffff;
+
+// If credit count on remote fall below this value, we send back credits to
+// reach default value.
+constexpr uint16_t L2CAP_LE_CREDIT_THRESHOLD = 0x0040;
+
+static_assert(L2CAP_LE_CREDIT_THRESHOLD < L2CAP_LE_CREDIT_DEFAULT,
+              "Threshold must be smaller than default credits");
+
 /* Define a structure to hold the configuration parameter for LE L2CAP
  * connection oriented channels.
  */
-typedef struct {
+struct tL2CAP_LE_CFG_INFO {
   uint16_t mtu;
   uint16_t mps;
-  uint16_t credits;
-} tL2CAP_LE_CFG_INFO;
+  uint16_t credits = L2CAP_LE_CREDIT_DEFAULT;
+};
 
 /* L2CAP channel configured field bitmap */
 #define L2CAP_CH_CFG_MASK_MTU 0x0001
@@ -164,7 +164,6 @@ typedef struct {
 #define L2CAP_CH_CFG_MASK_FLUSH_TO 0x0004
 #define L2CAP_CH_CFG_MASK_FCR 0x0008
 #define L2CAP_CH_CFG_MASK_FCS 0x0010
-#define L2CAP_CH_CFG_MASK_EXT_FLOW_SPEC 0x0020
 
 typedef uint16_t tL2CAP_CH_CFG_BITS;
 
@@ -186,11 +185,6 @@ typedef void(tL2CA_CONNECT_IND_CB)(const RawAddress&, uint16_t, uint16_t,
  *              Result - 0 = connected, non-zero means failure reason
  */
 typedef void(tL2CA_CONNECT_CFM_CB)(uint16_t, uint16_t);
-
-/* Connection pending callback prototype. Parameters are
- *              Local CID
- */
-typedef void(tL2CA_CONNECT_PND_CB)(uint16_t);
 
 /* Configuration indication callback prototype. Parameters are
  *              Local CID assigned to the connection
@@ -216,23 +210,11 @@ typedef void(tL2CA_DISCONNECT_IND_CB)(uint16_t, bool);
  */
 typedef void(tL2CA_DISCONNECT_CFM_CB)(uint16_t, uint16_t);
 
-/* QOS Violation indication callback prototype. Parameters are
- *              BD Address of violating device
- */
-typedef void(tL2CA_QOS_VIOLATION_IND_CB)(const RawAddress&);
-
 /* Data received indication callback prototype. Parameters are
  *              Local CID
  *              Address of buffer
  */
 typedef void(tL2CA_DATA_IND_CB)(uint16_t, BT_HDR*);
-
-/* Echo response callback prototype. Note that this is not included in the
- * registration information, but is passed to L2CAP as part of the API to
- * actually send an echo request. Parameters are
- *              Result
- */
-typedef void(tL2CA_ECHO_RSP_CB)(uint16_t);
 
 /* Callback function prototype to pass broadcom specific echo response  */
 /* to the upper layer                                                   */
@@ -281,12 +263,10 @@ typedef void(tL2CA_CREDITS_RECEIVED_CB)(uint16_t local_cid,
 typedef struct {
   tL2CA_CONNECT_IND_CB* pL2CA_ConnectInd_Cb;
   tL2CA_CONNECT_CFM_CB* pL2CA_ConnectCfm_Cb;
-  tL2CA_CONNECT_PND_CB* pL2CA_ConnectPnd_Cb;
   tL2CA_CONFIG_IND_CB* pL2CA_ConfigInd_Cb;
   tL2CA_CONFIG_CFM_CB* pL2CA_ConfigCfm_Cb;
   tL2CA_DISCONNECT_IND_CB* pL2CA_DisconnectInd_Cb;
   tL2CA_DISCONNECT_CFM_CB* pL2CA_DisconnectCfm_Cb;
-  tL2CA_QOS_VIOLATION_IND_CB* pL2CA_QoSViolationInd_Cb;
   tL2CA_DATA_IND_CB* pL2CA_DataInd_Cb;
   tL2CA_CONGESTION_STATUS_CB* pL2CA_CongestionStatus_Cb;
   tL2CA_TX_COMPLETE_CB* pL2CA_TxComplete_Cb;
@@ -303,8 +283,13 @@ typedef struct {
   uint16_t user_tx_buf_size;
   uint16_t fcr_rx_buf_size;
   uint16_t fcr_tx_buf_size;
-
 } tL2CAP_ERTM_INFO;
+
+/**
+ * Stack management declarations
+ */
+void l2c_init();
+void l2c_free();
 
 /*****************************************************************************
  *  External Function Declarations
@@ -325,7 +310,8 @@ typedef struct {
  *
  ******************************************************************************/
 extern uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                              bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info);
+                              bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
+                              uint16_t required_mtu);
 
 /*******************************************************************************
  *
@@ -566,11 +552,10 @@ extern bool L2CA_DisconnectRsp(uint16_t cid);
 extern uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
 
 // Given a local channel identifier, |lcid|, this function returns the bound
-// remote channel identifier, |rcid|, and the ACL link handle, |handle|. If
+// remote channel identifier, |rcid|. If
 // |lcid| is not known or is invalid, this function returns false and does not
-// modify the values pointed at by |rcid| and |handle|. |rcid| and |handle| may
-// be NULL.
-bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle);
+// modify the value pointed at by |rcid|. |rcid| may be NULL.
+bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid);
 
 /*******************************************************************************
  *
@@ -623,25 +608,6 @@ extern bool L2CA_SetIdleTimeoutByBdAddr(const RawAddress& bd_addr,
  *
  ******************************************************************************/
 extern uint8_t L2CA_SetTraceLevel(uint8_t trace_level);
-
-/*******************************************************************************
- *
- * Function     L2CA_SetDesireRole
- *
- * Description  This function sets the desire role for L2CAP.
- *              If the new role is L2CAP_ROLE_ALLOW_SWITCH, allow switch on
- *              HciCreateConnection.
- *              If the new role is L2CAP_ROLE_DISALLOW_SWITCH, do not allow
- *              switch on HciCreateConnection.
- *
- *              If the new role is a valid role (HCI_ROLE_MASTER or
- *              HCI_ROLE_SLAVE), the desire role is set to the new value.
- *              Otherwise, it is not changed.
- *
- * Returns      the new (current) role
- *
- ******************************************************************************/
-extern uint8_t L2CA_SetDesireRole(uint8_t new_role);
 
 /*******************************************************************************
  *
@@ -774,7 +740,6 @@ typedef struct {
   tL2CA_FIXED_CHNL_CB* pL2CA_FixedConn_Cb;
   tL2CA_FIXED_DATA_CB* pL2CA_FixedData_Cb;
   tL2CA_FIXED_CONGESTION_STATUS_CB* pL2CA_FixedCong_Cb;
-  tL2CAP_FCR_OPTS fixed_chnl_opts;
 
   uint16_t default_idle_tout;
   tL2CA_TX_COMPLETE_CB*
@@ -945,4 +910,18 @@ extern uint16_t L2CA_GetDisconnectReason(const RawAddress& remote_bda,
 extern void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
                                            uint16_t* max_interval,
                                            uint16_t floor_interval);
+
+/**
+ * Update max fixed channel tx data length if applicable
+ */
+extern void L2CA_SetLeFixedChannelTxDataLength(const RawAddress& remote_bda,
+                                               uint16_t fix_cid,
+                                               uint16_t tx_mtu);
+
+/**
+ * Check whether an ACL or LE link to the remote device is established
+ */
+extern bool L2CA_IsLinkEstablished(const RawAddress& bd_addr,
+                                   tBT_TRANSPORT transport);
+
 #endif /* L2C_API_H */

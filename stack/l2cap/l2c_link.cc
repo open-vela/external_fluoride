@@ -25,16 +25,11 @@
  ******************************************************************************/
 
 #include <base/logging.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "bt_common.h"
 #include "bt_types.h"
-#include "bt_utils.h"
 #include "btm_api.h"
 #include "btm_int.h"
-#include "btu.h"
 #include "device/include/controller.h"
 #include "hcimsgs.h"
 #include "l2c_api.h"
@@ -42,6 +37,7 @@
 #include "l2cdefs.h"
 #include "log/log.h"
 #include "osi/include/osi.h"
+#include "stack/include/acl_api.h"
 
 static bool l2c_link_send_to_lower(tL2C_LCB* p_lcb, BT_HDR* p_buf,
                                    tL2C_TX_COMPLETE_CB_INFO* p_cbi);
@@ -53,10 +49,8 @@ static bool l2c_link_send_to_lower(tL2C_LCB* p_lcb, BT_HDR* p_buf,
  * Description      This function is called when an HCI Connection Request
  *                  event is received.
  *
- * Returns          true, if accept conn
- *
  ******************************************************************************/
-bool l2c_link_hci_conn_req(const RawAddress& bd_addr) {
+void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
   tL2C_LCB* p_lcb;
   tL2C_LCB* p_lcb_cur;
   int xx;
@@ -71,7 +65,7 @@ bool l2c_link_hci_conn_req(const RawAddress& bd_addr) {
     if (!p_lcb) {
       btsnd_hcic_reject_conn(bd_addr, HCI_ERR_HOST_REJECT_RESOURCES);
       L2CAP_TRACE_ERROR("L2CAP failed to allocate LCB");
-      return false;
+      return;
     }
 
     no_links = true;
@@ -92,7 +86,7 @@ bool l2c_link_hci_conn_req(const RawAddress& bd_addr) {
       if (!btm_dev_support_switch(bd_addr))
         p_lcb->link_role = HCI_ROLE_SLAVE;
       else
-        p_lcb->link_role = l2cu_get_conn_role(p_lcb);
+        p_lcb->link_role = HCI_ROLE_MASTER;
     }
 
     /* Tell the other side we accept the connection */
@@ -103,55 +97,44 @@ bool l2c_link_hci_conn_req(const RawAddress& bd_addr) {
     /* Start a timer waiting for connect complete */
     alarm_set_on_mloop(p_lcb->l2c_lcb_timer, L2CAP_LINK_CONNECT_TIMEOUT_MS,
                        l2c_lcb_timer_timeout, p_lcb);
-    return (true);
+    return;
   }
 
-  /* We already had a link control block to the guy. Check what state it is in
+  /* We already had a link control block. Check what state it is in
    */
   if ((p_lcb->link_state == LST_CONNECTING) ||
       (p_lcb->link_state == LST_CONNECT_HOLDING)) {
-    /* Connection collision. Accept the connection anyways. */
-
     if (!btm_dev_support_switch(bd_addr))
       p_lcb->link_role = HCI_ROLE_SLAVE;
     else
-      p_lcb->link_role = l2cu_get_conn_role(p_lcb);
+      p_lcb->link_role = HCI_ROLE_MASTER;
 
     btsnd_hcic_accept_conn(bd_addr, p_lcb->link_role);
 
     p_lcb->link_state = LST_CONNECTING;
-    return (true);
   } else if (p_lcb->link_state == LST_DISCONNECTING) {
-    /* In disconnecting state, reject the connection. */
     btsnd_hcic_reject_conn(bd_addr, HCI_ERR_HOST_REJECT_DEVICE);
   } else {
     L2CAP_TRACE_ERROR(
         "L2CAP got conn_req while connected (state:%d). Reject it",
         p_lcb->link_state);
-    /* Reject the connection with ACL Connection Already exist reason */
     btsnd_hcic_reject_conn(bd_addr, HCI_ERR_CONNECTION_EXISTS);
   }
-  return (false);
 }
 
-/*******************************************************************************
- *
- * Function         l2c_link_hci_conn_comp
- *
- * Description      This function is called when an HCI Connection Complete
- *                  event is received.
- *
- * Returns          void
- *
- ******************************************************************************/
-bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
+void btm_acl_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
+                       uint8_t enc_mode) {
+  btm_sec_connected(bda, handle, status, enc_mode);
+  btm_acl_set_paging(false);
+  l2c_link_hci_conn_comp(status, handle, bda);
+}
+
+void l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
                             const RawAddress& p_bda) {
   tL2C_CONN_INFO ci;
   tL2C_LCB* p_lcb;
   tL2C_CCB* p_ccb;
   tBTM_SEC_DEV_REC* p_dev_info = NULL;
-
-  btm_acl_update_busy_level(BTM_BLI_PAGE_DONE_EVT);
 
   /* Save the parameters */
   ci.status = status;
@@ -166,7 +149,7 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
     p_lcb = l2cu_allocate_lcb(ci.bd_addr, false, BT_TRANSPORT_BR_EDR);
     if (p_lcb == nullptr) {
       L2CAP_TRACE_WARNING("%s: Failed to allocate an LCB", __func__);
-      return (false);
+      return;
     }
     p_lcb->link_state = LST_CONNECTING;
   }
@@ -175,14 +158,14 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
       (status == HCI_ERR_CONNECTION_EXISTS)) {
     L2CAP_TRACE_WARNING("%s: An ACL connection already exists. Handle:%d",
                         __func__, handle);
-    return (true);
+    return;
   } else if (p_lcb->link_state != LST_CONNECTING) {
     L2CAP_TRACE_ERROR("L2CAP got conn_comp in bad state: %d  status: 0x%d",
                       p_lcb->link_state, status);
 
     if (status != HCI_SUCCESS) l2c_link_hci_disc_comp(p_lcb->handle, status);
 
-    return (false);
+    return;
   }
 
   /* Save the handle */
@@ -205,11 +188,11 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
       btm_acl_created(ci.bd_addr, NULL, NULL, handle, p_lcb->link_role,
                       BT_TRANSPORT_BR_EDR);
 
-    BTM_SetLinkSuperTout(ci.bd_addr, btm_cb.btm_def_link_super_tout);
+    BTM_SetLinkSuperTout(ci.bd_addr, btm_cb.acl_cb_.btm_def_link_super_tout);
 
     /* If dedicated bonding do not process any further */
     if (p_lcb->is_bonding) {
-      if (l2cu_start_post_bond_timer(handle)) return (true);
+      if (l2cu_start_post_bond_timer(handle)) return;
     }
 
     /* Update the timeouts in the hold queue */
@@ -223,11 +206,7 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
       l2c_csm_execute(p_ccb, L2CEVT_LP_CONNECT_CFM, &ci);
     }
 
-    if (p_lcb->p_echo_rsp_cb) {
-      l2cu_send_peer_echo_req(p_lcb, NULL, 0);
-      alarm_set_on_mloop(p_lcb->l2c_lcb_timer, L2CAP_ECHO_RSP_TIMEOUT_MS,
-                         l2c_lcb_timer_timeout, p_lcb);
-    } else if (!p_lcb->ccb_queue.p_first_ccb) {
+    if (!p_lcb->ccb_queue.p_first_ccb) {
       uint64_t timeout_ms = L2CAP_LINK_STARTUP_TOUT * 1000;
       alarm_set_on_mloop(p_lcb->l2c_lcb_timer, timeout_ms,
                          l2c_lcb_timer_timeout, p_lcb);
@@ -268,7 +247,7 @@ bool l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
       }
     }
   }
-  return (true);
+  return;
 }
 
 /*******************************************************************************
@@ -366,10 +345,10 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
   } else {
     /* There can be a case when we rejected PIN code authentication */
     /* otherwise save a new reason */
-    if (btm_cb.acl_disc_reason != HCI_ERR_HOST_REJECT_SECURITY)
-      btm_cb.acl_disc_reason = reason;
+    if (btm_cb.acl_cb_.acl_disc_reason != HCI_ERR_HOST_REJECT_SECURITY)
+      btm_cb.acl_cb_.acl_disc_reason = reason;
 
-    p_lcb->disc_reason = btm_cb.acl_disc_reason;
+    p_lcb->disc_reason = btm_cb.acl_cb_.acl_disc_reason;
 
     /* Just in case app decides to try again in the callback context */
     p_lcb->link_state = LST_DISCONNECTING;
@@ -453,8 +432,8 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
         if (l2cu_create_conn_le(p_lcb))
           lcb_is_free = false; /* still using this lcb */
       } else {
-        if (l2cu_create_conn_br_edr(p_lcb))
-          lcb_is_free = false; /* still using this lcb */
+        l2cu_create_conn_br_edr(p_lcb);
+        lcb_is_free = false; /* still using this lcb */
       }
     }
 
@@ -472,35 +451,6 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
   }
 
   return status;
-}
-
-/*******************************************************************************
- *
- * Function         l2c_link_hci_qos_violation
- *
- * Description      This function is called when an HCI QOS Violation
- *                  event is received.
- *
- * Returns          true if the link is known about, else false
- *
- ******************************************************************************/
-bool l2c_link_hci_qos_violation(uint16_t handle) {
-  tL2C_LCB* p_lcb;
-  tL2C_CCB* p_ccb;
-
-  /* See if we have a link control block for the connection */
-  p_lcb = l2cu_find_lcb_by_handle(handle);
-
-  /* If we don't have one, maybe an SCO link. */
-  if (!p_lcb) return (false);
-
-  /* For all channels, tell the upper layer about it */
-  for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb; p_ccb = p_ccb->p_next_ccb) {
-    if (p_ccb->p_rcb->api.pL2CA_QoSViolationInd_Cb)
-      l2c_csm_execute(p_ccb, L2CEVT_LP_QOS_VIOLATION_IND, NULL);
-  }
-
-  return (true);
 }
 
 /*******************************************************************************
@@ -544,28 +494,6 @@ void l2c_link_timeout(tL2C_LCB* p_lcb) {
 
   /* If link is connected, check for inactivity timeout */
   if (p_lcb->link_state == LST_CONNECTED) {
-    /* Check for ping outstanding */
-    if (p_lcb->p_echo_rsp_cb) {
-      tL2CA_ECHO_RSP_CB* p_cb = p_lcb->p_echo_rsp_cb;
-
-      /* Zero out the callback in case app immediately calls us again */
-      p_lcb->p_echo_rsp_cb = NULL;
-
-      (*p_cb)(L2CAP_PING_RESULT_NO_RESP);
-
-      L2CAP_TRACE_WARNING("L2CAP - ping timeout");
-
-      /* For all channels, send a disconnect indication event through */
-      /* their FSMs. The CCBs should remove themselves from the LCB   */
-      for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb;) {
-        tL2C_CCB* pn = p_ccb->p_next_ccb;
-
-        l2c_csm_execute(p_ccb, L2CEVT_LP_DISCONNECT_IND, NULL);
-
-        p_ccb = pn;
-      }
-    }
-
     /* If no channels in use, drop the link. */
     if (!p_lcb->ccb_queue.p_first_ccb) {
       uint64_t timeout_ms;
@@ -820,38 +748,11 @@ void l2c_link_adjust_chnl_allocation(void) {
   }
 }
 
-/*******************************************************************************
- *
- * Function         l2c_link_processs_num_bufs
- *
- * Description      This function is called when a "controller buffer size"
- *                  event is first received from the controller. It updates
- *                  the L2CAP values.
- *
- * Returns          void
- *
- ******************************************************************************/
-void l2c_link_processs_num_bufs(uint16_t num_lm_acl_bufs) {
-  l2cb.num_lm_acl_bufs = l2cb.controller_xmit_window = num_lm_acl_bufs;
-}
+void l2c_link_init() {
+  const controller_t* controller = controller_get_interface();
 
-/*******************************************************************************
- *
- * Function         l2c_link_pkts_rcvd
- *
- * Description      This function is called from the HCI transport when it is
- *                  time to send a "Host ready for packets" command. This is
- *                  only when host to controller flow control is used. It fills
- *                  in the arrays of numbers of packets and handles.
- *
- * Returns          count of number of entries filled in
- *
- ******************************************************************************/
-uint8_t l2c_link_pkts_rcvd(UNUSED_ATTR uint16_t* num_pkts,
-                           UNUSED_ATTR uint16_t* handles) {
-  uint8_t num_found = 0;
-
-  return (num_found);
+  l2cb.num_lm_acl_bufs = controller->get_acl_buffer_count_classic();
+  l2cb.controller_xmit_window = controller->get_acl_buffer_count_classic();
 }
 
 /*******************************************************************************
@@ -1104,6 +1005,17 @@ void l2c_link_check_send_pkts(tL2C_LCB* p_lcb, tL2C_CCB* p_ccb, BT_HDR* p_buf) {
   }
 }
 
+void l2c_OnHciModeChangeSendPendingPackets(RawAddress remote) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(remote, BT_TRANSPORT_BR_EDR);
+  if (p_lcb != NULL) {
+    /* There might be any pending packets due to SNIFF or PENDING state */
+    /* Trigger L2C to start transmission of the pending packets. */
+    BTM_TRACE_DEBUG(
+        "btm mode change to active; check l2c_link for outgoing packets");
+    l2c_link_check_send_pkts(p_lcb, NULL, NULL);
+  }
+}
+
 /*******************************************************************************
  *
  * Function         l2c_link_send_to_lower
@@ -1239,6 +1151,8 @@ void l2c_link_process_num_completed_pkts(uint8_t* p, uint8_t evt_len) {
 
   for (xx = 0; xx < num_handles; xx++) {
     STREAM_TO_UINT16(handle, p);
+    /* Extract the handle */
+    handle = HCID_GET_HANDLE(handle);
     STREAM_TO_UINT16(num_sent, p);
 
     p_lcb = l2cu_find_lcb_by_handle(handle);
@@ -1358,4 +1272,29 @@ void l2c_link_segments_xmitted(BT_HDR* p_msg) {
     l2c_link_check_send_pkts(p_lcb, NULL, NULL);
   } else
     osi_free(p_msg);
+}
+
+tBTM_STATUS l2cu_ConnectAclForSecurity(const RawAddress& bd_addr) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_BR_EDR);
+  if (p_lcb && (p_lcb->link_state == LST_CONNECTED ||
+                p_lcb->link_state == LST_CONNECTING)) {
+    BTM_TRACE_WARNING("%s Connection already exists", __func__);
+    return BTM_CMD_STARTED;
+  }
+
+  /* Make sure an L2cap link control block is available */
+  if (!p_lcb &&
+      (p_lcb = l2cu_allocate_lcb(bd_addr, true, BT_TRANSPORT_BR_EDR)) == NULL) {
+    LOG(WARNING) << "failed allocate LCB " << bd_addr;
+    return BTM_NO_RESOURCES;
+  }
+
+  l2cu_create_conn_br_edr(p_lcb);
+  btm_acl_set_paging(true);
+  return BTM_SUCCESS;
+}
+
+void l2cble_update_sec_act(const RawAddress& bd_addr, uint16_t sec_act) {
+  tL2C_LCB* lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_LE);
+  lcb->sec_act = sec_act;
 }

@@ -27,14 +27,12 @@
 #include <string.h>
 
 #include <base/bind.h>
-#include <base/callback.h>
 
 #include "bta_gatt_api.h"
 #include "bta_gatt_queue.h"
 #include "bta_hh_co.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
-#include "btm_int.h"
 #include "device/include/interop.h"
 #include "osi/include/log.h"
 #include "srvc_api.h"
@@ -49,9 +47,6 @@ using std::vector;
 #endif
 
 #define BTA_HH_APP_ID_LE 0xff
-
-#define BTA_HH_LE_RPT_TYPE_VALID(x) \
-  ((x) <= BTA_LE_HID_RPT_FEATURE && (x) >= BTA_LE_HID_RPT_INPUT)
 
 #define BTA_HH_LE_PROTO_BOOT_MODE 0x00
 #define BTA_HH_LE_PROTO_REPORT_MODE 0x01
@@ -339,7 +334,7 @@ uint8_t bta_hh_le_find_service_inst_by_battery_inst_id(tBTA_HH_DEV_CB* p_cb,
  ******************************************************************************/
 tBTA_HH_LE_RPT* bta_hh_le_find_report_entry(
     tBTA_HH_DEV_CB* p_cb, uint8_t srvc_inst_id, /* service instance ID */
-    uint16_t rpt_uuid, uint8_t char_inst_id) {
+    uint16_t rpt_uuid, uint16_t char_inst_id) {
   uint8_t i;
   uint8_t hid_inst_id = srvc_inst_id;
   tBTA_HH_LE_RPT* p_rpt;
@@ -411,7 +406,7 @@ tBTA_HH_LE_RPT* bta_hh_le_find_rpt_by_idtype(tBTA_HH_LE_RPT* p_head,
 tBTA_HH_LE_RPT* bta_hh_le_find_alloc_report_entry(tBTA_HH_DEV_CB* p_cb,
                                                   uint8_t srvc_inst_id,
                                                   uint16_t rpt_uuid,
-                                                  uint8_t inst_id) {
+                                                  uint16_t inst_id) {
   uint8_t i, hid_inst_id = srvc_inst_id;
   tBTA_HH_LE_RPT* p_rpt;
 
@@ -462,7 +457,7 @@ static const gatt::Descriptor* find_descriptor_by_short_uuid(
       BTA_GATTC_GetCharacteristic(conn_id, char_handle);
 
   if (!p_char) {
-    LOG_WARN(LOG_TAG, "%s No such characteristic: %d", __func__, char_handle);
+    LOG_WARN("%s No such characteristic: %d", __func__, char_handle);
     return NULL;
   }
 
@@ -667,7 +662,7 @@ void bta_hh_le_open_cmpl(tBTA_HH_DEV_CB* p_cb) {
  *                  a characteristic
  *
  ******************************************************************************/
-bool bta_hh_le_write_ccc(tBTA_HH_DEV_CB* p_cb, uint8_t char_handle,
+bool bta_hh_le_write_ccc(tBTA_HH_DEV_CB* p_cb, uint16_t char_handle,
                          uint16_t clt_cfg_value, GATT_WRITE_OP_CB cb,
                          void* cb_data) {
   const gatt::Descriptor* p_desc = find_descriptor_by_short_uuid(
@@ -1078,16 +1073,11 @@ void bta_hh_clear_service_cache(tBTA_HH_DEV_CB* p_cb) {
 void bta_hh_start_security(tBTA_HH_DEV_CB* p_cb,
                            UNUSED_ATTR tBTA_HH_DATA* p_buf) {
   uint8_t sec_flag = 0;
-  tBTM_SEC_DEV_REC* p_dev_rec;
 
-  p_dev_rec = btm_find_dev(p_cb->addr);
-  if (p_dev_rec) {
-    if (p_dev_rec->sec_state == BTM_SEC_STATE_ENCRYPTING ||
-        p_dev_rec->sec_state == BTM_SEC_STATE_AUTHENTICATING) {
-      /* if security collision happened, wait for encryption done */
-      p_cb->security_pending = true;
-      return;
-    }
+  if (BTM_SecIsSecurityPending(p_cb->addr)) {
+    /* if security collision happened, wait for encryption done */
+    p_cb->security_pending = true;
+    return;
   }
 
   /* verify bond */
@@ -1401,7 +1391,7 @@ static void bta_hh_le_search_hid_chars(tBTA_HH_DEV_CB* p_dev_cb,
     if (!charac.uuid.Is16Bit()) continue;
 
     uint16_t uuid16 = charac.uuid.As16Bit();
-    LOG_DEBUG(LOG_TAG, "%s: %s %s", __func__, bta_hh_uuid_to_str(uuid16),
+    LOG_DEBUG("%s: %s %s", __func__, bta_hh_uuid_to_str(uuid16),
               charac.uuid.ToString().c_str());
 
     switch (uuid16) {
@@ -1650,7 +1640,7 @@ void bta_hh_le_open_fail(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
  *
  * Function         bta_hh_gatt_close
  *
- * Description      action function to process the GATT close int he state
+ * Description      action function to process the GATT close in the state
  *                  machine.
  *
  * Returns          void
