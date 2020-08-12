@@ -60,7 +60,8 @@ void btm_ble_refresh_local_resolvable_private_addr(
     const RawAddress& pseudo_addr, const RawAddress& local_rpa);
 void btm_sec_dev_rec_cback_event(tBTM_SEC_DEV_REC* p_dev_rec, uint8_t res,
                                  bool is_le_trasnport);
-void btm_io_capabilities_req(const RawAddress& p);
+void btm_sec_set_peer_sec_caps(tACL_CONN* p_acl_cb,
+                               tBTM_SEC_DEV_REC* p_dev_rec);
 
 static void btm_acl_chk_peer_pkt_type_support(tACL_CONN* p,
                                               uint16_t* p_pkt_type);
@@ -74,9 +75,6 @@ static void btm_read_rssi_timeout(void* data);
 static void btm_read_tx_power_timeout(void* data);
 static void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
                                             uint8_t num_read_pages);
-static void btm_sec_set_peer_sec_caps(tACL_CONN* p_acl_cb,
-                                      tBTM_SEC_DEV_REC* p_dev_rec);
-static tACL_CONN* acl_get_connection_from_handle(uint16_t handle);
 static tBTM_STATUS btm_set_packet_types(tACL_CONN* p, uint16_t pkt_types);
 
 void BTIF_dm_report_inquiry_status_change(uint8_t busy_level_flags);
@@ -206,12 +204,6 @@ uint8_t btm_handle_to_acl_index(uint16_t hci_handle) {
 
   /* If here, no BD Addr found */
   return (xx);
-}
-
-tACL_CONN* acl_get_connection_from_handle(uint16_t hci_handle) {
-  uint8_t index = btm_handle_to_acl_index(hci_handle);
-  if (index >= MAX_L2CAP_LINKS) return nullptr;
-  return &btm_cb.acl_cb_.acl_db[index];
 }
 
 #if (BLE_PRIVACY_SPT == TRUE)
@@ -2225,7 +2217,7 @@ uint8_t BTM_SetTraceLevel(uint8_t new_level) {
  *
  ******************************************************************************/
 void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec,
-                      UNUSED_ATTR uint8_t hci_status) {
+                      uint8_t hci_status) {
   BTM_TRACE_DEBUG("btm_cont_rswitch");
   /* Check to see if encryption needs to be turned off if pending
      change of link key or role switch */
@@ -2252,16 +2244,6 @@ void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec,
       }
     }
   }
-}
-
-void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
-  BTM_TRACE_DEBUG("%s", __func__);
-  tACL_CONN* p_acl = acl_get_connection_from_handle(hci_handle);
-  if (p_acl == nullptr) {
-    BTM_TRACE_ERROR("%s role switch received but with no active ACL", __func__);
-    return;
-  }
-  btm_cont_rswitch(p_acl, btm_find_dev(p_acl->remote_addr), 0);
 }
 
 /*******************************************************************************
@@ -2608,40 +2590,4 @@ void btm_ble_refresh_local_resolvable_private_addr(
     }
   }
 #endif
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_set_peer_sec_caps
- *
- * Description      This function is called to set sm4 and rmt_sec_caps fields
- *                  based on the available peer device features.
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_sec_set_peer_sec_caps(tACL_CONN* p_acl_cb,
-                               tBTM_SEC_DEV_REC* p_dev_rec) {
-  if ((btm_cb.security_mode == BTM_SEC_MODE_SP ||
-       btm_cb.security_mode == BTM_SEC_MODE_SC) &&
-      HCI_SSP_HOST_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[1])) {
-    p_dev_rec->sm4 = BTM_SM4_TRUE;
-    p_dev_rec->remote_supports_secure_connections =
-        (HCI_SC_HOST_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[1]));
-  } else {
-    p_dev_rec->sm4 = BTM_SM4_KNOWN;
-    p_dev_rec->remote_supports_secure_connections = false;
-  }
-
-  BTM_TRACE_API("%s: sm4: 0x%02x, rmt_support_for_secure_connections %d",
-                __func__, p_dev_rec->sm4,
-                p_dev_rec->remote_supports_secure_connections);
-
-  if (p_dev_rec->remote_features_needed) {
-    BTM_TRACE_EVENT(
-        "%s: Now device in SC Only mode, waiting for peer remote features!",
-        __func__);
-    btm_io_capabilities_req(p_dev_rec->bd_addr);
-    p_dev_rec->remote_features_needed = false;
-  }
 }
