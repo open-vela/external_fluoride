@@ -65,12 +65,7 @@
 #endif
 #include "bta/sys/bta_sys_int.h"
 #include "bta_dm_int.h"
-#include "btif/include/btif_pan.h"
-#include "btif/include/btif_sock.h"
 #include "main/shim/controller.h"
-
-void BTA_dm_on_hw_on();
-void BTA_dm_on_hw_off();
 
 using bluetooth::common::MessageLoopThread;
 
@@ -197,6 +192,8 @@ static void event_start_up_stack(UNUSED_ATTR void* context) {
     module_start_up(get_module(HCI_MODULE));
   }
 
+  BTU_StartUp();
+
   btm_init();
   l2c_init();
   sdp_init();
@@ -230,7 +227,7 @@ static void event_start_up_stack(UNUSED_ATTR void* context) {
   BTA_dm_init();
   bta_dm_enable(bte_dm_evt);
 
-  bta_set_forward_hw_failures(true);
+  bta_sys_set_state(BTA_SYS_HW_STARTING);
   btm_acl_device_down();
   BTM_db_reset();
   if (bluetooth::shim::is_gd_controller_enabled()) {
@@ -239,8 +236,6 @@ static void event_start_up_stack(UNUSED_ATTR void* context) {
     CHECK(module_start_up(get_module(CONTROLLER_MODULE)));
   }
   BTM_reset_complete();
-
-  BTA_dm_on_hw_on();
 
   if (future_await(local_hack_future) != FUTURE_SUCCESS) {
     LOG_ERROR("%s failed to start up the stack", __func__);
@@ -266,22 +261,7 @@ static void event_shut_down_stack(UNUSED_ATTR void* context) {
   hack_future = local_hack_future;
   stack_is_running = false;
 
-  do_in_main_thread(FROM_HERE, base::Bind(&btm_ble_multi_adv_cleanup));
-
-  btif_dm_on_disable();
-  btif_sock_cleanup();
-  btif_pan_cleanup();
-
-  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_disable));
-
-  future_await(local_hack_future);
-  local_hack_future = future_new();
-  hack_future = local_hack_future;
-
-  bta_sys_disable();
-  bta_set_forward_hw_failures(false);
-  BTA_dm_on_hw_off();
-
+  btif_disable_bluetooth();
   module_shut_down(get_module(BTIF_CONFIG_MODULE));
 
   future_await(local_hack_future);

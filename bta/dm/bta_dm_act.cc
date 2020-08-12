@@ -54,7 +54,6 @@
 #include "stack/gatt/connection_manager.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/gatt_api.h"
-#include "stack_manager.h"
 #include "utl.h"
 
 #if (GAP_INCLUDED == TRUE)
@@ -251,6 +250,17 @@ static uint8_t btm_local_io_caps;
 
 /** Initialises the BT device manager */
 void bta_dm_enable(tBTA_DM_SEC_CBACK* p_sec_cback) {
+  /* if already in use, return an error */
+  if (bta_dm_cb.is_bta_dm_active) {
+    tBTA_DM_SEC enable_event;
+    APPL_TRACE_WARNING("%s Device already started by another application",
+                       __func__);
+    memset(&enable_event, 0, sizeof(tBTA_DM_SEC));
+    enable_event.enable.status = BTA_FAILURE;
+    if (p_sec_cback != NULL) p_sec_cback(BTA_DM_ENABLE_EVT, &enable_event);
+    return;
+  }
+
   /* make sure security callback is saved - if no callback, do not erase the
   previous one,
   it could be an error recovery mechanism */
@@ -305,6 +315,12 @@ void bta_dm_deinit_cb(void) {
     }
   }
   memset(&bta_dm_cb, 0, sizeof(bta_dm_cb));
+}
+
+void BTA_dm_on_hw_error() {
+  if (bta_dm_cb.p_sec_cback != NULL) {
+    bta_dm_cb.p_sec_cback(BTA_DM_HW_ERROR_EVT, NULL);
+  }
 }
 
 void BTA_dm_on_hw_off() {
@@ -2448,6 +2464,8 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
 static void bta_dm_local_name_cback(UNUSED_ATTR void* p_name) {
   tBTA_DM_SEC sec_event;
 
+  sec_event.enable.status = BTA_SUCCESS;
+
   if (bta_dm_cb.p_sec_cback)
     bta_dm_cb.p_sec_cback(BTA_DM_ENABLE_EVT, &sec_event);
 }
@@ -2688,8 +2706,10 @@ static void bta_dm_disable_conn_down_timer_cback(UNUSED_ATTR void* data) {
   /* disable the power managment module */
   bta_dm_disable_pm();
 
+  /* register our callback to SYS HW manager */
+  send_bta_sys_hw_event(BTA_SYS_API_DISABLE_EVT);
+
   bta_dm_cb.disabling = false;
-  future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
 }
 
 /*******************************************************************************
@@ -3526,6 +3546,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
+      break;
+
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
