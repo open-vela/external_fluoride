@@ -112,6 +112,7 @@ static void btm_sec_check_pending_enc_req(tBTM_SEC_DEV_REC* p_dev_rec,
                                           uint8_t encr_enable);
 
 static bool btm_sec_use_smp_br_chnl(tBTM_SEC_DEV_REC* p_dev_rec);
+static bool btm_sec_is_master(tBTM_SEC_DEV_REC* p_dev_rec);
 
 /* true - authenticated link key is possible */
 static const bool btm_sec_io_map[BTM_IO_CAP_MAX][BTM_IO_CAP_MAX] = {
@@ -708,7 +709,7 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
       /* use BTM_PAIR_STATE_WAIT_AUTH_COMPLETE to report authentication failed
        * event */
       btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_AUTH_COMPLETE);
-      acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+      btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
 
       btsnd_hcic_pin_code_neg_reply(bd_addr);
     } else {
@@ -726,7 +727,7 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
   }
 
   if ((btm_cb.pairing_flags & BTM_PAIR_FLAGS_WE_STARTED_DD) &&
-      (p_dev_rec->hci_handle == HCI_INVALID_HANDLE) &&
+      (p_dev_rec->hci_handle == BTM_SEC_INVALID_HANDLE) &&
       (!btm_cb.security_mode_changed)) {
     /* This is start of the dedicated bonding if local device is 2.0 */
     btm_cb.pin_code_len = pin_len;
@@ -738,7 +739,7 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
 #endif
       btsnd_hcic_write_auth_enable(true);
 
-    acl_set_disconnect_reason(0xff);
+    btm_cb.acl_cb_.acl_disc_reason = 0xff;
 
     /* if we rejected incoming connection request, we have to wait
      * HCI_Connection_Complete event */
@@ -771,7 +772,7 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
   }
 
   btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_AUTH_COMPLETE);
-  acl_set_disconnect_reason(HCI_SUCCESS);
+  btm_cb.acl_cb_.acl_disc_reason = HCI_SUCCESS;
 
   btsnd_hcic_pin_code_req_reply(bd_addr, pin_len, p_pin);
 }
@@ -797,6 +798,7 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
   tBTM_STATUS status;
   uint8_t* p_features;
   uint8_t ii;
+  tACL_CONN* p = btm_bda_to_acl(bd_addr, transport);
   VLOG(1) << __func__ << " BDA: " << bd_addr;
 
   BTM_TRACE_DEBUG("%s: Transport used %d, bd_addr=%s", __func__, transport,
@@ -822,10 +824,10 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
   BTM_TRACE_DEBUG("before update sec_flags=0x%x", p_dev_rec->sec_flags);
 
   /* Finished if connection is active and already paired */
-  if (((p_dev_rec->hci_handle != HCI_INVALID_HANDLE) &&
+  if (((p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE) &&
        transport == BT_TRANSPORT_BR_EDR &&
        (p_dev_rec->sec_flags & BTM_SEC_AUTHENTICATED)) ||
-      ((p_dev_rec->ble_hci_handle != HCI_INVALID_HANDLE) &&
+      ((p_dev_rec->ble_hci_handle != BTM_SEC_INVALID_HANDLE) &&
        transport == BT_TRANSPORT_LE &&
        (p_dev_rec->sec_flags & BTM_SEC_LE_AUTHENTICATED))) {
     BTM_TRACE_WARNING("BTM_SecBond -> Already Paired");
@@ -901,7 +903,7 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
 #endif
 
   /* If connection already exists... */
-  if (BTM_IsAclConnectionUpAndHandleValid(bd_addr, transport)) {
+  if (p && p->hci_handle != BTM_SEC_INVALID_HANDLE) {
     btm_sec_start_authentication(p_dev_rec);
 
     btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_PIN_REQ);
@@ -1040,7 +1042,7 @@ tBTM_STATUS BTM_SecBondCancel(const RawAddress& bd_addr) {
   if ((btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) &&
       (btm_cb.pairing_flags & BTM_PAIR_FLAGS_WE_STARTED_DD)) {
     /* If the HCI link is up */
-    if (p_dev_rec->hci_handle != HCI_INVALID_HANDLE) {
+    if (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE) {
       /* If some other thread disconnecting, we do not send second command */
       if ((p_dev_rec->sec_state == BTM_SEC_STATE_DISCONNECTING) ||
           (p_dev_rec->sec_state == BTM_SEC_STATE_DISCONNECTING_BOTH))
@@ -1137,9 +1139,9 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr,
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (!p_dev_rec ||
       (transport == BT_TRANSPORT_BR_EDR &&
-       p_dev_rec->hci_handle == HCI_INVALID_HANDLE) ||
+       p_dev_rec->hci_handle == BTM_SEC_INVALID_HANDLE) ||
       (transport == BT_TRANSPORT_LE &&
-       p_dev_rec->ble_hci_handle == HCI_INVALID_HANDLE)) {
+       p_dev_rec->ble_hci_handle == BTM_SEC_INVALID_HANDLE)) {
     /* Connection should be up and runnning */
     BTM_TRACE_WARNING("Security Manager: BTM_SetEncryption not connected");
 
@@ -1187,9 +1189,9 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr,
       p_dev_rec->security_required, p_dev_rec, p_callback);
 
   if (transport == BT_TRANSPORT_LE) {
-    if (BTM_IsAclConnectionUp(bd_addr, transport)) {
-      rc = btm_ble_set_encryption(bd_addr, sec_act,
-                                  acl_link_role(bd_addr, transport));
+    tACL_CONN* p = btm_bda_to_acl(bd_addr, transport);
+    if (p) {
+      rc = btm_ble_set_encryption(bd_addr, sec_act, p->link_role);
     } else {
       rc = BTM_WRONG_MODE;
       BTM_TRACE_WARNING("%s: cannot call btm_ble_set_encryption, p is NULL",
@@ -1303,7 +1305,7 @@ void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr) {
   btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_AUTH_COMPLETE);
 
   if ((res == BTM_SUCCESS) || (res == BTM_SUCCESS_NO_SECURITY)) {
-    acl_set_disconnect_reason(HCI_SUCCESS);
+    btm_cb.acl_cb_.acl_disc_reason = HCI_SUCCESS;
 
     if (res == BTM_SUCCESS) {
       p_dev_rec = btm_find_dev(bd_addr);
@@ -1317,7 +1319,7 @@ void BTM_ConfirmReqReply(tBTM_STATUS res, const RawAddress& bd_addr) {
   } else {
     /* Report authentication failed event from state
      * BTM_PAIR_STATE_WAIT_AUTH_COMPLETE */
-    acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+    btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
     btsnd_hcic_user_conf_reply(bd_addr, false);
   }
 }
@@ -1353,9 +1355,9 @@ void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
       (res != BTM_SUCCESS)) {
     tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
     if (p_dev_rec != NULL) {
-      acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+      btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
 
-      if (p_dev_rec->hci_handle != HCI_INVALID_HANDLE)
+      if (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE)
         btm_sec_send_hci_disconnect(p_dev_rec, HCI_ERR_AUTH_FAILURE,
                                     p_dev_rec->hci_handle);
       else
@@ -1377,10 +1379,10 @@ void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
   if (res != BTM_SUCCESS) {
     /* use BTM_PAIR_STATE_WAIT_AUTH_COMPLETE to report authentication failed
      * event */
-    acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+    btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
     btsnd_hcic_user_passkey_neg_reply(bd_addr);
   } else {
-    acl_set_disconnect_reason(HCI_SUCCESS);
+    btm_cb.acl_cb_.acl_disc_reason = HCI_SUCCESS;
     btsnd_hcic_user_passkey_reply(bd_addr, passkey);
   }
 }
@@ -1455,10 +1457,10 @@ void BTM_RemoteOobDataReply(tBTM_STATUS res, const RawAddress& bd_addr,
   if (res != BTM_SUCCESS) {
     /* use BTM_PAIR_STATE_WAIT_AUTH_COMPLETE to report authentication failed
      * event */
-    acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+    btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
     btsnd_hcic_rem_oob_neg_reply(bd_addr);
   } else {
-    acl_set_disconnect_reason(HCI_SUCCESS);
+    btm_cb.acl_cb_.acl_disc_reason = HCI_SUCCESS;
     btsnd_hcic_rem_oob_reply(bd_addr, c, r);
   }
 }
@@ -2356,7 +2358,7 @@ void btm_sec_check_pending_reqs(void) {
     tBTM_SEC_QUEUE_ENTRY* p_e;
     while ((p_e = (tBTM_SEC_QUEUE_ENTRY*)fixed_queue_try_dequeue(bq)) != NULL) {
       /* Check that the ACL is still up before starting security procedures */
-      if (BTM_IsAclConnectionUp(p_e->bd_addr, p_e->transport)) {
+      if (btm_bda_to_acl(p_e->bd_addr, p_e->transport) != NULL) {
         if (p_e->psm != 0) {
           BTM_TRACE_EVENT(
               "%s PSM:0x%04x Is_Orig:%u mx_proto_id:%u mx_chan_id:%u", __func__,
@@ -2484,9 +2486,8 @@ void btm_sec_rmt_name_request_complete(const RawAddress* p_bd_addr,
   uint8_t old_sec_state;
 
   BTM_TRACE_EVENT("btm_sec_rmt_name_request_complete");
-  if ((!p_bd_addr &&
-       !BTM_IsAclConnectionUp(btm_cb.connecting_bda, BT_TRANSPORT_BR_EDR)) ||
-      (p_bd_addr && !BTM_IsAclConnectionUp(*p_bd_addr, BT_TRANSPORT_BR_EDR))) {
+  if ((!p_bd_addr && !BTM_ACL_IS_CONNECTED(btm_cb.connecting_bda)) ||
+      (p_bd_addr && !BTM_ACL_IS_CONNECTED(*p_bd_addr))) {
     btm_acl_resubmit_page();
   }
 
@@ -2671,7 +2672,7 @@ void btm_sec_rmt_name_request_complete(const RawAddress* p_bd_addr,
    */
   if (p_dev_rec->link_key_not_sent) {
     /* If HCI connection complete has not arrived, wait for it */
-    if (p_dev_rec->hci_handle == HCI_INVALID_HANDLE) return;
+    if (p_dev_rec->hci_handle == BTM_SEC_INVALID_HANDLE) return;
 
     p_dev_rec->link_key_not_sent = false;
     btm_send_link_key_notif(p_dev_rec);
@@ -3123,7 +3124,7 @@ void btm_proc_sp_req_evt(tBTM_SP_EVT event, uint8_t* p) {
   }
 
   /* Something bad. we can only fail this connection */
-  acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+  btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
 
   if (BTM_SP_CFM_REQ_EVT == event) {
     btsnd_hcic_user_conf_reply(p_bda, false);
@@ -3245,7 +3246,7 @@ void btm_rem_oob_req(uint8_t* p) {
   }
 
   /* something bad. we can only fail this connection */
-  acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+  btm_cb.acl_cb_.acl_disc_reason = HCI_ERR_HOST_REJECT_SECURITY;
   btsnd_hcic_rem_oob_neg_reply(p_bda);
 }
 
@@ -3296,7 +3297,7 @@ static void btm_sec_auth_collision(uint16_t handle) {
 
   if ((bluetooth::common::time_get_os_boottime_ms() -
        btm_cb.collision_start_time) < BTM_SEC_MAX_COLLISION_DELAY) {
-    if (handle == HCI_INVALID_HANDLE) {
+    if (handle == BTM_SEC_INVALID_HANDLE) {
       p_dev_rec = btm_sec_find_dev_by_sec_state(BTM_SEC_STATE_AUTHENTICATING);
       if (p_dev_rec == NULL)
         p_dev_rec = btm_sec_find_dev_by_sec_state(BTM_SEC_STATE_ENCRYPTING);
@@ -3487,7 +3488,7 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
         BTM_TRACE_DEBUG(
             "link encrypted afer dedic bonding can use SMP_BR_CHNL");
 
-        if (acl_br_edr_is_role_master(p_dev_rec->bd_addr)) {
+        if (btm_sec_is_master(p_dev_rec)) {
           // Encryption is required to start SM over BR/EDR
           // indicate that this is encryption after authentication
           BTM_SetEncryption(p_dev_rec->bd_addr, BT_TRANSPORT_BR_EDR, NULL, NULL,
@@ -3541,6 +3542,8 @@ void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
 void btm_sec_encrypt_change(uint16_t handle, uint8_t status,
                             uint8_t encr_enable) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
+  tACL_CONN* p_acl = NULL;
+  uint8_t acl_idx = btm_handle_to_acl_index(handle);
   BTM_TRACE_EVENT(
       "Security Manager: encrypt_change status:%d State:%d, encr_enable = %d",
       status, (p_dev_rec) ? p_dev_rec->sec_state : 0, encr_enable);
@@ -3584,13 +3587,12 @@ void btm_sec_encrypt_change(uint16_t handle, uint8_t status,
   BTM_TRACE_DEBUG("after update p_dev_rec->sec_flags=0x%x",
                   p_dev_rec->sec_flags);
 
-  if (BTM_IsAclConnectionUpFromHandle(handle)) {
-    btm_sec_check_pending_enc_req(
-        p_dev_rec, acl_get_transport_from_handle(handle), encr_enable);
-  }
+  if (acl_idx != MAX_L2CAP_LINKS) p_acl = &btm_cb.acl_cb_.acl_db[acl_idx];
 
-  if (BTM_IsAclConnectionUpFromHandle(handle) &&
-      acl_is_transport_le_from_handle(handle)) {
+  if (p_acl != NULL)
+    btm_sec_check_pending_enc_req(p_dev_rec, p_acl->transport, encr_enable);
+
+  if (p_acl && p_acl->transport == BT_TRANSPORT_LE) {
     if (status == HCI_ERR_KEY_MISSING || status == HCI_ERR_AUTH_FAILURE ||
         status == HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE) {
       p_dev_rec->sec_flags &= ~(BTM_SEC_LE_LINK_KEY_KNOWN);
@@ -3617,8 +3619,7 @@ void btm_sec_encrypt_change(uint16_t handle, uint8_t status,
                       __func__);
     }
     if (p_dev_rec->new_encryption_key_is_p256) {
-      if (btm_sec_use_smp_br_chnl(p_dev_rec) &&
-          acl_br_edr_is_role_master(p_dev_rec->bd_addr) &&
+      if (btm_sec_use_smp_br_chnl(p_dev_rec) && btm_sec_is_master(p_dev_rec) &&
           /* if LE key is not known, do deriving */
           (!(p_dev_rec->sec_flags & BTM_SEC_LE_LINK_KEY_KNOWN) ||
            /* or BR key is higher security than existing LE keys */
@@ -3899,7 +3900,7 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
 
 #ifdef BRCM_NOT_4_BTE
       /* If we rejected pairing, pass this special result code */
-      if (acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY)) {
+      if (btm_cb.acl_cb_.acl_disc_reason == HCI_ERR_HOST_REJECT_SECURITY) {
         status = HCI_ERR_HOST_REJECT_SECURITY;
       }
 #endif
@@ -3977,8 +3978,8 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
     /* For now there are a some devices that do not like sending */
     /* commands events and data at the same time. */
     /* Set the packet types to the default allowed by the device */
-  btm_set_packet_types_from_address(bda, BT_TRANSPORT_BR_EDR,
-                                    acl_get_supported_packet_types());
+    btm_set_packet_types_from_address(
+        bda, BT_TRANSPORT_BR_EDR, btm_cb.acl_cb_.btm_acl_pkt_types_supported);
 
   btm_acl_created(bda, p_dev_rec->dev_class, p_dev_rec->sec_bd_name, handle,
                   HCI_ROLE_SLAVE, BT_TRANSPORT_BR_EDR);
@@ -4127,7 +4128,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
   /* see sec_flags processing in btm_acl_removed */
 
   if (transport == BT_TRANSPORT_LE) {
-    p_dev_rec->ble_hci_handle = HCI_INVALID_HANDLE;
+    p_dev_rec->ble_hci_handle = BTM_SEC_INVALID_HANDLE;
     p_dev_rec->sec_flags &= ~(BTM_SEC_LE_AUTHENTICATED | BTM_SEC_LE_ENCRYPTED);
     p_dev_rec->enc_key_size = 0;
 
@@ -4137,7 +4138,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
       btm_ble_advertiser_notify_terminated_legacy(HCI_SUCCESS, handle);
     }
   } else {
-    p_dev_rec->hci_handle = HCI_INVALID_HANDLE;
+    p_dev_rec->hci_handle = BTM_SEC_INVALID_HANDLE;
     p_dev_rec->sec_flags &=
         ~(BTM_SEC_AUTHORIZED | BTM_SEC_AUTHENTICATED | BTM_SEC_ENCRYPTED |
           BTM_SEC_ROLE_SWITCHED | BTM_SEC_16_DIGIT_PIN_AUTHED);
@@ -4654,7 +4655,7 @@ tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
 
   /* If any security is required, get the name first */
   if (!(p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) &&
-      (p_dev_rec->hci_handle != HCI_INVALID_HANDLE)) {
+      (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE)) {
     BTM_TRACE_EVENT("Security Manager: Start get name");
     if (!btm_sec_start_get_name(p_dev_rec)) {
       return (BTM_NO_RESOURCES);
@@ -4672,13 +4673,13 @@ tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
        (!(p_dev_rec->sec_flags & BTM_SEC_16_DIGIT_PIN_AUTHED) &&
         (!p_dev_rec->is_originator &&
          (p_dev_rec->security_required & BTM_SEC_IN_MIN_16_DIGIT_PIN)))) &&
-      (p_dev_rec->hci_handle != HCI_INVALID_HANDLE)) {
-    /*
-     * We rely on BTM_SEC_16_DIGIT_PIN_AUTHED being set if MITM is in use,
-     * as 16 DIGIT is only needed if MITM is not used. Unfortunately, the
-     * BTM_SEC_AUTHENTICATED is used for both MITM and non-MITM
-     * authenticated connections, hence we cannot distinguish here.
-     */
+      (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE)) {
+/*
+ * We rely on BTM_SEC_16_DIGIT_PIN_AUTHED being set if MITM is in use,
+ * as 16 DIGIT is only needed if MITM is not used. Unfortunately, the
+ * BTM_SEC_AUTHENTICATED is used for both MITM and non-MITM
+ * authenticated connections, hence we cannot distinguish here.
+ */
 
     BTM_TRACE_EVENT("Security Manager: Start authentication");
 
@@ -4713,7 +4714,8 @@ tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
         (p_dev_rec->security_required & BTM_SEC_OUT_ENCRYPT)) ||
        (!p_dev_rec->is_originator &&
         (p_dev_rec->security_required & BTM_SEC_IN_ENCRYPT))) &&
-      (p_dev_rec->hci_handle != HCI_INVALID_HANDLE)) {
+      (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE)) {
+
     BTM_TRACE_EVENT("Security Manager: Start encryption");
 
     btm_sec_start_encryption(p_dev_rec);
@@ -4820,7 +4822,7 @@ static uint8_t btm_sec_start_authorization(tBTM_SEC_DEV_REC* p_dev_rec) {
   uint8_t service_id;
 
   if ((p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) ||
-      (p_dev_rec->hci_handle == HCI_INVALID_HANDLE)) {
+      (p_dev_rec->hci_handle == BTM_SEC_INVALID_HANDLE)) {
     if (!btm_cb.api.p_authorize_callback) return (BTM_MODE_UNSUPPORTED);
 
     service_id =
@@ -5252,7 +5254,7 @@ static bool btm_sec_check_prefetch_pin(tBTM_SEC_DEV_REC* p_dev_rec) {
       if (btm_cb.api.p_pin_callback &&
           ((btm_cb.pairing_flags & BTM_PAIR_FLAGS_PIN_REQD) == 0)) {
         BTM_TRACE_DEBUG("%s() PIN code callback called", __func__);
-        if (BTM_IsAclConnectionUp(p_dev_rec->bd_addr, BT_TRANSPORT_BR_EDR))
+        if (btm_bda_to_acl(p_dev_rec->bd_addr, BT_TRANSPORT_BR_EDR) == NULL)
           btm_cb.pairing_flags |= BTM_PAIR_FLAGS_PIN_REQD;
         (btm_cb.api.p_pin_callback)(
             p_dev_rec->bd_addr, p_dev_rec->dev_class, p_dev_rec->sec_bd_name,
@@ -5469,3 +5471,17 @@ static bool btm_sec_use_smp_br_chnl(tBTM_SEC_DEV_REC* p_dev_rec) {
   return true;
 }
 
+/*******************************************************************************
+ *
+ * Function         btm_sec_is_master
+ *
+ * Description      The function checks if the device is BR/EDR master after
+ *                  pairing is completed.
+ *
+ * Returns          true - if the device is master.
+ *
+ ******************************************************************************/
+static bool btm_sec_is_master(tBTM_SEC_DEV_REC* p_dev_rec) {
+  tACL_CONN* p = btm_bda_to_acl(p_dev_rec->bd_addr, BT_TRANSPORT_BR_EDR);
+  return (p && (p->link_role == HCI_ROLE_MASTER));
+}
