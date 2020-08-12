@@ -370,7 +370,6 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
-#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_ENABLE_EVT */
@@ -954,23 +953,7 @@ typedef uint8_t tBTA_DM_LINK_TYPE;
  *  External Function Declarations
  ****************************************************************************/
 
-/*******************************************************************************
- *
- * Function         BTA_EnableBluetooth
- *
- * Description      This function initializes BTA and prepares BTA and the
- *                  Bluetooth protocol stack for use.  This function is
- *                  typically called at startup or when Bluetooth services
- *                  are required by the phone.  This function must be called
- *                  before calling any other API function.
- *
- *
- * Returns          BTA_SUCCESS if successful.
- *                  BTA_FAIL if internal failure.
- *
- ******************************************************************************/
-extern tBTA_STATUS BTA_EnableBluetooth(tBTA_DM_SEC_CBACK* p_cback);
-
+void BTA_dm_init();
 /*******************************************************************************
  *
  * Function         BTA_DisableBluetooth
