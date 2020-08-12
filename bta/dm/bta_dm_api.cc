@@ -30,7 +30,6 @@
 #include "bta_sys.h"
 #include "bta_sys_int.h"
 #include "btm_api.h"
-#include "btm_int.h"
 #include "osi/include/osi.h"
 #include "stack/include/btu.h"
 #include "utl.h"
@@ -44,28 +43,10 @@ using bluetooth::Uuid;
 static const tBTA_SYS_REG bta_dm_search_reg = {bta_dm_search_sm_execute,
                                                bta_dm_search_sm_disable};
 
-/*******************************************************************************
- *
- * Function         BTA_EnableBluetooth
- *
- * Description      Enables bluetooth service.  This function must be
- *                  called before any other functions in the BTA API are called.
- *
- *
- * Returns          tBTA_STATUS
- *
- ******************************************************************************/
-tBTA_STATUS BTA_EnableBluetooth(tBTA_DM_SEC_CBACK* p_cback) {
-  /* Bluetooth disabling is in progress */
-  if (bta_dm_cb.disabling) return BTA_FAILURE;
-
+void BTA_dm_init() {
   bta_sys_register(BTA_ID_DM_SEARCH, &bta_dm_search_reg);
-
   /* if UUID list is not provided as static data */
   bta_sys_eir_register(bta_dm_eir_update_uuid);
-
-  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_enable, p_cback));
-  return BTA_SUCCESS;
 }
 
 /*******************************************************************************
@@ -87,11 +68,6 @@ tBTA_STATUS BTA_DisableBluetooth(void) {
 void BTA_EnableTestMode(void) {
   do_in_main_thread(FROM_HERE,
                     base::Bind(base::IgnoreResult(BTM_EnableTestMode)));
-}
-
-/** Disable bluetooth device under test mode */
-void BTA_DisableTestMode(void) {
-  do_in_main_thread(FROM_HERE, base::Bind(BTM_DeviceReset, nullptr));
 }
 
 /** This function sets the Bluetooth name of local device */
@@ -211,9 +187,9 @@ void BTA_DmDiscoverUUID(const RawAddress& bd_addr, const Uuid& uuid,
 
 /** This function initiates a bonding procedure with a peer device */
 void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                tBTA_TRANSPORT transport) {
-  do_in_main_thread(FROM_HERE,
-                    base::Bind(bta_dm_bond, bd_addr, addr_type, transport));
+                tBTA_TRANSPORT transport, int device_type) {
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_bond, bd_addr, addr_type,
+                                          transport, device_type));
 }
 
 /** This function cancels the bonding procedure with a peer device
@@ -293,7 +269,7 @@ void BTA_DmConfirm(const RawAddress& bd_addr, bool accept) {
  ******************************************************************************/
 void BTA_DmAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
                      const LinkKey& link_key, tBTA_SERVICE_MASK trusted_mask,
-                     bool is_trusted, uint8_t key_type, tBTA_IO_CAP io_cap,
+                     bool is_trusted, uint8_t key_type, tBTM_IO_CAP io_cap,
                      uint8_t pin_length) {
   std::unique_ptr<tBTA_DM_API_ADD_DEVICE> msg =
       std::make_unique<tBTA_DM_API_ADD_DEVICE>();
@@ -546,24 +522,6 @@ void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
 
 /*******************************************************************************
  *
- * Function         BTA_DmSetBleConnScanParams
- *
- * Description      This function is called to set scan parameters used in
- *                  BLE connection request
- *
- * Parameters:      scan_interval    - scan interval
- *                  scan_window      - scan window
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmSetBleConnScanParams(uint32_t scan_interval, uint32_t scan_window) {
-  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_ble_set_conn_scan_params,
-                                          scan_interval, scan_window));
-}
-
-/*******************************************************************************
- *
  * Function         bta_dm_discover_send_msg
  *
  * Description      This function send discover message to BTA task.
@@ -622,77 +580,6 @@ void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
                                tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search,
                                tBTA_TRANSPORT transport) {
   bta_dm_discover_send_msg(bd_addr, p_services, p_cback, sdp_search, transport);
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmDiscoverExt
- *
- * Description      This function does service discovery for services of a
- *                  peer device. When services.num_uuid is 0, it indicates all
- *                  GATT based services are to be searched; other wise a list of
- *                  UUID of interested services should be provided through
- *                  p_services->p_uuid.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmDiscoverExt(const RawAddress& bd_addr,
-                       tBTA_SERVICE_MASK_EXT* p_services,
-                       tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search) {
-  bta_dm_discover_send_msg(bd_addr, p_services, p_cback, sdp_search,
-                           BTA_TRANSPORT_UNKNOWN);
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmSearchExt
- *
- * Description      This function searches for peer Bluetooth devices. It
- *                  performs an inquiry and gets the remote name for devices.
- *                  Service discovery is done if services is non zero
- *
- * Parameters       p_dm_inq: inquiry conditions
- *                  p_services: if service is not empty, service discovery will
- *                              be done. For all GATT based service conditions,
- *                              put num_uuid, and p_uuid is the pointer to the
- *                              list of UUID values.
- *                  p_cback: callback function when search is completed.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmSearchExt(tBTA_DM_INQ* p_dm_inq, tBTA_SERVICE_MASK_EXT* p_services,
-                     tBTA_DM_SEARCH_CBACK* p_cback) {
-  const size_t len =
-      p_services
-          ? (sizeof(tBTA_DM_API_SEARCH) + sizeof(Uuid) * p_services->num_uuid)
-          : sizeof(tBTA_DM_API_SEARCH);
-  tBTA_DM_API_SEARCH* p_msg = (tBTA_DM_API_SEARCH*)osi_calloc(len);
-
-  p_msg->hdr.event = BTA_DM_API_SEARCH_EVT;
-  memcpy(&p_msg->inq_params, p_dm_inq, sizeof(tBTA_DM_INQ));
-  p_msg->p_cback = p_cback;
-  p_msg->rs_res = BTA_DM_RS_NONE;
-
-  if (p_services != NULL) {
-    p_msg->services = p_services->srvc_mask;
-    p_msg->num_uuid = p_services->num_uuid;
-
-    if (p_services->num_uuid != 0) {
-      p_msg->p_uuid = (Uuid*)(p_msg + 1);
-      memcpy(p_msg->p_uuid, p_services->p_uuid,
-             sizeof(Uuid) * p_services->num_uuid);
-    } else {
-      p_msg->p_uuid = NULL;
-    }
-  }
-
-  bta_sys_sendmsg(p_msg);
 }
 
 /*******************************************************************************
@@ -789,7 +676,7 @@ void BTA_DmBleSetDataLength(const RawAddress& remote_device,
  ******************************************************************************/
 void BTA_DmSetEncryption(const RawAddress& bd_addr, tBTA_TRANSPORT transport,
                          tBTA_DM_ENCRYPT_CBACK* p_callback,
-                         tBTA_DM_BLE_SEC_ACT sec_act) {
+                         tBTM_BLE_SEC_ACT sec_act) {
   APPL_TRACE_API("%s", __func__);
   do_in_main_thread(FROM_HERE, base::Bind(bta_dm_set_encryption, bd_addr,
                                           transport, p_callback, sec_act));
@@ -857,18 +744,4 @@ void BTA_VendorInit(void) { APPL_TRACE_API("BTA_VendorInit"); }
  * Returns          void
  *
  ******************************************************************************/
-void BTA_VendorCleanup(void) {
-  tBTM_BLE_VSC_CB cmn_ble_vsc_cb;
-  BTM_BleGetVendorCapabilities(&cmn_ble_vsc_cb);
-
-  if (cmn_ble_vsc_cb.max_filter > 0) {
-    btm_ble_adv_filter_cleanup();
-#if (BLE_PRIVACY_SPT == TRUE)
-    btm_ble_resolving_list_cleanup();
-#endif
-  }
-
-  if (cmn_ble_vsc_cb.tot_scan_results_strg > 0) btm_ble_batchscan_cleanup();
-
-  if (cmn_ble_vsc_cb.adv_inst_max > 0) btm_ble_multi_adv_cleanup();
-}
+void BTA_VendorCleanup(void) { BTM_VendorCleanup(); }

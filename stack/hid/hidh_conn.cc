@@ -44,6 +44,7 @@
 
 #include "log/log.h"
 #include "osi/include/osi.h"
+#include "stack/include/acl_api.h"
 
 static uint8_t find_conn_by_cid(uint16_t cid);
 static void hidh_conn_retry(uint8_t dhandle);
@@ -65,12 +66,10 @@ static void hidh_l2cif_cong_ind(uint16_t l2cap_cid, bool congested);
 static const tL2CAP_APPL_INFO hst_reg_info = {
     hidh_l2cif_connect_ind,
     hidh_l2cif_connect_cfm,
-    NULL,
     hidh_l2cif_config_ind,
     hidh_l2cif_config_cfm,
     hidh_l2cif_disconnect_ind,
     hidh_l2cif_disconnect_cfm,
-    NULL,
     hidh_l2cif_data_ind,
     hidh_l2cif_cong_ind,
     NULL, /* tL2CA_TX_COMPLETE_CB */
@@ -98,12 +97,12 @@ tHID_STATUS hidh_conn_reg(void) {
 
   /* Now, register with L2CAP */
   if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&hst_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+                     false /* enable_snoop */, nullptr, hh_cb.l2cap_cfg.mtu)) {
     HIDH_TRACE_ERROR("HID-Host Control Registration failed");
     return (HID_ERR_L2CAP_FAILED);
   }
   if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&hst_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+                     false /* enable_snoop */, nullptr, hh_cb.l2cap_cfg.mtu)) {
     L2CA_Deregister(HID_PSM_CONTROL);
     HIDH_TRACE_ERROR("HID-Host Interrupt Registration failed");
     return (HID_ERR_L2CAP_FAILED);

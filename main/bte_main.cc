@@ -27,30 +27,16 @@
 #define LOG_TAG "bt_main"
 
 #include <base/logging.h>
-#include <base/threading/thread.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <time.h>
-
 #include <hardware/bluetooth.h>
 
 #include "bt_common.h"
-#include "bt_hci_bdroid.h"
-#include "bt_utils.h"
-#include "bta_api.h"
 #include "btcore/include/module.h"
 #include "bte.h"
-#include "btif_common.h"
+#include "btif/include/btif_config.h"
 #include "btsnoop.h"
 #include "btu.h"
 #include "device/include/interop.h"
 #include "hci_layer.h"
-#include "hcimsgs.h"
-#include "osi/include/alarm.h"
-#include "osi/include/fixed_queue.h"
-#include "osi/include/future.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "shim/hci_layer.h"
@@ -120,7 +106,7 @@ void bte_main_boot_entry(void) {
 
   hci = hci_layer_get_interface();
   if (!hci) {
-    LOG_ERROR(LOG_TAG, "%s could not get hci layer interface.", __func__);
+    LOG_ERROR("%s could not get hci layer interface.", __func__);
     return;
   }
 
@@ -146,31 +132,6 @@ void bte_main_cleanup() {
 
 /******************************************************************************
  *
- * Function         bte_main_enable
- *
- * Description      BTE MAIN API - Creates all the BTE tasks. Should be called
- *                  part of the Bluetooth stack enable sequence
- *
- * Returns          None
- *
- *****************************************************************************/
-void bte_main_enable() {
-  APPL_TRACE_DEBUG("%s", __func__);
-
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO(LOG_TAG, "%s Gd shim module enabled", __func__);
-    module_start_up(get_module(GD_SHIM_MODULE));
-    module_start_up(get_module(GD_HCI_MODULE));
-  } else {
-    module_start_up(get_module(BTSNOOP_MODULE));
-    module_start_up(get_module(HCI_MODULE));
-  }
-
-  BTU_StartUp();
-}
-
-/******************************************************************************
- *
  * Function         bte_main_disable
  *
  * Description      BTE MAIN API - Destroys all the BTE tasks. Should be called
@@ -182,29 +143,16 @@ void bte_main_enable() {
 void bte_main_disable(void) {
   APPL_TRACE_DEBUG("%s", __func__);
 
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    LOG_INFO(LOG_TAG, "%s Gd shim module enabled", __func__);
-    module_shut_down(get_module(GD_HCI_MODULE));
+  if (bluetooth::shim::is_any_gd_enabled()) {
+    LOG_INFO("%s Gd shim module disabled", __func__);
     module_shut_down(get_module(GD_SHIM_MODULE));
+    module_start_up(get_module(GD_IDLE_MODULE));
   } else {
     module_shut_down(get_module(HCI_MODULE));
     module_shut_down(get_module(BTSNOOP_MODULE));
   }
 
   BTU_ShutDown();
-}
-
-/******************************************************************************
- *
- * Function         bte_main_postload_cfg
- *
- * Description      BTE MAIN API - Stack postload configuration
- *
- * Returns          None
- *
- *****************************************************************************/
-void bte_main_postload_cfg(void) {
-  // TODO(eisenbach): [HIDL] DEPRECATE?
 }
 
 /******************************************************************************
