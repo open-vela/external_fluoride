@@ -63,19 +63,6 @@ bt_status_t btif_enable_bluetooth(void);
 
 /*******************************************************************************
  *
- * Function         btif_disable_bluetooth
- *
- * Description      Inititates shutdown of Bluetooth system.
- *                  Any active links will be dropped and device entering
- *                  non connectable/discoverable mode
- *
- * Returns          void
- *
- ******************************************************************************/
-bt_status_t btif_disable_bluetooth(void);
-
-/*******************************************************************************
- *
  * Function         btif_cleanup_bluetooth
  *
  * Description      Cleanup BTIF state.
@@ -131,18 +118,6 @@ bool is_niap_mode(void);
  *
  ******************************************************************************/
 int get_niap_config_compare_result(void);
-
-/*******************************************************************************
- *
- * Function         is_atv_device
- *
- * Description      Returns true if the local device is an Android TV
- *                  device, false if it is not.
- *
- * Returns          bool
- *
- ******************************************************************************/
-bool is_atv_device(void);
 
 /*******************************************************************************
  *
