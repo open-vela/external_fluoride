@@ -48,7 +48,6 @@
 #include "advertise_data_parser.h"
 #include "bt_common.h"
 #include "bta_gatt_api.h"
-#include "btif/include/stack_manager.h"
 #include "btif_api.h"
 #include "btif_av.h"
 #include "btif_bqr.h"
@@ -1740,7 +1739,7 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
         }
       }
       bluetooth::bqr::EnableBtQualityReport(false);
-      future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
+      btif_disable_bluetooth_evt();
       break;
 
     case BTA_DM_PIN_REQ_EVT:
