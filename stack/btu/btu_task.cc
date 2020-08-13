@@ -118,4 +118,11 @@ void main_thread_start_up() {
   }
 }
 
-void main_thread_shut_down() { main_thread.ShutDown(); }
+void btu_task_shut_down() {
+  // Shutdown message loop on task completed
+  main_thread.ShutDown();
+
+  module_clean_up(get_module(BTE_LOGMSG_MODULE));
+
+  btu_free_core();
+}
