@@ -369,7 +369,6 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
-#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_PIN_REQ_EVT */
@@ -1451,17 +1450,5 @@ extern void BTA_DmBleGetEnergyInfo(tBTA_BLE_ENERGY_INFO_CBACK* p_cmpl_cback);
  *
  ******************************************************************************/
 extern void BTA_VendorInit(void);
-
-/*******************************************************************************
- *
- * Function         BTA_BrcmCleanup
- *
- * Description      This function frees up Broadcom specific VS specific dynamic
- *                  memory
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void BTA_VendorCleanup(void);
 
 #endif /* BTA_API_H */
