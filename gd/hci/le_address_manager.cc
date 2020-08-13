@@ -41,7 +41,6 @@ void LeAddressManager::SetPrivacyPolicyForInitiatorAddress(
   switch (address_policy_) {
     case AddressPolicy::USE_PUBLIC_ADDRESS:
       le_address_ = fixed_address;
-      handler_->BindOnceOn(this, &LeAddressManager::resume_registered_clients).Invoke();
       break;
     case AddressPolicy::USE_STATIC_ADDRESS: {
       auto addr = fixed_address.GetAddress();
@@ -65,11 +64,6 @@ void LeAddressManager::SetPrivacyPolicyForInitiatorAddress(
       minimum_rotation_time_ = minimum_rotation_time;
       maximum_rotation_time_ = maximum_rotation_time;
       address_rotation_alarm_ = std::make_unique<os::Alarm>(handler_);
-      if (!registered_clients_.empty()) {
-        // clients registered and paused before the policy set, rotate random address and resume
-        // clients after set random address complete
-        handler_->BindOnceOn(this, &LeAddressManager::rotate_random_address).Invoke();
-      }
       break;
     case AddressPolicy::POLICY_NOT_SET:
       LOG_ALWAYS_FATAL("invalid parameters");
@@ -126,12 +120,7 @@ LeAddressManager::AddressPolicy LeAddressManager::Register(LeAddressManagerCallb
 
 void LeAddressManager::register_client(LeAddressManagerCallback* callback) {
   registered_clients_.insert(std::pair<LeAddressManagerCallback*, ClientState>(callback, ClientState::RESUMED));
-  if (address_policy_ == AddressPolicy::POLICY_NOT_SET) {
-    LOG_DEBUG("address policy isn't set yet, pause clients and return");
-    pause_registered_clients();
-    return;
-  } else if (
-      address_policy_ == AddressPolicy::USE_RESOLVABLE_ADDRESS ||
+  if (address_policy_ == AddressPolicy::POLICY_NOT_SET || address_policy_ == AddressPolicy::USE_RESOLVABLE_ADDRESS ||
       address_policy_ == AddressPolicy::USE_NON_RESOLVABLE_ADDRESS) {
     prepare_to_rotate();
   }
@@ -188,10 +177,7 @@ void LeAddressManager::ack_pause(LeAddressManagerCallback* callback) {
       return;
     }
   }
-
-  if (address_policy_ != AddressPolicy::POLICY_NOT_SET) {
-    handle_next_command();
-  }
+  handle_next_command();
 }
 
 void LeAddressManager::resume_registered_clients() {
@@ -221,7 +207,6 @@ void LeAddressManager::prepare_to_rotate() {
 void LeAddressManager::rotate_random_address() {
   if (address_policy_ != AddressPolicy::USE_RESOLVABLE_ADDRESS &&
       address_policy_ != AddressPolicy::USE_NON_RESOLVABLE_ADDRESS) {
-    LOG_ALWAYS_FATAL("Invalid address policy!");
     return;
   }
 
