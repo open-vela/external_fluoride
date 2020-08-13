@@ -75,11 +75,11 @@ bool LegacyConfigFile::Write(const ConfigCache& cache) {
 }
 
 bool LegacyConfigFile::Delete() {
-  if (!os::FileExists(path_)) {
-    LOG_WARN("Config file at \"%s\" does not exist", path_.c_str());
+  if (remove(path_.c_str()) != 0) {
+    LOG_WARN("unable to remove file '%s', error: %s", path_.c_str(), strerror(errno));
     return false;
   }
-  return os::RemoveFile(path_);
+  return true;
 }
 
 }  // namespace storage
