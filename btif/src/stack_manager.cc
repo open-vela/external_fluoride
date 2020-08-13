@@ -156,6 +156,7 @@ static void event_init_stack(void* context) {
     }
     module_init(get_module(BTIF_CONFIG_MODULE));
     btif_init_bluetooth();
+    bte_main_boot_entry();
 
     module_init(get_module(INTEROP_MODULE));
     bte_main_init();
