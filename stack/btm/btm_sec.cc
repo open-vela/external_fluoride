@@ -54,7 +54,6 @@ bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -1383,41 +1382,6 @@ void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr,
   } else {
     acl_set_disconnect_reason(HCI_SUCCESS);
     btsnd_hcic_user_passkey_reply(bd_addr, passkey);
-  }
-}
-
-/*******************************************************************************
- *
- * Function         BTM_IoCapRsp
- *
- * Description      This function is called in response to BTM_SP_IO_REQ_EVT
- *                  When the event data io_req.oob_data is set to
- *                  BTM_OOB_UNKNOWN by the tBTM_SP_CALLBACK implementation,
- *                  this function is called to provide the actual response
- *
- * Parameters:      bd_addr - Address of the peer device
- *                  io_cap  - The IO capability of local device.
- *                  oob     - BTM_OOB_NONE or BTM_OOB_PRESENT.
- *                  auth_req- MITM protection required or not.
- *
- ******************************************************************************/
-void BTM_IoCapRsp(const RawAddress& bd_addr, tBTM_IO_CAP io_cap,
-                  tBTM_OOB_DATA oob, tBTM_AUTH_REQ auth_req) {
-  BTM_TRACE_EVENT("BTM_IoCapRsp: state: %s  oob: %d io_cap: %d",
-                  btm_pair_state_descr(btm_cb.pairing_state), oob, io_cap);
-
-  if ((btm_cb.pairing_state != BTM_PAIR_STATE_WAIT_LOCAL_IOCAPS) ||
-      (btm_cb.pairing_bda != bd_addr))
-    return;
-
-  if (oob < BTM_OOB_UNKNOWN && io_cap < BTM_IO_CAP_MAX) {
-    btm_cb.devcb.loc_auth_req = auth_req;
-    btm_cb.devcb.loc_io_caps = io_cap;
-
-    if (btm_cb.pairing_flags & BTM_PAIR_FLAGS_WE_STARTED_DD)
-      auth_req = (BTM_AUTH_DD_BOND | (auth_req & BTM_AUTH_YN_BIT));
-
-    btsnd_hcic_io_cap_req_reply(bd_addr, io_cap, oob, auth_req);
   }
 }
 
@@ -2784,13 +2748,6 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
 
   p_dev_rec = btm_find_or_alloc_dev(evt_data.bd_addr);
 
@@ -4161,8 +4118,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
