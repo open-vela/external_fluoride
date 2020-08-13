@@ -222,6 +222,7 @@ static btif_dm_oob_cb_t oob_cb;
 static void btif_dm_generic_evt(uint16_t event, char* p_param);
 static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
                                    tBTA_TRANSPORT transport);
+static void btif_dm_cb_hid_remote_name(tBTM_REMOTE_DEV_NAME* p_remote_name);
 static void btif_update_remote_properties(const RawAddress& bd_addr,
                                           BD_NAME bd_name, DEV_CLASS dev_class,
                                           tBT_DEVICE_TYPE dev_type);
@@ -684,6 +685,29 @@ static void btif_update_remote_properties(const RawAddress& bdaddr,
   auto tmp = bdaddr;
   HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, status, &tmp,
             num_properties, properties);
+}
+
+/*******************************************************************************
+ *
+ * Function         btif_dm_cb_hid_remote_name
+ *
+ * Description      Remote name callback for HID device. Called in btif context
+ *                  Special handling for HID devices
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+static void btif_dm_cb_hid_remote_name(tBTM_REMOTE_DEV_NAME* p_remote_name) {
+  BTIF_TRACE_DEBUG("%s: status=%d pairing_cb.state=%d", __func__,
+                   p_remote_name->status, pairing_cb.state);
+  if (pairing_cb.state == BT_BOND_STATE_BONDING) {
+    if (p_remote_name->status == BTM_SUCCESS) {
+      bond_state_changed(BT_STATUS_SUCCESS, pairing_cb.bd_addr,
+                         BT_BOND_STATE_BONDED);
+    } else
+      bond_state_changed(BT_STATUS_FAIL, pairing_cb.bd_addr,
+                         BT_BOND_STATE_NONE);
+  }
 }
 
 /*******************************************************************************
@@ -1985,6 +2009,11 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
 static void btif_dm_generic_evt(uint16_t event, char* p_param) {
   BTIF_TRACE_EVENT("%s: event=%d", __func__, event);
   switch (event) {
+    case BTIF_DM_CB_DISCOVERY_STARTED: {
+      HAL_CBACK(bt_hal_cbacks, discovery_state_changed_cb,
+                BT_DISCOVERY_STARTED);
+    } break;
+
     case BTIF_DM_CB_CREATE_BOND: {
       pairing_cb.timeout_retries = NUM_TIMEOUT_RETRIES;
       btif_dm_create_bond_cb_t* create_bond_cb =
@@ -1994,6 +2023,10 @@ static void btif_dm_generic_evt(uint16_t event, char* p_param) {
 
     case BTIF_DM_CB_REMOVE_BOND: {
       btif_dm_cb_remove_bond((RawAddress*)p_param);
+    } break;
+
+    case BTIF_DM_CB_HID_REMOTE_NAME: {
+      btif_dm_cb_hid_remote_name((tBTM_REMOTE_DEV_NAME*)p_param);
     } break;
 
     case BTIF_DM_CB_BOND_STATE_BONDING: {
