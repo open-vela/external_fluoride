@@ -66,6 +66,7 @@ static void btm_acl_chk_peer_pkt_type_support(tACL_CONN* p,
                                               uint16_t* p_pkt_type);
 static void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec);
 static void btm_establish_continue(tACL_CONN* p_acl_cb);
+static void btm_pm_sm_alloc(uint8_t ind);
 static void btm_read_automatic_flush_timeout_timeout(void* data);
 static void btm_read_failed_contact_counter_timeout(void* data);
 static void btm_read_remote_features(uint16_t handle);
@@ -80,7 +81,6 @@ static tACL_CONN* acl_get_connection_from_handle(uint16_t handle);
 static tACL_CONN* btm_bda_to_acl(const RawAddress& bda,
                                  tBT_TRANSPORT transport);
 static tBTM_STATUS btm_set_packet_types(tACL_CONN* p, uint16_t pkt_types);
-static bool acl_is_role_master(const RawAddress& bda, tBT_TRANSPORT transport);
 
 void BTIF_dm_report_inquiry_status_change(uint8_t busy_level_flags);
 void BTA_dm_acl_up(const RawAddress bd_addr, tBT_TRANSPORT transport,
@@ -324,22 +324,7 @@ void btm_acl_created(const RawAddress& bda, DEV_CLASS dc, BD_NAME bdn,
       p->switch_role_failed_attempts = 0;
       p->switch_role_state = BTM_ACL_SWKEY_STATE_IDLE;
 
-      /*******************************************************************************
-       *
-       * Function         btm_pm_sm_alloc
-       *
-       * Description      This function initializes the control block of an ACL
-       *link. It is called when an ACL connection is created.
-       *
-       * Returns          void
-       *
-       ******************************************************************************/
-      tBTM_PM_MCB* p_db = &btm_cb.acl_cb_.pm_mode_db[xx]; /* per ACL link */
-      memset(p_db, 0, sizeof(tBTM_PM_MCB));
-      p_db->state = BTM_PM_ST_ACTIVE;
-#if (BTM_PM_DEBUG == TRUE)
-      BTM_TRACE_DEBUG("btm_pm_sm_alloc ind:%d st:%d", xx, p_db->state);
-#endif  // BTM_PM_DEBUG
+      btm_pm_sm_alloc(xx);
 
       if (dc) memcpy(p->remote_dc, dc, DEV_CLASS_LEN);
 
@@ -2444,6 +2429,25 @@ void btm_acl_chk_peer_pkt_type_support(tACL_CONN* p, uint16_t* p_pkt_type) {
   }
 }
 
+/*******************************************************************************
+ *
+ * Function         btm_pm_sm_alloc
+ *
+ * Description      This function initializes the control block of an ACL link.
+ *                  It is called when an ACL connection is created.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_pm_sm_alloc(uint8_t ind) {
+  tBTM_PM_MCB* p_db = &btm_cb.acl_cb_.pm_mode_db[ind]; /* per ACL link */
+  memset(p_db, 0, sizeof(tBTM_PM_MCB));
+  p_db->state = BTM_PM_ST_ACTIVE;
+#if (BTM_PM_DEBUG == TRUE)
+  BTM_TRACE_DEBUG("btm_pm_sm_alloc ind:%d st:%d", ind, p_db->state);
+#endif  // BTM_PM_DEBUG
+}
+
 bool lmp_version_below(const RawAddress& bda, uint8_t version) {
   tACL_CONN* acl = btm_bda_to_acl(bda, BT_TRANSPORT_LE);
   if (acl == NULL || acl->lmp_version == 0) {
@@ -2455,20 +2459,12 @@ bool lmp_version_below(const RawAddress& bda, uint8_t version) {
   return acl->lmp_version < version;
 }
 
-bool acl_is_role_master(const RawAddress& bda, tBT_TRANSPORT transport) {
+bool acl_br_edr_is_role_master(const RawAddress& bda) {
   tACL_CONN* p = btm_bda_to_acl(bda, BT_TRANSPORT_BR_EDR);
   if (p == nullptr) {
     return false;
   }
   return (p->link_role == HCI_ROLE_MASTER);
-}
-
-bool acl_br_edr_is_role_master(const RawAddress& bda) {
-  return acl_is_role_master(bda, BT_TRANSPORT_BR_EDR);
-}
-
-bool acl_ble_is_role_master(const RawAddress& bda) {
-  return acl_is_role_master(bda, BT_TRANSPORT_LE);
 }
 
 bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x) {
