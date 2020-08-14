@@ -55,6 +55,8 @@
 #define BTM_PM_GET_MD2 2
 #define BTM_PM_GET_COMP 3
 
+uint8_t btm_handle_to_acl_index(uint16_t hci_handle);
+
 const uint8_t
     btm_pm_md_comp_matrix[BTM_PM_NUM_SET_MODES * BTM_PM_NUM_SET_MODES] = {
         BTM_PM_GET_COMP, BTM_PM_GET_MD2,  BTM_PM_GET_MD2,
@@ -606,29 +608,6 @@ static tBTM_STATUS btm_pm_snd_md_req(uint8_t pm_id, int link_ind,
 
 /*******************************************************************************
  *
- * Function         btm_pm_check_stored
- *
- * Description      This function is called when an HCI command status event
- *                  occurs to check if there's any PM command issued while
- *                  waiting for HCI command status.
- *
- * Returns          none.
- *
- ******************************************************************************/
-static void btm_pm_check_stored(void) {
-  int xx;
-  for (xx = 0; xx < MAX_L2CAP_LINKS; xx++) {
-    if (btm_cb.acl_cb_.pm_mode_db[xx].state & BTM_PM_STORED_MASK) {
-      btm_cb.acl_cb_.pm_mode_db[xx].state &= ~BTM_PM_STORED_MASK;
-      BTM_TRACE_DEBUG("btm_pm_check_stored :%d", xx);
-      btm_pm_snd_md_req(BTM_PM_SET_ONLY_ID, xx, NULL);
-      break;
-    }
-  }
-}
-
-/*******************************************************************************
- *
  * Function         btm_pm_proc_cmd_status
  *
  * Description      This function is called when an HCI command status event
@@ -674,7 +653,26 @@ void btm_pm_proc_cmd_status(uint8_t status) {
 #endif  // BTM_PM_DEBUG
   btm_cb.acl_cb_.pm_pend_link = MAX_L2CAP_LINKS;
 
-  btm_pm_check_stored();
+  /*******************************************************************************
+   *
+   * Function         btm_pm_check_stored
+   *
+   * Description      This function is called when an HCI command status event
+   *                  occurs to check if there's any PM command issued while
+   *                  waiting for HCI command status.
+   *
+   * Returns          none.
+   *
+   ******************************************************************************/
+  int xx;
+  for (xx = 0; xx < MAX_L2CAP_LINKS; xx++) {
+    if (btm_cb.acl_cb_.pm_mode_db[xx].state & BTM_PM_STORED_MASK) {
+      btm_cb.acl_cb_.pm_mode_db[xx].state &= ~BTM_PM_STORED_MASK;
+      BTM_TRACE_DEBUG("btm_pm_check_stored :%d", xx);
+      btm_pm_snd_md_req(BTM_PM_SET_ONLY_ID, xx, NULL);
+      break;
+    }
+  }
 }
 
 /*******************************************************************************
