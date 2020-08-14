@@ -88,7 +88,6 @@ bool restricted_mode = false;
 bool niap_mode = false;
 const int CONFIG_COMPARE_ALL_PASS = 0b11;
 int niap_config_compare_result = CONFIG_COMPARE_ALL_PASS;
-bool is_local_device_atv = false;
 
 /*******************************************************************************
  *  Externs
@@ -142,7 +141,7 @@ static bool is_profile(const char* p1, const char* p2) {
 
 static int init(bt_callbacks_t* callbacks, bool start_restricted,
                 bool is_niap_mode, int config_compare_result,
-                const char** init_flags, bool is_atv) {
+                const char** init_flags) {
   LOG_INFO("%s: start restricted = %d ; niap = %d, config compare result = %d",
            __func__, start_restricted, is_niap_mode, config_compare_result);
 
@@ -158,7 +157,6 @@ static int init(bt_callbacks_t* callbacks, bool start_restricted,
   restricted_mode = start_restricted;
   niap_mode = is_niap_mode;
   niap_config_compare_result = config_compare_result;
-  is_local_device_atv = is_atv;
 
   stack_manager_get_interface()->init_stack();
   btif_debug_init();
@@ -189,20 +187,21 @@ int get_niap_config_compare_result() {
   return niap_mode ? niap_config_compare_result : CONFIG_COMPARE_ALL_PASS;
 }
 
-bool is_atv_device() { return is_local_device_atv; }
-
 static int get_adapter_properties(void) {
-  /* sanity check */
-  if (!interface_ready()) return BT_STATUS_NOT_READY;
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
 
-  return btif_get_adapter_properties();
+  do_in_jni_thread(FROM_HERE, base::BindOnce(btif_get_adapter_properties));
+  return BT_STATUS_SUCCESS;
 }
 
 static int get_adapter_property(bt_property_type_t type) {
-  /* sanity check */
-  if (!interface_ready()) return BT_STATUS_NOT_READY;
+  /* Allow get_adapter_property only for BDADDR and BDNAME if BT is disabled */
+  if (!btif_is_enabled() && (type != BT_PROPERTY_BDADDR) &&
+      (type != BT_PROPERTY_BDNAME) && (type != BT_PROPERTY_CLASS_OF_DEVICE))
+    return BT_STATUS_NOT_READY;
 
-  return btif_get_adapter_property(type);
+  do_in_jni_thread(FROM_HERE, base::BindOnce(btif_get_adapter_property, type));
+  return BT_STATUS_SUCCESS;
 }
 
 static int set_adapter_property(const bt_property_t* property) {
