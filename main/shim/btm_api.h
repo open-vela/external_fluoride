@@ -1880,7 +1880,8 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
  *                  BTM_UNKNOWN_ADDR if bd addr is not active or bad
  *
  ******************************************************************************/
-bool BTM_ReadPowerMode(const RawAddress& remote_bda, tBTM_PM_MODE* p_mode);
+tBTM_STATUS BTM_ReadPowerMode(const RawAddress& remote_bda,
+                              tBTM_PM_MODE* p_mode);
 
 /*******************************************************************************
  *
