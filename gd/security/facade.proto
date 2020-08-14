@@ -24,7 +24,6 @@ service SecurityModuleFacade {
   rpc SendUiCallback(UiCallbackMsg) returns (google.protobuf.Empty) {}
   rpc FetchUiEvents(google.protobuf.Empty) returns (stream UiMsg) {}
   rpc FetchBondEvents(google.protobuf.Empty) returns (stream BondMsg) {}
-  rpc FetchHelperEvents(google.protobuf.Empty) returns (stream SecurityHelperMsg) {}
   rpc EnforceSecurityPolicy(SecurityPolicyMessage) returns (google.protobuf.Empty) {}
   rpc FetchEnforceSecurityPolicyEvents(google.protobuf.Empty) returns (stream EnforceSecurityPolicyMsg) {}
 }
@@ -73,13 +72,6 @@ enum BondMsgType {
 
 message BondMsg {
   BondMsgType message_type = 1;
-  facade.BluetoothAddressWithType peer = 2;
-}
-
-enum HelperMsgType { DEVICE_DISCONNECTED = 0; }
-
-message SecurityHelperMsg {
-  HelperMsgType message_type = 1;
   facade.BluetoothAddressWithType peer = 2;
 }
 
