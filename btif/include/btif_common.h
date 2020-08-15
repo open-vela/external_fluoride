@@ -76,6 +76,8 @@
 #define BTIF_PAN 4
 #define BTIF_HF_CLIENT 5
 
+extern bt_callbacks_t* bt_hal_cbacks;
+
 #define HAL_CBACK(P_CB, P_CBACK, ...)                              \
   do {                                                             \
     if ((P_CB) && (P_CB)->P_CBACK) {                               \
@@ -91,6 +93,16 @@
  * on downstreams path
  */
 enum {
+  BTIF_CORE_API_START = BTIF_SIG_START(BTIF_CORE),
+  BTIF_CORE_STORAGE_NO_ACTION,
+  BTIF_CORE_STORAGE_ADAPTER_WRITE,
+  BTIF_CORE_STORAGE_REMOTE_WRITE,
+  BTIF_CORE_STORAGE_REMOTE_READ,
+  BTIF_CORE_STORAGE_REMOTE_READ_ALL,
+  BTIF_CORE_STORAGE_READ_ALL,
+  BTIF_CORE_STORAGE_NOTIFY_STATUS,
+  /* add here */
+
   BTIF_DM_API_START = BTIF_SIG_START(BTIF_DM),
   BTIF_DM_ENABLE_SERVICE,
   BTIF_DM_DISABLE_SERVICE,
@@ -193,27 +205,5 @@ bt_status_t btif_transfer_context(tBTIF_CBACK* p_cback, uint16_t event,
                                   tBTIF_COPY_CBACK* p_copy_cback);
 
 void btif_init_ok();
-
-void invoke_adapter_state_changed_cb(bt_state_t state);
-void invoke_adapter_properties_cb(bt_status_t status, int num_properties,
-                                  bt_property_t* properties);
-void invoke_remote_device_properties_cb(bt_status_t status, RawAddress bd_addr,
-                                        int num_properties,
-                                        bt_property_t* properties);
-void invoke_device_found_cb(int num_properties, bt_property_t* properties);
-void invoke_discovery_state_changed_cb(bt_discovery_state_t state);
-void invoke_pin_request_cb(RawAddress bd_addr, bt_bdname_t bd_name,
-                           uint32_t cod, bool min_16_digit);
-void invoke_ssp_request_cb(RawAddress bd_addr, bt_bdname_t bd_name,
-                           uint32_t cod, bt_ssp_variant_t pairing_variant,
-                           uint32_t pass_key);
-void invoke_bond_state_changed_cb(bt_status_t status, RawAddress bd_addr,
-                                  bt_bond_state_t state);
-void invoke_acl_state_changed_cb(bt_status_t status, RawAddress bd_addr,
-                                 bt_acl_state_t state);
-void invoke_thread_evt_cb(bt_cb_thread_evt event);
-void invoke_le_test_mode_cb(bt_status_t status, uint16_t count);
-void invoke_energy_info_cb(bt_activity_energy_info energy_info,
-                           bt_uid_traffic_t* uid_data);
 
 #endif /* BTIF_COMMON_H */
