@@ -34,7 +34,6 @@
 #include "hiddefs.h"
 #include "hidh_api.h"
 #include "hidh_int.h"
-#include "stack/btm/btm_dev.h"
 
 using bluetooth::Uuid;
 

@@ -33,7 +33,6 @@
 #include "hcimsgs.h"
 
 #include "btm_ble_int.h"
-#include "stack/btm/btm_dev.h"
 #include "stack/crypto_toolbox/crypto_toolbox.h"
 #include "stack/include/acl_api.h"
 

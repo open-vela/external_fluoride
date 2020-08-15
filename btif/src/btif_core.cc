@@ -135,6 +135,9 @@ static uid_set_t* uid_set;
 /*******************************************************************************
  *  Static functions
  ******************************************************************************/
+static void btif_jni_associate();
+static void btif_jni_disassociate();
+
 /* sends message to btif task */
 static void btif_sendmsg(void* p_msg);
 
@@ -320,7 +323,7 @@ bt_status_t btif_init_bluetooth() {
   LOG_INFO("%s entered", __func__);
   exit_manager = new base::AtExitManager();
   jni_thread.StartUp();
-  invoke_thread_evt_cb(ASSOCIATE_JVM);
+  jni_thread.DoInThread(FROM_HERE, base::Bind(btif_jni_associate));
   LOG_INFO("%s finished", __func__);
   return BT_STATUS_SUCCESS;
 }
@@ -356,7 +359,8 @@ void btif_enable_bluetooth_evt() {
     prop.type = BT_PROPERTY_BDADDR;
     prop.val = (void*)&local_bd_addr;
     prop.len = sizeof(RawAddress);
-    invoke_adapter_properties_cb(BT_STATUS_SUCCESS, 1, &prop);
+    HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, BT_STATUS_SUCCESS, 1,
+              &prop);
   }
 
   /* callback to HAL */
@@ -394,7 +398,7 @@ void btif_enable_bluetooth_evt() {
 bt_status_t btif_cleanup_bluetooth() {
   LOG_INFO("%s entered", __func__);
   btif_dm_cleanup();
-  invoke_thread_evt_cb(DISASSOCIATE_JVM);
+  jni_thread.DoInThread(FROM_HERE, base::BindOnce(btif_jni_disassociate));
   btif_queue_release();
   jni_thread.ShutDown();
   delete exit_manager;
@@ -425,9 +429,16 @@ static void btif_dut_mode_cback(UNUSED_ATTR tBTM_VSC_CMPL* p) {
  * Description      Configure Test Mode - 'enable' to 1 puts the device in test
  *                       mode and 0 exits test mode
  *
+ * Returns          BT_STATUS_SUCCESS on success
+ *
  ******************************************************************************/
-void btif_dut_mode_configure(uint8_t enable) {
+bt_status_t btif_dut_mode_configure(uint8_t enable) {
   BTIF_TRACE_DEBUG("%s", __func__);
+
+  if (!stack_manager_get_interface()->get_stack_is_running()) {
+    BTIF_TRACE_ERROR("btif_dut_mode_configure : Bluetooth not enabled");
+    return BT_STATUS_NOT_READY;
+  }
 
   btif_dut_mode = enable;
   if (enable == 1) {
@@ -436,6 +447,7 @@ void btif_dut_mode_configure(uint8_t enable) {
     // Can't do in process reset anyways - just quit
     kill(getpid(), SIGKILL);
   }
+  return BT_STATUS_SUCCESS;
 }
 
 /*******************************************************************************
@@ -444,10 +456,18 @@ void btif_dut_mode_configure(uint8_t enable) {
  *
  * Description     Sends a HCI Vendor specific command to the controller
  *
+ * Returns          BT_STATUS_SUCCESS on success
+ *
  ******************************************************************************/
-void btif_dut_mode_send(uint16_t opcode, uint8_t* buf, uint8_t len) {
+bt_status_t btif_dut_mode_send(uint16_t opcode, uint8_t* buf, uint8_t len) {
+  /* TODO: Check that opcode is a vendor command group */
   BTIF_TRACE_DEBUG("%s", __func__);
+  if (!btif_is_dut_mode()) {
+    BTIF_TRACE_ERROR("Bluedroid HAL needs to be init with test_mode set to 1.");
+    return BT_STATUS_FAIL;
+  }
   BTM_VendorSpecificCommand(opcode, len, buf, btif_dut_mode_cback);
+  return BT_STATUS_SUCCESS;
 }
 
 /*****************************************************************************
@@ -526,7 +546,9 @@ static bt_status_t btif_in_get_adapter_properties(void) {
   btif_storage_get_adapter_property(&properties[num_props]);
   num_props++;
 
-  invoke_adapter_properties_cb(BT_STATUS_SUCCESS, num_props, properties);
+  HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, BT_STATUS_SUCCESS, num_props,
+            properties);
+
   return BT_STATUS_SUCCESS;
 }
 
@@ -571,29 +593,119 @@ static bt_status_t btif_in_get_remote_device_properties(RawAddress* bd_addr) {
                                           &remote_properties[num_props]);
   num_props++;
 
-  invoke_remote_device_properties_cb(BT_STATUS_SUCCESS, *bd_addr, num_props,
-                                     remote_properties);
+  HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, BT_STATUS_SUCCESS,
+            bd_addr, num_props, remote_properties);
 
   return BT_STATUS_SUCCESS;
 }
 
-static void btif_core_storage_adapter_notify_empty_success() {
-  invoke_adapter_properties_cb(BT_STATUS_SUCCESS, 0, NULL);
+/*******************************************************************************
+ *
+ * Function         execute_storage_request
+ *
+ * Description      Executes adapter storage request in BTIF context
+ *
+ * Returns          bt_status_t
+ *
+ ******************************************************************************/
+
+static void execute_storage_request(uint16_t event, char* p_param) {
+  bt_status_t status = BT_STATUS_SUCCESS;
+
+  BTIF_TRACE_EVENT("execute storage request event : %d", event);
+
+  switch (event) {
+    case BTIF_CORE_STORAGE_ADAPTER_WRITE: {
+      btif_storage_req_t* p_req = (btif_storage_req_t*)p_param;
+      bt_property_t* p_prop = &(p_req->write_req.prop);
+      BTIF_TRACE_EVENT("type: %d, len %d, 0x%x", p_prop->type, p_prop->len,
+                       p_prop->val);
+
+      status = btif_storage_set_adapter_property(p_prop);
+      HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, status, 1, p_prop);
+    } break;
+
+    case BTIF_CORE_STORAGE_NOTIFY_STATUS: {
+      HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, status, 0, NULL);
+    } break;
+
+    default:
+      BTIF_TRACE_ERROR("%s invalid event id (%d)", __func__, event);
+      break;
+  }
 }
 
-static void btif_core_storage_adapter_write(bt_property_t* prop) {
-  BTIF_TRACE_EVENT("type: %d, len %d, 0x%x", prop->type, prop->len, prop->val);
-  bt_status_t status = btif_storage_set_adapter_property(prop);
-  invoke_adapter_properties_cb(status, 1, prop);
+static void execute_storage_remote_request(uint16_t event, char* p_param) {
+  bt_status_t status = BT_STATUS_FAIL;
+  bt_property_t prop;
+
+  BTIF_TRACE_EVENT("execute storage remote request event : %d", event);
+
+  switch (event) {
+    case BTIF_CORE_STORAGE_REMOTE_READ: {
+      char buf[1024];
+      btif_storage_req_t* p_req = (btif_storage_req_t*)p_param;
+      prop.type = p_req->read_req.type;
+      prop.val = (void*)buf;
+      prop.len = sizeof(buf);
+
+      status = btif_storage_get_remote_device_property(
+          &(p_req->read_req.bd_addr), &prop);
+      HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, status,
+                &(p_req->read_req.bd_addr), 1, &prop);
+    } break;
+    case BTIF_CORE_STORAGE_REMOTE_WRITE: {
+      btif_storage_req_t* p_req = (btif_storage_req_t*)p_param;
+      status = btif_storage_set_remote_device_property(
+          &(p_req->write_req.bd_addr), &(p_req->write_req.prop));
+    } break;
+    case BTIF_CORE_STORAGE_REMOTE_READ_ALL: {
+      btif_storage_req_t* p_req = (btif_storage_req_t*)p_param;
+      btif_in_get_remote_device_properties(&p_req->read_req.bd_addr);
+    } break;
+  }
 }
 
 void btif_adapter_properties_evt(bt_status_t status, uint32_t num_props,
                                  bt_property_t* p_props) {
-  invoke_adapter_properties_cb(status, num_props, p_props);
+  HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, status, num_props, p_props);
 }
 void btif_remote_properties_evt(bt_status_t status, RawAddress* remote_addr,
                                 uint32_t num_props, bt_property_t* p_props) {
-  invoke_remote_device_properties_cb(status, *remote_addr, num_props, p_props);
+  HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, status, remote_addr,
+            num_props, p_props);
+}
+
+/*******************************************************************************
+ *
+ * Function         btif_in_storage_request_copy_cb
+ *
+ * Description     Switch context callback function to perform the deep copy for
+ *                 both the adapter and remote_device property API
+ *
+ * Returns          None
+ *
+ ******************************************************************************/
+static void btif_in_storage_request_copy_cb(uint16_t event, char* p_new_buf,
+                                            char* p_old_buf) {
+  btif_storage_req_t* new_req = (btif_storage_req_t*)p_new_buf;
+  btif_storage_req_t* old_req = (btif_storage_req_t*)p_old_buf;
+
+  BTIF_TRACE_EVENT("%s", __func__);
+  switch (event) {
+    case BTIF_CORE_STORAGE_REMOTE_WRITE:
+    case BTIF_CORE_STORAGE_ADAPTER_WRITE: {
+      new_req->write_req.bd_addr = old_req->write_req.bd_addr;
+      /* Copy the member variables one at a time */
+      new_req->write_req.prop.type = old_req->write_req.prop.type;
+      new_req->write_req.prop.len = old_req->write_req.prop.len;
+
+      new_req->write_req.prop.val =
+          (uint8_t*)(p_new_buf + sizeof(btif_storage_req_t));
+      memcpy(new_req->write_req.prop.val, old_req->write_req.prop.val,
+             old_req->write_req.prop.len);
+    } break;
+  }
 }
 
 /*******************************************************************************
@@ -660,7 +772,7 @@ void btif_get_adapter_property(bt_property_type_t type) {
   } else {
     status = btif_storage_get_adapter_property(&prop);
   }
-  invoke_adapter_properties_cb(status, 1, &prop);
+  HAL_CBACK(bt_hal_cbacks, adapter_properties_cb, status, 1, &prop);
 }
 
 bt_property_t* property_deep_copy(const bt_property_t* prop) {
@@ -684,16 +796,20 @@ bt_property_t* property_deep_copy(const bt_property_t* prop) {
  *
  ******************************************************************************/
 
-void btif_set_adapter_property(bt_property_t* property) {
+void btif_set_adapter_property(const bt_property_t* property) {
+  btif_storage_req_t req;
+  int storage_req_id = BTIF_CORE_STORAGE_NOTIFY_STATUS; /* default */
+  char bd_name[BTM_MAX_LOC_BD_NAME_LEN + 1];
+  uint16_t name_len = 0;
+
   BTIF_TRACE_EVENT("btif_set_adapter_property type: %d, len %d, 0x%x",
                    property->type, property->len, property->val);
 
   switch (property->type) {
     case BT_PROPERTY_BDNAME: {
-      char bd_name[BTM_MAX_LOC_BD_NAME_LEN + 1];
-      uint16_t name_len = property->len > BTM_MAX_LOC_BD_NAME_LEN
-                              ? BTM_MAX_LOC_BD_NAME_LEN
-                              : property->len;
+      name_len = property->len > BTM_MAX_LOC_BD_NAME_LEN
+                     ? BTM_MAX_LOC_BD_NAME_LEN
+                     : property->len;
       memcpy(bd_name, property->val, name_len);
       bd_name[name_len] = '\0';
 
@@ -701,7 +817,7 @@ void btif_set_adapter_property(bt_property_t* property) {
 
       BTA_DmSetDeviceName((char*)bd_name);
 
-      btif_core_storage_adapter_write(property);
+      storage_req_id = BTIF_CORE_STORAGE_ADAPTER_WRITE;
     } break;
 
     case BT_PROPERTY_ADAPTER_SCAN_MODE: {
@@ -734,13 +850,13 @@ void btif_set_adapter_property(bt_property_t* property) {
 
       BTA_DmSetVisibility(disc_mode, conn_mode, BTA_DM_IGNORE, BTA_DM_IGNORE);
 
-      btif_core_storage_adapter_write(property);
+      storage_req_id = BTIF_CORE_STORAGE_ADAPTER_WRITE;
     } break;
     case BT_PROPERTY_ADAPTER_DISCOVERY_TIMEOUT: {
       /* Nothing to do beside store the value in NV.  Java
          will change the SCAN_MODE property after setting timeout,
          if required */
-      btif_core_storage_adapter_write(property);
+      storage_req_id = BTIF_CORE_STORAGE_ADAPTER_WRITE;
     } break;
     case BT_PROPERTY_CLASS_OF_DEVICE: {
       DEV_CLASS dev_class;
@@ -750,17 +866,24 @@ void btif_set_adapter_property(bt_property_t* property) {
                        dev_class[1], dev_class[2]);
 
       BTM_SetDeviceClass(dev_class);
-      btif_core_storage_adapter_notify_empty_success();
     } break;
     case BT_PROPERTY_LOCAL_IO_CAPS:
     case BT_PROPERTY_LOCAL_IO_CAPS_BLE: {
       // Changing IO Capability of stack at run-time is not currently supported.
       // This call changes the stored value which will affect the stack next
       // time it starts up.
-      btif_core_storage_adapter_write(property);
+      storage_req_id = BTIF_CORE_STORAGE_ADAPTER_WRITE;
     } break;
     default:
       break;
+  }
+
+  if (storage_req_id != BTIF_CORE_STORAGE_NO_ACTION) {
+    /* pass on to storage for updating local database */
+
+    req.write_req.bd_addr = RawAddress::kEmpty;
+    memcpy(&(req.write_req.prop), property, sizeof(bt_property_t));
+    execute_storage_request(storage_req_id, (char*)&req);
   }
 }
 
@@ -770,18 +893,20 @@ void btif_set_adapter_property(bt_property_t* property) {
  *
  * Description      Fetches the remote device property from the NVRAM
  *
+ * Returns          bt_status_t
+ *
  ******************************************************************************/
-void btif_get_remote_device_property(RawAddress remote_addr,
-                                     bt_property_type_t type) {
-  char buf[1024];
-  bt_property_t prop;
-  prop.type = type;
-  prop.val = (void*)buf;
-  prop.len = sizeof(buf);
+bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
+                                            bt_property_type_t type) {
+  btif_storage_req_t req;
 
-  bt_status_t status =
-      btif_storage_get_remote_device_property(&remote_addr, &prop);
-  invoke_remote_device_properties_cb(status, remote_addr, 1, &prop);
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
+
+  req.read_req.bd_addr = *remote_addr;
+  req.read_req.type = type;
+  return btif_transfer_context(execute_storage_remote_request,
+                               BTIF_CORE_STORAGE_REMOTE_READ, (char*)&req,
+                               sizeof(btif_storage_req_t), NULL);
 }
 
 /*******************************************************************************
@@ -790,9 +915,18 @@ void btif_get_remote_device_property(RawAddress remote_addr,
  *
  * Description      Fetches all the remote device properties from NVRAM
  *
+ * Returns          bt_status_t
+ *
  ******************************************************************************/
-void btif_get_remote_device_properties(RawAddress remote_addr) {
-  btif_in_get_remote_device_properties(&remote_addr);
+bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr) {
+  btif_storage_req_t req;
+
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
+
+  req.read_req.bd_addr = *remote_addr;
+  return btif_transfer_context(execute_storage_remote_request,
+                               BTIF_CORE_STORAGE_REMOTE_READ_ALL, (char*)&req,
+                               sizeof(btif_storage_req_t), NULL);
 }
 
 /*******************************************************************************
@@ -803,10 +937,39 @@ void btif_get_remote_device_properties(RawAddress remote_addr) {
  *                  Currently, BT_PROPERTY_REMOTE_FRIENDLY_NAME is the only
  *                  remote device property that can be set
  *
+ * Returns          bt_status_t
+ *
  ******************************************************************************/
-void btif_set_remote_device_property(RawAddress* remote_addr,
-                                     bt_property_t* property) {
-  btif_storage_set_remote_device_property(remote_addr, property);
+bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
+                                            const bt_property_t* property) {
+  btif_storage_req_t req;
+
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
+
+  req.write_req.bd_addr = *remote_addr;
+  memcpy(&(req.write_req.prop), property, sizeof(bt_property_t));
+
+  return btif_transfer_context(execute_storage_remote_request,
+                               BTIF_CORE_STORAGE_REMOTE_WRITE, (char*)&req,
+                               sizeof(btif_storage_req_t) + property->len,
+                               btif_in_storage_request_copy_cb);
+}
+
+/*******************************************************************************
+ *
+ * Function         btif_get_remote_service_record
+ *
+ * Description      Looks up the service matching uuid on the remote device
+ *                  and fetches the SCN and service_name if the UUID is found
+ *
+ * Returns          bt_status_t
+ *
+ ******************************************************************************/
+bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
+                                           const Uuid& uuid) {
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
+
+  return btif_dm_get_remote_service_record(remote_addr, uuid);
 }
 
 /*******************************************************************************
@@ -887,4 +1050,15 @@ bt_status_t btif_disable_service(tBTA_SERVICE_ID service_id) {
   }
 
   return BT_STATUS_SUCCESS;
+}
+
+static void btif_jni_associate() {
+  BTIF_TRACE_DEBUG("%s Associating thread to JVM", __func__);
+  HAL_CBACK(bt_hal_cbacks, thread_evt_cb, ASSOCIATE_JVM);
+}
+
+static void btif_jni_disassociate() {
+  BTIF_TRACE_DEBUG("%s Disassociating thread from JVM", __func__);
+  HAL_CBACK(bt_hal_cbacks, thread_evt_cb, DISASSOCIATE_JVM);
+  bt_hal_cbacks = NULL;
 }

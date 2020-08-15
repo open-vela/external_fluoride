@@ -34,7 +34,6 @@
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_dev.h"
 
 using base::StringPrintf;
 
