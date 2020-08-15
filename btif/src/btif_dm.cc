@@ -2130,8 +2130,10 @@ void btif_dm_start_discovery(void) {
   BTIF_TRACE_EVENT("%s", __func__);
 
   /* Cleanup anything remaining on index 0 */
-  BTM_BleAdvFilterParamSetup(BTM_BLE_SCAN_COND_DELETE, 0, nullptr,
-                             base::Bind(&bte_scan_filt_param_cfg_evt, 0));
+  do_in_main_thread(
+      FROM_HERE,
+      base::Bind(&BTM_BleAdvFilterParamSetup, BTM_BLE_SCAN_COND_DELETE, 0,
+                 nullptr, base::Bind(&bte_scan_filt_param_cfg_evt, 0)));
 
   auto adv_filt_param = std::make_unique<btgatt_filt_param_setup_t>();
   /* Add an allow-all filter on index 0*/
@@ -2141,9 +2143,10 @@ void btif_dm_start_discovery(void) {
   adv_filt_param->list_logic_type = BTA_DM_BLE_PF_LIST_LOGIC_OR;
   adv_filt_param->rssi_low_thres = LOWEST_RSSI_VALUE;
   adv_filt_param->rssi_high_thres = LOWEST_RSSI_VALUE;
-  BTM_BleAdvFilterParamSetup(BTM_BLE_SCAN_COND_ADD, 0,
-                             std::move(adv_filt_param),
-                             base::Bind(&bte_scan_filt_param_cfg_evt, 0));
+  do_in_main_thread(
+      FROM_HERE, base::Bind(&BTM_BleAdvFilterParamSetup, BTM_BLE_SCAN_COND_ADD,
+                            0, base::Passed(&adv_filt_param),
+                            base::Bind(&bte_scan_filt_param_cfg_evt, 0)));
 
   /* TODO: Do we need to handle multiple inquiries at the same time? */
 
@@ -2318,8 +2321,9 @@ void btif_dm_pin_reply(const RawAddress bd_addr, uint8_t accept,
     uint8_t tmp_addr_type = 0;
     BTM_ReadDevInfo(bd_addr, &tmp_dev_type, &tmp_addr_type);
 
-    bluetooth::shim::BTIF_DM_pin_reply(bd_addr, tmp_addr_type, accept, pin_len,
-                                       pin_code);
+    do_in_main_thread(FROM_HERE,
+                      base::Bind(&bluetooth::shim::BTIF_DM_pin_reply, bd_addr,
+                                 tmp_addr_type, accept, pin_len, pin_code));
     return;
   }
 
@@ -2354,7 +2358,9 @@ void btif_dm_ssp_reply(const RawAddress bd_addr, bt_ssp_variant_t variant,
     uint8_t tmp_addr_type = 0;
     BTM_ReadDevInfo(bd_addr, &tmp_dev_type, &tmp_addr_type);
 
-    bluetooth::shim::BTIF_DM_ssp_reply(bd_addr, tmp_addr_type, variant, accept);
+    do_in_main_thread(FROM_HERE,
+                      base::Bind(&bluetooth::shim::BTIF_DM_ssp_reply, bd_addr,
+                                 tmp_addr_type, variant, accept));
     return;
   }
 
