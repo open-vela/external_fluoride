@@ -33,7 +33,6 @@
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
 
 /* Control block for AVCT */
 tAVCT_CB avct_cb;

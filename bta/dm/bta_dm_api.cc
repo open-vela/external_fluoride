@@ -31,7 +31,6 @@
 #include "bta_sys_int.h"
 #include "btm_api.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/include/btu.h"
 #include "utl.h"
 
