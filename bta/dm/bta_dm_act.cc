@@ -51,7 +51,6 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "sdp_api.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/gatt/connection_manager.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/gatt_api.h"
@@ -693,7 +692,7 @@ void bta_dm_add_device(std::unique_ptr<tBTA_DM_API_ADD_DEVICE> msg) {
 /** This function forces to close the connection to a remote device and
  * optionaly remove the device from security database if required. */
 void bta_dm_close_acl(const RawAddress& bd_addr, bool remove_dev,
-                      tBT_TRANSPORT transport) {
+                      tBTA_TRANSPORT transport) {
   uint8_t index;
 
   APPL_TRACE_DEBUG("bta_dm_close_acl");
@@ -725,7 +724,7 @@ void bta_dm_close_acl(const RawAddress& bd_addr, bool remove_dev,
 
 /** Bonds with peer device */
 void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                 tBT_TRANSPORT transport, int device_type) {
+                 tBTA_TRANSPORT transport, int device_type) {
   tBTA_DM_SEC sec_event;
   char* p_name;
 
@@ -1756,7 +1755,7 @@ static void bta_dm_discover_next_device(void) {
  ******************************************************************************/
 static void bta_dm_discover_device(const RawAddress& remote_bd_addr) {
   tBT_TRANSPORT transport = BT_TRANSPORT_BR_EDR;
-  if (bta_dm_search_cb.transport == BT_TRANSPORT_UNKNOWN) {
+  if (bta_dm_search_cb.transport == BTA_TRANSPORT_UNKNOWN) {
     tBT_DEVICE_TYPE dev_type;
     tBLE_ADDR_TYPE addr_type;
 
@@ -1768,7 +1767,7 @@ static void bta_dm_discover_device(const RawAddress& remote_bd_addr) {
   }
 
   /* Reset transport state for next discovery */
-  bta_dm_search_cb.transport = BT_TRANSPORT_UNKNOWN;
+  bta_dm_search_cb.transport = BTA_TRANSPORT_UNKNOWN;
 
   VLOG(1) << __func__ << " BDA: " << remote_bd_addr;
 
@@ -3336,7 +3335,7 @@ void bta_dm_encrypt_cback(const RawAddress* bd_addr, tBT_TRANSPORT transport,
 }
 
 /**This function to encrypt the link */
-void bta_dm_set_encryption(const RawAddress& bd_addr, tBT_TRANSPORT transport,
+void bta_dm_set_encryption(const RawAddress& bd_addr, tBTA_TRANSPORT transport,
                            tBTA_DM_ENCRYPT_CBACK* p_callback,
                            tBTM_BLE_SEC_ACT sec_act) {
   uint8_t i;
@@ -3519,6 +3518,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
+      break;
+
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
