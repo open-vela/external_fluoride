@@ -36,7 +36,6 @@
 #include "btm_api.h"
 #include "osi/include/osi.h"
 #include "sdp_api.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/include/btu.h"
 #include "utl.h"
 

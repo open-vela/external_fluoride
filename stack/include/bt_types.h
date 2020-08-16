@@ -593,9 +593,7 @@ typedef Octet16 LinkKey; /* Link Key */
  * 0x4C68384139F574D836BCF34E9DFB01BF */
 constexpr Octet16 SAMPLE_LTK = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
                                 0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
-inline bool is_sample_ltk(const Octet16& ltk) {
-  return ltk == SAMPLE_LTK;
-}
+inline bool is_sample_ltk(const Octet16& ltk) { return ltk == SAMPLE_LTK; }
 
 #endif
 
@@ -754,6 +752,11 @@ typedef struct {
 #define BLE_ADDR_ANONYMOUS 0xFF
 typedef uint8_t tBLE_ADDR_TYPE;
 #define BLE_ADDR_TYPE_MASK (BLE_ADDR_RANDOM | BLE_ADDR_PUBLIC)
+
+#define BT_TRANSPORT_INVALID 0
+#define BT_TRANSPORT_BR_EDR 1
+#define BT_TRANSPORT_LE 2
+typedef uint8_t tBT_TRANSPORT;
 
 #define PHY_LE_1M_MASK 1
 #define PHY_LE_2M_MASK 2

@@ -32,7 +32,6 @@
 #include "hcimsgs.h"
 #include "l2c_int.h"
 #include "l2cdefs.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/include/acl_api.h"
 
 /******************************************************************************/

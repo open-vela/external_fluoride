@@ -74,7 +74,6 @@
 #include "osi/include/properties.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int.h"
-#include "stack/btm/btm_sec.h"
 #include "stack_config.h"
 
 using bluetooth::Uuid;
@@ -208,7 +207,7 @@ static size_t btif_events_end_index = 0;
 static btif_dm_pairing_cb_t pairing_cb;
 static btif_dm_oob_cb_t oob_cb;
 static void btif_dm_cb_create_bond(const RawAddress bd_addr,
-                                   tBT_TRANSPORT transport);
+                                   tBTA_TRANSPORT transport);
 static void btif_update_remote_properties(const RawAddress& bd_addr,
                                           BD_NAME bd_name, DEV_CLASS dev_class,
                                           tBT_DEVICE_TYPE dev_type);
@@ -271,7 +270,7 @@ static void btif_dm_send_bond_state_changed(RawAddress address, bt_bond_state_t 
   }
 
   invoke_bond_state_changed_cb(BT_STATUS_SUCCESS, address, bond_state);
-  btif_dm_get_remote_services_by_transport(&address, BT_TRANSPORT_UNKNOWN);
+  btif_dm_get_remote_services_by_transport(&address, BTA_TRANSPORT_UNKNOWN);
 }
 
 void btif_dm_init(uid_set_t* set) {
@@ -663,7 +662,7 @@ static void btif_update_remote_properties(const RawAddress& bdaddr,
  *
  ******************************************************************************/
 static void btif_dm_cb_create_bond(const RawAddress bd_addr,
-                                   tBT_TRANSPORT transport) {
+                                   tBTA_TRANSPORT transport) {
   bool is_hid = check_cod(&bd_addr, COD_HID_POINTING);
   bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_BOND_STATE_BONDING);
 
@@ -838,8 +837,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  uint32_t cod;
   bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
+  uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1074,7 +1073,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
           BTIF_TRACE_WARNING("%s() - Pairing timeout; retrying (%d) ...",
                              __func__, pairing_cb.timeout_retries);
           --pairing_cb.timeout_retries;
-          btif_dm_cb_create_bond(bd_addr, BT_TRANSPORT_UNKNOWN);
+          btif_dm_cb_create_bond(bd_addr, BTA_TRANSPORT_UNKNOWN);
           return;
         }
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
@@ -1107,7 +1106,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
           /* Create the Bond once again */
           BTIF_TRACE_WARNING("%s() auto pair failed. Reinitiate Bond",
                              __func__);
-          btif_dm_cb_create_bond(bd_addr, BT_TRANSPORT_UNKNOWN);
+          btif_dm_cb_create_bond(bd_addr, BTA_TRANSPORT_UNKNOWN);
           return;
         } else {
           /* if autopair attempts are more than 1, or not attempted */
@@ -1700,9 +1699,13 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
           break;
       }
       break;
+    case BTA_DM_BLE_CONSENT_REQ_EVT:
+      BTIF_TRACE_DEBUG("BTA_DM_BLE_CONSENT_REQ_EVT. ");
+      btif_dm_ble_sec_req_evt(&p_data->ble_req, true);
+      break;
     case BTA_DM_BLE_SEC_REQ_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_SEC_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req);
+      btif_dm_ble_sec_req_evt(&p_data->ble_req, false);
       break;
     case BTA_DM_BLE_PASSKEY_NOTIF_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_PASSKEY_NOTIF_EVT. ");
@@ -2731,14 +2734,14 @@ void btif_dm_remove_ble_bonding_keys(void) {
  * Returns          void
  *
  ******************************************************************************/
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req) {
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent) {
   bt_bdname_t bd_name;
   uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
 
-  if (pairing_cb.state == BT_BOND_STATE_BONDING) {
+  if (!is_consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
     BTIF_TRACE_DEBUG("%s Discard security request", __func__);
     return;
   }

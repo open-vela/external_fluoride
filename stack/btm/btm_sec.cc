@@ -37,7 +37,6 @@
 #include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/l2cap_security_interface.h"
 
@@ -49,9 +48,14 @@
 
 #define BTM_SEC_MAX_COLLISION_DELAY (5000)
 
+#ifdef APPL_AUTH_WRITE_EXCEPTION
+bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
+#endif
+
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -731,6 +735,9 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
     memcpy(btm_cb.pin_code, p_pin, pin_len);
 
     btm_cb.security_mode_changed = true;
+#ifdef APPL_AUTH_WRITE_EXCEPTION
+    if (!(APPL_AUTH_WRITE_EXCEPTION)(p_dev_rec->bd_addr))
+#endif
       btsnd_hcic_write_auth_enable(true);
 
     acl_set_disconnect_reason(0xff);
@@ -2726,6 +2733,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2754,7 +2768,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -4113,7 +4127,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -5195,6 +5210,9 @@ static bool btm_sec_check_prefetch_pin(tBTM_SEC_DEV_REC* p_dev_rec) {
 
     if (!btm_cb.security_mode_changed) {
       btm_cb.security_mode_changed = true;
+#ifdef APPL_AUTH_WRITE_EXCEPTION
+      if (!(APPL_AUTH_WRITE_EXCEPTION)(p_dev_rec->bd_addr))
+#endif
         btsnd_hcic_write_auth_enable(true);
     }
   } else {
@@ -5372,6 +5390,25 @@ bool btm_sec_is_a_bonded_dev(const RawAddress& bda) {
   }
   BTM_TRACE_DEBUG("%s() is_bonded=%d", __func__, is_bonded);
   return (is_bonded);
+}
+
+/*******************************************************************************
+ *
+ * Function         btm_sec_is_le_capable_dev
+ *
+ * Description       Is the specified device is dual mode or LE only device
+ *
+ * Returns          true - dev is a dual mode
+ *
+ ******************************************************************************/
+bool btm_sec_is_le_capable_dev(const RawAddress& bda) {
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bda);
+  bool le_capable = false;
+
+  if (p_dev_rec &&
+      (p_dev_rec->device_type & BT_DEVICE_TYPE_BLE) == BT_DEVICE_TYPE_BLE)
+    le_capable = true;
+  return le_capable;
 }
 
 /*******************************************************************************
