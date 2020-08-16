@@ -31,7 +31,6 @@
 #include "bt_types.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
-#include "types/bt_transport.h"
 
 /*****************************************************************************
  *  Constants and data types
@@ -368,6 +367,7 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
+#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_PIN_REQ_EVT */
@@ -678,7 +678,7 @@ typedef void(tBTA_DM_EXEC_CBACK)(void* p_param);
 
 /* Encryption callback*/
 typedef void(tBTA_DM_ENCRYPT_CBACK)(const RawAddress& bd_addr,
-                                    tBT_TRANSPORT transport,
+                                    tBTA_TRANSPORT transport,
                                     tBTA_STATUS result);
 
 #define BTA_DM_BLE_SEC_NONE BTM_BLE_SEC_NONE
@@ -1038,7 +1038,7 @@ tBTA_STATUS BTA_DmGetCachedRemoteName(const RawAddress& remote_device,
  *
  ******************************************************************************/
 extern void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                       tBT_TRANSPORT transport, int device_type);
+                       tBTA_TRANSPORT transport, int device_type);
 
 /*******************************************************************************
  *
@@ -1184,7 +1184,7 @@ extern tBTA_STATUS BTA_DmSetLocalDiRecord(tBTA_DI_RECORD* p_device_info,
  *
  ******************************************************************************/
 extern void BTA_DmCloseACL(const RawAddress& bd_addr, bool remove_dev,
-                           tBT_TRANSPORT transport);
+                           tBTA_TRANSPORT transport);
 
 /* BLE related API functions */
 /*******************************************************************************
@@ -1314,7 +1314,8 @@ extern void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
 extern void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
                                       tBTA_SERVICE_MASK_EXT* p_services,
                                       tBTA_DM_SEARCH_CBACK* p_cback,
-                                      bool sdp_search, tBT_TRANSPORT transport);
+                                      bool sdp_search,
+                                      tBTA_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -1340,7 +1341,7 @@ extern void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
  *
  ******************************************************************************/
 extern void BTA_DmSetEncryption(const RawAddress& bd_addr,
-                                tBT_TRANSPORT transport,
+                                tBTA_TRANSPORT transport,
                                 tBTA_DM_ENCRYPT_CBACK* p_callback,
                                 tBTM_BLE_SEC_ACT sec_act);
 

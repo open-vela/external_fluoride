@@ -173,7 +173,7 @@ void BTA_DmDiscoverUUID(const RawAddress& bd_addr, const Uuid& uuid,
 
 /** This function initiates a bonding procedure with a peer device */
 void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                tBT_TRANSPORT transport, int device_type) {
+                tBTA_TRANSPORT transport, int device_type) {
   do_in_main_thread(FROM_HERE, base::Bind(bta_dm_bond, bd_addr, addr_type,
                                           transport, device_type));
 }
@@ -518,7 +518,8 @@ void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
 static void bta_dm_discover_send_msg(const RawAddress& bd_addr,
                                      tBTA_SERVICE_MASK_EXT* p_services,
                                      tBTA_DM_SEARCH_CBACK* p_cback,
-                                     bool sdp_search, tBT_TRANSPORT transport) {
+                                     bool sdp_search,
+                                     tBTA_TRANSPORT transport) {
   const size_t len =
       p_services
           ? (sizeof(tBTA_DM_API_DISCOVER) + sizeof(Uuid) * p_services->num_uuid)
@@ -563,7 +564,7 @@ static void bta_dm_discover_send_msg(const RawAddress& bd_addr,
 void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
                                tBTA_SERVICE_MASK_EXT* p_services,
                                tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search,
-                               tBT_TRANSPORT transport) {
+                               tBTA_TRANSPORT transport) {
   bta_dm_discover_send_msg(bd_addr, p_services, p_cback, sdp_search, transport);
 }
 
@@ -659,7 +660,7 @@ void BTA_DmBleSetDataLength(const RawAddress& remote_device,
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmSetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport,
+void BTA_DmSetEncryption(const RawAddress& bd_addr, tBTA_TRANSPORT transport,
                          tBTA_DM_ENCRYPT_CBACK* p_callback,
                          tBTM_BLE_SEC_ACT sec_act) {
   APPL_TRACE_API("%s", __func__);
@@ -681,7 +682,7 @@ void BTA_DmSetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport,
  *
  ******************************************************************************/
 void BTA_DmCloseACL(const RawAddress& bd_addr, bool remove_dev,
-                    tBT_TRANSPORT transport) {
+                    tBTA_TRANSPORT transport) {
   do_in_main_thread(
       FROM_HERE, base::Bind(bta_dm_close_acl, bd_addr, remove_dev, transport));
 }
