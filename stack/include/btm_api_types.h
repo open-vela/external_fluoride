@@ -26,7 +26,6 @@
 #include "stack/include/btm_status.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/smp_api_types.h"
-#include "types/bt_transport.h"
 
 /* Maximum number of bytes allowed for vendor specific command parameters */
 #define BTM_MAX_VENDOR_SPECIFIC_LEN HCI_COMMAND_SIZE
@@ -1027,6 +1026,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0

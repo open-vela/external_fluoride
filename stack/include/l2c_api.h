@@ -29,7 +29,6 @@
 #include "bt_target.h"
 #include "hcidefs.h"
 #include "l2cdefs.h"
-#include "types/bt_transport.h"
 
 /*****************************************************************************
  *  Constants
