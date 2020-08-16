@@ -854,12 +854,12 @@ void bta_dm_search_start(tBTA_DM_MSG* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_search_cancel() {
+void bta_dm_search_cancel(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   tBTA_DM_MSG* p_msg;
 
   if (BTM_IsInquiryActive()) {
     if (BTM_CancelInquiry() == BTM_SUCCESS) {
-      bta_dm_search_cancel_notify();
+      bta_dm_search_cancel_notify(NULL);
       p_msg = (tBTA_DM_MSG*)osi_malloc(sizeof(tBTA_DM_MSG));
       p_msg->hdr.event = BTA_DM_SEARCH_CMPL_EVT;
       p_msg->hdr.layer_specific = BTA_DM_API_DISCOVER_EVT;
@@ -879,7 +879,10 @@ void bta_dm_search_cancel() {
     p_msg->hdr.layer_specific = BTA_DM_API_DISCOVER_EVT;
     bta_sys_sendmsg(p_msg);
   } else {
-    bta_dm_inq_cmpl(0);
+    p_msg = (tBTA_DM_MSG*)osi_malloc(sizeof(tBTA_DM_MSG));
+    p_msg->hdr.event = BTA_DM_INQUIRY_CMPL_EVT;
+    p_msg->hdr.layer_specific = BTA_DM_API_DISCOVER_EVT;
+    bta_sys_sendmsg(p_msg);
   }
 
   if (bta_dm_search_cb.gatt_disc_active) {
@@ -989,7 +992,7 @@ static void bta_dm_di_disc_callback(uint16_t result) {
 static void bta_dm_disable_search_and_disc(void) {
   tBTA_DM_DI_DISC_CMPL di_disc;
 
-  if (bta_dm_search_cb.state != BTA_DM_SEARCH_IDLE) bta_dm_search_cancel();
+  if (bta_dm_search_cb.state != BTA_DM_SEARCH_IDLE) bta_dm_search_cancel(NULL);
 
   if (bta_dm_di_cb.p_di_db != NULL) {
     memset(&di_disc, 0, sizeof(tBTA_DM_DI_DISC_CMPL));
@@ -1087,22 +1090,12 @@ static bool bta_dm_read_remote_device_name(const RawAddress& bd_addr,
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_inq_cmpl(uint8_t num) {
-  if (bta_dm_search_get_state() == BTA_DM_SEARCH_CANCELLING) {
-    bta_dm_search_set_state(BTA_DM_SEARCH_IDLE);
-    bta_dm_search_cancel_cmpl();
-    return;
-  }
-
-  if (bta_dm_search_get_state() != BTA_DM_SEARCH_ACTIVE) {
-    return;
-  }
-
+void bta_dm_inq_cmpl(tBTA_DM_MSG* p_data) {
   tBTA_DM_SEARCH data;
 
   APPL_TRACE_DEBUG("bta_dm_inq_cmpl");
 
-  data.inq_cmpl.num_resps = num;
+  data.inq_cmpl.num_resps = p_data->inq_cmpl.num;
   bta_dm_search_cb.p_search_cback(BTA_DM_INQ_CMPL_EVT, &data);
 
   bta_dm_search_cb.p_btm_inq_info = BTM_InqDbFirst();
@@ -1549,7 +1542,7 @@ void bta_dm_queue_disc(tBTA_DM_MSG* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_search_clear_queue() {
+void bta_dm_search_clear_queue(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   osi_free_and_reset((void**)&bta_dm_search_cb.p_search_queue);
 }
 
@@ -1562,11 +1555,26 @@ void bta_dm_search_clear_queue() {
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_search_cancel_cmpl() {
+void bta_dm_search_cancel_cmpl(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   if (bta_dm_search_cb.p_search_queue) {
     bta_sys_sendmsg(bta_dm_search_cb.p_search_queue);
     bta_dm_search_cb.p_search_queue = NULL;
   }
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_dm_search_cancel_transac_cmpl
+ *
+ * Description      Current Service Discovery or remote name procedure is
+ *                  completed after search cancellation
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_dm_search_cancel_transac_cmpl(UNUSED_ATTR tBTA_DM_MSG* p_data) {
+  osi_free_and_reset((void**)&bta_dm_search_cb.p_sdp_db);
+  bta_dm_search_cancel_notify(NULL);
 }
 
 /*******************************************************************************
@@ -1578,7 +1586,7 @@ void bta_dm_search_cancel_cmpl() {
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_search_cancel_notify() {
+void bta_dm_search_cancel_notify(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   if (bta_dm_search_cb.p_search_cback) {
     bta_dm_search_cb.p_search_cback(BTA_DM_SEARCH_CANCEL_CMPL_EVT, NULL);
   }
@@ -1951,14 +1959,16 @@ static void bta_dm_inq_cmpl_cb(void* p_result) {
   APPL_TRACE_DEBUG("%s", __func__);
 
   if (!bta_dm_search_cb.cancel_pending) {
-    bta_dm_inq_cmpl(((tBTM_INQUIRY_CMPL*)p_result)->num_resp);
+    p_msg->inq_cmpl.hdr.event = BTA_DM_INQUIRY_CMPL_EVT;
+    p_msg->inq_cmpl.num = ((tBTM_INQUIRY_CMPL*)p_result)->num_resp;
   } else {
     bta_dm_search_cb.cancel_pending = false;
-    bta_dm_search_cancel_notify();
+    bta_dm_search_cancel_notify(NULL);
     p_msg->hdr.event = BTA_DM_SEARCH_CMPL_EVT;
     p_msg->hdr.layer_specific = BTA_DM_API_DISCOVER_EVT;
-    bta_sys_sendmsg(p_msg);
   }
+
+  bta_sys_sendmsg(p_msg);
 }
 
 /*******************************************************************************
