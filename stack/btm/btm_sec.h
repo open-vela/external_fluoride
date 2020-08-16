@@ -22,11 +22,39 @@
  *
  ******************************************************************************/
 
-#include <cstdint>
-#include "stack/btm/security_device_record.h"
-#include "stack/include/btm_api_types.h"
+#define LOG_TAG "bt_btm_sec"
+
+#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
+#include <frameworks/base/core/proto/android/bluetooth/hci/enums.pb.h>
+#include <log/log.h>
+#include <string.h>
+
+#include "common/metrics.h"
+#include "common/time_util.h"
+#include "device/include/controller.h"
+#include "l2c_api.h"
+#include "main/shim/btm_api.h"
+#include "main/shim/shim.h"
+#include "osi/include/log.h"
+#include "osi/include/osi.h"
+#include "stack/include/acl_api.h"
+#include "stack/include/l2cap_security_interface.h"
+
+#include "bt_types.h"
+#include "btif_storage.h"
+#include "btm_int.h"
+#include "hcimsgs.h"
+#include "stack/btm/btm_dev.h"
 
 #define BTM_SEC_MAX_COLLISION_DELAY (5000)
+
+#ifdef APPL_AUTH_WRITE_EXCEPTION
+bool(APPL_AUTH_WRITE_EXCEPTION)(const RawAddress& bd_addr);
+#endif
+
+extern void btm_ble_advertiser_notify_terminated_legacy(
+    uint8_t status, uint16_t connection_handle);
+extern void bta_dm_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -506,6 +534,19 @@ void btm_sec_conn_req(const RawAddress& bda, uint8_t* dc);
  *
  ******************************************************************************/
 void btm_create_conn_cancel_complete(uint8_t* p);
+
+/*******************************************************************************
+ *
+ * Function         btm_sec_check_pending_reqs
+ *
+ * Description      This function is called at the end of the security procedure
+ *                  to let L2CAP and RFCOMM know to re-submit any pending
+ *                  requests
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_sec_check_pending_reqs(void);
 
 /*******************************************************************************
  *

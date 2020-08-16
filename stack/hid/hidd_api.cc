@@ -33,7 +33,6 @@
 #include "hidd_api.h"
 #include "hidd_int.h"
 #include "hiddefs.h"
-#include "stack/btm/btm_sec.h"
 
 tHID_DEV_CTB hd_cb;
 
