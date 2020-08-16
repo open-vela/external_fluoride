@@ -36,7 +36,6 @@
 
 #include <set>
 #include "hci/include/btsnoop.h"
-#include "stack/btm/btm_sec.h"
 
 static const std::set<uint16_t> uuid_logging_whitelist = {
     UUID_SERVCLASS_HEADSET_AUDIO_GATEWAY,
