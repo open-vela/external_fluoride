@@ -61,20 +61,12 @@ enum {
 
 };
 
-enum {
-  BTA_DM_RS_NONE, /* straight API call */
-  BTA_DM_RS_OK,   /* the role switch result - successful */
-  BTA_DM_RS_FAIL  /* the role switch result - failed */
-};
-typedef uint8_t tBTA_DM_RS_RES;
-
 /* data type for BTA_DM_API_SEARCH_EVT */
 typedef struct {
   BT_HDR hdr;
   tBTA_DM_INQ inq_params;
   tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
-  tBTA_DM_RS_RES rs_res;
   uint8_t num_uuid;
   bluetooth::Uuid* p_uuid;
 } tBTA_DM_API_SEARCH;
@@ -531,12 +523,14 @@ extern void bta_dm_discovery_cmpl(tBTA_DM_MSG* p_data);
 extern void bta_dm_queue_search(tBTA_DM_MSG* p_data);
 extern void bta_dm_queue_disc(tBTA_DM_MSG* p_data);
 extern void bta_dm_search_clear_queue(tBTA_DM_MSG* p_data);
-extern void bta_dm_search_cancel_cmpl(tBTA_DM_MSG* p_data);
-extern void bta_dm_search_cancel_notify(tBTA_DM_MSG* p_data);
-extern void bta_dm_search_cancel_transac_cmpl(tBTA_DM_MSG* p_data);
+extern void bta_dm_search_cancel_cmpl();
+extern void bta_dm_search_cancel_notify();
 extern void bta_dm_disc_rmt_name(tBTA_DM_MSG* p_data);
 extern tBTA_DM_PEER_DEVICE* bta_dm_find_peer_device(
     const RawAddress& peer_addr);
+
+uint8_t bta_dm_search_get_state();
+void bta_dm_search_set_state(uint8_t state);
 
 void bta_dm_eir_update_uuid(uint16_t uuid16, bool adding);
 #endif /* BTA_DM_INT_H */
