@@ -220,3 +220,14 @@ void bta_sys_disable() {
     }
   }
 }
+
+/*******************************************************************************
+ *
+ * Function         bta_sys_set_trace_level
+ *
+ * Description      Set trace level for BTA
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_sys_set_trace_level(uint8_t level) { appl_trace_level = level; }

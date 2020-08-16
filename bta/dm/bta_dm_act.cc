@@ -63,9 +63,6 @@
 
 using bluetooth::Uuid;
 
-void BTIF_dm_enable();
-void BTIF_dm_disable();
-
 static void bta_dm_inq_results_cb(tBTM_INQ_RESULTS* p_inq, uint8_t* p_eir,
                                   uint16_t eir_len);
 static void bta_dm_inq_cmpl_cb(void* p_result);
@@ -311,7 +308,8 @@ void bta_dm_deinit_cb(void) {
 }
 
 void BTA_dm_on_hw_off() {
-  BTIF_dm_disable();
+  if (bta_dm_cb.p_sec_cback != NULL)
+    bta_dm_cb.p_sec_cback(BTA_DM_DISABLE_EVT, NULL);
 
   /* reinitialize the control block */
   bta_dm_deinit_cb();
@@ -481,7 +479,7 @@ static void bta_dm_disable_timer_cback(void* data) {
     bta_dm_cb.disabling = false;
 
     bta_sys_remove_uuid(UUID_SERVCLASS_PNP_INFORMATION);
-    BTIF_dm_disable();
+    bta_dm_cb.p_sec_cback(BTA_DM_DISABLE_EVT, NULL);
   }
 }
 
@@ -859,7 +857,7 @@ void bta_dm_search_cancel(UNUSED_ATTR tBTA_DM_MSG* p_data) {
 
   if (BTM_IsInquiryActive()) {
     if (BTM_CancelInquiry() == BTM_SUCCESS) {
-      bta_dm_search_cancel_notify();
+      bta_dm_search_cancel_notify(NULL);
       p_msg = (tBTA_DM_MSG*)osi_malloc(sizeof(tBTA_DM_MSG));
       p_msg->hdr.event = BTA_DM_SEARCH_CMPL_EVT;
       p_msg->hdr.layer_specific = BTA_DM_API_DISCOVER_EVT;
@@ -1555,11 +1553,26 @@ void bta_dm_search_clear_queue(UNUSED_ATTR tBTA_DM_MSG* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_search_cancel_cmpl() {
+void bta_dm_search_cancel_cmpl(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   if (bta_dm_search_cb.p_search_queue) {
     bta_sys_sendmsg(bta_dm_search_cb.p_search_queue);
     bta_dm_search_cb.p_search_queue = NULL;
   }
+}
+
+/*******************************************************************************
+ *
+ * Function         bta_dm_search_cancel_transac_cmpl
+ *
+ * Description      Current Service Discovery or remote name procedure is
+ *                  completed after search cancellation
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void bta_dm_search_cancel_transac_cmpl(UNUSED_ATTR tBTA_DM_MSG* p_data) {
+  osi_free_and_reset((void**)&bta_dm_search_cb.p_sdp_db);
+  bta_dm_search_cancel_notify(NULL);
 }
 
 /*******************************************************************************
@@ -1571,7 +1584,7 @@ void bta_dm_search_cancel_cmpl() {
  * Returns          void
  *
  ******************************************************************************/
-void bta_dm_search_cancel_notify() {
+void bta_dm_search_cancel_notify(UNUSED_ATTR tBTA_DM_MSG* p_data) {
   if (bta_dm_search_cb.p_search_cback) {
     bta_dm_search_cb.p_search_cback(BTA_DM_SEARCH_CANCEL_CMPL_EVT, NULL);
   }
@@ -1948,7 +1961,7 @@ static void bta_dm_inq_cmpl_cb(void* p_result) {
     p_msg->inq_cmpl.num = ((tBTM_INQUIRY_CMPL*)p_result)->num_resp;
   } else {
     bta_dm_search_cb.cancel_pending = false;
-    bta_dm_search_cancel_notify();
+    bta_dm_search_cancel_notify(NULL);
     p_msg->hdr.event = BTA_DM_SEARCH_CMPL_EVT;
     p_msg->hdr.layer_specific = BTA_DM_API_DISCOVER_EVT;
   }
@@ -2426,7 +2439,10 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
  *
  ******************************************************************************/
 static void bta_dm_local_name_cback(UNUSED_ATTR void* p_name) {
-  BTIF_dm_enable();
+  tBTA_DM_SEC sec_event;
+
+  if (bta_dm_cb.p_sec_cback)
+    bta_dm_cb.p_sec_cback(BTA_DM_ENABLE_EVT, &sec_event);
 }
 
 static void handle_role_change(const RawAddress& bd_addr, uint8_t new_role,
@@ -3503,6 +3519,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
+      break;
+
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
