@@ -55,12 +55,15 @@ enum {
   BTA_DM_SDP_RESULT_EVT,
   BTA_DM_SEARCH_CMPL_EVT,
   BTA_DM_DISCOVERY_RESULT_EVT,
+  BTA_DM_API_DI_DISCOVER_EVT,
   BTA_DM_DISC_CLOSE_TOUT_EVT
+
 };
 
 /* data type for BTA_DM_API_SEARCH_EVT */
 typedef struct {
   BT_HDR hdr;
+  tBTA_DM_INQ inq_params;
   tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
 } tBTA_DM_API_SEARCH;
@@ -69,9 +72,19 @@ typedef struct {
 typedef struct {
   BT_HDR hdr;
   RawAddress bd_addr;
+  tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
   tBT_TRANSPORT transport;
 } tBTA_DM_API_DISCOVER;
+
+/* data type for BTA_DM_API_DI_DISC_EVT */
+typedef struct {
+  BT_HDR hdr;
+  RawAddress bd_addr;
+  tBTA_DISCOVERY_DB* p_sdp_db;
+  uint32_t len;
+  tBTA_DM_SEARCH_CBACK* p_cback;
+} tBTA_DM_API_DI_DISC;
 
 typedef struct {
   RawAddress bd_addr;
@@ -156,6 +169,8 @@ typedef union {
   tBTA_DM_INQUIRY_CMPL inq_cmpl;
 
   tBTA_DM_SDP_RESULT sdp_event;
+
+  tBTA_DM_API_DI_DISC di_disc;
 
 } tBTA_DM_MSG;
 
@@ -313,8 +328,8 @@ typedef struct {
   BD_NAME peer_name;
   alarm_t* search_timer;
   uint8_t service_index;
-  tBTA_DM_MSG* p_pending_search;
-  tBTA_DM_MSG* p_pending_discovery;
+  tBTA_DM_MSG* p_search_queue; /* search or discover commands during search
+                                  cancel stored here */
   bool wait_disc;
   bool sdp_results;
   bluetooth::Uuid uuid;
@@ -336,6 +351,7 @@ typedef struct {
 
 /* DI control block */
 typedef struct {
+  tSDP_DISCOVERY_DB* p_di_db;         /* pointer to the DI discovery database */
   uint8_t di_num;                     /* total local DI record number */
   uint32_t di_handle[BTA_DI_NUM_MAX]; /* local DI record handle, the first one
                                          is primary record */
@@ -485,6 +501,7 @@ extern uint8_t bta_dm_get_av_count(void);
 extern void bta_dm_search_start(tBTA_DM_MSG* p_data);
 extern void bta_dm_search_cancel();
 extern void bta_dm_discover(tBTA_DM_MSG* p_data);
+extern void bta_dm_di_disc(tBTA_DM_MSG* p_data);
 extern void bta_dm_inq_cmpl(uint8_t num);
 extern void bta_dm_rmt_name(tBTA_DM_MSG* p_data);
 extern void bta_dm_sdp_result(tBTA_DM_MSG* p_data);

@@ -186,6 +186,45 @@ typedef uint16_t
 
 typedef uint16_t tBTA_DM_CONN;
 
+/* Pairable Modes */
+#define BTA_DM_PAIRABLE 1
+#define BTA_DM_NON_PAIRABLE 0
+
+/* Connectable Paired Only Mode */
+#define BTA_DM_CONN_ALL 0
+#define BTA_DM_CONN_PAIRED 1
+
+/* Inquiry Modes */
+#define BTA_DM_INQUIRY_NONE BTM_INQUIRY_NONE /*No BR inquiry. */
+#define BTA_DM_GENERAL_INQUIRY \
+  BTM_GENERAL_INQUIRY /* Perform general inquiry. */
+#define BTA_DM_LIMITED_INQUIRY \
+  BTM_LIMITED_INQUIRY /* Perform limited inquiry. */
+
+#define BTA_BLE_INQUIRY_NONE BTM_BLE_INQUIRY_NONE
+#define BTA_BLE_GENERAL_INQUIRY \
+  BTM_BLE_GENERAL_INQUIRY /* Perform LE general inquiry. */
+#define BTA_BLE_LIMITED_INQUIRY \
+  BTM_BLE_LIMITED_INQUIRY /* Perform LE limited inquiry. */
+typedef uint8_t tBTA_DM_INQ_MODE;
+
+/* Inquiry Filter Type */
+#define BTA_DM_INQ_CLR BTM_CLR_INQUIRY_FILTER /* Clear inquiry filter. */
+#define BTA_DM_INQ_DEV_CLASS \
+  BTM_FILTER_COND_DEVICE_CLASS /* Filter on device class. */
+#define BTA_DM_INQ_BD_ADDR \
+  BTM_FILTER_COND_BD_ADDR /* Filter on a specific  BD address. */
+
+typedef uint8_t tBTA_DM_INQ_FILT;
+
+/* Authorize Response */
+#define BTA_DM_AUTH_PERM \
+  0 /* Authorized for future connections to the service */
+#define BTA_DM_AUTH_TEMP 1 /* Authorized for current connection only */
+#define BTA_DM_NOT_AUTH 2  /* Not authorized for the service */
+
+typedef uint8_t tBTA_AUTH_RESP;
+
 /* M/S preferred roles */
 #define BTA_ANY_ROLE 0x00
 #define BTA_MASTER_ROLE_PREF 0x01
@@ -208,6 +247,31 @@ enum {
                             and slave roles */
 
 };
+
+/* Inquiry filter device class condition */
+typedef struct {
+  DEV_CLASS dev_class;      /* device class of interest */
+  DEV_CLASS dev_class_mask; /* mask to determine the bits of device class of
+                               interest */
+} tBTA_DM_COD_COND;
+
+/* Inquiry Filter Condition */
+typedef union {
+  RawAddress bd_addr;              /* BD address of  device to filter. */
+  tBTA_DM_COD_COND dev_class_cond; /* Device class filter condition */
+} tBTA_DM_INQ_COND;
+
+/* Inquiry Parameters */
+typedef struct {
+  tBTA_DM_INQ_MODE mode; /* Inquiry mode, limited or general. */
+  uint8_t duration;      /* Inquiry duration in 1.28 sec units. */
+  uint8_t max_resps; /* Maximum inquiry responses.  Set to zero for unlimited
+                        responses. */
+  bool report_dup; /* report duplicated inquiry response with higher RSSI value
+                      */
+  tBTA_DM_INQ_FILT filter_type; /* Filter condition type. */
+  tBTA_DM_INQ_COND filter_cond; /* Filter condition data. */
+} tBTA_DM_INQ;
 
 typedef struct {
   uint8_t bta_dm_eir_min_name_len; /* minimum length of local name when it is
@@ -518,6 +582,7 @@ typedef void(tBTA_DM_SEC_CBACK)(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data);
 #define BTA_DM_DISC_BLE_RES_EVT \
   3 /* Discovery result for BLE GATT based servoce on a peer device. */
 #define BTA_DM_DISC_CMPL_EVT 4          /* Discovery complete. */
+#define BTA_DM_DI_DISC_CMPL_EVT 5       /* Discovery complete. */
 #define BTA_DM_SEARCH_CANCEL_CMPL_EVT 6 /* Search cancelled */
 
 typedef uint8_t tBTA_DM_SEARCH_EVT;
@@ -554,6 +619,13 @@ typedef struct {
   uint8_t num_resps; /* Number of inquiry responses. */
 } tBTA_DM_INQ_CMPL;
 
+/* Structure associated with BTA_DM_DI_DISC_CMPL_EVT */
+typedef struct {
+  RawAddress bd_addr; /* BD address peer device. */
+  uint8_t num_record; /* Number of DI record */
+  tBTA_STATUS result;
+} tBTA_DM_DI_DISC_CMPL;
+
 /* Structure associated with BTA_DM_DISC_RES_EVT */
 typedef struct {
   RawAddress bd_addr;          /* BD address peer device. */
@@ -581,6 +653,8 @@ typedef union {
   tBTA_DM_DISC_RES disc_res; /* Discovery result for a peer device. */
   tBTA_DM_DISC_BLE_RES
       disc_ble_res;             /* discovery result for GATT based service */
+  tBTA_DM_DI_DISC_CMPL di_disc; /* DI discovery result for a peer device */
+
 } tBTA_DM_SEARCH;
 
 /* Search callback */
@@ -878,7 +952,8 @@ extern void BTA_DmSetVisibility(tBTA_DM_DISC disc_mode, tBTA_DM_CONN conn_mode);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_DmSearch(tBTA_DM_SEARCH_CBACK* p_cback);
+extern void BTA_DmSearch(tBTA_DM_INQ* p_dm_inq, tBTA_SERVICE_MASK services,
+                         tBTA_DM_SEARCH_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -905,6 +980,7 @@ extern void BTA_DmSearchCancel(void);
  *
  ******************************************************************************/
 extern void BTA_DmDiscover(const RawAddress& bd_addr,
+                           tBTA_SERVICE_MASK services,
                            tBTA_DM_SEARCH_CBACK* p_cback,
                            tBT_TRANSPORT transport);
 
