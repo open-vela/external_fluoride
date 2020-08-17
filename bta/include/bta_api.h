@@ -356,6 +356,7 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
+#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_PIN_REQ_EVT */
@@ -653,6 +654,8 @@ typedef union {
   tBTA_DM_DISC_RES disc_res; /* Discovery result for a peer device. */
   tBTA_DM_DISC_BLE_RES
       disc_ble_res;             /* discovery result for GATT based service */
+  tBTA_DM_DI_DISC_CMPL di_disc; /* DI discovery result for a peer device */
+
 } tBTA_DM_SEARCH;
 
 /* Search callback */
