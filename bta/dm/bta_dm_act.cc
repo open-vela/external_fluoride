@@ -886,52 +886,6 @@ void bta_dm_discover(tBTA_DM_MSG* p_data) {
 
 /*******************************************************************************
  *
- * Function         bta_dm_di_disc_cmpl
- *
- * Description      Sends event to application when DI discovery complete
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_di_disc_cmpl(tBTA_DM_MSG* p_data) {
-  tBTA_DM_DI_DISC_CMPL di_disc;
-
-  memset(&di_disc, 0, sizeof(tBTA_DM_DI_DISC_CMPL));
-  di_disc.bd_addr = bta_dm_search_cb.peer_bdaddr;
-
-  if ((p_data->hdr.offset == SDP_SUCCESS) ||
-      (p_data->hdr.offset == SDP_DB_FULL)) {
-    di_disc.num_record = SDP_GetNumDiRecords(bta_dm_di_cb.p_di_db);
-  } else
-    di_disc.result = BTA_FAILURE;
-
-  bta_dm_di_cb.p_di_db = NULL;
-  bta_dm_search_cb.p_search_cback(BTA_DM_DI_DISC_CMPL_EVT,
-                                  (tBTA_DM_SEARCH*)&di_disc);
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_di_disc_callback
- *
- * Description      This function queries a remote device for DI information.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-static void bta_dm_di_disc_callback(uint16_t result) {
-  tBTA_DM_MSG* p_msg = (tBTA_DM_MSG*)osi_malloc(sizeof(tBTA_DM_MSG));
-
-  p_msg->hdr.event = BTA_DM_SEARCH_CMPL_EVT;
-  p_msg->hdr.layer_specific = BTA_DM_API_DI_DISCOVER_EVT;
-  p_msg->hdr.offset = result;
-
-  bta_sys_sendmsg(p_msg);
-}
-
-/*******************************************************************************
- *
  * Function         bta_dm_disable_search_and_disc
  *
  * Description      Cancels an ongoing search or discovery for devices in case
@@ -942,53 +896,7 @@ static void bta_dm_di_disc_callback(uint16_t result) {
  *
  ******************************************************************************/
 static void bta_dm_disable_search_and_disc(void) {
-  tBTA_DM_DI_DISC_CMPL di_disc;
-
   if (bta_dm_search_cb.state != BTA_DM_SEARCH_IDLE) bta_dm_search_cancel();
-
-  if (bta_dm_di_cb.p_di_db != NULL) {
-    memset(&di_disc, 0, sizeof(tBTA_DM_DI_DISC_CMPL));
-    di_disc.bd_addr = bta_dm_search_cb.peer_bdaddr;
-    di_disc.result = BTA_FAILURE;
-
-    bta_dm_di_cb.p_di_db = NULL;
-    bta_dm_search_cb.p_search_cback(BTA_DM_DI_DISC_CMPL_EVT, NULL);
-  }
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_di_disc
- *
- * Description      This function queries a remote device for DI information.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_di_disc(tBTA_DM_MSG* p_data) {
-  uint16_t result = BTA_FAILURE;
-
-  bta_dm_search_cb.p_search_cback = p_data->di_disc.p_cback;
-  bta_dm_search_cb.peer_bdaddr = p_data->di_disc.bd_addr;
-  bta_dm_di_cb.p_di_db = p_data->di_disc.p_sdp_db;
-
-  bta_dm_search_cb.p_sdp_db =
-      (tSDP_DISCOVERY_DB*)osi_malloc(BTA_DM_SDP_DB_SIZE);
-  if (SDP_DiDiscover(bta_dm_search_cb.peer_bdaddr, p_data->di_disc.p_sdp_db,
-                     p_data->di_disc.len,
-                     bta_dm_di_disc_callback) == SDP_SUCCESS) {
-    result = BTA_SUCCESS;
-  }
-
-  if (result == BTA_FAILURE) {
-    tBTA_DM_MSG* p_msg = (tBTA_DM_MSG*)osi_malloc(sizeof(tBTA_DM_MSG));
-
-    p_msg->hdr.event = BTA_DM_SEARCH_CMPL_EVT;
-    p_msg->hdr.layer_specific = BTA_DM_API_DI_DISCOVER_EVT;
-    p_data->hdr.offset = result;
-    bta_sys_sendmsg(p_msg);
-  }
 }
 
 /*******************************************************************************
@@ -1340,10 +1248,7 @@ void bta_dm_sdp_result(tBTA_DM_MSG* p_data) {
 void bta_dm_search_cmpl(tBTA_DM_MSG* p_data) {
   APPL_TRACE_EVENT("%s", __func__);
 
-  if (p_data->hdr.layer_specific == BTA_DM_API_DI_DISCOVER_EVT)
-    bta_dm_di_disc_cmpl(p_data);
-  else
-    bta_dm_search_cb.p_search_cback(BTA_DM_DISC_CMPL_EVT, NULL);
+  bta_dm_search_cb.p_search_cback(BTA_DM_DISC_CMPL_EVT, NULL);
 }
 
 /*******************************************************************************
@@ -3356,16 +3261,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                        p_data->io_req.oob_data);
       break;
 
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
-      break;
-
     case BTM_LE_SEC_REQUEST_EVT:
       sec_event.ble_req.bd_addr = bda;
       p_name = BTM_SecReadDevName(bda);
@@ -3686,19 +3581,6 @@ static void bta_dm_gattc_register(void) {
 
 /*******************************************************************************
  *
- * Function         btm_dm_start_disc_gatt_services
- *
- * Description      This function starts a GATT service search request.
- *
- * Parameters:
- *
- ******************************************************************************/
-static void btm_dm_start_disc_gatt_services(uint16_t conn_id) {
-  BTA_GATTC_ServiceSearchRequest(conn_id, nullptr);
-}
-
-/*******************************************************************************
- *
  * Function         bta_dm_gatt_disc_result
  *
  * Description      This function process the GATT service search result.
@@ -3843,7 +3725,7 @@ void btm_dm_start_gatt_discovery(const RawAddress& bd_addr) {
       bta_dm_search_cb.conn_id != GATT_INVALID_CONN_ID) {
     bta_dm_search_cb.pending_close_bda = RawAddress::kEmpty;
     alarm_cancel(bta_dm_search_cb.gatt_close_timer);
-    btm_dm_start_disc_gatt_services(bta_dm_search_cb.conn_id);
+    BTA_GATTC_ServiceSearchRequest(bta_dm_search_cb.conn_id, nullptr);
   } else {
     if (BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
       BTA_GATTC_Open(bta_dm_search_cb.client_if, bd_addr, true, BT_TRANSPORT_LE,
@@ -3892,7 +3774,7 @@ void bta_dm_proc_open_evt(tBTA_GATTC_OPEN* p_data) {
   bta_dm_search_cb.conn_id = p_data->conn_id;
 
   if (p_data->status == GATT_SUCCESS) {
-    btm_dm_start_disc_gatt_services(p_data->conn_id);
+    BTA_GATTC_ServiceSearchRequest(p_data->conn_id, nullptr);
   } else {
     bta_dm_gatt_disc_complete(GATT_INVALID_CONN_ID, p_data->status);
   }
