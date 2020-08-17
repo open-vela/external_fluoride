@@ -33,7 +33,6 @@
 #include "bta_gattc_int.h"
 #include "bta_sys.h"
 #include "l2c_api.h"
-#include "types/bt_transport.h"
 #include "utl.h"
 
 /*******************************************************************************
@@ -370,7 +369,7 @@ void bta_gattc_clear_notif_registration(tBTA_GATTC_SERV* p_srcb,
   tGATT_IF gatt_if;
   tBTA_GATTC_RCB* p_clrcb;
   uint8_t i;
-  tBT_TRANSPORT transport;
+  tGATT_TRANSPORT transport;
   uint16_t handle;
 
   if (GATT_GetConnectionInfor(conn_id, &gatt_if, remote_bda, &transport)) {
