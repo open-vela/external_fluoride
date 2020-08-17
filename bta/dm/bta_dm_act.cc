@@ -490,8 +490,7 @@ void bta_dm_set_dev_name(const std::vector<uint8_t>& name) {
 
 /** Sets discoverability, connectability and pairability */
 void bta_dm_set_visibility(tBTA_DM_DISC disc_mode_param,
-                           tBTA_DM_CONN conn_mode_param, uint8_t pairable_mode,
-                           uint8_t conn_paired_only) {
+                           tBTA_DM_CONN conn_mode_param) {
   uint16_t window, interval;
   uint16_t le_disc_mode = BTM_BleReadDiscoverability();
   uint16_t le_conn_mode = BTM_BleReadConnectability();
@@ -518,27 +517,6 @@ void bta_dm_set_visibility(tBTA_DM_DISC disc_mode_param,
     BTM_SetConnectability(conn_mode_param, bta_dm_cb.page_scan_window,
                           bta_dm_cb.page_scan_interval);
   }
-
-  /* Send False or True if not ignore */
-  if (pairable_mode != BTA_DM_IGNORE) {
-    if (pairable_mode == BTA_DM_NON_PAIRABLE)
-      bta_dm_cb.disable_pair_mode = true;
-    else
-      bta_dm_cb.disable_pair_mode = false;
-  }
-
-  /* Send False or True if not ignore */
-  if (conn_paired_only != BTA_DM_IGNORE) {
-    if (conn_paired_only == BTA_DM_CONN_ALL)
-      bta_dm_cb.conn_paired_only = false;
-    else
-      bta_dm_cb.conn_paired_only = true;
-  }
-
-  /* Change mode if either mode is not ignore */
-  if (pairable_mode != BTA_DM_IGNORE || conn_paired_only != BTA_DM_IGNORE)
-    BTM_SetPairableMode((bool)(!(bta_dm_cb.disable_pair_mode)),
-                        bta_dm_cb.conn_paired_only);
 }
 
 static void bta_dm_process_remove_device_no_callback(
@@ -3433,16 +3411,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
