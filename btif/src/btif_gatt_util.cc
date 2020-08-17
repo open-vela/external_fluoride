@@ -39,7 +39,6 @@
 #include "btif_storage.h"
 #include "btif_util.h"
 #include "osi/include/osi.h"
-#include "types/bt_transport.h"
 
 using bluetooth::Uuid;
 
@@ -74,7 +73,7 @@ static void btif_gatt_set_encryption_cb(UNUSED_ATTR const RawAddress& bd_addr,
 
 #if (BLE_DELAY_REQUEST_ENC == FALSE)
 void btif_gatt_check_encrypted_link(RawAddress bd_addr,
-                                    tBT_TRANSPORT transport_link) {
+                                    tGATT_TRANSPORT transport_link) {
   tBTM_LE_PENC_KEYS key;
   if ((btif_storage_get_ble_bonding_key(
            bd_addr, BTIF_DM_LE_KEY_PENC, (uint8_t*)&key,
@@ -87,7 +86,8 @@ void btif_gatt_check_encrypted_link(RawAddress bd_addr,
 }
 #else
 void btif_gatt_check_encrypted_link(UNUSED_ATTR RawAddress bd_addr,
-                                    UNUSED_ATTR tBT_TRANSPORT transport_link) {}
+                                    UNUSED_ATTR tGATT_TRANSPORT
+                                        transport_link) {}
 #endif
 
 void btif_gatt_move_track_adv_data(btgatt_track_adv_info_t* p_dest,

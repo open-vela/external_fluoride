@@ -52,6 +52,7 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2726,6 +2727,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2754,7 +2762,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -3135,24 +3143,25 @@ void btm_simple_pair_complete(uint8_t* p) {
 
   if (status == HCI_SUCCESS) {
     p_dev_rec->sec_flags |= BTM_SEC_AUTHENTICATED;
-  } else if (status == HCI_ERR_PAIRING_NOT_ALLOWED) {
-    /* The test spec wants the peer device to get this failure code. */
-    btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_DISCONNECT);
-
-    /* Change the timer to 1 second */
-    alarm_set_on_mloop(btm_cb.pairing_timer, BT_1SEC_TIMEOUT_MS,
-                       btm_sec_pairing_timeout, NULL);
-  } else if (btm_cb.pairing_bda == bd_addr) {
-    /* stop the timer */
-    alarm_cancel(btm_cb.pairing_timer);
-
-    if (p_dev_rec->sec_state != BTM_SEC_STATE_AUTHENTICATING) {
-      /* the initiating side: will receive auth complete event. disconnect ACL
-       * at that time */
-      disc = true;
-    }
   } else {
-    disc = true;
+    if (status == HCI_ERR_PAIRING_NOT_ALLOWED) {
+      /* The test spec wants the peer device to get this failure code. */
+      btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_DISCONNECT);
+
+      /* Change the timer to 1 second */
+      alarm_set_on_mloop(btm_cb.pairing_timer, BT_1SEC_TIMEOUT_MS,
+                         btm_sec_pairing_timeout, NULL);
+    } else if (btm_cb.pairing_bda == bd_addr) {
+      /* stop the timer */
+      alarm_cancel(btm_cb.pairing_timer);
+
+      if (p_dev_rec->sec_state != BTM_SEC_STATE_AUTHENTICATING) {
+        /* the initiating side: will receive auth complete event. disconnect ACL
+         * at that time */
+        disc = true;
+      }
+    } else
+      disc = true;
   }
 
   if (disc) {
@@ -4112,7 +4121,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }

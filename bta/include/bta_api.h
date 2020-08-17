@@ -193,6 +193,11 @@ typedef uint16_t
 
 typedef uint16_t tBTA_DM_CONN;
 
+#define BTA_TRANSPORT_UNKNOWN 0
+#define BTA_TRANSPORT_BR_EDR BT_TRANSPORT_BR_EDR
+#define BTA_TRANSPORT_LE BT_TRANSPORT_LE
+typedef tBT_TRANSPORT tBTA_TRANSPORT;
+
 /* Pairable Modes */
 #define BTA_DM_PAIRABLE 1
 #define BTA_DM_NON_PAIRABLE 0
@@ -363,6 +368,7 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
+#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_PIN_REQ_EVT */
