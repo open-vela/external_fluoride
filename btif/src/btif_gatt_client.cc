@@ -51,7 +51,6 @@
 #include "stack/include/acl_api.h"
 #include "stack/include/acl_api_types.h"
 #include "stack/include/btu.h"
-#include "types/bt_transport.h"
 #include "vendor_api.h"
 
 using base::Bind;
@@ -252,7 +251,7 @@ void btif_gattc_open_impl(int client_if, RawAddress address, bool is_direct,
   // Ensure device is in inquiry database
   int addr_type = 0;
   int device_type = 0;
-  tBT_TRANSPORT transport = (tBT_TRANSPORT)BT_TRANSPORT_LE;
+  tGATT_TRANSPORT transport = (tGATT_TRANSPORT)GATT_TRANSPORT_LE;
 
   if (btif_get_address_type(address, &addr_type) &&
       btif_get_device_type(address, &device_type) &&
@@ -283,18 +282,18 @@ void btif_gattc_open_impl(int client_if, RawAddress address, bool is_direct,
   } else {
     switch (device_type) {
       case BT_DEVICE_TYPE_BREDR:
-        transport = BT_TRANSPORT_BR_EDR;
+        transport = GATT_TRANSPORT_BR_EDR;
         break;
 
       case BT_DEVICE_TYPE_BLE:
-        transport = BT_TRANSPORT_LE;
+        transport = GATT_TRANSPORT_LE;
         break;
 
       case BT_DEVICE_TYPE_DUMO:
-        if (transport_p == BT_TRANSPORT_LE)
-          transport = BT_TRANSPORT_LE;
+        if (transport_p == GATT_TRANSPORT_LE)
+          transport = GATT_TRANSPORT_LE;
         else
-          transport = BT_TRANSPORT_BR_EDR;
+          transport = GATT_TRANSPORT_BR_EDR;
         break;
     }
   }
