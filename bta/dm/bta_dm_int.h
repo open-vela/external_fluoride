@@ -66,6 +66,8 @@ typedef struct {
   tBTA_DM_INQ inq_params;
   tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
+  uint8_t num_uuid;
+  bluetooth::Uuid* p_uuid;
 } tBTA_DM_API_SEARCH;
 
 /* data type for BTA_DM_API_DISCOVER_EVT */
@@ -75,6 +77,9 @@ typedef struct {
   tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
   tBT_TRANSPORT transport;
+  uint8_t num_uuid;
+  bluetooth::Uuid* p_uuid;
+  bluetooth::Uuid uuid;
 } tBTA_DM_API_DISCOVER;
 
 /* data type for BTA_DM_API_DI_DISC_EVT */
@@ -338,6 +343,8 @@ typedef struct {
   tBT_TRANSPORT transport;
   tBTA_DM_SEARCH_CBACK* p_scan_cback;
   tGATT_IF client_if;
+  uint8_t num_uuid;
+  bluetooth::Uuid* p_srvc_uuid;
   uint8_t uuid_to_search;
   bool gatt_disc_active;
   uint16_t conn_id;
