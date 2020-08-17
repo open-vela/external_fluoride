@@ -264,6 +264,15 @@ int set_remote_device_property(RawAddress* remote_addr,
   return BT_STATUS_SUCCESS;
 }
 
+int get_remote_service_record(const RawAddress& remote_addr,
+                              const bluetooth::Uuid& uuid) {
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
+
+  do_in_main_thread(FROM_HERE, base::BindOnce(btif_dm_get_remote_service_record,
+                                              remote_addr, uuid));
+  return BT_STATUS_SUCCESS;
+}
+
 int get_remote_services(RawAddress* remote_addr) {
   if (!interface_ready()) return BT_STATUS_NOT_READY;
 
@@ -544,7 +553,7 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
     get_remote_device_properties,
     get_remote_device_property,
     set_remote_device_property,
-    nullptr,
+    get_remote_service_record,
     get_remote_services,
     start_discovery,
     cancel_discovery,
