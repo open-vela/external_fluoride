@@ -121,18 +121,6 @@ int get_niap_config_compare_result(void);
 
 /*******************************************************************************
  *
- * Function         is_atv_device
- *
- * Description      Returns true if the local device is an Android TV
- *                  device, false if it is not.
- *
- * Returns          bool
- *
- ******************************************************************************/
-bool is_atv_device(void);
-
-/*******************************************************************************
- *
  * Function         btif_get_adapter_properties
  *
  * Description      Fetches all local adapter properties
@@ -306,16 +294,6 @@ void btif_dm_ssp_reply(const RawAddress bd_addr, bt_ssp_variant_t variant,
  *
  ******************************************************************************/
 bt_status_t btif_dm_get_adapter_property(bt_property_t* prop);
-
-/*******************************************************************************
- *
- * Function         btif_dm_get_remote_services
- *
- * Description      Start SDP to get remote services
- *
- ******************************************************************************/
-void btif_dm_get_remote_service_record(const RawAddress remote_addr,
-                                       const bluetooth::Uuid uuid);
 
 /*******************************************************************************
  *
