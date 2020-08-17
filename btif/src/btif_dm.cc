@@ -837,8 +837,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   uint32_t cod;
+  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1441,49 +1441,6 @@ static void btif_dm_search_services_evt(uint16_t event, char* p_param) {
   }
 }
 
-/*******************************************************************************
- *
- * Function         btif_dm_remote_service_record_evt
- *
- * Description      Executes search service record event in btif context
- *
- * Returns          void
- *
- ******************************************************************************/
-static void btif_dm_remote_service_record_evt(uint16_t event, char* p_param) {
-  tBTA_DM_SEARCH* p_data = (tBTA_DM_SEARCH*)p_param;
-
-  BTIF_TRACE_EVENT("%s:  event = %d", __func__, event);
-  switch (event) {
-    case BTA_DM_DISC_RES_EVT: {
-      bt_service_record_t rec;
-      bt_property_t prop;
-
-      memset(&rec, 0, sizeof(bt_service_record_t));
-      RawAddress& bd_addr = p_data->disc_res.bd_addr;
-
-      BTIF_TRACE_DEBUG("%s:(result=0x%x, services 0x%x)", __func__,
-                       p_data->disc_res.result, p_data->disc_res.services);
-      prop.type = BT_PROPERTY_SERVICE_RECORD;
-      prop.val = (void*)&rec;
-      prop.len = sizeof(rec);
-
-      /* disc_res.result is overloaded with SCN. Cannot check result */
-      p_data->disc_res.services &= ~BTA_USER_SERVICE_MASK;
-      /* TODO: Get the UUID as well */
-      rec.channel = p_data->disc_res.result - 3;
-      /* TODO: Need to get the service name using p_raw_data */
-      rec.name[0] = 0;
-
-      invoke_remote_device_properties_cb(BT_STATUS_SUCCESS, bd_addr, 1, &prop);
-    } break;
-
-    default: {
-      ASSERTC(0, "unhandled remote service record event", event);
-    } break;
-  }
-}
-
 void BTIF_dm_report_inquiry_status_change(uint8_t status) {
   if (status == BTM_INQUIRY_STARTED) {
     invoke_discovery_state_changed_cb(BT_DISCOVERY_STARTED);
@@ -1699,13 +1656,9 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
           break;
       }
       break;
-    case BTA_DM_BLE_CONSENT_REQ_EVT:
-      BTIF_TRACE_DEBUG("BTA_DM_BLE_CONSENT_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, true);
-      break;
     case BTA_DM_BLE_SEC_REQ_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_SEC_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, false);
+      btif_dm_ble_sec_req_evt(&p_data->ble_req);
       break;
     case BTA_DM_BLE_PASSKEY_NOTIF_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_PASSKEY_NOTIF_EVT. ");
@@ -1834,21 +1787,6 @@ void bte_dm_evt(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data) {
 static void bte_dm_search_services_evt(tBTA_DM_SEARCH_EVT event,
                                        tBTA_DM_SEARCH* p_data) {
   btif_dm_search_services_evt(event, (char*)p_data);
-}
-
-/*******************************************************************************
- *
- * Function         bte_dm_remote_service_record_evt
- *
- * Description      Switches context from BTE to BTIF for DM search service
- *                  record event
- *
- * Returns          void
- *
- ******************************************************************************/
-static void bte_dm_remote_service_record_evt(tBTA_DM_SEARCH_EVT event,
-                                             tBTA_DM_SEARCH* p_data) {
-  btif_dm_remote_service_record_evt(event, (char*)p_data);
 }
 
 /*******************************************************************************
@@ -2262,19 +2200,6 @@ bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
                  transport);
 
   return BT_STATUS_SUCCESS;
-}
-
-/*******************************************************************************
- *
- * Function         btif_dm_get_remote_service_record
- *
- * Description      Start SDP to get remote service record
- *
- ******************************************************************************/
-void btif_dm_get_remote_service_record(const RawAddress remote_addr,
-                                       const Uuid uuid) {
-  BTIF_TRACE_EVENT("%s: bd_addr=%s", __func__, remote_addr.ToString().c_str());
-  BTA_DmDiscoverUUID(remote_addr, uuid, bte_dm_remote_service_record_evt);
 }
 
 void btif_dm_enable_service(tBTA_SERVICE_ID service_id, bool enable) {
@@ -2728,14 +2653,14 @@ void btif_dm_remove_ble_bonding_keys(void) {
  * Returns          void
  *
  ******************************************************************************/
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent) {
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req) {
   bt_bdname_t bd_name;
   uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
 
-  if (!is_consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
+  if (pairing_cb.state == BT_BOND_STATE_BONDING) {
     BTIF_TRACE_DEBUG("%s Discard security request", __func__);
     return;
   }
