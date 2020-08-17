@@ -271,6 +271,7 @@ static void btif_dm_send_bond_state_changed(RawAddress address, bt_bond_state_t 
   }
 
   invoke_bond_state_changed_cb(BT_STATUS_SUCCESS, address, bond_state);
+  btif_dm_get_remote_services_by_transport(&address, BT_TRANSPORT_UNKNOWN);
 }
 
 void btif_dm_init(uid_set_t* set) {
@@ -2237,7 +2238,7 @@ void btif_dm_get_remote_services(const RawAddress remote_addr) {
   BTIF_TRACE_EVENT("%s: bd_addr=%s", __func__, remote_addr.ToString().c_str());
 
   BTA_DmDiscover(remote_addr, BTA_ALL_SERVICE_MASK, bte_dm_search_services_evt,
-                 BT_TRANSPORT_UNKNOWN);
+                 true);
 }
 
 /*******************************************************************************
@@ -2254,8 +2255,14 @@ bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
   BTIF_TRACE_EVENT("%s: transport=%d, remote_addr=%s", __func__, transport,
                    remote_addr->ToString().c_str());
 
-  BTA_DmDiscover(*remote_addr, BTA_ALL_SERVICE_MASK, bte_dm_search_services_evt,
-                 transport);
+  /* Set the mask extension */
+  tBTA_SERVICE_MASK_EXT mask_ext;
+  mask_ext.num_uuid = 0;
+  mask_ext.p_uuid = NULL;
+  mask_ext.srvc_mask = BTA_ALL_SERVICE_MASK;
+
+  BTA_DmDiscoverByTransport(*remote_addr, &mask_ext, bte_dm_search_services_evt,
+                            true, transport);
 
   return BT_STATUS_SUCCESS;
 }
@@ -2270,7 +2277,7 @@ bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
 void btif_dm_get_remote_service_record(const RawAddress remote_addr,
                                        const Uuid uuid) {
   BTIF_TRACE_EVENT("%s: bd_addr=%s", __func__, remote_addr.ToString().c_str());
-  BTA_DmDiscoverUUID(remote_addr, uuid, bte_dm_remote_service_record_evt);
+  BTA_DmDiscoverUUID(remote_addr, uuid, bte_dm_remote_service_record_evt, true);
 }
 
 void btif_dm_enable_service(tBTA_SERVICE_ID service_id, bool enable) {
