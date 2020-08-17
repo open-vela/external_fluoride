@@ -990,7 +990,7 @@ extern void BTA_DmSearchCancel(void);
  ******************************************************************************/
 extern void BTA_DmDiscover(const RawAddress& bd_addr,
                            tBTA_SERVICE_MASK services,
-                           tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search);
+                           tBTA_DM_SEARCH_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -1005,7 +1005,7 @@ extern void BTA_DmDiscover(const RawAddress& bd_addr,
  ******************************************************************************/
 extern void BTA_DmDiscoverUUID(const RawAddress& bd_addr,
                                const bluetooth::Uuid& uuid,
-                               tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search);
+                               tBTA_DM_SEARCH_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -1310,7 +1310,7 @@ extern void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
 extern void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
                                       tBTA_SERVICE_MASK_EXT* p_services,
                                       tBTA_DM_SEARCH_CBACK* p_cback,
-                                      bool sdp_search, tBT_TRANSPORT transport);
+                                      tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
