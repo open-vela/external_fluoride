@@ -89,7 +89,6 @@ bool restricted_mode = false;
 bool niap_mode = false;
 const int CONFIG_COMPARE_ALL_PASS = 0b11;
 int niap_config_compare_result = CONFIG_COMPARE_ALL_PASS;
-bool is_local_device_atv = false;
 
 /*******************************************************************************
  *  Externs
@@ -143,7 +142,7 @@ static bool is_profile(const char* p1, const char* p2) {
 
 static int init(bt_callbacks_t* callbacks, bool start_restricted,
                 bool is_niap_mode, int config_compare_result,
-                const char** init_flags, bool is_atv) {
+                const char** init_flags) {
   LOG_INFO("%s: start restricted = %d ; niap = %d, config compare result = %d",
            __func__, start_restricted, is_niap_mode, config_compare_result);
 
@@ -159,7 +158,6 @@ static int init(bt_callbacks_t* callbacks, bool start_restricted,
   restricted_mode = start_restricted;
   niap_mode = is_niap_mode;
   niap_config_compare_result = config_compare_result;
-  is_local_device_atv = is_atv;
 
   stack_manager_get_interface()->init_stack();
   btif_debug_init();
@@ -189,8 +187,6 @@ bool is_niap_mode() { return niap_mode; }
 int get_niap_config_compare_result() {
   return niap_mode ? niap_config_compare_result : CONFIG_COMPARE_ALL_PASS;
 }
-
-bool is_atv_device() { return is_local_device_atv; }
 
 static int get_adapter_properties(void) {
   if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
@@ -261,6 +257,15 @@ int set_remote_device_property(RawAddress* remote_addr,
                        osi_free(property);
                      },
                      *remote_addr, property_deep_copy(property)));
+  return BT_STATUS_SUCCESS;
+}
+
+int get_remote_service_record(const RawAddress& remote_addr,
+                              const bluetooth::Uuid& uuid) {
+  if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
+
+  do_in_main_thread(FROM_HERE, base::BindOnce(btif_dm_get_remote_service_record,
+                                              remote_addr, uuid));
   return BT_STATUS_SUCCESS;
 }
 
@@ -544,7 +549,7 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
     get_remote_device_properties,
     get_remote_device_property,
     set_remote_device_property,
-    nullptr,
+    get_remote_service_record,
     get_remote_services,
     start_discovery,
     cancel_discovery,
