@@ -82,6 +82,15 @@ typedef struct {
   bluetooth::Uuid uuid;
 } tBTA_DM_API_DISCOVER;
 
+/* data type for BTA_DM_API_DI_DISC_EVT */
+typedef struct {
+  BT_HDR hdr;
+  RawAddress bd_addr;
+  tBTA_DISCOVERY_DB* p_sdp_db;
+  uint32_t len;
+  tBTA_DM_SEARCH_CBACK* p_cback;
+} tBTA_DM_API_DI_DISC;
+
 typedef struct {
   RawAddress bd_addr;
   bool accept;
@@ -165,6 +174,8 @@ typedef union {
   tBTA_DM_INQUIRY_CMPL inq_cmpl;
 
   tBTA_DM_SDP_RESULT sdp_event;
+
+  tBTA_DM_API_DI_DISC di_disc;
 
 } tBTA_DM_MSG;
 
