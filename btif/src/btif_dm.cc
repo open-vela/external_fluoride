@@ -99,8 +99,6 @@ const Uuid UUID_HEARING_AID = Uuid::FromString("FDF0");
 #define COD_AV_PORTABLE_AUDIO 0x041C
 #define COD_AV_HIFI_AUDIO 0x0428
 
-#define BTIF_DM_DEFAULT_INQ_MAX_RESULTS 0
-#define BTIF_DM_DEFAULT_INQ_MAX_DURATION 10
 #define BTIF_DM_MAX_SDP_ATTEMPTS_AFTER_PAIRING 2
 
 #define NUM_TIMEOUT_RETRIES 5
@@ -837,8 +835,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   uint32_t cod;
+  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1057,7 +1055,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
         }
         bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_BOND_STATE_BONDED);
 
-        btif_dm_get_remote_services(bd_addr);
+        btif_dm_get_remote_services(bd_addr, BT_TRANSPORT_UNKNOWN);
       }
     }
     // Do not call bond_state_changed_cb yet. Wait until remote service
@@ -1322,7 +1320,7 @@ static void btif_dm_search_services_evt(tBTA_DM_SEARCH_EVT event,
           BTIF_TRACE_WARNING("%s: SDP failed after bonding re-attempting",
                              __func__);
           pairing_cb.sdp_attempts++;
-          btif_dm_get_remote_services(bd_addr);
+          btif_dm_get_remote_services(bd_addr, BT_TRANSPORT_UNKNOWN);
         } else {
           BTIF_TRACE_WARNING("%s: SDP triggered by someone failed when bonding",
                              __func__);
@@ -1655,13 +1653,9 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
           break;
       }
       break;
-    case BTA_DM_BLE_CONSENT_REQ_EVT:
-      BTIF_TRACE_DEBUG("BTA_DM_BLE_CONSENT_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, true);
-      break;
     case BTA_DM_BLE_SEC_REQ_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_SEC_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, false);
+      btif_dm_ble_sec_req_evt(&p_data->ble_req);
       break;
     case BTA_DM_BLE_PASSKEY_NOTIF_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_PASSKEY_NOTIF_EVT. ");
@@ -1836,9 +1830,6 @@ static void bte_scan_filt_param_cfg_evt(uint8_t ref_value, uint8_t avbl_space,
  *
  ******************************************************************************/
 void btif_dm_start_discovery(void) {
-  tBTA_DM_INQ inq_params;
-  tBTA_SERVICE_MASK services = 0;
-
   BTIF_TRACE_EVENT("%s", __func__);
 
   /* Cleanup anything remaining on index 0 */
@@ -1857,22 +1848,10 @@ void btif_dm_start_discovery(void) {
                              std::move(adv_filt_param),
                              base::Bind(&bte_scan_filt_param_cfg_evt, 0));
 
-  /* TODO: Do we need to handle multiple inquiries at the same time? */
-
-  /* Set inquiry params and call API */
-  inq_params.mode = BTA_DM_GENERAL_INQUIRY | BTA_BLE_GENERAL_INQUIRY;
-  inq_params.duration = BTIF_DM_DEFAULT_INQ_MAX_DURATION;
-
-  inq_params.max_resps = BTIF_DM_DEFAULT_INQ_MAX_RESULTS;
-  inq_params.report_dup = true;
-
-  inq_params.filter_type = BTA_DM_INQ_CLR;
-  /* TODO: Filter device by BDA needs to be implemented here */
-
   /* Will be enabled to true once inquiry busy level has been received */
   btif_dm_inquiry_in_progress = false;
   /* find nearby devices */
-  BTA_DmSearch(&inq_params, services, btif_dm_search_devices_evt);
+  BTA_DmSearch(btif_dm_search_devices_evt);
 }
 
 /*******************************************************************************
@@ -2160,34 +2139,16 @@ bt_status_t btif_dm_get_adapter_property(bt_property_t* prop) {
  *
  * Function         btif_dm_get_remote_services
  *
- * Description      Start SDP to get remote services
- *
- ******************************************************************************/
-void btif_dm_get_remote_services(const RawAddress remote_addr) {
-  BTIF_TRACE_EVENT("%s: bd_addr=%s", __func__, remote_addr.ToString().c_str());
-
-  BTA_DmDiscover(remote_addr, BTA_ALL_SERVICE_MASK, btif_dm_search_services_evt,
-                 BT_TRANSPORT_UNKNOWN);
-}
-
-/*******************************************************************************
- *
- * Function         btif_dm_get_remote_services_by_transport
- *
  * Description      Start SDP to get remote services by transport
  *
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
-                                                     const int transport) {
+void btif_dm_get_remote_services(RawAddress remote_addr, const int transport) {
   BTIF_TRACE_EVENT("%s: transport=%d, remote_addr=%s", __func__, transport,
-                   remote_addr->ToString().c_str());
+                   remote_addr.ToString().c_str());
 
-  BTA_DmDiscover(*remote_addr, BTA_ALL_SERVICE_MASK,
-                 btif_dm_search_services_evt, transport);
-
-  return BT_STATUS_SUCCESS;
+  BTA_DmDiscover(remote_addr, btif_dm_search_services_evt, transport);
 }
 
 void btif_dm_enable_service(tBTA_SERVICE_ID service_id, bool enable) {
@@ -2506,7 +2467,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       state = BT_BOND_STATE_NONE;
     } else {
       btif_dm_save_ble_bonding_keys(bdaddr);
-      btif_dm_get_remote_services_by_transport(&bd_addr, BT_TRANSPORT_LE);
+      btif_dm_get_remote_services(bd_addr, BT_TRANSPORT_LE);
     }
   } else {
     /*Map the HCI fail reason  to  bt status  */
@@ -2641,14 +2602,14 @@ void btif_dm_remove_ble_bonding_keys(void) {
  * Returns          void
  *
  ******************************************************************************/
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent) {
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req) {
   bt_bdname_t bd_name;
   uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
 
-  if (!is_consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
+  if (pairing_cb.state == BT_BOND_STATE_BONDING) {
     BTIF_TRACE_DEBUG("%s Discard security request", __func__);
     return;
   }

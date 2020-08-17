@@ -61,7 +61,6 @@ enum {
 /* data type for BTA_DM_API_SEARCH_EVT */
 typedef struct {
   BT_HDR hdr;
-  tBTA_DM_INQ inq_params;
   tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
 } tBTA_DM_API_SEARCH;
@@ -70,7 +69,6 @@ typedef struct {
 typedef struct {
   BT_HDR hdr;
   RawAddress bd_addr;
-  tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
   tBT_TRANSPORT transport;
 } tBTA_DM_API_DISCOVER;
@@ -315,8 +313,8 @@ typedef struct {
   BD_NAME peer_name;
   alarm_t* search_timer;
   uint8_t service_index;
-  tBTA_DM_MSG* p_search_queue; /* search or discover commands during search
-                                  cancel stored here */
+  tBTA_DM_MSG* p_pending_search;
+  tBTA_DM_MSG* p_pending_discovery;
   bool wait_disc;
   bool sdp_results;
   bluetooth::Uuid uuid;
