@@ -48,7 +48,6 @@
 #include "btif_storage.h"
 #include "osi/include/log.h"
 #include "stack/include/btu.h"
-#include "types/bt_transport.h"
 
 using base::Bind;
 using base::Owned;
@@ -284,7 +283,7 @@ static void btif_gatts_open_impl(int server_if, const RawAddress& address,
   // Ensure device is in inquiry database
   int addr_type = 0;
   int device_type = 0;
-  tBT_TRANSPORT transport = BT_TRANSPORT_LE;
+  tGATT_TRANSPORT transport = GATT_TRANSPORT_LE;
 
   if (btif_get_address_type(address, &addr_type) &&
       btif_get_device_type(address, &device_type) &&
@@ -293,23 +292,23 @@ static void btif_gatts_open_impl(int server_if, const RawAddress& address,
   }
 
   // Determine transport
-  if (transport_param != BT_TRANSPORT_AUTO) {
+  if (transport_param != GATT_TRANSPORT_AUTO) {
     transport = transport_param;
   } else {
     switch (device_type) {
       case BT_DEVICE_TYPE_BREDR:
-        transport = BT_TRANSPORT_BR_EDR;
+        transport = GATT_TRANSPORT_BR_EDR;
         break;
 
       case BT_DEVICE_TYPE_BLE:
-        transport = BT_TRANSPORT_LE;
+        transport = GATT_TRANSPORT_LE;
         break;
 
       case BT_DEVICE_TYPE_DUMO:
-        if (transport_param == BT_TRANSPORT_LE)
-          transport = BT_TRANSPORT_LE;
+        if (transport_param == GATT_TRANSPORT_LE)
+          transport = GATT_TRANSPORT_LE;
         else
-          transport = BT_TRANSPORT_BR_EDR;
+          transport = GATT_TRANSPORT_BR_EDR;
         break;
     }
   }
