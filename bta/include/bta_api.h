@@ -1003,7 +1003,9 @@ extern void BTA_DmConfirm(const RawAddress& bd_addr, bool accept);
  *
  ******************************************************************************/
 extern void BTA_DmAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                            const LinkKey& link_key, uint8_t key_type,
+                            const LinkKey& link_key,
+                            tBTA_SERVICE_MASK trusted_mask, bool is_trusted,
+                            uint8_t key_type, tBTM_IO_CAP io_cap,
                             uint8_t pin_length);
 
 /*******************************************************************************
