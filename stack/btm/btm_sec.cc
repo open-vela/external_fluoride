@@ -52,6 +52,7 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -363,6 +364,29 @@ void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len) {
   btm_cb.cfg.pin_type = pin_type;
   btm_cb.cfg.pin_code_len = pin_code_len;
   memcpy(btm_cb.cfg.pin_code, pin_code, pin_code_len);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetPairableMode
+ *
+ * Description      Enable or disable pairing
+ *
+ * Parameters       allow_pairing - (true or false) whether or not the device
+ *                      allows pairing.
+ *                  connect_only_paired - (true or false) whether or not to
+ *                      only allow paired devices to connect.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_SetPairableMode(bool allow_pairing, bool connect_only_paired) {
+  BTM_TRACE_API(
+      "BTM_SetPairableMode()  allow_pairing: %u   connect_only_paired: %u",
+      allow_pairing, connect_only_paired);
+
+  btm_cb.pairing_disabled = !allow_pairing;
+  btm_cb.connect_only_paired = connect_only_paired;
 }
 
 #define BTM_NO_AVAIL_SEC_SERVICES ((uint16_t)0xffff)
@@ -2703,6 +2727,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2731,7 +2762,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -4089,7 +4120,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
