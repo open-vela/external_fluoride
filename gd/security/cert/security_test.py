@@ -274,5 +274,4 @@ class SecurityTest(GdBaseTestClass):
                                 self.cert_security.remove_bond(self.dut_security.get_address(),
                                                                common.BluetoothAddressTypeEnum.PUBLIC_DEVICE_ADDRESS)
 
-                                self.dut_security.wait_for_disconnect_event()
-                                self.cert_security.wait_for_disconnect_event()
+                                time.sleep(.1)
