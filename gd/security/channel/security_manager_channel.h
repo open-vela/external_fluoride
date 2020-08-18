@@ -40,7 +40,6 @@ class ISecurityManagerChannelListener {
   virtual ~ISecurityManagerChannelListener() = default;
   virtual void OnHciEventReceived(hci::EventPacketView packet) = 0;
   virtual void OnConnectionClosed(hci::Address) = 0;
-  virtual void OnEncryptionChange(hci::Address, bool encrypted) = 0;
 };
 
 /**
@@ -114,8 +113,6 @@ class SecurityManagerChannel : public l2cap::classic::LinkSecurityInterfaceListe
   // Interface overrides
   void OnLinkConnected(std::unique_ptr<l2cap::classic::LinkSecurityInterface> link) override;
   void OnLinkDisconnected(hci::Address address) override;
-  void OnAuthenticationComplete(hci::Address remote) override;
-  void OnEncryptionChange(hci::Address, bool encrypted) override;
 
  private:
   ISecurityManagerChannelListener* listener_{nullptr};
