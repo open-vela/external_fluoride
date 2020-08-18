@@ -14,15 +14,8 @@
  * limitations under the License.
  */
 
-#include "service/common/bluetooth/a2dp_codec_config.h"
-#include "stack/include/a2dp_vendor_ldac.h"
+#pragma once
 
-bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
-  return nullptr;
-}
+#include <cstdint>
 
-int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
-int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
-  return 0;
-}
-int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
+void BTIF_dm_report_inquiry_status_change(uint8_t busy_level_flags);
