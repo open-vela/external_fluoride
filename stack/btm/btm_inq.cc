@@ -695,8 +695,8 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_RESULTS_CB* p_results_cb,
       p_inq->state = BTM_INQ_SET_FILT_STATE;
       break;
 
-    case HCI_FILTER_COND_DEVICE_CLASS:
-    case HCI_FILTER_COND_BD_ADDR:
+    case BTM_FILTER_COND_DEVICE_CLASS:
+    case BTM_FILTER_COND_BD_ADDR:
       /* The filter is not being used so simply clear it;
           the inquiry can start after this operation */
       p_inq->state = BTM_INQ_CLR_FILT_STATE;
@@ -1242,7 +1242,7 @@ static tBTM_STATUS btm_set_inq_event_filter(uint8_t filter_cond_type,
 
   /* Load the correct filter condition to pass to the lower layer */
   switch (filter_cond_type) {
-    case HCI_FILTER_COND_DEVICE_CLASS:
+    case BTM_FILTER_COND_DEVICE_CLASS:
       /* copy the device class and device class fields into contiguous memory to
        * send to HCI */
       memcpy(condition_buf, p_filt_cond->cod_cond.dev_class, DEV_CLASS_LEN);
@@ -1252,7 +1252,7 @@ static tBTM_STATUS btm_set_inq_event_filter(uint8_t filter_cond_type,
       /* condition length should already be set as the default */
       break;
 
-    case HCI_FILTER_COND_BD_ADDR:
+    case BTM_FILTER_COND_BD_ADDR:
       p_cond = (uint8_t*)&p_filt_cond->bdaddr_cond;
 
       /* condition length should already be set as the default */

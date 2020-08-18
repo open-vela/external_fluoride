@@ -154,6 +154,10 @@ typedef void(tBTM_VSC_CMPL_CB)(tBTM_VSC_CMPL* p1);
 /* Inquiry Filter Condition types (see tBTM_INQ_PARMS) */
 /* Inquiry Filtering is turned off */
 #define BTM_CLR_INQUIRY_FILTER 0
+/* Filter on device class */
+#define BTM_FILTER_COND_DEVICE_CLASS HCI_FILTER_COND_DEVICE_CLASS
+/* Filter on device addr */
+#define BTM_FILTER_COND_BD_ADDR HCI_FILTER_COND_BD_ADDR
 
 /****************************
  * minor device class field
@@ -1023,7 +1027,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
