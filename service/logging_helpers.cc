@@ -15,7 +15,7 @@
 //
 #include "logging_helpers.h"
 
-#include <string.h>
+#include "types/bt_transport.h"
 
 #include <string>
 
@@ -41,16 +41,6 @@ const char* BtAvAudioStateText(const btav_audio_state_t state) {
     CASE_RETURN_TEXT(BTAV_AUDIO_STATE_STARTED);
     default:
       return "Invalid audio state";
-  }
-}
-
-const char* BtTransportText(const btgatt_transport_t t) {
-  switch (t) {
-    CASE_RETURN_TEXT(GATT_TRANSPORT_AUTO);
-    CASE_RETURN_TEXT(GATT_TRANSPORT_BREDR);
-    CASE_RETURN_TEXT(GATT_TRANSPORT_LE);
-    default:
-      return "unknown transport";
   }
 }
 

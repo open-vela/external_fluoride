@@ -55,42 +55,23 @@ enum {
   BTA_DM_SDP_RESULT_EVT,
   BTA_DM_SEARCH_CMPL_EVT,
   BTA_DM_DISCOVERY_RESULT_EVT,
-  BTA_DM_API_DI_DISCOVER_EVT,
   BTA_DM_DISC_CLOSE_TOUT_EVT
-
 };
 
 /* data type for BTA_DM_API_SEARCH_EVT */
 typedef struct {
   BT_HDR hdr;
-  tBTA_DM_INQ inq_params;
   tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
-  uint8_t num_uuid;
-  bluetooth::Uuid* p_uuid;
 } tBTA_DM_API_SEARCH;
 
 /* data type for BTA_DM_API_DISCOVER_EVT */
 typedef struct {
   BT_HDR hdr;
   RawAddress bd_addr;
-  tBTA_SERVICE_MASK services;
   tBTA_DM_SEARCH_CBACK* p_cback;
-  bool sdp_search;
   tBT_TRANSPORT transport;
-  uint8_t num_uuid;
-  bluetooth::Uuid* p_uuid;
-  bluetooth::Uuid uuid;
 } tBTA_DM_API_DISCOVER;
-
-/* data type for BTA_DM_API_DI_DISC_EVT */
-typedef struct {
-  BT_HDR hdr;
-  RawAddress bd_addr;
-  tBTA_DISCOVERY_DB* p_sdp_db;
-  uint32_t len;
-  tBTA_DM_SEARCH_CBACK* p_cback;
-} tBTA_DM_API_DI_DISC;
 
 typedef struct {
   RawAddress bd_addr;
@@ -175,8 +156,6 @@ typedef union {
   tBTA_DM_INQUIRY_CMPL inq_cmpl;
 
   tBTA_DM_SDP_RESULT sdp_event;
-
-  tBTA_DM_API_DI_DISC di_disc;
 
 } tBTA_DM_MSG;
 
@@ -334,19 +313,16 @@ typedef struct {
   BD_NAME peer_name;
   alarm_t* search_timer;
   uint8_t service_index;
-  tBTA_DM_MSG* p_search_queue; /* search or discover commands during search
-                                  cancel stored here */
+  tBTA_DM_MSG* p_pending_search;
+  tBTA_DM_MSG* p_pending_discovery;
   bool wait_disc;
   bool sdp_results;
   bluetooth::Uuid uuid;
   uint8_t peer_scn;
-  bool sdp_search;
   bool cancel_pending; /* inquiry cancel is pending */
   tBT_TRANSPORT transport;
   tBTA_DM_SEARCH_CBACK* p_scan_cback;
   tGATT_IF client_if;
-  uint8_t num_uuid;
-  bluetooth::Uuid* p_srvc_uuid;
   uint8_t uuid_to_search;
   bool gatt_disc_active;
   uint16_t conn_id;
@@ -360,7 +336,6 @@ typedef struct {
 
 /* DI control block */
 typedef struct {
-  tSDP_DISCOVERY_DB* p_di_db;         /* pointer to the DI discovery database */
   uint8_t di_num;                     /* total local DI record number */
   uint32_t di_handle[BTA_DI_NUM_MAX]; /* local DI record handle, the first one
                                          is primary record */
@@ -460,7 +435,7 @@ extern void bta_dm_enable(tBTA_DM_SEC_CBACK*);
 extern void bta_dm_disable();
 extern void bta_dm_init_cb(void);
 extern void bta_dm_set_dev_name(const std::vector<uint8_t>&);
-extern void bta_dm_set_visibility(tBTA_DM_DISC, tBTA_DM_CONN, uint8_t, uint8_t);
+extern void bta_dm_set_visibility(tBTA_DM_DISC, tBTA_DM_CONN);
 extern void bta_dm_set_scan_config(tBTA_DM_MSG* p_data);
 extern void bta_dm_vendor_spec_command(tBTA_DM_MSG* p_data);
 extern void bta_dm_bond(const RawAddress&, tBLE_ADDR_TYPE, tBT_TRANSPORT, int);
@@ -510,7 +485,6 @@ extern uint8_t bta_dm_get_av_count(void);
 extern void bta_dm_search_start(tBTA_DM_MSG* p_data);
 extern void bta_dm_search_cancel();
 extern void bta_dm_discover(tBTA_DM_MSG* p_data);
-extern void bta_dm_di_disc(tBTA_DM_MSG* p_data);
 extern void bta_dm_inq_cmpl(uint8_t num);
 extern void bta_dm_rmt_name(tBTA_DM_MSG* p_data);
 extern void bta_dm_sdp_result(tBTA_DM_MSG* p_data);
