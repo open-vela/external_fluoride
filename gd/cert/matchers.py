@@ -93,10 +93,6 @@ class HciMatchers(object):
     def Disconnect():
         return lambda event: HciMatchers.EventWithCode(EventCode.DISCONNECT)
 
-    @staticmethod
-    def DisconnectionComplete():
-        return lambda event: HciMatchers.EventWithCode(EventCode.DISCONNECTION_COMPLETE)
-
 
 class NeighborMatchers(object):
 
