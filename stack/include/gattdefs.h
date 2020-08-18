@@ -135,7 +135,4 @@
 #define GATT_UUID_SERVER_SUP_FEAT 0x2B3A
 #define GATT_UUID_CLIENT_SUP_FEAT 0x2B29
 
-/* Database Hash characteristic */
-#define GATT_UUID_DATABASE_HASH 0x2B2A
-
 #endif
