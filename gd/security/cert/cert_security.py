@@ -210,7 +210,6 @@ class CertSecurity(PySecurity):
         """
             Cert side needs to pass
         """
-        assertThat(self._hci_event_stream).emits(HciMatchers.DisconnectionComplete())
         pass
 
     def close(self):
