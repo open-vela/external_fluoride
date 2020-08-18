@@ -465,8 +465,8 @@ static bt_status_t btif_in_fetch_bonded_devices(
           if (btif_config_get_int(name, "DevClass", &cod))
             uint2devclass((uint32_t)cod, dev_class);
           btif_config_get_int(name, "PinLength", &pin_length);
-          BTA_DmAddDevice(bd_addr, dev_class, link_key, 0, 0,
-                          (uint8_t)linkkey_type, 0, pin_length);
+          BTA_DmAddDevice(bd_addr, dev_class, link_key, (uint8_t)linkkey_type,
+                          pin_length);
 
           if (btif_config_get_int(name, "DevType", &device_type) &&
               (device_type == BT_DEVICE_TYPE_DUMO)) {
@@ -889,8 +889,7 @@ static void remove_devices_with_sample_ltk() {
 
   for (RawAddress address : bad_ltk) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(ERROR) << __func__
-               << ": removing bond to device using test TLK: " << address;
+    LOG(ERROR) << __func__ << ": removing bond to device using test TLK: " << address;
 
     btif_storage_remove_bonded_device(&address);
   }

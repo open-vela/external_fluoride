@@ -292,7 +292,6 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
-#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
 
 /* Structure associated with BTA_DM_PIN_REQ_EVT */
@@ -1003,9 +1002,7 @@ extern void BTA_DmConfirm(const RawAddress& bd_addr, bool accept);
  *
  ******************************************************************************/
 extern void BTA_DmAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                            const LinkKey& link_key,
-                            tBTA_SERVICE_MASK trusted_mask, bool is_trusted,
-                            uint8_t key_type, tBTM_IO_CAP io_cap,
+                            const LinkKey& link_key, uint8_t key_type,
                             uint8_t pin_length);
 
 /*******************************************************************************
