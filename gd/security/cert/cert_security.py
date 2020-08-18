@@ -206,11 +206,5 @@ class CertSecurity(PySecurity):
         """
         pass
 
-    def wait_for_disconnect_event(self):
-        """
-            Cert side needs to pass
-        """
-        pass
-
     def close(self):
         safeClose(self._hci)
