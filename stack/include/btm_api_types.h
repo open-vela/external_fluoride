@@ -417,8 +417,6 @@ typedef struct /* contains the parameters passed to the inquiry functions */
   uint8_t mode;      /* general or limited */
   uint8_t duration;  /* duration of the inquiry (1.28 sec increments) */
   uint8_t max_resps; /* maximum number of responses to return */
-  bool report_dup; /* report duplicated inquiry response with higher RSSI value
-                      */
   tBTM_INQ_FILT_COND filter_cond; /* filter value based on filter cond type */
 } tBTM_INQ_PARMS;
 
@@ -1022,7 +1020,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
