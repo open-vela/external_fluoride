@@ -52,7 +52,6 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2704,13 +2703,6 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2731,7 +2723,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
    * loc_io_caps is initialized with the default value */
   evt_data.io_cap = btm_cb.devcb.loc_io_caps;
   evt_data.oob_data = BTM_OOB_NONE;
-  evt_data.auth_req = BTM_DEFAULT_AUTH_REQ;
+  evt_data.auth_req = BTM_AUTH_SP_NO;
 
   uint8_t err_code = 0;
   bool is_orig = true;
@@ -2739,7 +2731,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
- 
+
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -2768,7 +2760,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
       if (btm_cb.pairing_flags & BTM_PAIR_FLAGS_PEER_STARTED_DD) {
         /* acceptor in dedicated bonding */
-        evt_data.auth_req = BTM_DEFAULT_DD_AUTH_REQ;
+        evt_data.auth_req = BTM_AUTH_AP_YES;
       }
       break;
 
@@ -2776,7 +2768,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
     initiated by local device */
     case BTM_PAIR_STATE_WAIT_PIN_REQ:
       if (evt_data.bd_addr == btm_cb.pairing_bda) {
-        evt_data.auth_req = BTM_DEFAULT_DD_AUTH_REQ;
+        evt_data.auth_req = BTM_AUTH_AP_YES;
       } else {
         err_code = HCI_ERR_HOST_BUSY_PAIRING;
       }
@@ -4097,8 +4089,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
