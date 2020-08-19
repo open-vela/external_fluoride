@@ -2034,9 +2034,7 @@ static uint8_t bta_dm_sp_cback(tBTM_SP_EVT event, tBTM_SP_EVT_DATA* p_data) {
       if (btm_local_io_caps != BTM_IO_CAP_NONE) {
         /* translate auth_req */
         btif_dm_set_oob_for_io_req(&p_data->io_req.oob_data);
-        btif_dm_proc_io_req(p_data->io_req.bd_addr, &p_data->io_req.io_cap,
-                            &p_data->io_req.oob_data, &p_data->io_req.auth_req,
-                            p_data->io_req.is_orig);
+        btif_dm_proc_io_req(&p_data->io_req.auth_req, p_data->io_req.is_orig);
       }
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
@@ -3183,16 +3181,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:

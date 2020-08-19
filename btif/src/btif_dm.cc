@@ -817,8 +817,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   uint32_t cod;
+  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1635,13 +1635,9 @@ static void btif_dm_upstreams_evt(uint16_t event, char* p_param) {
           break;
       }
       break;
-    case BTA_DM_BLE_CONSENT_REQ_EVT:
-      BTIF_TRACE_DEBUG("BTA_DM_BLE_CONSENT_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, true);
-      break;
     case BTA_DM_BLE_SEC_REQ_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_SEC_REQ_EVT. ");
-      btif_dm_ble_sec_req_evt(&p_data->ble_req, false);
+      btif_dm_ble_sec_req_evt(&p_data->ble_req);
       break;
     case BTA_DM_BLE_PASSKEY_NOTIF_EVT:
       BTIF_TRACE_DEBUG("BTA_DM_BLE_PASSKEY_NOTIF_EVT. ");
@@ -2152,10 +2148,7 @@ void btif_dm_enable_service(tBTA_SERVICE_ID service_id, bool enable) {
   return;
 }
 
-void btif_dm_proc_io_req(UNUSED_ATTR const RawAddress& bd_addr,
-                         UNUSED_ATTR tBTM_IO_CAP* p_io_cap,
-                         UNUSED_ATTR tBTM_OOB_DATA* p_oob_data,
-                         tBTM_AUTH_REQ* p_auth_req, bool is_orig) {
+void btif_dm_proc_io_req(tBTM_AUTH_REQ* p_auth_req, bool is_orig) {
   uint8_t yes_no_bit = BTA_AUTH_SP_YES & *p_auth_req;
   /* if local initiated:
   **      1. set DD + MITM
@@ -2589,14 +2582,14 @@ void btif_dm_remove_ble_bonding_keys(void) {
  * Returns          void
  *
  ******************************************************************************/
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent) {
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req) {
   bt_bdname_t bd_name;
   uint32_t cod;
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
 
-  if (!is_consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
+  if (pairing_cb.state == BT_BOND_STATE_BONDING) {
     BTIF_TRACE_DEBUG("%s Discard security request", __func__);
     return;
   }
