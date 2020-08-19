@@ -210,8 +210,7 @@ class BleScannerInterfaceImpl : public BleScannerInterface {
                           [](RegisterCallback cb) {
                             BTA_GATTC_AppRegister(
                                 bta_cback,
-                                jni_thread_wrapper(FROM_HERE, std::move(cb)),
-                                false);
+                                jni_thread_wrapper(FROM_HERE, std::move(cb)));
                           },
                           std::move(cb)));
   }
