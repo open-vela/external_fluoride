@@ -99,12 +99,14 @@ typedef void(tBTM_VSC_CMPL_CB)(tBTM_VSC_CMPL* p1);
  */
 #define BTM_INQUIRY_NONE 0
 #define BTM_GENERAL_INQUIRY 0x01
-#define BTM_BR_INQUIRY_MASK (BTM_GENERAL_INQUIRY)
+#define BTM_LIMITED_INQUIRY 0x02
+#define BTM_BR_INQUIRY_MASK (BTM_GENERAL_INQUIRY | BTM_LIMITED_INQUIRY)
 
 /* high byte of inquiry mode for BLE inquiry mode */
 #define BTM_BLE_INQUIRY_NONE 0x00
 #define BTM_BLE_GENERAL_INQUIRY 0x10
-#define BTM_BLE_INQUIRY_MASK (BTM_BLE_GENERAL_INQUIRY)
+#define BTM_BLE_LIMITED_INQUIRY 0x20
+#define BTM_BLE_INQUIRY_MASK (BTM_BLE_GENERAL_INQUIRY | BTM_BLE_LIMITED_INQUIRY)
 
 /* BTM_IsInquiryActive return values (Bit Mask)
  * Note: These bit masks are associated with the inquiry modes (BTM_*_INQUIRY)
@@ -113,18 +115,27 @@ typedef void(tBTM_VSC_CMPL_CB)(tBTM_VSC_CMPL* p1);
 #define BTM_INQUIRY_INACTIVE 0x0
 /* a general inquiry is in progress */
 #define BTM_GENERAL_INQUIRY_ACTIVE BTM_GENERAL_INQUIRY
+/* a limited inquiry is in progress */
+#define BTM_LIMITED_INQUIRY_ACTIVE BTM_LIMITED_INQUIRY
+/* a periodic inquiry is active */
+#define BTM_PERIODIC_INQUIRY_ACTIVE 0x8
 /* SSP is active, so inquiry is disallowed (work around for FW bug) */
 #define BTM_SSP_INQUIRY_ACTIVE 0x4
 /* a general inquiry is in progress */
 #define BTM_LE_GENERAL_INQUIRY_ACTIVE BTM_BLE_GENERAL_INQUIRY
+/* a limited inquiry is in progress */
+#define BTM_LE_LIMITED_INQUIRY_ACTIVE BTM_BLE_LIMITED_INQUIRY
 
 /* inquiry activity mask */
 /* BR/EDR inquiry activity mask */
-#define BTM_BR_INQ_ACTIVE_MASK (BTM_GENERAL_INQUIRY_ACTIVE)
+#define BTM_BR_INQ_ACTIVE_MASK                               \
+  (BTM_GENERAL_INQUIRY_ACTIVE | BTM_LIMITED_INQUIRY_ACTIVE | \
+   BTM_PERIODIC_INQUIRY_ACTIVE)
 /* LE scan activity mask */
 #define BTM_BLE_SCAN_ACTIVE_MASK 0xF0
 /* LE inquiry activity mask*/
-#define BTM_BLE_INQ_ACTIVE_MASK (BTM_LE_GENERAL_INQUIRY_ACTIVE)
+#define BTM_BLE_INQ_ACTIVE_MASK \
+  (BTM_LE_GENERAL_INQUIRY_ACTIVE | BTM_LE_LIMITED_INQUIRY_ACTIVE)
 /* inquiry activity mask */
 #define BTM_INQUIRY_ACTIVE_MASK \
   (BTM_BR_INQ_ACTIVE_MASK | BTM_BLE_INQ_ACTIVE_MASK)
@@ -405,6 +416,8 @@ typedef struct /* contains the parameters passed to the inquiry functions */
 {
   uint8_t mode;      /* general or limited */
   uint8_t duration;  /* duration of the inquiry (1.28 sec increments) */
+  uint8_t max_resps; /* maximum number of responses to return */
+  tBTM_INQ_FILT_COND filter_cond; /* filter value based on filter cond type */
 } tBTM_INQ_PARMS;
 
 #define BTM_INQ_RESULT_BR 0x01
@@ -1007,6 +1020,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
