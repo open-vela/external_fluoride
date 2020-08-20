@@ -90,7 +90,6 @@ static_library("stack") {
     "btm/btm_dev.cc",
     "btm/btm_devctl.cc",
     "btm/btm_inq.cc",
-    "btm/btm_iso.cc",
     "btm/btm_main.cc",
     "btm/btm_pm.cc",
     "btm/btm_sco.cc",
