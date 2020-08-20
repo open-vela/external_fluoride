@@ -76,6 +76,7 @@ static void bta_dm_remname_cback(void* p);
 static void bta_dm_find_services(const RawAddress& bd_addr);
 static void bta_dm_discover_next_device(void);
 static void bta_dm_sdp_callback(uint16_t sdp_status);
+static uint8_t bta_dm_authorize_cback(uint8_t service_id);
 static uint8_t bta_dm_pin_cback(const RawAddress& bd_addr, DEV_CLASS dev_class,
                                 BD_NAME bd_name, bool min_16_digit);
 static uint8_t bta_dm_new_link_key_cback(const RawAddress& bd_addr,
@@ -231,7 +232,8 @@ const uint32_t bta_service_id_to_btm_srv_id_lkup_tbl[BTA_MAX_SERVICE_ID] = {
 };
 
 /* bta security callback */
-const tBTM_APPL_INFO bta_security = {&bta_dm_pin_cback,
+const tBTM_APPL_INFO bta_security = {&bta_dm_authorize_cback,
+                                     &bta_dm_pin_cback,
                                      &bta_dm_new_link_key_cback,
                                      &bta_dm_authentication_complete_cback,
                                      &bta_dm_bond_cancel_complete_cback,
@@ -627,14 +629,18 @@ void bta_dm_remove_device(const RawAddress& bd_addr) {
 void bta_dm_add_device(std::unique_ptr<tBTA_DM_API_ADD_DEVICE> msg) {
   uint8_t* p_dc = NULL;
   LinkKey* p_lc = NULL;
+  uint32_t trusted_services_mask[BTM_SEC_SERVICE_ARRAY_SIZE];
+
+  memset(trusted_services_mask, 0, sizeof(trusted_services_mask));
 
   /* If not all zeros, the device class has been specified */
   if (msg->dc_known) p_dc = (uint8_t*)msg->dc;
 
   if (msg->link_key_known) p_lc = &msg->link_key;
 
-  if (!BTM_SecAddDevice(msg->bd_addr, p_dc, msg->bd_name, msg->features, p_lc,
-                        msg->key_type, msg->pin_length)) {
+  if (!BTM_SecAddDevice(msg->bd_addr, p_dc, msg->bd_name, msg->features,
+                        trusted_services_mask, p_lc, msg->key_type,
+                        msg->pin_length)) {
     LOG(ERROR) << "BTA_DM: Error adding device " << msg->bd_addr;
   }
 }
@@ -679,7 +685,7 @@ void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
   char* p_name;
 
   tBTM_STATUS status =
-      BTM_SecBond(bd_addr, addr_type, transport, device_type, 0, NULL);
+      BTM_SecBond(bd_addr, addr_type, transport, device_type, 0, NULL, 0);
 
   if (bta_dm_cb.p_sec_cback && (status != BTM_CMD_STARTED)) {
     memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
@@ -723,10 +729,20 @@ void bta_dm_bond_cancel(const RawAddress& bd_addr) {
 
 /** Send the pin_reply to a request from BTM */
 void bta_dm_pin_reply(std::unique_ptr<tBTA_DM_API_PIN_REPLY> msg) {
-  if (msg->accept) {
-    BTM_PINCodeReply(msg->bd_addr, BTM_SUCCESS, msg->pin_len, msg->p_pin);
+  uint32_t trusted_mask[BTM_SEC_SERVICE_ARRAY_SIZE];
+
+  uint32_t* current_trusted_mask = BTM_ReadTrustedMask(msg->bd_addr);
+  if (current_trusted_mask) {
+    memcpy(trusted_mask, current_trusted_mask, sizeof(trusted_mask));
   } else {
-    BTM_PINCodeReply(msg->bd_addr, BTM_NOT_AUTHORIZED, 0, NULL);
+    memset(trusted_mask, 0, sizeof(trusted_mask));
+  }
+
+  if (msg->accept) {
+    BTM_PINCodeReply(msg->bd_addr, BTM_SUCCESS, msg->pin_len, msg->p_pin,
+                     trusted_mask);
+  } else {
+    BTM_PINCodeReply(msg->bd_addr, BTM_NOT_AUTHORIZED, 0, NULL, trusted_mask);
   }
 }
 
@@ -1768,6 +1784,39 @@ static void bta_dm_remname_cback(void* p) {
 
 /*******************************************************************************
  *
+ * Function         bta_dm_authorize_cback
+ *
+ * Description      cback requesting authorization
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+static uint8_t bta_dm_authorize_cback(uint8_t service_id) {
+  uint8_t index = 1;
+  while (index < BTA_MAX_SERVICE_ID) {
+    /* get the BTA service id corresponding to BTM id */
+    if (bta_service_id_to_btm_srv_id_lkup_tbl[index] == service_id) {
+      break;
+    }
+    index++;
+  }
+
+  /* if supported service callback otherwise not authorized */
+  if (bta_dm_cb.p_sec_cback && (index < BTA_MAX_SERVICE_ID
+#if (BTA_JV_INCLUDED == TRUE)
+                                /* pass through JV service ID */
+                                || (service_id >= BTA_FIRST_JV_SERVICE_ID &&
+                                    service_id <= BTA_LAST_JV_SERVICE_ID)
+#endif
+                                    )) {
+    return BTM_CMD_STARTED;
+  } else {
+    return BTM_NOT_AUTHORIZED;
+  }
+}
+
+/*******************************************************************************
+ *
  * Function         bta_dm_pinname_cback
  *
  * Description      Callback requesting pin_key
@@ -1887,30 +1936,35 @@ static uint8_t bta_dm_new_link_key_cback(const RawAddress& bd_addr,
 
   memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
 
-  event = BTA_DM_AUTH_CMPL_EVT;
-  p_auth_cmpl = &sec_event.auth_cmpl;
+  /* Not AMP Key type */
+  if (key_type != HCI_LKEY_TYPE_AMP_WIFI && key_type != HCI_LKEY_TYPE_AMP_UWB) {
+    event = BTA_DM_AUTH_CMPL_EVT;
+    p_auth_cmpl = &sec_event.auth_cmpl;
 
-  p_auth_cmpl->bd_addr = bd_addr;
+    p_auth_cmpl->bd_addr = bd_addr;
 
-  memcpy(p_auth_cmpl->bd_name, bd_name, (BD_NAME_LEN - 1));
-  p_auth_cmpl->bd_name[BD_NAME_LEN - 1] = 0;
-  p_auth_cmpl->key_present = true;
-  p_auth_cmpl->key_type = key_type;
-  p_auth_cmpl->success = true;
-  p_auth_cmpl->key = key;
-  sec_event.auth_cmpl.fail_reason = HCI_SUCCESS;
+    memcpy(p_auth_cmpl->bd_name, bd_name, (BD_NAME_LEN - 1));
+    p_auth_cmpl->bd_name[BD_NAME_LEN - 1] = 0;
+    p_auth_cmpl->key_present = true;
+    p_auth_cmpl->key_type = key_type;
+    p_auth_cmpl->success = true;
+    p_auth_cmpl->key = key;
+    sec_event.auth_cmpl.fail_reason = HCI_SUCCESS;
 
-  // Report the BR link key based on the BR/EDR address and type
-  BTM_ReadDevInfo(bd_addr, &sec_event.auth_cmpl.dev_type,
-                  &sec_event.auth_cmpl.addr_type);
-  if (bta_dm_cb.p_sec_cback) bta_dm_cb.p_sec_cback(event, &sec_event);
+    // Report the BR link key based on the BR/EDR address and type
+    BTM_ReadDevInfo(bd_addr, &sec_event.auth_cmpl.dev_type,
+                    &sec_event.auth_cmpl.addr_type);
+    if (bta_dm_cb.p_sec_cback) bta_dm_cb.p_sec_cback(event, &sec_event);
 
-  // Setting remove_dev_pending flag to false, where it will avoid deleting
-  // the
-  // security device record when the ACL connection link goes down in case of
-  // reconnection.
-  if (bta_dm_cb.device_list.count)
-    bta_dm_reset_sec_dev_pending(p_auth_cmpl->bd_addr);
+    // Setting remove_dev_pending flag to false, where it will avoid deleting
+    // the
+    // security device record when the ACL connection link goes down in case of
+    // reconnection.
+    if (bta_dm_cb.device_list.count)
+      bta_dm_reset_sec_dev_pending(p_auth_cmpl->bd_addr);
+  } else {
+    APPL_TRACE_WARNING("%s() Received AMP Key", __func__);
+  }
 
   return BTM_CMD_STARTED;
 }
@@ -3127,16 +3181,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
