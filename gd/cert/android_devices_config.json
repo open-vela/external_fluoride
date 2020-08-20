@@ -10,9 +10,8 @@
                     "grpc_port": "8898",
                     "grpc_root_server_port": "8896",
                     "signal_port": "8894",
-                    "label": "cert",
+                    "label": "cert_stack",
                     "serial_number": "CERT",
-                    "name": "Cert Device",
                     "cmd":
                     [
                         "adb",
@@ -30,9 +29,8 @@
                     "grpc_port": "8899",
                     "grpc_root_server_port": "8897",
                     "signal_port": "8895",
-                    "label": "dut",
+                    "label": "stack_under_test",
                     "serial_number": "DUT",
-                    "name": "DUT Device",
                     "cmd":
                     [
                         "adb",
