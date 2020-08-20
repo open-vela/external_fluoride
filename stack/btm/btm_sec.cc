@@ -52,6 +52,7 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -83,6 +84,8 @@ static bool btm_sec_queue_mx_request(const RawAddress& bd_addr, uint16_t psm,
 static void btm_sec_bond_cancel_complete(void);
 static void btm_send_link_key_notif(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_sec_check_prefetch_pin(tBTM_SEC_DEV_REC* p_dev_rec);
+
+bool btm_sec_are_all_trusted(uint32_t p_mask[]);
 
 static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
                                                uint8_t reason,
@@ -2568,6 +2571,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2596,7 +2606,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -3942,7 +3952,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -4922,6 +4933,28 @@ static bool btm_sec_check_prefetch_pin(tBTM_SEC_DEV_REC* p_dev_rec) {
   }
 
   return rv;
+}
+
+/*******************************************************************************
+ *
+ * Function         btm_sec_auth_payload_tout
+ *
+ * Description      Processes the HCI Autheniticated Payload Timeout Event
+ *                  indicating that a packet containing a valid MIC on the
+ *                  connection handle was not received within the programmed
+ *                  timeout value. (Spec Default is 30 secs, but can be
+ *                  changed via the BTM_SecSetAuthPayloadTimeout() function.
+ *
+ ******************************************************************************/
+void btm_sec_auth_payload_tout(uint8_t* p, uint16_t hci_evt_len) {
+  uint16_t handle;
+
+  STREAM_TO_UINT16(handle, p);
+  handle = HCID_GET_HANDLE(handle);
+
+  /* Will be exposed to upper layers in the future if/when determined necessary
+   */
+  BTM_TRACE_ERROR("%s on handle 0x%02x", __func__, handle);
 }
 
 /*******************************************************************************
