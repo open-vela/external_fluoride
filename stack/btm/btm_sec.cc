@@ -52,6 +52,7 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2490,6 +2491,17 @@ void btm_sec_rmt_name_request_complete(const RawAddress* p_bd_addr,
 
     p_dev_rec->link_key_not_sent = false;
     btm_send_link_key_notif(p_dev_rec);
+
+    /* If its not us who perform authentication, we should tell stackserver */
+    /* that some authentication has been completed                          */
+    /* This is required when different entities receive link notification and
+     * auth complete */
+    if (!(p_dev_rec->security_required & BTM_SEC_OUT_AUTHENTICATE)) {
+      if (btm_cb.api.p_auth_complete_callback)
+        (*btm_cb.api.p_auth_complete_callback)(
+            p_dev_rec->bd_addr, p_dev_rec->dev_class, p_dev_rec->sec_bd_name,
+            HCI_SUCCESS);
+    }
   }
 
   /* If this is a bonding procedure can disconnect the link now */
@@ -2570,6 +2582,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2598,7 +2617,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -3748,6 +3767,11 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
     else
       res = false;
 
+    if (btm_cb.api.p_auth_complete_callback)
+      (*btm_cb.api.p_auth_complete_callback)(
+          p_dev_rec->bd_addr, p_dev_rec->dev_class, p_dev_rec->sec_bd_name,
+          HCI_SUCCESS);
+
     btm_sec_change_pairing_state(BTM_PAIR_STATE_IDLE);
 
     if (res) {
@@ -3945,7 +3969,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -4061,6 +4086,19 @@ void btm_sec_link_key_notification(const RawAddress& p_bda,
                     p_dev_rec->rmt_io_caps, p_dev_rec->sec_flags,
                     p_dev_rec->dev_class[1])
     return;
+  }
+
+  /* If its not us who perform authentication, we should tell stackserver */
+  /* that some authentication has been completed                          */
+  /* This is required when different entities receive link notification and auth
+   * complete */
+  if (!(p_dev_rec->security_required & BTM_SEC_OUT_AUTHENTICATE)
+      /* for derived key, always send authentication callback for BR channel */
+      || ltk_derived_lk) {
+    if (btm_cb.api.p_auth_complete_callback)
+      (*btm_cb.api.p_auth_complete_callback)(
+          p_dev_rec->bd_addr, p_dev_rec->dev_class, p_dev_rec->sec_bd_name,
+          HCI_SUCCESS);
   }
 
 /* We will save link key only if the user authorized it - BTE report link key in
