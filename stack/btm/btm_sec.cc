@@ -52,7 +52,6 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
-extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -85,7 +84,6 @@ static void btm_sec_bond_cancel_complete(void);
 static void btm_send_link_key_notif(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_sec_check_prefetch_pin(tBTM_SEC_DEV_REC* p_dev_rec);
 
-static uint8_t btm_sec_start_authorization(tBTM_SEC_DEV_REC* p_dev_rec);
 bool btm_sec_are_all_trusted(uint32_t p_mask[]);
 
 static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
@@ -95,9 +93,6 @@ tBTM_SEC_DEV_REC* btm_sec_find_dev_by_sec_state(uint8_t state);
 
 static bool btm_dev_authenticated(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_dev_encrypted(tBTM_SEC_DEV_REC* p_dev_rec);
-static bool btm_dev_authorized(tBTM_SEC_DEV_REC* p_dev_rec);
-static bool btm_serv_trusted(tBTM_SEC_DEV_REC* p_dev_rec,
-                             tBTM_SEC_SERV_REC* p_serv_rec);
 static uint16_t btm_sec_set_serv_level4_flags(uint16_t cur_security,
                                               bool is_originator);
 
@@ -158,22 +153,6 @@ static bool btm_dev_encrypted(tBTM_SEC_DEV_REC* p_dev_rec) {
 
 /*******************************************************************************
  *
- * Function         btm_dev_authorized
- *
- * Description      check device is authorized
- *
- * Returns          bool    true or false
- *
- ******************************************************************************/
-static bool btm_dev_authorized(tBTM_SEC_DEV_REC* p_dev_rec) {
-  if (p_dev_rec->sec_flags & BTM_SEC_AUTHORIZED) {
-    return (true);
-  }
-  return (false);
-}
-
-/*******************************************************************************
- *
  * Function         btm_dev_16_digit_authenticated
  *
  * Description      check device is authenticated by using 16 digit pin or MITM
@@ -184,24 +163,6 @@ static bool btm_dev_authorized(tBTM_SEC_DEV_REC* p_dev_rec) {
 static bool btm_dev_16_digit_authenticated(tBTM_SEC_DEV_REC* p_dev_rec) {
   // BTM_SEC_16_DIGIT_PIN_AUTHED is set if MITM or 16 digit pin is used
   if (p_dev_rec->sec_flags & BTM_SEC_16_DIGIT_PIN_AUTHED) {
-    return (true);
-  }
-  return (false);
-}
-
-/*******************************************************************************
- *
- * Function         btm_serv_trusted
- *
- * Description      check service is trusted
- *
- * Returns          bool    true or false
- *
- ******************************************************************************/
-static bool btm_serv_trusted(tBTM_SEC_DEV_REC* p_dev_rec,
-                             tBTM_SEC_SERV_REC* p_serv_rec) {
-  if (BTM_SEC_IS_SERVICE_TRUSTED(p_dev_rec->trusted_mask,
-                                 p_serv_rec->service_id)) {
     return (true);
   }
   return (false);
@@ -457,17 +418,16 @@ bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
 #endif
 /* clear out the old setting, just in case it exists */
     {
-      p_srec->security_flags &= ~(
-          BTM_SEC_OUT_AUTHORIZE | BTM_SEC_OUT_ENCRYPT |
-          BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_MITM | BTM_SEC_FORCE_MASTER |
-          BTM_SEC_ATTEMPT_MASTER | BTM_SEC_FORCE_SLAVE | BTM_SEC_ATTEMPT_SLAVE);
+      p_srec->security_flags &=
+          ~(BTM_SEC_OUT_ENCRYPT | BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_MITM |
+            BTM_SEC_FORCE_MASTER | BTM_SEC_ATTEMPT_MASTER |
+            BTM_SEC_FORCE_SLAVE | BTM_SEC_ATTEMPT_SLAVE);
     }
 
     /* Parameter validation.  Originator should not set requirements for
      * incoming connections */
-    sec_level &=
-        ~(BTM_SEC_IN_AUTHORIZE | BTM_SEC_IN_ENCRYPT | BTM_SEC_IN_AUTHENTICATE |
-          BTM_SEC_IN_MITM | BTM_SEC_IN_MIN_16_DIGIT_PIN);
+    sec_level &= ~(BTM_SEC_IN_ENCRYPT | BTM_SEC_IN_AUTHENTICATE |
+                   BTM_SEC_IN_MITM | BTM_SEC_IN_MIN_16_DIGIT_PIN);
 
     if (btm_cb.security_mode == BTM_SEC_MODE_SP ||
         btm_cb.security_mode == BTM_SEC_MODE_SC) {
@@ -489,17 +449,16 @@ bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
 #endif
 /* clear out the old setting, just in case it exists */
     {
-      p_srec->security_flags &=
-          ~(BTM_SEC_IN_AUTHORIZE | BTM_SEC_IN_ENCRYPT |
-            BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_MITM | BTM_SEC_FORCE_MASTER |
-            BTM_SEC_ATTEMPT_MASTER | BTM_SEC_FORCE_SLAVE |
-            BTM_SEC_ATTEMPT_SLAVE | BTM_SEC_IN_MIN_16_DIGIT_PIN);
+      p_srec->security_flags &= ~(
+          BTM_SEC_IN_ENCRYPT | BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_MITM |
+          BTM_SEC_FORCE_MASTER | BTM_SEC_ATTEMPT_MASTER | BTM_SEC_FORCE_SLAVE |
+          BTM_SEC_ATTEMPT_SLAVE | BTM_SEC_IN_MIN_16_DIGIT_PIN);
     }
 
     /* Parameter validation.  Acceptor should not set requirements for outgoing
      * connections */
-    sec_level &= ~(BTM_SEC_OUT_AUTHORIZE | BTM_SEC_OUT_ENCRYPT |
-                   BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_MITM);
+    sec_level &=
+        ~(BTM_SEC_OUT_ENCRYPT | BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_MITM);
 
     if (btm_cb.security_mode == BTM_SEC_MODE_SP ||
         btm_cb.security_mode == BTM_SEC_MODE_SC) {
@@ -1681,9 +1640,7 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
               btm_dev_authenticated(p_dev_rec))) ||
             ((((security_required & BTM_SEC_OUT_FLAGS) ==
                (BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_ENCRYPT)) &&
-              btm_dev_encrypted(p_dev_rec))) ||
-            ((((security_required & BTM_SEC_OUT_FLAGS) == BTM_SEC_OUT_FLAGS) &&
-              btm_dev_authorized(p_dev_rec) && btm_dev_encrypted(p_dev_rec)))) {
+              btm_dev_encrypted(p_dev_rec)))) {
           rc = BTM_SUCCESS;
         }
       } else {
@@ -1693,24 +1650,7 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
              btm_dev_authenticated(p_dev_rec)) ||
             (((security_required & BTM_SEC_IN_FLAGS) ==
               (BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_ENCRYPT)) &&
-             btm_dev_encrypted(p_dev_rec)) ||
-            (((security_required & BTM_SEC_IN_FLAGS) == BTM_SEC_IN_AUTHORIZE) &&
-             (btm_dev_authorized(p_dev_rec) ||
-              btm_serv_trusted(p_dev_rec, p_serv_rec))) ||
-            (((security_required & BTM_SEC_IN_FLAGS) ==
-              (BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_AUTHORIZE)) &&
-             ((btm_dev_authorized(p_dev_rec) ||
-               btm_serv_trusted(p_dev_rec, p_serv_rec)) &&
-              btm_dev_authenticated(p_dev_rec))) ||
-            (((security_required & BTM_SEC_IN_FLAGS) ==
-              (BTM_SEC_IN_ENCRYPT | BTM_SEC_IN_AUTHORIZE)) &&
-             ((btm_dev_authorized(p_dev_rec) ||
-               btm_serv_trusted(p_dev_rec, p_serv_rec)) &&
-              btm_dev_encrypted(p_dev_rec))) ||
-            (((security_required & BTM_SEC_IN_FLAGS) == BTM_SEC_IN_FLAGS) &&
-             btm_dev_encrypted(p_dev_rec) &&
-             (btm_dev_authorized(p_dev_rec) ||
-              btm_serv_trusted(p_dev_rec, p_serv_rec)))) {
+             btm_dev_encrypted(p_dev_rec))) {
           // Check for 16 digits (or MITM)
           if (((security_required & BTM_SEC_IN_MIN_16_DIGIT_PIN) == 0) ||
               (((security_required & BTM_SEC_IN_MIN_16_DIGIT_PIN) ==
@@ -1986,19 +1926,6 @@ tBTM_STATUS btm_sec_mx_access_request(const RawAddress& bd_addr, uint16_t psm,
             ((((security_required & BTM_SEC_IN_FLAGS) ==
                BTM_SEC_IN_AUTHENTICATE) &&
               btm_dev_authenticated(p_dev_rec))) ||
-            (((security_required & BTM_SEC_IN_FLAGS) == BTM_SEC_IN_AUTHORIZE) &&
-             (btm_dev_authorized(p_dev_rec) ||
-              btm_serv_trusted(p_dev_rec, p_serv_rec))) ||
-            (((security_required & BTM_SEC_IN_FLAGS) ==
-              (BTM_SEC_IN_AUTHORIZE | BTM_SEC_IN_AUTHENTICATE)) &&
-             ((btm_dev_authorized(p_dev_rec) ||
-               btm_serv_trusted(p_dev_rec, p_serv_rec)) &&
-              btm_dev_authenticated(p_dev_rec))) ||
-            (((security_required & BTM_SEC_IN_FLAGS) ==
-              (BTM_SEC_IN_AUTHORIZE | BTM_SEC_IN_ENCRYPT)) &&
-             ((btm_dev_authorized(p_dev_rec) ||
-               btm_serv_trusted(p_dev_rec, p_serv_rec)) &&
-              btm_dev_encrypted(p_dev_rec))) ||
             ((((security_required & BTM_SEC_IN_FLAGS) ==
                (BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_ENCRYPT)) &&
               btm_dev_encrypted(p_dev_rec)))) {
@@ -2013,20 +1940,6 @@ tBTM_STATUS btm_sec_mx_access_request(const RawAddress& bd_addr, uint16_t psm,
       }
       if ((rc == BTM_SUCCESS) && (security_required & BTM_SEC_MODE4_LEVEL4) &&
           (p_dev_rec->link_key_type != BTM_LKEY_TYPE_AUTH_COMB_P_256)) {
-        rc = BTM_CMD_STARTED;
-      }
-    }
-
-    if (rc == BTM_SUCCESS) {
-      BTM_TRACE_EVENT("%s: allow to bypass, checking authorization", __func__);
-      /* the security in BTM_SEC_IN_FLAGS is fullfilled so far, check the
-       * requirements in */
-      /* btm_sec_execute_procedure */
-      if ((is_originator &&
-           (p_serv_rec->security_flags & BTM_SEC_OUT_AUTHORIZE)) ||
-          (!is_originator &&
-           (p_serv_rec->security_flags & BTM_SEC_IN_AUTHORIZE))) {
-        BTM_TRACE_EVENT("%s: still need authorization", __func__);
         rc = BTM_CMD_STARTED;
       }
     }
@@ -2704,13 +2617,6 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2739,7 +2645,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
- 
+
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -4094,8 +4000,7 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
-              << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -4667,30 +4572,9 @@ tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
     return (BTM_FAILED_ON_SECURITY);
   }
 
-  /* If connection is not authorized and authorization is required */
-  /* start authorization and return PENDING to the caller */
-  if (!(p_dev_rec->sec_flags & BTM_SEC_AUTHORIZED) &&
-      ((p_dev_rec->is_originator &&
-        (p_dev_rec->security_required & BTM_SEC_OUT_AUTHORIZE)) ||
-       (!p_dev_rec->is_originator &&
-        (p_dev_rec->security_required & BTM_SEC_IN_AUTHORIZE)))) {
-    BTM_TRACE_EVENT(
-        "service id:%d, is trusted:%d", p_dev_rec->p_cur_service->service_id,
-        (BTM_SEC_IS_SERVICE_TRUSTED(p_dev_rec->trusted_mask,
-                                    p_dev_rec->p_cur_service->service_id)));
-    if ((!btm_sec_are_all_trusted(p_dev_rec->trusted_mask)) &&
-        (p_dev_rec->p_cur_service->service_id < BTM_SEC_MAX_SERVICES) &&
-        (!BTM_SEC_IS_SERVICE_TRUSTED(p_dev_rec->trusted_mask,
-                                     p_dev_rec->p_cur_service->service_id))) {
-      BTM_TRACE_EVENT("Security Manager: Start authorization");
-      return (btm_sec_start_authorization(p_dev_rec));
-    }
-  }
-
   /* All required  security procedures already established */
   p_dev_rec->security_required &=
-      ~(BTM_SEC_OUT_AUTHORIZE | BTM_SEC_IN_AUTHORIZE |
-        BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_IN_AUTHENTICATE |
+      ~(BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_IN_AUTHENTICATE |
         BTM_SEC_OUT_ENCRYPT | BTM_SEC_IN_ENCRYPT | BTM_SEC_FORCE_MASTER |
         BTM_SEC_ATTEMPT_MASTER | BTM_SEC_FORCE_SLAVE | BTM_SEC_ATTEMPT_SLAVE);
 
@@ -4743,59 +4627,6 @@ static void btm_sec_start_authentication(tBTM_SEC_DEV_REC* p_dev_rec) {
 static void btm_sec_start_encryption(tBTM_SEC_DEV_REC* p_dev_rec) {
   btsnd_hcic_set_conn_encrypt(p_dev_rec->hci_handle, true);
   p_dev_rec->sec_state = BTM_SEC_STATE_ENCRYPTING;
-}
-
-/*******************************************************************************
- *
- * Function         btm_sec_start_authorization
- *
- * Description      This function is called to start authorization
- *
- * Returns          true if started
- *
- ******************************************************************************/
-static uint8_t btm_sec_start_authorization(tBTM_SEC_DEV_REC* p_dev_rec) {
-  uint8_t result;
-  uint8_t service_id;
-
-  if ((p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) ||
-      (p_dev_rec->hci_handle == HCI_INVALID_HANDLE)) {
-    if (!btm_cb.api.p_authorize_callback) return (BTM_MODE_UNSUPPORTED);
-
-    service_id =
-        p_dev_rec->p_cur_service ? p_dev_rec->p_cur_service->service_id : 0;
-
-    /* Send authorization request if not already sent during this service
-     * connection */
-    if (p_dev_rec->last_author_service_id == BTM_SEC_NO_LAST_SERVICE_ID ||
-        p_dev_rec->last_author_service_id != service_id) {
-      p_dev_rec->sec_state = BTM_SEC_STATE_AUTHORIZING;
-      result = (*btm_cb.api.p_authorize_callback)(service_id);
-    }
-
-    else /* Already authorized once for this L2CAP bringup */
-    {
-      BTM_TRACE_DEBUG(
-          "btm_sec_start_authorization: (Ignoring extra Authorization prompt "
-          "for service %d)",
-          service_id);
-      return (BTM_SUCCESS);
-    }
-
-    if (result == BTM_SUCCESS) {
-      p_dev_rec->sec_flags |= BTM_SEC_AUTHORIZED;
-
-      /* Save the currently authorized service in case we are asked again by
-       * another multiplexer layer */
-      if (!p_dev_rec->is_originator)
-        p_dev_rec->last_author_service_id = service_id;
-
-      p_dev_rec->sec_state = BTM_SEC_STATE_IDLE;
-    }
-    return (result);
-  }
-  btm_sec_start_get_name(p_dev_rec);
-  return (BTM_CMD_STARTED);
 }
 
 /*******************************************************************************
