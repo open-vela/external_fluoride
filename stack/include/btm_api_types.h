@@ -634,10 +634,14 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
 */
 /* Nothing required */
 #define BTM_SEC_NONE 0x0000
+/* Inbound call requires authorization */
+#define BTM_SEC_IN_AUTHORIZE 0x0001
 /* Inbound call requires authentication */
 #define BTM_SEC_IN_AUTHENTICATE 0x0002
 /* Inbound call requires encryption */
 #define BTM_SEC_IN_ENCRYPT 0x0004
+/* Outbound call requires authorization */
+#define BTM_SEC_OUT_AUTHORIZE 0x0008
 /* Outbound call requires authentication */
 #define BTM_SEC_OUT_AUTHENTICATE 0x0010
 /* Outbound call requires encryption */
@@ -661,6 +665,7 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
 
 /* Security Flags [bit mask] (BTM_GetSecurityFlags)
 */
+#define BTM_SEC_FLAG_AUTHORIZED 0x01
 #define BTM_SEC_FLAG_AUTHENTICATED 0x02
 #define BTM_SEC_FLAG_ENCRYPTED 0x04
 #define BTM_SEC_FLAG_LKEY_KNOWN 0x10
@@ -691,6 +696,12 @@ typedef uint8_t tBTM_LINK_KEY_TYPE;
 #define BTM_SEC_PROTO_BNEP 5
 #define BTM_SEC_PROTO_HID 6 /* HID      */
 #define BTM_SEC_PROTO_AVDT 7
+
+/* Determine the number of uint32_t's necessary for security services */
+#define BTM_SEC_ARRAY_BITS 32 /* Number of bits in each array element */
+#define BTM_SEC_SERVICE_ARRAY_SIZE                         \
+  (((uint32_t)BTM_SEC_MAX_SERVICES / BTM_SEC_ARRAY_BITS) + \
+   (((uint32_t)BTM_SEC_MAX_SERVICES % BTM_SEC_ARRAY_BITS) ? 1 : 0))
 
 /* Security service definitions (BTM_SetSecurityLevel)
  * Used for Authorization APIs
@@ -744,6 +755,32 @@ typedef uint8_t tBTM_LINK_KEY_TYPE;
  * Security Services MACROS handle array of uint32_t bits for more than 32
  * trusted services
  ******************************************************************************/
+
+/* MACRO to check the security service bit mask in a bit stream (Returns true or
+ * false) */
+#define BTM_SEC_IS_SERVICE_TRUSTED(p, service)                                 \
+  (((((uint32_t*)(p))[(((uint32_t)(service)) / BTM_SEC_ARRAY_BITS)]) &         \
+    (uint32_t)(((uint32_t)1 << (((uint32_t)(service)) % BTM_SEC_ARRAY_BITS)))) \
+       ? true                                                                  \
+       : false)
+
+/* MACRO to copy two trusted device bitmask */
+#define BTM_SEC_COPY_TRUSTED_DEVICE(p_src, p_dst)              \
+  {                                                            \
+    uint32_t trst;                                             \
+    for (trst = 0; trst < BTM_SEC_SERVICE_ARRAY_SIZE; trst++)  \
+      ((uint32_t*)(p_dst))[trst] = ((uint32_t*)(p_src))[trst]; \
+  }
+
+/* MACRO to clear two trusted device bitmask */
+#define BTM_SEC_CLR_TRUSTED_DEVICE(p_dst)                     \
+  {                                                           \
+    uint32_t trst;                                            \
+    for (trst = 0; trst < BTM_SEC_SERVICE_ARRAY_SIZE; trst++) \
+      ((uint32_t*)(p_dst))[trst] = 0;                         \
+  }
+
+#define BTM_SEC_TRUST_ALL 0xFFFFFFFF /* for each array element */
 
 /****************************************
  *  Security Manager Callback Functions
@@ -970,7 +1007,6 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
-#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
@@ -1127,6 +1163,7 @@ typedef void(tBTM_LE_KEY_CALLBACK)(uint8_t key_type,
  ***************************/
 /* Structure that applications use to register with BTM_SecRegister */
 typedef struct {
+  tBTM_AUTHORIZE_CALLBACK* p_authorize_callback;
   tBTM_PIN_CALLBACK* p_pin_callback;
   tBTM_LINK_KEY_CALLBACK* p_link_key_callback;
   tBTM_AUTH_COMPLETE_CALLBACK* p_auth_complete_callback;
