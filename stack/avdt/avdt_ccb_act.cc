@@ -34,6 +34,7 @@
 #include "btm_api.h"
 #include "btu.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
 
 /*******************************************************************************
  *
@@ -943,8 +944,7 @@ void avdt_ccb_set_conn(AvdtpCcb* p_ccb, tAVDT_CCB_EVT* p_data) {
 
   /* set security level */
   BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP,
-                       p_data->connect.sec_mask, AVDT_PSM, BTM_SEC_PROTO_AVDT,
-                       AVDT_CHAN_SIG);
+                       p_data->connect.sec_mask, AVDT_PSM, 0, 0);
 }
 
 /*******************************************************************************
