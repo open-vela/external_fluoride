@@ -36,6 +36,7 @@
 #include "pan_int.h"
 #include "sdp_api.h"
 #include "sdpdefs.h"
+#include "stack/btm/btm_sec.h"
 
 using bluetooth::Uuid;
 
@@ -54,9 +55,6 @@ using bluetooth::Uuid;
  *
  ******************************************************************************/
 void PAN_Register(tPAN_REGISTER* p_register) {
-  BTM_SetDiscoverability(BTM_GENERAL_DISCOVERABLE, 0, 0);
-  BTM_SetConnectability(BTM_CONNECTABLE, 0, 0);
-
   pan_register_with_bnep();
 
   if (!p_register) return;
@@ -129,10 +127,15 @@ void PAN_Deregister(void) {
 tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
                         const char* p_user_name, const char* p_gn_name,
                         const char* p_nap_name) {
+  /* Check if it is a shutdown request */
+  if (role == PAN_ROLE_INACTIVE) {
+    pan_close_all_connections();
+    pan_cb.role = role;
+    return PAN_SUCCESS;
+  }
+
   const char* p_desc;
-  uint8_t security[3] = {PAN_PANU_SECURITY_LEVEL, PAN_GN_SECURITY_LEVEL,
-                         PAN_NAP_SECURITY_LEVEL};
-  uint8_t* p_sec;
+  uint8_t* p_sec = sec_mask;
 
   /* If the role is not a valid combination reject it */
   if ((!(role &
@@ -147,11 +150,6 @@ tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
     PAN_TRACE_EVENT("PAN role already was set to: %d", role);
     return PAN_SUCCESS;
   }
-
-  if (!sec_mask)
-    p_sec = security;
-  else
-    p_sec = sec_mask;
 
   /* Register all the roles with SDP */
   PAN_TRACE_API("PAN_SetRole() called with role 0x%x", role);
@@ -233,9 +231,6 @@ tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
     }
   }
 #endif
-
-  /* Check if it is a shutdown request */
-  if (role == PAN_ROLE_INACTIVE) pan_close_all_connections();
 
   pan_cb.role = role;
   PAN_TRACE_EVENT("PAN role set to: %d", role);
