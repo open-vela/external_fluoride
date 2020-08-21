@@ -26,12 +26,11 @@ class ParameterProvider {
   // Return the path to config file for storage module
   static std::string ConfigFilePath();
 
-  static void OverrideConfigFilePath(const std::string& path);
-
   // Return the path to the default snoop log file location
   static std::string SnoopLogFilePath();
 
-  static void OverrideSnoopLogFilePath(const std::string& path);
+  // Flag to allow flush into persistent memory on every packet captured. This is enabled on host for debugging
+  static bool SnoopLogAlwaysFlush();
 };
 
 }  // namespace os

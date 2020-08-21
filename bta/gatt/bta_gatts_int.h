@@ -63,7 +63,6 @@ typedef struct {
   BT_HDR hdr;
   bluetooth::Uuid app_uuid;
   tBTA_GATTS_CBACK* p_cback;
-  bool eatt_support;
 } tBTA_GATTS_API_REG;
 
 typedef struct {
