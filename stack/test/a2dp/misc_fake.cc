@@ -14,10 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include <cstdint>
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-bool BTM_FreeSCN(uint8_t scn);
-bool BTM_TryAllocateSCN(uint8_t scn);
-bool BTM_TryAllocateSCN(uint8_t scn);
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
