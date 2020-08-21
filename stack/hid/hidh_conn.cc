@@ -44,6 +44,8 @@
 
 #include "log/log.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
+#include "stack/include/acl_api.h"
 
 static uint8_t find_conn_by_cid(uint16_t cid);
 static void hidh_conn_retry(uint8_t dhandle);
@@ -65,12 +67,10 @@ static void hidh_l2cif_cong_ind(uint16_t l2cap_cid, bool congested);
 static const tL2CAP_APPL_INFO hst_reg_info = {
     hidh_l2cif_connect_ind,
     hidh_l2cif_connect_cfm,
-    NULL,
     hidh_l2cif_config_ind,
     hidh_l2cif_config_cfm,
     hidh_l2cif_disconnect_ind,
     hidh_l2cif_disconnect_cfm,
-    NULL,
     hidh_l2cif_data_ind,
     hidh_l2cif_cong_ind,
     NULL, /* tL2CA_TX_COMPLETE_CB */
@@ -98,12 +98,12 @@ tHID_STATUS hidh_conn_reg(void) {
 
   /* Now, register with L2CAP */
   if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&hst_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+                     false /* enable_snoop */, nullptr, hh_cb.l2cap_cfg.mtu)) {
     HIDH_TRACE_ERROR("HID-Host Control Registration failed");
     return (HID_ERR_L2CAP_FAILED);
   }
   if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&hst_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+                     false /* enable_snoop */, nullptr, hh_cb.l2cap_cfg.mtu)) {
     L2CA_Deregister(HID_PSM_CONTROL);
     HIDH_TRACE_ERROR("HID-Host Interrupt Registration failed");
     return (HID_ERR_L2CAP_FAILED);
@@ -262,14 +262,9 @@ static void hidh_l2cif_connect_ind(const RawAddress& bd_addr,
                                                   to 'connection failure' */
 
     p_hcon->conn_state = HID_CONN_STATE_SECURITY;
-    if (btm_sec_mx_access_request(
-            p_dev->addr, HID_PSM_CONTROL, false, BTM_SEC_PROTO_HID,
-            (p_dev->attr_mask & HID_SEC_REQUIRED) ? HID_SEC_CHN : HID_NOSEC_CHN,
-            &hidh_sec_check_complete_term, p_dev) == BTM_CMD_STARTED) {
-      L2CA_ConnectRsp(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_PENDING,
-                      L2CAP_CONN_OK);
-    }
-
+    // Assume security check ok
+    hidh_sec_check_complete_term(nullptr, BT_TRANSPORT_BR_EDR, p_dev,
+                                 BTM_SUCCESS);
     return;
   }
 
@@ -429,10 +424,9 @@ static void hidh_l2cif_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
                                                   then set CLOSE_EVT reason code
                                                   to "connection failure" */
 
-    btm_sec_mx_access_request(
-        p_dev->addr, HID_PSM_CONTROL, true, BTM_SEC_PROTO_HID,
-        (p_dev->attr_mask & HID_SEC_REQUIRED) ? HID_SEC_CHN : HID_NOSEC_CHN,
-        &hidh_sec_check_complete_orig, p_dev);
+    // Assume security check ok
+    hidh_sec_check_complete_orig(nullptr, BT_TRANSPORT_BR_EDR, p_dev,
+                                 BTM_SUCCESS);
   } else {
     p_hcon->conn_state = HID_CONN_STATE_CONFIG;
     /* Send a Configuration Request. */
