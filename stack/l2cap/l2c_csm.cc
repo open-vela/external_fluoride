@@ -812,7 +812,7 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
 
           /* See if we can forward anything on the hold queue */
           if (!fixed_queue_is_empty(p_ccb->xmit_hold_q)) {
-            l2c_link_check_send_pkts(p_ccb->p_lcb, NULL, NULL);
+            l2c_link_check_send_pkts(p_ccb->p_lcb, 0, NULL);
           }
         }
       }
@@ -898,7 +898,7 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
       /* See if we can forward anything on the hold queue */
       if ((p_ccb->chnl_state == CST_OPEN) &&
           (!fixed_queue_is_empty(p_ccb->xmit_hold_q))) {
-        l2c_link_check_send_pkts(p_ccb->p_lcb, NULL, NULL);
+        l2c_link_check_send_pkts(p_ccb->p_lcb, 0, NULL);
       }
       break;
 
@@ -918,7 +918,6 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
     case L2CEVT_L2CAP_DATA: /* Peer data packet rcvd    */
       L2CAP_TRACE_API("L2CAP - Calling DataInd_Cb(), CID: 0x%04x",
                       p_ccb->local_cid);
-#if (L2CAP_NUM_FIXED_CHNLS > 0)
       if (p_ccb->local_cid >= L2CAP_FIRST_FIXED_CHNL &&
           p_ccb->local_cid <= L2CAP_LAST_FIXED_CHNL) {
         if (p_ccb->local_cid < L2CAP_BASE_APPL_CID) {
@@ -933,7 +932,6 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
           break;
         }
       }
-#endif
       (*p_ccb->p_rcb->api.pL2CA_DataInd_Cb)(p_ccb->local_cid, (BT_HDR*)p_data);
       break;
 
@@ -1069,7 +1067,7 @@ static void l2c_csm_open(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
 
     case L2CEVT_L2CA_DATA_WRITE: /* Upper layer data to send */
       l2c_enqueue_peer_data(p_ccb, (BT_HDR*)p_data);
-      l2c_link_check_send_pkts(p_ccb->p_lcb, NULL, NULL);
+      l2c_link_check_send_pkts(p_ccb->p_lcb, 0, NULL);
       break;
 
     case L2CEVT_L2CA_CONFIG_REQ: /* Upper layer config req   */
@@ -1114,7 +1112,7 @@ static void l2c_csm_open(tL2C_CCB* p_ccb, uint16_t event, void* p_data) {
         if (p_ccb->p_lcb->transport == BT_TRANSPORT_LE && (cr_cb)) {
           (*cr_cb)(p_ccb->local_cid, credit, p_ccb->peer_conn_cfg.credits);
         }
-        l2c_link_check_send_pkts(p_ccb->p_lcb, NULL, NULL);
+        l2c_link_check_send_pkts(p_ccb->p_lcb, 0, NULL);
       }
       break;
   }
@@ -1358,14 +1356,12 @@ void l2c_enqueue_peer_data(tL2C_CCB* p_ccb, BT_HDR* p_buf) {
 
   l2cu_check_channel_congestion(p_ccb);
 
-#if (L2CAP_ROUND_ROBIN_CHANNEL_SERVICE == TRUE)
   /* if new packet is higher priority than serving ccb and it is not overrun */
   if ((p_ccb->p_lcb->rr_pri > p_ccb->ccb_priority) &&
       (p_ccb->p_lcb->rr_serv[p_ccb->ccb_priority].quota > 0)) {
     /* send out higher priority packet */
     p_ccb->p_lcb->rr_pri = p_ccb->ccb_priority;
   }
-#endif
 
   /* if we are doing a round robin scheduling, set the flag */
   if (p_ccb->p_lcb->link_xmit_quota == 0) l2cb.check_round_robin = true;
