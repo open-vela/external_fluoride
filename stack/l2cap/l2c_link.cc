@@ -1011,113 +1011,98 @@ void l2c_OnHciModeChangeSendPendingPackets(RawAddress remote) {
  * Description      This function queues the buffer for HCI transmission
  *
  ******************************************************************************/
-constexpr uint16_t kDataPacketEventBrEdr = (BT_EVT_TO_LM_HCI_ACL);
-constexpr uint16_t kDataPacketEventBle =
-    (BT_EVT_TO_LM_HCI_ACL | LOCAL_BLE_CONTROLLER_ID);
-
-static void l2c_link_send_to_lower_br_edr(tL2C_LCB* p_lcb, BT_HDR* p_buf) {
-  const uint16_t acl_packet_size_classic =
-      controller_get_interface()->get_acl_packet_size_classic();
-  const uint16_t link_xmit_quota = p_lcb->link_xmit_quota;
-  const bool is_bdr_and_fits_in_buffer =
-      (p_buf->len <= acl_packet_size_classic);
-
-  if (is_bdr_and_fits_in_buffer) {
-    if (link_xmit_quota == 0) {
-      l2cb.round_robin_unacked++;
-    }
-    p_lcb->sent_not_acked++;
-    p_buf->layer_specific = 0;
-    l2cb.controller_xmit_window--;
-  } else {
-    uint16_t num_segs =
-        (p_buf->len - HCI_DATA_PREAMBLE_SIZE + acl_packet_size_classic - 1) /
-        acl_packet_size_classic;
-
-    /* If doing round-robin, then only 1 segment each time */
-    if (p_lcb->link_xmit_quota == 0) {
-      num_segs = 1;
-      p_lcb->partial_segment_being_sent = true;
-    } else {
-      /* Multi-segment packet. Make sure it can fit */
-      if (num_segs > l2cb.controller_xmit_window) {
-        num_segs = l2cb.controller_xmit_window;
-        p_lcb->partial_segment_being_sent = true;
-      }
-
-      if (num_segs > (p_lcb->link_xmit_quota - p_lcb->sent_not_acked)) {
-        num_segs = (p_lcb->link_xmit_quota - p_lcb->sent_not_acked);
-        p_lcb->partial_segment_being_sent = true;
-      }
-    }
-
-    p_lcb->sent_not_acked += num_segs;
-    p_buf->layer_specific = num_segs;
-    l2cb.controller_xmit_window -= num_segs;
-    if (p_lcb->link_xmit_quota == 0) l2cb.round_robin_unacked += num_segs;
-  }
-  acl_send_data_packet(p_buf, kDataPacketEventBrEdr);
-  L2CAP_TRACE_DEBUG(
-      "TotalWin=%d,Hndl=0x%x,Quota=%d,Unack=%d,RRQuota=%d,RRUnack=%d",
-      l2cb.controller_xmit_window, p_lcb->handle, p_lcb->link_xmit_quota,
-      p_lcb->sent_not_acked, l2cb.round_robin_quota, l2cb.round_robin_unacked);
-}
-
-static void l2c_link_send_to_lower_ble(tL2C_LCB* p_lcb, BT_HDR* p_buf) {
-  const uint16_t acl_packet_size_ble =
-      controller_get_interface()->get_acl_packet_size_ble();
-  const uint16_t link_xmit_quota = p_lcb->link_xmit_quota;
-  const bool is_ble_and_fits_in_buffer = (p_buf->len <= acl_packet_size_ble);
-
-  if (is_ble_and_fits_in_buffer) {
-    if (link_xmit_quota == 0) {
-      l2cb.ble_round_robin_unacked++;
-    }
-    p_lcb->sent_not_acked++;
-    p_buf->layer_specific = 0;
-    l2cb.controller_le_xmit_window--;
-  } else {
-    uint16_t num_segs =
-        (p_buf->len - HCI_DATA_PREAMBLE_SIZE + acl_packet_size_ble - 1) /
-        acl_packet_size_ble;
-
-    /* If doing round-robin, then only 1 segment each time */
-    if (p_lcb->link_xmit_quota == 0) {
-      num_segs = 1;
-      p_lcb->partial_segment_being_sent = true;
-    } else {
-      /* Multi-segment packet. Make sure it can fit */
-      if (num_segs > l2cb.controller_le_xmit_window) {
-        num_segs = l2cb.controller_le_xmit_window;
-        p_lcb->partial_segment_being_sent = true;
-      }
-
-      if (num_segs > (p_lcb->link_xmit_quota - p_lcb->sent_not_acked)) {
-        num_segs = (p_lcb->link_xmit_quota - p_lcb->sent_not_acked);
-        p_lcb->partial_segment_being_sent = true;
-      }
-    }
-
-    p_lcb->sent_not_acked += num_segs;
-    p_buf->layer_specific = num_segs;
-    l2cb.controller_le_xmit_window -= num_segs;
-    if (p_lcb->link_xmit_quota == 0) l2cb.ble_round_robin_unacked += num_segs;
-  }
-  acl_send_data_packet(p_buf, kDataPacketEventBle);
-  L2CAP_TRACE_DEBUG(
-      "TotalWin=%d,Hndl=0x%x,Quota=%d,Unack=%d,RRQuota=%d,RRUnack=%d",
-      l2cb.controller_le_xmit_window, p_lcb->handle, p_lcb->link_xmit_quota,
-      p_lcb->sent_not_acked, l2cb.ble_round_robin_quota,
-      l2cb.ble_round_robin_unacked);
-}
-
 static void l2c_link_send_to_lower(tL2C_LCB* p_lcb, BT_HDR* p_buf,
                                    tL2C_TX_COMPLETE_CB_INFO* p_cbi) {
-  if (p_lcb->transport == BT_TRANSPORT_BR_EDR) {
-    l2c_link_send_to_lower_br_edr(p_lcb, p_buf);
+  const controller_t* controller = controller_get_interface();
+
+  if ((p_buf->len <= controller->get_acl_packet_size_classic() &&
+       (p_lcb->transport == BT_TRANSPORT_BR_EDR)) ||
+      ((p_lcb->transport == BT_TRANSPORT_LE) &&
+       (p_buf->len <= controller->get_acl_packet_size_ble()))) {
+    if (p_lcb->link_xmit_quota == 0) {
+      if (p_lcb->transport == BT_TRANSPORT_LE)
+        l2cb.ble_round_robin_unacked++;
+      else
+        l2cb.round_robin_unacked++;
+    }
+    p_lcb->sent_not_acked++;
+    p_buf->layer_specific = 0;
+
+    if (p_lcb->transport == BT_TRANSPORT_LE) {
+      l2cb.controller_le_xmit_window--;
+      bte_main_hci_send(
+          p_buf, (uint16_t)(BT_EVT_TO_LM_HCI_ACL | LOCAL_BLE_CONTROLLER_ID));
+    } else {
+      l2cb.controller_xmit_window--;
+      bte_main_hci_send(p_buf, BT_EVT_TO_LM_HCI_ACL);
+    }
   } else {
-    l2c_link_send_to_lower_ble(p_lcb, p_buf);
+    uint16_t xmit_window{0};
+    uint16_t acl_data_size{0};
+    if (p_lcb->transport == BT_TRANSPORT_LE) {
+      acl_data_size = controller->get_acl_data_size_ble();
+      xmit_window = l2cb.controller_le_xmit_window;
+
+    } else {
+      acl_data_size = controller->get_acl_data_size_classic();
+      xmit_window = l2cb.controller_xmit_window;
+    }
+    uint16_t num_segs =
+        (p_buf->len - HCI_DATA_PREAMBLE_SIZE + acl_data_size - 1) /
+        acl_data_size;
+
+    /* If doing round-robin, then only 1 segment each time */
+    if (p_lcb->link_xmit_quota == 0) {
+      num_segs = 1;
+      p_lcb->partial_segment_being_sent = true;
+    } else {
+      /* Multi-segment packet. Make sure it can fit */
+      if (num_segs > xmit_window) {
+        num_segs = xmit_window;
+        p_lcb->partial_segment_being_sent = true;
+      }
+
+      if (num_segs > (p_lcb->link_xmit_quota - p_lcb->sent_not_acked)) {
+        num_segs = (p_lcb->link_xmit_quota - p_lcb->sent_not_acked);
+        p_lcb->partial_segment_being_sent = true;
+      }
+    }
+
+    p_buf->layer_specific = num_segs;
+    if (p_lcb->transport == BT_TRANSPORT_LE) {
+      l2cb.controller_le_xmit_window -= num_segs;
+      if (p_lcb->link_xmit_quota == 0) l2cb.ble_round_robin_unacked += num_segs;
+    } else {
+      l2cb.controller_xmit_window -= num_segs;
+
+      if (p_lcb->link_xmit_quota == 0) l2cb.round_robin_unacked += num_segs;
+    }
+
+    p_lcb->sent_not_acked += num_segs;
+    if (p_lcb->transport == BT_TRANSPORT_LE) {
+      bte_main_hci_send(
+          p_buf, (uint16_t)(BT_EVT_TO_LM_HCI_ACL | LOCAL_BLE_CONTROLLER_ID));
+    } else {
+      bte_main_hci_send(p_buf, BT_EVT_TO_LM_HCI_ACL);
+    }
   }
+
+#if (L2CAP_HCI_FLOW_CONTROL_DEBUG == TRUE)
+  if (p_lcb->transport == BT_TRANSPORT_LE) {
+    L2CAP_TRACE_DEBUG(
+        "TotalWin=%d,Hndl=0x%x,Quota=%d,Unack=%d,RRQuota=%d,RRUnack=%d",
+        l2cb.controller_le_xmit_window, p_lcb->handle, p_lcb->link_xmit_quota,
+        p_lcb->sent_not_acked, l2cb.ble_round_robin_quota,
+        l2cb.ble_round_robin_unacked);
+  } else {
+    L2CAP_TRACE_DEBUG(
+        "TotalWin=%d,Hndl=0x%x,Quota=%d,Unack=%d,RRQuota=%d,RRUnack=%d",
+        l2cb.controller_xmit_window, p_lcb->handle, p_lcb->link_xmit_quota,
+        p_lcb->sent_not_acked, l2cb.round_robin_quota,
+        l2cb.round_robin_unacked);
+  }
+#endif
+
   if (p_cbi) l2cu_tx_complete(p_cbi);
 }
 
@@ -1210,6 +1195,7 @@ void l2c_link_process_num_completed_pkts(uint8_t* p, uint8_t evt_len) {
       }
     }
 
+#if (L2CAP_HCI_FLOW_CONTROL_DEBUG == TRUE)
     if (p_lcb) {
       if (p_lcb->transport == BT_TRANSPORT_LE) {
         L2CAP_TRACE_DEBUG(
@@ -1229,6 +1215,7 @@ void l2c_link_process_num_completed_pkts(uint8_t* p, uint8_t evt_len) {
           l2cb.controller_xmit_window, l2cb.controller_le_xmit_window, handle,
           l2cb.ble_check_round_robin, l2cb.ble_round_robin_unacked);
     }
+#endif
   }
 }
 
