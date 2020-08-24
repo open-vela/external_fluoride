@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@
 #include "gatt_api.h"
 #include "gatt_int.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
 
 using base::StringPrintf;
 
@@ -175,7 +174,12 @@ void gatt_enc_cmpl_cback(const RawAddress* bd_addr, tBT_TRANSPORT transport,
   bool status = false;
   if (result == BTM_SUCCESS) {
     if (gatt_get_sec_act(p_tcb) == GATT_SEC_ENCRYPT_MITM) {
-      status = BTM_IsLinkKeyAuthed(*bd_addr, transport);
+      uint8_t sec_flag = 0;
+      BTM_GetSecurityFlagsByTransport(*bd_addr, &sec_flag, transport);
+
+      if (sec_flag & BTM_SEC_FLAG_LKEY_AUTHED) {
+        status = true;
+      }
     } else {
       status = true;
     }
@@ -184,13 +188,11 @@ void gatt_enc_cmpl_cback(const RawAddress* bd_addr, tBT_TRANSPORT transport,
   gatt_sec_check_complete(status, p_clcb, p_tcb->sec_act);
 
   /* start all other pending operation in queue */
-  std::queue<tGATT_CLCB*> new_pending_clcbs;
   while (!p_tcb->pending_enc_clcb.empty()) {
     tGATT_CLCB* p_clcb = p_tcb->pending_enc_clcb.front();
     p_tcb->pending_enc_clcb.pop();
-    if (gatt_security_check_start(p_clcb)) new_pending_clcbs.push(p_clcb);
+    gatt_security_check_start(p_clcb);
   }
-  p_tcb->pending_enc_clcb = new_pending_clcbs;
 }
 
 /*******************************************************************************
@@ -221,13 +223,11 @@ void gatt_notify_enc_cmpl(const RawAddress& bd_addr) {
   if (gatt_get_sec_act(p_tcb) == GATT_SEC_ENC_PENDING) {
     gatt_set_sec_act(p_tcb, GATT_SEC_NONE);
 
-    std::queue<tGATT_CLCB*> new_pending_clcbs;
     while (!p_tcb->pending_enc_clcb.empty()) {
       tGATT_CLCB* p_clcb = p_tcb->pending_enc_clcb.front();
       p_tcb->pending_enc_clcb.pop();
-      if (gatt_security_check_start(p_clcb)) new_pending_clcbs.push(p_clcb);
+      gatt_security_check_start(p_clcb);
     }
-    p_tcb->pending_enc_clcb = new_pending_clcbs;
   }
 }
 /*******************************************************************************
@@ -266,6 +266,7 @@ tGATT_SEC_ACTION gatt_get_sec_act(tGATT_TCB* p_tcb) {
  */
 tGATT_SEC_ACTION gatt_determine_sec_act(tGATT_CLCB* p_clcb) {
   tGATT_SEC_ACTION act = GATT_SEC_OK;
+  uint8_t sec_flag;
   tGATT_TCB* p_tcb = p_clcb->p_tcb;
   tGATT_AUTH_REQ auth_req = p_clcb->auth_req;
   bool is_link_encrypted = false;
@@ -276,17 +277,22 @@ tGATT_SEC_ACTION gatt_determine_sec_act(tGATT_CLCB* p_clcb) {
 
   if (auth_req == GATT_AUTH_REQ_NONE) return act;
 
+  BTM_GetSecurityFlagsByTransport(p_tcb->peer_bda, &sec_flag,
+                                  p_clcb->p_tcb->transport);
+
   btm_ble_link_sec_check(p_tcb->peer_bda, auth_req, &sec_act);
 
   /* if a encryption is pending, need to wait */
   if (sec_act == BTM_BLE_SEC_REQ_ACT_DISCARD && auth_req != GATT_AUTH_REQ_NONE)
     return GATT_SEC_ENC_PENDING;
 
-  is_link_key_known =
-      BTM_IsLinkKeyKnown(p_tcb->peer_bda, p_clcb->p_tcb->transport);
-  is_link_encrypted =
-      BTM_IsEncrypted(p_tcb->peer_bda, p_clcb->p_tcb->transport);
-  is_key_mitm = BTM_IsLinkKeyAuthed(p_tcb->peer_bda, p_clcb->p_tcb->transport);
+  if (sec_flag & (BTM_SEC_FLAG_ENCRYPTED | BTM_SEC_FLAG_LKEY_KNOWN)) {
+    if (sec_flag & BTM_SEC_FLAG_ENCRYPTED) is_link_encrypted = true;
+
+    is_link_key_known = true;
+
+    if (sec_flag & BTM_SEC_FLAG_LKEY_AUTHED) is_key_mitm = true;
+  }
 
   /* first check link key upgrade required or not */
   switch (auth_req) {
@@ -344,16 +350,15 @@ tGATT_SEC_ACTION gatt_determine_sec_act(tGATT_CLCB* p_clcb) {
  ******************************************************************************/
 tGATT_STATUS gatt_get_link_encrypt_status(tGATT_TCB& tcb) {
   tGATT_STATUS encrypt_status = GATT_NOT_ENCRYPTED;
+  uint8_t sec_flag = 0;
 
-  bool encrypted = BTM_IsEncrypted(tcb.peer_bda, tcb.transport);
-  bool link_key_known = BTM_IsLinkKeyKnown(tcb.peer_bda, tcb.transport);
-  bool link_key_authed = BTM_IsLinkKeyAuthed(tcb.peer_bda, tcb.transport);
+  BTM_GetSecurityFlagsByTransport(tcb.peer_bda, &sec_flag, tcb.transport);
 
-  if (encrypted && link_key_known) {
+  if ((sec_flag & BTM_SEC_FLAG_ENCRYPTED) &&
+      (sec_flag & BTM_SEC_FLAG_LKEY_KNOWN)) {
     encrypt_status = GATT_ENCRYPED_NO_MITM;
-    if (link_key_authed) {
+    if (sec_flag & BTM_SEC_FLAG_LKEY_AUTHED)
       encrypt_status = GATT_ENCRYPED_MITM;
-    }
   }
 
   VLOG(1) << StringPrintf("gatt_get_link_encrypt_status status=0x%x",
@@ -392,8 +397,8 @@ static bool gatt_convert_sec_action(tGATT_SEC_ACTION gatt_sec_act,
   return status;
 }
 
-/** check link security, return true if p_clcb should be added back to queue */
-bool gatt_security_check_start(tGATT_CLCB* p_clcb) {
+/** check link security */
+void gatt_security_check_start(tGATT_CLCB* p_clcb) {
   tGATT_TCB* p_tcb = p_clcb->p_tcb;
   tGATT_SEC_ACTION sec_act_old = gatt_get_sec_act(p_tcb);
 
@@ -425,17 +430,17 @@ bool gatt_security_check_start(tGATT_CLCB* p_clcb) {
           gatt_set_ch_state(p_tcb, GATT_CH_OPEN);
 
           gatt_end_operation(p_clcb, GATT_INSUF_ENCRYPTION, NULL);
-          return false;
+          return;
         }
       }
-      return true;
+      p_tcb->pending_enc_clcb.push(p_clcb);
+      break;
     case GATT_SEC_ENC_PENDING:
+      p_tcb->pending_enc_clcb.push(p_clcb);
       /* wait for link encrypotion to finish */
-      return true;
+      break;
     default:
       gatt_sec_check_complete(true, p_clcb, gatt_sec_act);
       break;
   }
-
-  return false;
 }

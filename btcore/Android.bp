@@ -11,14 +11,17 @@ cc_library_static {
         "src/module.cc",
         "src/osi_module.cc",
         "src/property.cc",
+        "src/uuid.cc",
     ],
     shared_libs: [
         "liblog",
     ],
-    header_libs: ["libbluetooth_headers"],
     host_supported: true,
     target: {
-        linux_glibc: {
+        darwin: {
+            enabled: false,
+        },
+        linux: {
             cflags: ["-D_GNU_SOURCE"],
         },
     },
@@ -37,6 +40,7 @@ cc_test {
     srcs: [
         "test/device_class_test.cc",
         "test/property_test.cc",
+        "test/uuid_test.cc",
     ],
     shared_libs: [
         "liblog",
@@ -47,4 +51,9 @@ cc_test {
         "libosi",
     ],
     host_supported: true,
+    target: {
+        darwin: {
+            enabled: false,
+        }
+    }
 }

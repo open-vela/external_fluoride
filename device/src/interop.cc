@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2015 Google, Inc.
+ *  Copyright (C) 2015 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,8 +50,9 @@ bool interop_match_addr(const interop_feature_t feature,
 
   if (interop_match_fixed_(feature, addr) ||
       interop_match_dynamic_(feature, addr)) {
-    LOG_INFO("%s() Device %s is a match for interop workaround %s.", __func__,
-             addr->ToString().c_str(), interop_feature_string_(feature));
+    LOG_WARN(LOG_TAG, "%s() Device %s is a match for interop workaround %s.",
+             __func__, addr->ToString().c_str(),
+             interop_feature_string_(feature));
     return true;
   }
 
@@ -68,8 +69,6 @@ bool interop_match_name(const interop_feature_t feature, const char* name) {
         strlen(name) >= interop_name_database[i].length &&
         strncmp(name, interop_name_database[i].name,
                 interop_name_database[i].length) == 0) {
-      LOG_INFO("%s() Device %s is a match for interop workaround %s.", __func__,
-               name, interop_feature_string_(feature));
       return true;
     }
   }
@@ -77,7 +76,7 @@ bool interop_match_name(const interop_feature_t feature, const char* name) {
   return false;
 }
 
-void interop_database_add(uint16_t feature, const RawAddress* addr,
+void interop_database_add(const uint16_t feature, const RawAddress* addr,
                           size_t length) {
   CHECK(addr);
   CHECK(length > 0);
@@ -129,8 +128,6 @@ static const char* interop_feature_string_(const interop_feature_t feature) {
     CASE_RETURN_STR(INTEROP_DISABLE_AVDTP_RECONFIGURE)
     CASE_RETURN_STR(INTEROP_DYNAMIC_ROLE_SWITCH)
     CASE_RETURN_STR(INTEROP_DISABLE_ROLE_SWITCH)
-    CASE_RETURN_STR(INTEROP_HID_HOST_LIMIT_SNIFF_INTERVAL)
-    CASE_RETURN_STR(INTEROP_DISABLE_NAME_REQUEST)
   }
 
   return "UNKNOWN";

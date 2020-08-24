@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2005-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ typedef struct {
 #define BTA_HD_APP_NAME_LEN 50
 #define BTA_HD_APP_DESCRIPTION_LEN 50
 #define BTA_HD_APP_PROVIDER_LEN 50
-#define BTA_HD_APP_DESCRIPTOR_LEN HIDD_APP_DESCRIPTOR_LEN
+#define BTA_HD_APP_DESCRIPTOR_LEN 2048
 
 #define BTA_HD_STATE_DISABLED 0x00
 #define BTA_HD_STATE_ENABLED 0x01
@@ -77,9 +77,9 @@ typedef struct {
 
 typedef struct {
   BT_HDR hdr;
-  char name[BTA_HD_APP_NAME_LEN];
-  char description[BTA_HD_APP_DESCRIPTION_LEN];
-  char provider[BTA_HD_APP_PROVIDER_LEN];
+  char name[BTA_HD_APP_NAME_LEN + 1];
+  char description[BTA_HD_APP_DESCRIPTION_LEN + 1];
+  char provider[BTA_HD_APP_PROVIDER_LEN + 1];
   uint8_t subclass;
   uint16_t d_len;
   uint8_t d_data[BTA_HD_APP_DESCRIPTOR_LEN];
@@ -141,7 +141,12 @@ typedef struct {
   bool disable_w4_close;
 } tBTA_HD_CB;
 
+#if BTA_DYNAMIC_MEMORY == FALSE
 extern tBTA_HD_CB bta_hd_cb;
+#else
+extern tBTA_HD_CB* bta_hd_cb_ptr;
+#define bta_hd_cb (*bta_hd_cb_ptr)
+#endif
 
 /*****************************************************************************
  *  Function prototypes

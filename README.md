@@ -35,6 +35,7 @@ git clone https://android.googlesource.com/platform/external/libchrome
 git clone https://android.googlesource.com/platform/external/libldac
 git clone https://android.googlesource.com/platform/external/modp_b64
 git clone https://android.googlesource.com/platform/external/tinyxml2
+git clone https://android.googlesource.com/platform/hardware/libhardware
 ```
 
 And third party dependencies of third party dependencies:
@@ -59,6 +60,7 @@ ln -s ../../../external/libchrome libchrome
 ln -s ../../../external/libldac libldac
 ln -s ../../../external/modp_b64 modp_b64
 ln -s ../../../external/tinyxml2 tinyxml2
+ln -s ../../../hardware/libhardware libhardware
 ln -s ../../../external/googletest googletest
 ```
 
@@ -90,7 +92,7 @@ LD_LIBRARY_PATH=./ ./bluetoothtbd -create-ipc-socket=fluoride
 ### Eclipse IDE Support
 
 1. Follows the Chromium project
- [Eclipse Setup Instructions](https://chromium.googlesource.com/chromium/src.git/+/master/docs/linux/eclipse_dev.md)
+ [Eclipse Setup Instructions](https://chromium.googlesource.com/chromium/src/+/master/docs/linux_eclipse_dev.md)
  until "Optional: Building inside Eclipse" section (don't do that section, we
  will set it up differently)
 

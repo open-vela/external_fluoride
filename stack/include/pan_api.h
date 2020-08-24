@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2001-2012 Broadcom Corporation
+ *  Copyright (C) 2001-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -256,8 +256,9 @@ extern void PAN_Deregister(void);
  *                  PAN_FAILURE     - if the role is not valid
  *
  ******************************************************************************/
-extern tPAN_RESULT PAN_SetRole(uint8_t role, const char* p_user_name,
-                               const char* p_gn_name, const char* p_nap_name);
+extern tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
+                               const char* p_user_name, const char* p_gn_name,
+                               const char* p_nap_name);
 
 /*******************************************************************************
  *
