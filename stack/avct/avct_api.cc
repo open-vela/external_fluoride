@@ -67,7 +67,11 @@ void AVCT_Register(uint16_t mtu, UNUSED_ATTR uint16_t mtu_br,
   L2CA_Register(AVCT_PSM, (tL2CAP_APPL_INFO*)&avct_l2c_appl,
                 true /* enable_snoop */, nullptr, avct_cb.mtu);
 
-  BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_AVCTP, sec_mask, AVCT_PSM);
+  /* set security level */
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVCTP, sec_mask, AVCT_PSM, 0,
+                       0);
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_AVCTP, sec_mask, AVCT_PSM, 0,
+                       0);
 
   /* Include the browsing channel which uses eFCR */
   tL2CAP_ERTM_INFO ertm_info;
@@ -86,7 +90,10 @@ void AVCT_Register(uint16_t mtu, UNUSED_ATTR uint16_t mtu_br,
 
   /* AVCTP browsing channel uses the same security service as AVCTP control
    * channel */
-  BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_AVCTP, sec_mask, AVCT_BR_PSM);
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVCTP, sec_mask, AVCT_BR_PSM,
+                       0, 0);
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_AVCTP, sec_mask, AVCT_BR_PSM,
+                       0, 0);
 
 #if defined(AVCT_INITIAL_TRACE_LEVEL)
   avct_cb.trace_level = AVCT_INITIAL_TRACE_LEVEL;

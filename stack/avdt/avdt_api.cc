@@ -94,7 +94,11 @@ void AVDT_Register(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback) {
   L2CA_Register(AVDT_PSM, (tL2CAP_APPL_INFO*)&avdt_l2c_appl,
                 true /* enable_snoop */, nullptr, L2CAP_DEFAULT_MTU);
 
-  BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask, AVDT_PSM);
+  /* set security level */
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask,
+                       AVDT_PSM, 0, 0);
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_AVDTP, p_reg->sec_mask,
+                       AVDT_PSM, 0, 0);
 
   /* initialize AVDTP data structures */
   avdt_scb_init();
