@@ -114,14 +114,6 @@ bool btif_av_is_peer_edr(const RawAddress& peer_address);
 bool btif_av_peer_supports_3mbps(const RawAddress& peer_address);
 
 /**
- * Check whether the mandatory codec is more preferred for this peer.
- *
- * @param peer_address the target peer address
- * @return true if optional codecs are not preferred to be used
- */
-bool btif_av_peer_prefers_mandatory_codec(const RawAddress& peer_address);
-
-/**
  * Report A2DP Source Codec State for a peer.
  *
  * @param peer_address the address of the peer to report
@@ -171,16 +163,9 @@ void btif_debug_av_dump(int fd);
 /**
  * Set the audio delay for the stream.
  *
- * @param peer_address the address of the peer to report
  * @param delay the delay to set in units of 1/10ms
  */
-void btif_av_set_audio_delay(const RawAddress& peer_address, uint16_t delay);
-
-/**
- * Get the audio delay for the stream.
- *  @param  none
- */
-uint16_t btif_av_get_audio_delay(void);
+void btif_av_set_audio_delay(uint16_t delay);
 
 /**
  * Reset the audio delay and count of audio bytes sent to zero.
@@ -201,12 +186,6 @@ void btif_av_src_disconnect_sink(const RawAddress& peer_address);
  *  @param  none
  */
 bool btif_av_is_a2dp_offload_enabled(void);
-
-/**
- *  check A2DP offload enabled and running
- *  @param  none
- */
-bool btif_av_is_a2dp_offload_running(void);
 
 /**
  * Check whether peer device is silenced
