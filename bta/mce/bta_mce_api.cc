@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2014 The Android Open Source Project
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ tBTA_MCE_STATUS BTA_MceEnable(tBTA_MCE_DM_CBACK* p_cback) {
 
   APPL_TRACE_API("%", __func__);
 
-  if (p_cback && false == bta_sys_is_register(BTA_ID_MCE)) {
+  if (p_cback && !bta_sys_is_register(BTA_ID_MCE)) {
     memset(&bta_mce_cb, 0, sizeof(tBTA_MCE_CB));
 
     /* register with BTA system manager */
@@ -91,7 +91,7 @@ tBTA_MCE_STATUS BTA_MceEnable(tBTA_MCE_DM_CBACK* p_cback) {
  *                  BTA_MCE_FAILURE, otherwise.
  *
  ******************************************************************************/
-tBTA_MCE_STATUS BTA_MceGetRemoteMasInstances(BD_ADDR bd_addr) {
+tBTA_MCE_STATUS BTA_MceGetRemoteMasInstances(const RawAddress& bd_addr) {
   tBTA_MCE_API_GET_REMOTE_MAS_INSTANCES* p_msg =
       (tBTA_MCE_API_GET_REMOTE_MAS_INSTANCES*)osi_malloc(
           sizeof(tBTA_MCE_API_GET_REMOTE_MAS_INSTANCES));
@@ -99,7 +99,7 @@ tBTA_MCE_STATUS BTA_MceGetRemoteMasInstances(BD_ADDR bd_addr) {
   APPL_TRACE_API("%s", __func__);
 
   p_msg->hdr.event = BTA_MCE_API_GET_REMOTE_MAS_INSTANCES_EVT;
-  bdcpy(p_msg->bd_addr, bd_addr);
+  p_msg->bd_addr = bd_addr;
 
   bta_sys_sendmsg(p_msg);
 

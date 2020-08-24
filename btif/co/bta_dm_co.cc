@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -69,9 +69,9 @@ bool bta_dm_co_get_compress_memory(UNUSED_ATTR tBTA_SYS_ID id,
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_io_req(UNUSED_ATTR BD_ADDR bd_addr, tBTA_IO_CAP* p_io_cap,
-                      tBTA_OOB_DATA* p_oob_data, tBTA_AUTH_REQ* p_auth_req,
-                      bool is_orig) {
+void bta_dm_co_io_req(UNUSED_ATTR const RawAddress& bd_addr,
+                      tBTA_IO_CAP* p_io_cap, tBTA_OOB_DATA* p_oob_data,
+                      tBTA_AUTH_REQ* p_auth_req, bool is_orig) {
   btif_dm_set_oob_for_io_req(p_oob_data);
   btif_dm_proc_io_req(bd_addr, p_io_cap, p_oob_data, p_auth_req, is_orig);
   BTIF_TRACE_DEBUG("bta_dm_co_io_req *p_oob_data = %d", *p_oob_data);
@@ -97,7 +97,7 @@ void bta_dm_co_io_req(UNUSED_ATTR BD_ADDR bd_addr, tBTA_IO_CAP* p_io_cap,
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_io_rsp(BD_ADDR bd_addr, tBTA_IO_CAP io_cap,
+void bta_dm_co_io_rsp(const RawAddress& bd_addr, tBTA_IO_CAP io_cap,
                       tBTA_OOB_DATA oob_data, tBTA_AUTH_REQ auth_req) {
   btif_dm_proc_io_rsp(bd_addr, io_cap, oob_data, auth_req);
 }
@@ -115,7 +115,7 @@ void bta_dm_co_io_rsp(BD_ADDR bd_addr, tBTA_IO_CAP io_cap,
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_lk_upgrade(UNUSED_ATTR BD_ADDR bd_addr,
+void bta_dm_co_lk_upgrade(UNUSED_ATTR const RawAddress& bd_addr,
                           UNUSED_ATTR bool* p_upgrade) {}
 
 /*******************************************************************************
@@ -152,7 +152,7 @@ void bta_dm_co_loc_oob(bool valid, BT_OCTET16 c, BT_OCTET16 r) {
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_rmt_oob(BD_ADDR bd_addr) {
+void bta_dm_co_rmt_oob(const RawAddress& bd_addr) {
   BT_OCTET16 p_c;
   BT_OCTET16 p_r;
   bool result = false;
@@ -164,99 +164,6 @@ void bta_dm_co_rmt_oob(BD_ADDR bd_addr) {
   BTIF_TRACE_DEBUG("bta_dm_co_rmt_oob: result=%d", result);
   bta_dm_ci_rmt_oob(result, bd_addr, p_c, p_r);
 }
-
-// REMOVE FOR BLUEDROID ?
-
-#if (BTM_SCO_HCI_INCLUDED == TRUE) && (BTM_SCO_INCLUDED == TRUE)
-
-/*******************************************************************************
- *
- * Function         btui_sco_codec_callback
- *
- * Description      Callback for btui codec.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-static void btui_sco_codec_callback(uint16_t event, uint16_t sco_handle) {
-  bta_dm_sco_ci_data_ready(event, sco_handle);
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_open
- *
- * Description      This function is executed when a SCO connection is open.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_open(uint16_t handle, uint8_t pkt_size, uint16_t event) {
-  tBTUI_SCO_CODEC_CFG cfg;
-
-  if (btui_cb.sco_hci) {
-    BTIF_TRACE_DEBUG("bta_dm_sco_co_open handle:%d pkt_size:%d", handle,
-                     pkt_size);
-    cfg.p_cback = btui_sco_codec_callback;
-    cfg.pkt_size = pkt_size;
-    cfg.cb_event = event;
-    /* open and start the codec */
-    btui_sco_codec_open(&cfg);
-    btui_sco_codec_start(handle);
-  }
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_close
- *
- * Description      This function is called when a SCO connection is closed
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_close(void) {
-  if (btui_cb.sco_hci) {
-    BTIF_TRACE_DEBUG("bta_dm_sco_co_close close codec");
-    /* close sco codec */
-    btui_sco_codec_close();
-
-    btui_cb.sco_hci = false;
-  }
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_in_data
- *
- * Description      This function is called to send incoming SCO data to
- *                  application.
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_in_data(BT_HDR* p_buf) {
-  if (btui_cfg.sco_use_mic)
-    btui_sco_codec_inqdata(p_buf);
-  else
-    osi_free(p_buf);
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_sco_co_out_data
- *
- * Description      This function is called to send SCO data over HCI.
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_dm_sco_co_out_data(BT_HDR** p_buf) { btui_sco_codec_readbuf(p_buf); }
-
-#endif /* (BTM_SCO_HCI_INCLUDED == TRUE) && (BTM_SCO_INCLUDED == TRUE)*/
 
 /*******************************************************************************
  *
@@ -274,7 +181,7 @@ void bta_dm_sco_co_out_data(BT_HDR** p_buf) { btui_sco_codec_readbuf(p_buf); }
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_le_io_key_req(UNUSED_ATTR BD_ADDR bd_addr,
+void bta_dm_co_le_io_key_req(UNUSED_ATTR const RawAddress& bd_addr,
                              uint8_t* p_max_key_size,
                              tBTA_LE_KEY_TYPE* p_init_key,
                              tBTA_LE_KEY_TYPE* p_resp_key) {
@@ -329,7 +236,7 @@ void bta_dm_co_ble_load_local_keys(tBTA_DM_BLE_LOCAL_KEY_MASK* p_key_mask,
  * Returns          void.
  *
  ******************************************************************************/
-void bta_dm_co_ble_io_req(UNUSED_ATTR BD_ADDR bd_addr, tBTA_IO_CAP* p_io_cap,
+void bta_dm_co_ble_io_req(const RawAddress& bd_addr, tBTA_IO_CAP* p_io_cap,
                           tBTA_OOB_DATA* p_oob_data,
                           tBTA_LE_AUTH_REQ* p_auth_req, uint8_t* p_max_key_size,
                           tBTA_LE_KEY_TYPE* p_init_key,

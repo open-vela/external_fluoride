@@ -1,5 +1,5 @@
 #
-#  Copyright (C) 2015 Google
+#  Copyright 2015 Google
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -26,15 +26,15 @@ source_set("service") {
     "common/bluetooth/scan_result.cc",
     "common/bluetooth/scan_settings.cc",
     "common/bluetooth/service.cc",
-    "common/bluetooth/util/address_helper.cc",
     "common/bluetooth/util/atomic_string.cc",
-    "common/bluetooth/uuid.cc",
     "daemon.cc",
     "gatt_client.cc",
     "gatt_server.cc",
     "gatt_server_old.cc",
     "hal/bluetooth_gatt_interface.cc",
     "hal/bluetooth_interface.cc",
+    "ipc/dbus/bluetooth_adapter.cc",
+    "ipc/dbus/ipc_handler_dbus.cc",
     "hal/fake_bluetooth_gatt_interface.cc",
     "hal/fake_bluetooth_interface.cc",
     "ipc/ipc_handler.cc",
@@ -50,13 +50,14 @@ source_set("service") {
 
   include_dirs = [
     "//",
+    "//include",
     "//service/common",
     "//third_party/modp_b64/modp64",
-    "//third_party/libhardware/include",
   ]
 
   deps = [
-    "//third_party/libchrome:base"
+    "//types",
+    "//third_party/libchrome:base",
   ]
 }
 
@@ -86,7 +87,6 @@ executable("service_unittests") {
   sources = [
     "test/fake_hal_util.cc",
     "test/settings_unittest.cc",
-    "test/uuid_unittest.cc",
   ]
 
   include_dirs = [ "//" ]

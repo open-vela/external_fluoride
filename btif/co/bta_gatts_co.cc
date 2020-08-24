@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2013 Broadcom Corporation
+ *  Copyright 2009-2013 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
 typedef struct {
   bool enable;
   uint8_t num_clients;
-  tBTA_GATTS_SRV_CHG srv_chg[BTIF_GATTS_MAX_SRV_CHG_CLT_SIZE];
+  tGATTS_SRV_CHG srv_chg[BTIF_GATTS_MAX_SRV_CHG_CLT_SIZE];
 } __attribute__((packed)) btif_gatts_srv_chg_cb_t;
 
 /*****************************************************************************
@@ -60,7 +60,7 @@ static void btif_gatts_check_init(void) {
  *  Externally called functions
  ****************************************************************************/
 
-void btif_gatts_add_bonded_dev_from_nv(BD_ADDR bda) {
+void btif_gatts_add_bonded_dev_from_nv(const RawAddress& bda) {
   btif_gatts_srv_chg_cb_t* p_cb = &btif_gatts_srv_chg_cb;
   bool found = false;
   uint8_t i;
@@ -68,7 +68,7 @@ void btif_gatts_add_bonded_dev_from_nv(BD_ADDR bda) {
   btif_gatts_check_init();
 
   for (i = 0; i != p_cb->num_clients; ++i) {
-    if (!memcmp(p_cb->srv_chg[i].bda, bda, sizeof(BD_ADDR))) {
+    if (p_cb->srv_chg[i].bda == bda) {
       found = true;
       break;
     }
@@ -76,7 +76,7 @@ void btif_gatts_add_bonded_dev_from_nv(BD_ADDR bda) {
 
   if (!found) {
     if (p_cb->num_clients < BTIF_GATTS_MAX_SRV_CHG_CLT_SIZE) {
-      bdcpy(p_cb->srv_chg[p_cb->num_clients].bda, bda);
+      p_cb->srv_chg[p_cb->num_clients].bda = bda;
       p_cb->srv_chg[p_cb->num_clients].srv_changed = false;
       p_cb->num_clients++;
     }
@@ -121,9 +121,9 @@ void bta_gatts_co_update_handle_range(
  *                  false - if the request can not be processed
  *
  ******************************************************************************/
-bool bta_gatts_co_srv_chg(UNUSED_ATTR tBTA_GATTS_SRV_CHG_CMD cmd,
-                          UNUSED_ATTR tBTA_GATTS_SRV_CHG_REQ* p_req,
-                          UNUSED_ATTR tBTA_GATTS_SRV_CHG_RSP* p_rsp) {
+bool bta_gatts_co_srv_chg(UNUSED_ATTR tGATTS_SRV_CHG_CMD cmd,
+                          UNUSED_ATTR tGATTS_SRV_CHG_REQ* p_req,
+                          UNUSED_ATTR tGATTS_SRV_CHG_RSP* p_rsp) {
   return false;
 }
 
