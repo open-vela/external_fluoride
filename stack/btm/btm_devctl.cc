@@ -90,6 +90,8 @@ void btm_dev_init() {
       alarm_new("btm.read_automatic_flush_timeout_timer");
   btm_cb.devcb.read_link_quality_timer =
       alarm_new("btm.read_link_quality_timer");
+  btm_cb.devcb.read_inq_tx_power_timer =
+      alarm_new("btm.read_inq_tx_power_timer");
   btm_cb.devcb.read_tx_power_timer = alarm_new("btm.read_tx_power_timer");
 
   btm_cb.btm_sco_pkt_types_supported =
@@ -609,12 +611,14 @@ tBTM_STATUS BTM_EnableTestMode(void) {
                               HCI_FILTER_COND_NEW_DEVICE, &cond, sizeof(cond));
 
   /* put device to connectable mode */
-  if (BTM_SetConnectability(BTM_CONNECTABLE) != BTM_SUCCESS) {
+  if (BTM_SetConnectability(BTM_CONNECTABLE, BTM_DEFAULT_CONN_WINDOW,
+                            BTM_DEFAULT_CONN_INTERVAL) != BTM_SUCCESS) {
     return BTM_NO_RESOURCES;
   }
 
   /* put device to discoverable mode */
-  if (BTM_SetDiscoverability(BTM_GENERAL_DISCOVERABLE) != BTM_SUCCESS) {
+  if (BTM_SetDiscoverability(BTM_GENERAL_DISCOVERABLE, BTM_DEFAULT_DISC_WINDOW,
+                             BTM_DEFAULT_DISC_INTERVAL) != BTM_SUCCESS) {
     return BTM_NO_RESOURCES;
   }
 
