@@ -44,7 +44,6 @@ typedef struct {
   bool link_up_issued;
   tBT_TRANSPORT transport;
   uint16_t clock_offset;
-  uint16_t flush_timeout_in_ticks;
   uint16_t hci_handle;
   uint16_t link_policy;
   uint16_t link_super_tout;
@@ -53,7 +52,6 @@ typedef struct {
   uint16_t pkt_types_mask;
   uint8_t active_remote_addr_type;
   uint8_t conn_addr_type;
-  uint8_t disconnect_reason;
   uint8_t encrypt_state;
   uint8_t link_role;
   uint8_t lmp_version;

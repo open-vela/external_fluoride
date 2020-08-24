@@ -232,6 +232,7 @@ tACL_CONN* StackAclBtmAcl::acl_get_connection_from_handle(uint16_t hci_handle) {
   return &btm_cb.acl_cb_.acl_db[index];
 }
 
+#if (BLE_PRIVACY_SPT == TRUE)
 /*******************************************************************************
  *
  * Function         btm_ble_get_acl_remote_addr
@@ -277,6 +278,7 @@ bool btm_ble_get_acl_remote_addr(tBTM_SEC_DEV_REC* p_dev_rec,
 
   return st;
 }
+#endif
 
 void btm_acl_process_sca_cmpl_pkt(uint8_t len, uint8_t* data) {
   uint16_t handle;
@@ -355,9 +357,15 @@ void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
       btm_set_link_policy(p, btm_cb.acl_cb_.btm_def_link_policy);
 
       p->transport = transport;
+#if (BLE_PRIVACY_SPT == TRUE)
       if (transport == BT_TRANSPORT_LE)
         btm_ble_refresh_local_resolvable_private_addr(
             bda, btm_cb.ble_ctr_cb.addr_mgnt_cb.private_addr);
+#else
+      p->conn_addr_type = BLE_ADDR_PUBLIC;
+      p->conn_addr = *controller_get_interface()->get_address();
+
+#endif
       p->switch_role_failed_attempts = 0;
       p->switch_role_state = BTM_ACL_SWKEY_STATE_IDLE;
 
@@ -414,8 +422,10 @@ void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
 
       /* If here, features are not known yet */
       if (p_dev_rec && transport == BT_TRANSPORT_LE) {
+#if (BLE_PRIVACY_SPT == TRUE)
         btm_ble_get_acl_remote_addr(p_dev_rec, p->active_remote_addr,
                                     &p->active_remote_addr_type);
+#endif
 
         if (controller_get_interface()
                 ->supports_ble_peripheral_initiated_feature_exchange() ||
@@ -640,7 +650,9 @@ tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role) {
       btsnd_hcic_switch_role(remote_bd_addr, new_role);
       p->switch_role_state = BTM_ACL_SWKEY_STATE_IN_PROGRESS;
 
+#if (BTM_DISC_DURING_RS == TRUE)
       if (p_dev_rec) p_dev_rec->rs_disc_pending = BTM_SEC_RS_PENDING;
+#endif
     }
   }
 
@@ -686,8 +698,10 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
     }
 
     btsnd_hcic_switch_role(p->remote_addr, (uint8_t)!p->link_role);
+#if (BTM_DISC_DURING_RS == TRUE)
     p_dev_rec = btm_find_dev(p->remote_addr);
     if (p_dev_rec != NULL) p_dev_rec->rs_disc_pending = BTM_SEC_RS_PENDING;
+#endif
 
   }
   /* Finished enabling Encryption after role switch */
@@ -704,6 +718,7 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
         "%s: Role Switch Event: new_role 0x%02x, HCI Status 0x%02x, rs_st:%d",
         __func__, new_role, hci_status, p->switch_role_state);
 
+#if (BTM_DISC_DURING_RS == TRUE)
     /* If a disconnect is pending, issue it now that role switch has completed
      */
     p_dev_rec = btm_find_dev(p->remote_addr);
@@ -718,6 +733,7 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
           PTR_TO_UINT(p_dev_rec), p_dev_rec->rs_disc_pending);
       p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
     }
+#endif
   }
 }
 
@@ -1327,8 +1343,8 @@ uint16_t BTM_GetNumAclLinks(void) {
  ******************************************************************************/
 uint16_t btm_get_acl_disc_reason_code(void) {
   uint8_t res = btm_cb.acl_cb_.acl_disc_reason;
-  LOG_WARN("%s This API should require an address for per ACL basis", __func__);
-  return res;
+  BTM_TRACE_DEBUG("btm_get_acl_disc_reason_code");
+  return (res);
 }
 
 /*******************************************************************************
@@ -1538,6 +1554,7 @@ void btm_acl_role_changed(uint8_t hci_status, const RawAddress& bd_addr,
       __func__, bd_addr.ToString().c_str(), p_switch_role->role,
       p_switch_role->hci_status, p_acl->switch_role_state);
 
+#if (BTM_DISC_DURING_RS == TRUE)
   /* If a disconnect is pending, issue it now that role switch has completed */
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
   if (p_dev_rec != nullptr) {
@@ -1550,6 +1567,7 @@ void btm_acl_role_changed(uint8_t hci_status, const RawAddress& bd_addr,
                     bd_addr.ToString().c_str(), p_dev_rec->rs_disc_pending);
     p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
   }
+#endif
 }
 
 /*******************************************************************************
@@ -2200,12 +2218,14 @@ tBTM_STATUS btm_remove_acl(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
   tBTM_STATUS status = BTM_SUCCESS;
 
   BTM_TRACE_DEBUG("btm_remove_acl");
+#if (BTM_DISC_DURING_RS == TRUE)
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
 
   /* Role Switch is pending, postpone until completed */
   if (p_dev_rec && (p_dev_rec->rs_disc_pending == BTM_SEC_RS_PENDING)) {
     p_dev_rec->rs_disc_pending = BTM_SEC_DISC_PENDING;
   } else /* otherwise can disconnect right away */
+#endif
   {
     if (hci_handle != HCI_INVALID_HANDLE && p_dev_rec &&
         p_dev_rec->sec_state != BTM_SEC_STATE_DISCONNECTING) {
@@ -2266,7 +2286,9 @@ void btm_cont_rswitch(tACL_CONN* p, tBTM_SEC_DEV_REC* p_dev_rec) {
     {
       if (p->switch_role_state == BTM_ACL_SWKEY_STATE_MODE_CHANGE) {
         p->switch_role_state = BTM_ACL_SWKEY_STATE_IN_PROGRESS;
+#if (BTM_DISC_DURING_RS == TRUE)
         if (p_dev_rec) p_dev_rec->rs_disc_pending = BTM_SEC_RS_PENDING;
+#endif
         btsnd_hcic_switch_role(p->remote_addr, (uint8_t)!p->link_role);
       }
     }
@@ -2595,6 +2617,7 @@ int btm_pm_find_acl_ind(const RawAddress& remote_bda) {
  ******************************************************************************/
 void btm_ble_refresh_local_resolvable_private_addr(
     const RawAddress& pseudo_addr, const RawAddress& local_rpa) {
+#if (BLE_PRIVACY_SPT == TRUE)
   tACL_CONN* p = internal_.btm_bda_to_acl(pseudo_addr, BT_TRANSPORT_LE);
 
   if (p != NULL) {
@@ -2609,6 +2632,7 @@ void btm_ble_refresh_local_resolvable_private_addr(
       p->conn_addr = *controller_get_interface()->get_address();
     }
   }
+#endif
 }
 
 /*******************************************************************************
@@ -2694,6 +2718,7 @@ bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr,
                                                          p_addr_type);
   }
   bool st = true;
+#if (BLE_PRIVACY_SPT == TRUE)
   tACL_CONN* p_acl = internal_.btm_bda_to_acl(pseudo_addr, BT_TRANSPORT_LE);
 
   if (p_acl == NULL) {
@@ -2705,6 +2730,14 @@ bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr,
 
   conn_addr = p_acl->active_remote_addr;
   *p_addr_type = p_acl->active_remote_addr_type;
+#else
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(pseudo_addr);
+
+  conn_addr = pseudo_addr;
+  if (p_dev_rec != NULL) {
+    *p_addr_type = p_dev_rec->ble.ble_addr_type;
+  }
+#endif
   return st;
 }
 
@@ -2851,44 +2884,6 @@ void acl_reject_connection_request(const RawAddress& bd_addr, uint8_t reason) {
   btsnd_hcic_reject_conn(bd_addr, reason);
 }
 
-void acl_disconnect(const RawAddress& bd_addr, tBT_TRANSPORT transport,
-                    uint8_t reason) {
-  tACL_CONN* p_acl = internal_.btm_bda_to_acl(bd_addr, transport);
-  if (p_acl == nullptr) {
-    LOG_WARN("%s Acl disconnect request for unknown device", __func__);
-    return;
-  }
-  p_acl->disconnect_reason = reason;
-  btsnd_hcic_disconnect(p_acl->hci_handle, reason);
-}
-
 void acl_send_data_packet(BT_HDR* p_buf, uint16_t flags) {
   bte_main_hci_send(p_buf, flags);
-}
-
-void acl_write_automatic_flush_timeout(const RawAddress& bd_addr,
-                                       uint16_t flush_timeout_in_ticks) {
-  tACL_CONN* p_acl = internal_.btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
-  if (p_acl == nullptr) {
-    LOG_ERROR("%s Unknown peer ACL", __func__);
-    return;
-  }
-  if (p_acl->flush_timeout_in_ticks == flush_timeout_in_ticks) {
-    LOG_INFO(
-        "%s Ignoring since cached value is same as requested flush_timeout:%hd",
-        __func__, flush_timeout_in_ticks);
-    return;
-  }
-  flush_timeout_in_ticks &= HCI_MAX_AUTOMATIC_FLUSH_TIMEOUT;
-  p_acl->flush_timeout_in_ticks = flush_timeout_in_ticks;
-  btsnd_hcic_write_auto_flush_tout(p_acl->hci_handle, flush_timeout_in_ticks);
-}
-
-uint16_t acl_read_cached_automatic_flush_timeout(const RawAddress& bd_addr) {
-  tACL_CONN* p_acl = internal_.btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
-  if (p_acl == nullptr) {
-    LOG_ERROR("%s Unknown peer ACL", __func__);
-    return HCI_DEFAULT_AUTOMATIC_FLUSH_TIMEOUT;
-  }
-  return p_acl->flush_timeout_in_ticks;
 }

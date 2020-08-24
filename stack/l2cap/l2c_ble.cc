@@ -36,7 +36,6 @@
 #include "main/shim/shim.h"
 #include "osi/include/osi.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/gatt/connection_manager.h"
 #include "stack/include/acl_api.h"
 #include "stack_config.h"
@@ -297,7 +296,7 @@ void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
   if (role == HCI_ROLE_MASTER) alarm_cancel(p_lcb->l2c_lcb_timer);
 
   /* Save the handle */
-  p_lcb->SetHandle(handle);
+  p_lcb->handle = handle;
 
   /* Connected OK. Change state to connected, we were scanning so we are master
    */
@@ -322,7 +321,9 @@ void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
                              L2CAP_FIXED_CHNL_BLE_SIG_BIT |
                              L2CAP_FIXED_CHNL_SMP_BIT;
 
+#if (BLE_PRIVACY_SPT == TRUE)
   btm_ble_disable_resolving_list(BTM_BLE_RL_INIT, true);
+#endif
 
   if (role == HCI_ROLE_SLAVE) {
     if (!controller_get_interface()
@@ -384,7 +385,7 @@ static void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
                   p_lcb->remote_bd_addr))
 #endif
       ) {
-        btsnd_hcic_ble_upd_ll_conn_params(p_lcb->Handle(), min_conn_int,
+        btsnd_hcic_ble_upd_ll_conn_params(p_lcb->handle, min_conn_int,
                                           max_conn_int, slave_latency,
                                           supervision_tout, 0, 0);
         p_lcb->conn_update_mask |= L2C_BLE_UPDATE_PENDING;
@@ -407,7 +408,7 @@ static void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
                   p_lcb->remote_bd_addr))
 #endif
       ) {
-        btsnd_hcic_ble_upd_ll_conn_params(p_lcb->Handle(), p_lcb->min_interval,
+        btsnd_hcic_ble_upd_ll_conn_params(p_lcb->handle, p_lcb->min_interval,
                                           p_lcb->max_interval, p_lcb->latency,
                                           p_lcb->timeout, p_lcb->min_ce_len,
                                           p_lcb->max_ce_len);
@@ -1317,7 +1318,7 @@ void l2cble_use_preferred_conn_params(const RawAddress& bda) {
     BTM_TRACE_DEBUG(
         "%s: HANDLE=%d min_conn_int=%d max_conn_int=%d slave_latency=%d "
         "supervision_tout=%d",
-        __func__, p_lcb->Handle(), p_dev_rec->conn_params.min_conn_int,
+        __func__, p_lcb->handle, p_dev_rec->conn_params.min_conn_int,
         p_dev_rec->conn_params.max_conn_int,
         p_dev_rec->conn_params.slave_latency,
         p_dev_rec->conn_params.supervision_tout);
@@ -1328,7 +1329,7 @@ void l2cble_use_preferred_conn_params(const RawAddress& bda) {
     p_lcb->latency = p_dev_rec->conn_params.slave_latency;
 
     btsnd_hcic_ble_upd_ll_conn_params(
-        p_lcb->Handle(), p_dev_rec->conn_params.min_conn_int,
+        p_lcb->handle, p_dev_rec->conn_params.min_conn_int,
         p_dev_rec->conn_params.max_conn_int,
         p_dev_rec->conn_params.slave_latency,
         p_dev_rec->conn_params.supervision_tout, 0, 0);

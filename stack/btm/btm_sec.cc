@@ -52,6 +52,7 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -2568,6 +2569,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2596,7 +2604,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -3588,7 +3596,9 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
               btm_sec_change_pairing_state(BTM_PAIR_STATE_IDLE);
             }
           }
+#if (BTM_DISC_DURING_RS == TRUE)
           p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
+#endif
           return;
         } else {
           l2cu_update_lcb_4_bonding(p_dev_rec->bd_addr, true);
@@ -3601,7 +3611,9 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
 
   p_dev_rec->device_type |= BT_DEVICE_TYPE_BREDR;
 
+#if (BTM_DISC_DURING_RS == TRUE)
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
+#endif
 
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 
@@ -3860,9 +3872,11 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
 
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 
+#if (BTM_DISC_DURING_RS == TRUE)
   LOG_INFO("%s clearing pending flag handle:%d reason:%d", __func__, handle,
            reason);
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
+#endif
 
   /* clear unused flags */
   p_dev_rec->sm4 &= BTM_SM4_TRUE;
@@ -3936,7 +3950,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
@@ -5017,7 +5032,9 @@ void btm_sec_clear_ble_keys(tBTM_SEC_DEV_REC* p_dev_rec) {
   p_dev_rec->ble.key_type = BTM_LE_KEY_NONE;
   memset(&p_dev_rec->ble.keys, 0, sizeof(tBTM_SEC_BLE_KEYS));
 
+#if (BLE_PRIVACY_SPT == TRUE)
   btm_ble_resolving_list_remove_dev(p_dev_rec);
+#endif
 }
 
 /*******************************************************************************
