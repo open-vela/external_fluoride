@@ -575,7 +575,9 @@ bool bta_jv_check_psm(uint16_t psm) {
 
         case AVCT_PSM: /* 0x17 */
         case AVDT_PSM: /* 0x19 */
-          if (!bta_sys_is_register(BTA_ID_AV)) ret = true;
+          if ((!bta_sys_is_register(BTA_ID_AV)) &&
+              (!bta_sys_is_register(BTA_ID_AVK)))
+            ret = true;
           break;
 
         default:
@@ -1328,17 +1330,19 @@ void bta_jv_rfcomm_connect(tBTA_SEC sec_mask, tBTA_JV_ROLE role,
   memset(&evt_data, 0, sizeof(evt_data));
   evt_data.sec_id = sec_id;
   evt_data.status = BTA_JV_SUCCESS;
-  if (0 == sec_id) {
+  if (0 == sec_id ||
+      !BTM_SetSecurityLevel(true, "", sec_id, sec_mask, BT_PSM_RFCOMM,
+                            BTM_SEC_PROTO_RFCOMM, remote_scn)) {
     evt_data.status = BTA_JV_FAILURE;
     LOG(ERROR) << __func__ << ": sec_id=" << +sec_id
-               << " is zero, remote_scn:" << +remote_scn;
+               << " is zero or BTM_SetSecurityLevel failed, remote_scn:"
+               << +remote_scn;
   }
 
   if (evt_data.status == BTA_JV_SUCCESS &&
-      RFCOMM_CreateConnectionWithSecurity(
-          UUID_SERVCLASS_SERIAL_PORT, remote_scn, false, BTA_JV_DEF_RFC_MTU,
-          peer_bd_addr, &handle, bta_jv_port_mgmt_cl_cback, sec_id,
-          sec_mask) != PORT_SUCCESS) {
+      RFCOMM_CreateConnection(UUID_SERVCLASS_SERIAL_PORT, remote_scn, false,
+                              BTA_JV_DEF_RFC_MTU, peer_bd_addr, &handle,
+                              bta_jv_port_mgmt_cl_cback) != PORT_SUCCESS) {
     LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
     evt_data.status = BTA_JV_FAILURE;
   }
@@ -1638,15 +1642,16 @@ void bta_jv_rfcomm_start_server(tBTA_SEC sec_mask, tBTA_JV_ROLE role,
   do {
     sec_id = bta_jv_alloc_sec_id();
 
-    if (0 == sec_id) {
+    if (0 == sec_id ||
+        !BTM_SetSecurityLevel(false, "JV PORT", sec_id, sec_mask, BT_PSM_RFCOMM,
+                              BTM_SEC_PROTO_RFCOMM, local_scn)) {
       LOG(ERROR) << __func__ << ": run out of sec_id";
       break;
     }
 
-    if (RFCOMM_CreateConnectionWithSecurity(
-            sec_id, local_scn, true, BTA_JV_DEF_RFC_MTU, RawAddress::kAny,
-            &handle, bta_jv_port_mgmt_sr_cback, sec_id,
-            sec_mask) != PORT_SUCCESS) {
+    if (RFCOMM_CreateConnection(sec_id, local_scn, true, BTA_JV_DEF_RFC_MTU,
+                                RawAddress::kAny, &handle,
+                                bta_jv_port_mgmt_sr_cback) != PORT_SUCCESS) {
       LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
       break;
     }
