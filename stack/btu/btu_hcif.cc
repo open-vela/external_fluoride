@@ -47,7 +47,6 @@
 #include "btif_config.h"
 #include "btm_api.h"
 #include "btm_int.h"
-#include "btm_iso_api.h"
 #include "btu.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
@@ -59,10 +58,8 @@
 #include "stack/include/acl_api.h"
 #include "stack/include/acl_hci_link_interface.h"
 #include "stack/include/l2cap_hci_link_interface.h"
-#include "stack/include/sec_hci_link_interface.h"
 
 using base::Location;
-using bluetooth::hci::IsoManager;
 
 extern void btm_process_cancel_complete(uint8_t status, uint8_t mode);
 extern void btm_process_inq_results2(uint8_t* p, uint8_t inq_res_mode);
@@ -337,7 +334,6 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       break;
     case HCI_NUM_COMPL_DATA_PKTS_EVT:
       l2c_link_process_num_completed_pkts(p, hci_evt_len);
-      IsoManager::GetInstance()->HandleNumComplDataPkts(p, hci_evt_len);
       break;
     case HCI_MODE_CHANGE_EVT:
       btu_hcif_mode_change_evt(p);
@@ -438,20 +434,6 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
 
         case HCI_LE_ADVERTISING_SET_TERMINATED_EVT:
           btm_le_on_advertising_set_terminated(p, hci_evt_len);
-          break;
-
-        case HCI_BLE_REQ_PEER_SCA_CPL_EVT:
-          btm_acl_process_sca_cmpl_pkt(ble_evt_len, p);
-          break;
-
-        case HCI_BLE_CIS_EST_EVT:
-        case HCI_BLE_CREATE_BIG_CPL_EVT:
-        case HCI_BLE_TERM_BIG_CPL_EVT:
-        case HCI_BLE_CIS_REQ_EVT:
-        case HCI_BLE_BIG_SYNC_EST_EVT:
-        case HCI_BLE_BIG_SYNC_LOST_EVT:
-          IsoManager::GetInstance()->HandleHciEvent(ble_sub_code, p,
-                                                    ble_evt_len);
           break;
       }
       break;
@@ -1001,8 +983,11 @@ static void btu_hcif_connection_request_evt(uint8_t* p) {
   STREAM_TO_DEVCLASS(dc, p);
   STREAM_TO_UINT8(link_type, p);
 
+  /* Pass request to security manager to check connect filters before */
+  /* passing request to l2cap */
   if (link_type == HCI_LINK_TYPE_ACL) {
-    btm_acl_connection_request(bda, dc);
+    btm_sec_conn_req(bda, dc);
+    l2c_link_hci_conn_req(bda);
   } else {
     btm_sco_conn_req(bda, dc, link_type);
   }
@@ -1035,11 +1020,8 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
                     __func__, reason, handle);
   }
 
-  /* If L2CAP or SCO doesn't know about it, send it to ISO */
-  if (!l2c_link_hci_disc_comp(handle, reason) &&
-      !btm_sco_removed(handle, reason)) {
-    IsoManager::GetInstance()->HandleDisconnect(handle, reason);
-  }
+  /* If L2CAP doesn't know about it, send it to SCO */
+  if (!l2c_link_hci_disc_comp(handle, reason)) btm_sco_removed(handle, reason);
 
   /* Notify security manager */
   btm_sec_disconnected(handle, reason);
@@ -1294,6 +1276,7 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p,
       break;
 
     case HCI_READ_INQ_TX_POWER_LEVEL:
+      btm_read_inq_tx_power_complete(p);
       break;
 
     /* BLE Commands sComplete*/

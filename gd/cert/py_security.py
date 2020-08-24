@@ -168,8 +168,7 @@ class PySecurity(Closable):
             for Cert it isn't needed.
         """
         logging.debug("DUT: Waiting for Bond Event")
-        assertThat(self._bond_event_stream).emits(
-            lambda event: event.message_type == expected_bond_event or logging.info("DUT: %s" % event.message_type))
+        assertThat(self._bond_event_stream).emits(lambda event: event.message_type == expected_bond_event)
 
     def wait_for_enforce_security_event(self, expected_enforce_security_event):
         """
