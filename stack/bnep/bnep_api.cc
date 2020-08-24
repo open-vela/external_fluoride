@@ -25,7 +25,6 @@
 #include "bnep_api.h"
 #include <string.h>
 #include "bnep_int.h"
-#include "stack/btm/btm_sec.h"
 
 using bluetooth::Uuid;
 
@@ -127,8 +126,7 @@ void BNEP_Deregister(void) {
  *
  ******************************************************************************/
 tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda, const Uuid& src_uuid,
-                          const Uuid& dst_uuid, uint16_t* p_handle,
-                          uint32_t mx_chan_id) {
+                          const Uuid& dst_uuid, uint16_t* p_handle) {
   uint16_t cid;
   tBNEP_CONN* p_bcb = bnepu_find_bcb_by_bd_addr(p_rem_bda);
 
@@ -168,7 +166,6 @@ tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda, const Uuid& src_uuid,
      */
     p_bcb->con_state = BNEP_STATE_CONN_START;
 
-    BTM_SetOutService(p_rem_bda, BTM_SEC_SERVICE_BNEP_PANU, mx_chan_id);
     cid = L2CA_ConnectReq(BT_PSM_BNEP, p_bcb->rem_bda);
     if (cid != 0) {
       p_bcb->l2cap_cid = cid;
