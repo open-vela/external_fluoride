@@ -262,9 +262,6 @@ class PairingHandlerPairTest : public testing::Test {
               EncryptionChangeBuilder::Create(ErrorCode::SUCCESS, CONN_HANDLE_MASTER, EncryptionEnabled::ON)));
 
           pairing_handler_b->OnHciEvent(EventBuilderToView(
-              hci::LeLongTermKeyRequestBuilder::Create(CONN_HANDLE_SLAVE, {0,0,0,0,0,0,0,0}, 0)));
-
-          pairing_handler_b->OnHciEvent(EventBuilderToView(
               EncryptionChangeBuilder::Create(ErrorCode::SUCCESS, CONN_HANDLE_SLAVE, EncryptionEnabled::ON)));
         });
   }
