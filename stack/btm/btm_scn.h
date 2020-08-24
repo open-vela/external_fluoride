@@ -16,22 +16,8 @@
 
 #pragma once
 
-#include <memory>
-#include "hci/hci_packets.h"
+#include <cstdint>
 
-namespace bluetooth {
-namespace hci {
-namespace acl_manager {
-
-class LeConnectionManagementCallbacks {
- public:
-  virtual ~LeConnectionManagementCallbacks() = default;
-  virtual void OnConnectionUpdate(uint16_t connection_interval, uint16_t connection_latency,
-                                  uint16_t supervision_timeout) = 0;
-  virtual void OnDataLengthChange(uint16_t tx_octets, uint16_t tx_time, uint16_t rx_octets, uint16_t rx_time) = 0;
-  virtual void OnDisconnection(ErrorCode reason) = 0;
-};
-
-}  // namespace acl_manager
-}  // namespace hci
-}  // namespace bluetooth
+bool BTM_FreeSCN(uint8_t scn);
+bool BTM_TryAllocateSCN(uint8_t scn);
+bool BTM_TryAllocateSCN(uint8_t scn);
