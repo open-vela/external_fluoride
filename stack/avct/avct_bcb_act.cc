@@ -33,7 +33,6 @@
 #include "bt_utils.h"
 #include "btm_api.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
 
 /* action function list */
 const tAVCT_BCB_ACTION avct_bcb_action[] = {
