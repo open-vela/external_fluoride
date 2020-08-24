@@ -60,7 +60,9 @@
 #include "stack/include/hidh_api.h"
 #endif
 #include "stack/include/smp_api.h"
+#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
 #include "bta_ar_api.h"
+#endif
 #include "bta/sys/bta_sys_int.h"
 #include "bta_dm_int.h"
 #include "btif/include/btif_pan.h"
@@ -223,7 +225,9 @@ static void event_start_up_stack(UNUSED_ATTR void* context) {
 #endif
 
   bta_sys_init();
+#if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == TRUE)
   bta_ar_init();
+#endif
   module_init(get_module(BTE_LOGMSG_MODULE));
 
   main_thread_start_up();

@@ -113,10 +113,8 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     if (IAmMaster(i)) {
       LOG_INFO("Sending start encryption request");
       SendHciLeStartEncryption(i, i.connection_handle, {0}, {0}, ltk);
-    } else {
-      auto ltk_req = WaitLeLongTermKeyRequest();
-      SendHciLeLongTermKeyReply(i, i.connection_handle, ltk);
     }
+
   } else {
     // 2.3.5.5 LE legacy pairing phase 2
     LOG_INFO("Pairing Phase 2 LE legacy pairing Started");
@@ -140,9 +138,6 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     if (IAmMaster(i)) {
       LOG_INFO("Sending start encryption request");
       SendHciLeStartEncryption(i, i.connection_handle, {0}, {0}, stk);
-    } else {
-      auto ltk_req = WaitLeLongTermKeyRequest();
-      SendHciLeLongTermKeyReply(i, i.connection_handle, stk);
     }
   }
 

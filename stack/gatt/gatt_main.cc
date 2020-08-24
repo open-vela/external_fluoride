@@ -35,7 +35,6 @@
 #include "l2c_api.h"
 #include "osi/include/osi.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
 
 using base::StringPrintf;
 
@@ -122,7 +121,10 @@ void gatt_init(void) {
     LOG(ERROR) << "ATT Dynamic Registration failed";
   }
 
-  BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_ATT, BTM_SEC_NONE, BT_PSM_ATT);
+  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_ATT, BTM_SEC_NONE, BT_PSM_ATT,
+                       0, 0);
+  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_ATT, BTM_SEC_NONE, BT_PSM_ATT,
+                       0, 0);
 
   gatt_cb.hdl_cfg.gatt_start_hdl = GATT_GATT_START_HANDLE;
   gatt_cb.hdl_cfg.gap_start_hdl = GATT_GAP_START_HANDLE;
