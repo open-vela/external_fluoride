@@ -14,7 +14,7 @@
 //  limitations under the License.
 //
 
-#include "bluetooth/scan_settings.h"
+#include "service/common/bluetooth/scan_settings.h"
 
 namespace bluetooth {
 

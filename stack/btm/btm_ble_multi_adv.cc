@@ -20,7 +20,6 @@
 #include <base/bind.h>
 #include <base/logging.h>
 #include <base/strings/string_number_conversions.h>
-#include <base/time/time.h>
 #include <string.h>
 #include <queue>
 #include <vector>
@@ -34,15 +33,13 @@
 #include "btm_int_types.h"
 
 using base::Bind;
-using base::TimeDelta;
-using base::TimeTicks;
 using RegisterCb =
     base::Callback<void(uint8_t /* inst_id */, uint8_t /* status */)>;
 using IdTxPowerStatusCb = base::Callback<void(
     uint8_t /* inst_id */, int8_t /* tx_power */, uint8_t /* status */)>;
-using SetEnableData = BleAdvertiserHciInterface::SetEnableData;
 extern void btm_gen_resolvable_private_addr(
     base::Callback<void(uint8_t[8])> cb);
+extern fixed_queue_t* btu_general_alarm_queue;
 
 constexpr int ADV_DATA_LEN_MAX = 251;
 
@@ -58,15 +55,13 @@ struct AdvertisingInstance {
   uint8_t advertising_event_properties;
   alarm_t* adv_raddr_timer;
   int8_t tx_power;
-  uint16_t duration;  // 1 unit is 10ms
+  uint16_t duration;
   uint8_t maxExtAdvEvents;
   alarm_t* timeout_timer;
   uint8_t own_address_type;
-  RawAddress own_address;
+  BD_ADDR own_address;
   MultiAdvCb timeout_cb;
   bool address_update_required;
-  bool periodic_enabled;
-  uint32_t advertising_interval;  // 1 unit is 0.625 ms
 
   /* When true, advertising set is enabled, or last scheduled call to "LE Set
    * Extended Advertising Set Enable" is to enable this advertising set. Any
@@ -78,7 +73,6 @@ struct AdvertisingInstance {
    * command scheduled when in this state will execute when the set is disabled.
    */
   bool enable_status;
-  TimeTicks enable_time;
 
   bool IsEnabled() { return enable_status; }
 
@@ -92,9 +86,8 @@ struct AdvertisingInstance {
         duration(0),
         timeout_timer(nullptr),
         own_address_type(0),
-        own_address(RawAddress::kEmpty),
+        own_address{0},
         address_update_required(false),
-        periodic_enabled(false),
         enable_status(false) {
     adv_raddr_timer = alarm_new_periodic("btm_ble.adv_raddr_timer");
   }
@@ -123,14 +116,14 @@ static void alarm_closure_cb(void* p) {
 }
 
 // Periodic alarms are not supported, because we clean up data in callback
-void alarm_set_closure(const tracked_objects::Location& posted_from,
-                       alarm_t* alarm, period_ms_t interval_ms,
-                       base::Closure user_task) {
+void alarm_set_closure_on_queue(const tracked_objects::Location& posted_from,
+                                alarm_t* alarm, period_ms_t interval_ms,
+                                base::Closure user_task, fixed_queue_t* queue) {
   closure_data* data = new closure_data;
   data->posted_from = posted_from;
   data->user_task = std::move(user_task);
   VLOG(1) << "scheduling timer %s" << data->posted_from.ToString();
-  alarm_set_on_mloop(alarm, interval_ms, alarm_closure_cb, data);
+  alarm_set_on_queue(alarm, interval_ms, alarm_closure_cb, data, queue);
 }
 
 class BleAdvertisingManagerImpl;
@@ -166,7 +159,9 @@ class BleAdvertisingManagerImpl
   ~BleAdvertisingManagerImpl() { adv_inst.clear(); }
 
   void GetOwnAddress(uint8_t inst_id, GetAddressCallback cb) override {
-    cb.Run(adv_inst[inst_id].own_address_type, adv_inst[inst_id].own_address);
+    bt_bdaddr_t addr;
+    memcpy(addr.address, adv_inst[inst_id].own_address, BD_ADDR_LEN);
+    cb.Run(adv_inst[inst_id].own_address_type, addr);
   }
 
   void ReadInstanceCountCb(uint8_t instance_count) {
@@ -178,11 +173,11 @@ class BleAdvertisingManagerImpl
     }
   }
 
-  void OnRpaGenerationComplete(base::Callback<void(RawAddress)> cb,
+  void OnRpaGenerationComplete(base::Callback<void(bt_bdaddr_t)> cb,
                                uint8_t rand[8]) {
     VLOG(1) << __func__;
 
-    RawAddress bda;
+    bt_bdaddr_t bda;
 
     rand[2] &= (~BLE_RESOLVE_ADDR_MASK);
     rand[2] |= BLE_RESOLVE_ADDR_MSB;
@@ -206,7 +201,7 @@ class BleAdvertisingManagerImpl
     cb.Run(bda);
   }
 
-  void GenerateRpa(base::Callback<void(RawAddress)> cb) {
+  void GenerateRpa(base::Callback<void(bt_bdaddr_t)> cb) {
     btm_gen_resolvable_private_addr(
         Bind(&BleAdvertisingManagerImpl::OnRpaGenerationComplete,
              base::Unretained(this), std::move(cb)));
@@ -227,7 +222,7 @@ class BleAdvertisingManagerImpl
 
     GenerateRpa(Bind(
         [](AdvertisingInstance* p_inst, MultiAdvCb configuredCb,
-           RawAddress bda) {
+           bt_bdaddr_t bda) {
           /* Connectable advertising set must be disabled when updating RPA */
           bool restart = p_inst->IsEnabled() && p_inst->IsConnectable();
 
@@ -245,9 +240,9 @@ class BleAdvertisingManagerImpl
           hci_interface->SetRandomAddress(
               p_inst->inst_id, p_inst->own_address,
               Bind(
-                  [](AdvertisingInstance* p_inst, RawAddress bda,
+                  [](AdvertisingInstance* p_inst, bt_bdaddr_t bda,
                      MultiAdvCb configuredCb, uint8_t status) {
-                    p_inst->own_address = bda;
+                    memcpy(p_inst->own_address, &bda, BD_ADDR_LEN);
                     configuredCb.Run(0x00);
                   },
                   p_inst, bda, configuredCb));
@@ -277,18 +272,20 @@ class BleAdvertisingManagerImpl
             [](AdvertisingInstance* p_inst,
                base::Callback<void(uint8_t /* inst_id */, uint8_t /* status */)>
                    cb,
-               RawAddress bda) {
-              p_inst->own_address = bda;
+               bt_bdaddr_t bda) {
+              memcpy(p_inst->own_address, &bda, BD_ADDR_LEN);
 
-              alarm_set_on_mloop(p_inst->adv_raddr_timer,
+              alarm_set_on_queue(p_inst->adv_raddr_timer,
                                  BTM_BLE_PRIVATE_ADDR_INT_MS,
-                                 btm_ble_adv_raddr_timer_timeout, p_inst);
+                                 btm_ble_adv_raddr_timer_timeout, p_inst,
+                                 btu_general_alarm_queue);
               cb.Run(p_inst->inst_id, BTM_BLE_MULTI_ADV_SUCCESS);
             },
             p_inst, cb));
       } else {
         p_inst->own_address_type = BLE_ADDR_PUBLIC;
-        p_inst->own_address = *controller_get_interface()->get_address();
+        memcpy(p_inst->own_address,
+               controller_get_interface()->get_address()->address, BD_ADDR_LEN);
 
         cb.Run(p_inst->inst_id, BTM_BLE_MULTI_ADV_SUCCESS);
       }
@@ -343,8 +340,8 @@ class BleAdvertisingManagerImpl
 
         c->self->adv_inst[c->inst_id].tx_power = tx_power;
 
-        const RawAddress& rpa = c->self->adv_inst[c->inst_id].own_address;
-        c->self->GetHciInterface()->SetRandomAddress(c->inst_id, rpa, Bind(
+        BD_ADDR *rpa = &c->self->adv_inst[c->inst_id].own_address;
+        c->self->GetHciInterface()->SetRandomAddress(c->inst_id, *rpa, Bind(
           [](c_type c, uint8_t status) {
             if (status != 0) {
               LOG(ERROR) << "setting random address failed, status: " << +status;
@@ -398,6 +395,7 @@ class BleAdvertisingManagerImpl
     c->maxExtAdvEvents = maxExtAdvEvents;
     c->timeout_cb = std::move(timeout_cb);
 
+
     // this code is intentionally left formatted this way to highlight the
     // asynchronous flow
     // clang-format off
@@ -422,8 +420,8 @@ class BleAdvertisingManagerImpl
 
             c->self->adv_inst[c->inst_id].tx_power = tx_power;
 
-            const RawAddress& rpa = c->self->adv_inst[c->inst_id].own_address;
-            c->self->GetHciInterface()->SetRandomAddress(c->inst_id, rpa, Bind(
+            BD_ADDR *rpa = &c->self->adv_inst[c->inst_id].own_address;
+            c->self->GetHciInterface()->SetRandomAddress(c->inst_id, *rpa, Bind(
               [](c_type c, uint8_t status) {
                 if (status != 0) {
                   c->self->Unregister(c->inst_id);
@@ -540,8 +538,8 @@ class BleAdvertisingManagerImpl
                             std::move(timeout_cb), 0, 0, base::Bind(DoNothing));
 
     // schedule disable when the timeout passes
-    alarm_set_closure(FROM_HERE, p_inst->timeout_timer, duration * 10,
-                      std::move(cb));
+    alarm_set_closure_on_queue(FROM_HERE, p_inst->timeout_timer, duration * 10,
+                               std::move(cb), btu_general_alarm_queue);
   }
 
   void Enable(uint8_t inst_id, bool enable, MultiAdvCb cb, uint16_t duration,
@@ -580,27 +578,27 @@ class BleAdvertisingManagerImpl
 
   void EnableFinish(AdvertisingInstance* p_inst, bool enable, MultiAdvCb cb,
                     uint8_t status) {
-    MultiAdvCb myCb;
     if (enable && p_inst->duration) {
+      p_inst->enable_status = enable;
       // TODO(jpawlowski): HCI implementation that can't do duration should
       // emulate it, not EnableWithTimerCb.
-      myCb = Bind(&BleAdvertisingManagerImpl::EnableWithTimerCb,
-                  base::Unretained(this), p_inst->inst_id, std::move(cb),
-                  p_inst->duration, p_inst->timeout_cb);
-    } else {
-      myCb = std::move(cb);
+      GetHciInterface()->Enable(
+          enable, p_inst->inst_id, p_inst->duration, p_inst->maxExtAdvEvents,
+          Bind(&BleAdvertisingManagerImpl::EnableWithTimerCb,
+               base::Unretained(this), p_inst->inst_id, std::move(cb),
+               p_inst->duration, p_inst->timeout_cb));
 
+    } else {
       if (p_inst->timeout_timer) {
         alarm_cancel(p_inst->timeout_timer);
         alarm_free(p_inst->timeout_timer);
         p_inst->timeout_timer = nullptr;
       }
-    }
 
-    if (enable) p_inst->enable_time = TimeTicks::Now();
-    p_inst->enable_status = enable;
-    GetHciInterface()->Enable(enable, p_inst->inst_id, p_inst->duration,
-                              p_inst->maxExtAdvEvents, std::move(myCb));
+      p_inst->enable_status = enable;
+      GetHciInterface()->Enable(enable, p_inst->inst_id, p_inst->duration,
+                                p_inst->maxExtAdvEvents, std::move(cb));
+    }
   }
 
   void SetParameters(uint8_t inst_id, tBTM_BLE_ADV_PARAMS* p_params,
@@ -618,22 +616,20 @@ class BleAdvertisingManagerImpl
       return;
     }
 
-    // TODO: disable only if was enabled, currently no use scenario needs
-    // that,
+    // TODO: disable only if was enabled, currently no use scenario needs that,
     // we always set parameters before enabling
     // GetHciInterface()->Enable(false, inst_id, Bind(DoNothing));
     p_inst->advertising_event_properties =
         p_params->advertising_event_properties;
     p_inst->tx_power = p_params->tx_power;
-    p_inst->advertising_interval = p_params->adv_int_min;
-    const RawAddress& peer_address = RawAddress::kEmpty;
+    BD_ADDR peer_address = {0, 0, 0, 0, 0, 0};
 
     GetHciInterface()->SetParameters(
         p_inst->inst_id, p_params->advertising_event_properties,
         p_params->adv_int_min, p_params->adv_int_max, p_params->channel_map,
         p_inst->own_address_type, p_inst->own_address, 0x00, peer_address,
         p_params->adv_filter_policy, p_inst->tx_power,
-        p_params->primary_advertising_phy, 0x00,
+        p_params->primary_advertising_phy, 0x01,
         p_params->secondary_advertising_phy, 0x01 /* TODO: proper SID */,
         p_params->scan_request_notification_enable, cb);
 
@@ -762,27 +758,7 @@ class BleAdvertisingManagerImpl
                                     MultiAdvCb cb) override {
     VLOG(1) << __func__ << " inst_id: " << +inst_id << ", enable: " << +enable;
 
-    AdvertisingInstance* p_inst = &adv_inst[inst_id];
-    if (!p_inst->in_use) {
-      LOG(ERROR) << "Invalid or not active instance";
-      cb.Run(BTM_BLE_MULTI_ADV_FAILURE);
-      return;
-    }
-
-    MultiAdvCb enable_cb = Bind(
-        [](AdvertisingInstance* p_inst, uint8_t enable, MultiAdvCb cb,
-           uint8_t status) {
-          VLOG(1) << "periodc adv enable cb: inst_id: " << +p_inst->inst_id
-                  << ", enable: " << +enable << ", status: " << std::hex
-                  << +status;
-          if (!status) p_inst->periodic_enabled = enable;
-
-          cb.Run(status);
-        },
-        p_inst, enable, std::move(cb));
-
-    GetHciInterface()->SetPeriodicAdvertisingEnable(enable, inst_id,
-                                                    std::move(enable_cb));
+    GetHciInterface()->SetPeriodicAdvertisingEnable(enable, inst_id, cb);
   }
 
   void Unregister(uint8_t inst_id) override {
@@ -799,73 +775,10 @@ class BleAdvertisingManagerImpl
       GetHciInterface()->Enable(false, inst_id, 0x00, 0x00, Bind(DoNothing));
     }
 
-    if (p_inst->periodic_enabled) {
-      p_inst->periodic_enabled = false;
-      GetHciInterface()->SetPeriodicAdvertisingEnable(false, inst_id,
-                                                      Bind(DoNothing));
-    }
-
     alarm_cancel(p_inst->adv_raddr_timer);
     p_inst->in_use = false;
     GetHciInterface()->RemoveAdvertisingSet(inst_id, Bind(DoNothing));
     p_inst->address_update_required = false;
-  }
-
-  void RecomputeTimeout(AdvertisingInstance* inst, TimeTicks now) {
-    TimeDelta duration = now - inst->enable_time;
-    bool cb_fired = false;
-    if (inst->duration) {
-      int durationDone = (duration.InMilliseconds() / 10);
-      if (durationDone + 1 >= inst->duration) {
-        inst->enable_status = false;
-        inst->timeout_cb.Run(0 /* TODO: STATUS HERE?*/);
-        cb_fired = true;
-      } else {
-        inst->duration = inst->duration - durationDone;
-      }
-    }
-
-    if (inst->maxExtAdvEvents && !cb_fired) {
-      int eventsDone =
-          (duration.InMilliseconds() / (inst->advertising_interval * 5 / 8));
-
-      if (eventsDone + 1 >= inst->maxExtAdvEvents) {
-        inst->enable_status = false;
-        inst->timeout_cb.Run(0 /* TODO: STATUS HERE?*/);
-      } else {
-        inst->maxExtAdvEvents = inst->maxExtAdvEvents - eventsDone;
-      }
-    }
-  }
-
-  void Suspend() {
-    std::vector<SetEnableData> sets;
-
-    for (AdvertisingInstance& inst : adv_inst) {
-      if (!inst.in_use || !inst.enable_status) continue;
-
-      if (inst.duration || inst.maxExtAdvEvents)
-        RecomputeTimeout(&inst, TimeTicks::Now());
-
-      sets.emplace_back(SetEnableData{.handle = inst.inst_id});
-    }
-
-    if (!sets.empty()) GetHciInterface()->Enable(false, sets, Bind(DoNothing));
-  }
-
-  void Resume() override {
-    std::vector<SetEnableData> sets;
-
-    for (const AdvertisingInstance& inst : adv_inst) {
-      if (inst.in_use && inst.enable_status) {
-        sets.emplace_back(SetEnableData{
-            .handle = inst.inst_id,
-            .duration = inst.duration,
-            .max_extended_advertising_events = inst.maxExtAdvEvents});
-      }
-    }
-
-    if (!sets.empty()) GetHciInterface()->Enable(true, sets, Bind(DoNothing));
   }
 
   void OnAdvertisingSetTerminated(
@@ -899,15 +812,10 @@ class BleAdvertisingManagerImpl
     if (p_inst->in_use == true) {
       // TODO(jpawlowski): we don't really allow to do directed advertising
       // right now. This should probably be removed, check with Andre.
-      if ((p_inst->advertising_event_properties & 0x0C) == 0) {
-        /* directed advertising bits not set */
-
-        RecomputeTimeout(p_inst, TimeTicks::Now());
-        if (p_inst->enable_status) {
-          GetHciInterface()->Enable(true, advertising_handle, p_inst->duration,
-                                    p_inst->maxExtAdvEvents, Bind(DoNothing));
-        }
-
+      if ((p_inst->advertising_event_properties & 0x0C) ==
+          0 /* directed advertising bits not set */) {
+        GetHciInterface()->Enable(true, advertising_handle, 0x00, 0x00,
+                                  Bind(DoNothing));
       } else {
         /* mark directed adv as disabled if adv has been stopped */
         p_inst->in_use = false;
@@ -934,8 +842,6 @@ void btm_ble_adv_raddr_timer_timeout(void* data) {
 void BleAdvertisingManager::Initialize(BleAdvertiserHciInterface* interface) {
   instance = new BleAdvertisingManagerImpl(interface);
 }
-
-bool BleAdvertisingManager::IsInitialized() { return instance; }
 
 BleAdvertisingManager* BleAdvertisingManager::Get() {
   CHECK(instance);
@@ -975,73 +881,4 @@ void btm_ble_adv_init() {
 void btm_ble_multi_adv_cleanup(void) {
   BleAdvertisingManager::CleanUp();
   BleAdvertiserHciInterface::CleanUp();
-}
-
-// TODO(jpawlowski): Find a nicer way to test RecomputeTimeout without exposing
-// AdvertisingInstance
-bool timeout_triggered = false;
-void test_timeout_cb(uint8_t status) { timeout_triggered = true; }
-
-// verify that if duration passed, or is about to pass, recomputation will shut
-// down the advertiser completly
-void testRecomputeTimeout1() {
-  auto manager = (BleAdvertisingManagerImpl*)BleAdvertisingManager::Get();
-
-  TimeTicks start = TimeTicks::Now();
-  TimeTicks end = start + TimeDelta::FromMilliseconds(111);
-  AdvertisingInstance test1(0);
-  test1.enable_status = true;
-  test1.enable_time = start;
-  test1.duration = 12 /*120ms*/;
-  test1.timeout_cb = Bind(&test_timeout_cb);
-
-  manager->RecomputeTimeout(&test1, end);
-
-  CHECK(timeout_triggered == true);
-  timeout_triggered = false;
-  CHECK(test1.enable_status == false);
-}
-
-// verify that duration and maxExtAdvEvents are properly adjusted when
-// recomputing.
-void testRecomputeTimeout2() {
-  auto manager = (BleAdvertisingManagerImpl*)BleAdvertisingManager::Get();
-
-  TimeTicks start = TimeTicks::Now();
-  TimeTicks end = start + TimeDelta::FromMilliseconds(250);
-  AdvertisingInstance test1(0);
-  test1.enable_status = true;
-  test1.enable_time = start;
-  test1.duration = 50 /*500ms*/;
-  test1.maxExtAdvEvents = 50;
-  test1.advertising_interval = 16 /* 10 ms */;
-  test1.timeout_cb = Bind(&test_timeout_cb);
-
-  manager->RecomputeTimeout(&test1, end);
-
-  CHECK(timeout_triggered == false);
-  CHECK(test1.enable_status == true);
-  CHECK(test1.duration == 25);
-  CHECK(test1.maxExtAdvEvents == 25);
-}
-
-// verify that if maxExtAdvEvents were sent, or are close to end, recomputation
-// wil shut down the advertiser completly
-void testRecomputeTimeout3() {
-  auto manager = (BleAdvertisingManagerImpl*)BleAdvertisingManager::Get();
-
-  TimeTicks start = TimeTicks::Now();
-  TimeTicks end = start + TimeDelta::FromMilliseconds(495);
-  AdvertisingInstance test1(0);
-  test1.enable_status = true;
-  test1.enable_time = start;
-  test1.maxExtAdvEvents = 50;
-  test1.advertising_interval = 16 /* 10 ms */;
-  test1.timeout_cb = Bind(&test_timeout_cb);
-
-  manager->RecomputeTimeout(&test1, end);
-
-  CHECK(timeout_triggered == true);
-  timeout_triggered = false;
-  CHECK(test1.enable_status == false);
 }

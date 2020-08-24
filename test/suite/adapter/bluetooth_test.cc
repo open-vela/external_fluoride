@@ -18,6 +18,7 @@
 
 #include "adapter/bluetooth_test.h"
 #include <mutex>
+#include "btcore/include/bdaddr.h"
 #include "btcore/include/property.h"
 
 namespace {
@@ -88,9 +89,9 @@ bt_property_t* BluetoothTest::GetProperty(bt_property_type_t type) {
   return nullptr;
 }
 
-bt_property_t* BluetoothTest::GetRemoteDeviceProperty(const RawAddress* addr,
+bt_property_t* BluetoothTest::GetRemoteDeviceProperty(const bt_bdaddr_t* addr,
                                                       bt_property_type_t type) {
-  if (curr_remote_device_ != *addr) return nullptr;
+  if (!bdaddr_equals(&curr_remote_device_, addr)) return nullptr;
 
   for (int i = 0; i < remote_device_properties_changed_count_; i++) {
     if (remote_device_last_changed_properties_[i].type == type) {
@@ -128,10 +129,10 @@ void BluetoothTest::AdapterPropertiesCallback(bt_status_t status,
 
 // callback
 void BluetoothTest::RemoteDevicePropertiesCallback(bt_status_t status,
-                                                   RawAddress* remote_bd_addr,
+                                                   bt_bdaddr_t* remote_bd_addr,
                                                    int num_properties,
                                                    bt_property_t* properties) {
-  curr_remote_device_ = *remote_bd_addr;
+  bdaddr_copy(&curr_remote_device_, remote_bd_addr);
   property_free_array(remote_device_last_changed_properties_,
                       remote_device_properties_changed_count_);
   remote_device_last_changed_properties_ =
