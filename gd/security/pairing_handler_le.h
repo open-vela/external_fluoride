@@ -136,19 +136,14 @@ class PairingHandlerLe {
   void SendHciLeStartEncryption(const InitialInformations& i, uint16_t conn_handle, const std::array<uint8_t, 8>& rand,
                                 const uint16_t& ediv, const Octet16& ltk) {
     i.le_security_interface->EnqueueCommand(hci::LeStartEncryptionBuilder::Create(conn_handle, rand, ediv, ltk),
-                                            i.l2cap_handler->BindOnce([](hci::CommandStatusView) {
+                                            common::BindOnce([](hci::CommandStatusView) {
                                               // TODO: handle command status. It's important - can show we are not
                                               // connected any more.
 
                                               // TODO: if anything useful must be done there, use some sort of proper
                                               // handler, wait/notify, and execute on the handler thread
-                                            }));
-  }
-
-  void SendHciLeLongTermKeyReply(const InitialInformations& i, uint16_t conn_handle, const Octet16& ltk) {
-    i.le_security_interface->EnqueueCommand(
-        hci::LeLongTermKeyRequestReplyBuilder::Create(conn_handle, ltk),
-        i.l2cap_handler->BindOnce([](hci::CommandCompleteView) {}));
+                                            }),
+                                            i.l2cap_handler);
   }
 
   std::variant<PairingFailure, EncryptionChangeView, EncryptionKeyRefreshCompleteView> WaitEncryptionChanged() {
@@ -176,38 +171,20 @@ class PairingHandlerLe {
     return PairingFailure("Was expecting Encryption Change or Key Refresh Complete but received something else");
   }
 
-  std::variant<PairingFailure, hci::LeLongTermKeyRequestView> WaitLeLongTermKeyRequest() {
-    PairingEvent e = WaitForEvent();
-    if (e.type != PairingEvent::HCI_EVENT) return PairingFailure("Was expecting HCI event but received something else");
-
-    if (!e.hci_event->IsValid()) return PairingFailure("Received invalid HCI event");
-
-    if (e.hci_event->GetEventCode() != hci::EventCode::LE_META_EVENT) return PairingFailure("Was expecting LE event");
-
-    hci::LeMetaEventView le_event = hci::LeMetaEventView::Create(*e.hci_event);
-    if (!le_event.IsValid()) {
-      return PairingFailure("Invalid LE Event received");
-    }
-
-    if (le_event.GetSubeventCode() != hci::SubeventCode::LONG_TERM_KEY_REQUEST) {
-      return PairingFailure("Was expecting Long Term Key Request");
-    }
-
-    hci::LeLongTermKeyRequestView ltk_req_packet = hci::LeLongTermKeyRequestView::Create(le_event);
-    if (!ltk_req_packet.IsValid()) {
-      return PairingFailure("Invalid LE Long Term Key Request received");
-    }
-
-    return ltk_req_packet;
-  }
-
   inline bool IAmMaster(const InitialInformations& i) {
     return i.my_role == hci::Role::MASTER;
   }
 
   /* This function generates data that should be passed to remote device, except
      the private key. */
-  static MyOobData GenerateOobData();
+  static MyOobData GenerateOobData() {
+    MyOobData data;
+    std::tie(data.private_key, data.public_key) = GenerateECDHKeyPair();
+
+    data.r = GenerateRandom<16>();
+    data.c = crypto_toolbox::f4(data.public_key.x.data(), data.public_key.x.data(), data.r, 0);
+    return data;
+  }
 
   std::variant<PairingFailure, KeyExchangeResult> ExchangePublicKeys(const InitialInformations& i,
                                                                      OobDataFlag remote_have_oob_data);
@@ -286,15 +263,6 @@ class PairingHandlerLe {
     {
       std::unique_lock<std::mutex> lock(queue_guard);
       queue.push(PairingEvent(ui_action, ui_value));
-    }
-    pairing_thread_blocker_.notify_one();
-  }
-
-  /* HCI LE event received from remote device */
-  void OnHciLeEvent(hci::LeMetaEventView hci_event) {
-    {
-      std::unique_lock<std::mutex> lock(queue_guard);
-      queue.push(PairingEvent(std::move(hci_event)));
     }
     pairing_thread_blocker_.notify_one();
   }
@@ -493,6 +461,23 @@ class PairingHandlerLe {
 
   auto WaitSigningInformation() {
     return WaitPacket<Code::SIGNING_INFORMATION>();
+  }
+
+  template <size_t SIZE>
+  static std::array<uint8_t, SIZE> GenerateRandom() {
+    // TODO:  We need a proper  random number generator here.
+    // use current time as seed for random generator
+    std::srand(std::time(nullptr));
+    std::array<uint8_t, SIZE> r;
+    for (size_t i = 0; i < SIZE; i++) r[i] = std::rand();
+    return r;
+  }
+
+  uint32_t GenerateRandom() {
+    // TODO:  We need a proper  random number generator here.
+    // use current time as seed for random generator
+    std::srand(std::time(nullptr));
+    return std::rand();
   }
 
   /* This is just for test, never use in production code! */

@@ -12,7 +12,7 @@ function menu-adb() {
     result=0
     if [ $LEN -lt 1 ]; then
         echo "No devices connected!"
-        return 1
+        exit 1
     fi
 
     if [ "$LEN" == "" ]; then
@@ -47,7 +47,7 @@ function menu-adb() {
         echo
         echo "Please choose a correct index!" 1>&2
         echo
-        return 1
+        exit 1
     fi
 
     SERIAL=${SERIALS[$answer]}
@@ -67,12 +67,12 @@ function UpFind {
 
 
 function get-android-root() {
-    android_root=$(UpFind -name dalvik -type d)
+    android_root=$(UpFind -name out -type d)
     if [[ -z $android_root ]] ; then
         echo
         echo "Needs to be ran in the android tree"
         echo
-        return 1
+        exit 1
     fi
     echo "${android_root}"
 }
@@ -88,7 +88,6 @@ banner
 
 DRY_RUN=""
 DO_BUILD=0
-echo "$@"
 if [ $# -gt 0 ]; then
     for var in "$@"
     do
@@ -101,7 +100,7 @@ if [ $# -gt 0 ]; then
             echo " -h | Help(this) Menu"
             echo " -d | Dry run; just prints commands"
             echo
-            return 0
+            exit 0
         elif [ "$var" == "-d" ]; then
             DRY_RUN="echo"
         elif [ "$var" == "-b" ]; then
@@ -123,7 +122,7 @@ if [ "${CERT_SERIAL}" == "${DUT_SERIAL}" ]; then
     echo
     echo "ERROR: CERT and DUT cannot be the same device, or you only have one device connected!"
     echo
-    return 1
+    exit 1
 fi
 
 ## Start builds
@@ -146,7 +145,7 @@ fi
 pushd .
 cd "${DIR}"
 # Reset in case user chooses different item in menu
-git checkout android_devices_config.json
+git co android_devices_config.json
 popd
 $DRY_RUN sed -i "s/\"DUT\"/\"${DUT_SERIAL}\"/g" ${DIR}/android_devices_config.json
 $DRY_RUN sed -i "s/\"CERT\"/\"${CERT_SERIAL}\"/g" ${DIR}/android_devices_config.json
@@ -155,4 +154,4 @@ $DRY_RUN sed -i "s/\"CERT\"/\"${CERT_SERIAL}\"/g" ${DIR}/android_devices_config.
 #$DRY_RUN source $(get-android-root)/system/bt/gd/cert/set_up_acts.sh
 
 ## Start test
-$DRY_RUN $(get-android-root)/system/bt/gd/cert/run
+$DRY_RUN $(get-android-root)/system/bt/gd/cert/run_device_cert.sh

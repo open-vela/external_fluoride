@@ -32,6 +32,12 @@
 #include "bta_jv_api.h"
 #include "bta_sys.h"
 
+#ifndef BTA_DM_LINK_POLICY_SETTINGS
+#define BTA_DM_LINK_POLICY_SETTINGS                        \
+  (HCI_ENABLE_MASTER_SLAVE_SWITCH | HCI_ENABLE_HOLD_MODE | \
+   HCI_ENABLE_SNIFF_MODE | HCI_ENABLE_PARK_MODE)
+#endif
+
 /* page timeout in 625uS */
 #ifndef BTA_DM_PAGE_TIMEOUT
 #define BTA_DM_PAGE_TIMEOUT 8192
@@ -58,6 +64,8 @@
 const tBTA_DM_CFG bta_dm_cfg = {
     /* mobile phone COD */
     BTA_DM_COD,
+    /* link policy settings */
+    BTA_DM_LINK_POLICY_SETTINGS,
     /* page timeout in 625uS */
     BTA_DM_PAGE_TIMEOUT,
     /* link supervision timeout in 625uS*/
@@ -122,6 +130,7 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_CFG
         {BTA_ID_CG, BTA_ALL_APP_ID, 1},     /* cg resue ct spec table */
         {BTA_ID_DG, BTA_ALL_APP_ID, 2},     /* dg spec table */
         {BTA_ID_AV, BTA_ALL_APP_ID, 4},     /* av spec table */
+        {BTA_ID_AVK, BTA_ALL_APP_ID, 13},   /* avk spec table */
         {BTA_ID_FTC, BTA_ALL_APP_ID, 7},    /* ftc spec table */
         {BTA_ID_FTS, BTA_ALL_APP_ID, 8},    /* fts spec table */
         {BTA_ID_HD, BTA_ALL_APP_ID, 3},     /* hd spec table */
