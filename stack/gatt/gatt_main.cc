@@ -35,7 +35,6 @@
 #include "l2c_api.h"
 #include "osi/include/osi.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
 
 using base::StringPrintf;
 
