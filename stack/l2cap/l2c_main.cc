@@ -185,6 +185,7 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
     return;
   }
 
+#if (L2CAP_NUM_FIXED_CHNLS > 0)
   if ((rcv_cid >= L2CAP_FIRST_FIXED_CHNL) &&
       (rcv_cid <= L2CAP_LAST_FIXED_CHNL) &&
       (l2cb.fixed_reg[rcv_cid - L2CAP_FIRST_FIXED_CHNL].pL2CA_FixedData_Cb !=
@@ -207,6 +208,7 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
           rcv_cid, p_lcb->remote_bd_addr, p_msg);
     return;
   }
+#endif
 
   if (!p_ccb) {
     osi_free(p_msg);
@@ -325,7 +327,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
            * we will ignore it and let a higher protocol timeout take care of it
            */
           L2CAP_TRACE_WARNING("L2CAP - MTU rej Handle: %d MTU: %d",
-                              p_lcb->Handle(), rej_mtu);
+                              p_lcb->handle, rej_mtu);
         }
         if (rej_reason == L2CAP_CMD_REJ_INVALID_CID) {
           uint16_t lcid, rcid;
@@ -395,10 +397,10 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
 
         if (p_rcb->psm == BT_PSM_RFCOMM) {
           btsnoop_get_interface()->add_rfc_l2c_channel(
-              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
         } else if (p_rcb->log_packets) {
           btsnoop_get_interface()->whitelist_l2c_channel(
-              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
         }
 
         l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_REQ, &con_info);
@@ -435,10 +437,10 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         tL2C_RCB* p_rcb = p_ccb->p_rcb;
         if (p_rcb->psm == BT_PSM_RFCOMM) {
           btsnoop_get_interface()->add_rfc_l2c_channel(
-              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
         } else if (p_rcb->log_packets) {
           btsnoop_get_interface()->whitelist_l2c_channel(
-              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
         }
 
         break;
@@ -746,19 +748,24 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         STREAM_TO_UINT16(info_type, p);
         STREAM_TO_UINT16(result, p);
 
+        p_lcb->info_rx_bits |= (1 << info_type);
+
         if ((info_type == L2CAP_EXTENDED_FEATURES_INFO_TYPE) &&
             (result == L2CAP_INFO_RESP_RESULT_SUCCESS)) {
           if (p + 4 > p_next_cmd) return;
           STREAM_TO_UINT32(p_lcb->peer_ext_fea, p);
 
+#if (L2CAP_NUM_FIXED_CHNLS > 0)
           if (p_lcb->peer_ext_fea & L2CAP_EXTFEA_FIXED_CHNLS) {
             l2cu_send_peer_info_req(p_lcb, L2CAP_FIXED_CHANNELS_INFO_TYPE);
             break;
           } else {
             l2cu_process_fixed_chnl_resp(p_lcb);
           }
+#endif
         }
 
+#if (L2CAP_NUM_FIXED_CHNLS > 0)
         if (info_type == L2CAP_FIXED_CHANNELS_INFO_TYPE) {
           if (result == L2CAP_INFO_RESP_RESULT_SUCCESS) {
             if (p + L2CAP_FIXED_CHNL_ARRAY_SIZE > p_next_cmd) {
@@ -770,6 +777,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
 
           l2cu_process_fixed_chnl_resp(p_lcb);
         }
+#endif
         tL2C_CONN_INFO ci;
         ci.status = HCI_SUCCESS;
         ci.bd_addr = p_lcb->remote_bd_addr;

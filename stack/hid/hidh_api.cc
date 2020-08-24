@@ -35,7 +35,6 @@
 #include "hidh_api.h"
 #include "hidh_int.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
 
 using bluetooth::Uuid;
 
