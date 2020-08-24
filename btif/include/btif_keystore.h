@@ -70,7 +70,9 @@ class BtifKeystore {
  private:
   std::unique_ptr<keystore::KeystoreClient> keystore_client_;
   std::mutex api_mutex_;
-  bool GenerateKey(const std::string& name, int32_t flags);
+  keystore::KeyStoreNativeReturnCode GenerateKey(const std::string& name,
+                                                 int32_t flags,
+                                                 bool auth_bound);
 };
 
 }  // namespace bluetooth
