@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2014 Broadcom Corporation
+ *  Copyright (C) 2003-2014 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@
 #include "bt_types.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
-#include "types/bt_transport.h"
 
 /*****************************************************************************
  *  Constants and data types
@@ -51,9 +50,11 @@ typedef uint8_t tBTA_STATUS;
  * Service ID
  *
  * NOTES: When you add a new Service ID for BTA AND require to change the value
- * of BTA_MAX_SERVICE_ID, make sure that the correct security ID of the new
- * service from Security service definitions (btm_api.h) should be added to
- * bta_service_id_to_btm_srv_id_lkup_tbl table in bta_dm_act.cc
+ * of BTA_MAX_SERVICE_ID,
+ *        make sure that the correct security ID of the new service from
+ * Security service definitions (btm_api.h)
+ *        should be added to bta_service_id_to_btm_srv_id_lkup_tbl table in
+ * bta_dm_act.c.
  */
 
 #define BTA_RES_SERVICE_ID 0         /* Reserved */
@@ -138,13 +139,30 @@ typedef uint8_t tBTA_SERVICE_ID;
 
 typedef uint32_t tBTA_SERVICE_MASK;
 
+/* extended service mask, including mask with one or more GATT UUID */
+typedef struct {
+  tBTA_SERVICE_MASK srvc_mask;
+  uint8_t num_uuid;
+  tBT_UUID* p_uuid;
+} tBTA_SERVICE_MASK_EXT;
+
 /* Security Setting Mask */
 #define BTA_SEC_NONE BTM_SEC_NONE /* No security. */
+#define BTA_SEC_AUTHORIZE                                               \
+  (BTM_SEC_IN_AUTHORIZE) /* Authorization required (only needed for out \
+                            going connection )*/
 #define BTA_SEC_AUTHENTICATE \
   (BTM_SEC_IN_AUTHENTICATE | \
    BTM_SEC_OUT_AUTHENTICATE) /* Authentication required. */
 #define BTA_SEC_ENCRYPT \
   (BTM_SEC_IN_ENCRYPT | BTM_SEC_OUT_ENCRYPT) /* Encryption required. */
+#define BTA_SEC_MODE4_LEVEL4                                               \
+  (BTM_SEC_MODE4_LEVEL4) /* Mode 4 level 4 service, i.e. incoming/outgoing \
+                            MITM and P-256 encryption */
+#define BTA_SEC_MITM \
+  (BTM_SEC_IN_MITM | BTM_SEC_OUT_MITM) /* Man-In-The_Middle protection */
+#define BTA_SEC_IN_16_DIGITS \
+  (BTM_SEC_IN_MIN_16_DIGIT_PIN) /* Min 16 digit for pin code */
 
 typedef uint16_t tBTA_SEC;
 
@@ -183,6 +201,50 @@ typedef uint16_t
 
 typedef uint16_t tBTA_DM_CONN;
 
+#define BTA_TRANSPORT_UNKNOWN 0
+#define BTA_TRANSPORT_BR_EDR BT_TRANSPORT_BR_EDR
+#define BTA_TRANSPORT_LE BT_TRANSPORT_LE
+typedef tBT_TRANSPORT tBTA_TRANSPORT;
+
+/* Pairable Modes */
+#define BTA_DM_PAIRABLE 1
+#define BTA_DM_NON_PAIRABLE 0
+
+/* Connectable Paired Only Mode */
+#define BTA_DM_CONN_ALL 0
+#define BTA_DM_CONN_PAIRED 1
+
+/* Inquiry Modes */
+#define BTA_DM_INQUIRY_NONE BTM_INQUIRY_NONE /*No BR inquiry. */
+#define BTA_DM_GENERAL_INQUIRY \
+  BTM_GENERAL_INQUIRY /* Perform general inquiry. */
+#define BTA_DM_LIMITED_INQUIRY \
+  BTM_LIMITED_INQUIRY /* Perform limited inquiry. */
+
+#define BTA_BLE_INQUIRY_NONE BTM_BLE_INQUIRY_NONE
+#define BTA_BLE_GENERAL_INQUIRY \
+  BTM_BLE_GENERAL_INQUIRY /* Perform LE general inquiry. */
+#define BTA_BLE_LIMITED_INQUIRY \
+  BTM_BLE_LIMITED_INQUIRY /* Perform LE limited inquiry. */
+typedef uint8_t tBTA_DM_INQ_MODE;
+
+/* Inquiry Filter Type */
+#define BTA_DM_INQ_CLR BTM_CLR_INQUIRY_FILTER /* Clear inquiry filter. */
+#define BTA_DM_INQ_DEV_CLASS \
+  BTM_FILTER_COND_DEVICE_CLASS /* Filter on device class. */
+#define BTA_DM_INQ_BD_ADDR \
+  BTM_FILTER_COND_BD_ADDR /* Filter on a specific  BD address. */
+
+typedef uint8_t tBTA_DM_INQ_FILT;
+
+/* Authorize Response */
+#define BTA_DM_AUTH_PERM \
+  0 /* Authorized for future connections to the service */
+#define BTA_DM_AUTH_TEMP 1 /* Authorized for current connection only */
+#define BTA_DM_NOT_AUTH 2  /* Not authorized for the service */
+
+typedef uint8_t tBTA_AUTH_RESP;
+
 /* M/S preferred roles */
 #define BTA_ANY_ROLE 0x00
 #define BTA_MASTER_ROLE_PREF 0x01
@@ -206,6 +268,35 @@ enum {
 
 };
 
+/* Inquiry filter device class condition */
+typedef struct {
+  DEV_CLASS dev_class;      /* device class of interest */
+  DEV_CLASS dev_class_mask; /* mask to determine the bits of device class of
+                               interest */
+} tBTA_DM_COD_COND;
+
+/* Inquiry Filter Condition */
+typedef union {
+  RawAddress bd_addr;              /* BD address of  device to filter. */
+  tBTA_DM_COD_COND dev_class_cond; /* Device class filter condition */
+} tBTA_DM_INQ_COND;
+
+/* Inquiry Parameters */
+typedef struct {
+  tBTA_DM_INQ_MODE mode; /* Inquiry mode, limited or general. */
+  uint8_t duration;      /* Inquiry duration in 1.28 sec units. */
+  uint8_t max_resps; /* Maximum inquiry responses.  Set to zero for unlimited
+                        responses. */
+  bool report_dup; /* report duplicated inquiry response with higher RSSI value
+                      */
+  tBTA_DM_INQ_FILT filter_type; /* Filter condition type. */
+  tBTA_DM_INQ_COND filter_cond; /* Filter condition data. */
+#if (BTA_HOST_INTERLEAVE_SEARCH == TRUE)
+  uint8_t intl_duration
+      [4]; /*duration array storing the interleave scan's time portions*/
+#endif
+} tBTA_DM_INQ;
+
 typedef struct {
   uint8_t bta_dm_eir_min_name_len; /* minimum length of local name when it is
                                       shortened */
@@ -224,6 +315,9 @@ typedef struct {
   uint8_t bta_dm_eir_additional_len;   /* length of additional data in bytes */
   uint8_t* bta_dm_eir_additional;      /* additional data */
 } tBTA_DM_EIR_CONF;
+
+/* advertising filter policy */
+typedef tBTM_BLE_AFP tBTA_BLE_AFP;
 
 enum {
   BTA_BLE_BATCH_SCAN_MODE_PASS = 1,
@@ -262,16 +356,25 @@ typedef uint8_t tBTA_DM_LINK_QUALITY_VALUE;
 typedef uint8_t tBTA_SIG_STRENGTH_MASK;
 
 /* Security Callback Events */
+#define BTA_DM_ENABLE_EVT 0    /* Enable Event */
+#define BTA_DM_DISABLE_EVT 1   /* Disable Event */
 #define BTA_DM_PIN_REQ_EVT 2   /* PIN request. */
 #define BTA_DM_AUTH_CMPL_EVT 3 /* Authentication complete indication. */
 #define BTA_DM_AUTHORIZE_EVT 4 /* Authorization request. */
 #define BTA_DM_LINK_UP_EVT 5   /* Connection UP event */
 #define BTA_DM_LINK_DOWN_EVT 6 /* Connection DOWN event */
+#define BTA_DM_SIG_STRENGTH_EVT                                             \
+  7                             /* Signal strength for bluetooth connection \
+                                   */
+#define BTA_DM_BUSY_LEVEL_EVT 8 /* System busy level */
 #define BTA_DM_BOND_CANCEL_CMPL_EVT 9 /* Bond cancel complete indication */
 #define BTA_DM_SP_CFM_REQ_EVT                     \
   10 /* Simple Pairing User Confirmation request. \
         */
 #define BTA_DM_SP_KEY_NOTIF_EVT 11 /* Simple Pairing Passkey Notification */
+#define BTA_DM_SP_RMT_OOB_EVT 12   /* Simple Pairing Remote OOB Data request. */
+#define BTA_DM_SP_KEYPRESS_EVT 13  /* Key press notification event. */
+#define BTA_DM_ROLE_CHG_EVT 14     /* Role Change event. */
 #define BTA_DM_BLE_KEY_EVT 15      /* BLE SMP key event for peer device keys */
 #define BTA_DM_BLE_SEC_REQ_EVT 16  /* BLE SMP security request */
 #define BTA_DM_BLE_PASSKEY_NOTIF_EVT 17 /* SMP passkey notification event */
@@ -284,12 +387,17 @@ typedef uint8_t tBTA_SIG_STRENGTH_MASK;
   23 /* Simple Pairing Remote OOB Extended Data request. */
 #define BTA_DM_BLE_AUTH_CMPL_EVT 24 /* BLE Auth complete */
 #define BTA_DM_DEV_UNPAIRED_EVT 25
+#define BTA_DM_HW_ERROR_EVT 26 /* BT Chip H/W error */
 #define BTA_DM_LE_FEATURES_READ                                             \
   27                             /* Cotroller specific LE features are read \
                                     */
 #define BTA_DM_ENER_INFO_READ 28 /* Energy info read */
 #define BTA_DM_BLE_SC_OOB_REQ_EVT 29 /* SMP SC OOB request event */
+#define BTA_DM_BLE_CONSENT_REQ_EVT 30 /* SMP consent request event */
 typedef uint8_t tBTA_DM_SEC_EVT;
+
+/* Structure associated with BTA_DM_ENABLE_EVT */
+typedef struct { tBTA_STATUS status; } tBTA_DM_ENABLE;
 
 /* Structure associated with BTA_DM_PIN_REQ_EVT */
 typedef struct {
@@ -361,14 +469,20 @@ typedef struct {
   BTM_LE_KEY_LCSRK                /* local CSRK has been deliver to peer */
 typedef uint8_t tBTA_LE_KEY_TYPE; /* can be used as a bit mask */
 
+typedef tBTM_LE_PENC_KEYS tBTA_LE_PENC_KEYS;
+typedef tBTM_LE_PCSRK_KEYS tBTA_LE_PCSRK_KEYS;
+typedef tBTM_LE_LENC_KEYS tBTA_LE_LENC_KEYS;
+typedef tBTM_LE_LCSRK_KEYS tBTA_LE_LCSRK_KEYS;
+typedef tBTM_LE_PID_KEYS tBTA_LE_PID_KEYS;
+
 typedef union {
-  tBTM_LE_PENC_KEYS penc_key;  /* received peer encryption key */
-  tBTM_LE_PCSRK_KEYS psrk_key; /* received peer device SRK */
-  tBTM_LE_PID_KEYS pid_key;    /* peer device ID key */
-  tBTM_LE_LENC_KEYS
+  tBTA_LE_PENC_KEYS penc_key;  /* received peer encryption key */
+  tBTA_LE_PCSRK_KEYS psrk_key; /* received peer device SRK */
+  tBTA_LE_PID_KEYS pid_key;    /* peer device ID key */
+  tBTA_LE_LENC_KEYS
       lenc_key; /* local encryption reproduction keys LTK = = d1(ER,DIV,0)*/
-  tBTM_LE_LCSRK_KEYS lcsrk_key; /* local device CSRK = d1(ER,DIV,1)*/
-  tBTM_LE_PID_KEYS lid_key; /* local device ID key for the particular remote */
+  tBTA_LE_LCSRK_KEYS lcsrk_key; /* local device CSRK = d1(ER,DIV,1)*/
+  tBTA_LE_PID_KEYS lid_key; /* local device ID key for the particular remote */
 } tBTA_LE_KEY_VALUE;
 
 #define BTA_BLE_LOCAL_KEY_TYPE_ID 1
@@ -376,9 +490,9 @@ typedef union {
 typedef uint8_t tBTA_DM_BLE_LOCAL_KEY_MASK;
 
 typedef struct {
-  Octet16 ir;
-  Octet16 irk;
-  Octet16 dhk;
+  BT_OCTET16 ir;
+  BT_OCTET16 irk;
+  BT_OCTET16 dhk;
 } tBTA_BLE_LOCAL_ID_KEYS;
 
 #define BTA_DM_SEC_GRANTED BTA_SUCCESS
@@ -403,7 +517,7 @@ typedef struct {
   RawAddress bd_addr;  /* BD address peer device. */
   BD_NAME bd_name;     /* Name of peer device. */
   bool key_present;    /* Valid link key value in key element */
-  LinkKey key;         /* Link key associated with peer device. */
+  LINK_KEY key;        /* Link key associated with peer device. */
   uint8_t key_type;    /* The type of Link Key */
   bool success;        /* true of authentication succeeded, false if failed. */
   uint8_t fail_reason; /* The HCI reason/error code for when success=false */
@@ -411,20 +525,75 @@ typedef struct {
   tBT_DEVICE_TYPE dev_type;
 } tBTA_DM_AUTH_CMPL;
 
+/* Structure associated with BTA_DM_AUTHORIZE_EVT */
+typedef struct {
+  RawAddress bd_addr;      /* BD address peer device. */
+  BD_NAME bd_name;         /* Name of peer device. */
+  tBTA_SERVICE_ID service; /* Service ID to authorize. */
+  DEV_CLASS dev_class;
+} tBTA_DM_AUTHORIZE;
+
 /* Structure associated with BTA_DM_LINK_UP_EVT */
 typedef struct {
   RawAddress bd_addr; /* BD address peer device. */
+  tBTA_TRANSPORT link_type;
 } tBTA_DM_LINK_UP;
 
 /* Structure associated with BTA_DM_LINK_DOWN_EVT */
 typedef struct {
   RawAddress bd_addr; /* BD address peer device. */
+  uint8_t status;  /* connection open/closed */
+  bool is_removed; /* true if device is removed when link is down */
+  tBTA_TRANSPORT link_type;
 } tBTA_DM_LINK_DOWN;
 
+/* Structure associated with BTA_DM_ROLE_CHG_EVT */
+typedef struct {
+  RawAddress bd_addr; /* BD address peer device. */
+  uint8_t new_role; /* the new connection role */
+} tBTA_DM_ROLE_CHG;
+
+/* Structure associated with BTA_DM_BUSY_LEVEL_EVT */
+typedef struct {
+  uint8_t level;       /* when paging or inquiring, level is 10.
+                          Otherwise, the number of ACL links */
+  uint8_t level_flags; /* indicates individual flags */
+} tBTA_DM_BUSY_LEVEL;
+
+#define BTA_IO_CAP_OUT BTM_IO_CAP_OUT       /* 0 DisplayOnly */
+#define BTA_IO_CAP_IO BTM_IO_CAP_IO         /* 1 DisplayYesNo */
+#define BTA_IO_CAP_IN BTM_IO_CAP_IN         /* 2 KeyboardOnly */
+#define BTA_IO_CAP_NONE BTM_IO_CAP_NONE     /* 3 NoInputNoOutput */
+#define BTA_IO_CAP_KBDISP BTM_IO_CAP_KBDISP /* 4 Keyboard display */
+typedef tBTM_IO_CAP tBTA_IO_CAP;
+
+#define BTA_AUTH_SP_NO                                      \
+  BTM_AUTH_SP_NO /* 0 MITM Protection Not Required - Single \
+                   Profile/non-bonding                      \
+                   Numeric comparison with automatic accept allowed */
 #define BTA_AUTH_SP_YES                                                       \
   BTM_AUTH_SP_YES /* 1 MITM Protection Required - Single Profile/non-bonding  \
                     Use IO Capabilities to determine authentication procedure \
                     */
+#define BTA_AUTH_AP_NO                                                      \
+  BTM_AUTH_AP_NO /* 2 MITM Protection Not Required - All Profiles/dedicated \
+                   bonding                                                  \
+                   Numeric comparison with automatic accept allowed */
+#define BTA_AUTH_AP_YES                                                       \
+  BTM_AUTH_AP_YES /* 3 MITM Protection Required - All Profiles/dedicated      \
+                    bonding                                                   \
+                    Use IO Capabilities to determine authentication procedure \
+                    */
+#define BTA_AUTH_SPGB_NO                                                       \
+  BTM_AUTH_SPGB_NO /* 4 MITM Protection Not Required - Single Profiles/general \
+                     bonding                                                   \
+                     Numeric comparison with automatic accept allowed */
+#define BTA_AUTH_SPGB_YES                                                   \
+  BTM_AUTH_SPGB_YES /* 5 MITM Protection Required - Single Profiles/general \
+                      bonding                                               \
+                      Use IO Capabilities to determine authentication       \
+                      procedure */
+typedef tBTM_AUTH_REQ tBTA_AUTH_REQ;
 
 #define BTA_AUTH_DD_BOND \
   BTM_AUTH_DD_BOND /* 2 this bit is set for dedicated bonding */
@@ -433,7 +602,22 @@ typedef struct {
 #define BTA_AUTH_BONDS \
   BTM_AUTH_BONDS /* 6 the general/dedicated bonding bits  */
 
+#define BTA_LE_AUTH_NO_BOND BTM_LE_AUTH_REQ_NO_BOND /* 0*/
+#define BTA_LE_AUTH_BOND BTM_LE_AUTH_REQ_BOND       /* 1 << 0 */
+#define BTA_LE_AUTH_REQ_MITM BTM_LE_AUTH_REQ_MITM   /* 1 << 2 */
+
+#define BTA_LE_AUTH_REQ_SC_ONLY BTM_LE_AUTH_REQ_SC_ONLY           /* 1 << 3 */
+#define BTA_LE_AUTH_REQ_SC_BOND BTM_LE_AUTH_REQ_SC_BOND           /* 1001 */
+#define BTA_LE_AUTH_REQ_SC_MITM BTM_LE_AUTH_REQ_SC_MITM           /* 1100 */
 #define BTA_LE_AUTH_REQ_SC_MITM_BOND BTM_LE_AUTH_REQ_SC_MITM_BOND /* 1101 */
+typedef tBTM_LE_AUTH_REQ
+    tBTA_LE_AUTH_REQ; /* combination of the above bit pattern */
+
+#define BTA_OOB_NONE BTM_OOB_NONE
+#define BTA_OOB_PRESENT BTM_OOB_PRESENT
+#define BTA_OOB_UNKNOWN BTM_OOB_UNKNOWN
+
+typedef tBTM_OOB_DATA tBTA_OOB_DATA;
 
 /* Structure associated with BTA_DM_SP_CFM_REQ_EVT */
 typedef struct {
@@ -445,10 +629,10 @@ typedef struct {
   uint32_t num_val; /* the numeric value for comparison. If just_works, do not
                        show this number to UI */
   bool just_works;  /* true, if "Just Works" association model */
-  tBTM_AUTH_REQ loc_auth_req; /* Authentication required for local device */
-  tBTM_AUTH_REQ rmt_auth_req; /* Authentication required for peer device */
-  tBTM_IO_CAP loc_io_caps;    /* IO Capabilities of local device */
-  tBTM_AUTH_REQ rmt_io_caps;  /* IO Capabilities of remote device */
+  tBTA_AUTH_REQ loc_auth_req; /* Authentication required for local device */
+  tBTA_AUTH_REQ rmt_auth_req; /* Authentication required for peer device */
+  tBTA_IO_CAP loc_io_caps;    /* IO Capabilities of local device */
+  tBTA_AUTH_REQ rmt_io_caps;  /* IO Capabilities of remote device */
 } tBTA_DM_SP_CFM_REQ;
 
 enum {
@@ -459,6 +643,12 @@ enum {
   BTA_SP_KEY_COMPLT   /* passkey entry completed */
 };
 typedef uint8_t tBTA_SP_KEY_TYPE;
+
+/* Structure associated with BTA_DM_SP_KEYPRESS_EVT */
+typedef struct {
+  RawAddress bd_addr; /* peer address */
+  tBTA_SP_KEY_TYPE notif_type;
+} tBTA_DM_SP_KEY_PRESS;
 
 /* Structure associated with BTA_DM_SP_KEY_NOTIF_EVT */
 typedef struct {
@@ -487,19 +677,24 @@ typedef struct {
 
 /* Union of all security callback structures */
 typedef union {
+  tBTA_DM_ENABLE enable;          /* BTA enabled */
   tBTA_DM_PIN_REQ pin_req;        /* PIN request. */
   tBTA_DM_AUTH_CMPL auth_cmpl;    /* Authentication complete indication. */
+  tBTA_DM_AUTHORIZE authorize;    /* Authorization request. */
   tBTA_DM_LINK_UP link_up;        /* ACL connection down event */
   tBTA_DM_LINK_DOWN link_down;    /* ACL connection down event */
+  tBTA_DM_BUSY_LEVEL busy_level;  /* System busy level */
   tBTA_DM_SP_CFM_REQ cfm_req;     /* user confirm request */
   tBTA_DM_SP_KEY_NOTIF key_notif; /* passkey notification */
   tBTA_DM_SP_RMT_OOB rmt_oob;     /* remote oob */
   tBTA_DM_BOND_CANCEL_CMPL
       bond_cancel_cmpl;               /* Bond Cancel Complete indication */
+  tBTA_DM_SP_KEY_PRESS key_press;     /* key press notification event */
+  tBTA_DM_ROLE_CHG role_chg;          /* role change event */
   tBTA_DM_BLE_SEC_REQ ble_req;        /* BLE SMP related request */
   tBTA_DM_BLE_KEY ble_key;            /* BLE SMP keys used when pairing */
   tBTA_BLE_LOCAL_ID_KEYS ble_id_keys; /* IR event */
-  Octet16 ble_er;                     /* ER event data */
+  BT_OCTET16 ble_er;                  /* ER event data */
 } tBTA_DM_SEC;
 
 /* Security callback */
@@ -515,6 +710,7 @@ typedef void(tBTA_DM_SEC_CBACK)(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data);
 #define BTA_DM_DISC_BLE_RES_EVT \
   3 /* Discovery result for BLE GATT based servoce on a peer device. */
 #define BTA_DM_DISC_CMPL_EVT 4          /* Discovery complete. */
+#define BTA_DM_DI_DISC_CMPL_EVT 5       /* Discovery complete. */
 #define BTA_DM_SEARCH_CANCEL_CMPL_EVT 6 /* Search cancelled */
 
 typedef uint8_t tBTA_DM_SEARCH_EVT;
@@ -551,14 +747,23 @@ typedef struct {
   uint8_t num_resps; /* Number of inquiry responses. */
 } tBTA_DM_INQ_CMPL;
 
+/* Structure associated with BTA_DM_DI_DISC_CMPL_EVT */
+typedef struct {
+  RawAddress bd_addr; /* BD address peer device. */
+  uint8_t num_record; /* Number of DI record */
+  tBTA_STATUS result;
+} tBTA_DM_DI_DISC_CMPL;
+
 /* Structure associated with BTA_DM_DISC_RES_EVT */
 typedef struct {
   RawAddress bd_addr;          /* BD address peer device. */
   BD_NAME bd_name;             /* Name of peer device. */
   tBTA_SERVICE_MASK services;  /* Services found on peer device. */
+  uint8_t* p_raw_data;         /* Raw data for discovery DB */
+  uint32_t raw_data_size;      /* size of raw data */
   tBT_DEVICE_TYPE device_type; /* device type in case it is BLE device */
   uint32_t num_uuids;
-  bluetooth::Uuid* p_uuid_list;
+  uint8_t* p_uuid_list;
   tBTA_STATUS result;
 } tBTA_DM_DISC_RES;
 
@@ -566,7 +771,7 @@ typedef struct {
 typedef struct {
   RawAddress bd_addr; /* BD address peer device. */
   BD_NAME bd_name;  /* Name of peer device. */
-  bluetooth::Uuid service; /* GATT based Services UUID found on peer device. */
+  tBT_UUID service; /* GATT based Services UUID found on peer device. */
 } tBTA_DM_DISC_BLE_RES;
 
 /* Union of all search callback structures */
@@ -576,6 +781,8 @@ typedef union {
   tBTA_DM_DISC_RES disc_res; /* Discovery result for a peer device. */
   tBTA_DM_DISC_BLE_RES
       disc_ble_res;             /* discovery result for GATT based service */
+  tBTA_DM_DI_DISC_CMPL di_disc; /* DI discovery result for a peer device */
+
 } tBTA_DM_SEARCH;
 
 /* Search callback */
@@ -587,13 +794,19 @@ typedef void(tBTA_DM_EXEC_CBACK)(void* p_param);
 
 /* Encryption callback*/
 typedef void(tBTA_DM_ENCRYPT_CBACK)(const RawAddress& bd_addr,
-                                    tBT_TRANSPORT transport,
+                                    tBTA_TRANSPORT transport,
                                     tBTA_STATUS result);
 
 #define BTA_DM_BLE_SEC_NONE BTM_BLE_SEC_NONE
 #define BTA_DM_BLE_SEC_ENCRYPT BTM_BLE_SEC_ENCRYPT
 #define BTA_DM_BLE_SEC_NO_MITM BTM_BLE_SEC_ENCRYPT_NO_MITM
 #define BTA_DM_BLE_SEC_MITM BTM_BLE_SEC_ENCRYPT_MITM
+typedef tBTM_BLE_SEC_ACT tBTA_DM_BLE_SEC_ACT;
+
+typedef tBTM_BLE_TX_TIME_MS tBTA_DM_BLE_TX_TIME_MS;
+typedef tBTM_BLE_RX_TIME_MS tBTA_DM_BLE_RX_TIME_MS;
+typedef tBTM_BLE_IDLE_TIME_MS tBTA_DM_BLE_IDLE_TIME_MS;
+typedef tBTM_BLE_ENERGY_USED tBTA_DM_BLE_ENERGY_USED;
 
 #define BTA_DM_CONTRL_UNKNOWN 0 /* Unknown state */
 #define BTA_DM_CONTRL_ACTIVE 1  /* ACL link on, SCO link ongoing, sniff mode */
@@ -611,10 +824,10 @@ typedef uint8_t tBTA_DM_BLE_ADV_INFO_PRESENT;
 typedef uint8_t tBTA_DM_BLE_RSSI_VALUE;
 typedef uint16_t tBTA_DM_BLE_ADV_INFO_TIMESTAMP;
 
-typedef void(tBTA_BLE_ENERGY_INFO_CBACK)(tBTM_BLE_TX_TIME_MS tx_time,
-                                         tBTM_BLE_RX_TIME_MS rx_time,
-                                         tBTM_BLE_IDLE_TIME_MS idle_time,
-                                         tBTM_BLE_ENERGY_USED energy_used,
+typedef void(tBTA_BLE_ENERGY_INFO_CBACK)(tBTA_DM_BLE_TX_TIME_MS tx_time,
+                                         tBTA_DM_BLE_RX_TIME_MS rx_time,
+                                         tBTA_DM_BLE_IDLE_TIME_MS idle_time,
+                                         tBTA_DM_BLE_ENERGY_USED energy_used,
                                          tBTA_DM_CONTRL_STATE ctrl_state,
                                          tBTA_STATUS status);
 
@@ -622,6 +835,13 @@ typedef void(tBTA_BLE_ENERGY_INFO_CBACK)(tBTM_BLE_TX_TIME_MS tx_time,
 #define BTA_SERVICE_NAME_LEN 35
 #define BTA_SERVICE_DESP_LEN BTA_SERVICE_NAME_LEN
 #define BTA_PROVIDER_NAME_LEN BTA_SERVICE_NAME_LEN
+
+/* link policy masks  */
+#define BTA_DM_LP_SWITCH HCI_ENABLE_MASTER_SLAVE_SWITCH
+#define BTA_DM_LP_HOLD HCI_ENABLE_HOLD_MODE
+#define BTA_DM_LP_SNIFF HCI_ENABLE_SNIFF_MODE
+#define BTA_DM_LP_PARK HCI_ENABLE_PARK_MODE
+typedef uint16_t tBTA_DM_LP_MASK;
 
 /* power mode actions  */
 #define BTA_DM_PM_NO_ACTION 0x00 /* no change to the current pm setting */
@@ -662,7 +882,7 @@ typedef uint8_t tBTA_DM_PM_ACTION;
 
 #ifndef BTA_DM_PM_PARK_IDX
 #define BTA_DM_PM_PARK_IDX \
-  6 /* the actual index to bta_dm_pm_md[] for PARK mode */
+  5 /* the actual index to bta_dm_pm_md[] for PARK mode */
 #endif
 
 #ifndef BTA_DM_PM_SNIFF_A2DP_IDX
@@ -753,13 +973,6 @@ typedef uint8_t tBTA_DM_PM_ACTION;
 #define BTA_DM_PM_SNIFF5_TIMEOUT 0
 #endif
 
-#ifndef BTA_DM_PM_SNIFF6_MAX
-#define BTA_DM_PM_SNIFF6_MAX 18
-#define BTA_DM_PM_SNIFF6_MIN 14
-#define BTA_DM_PM_SNIFF6_ATTEMPT 1
-#define BTA_DM_PM_SNIFF6_TIMEOUT 0
-#endif
-
 #ifndef BTA_DM_PM_PARK_MAX
 #define BTA_DM_PM_PARK_MAX 800
 #define BTA_DM_PM_PARK_MIN 400
@@ -800,6 +1013,9 @@ typedef tSDP_DISCOVERY_DB tBTA_DISCOVERY_DB;
 #define BTA_DI_NUM_MAX 3
 #endif
 
+/* Device features mask definitions */
+#define BTA_FEATURE_BYTES_PER_PAGE BTM_FEATURE_BYTES_PER_PAGE
+#define BTA_EXT_FEATURES_PAGE_MAX BTM_EXT_FEATURES_PAGE_MAX
 /* ACL type
 */
 #define BTA_DM_LINK_TYPE_BR_EDR 0x01
@@ -817,7 +1033,36 @@ typedef uint8_t tBTA_DM_LINK_TYPE;
  *  External Function Declarations
  ****************************************************************************/
 
-void BTA_dm_init();
+/*******************************************************************************
+ *
+ * Function         BTA_EnableBluetooth
+ *
+ * Description      This function initializes BTA and prepares BTA and the
+ *                  Bluetooth protocol stack for use.  This function is
+ *                  typically called at startup or when Bluetooth services
+ *                  are required by the phone.  This function must be called
+ *                  before calling any other API function.
+ *
+ *
+ * Returns          BTA_SUCCESS if successful.
+ *                  BTA_FAIL if internal failure.
+ *
+ ******************************************************************************/
+extern tBTA_STATUS BTA_EnableBluetooth(tBTA_DM_SEC_CBACK* p_cback);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DisableBluetooth
+ *
+ * Description      This function disables BTA and the Bluetooth protocol
+ *                  stack.  It is called when BTA is no longer being used
+ *                  by any application in the system.
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern tBTA_STATUS BTA_DisableBluetooth(void);
 
 /*******************************************************************************
  *
@@ -829,7 +1074,19 @@ void BTA_dm_init();
  * Returns          tBTA_STATUS
  *
  ******************************************************************************/
-extern void BTA_EnableTestMode(void);
+extern tBTA_STATUS BTA_EnableTestMode(void);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DisableTestMode
+ *
+ * Description      Disable bluetooth device under test mode
+ *
+ *
+ * Returns          None
+ *
+ ******************************************************************************/
+extern void BTA_DisableTestMode(void);
 
 /*******************************************************************************
  *
@@ -857,7 +1114,8 @@ extern void BTA_DmSetDeviceName(char* p_name);
  * Returns          void
  *
  ******************************************************************************/
-extern bool BTA_DmSetVisibility(bt_scan_mode_t mode);
+extern void BTA_DmSetVisibility(tBTA_DM_DISC disc_mode, tBTA_DM_CONN conn_mode,
+                                uint8_t pairable_mode, uint8_t conn_filter);
 
 /*******************************************************************************
  *
@@ -873,7 +1131,8 @@ extern bool BTA_DmSetVisibility(bt_scan_mode_t mode);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_DmSearch(tBTA_DM_SEARCH_CBACK* p_cback);
+extern void BTA_DmSearch(tBTA_DM_INQ* p_dm_inq, tBTA_SERVICE_MASK services,
+                         tBTA_DM_SEARCH_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -900,8 +1159,22 @@ extern void BTA_DmSearchCancel(void);
  *
  ******************************************************************************/
 extern void BTA_DmDiscover(const RawAddress& bd_addr,
-                           tBTA_DM_SEARCH_CBACK* p_cback,
-                           tBT_TRANSPORT transport);
+                           tBTA_SERVICE_MASK services,
+                           tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DmDiscoverUUID
+ *
+ * Description      This function performs service discovery for the services
+ *                  of a particular peer device.
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_DmDiscoverUUID(const RawAddress& bd_addr, tSDP_UUID* uuid,
+                               tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search);
 
 /*******************************************************************************
  *
@@ -921,6 +1194,20 @@ tBTA_STATUS BTA_DmGetCachedRemoteName(const RawAddress& remote_device,
  * Function         BTA_DmBond
  *
  * Description      This function initiates a bonding procedure with a peer
+ *                  device.  The bonding procedure enables authentication
+ *                  and optionally encryption on the Bluetooth link.
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_DmBond(const RawAddress& bd_addr);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DmBondByTransport
+ *
+ * Description      This function initiates a bonding procedure with a peer
  *                  device by designated transport.  The bonding procedure
  *                  enables authentication and optionally encryption on the
  *                  Bluetooth link.
@@ -929,8 +1216,8 @@ tBTA_STATUS BTA_DmGetCachedRemoteName(const RawAddress& remote_device,
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                       tBT_TRANSPORT transport, int device_type);
+extern void BTA_DmBondByTransport(const RawAddress& bd_addr,
+                                  tBTA_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -999,8 +1286,9 @@ extern void BTA_DmConfirm(const RawAddress& bd_addr, bool accept);
  *
  ******************************************************************************/
 extern void BTA_DmAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                            const LinkKey& link_key, uint8_t key_type,
-                            uint8_t pin_length);
+                            LINK_KEY link_key, tBTA_SERVICE_MASK trusted_mask,
+                            bool is_trusted, uint8_t key_type,
+                            tBTA_IO_CAP io_cap, uint8_t pin_length);
 
 /*******************************************************************************
  *
@@ -1074,7 +1362,60 @@ extern tBTA_STATUS BTA_DmSetLocalDiRecord(tBTA_DI_RECORD* p_device_info,
  *
  ******************************************************************************/
 extern void BTA_DmCloseACL(const RawAddress& bd_addr, bool remove_dev,
-                           tBT_TRANSPORT transport);
+                           tBTA_TRANSPORT transport);
+
+/*******************************************************************************
+ *
+ * Function         bta_dmexecutecallback
+ *
+ * Description      This function will request BTA to execute a call back in the
+ *                  context of BTU task.
+ *                  This API was named in lower case because it is only intended
+ *                  for the internal customers(like BTIF).
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void bta_dmexecutecallback(tBTA_DM_EXEC_CBACK* p_callback,
+                                  void* p_param);
+
+#if (BTM_SCO_HCI_INCLUDED == TRUE)
+/*******************************************************************************
+ *
+ * Function         BTA_DmPcmInitSamples
+ *
+ * Description      initialize the down sample converter.
+ *
+ *                  src_sps: original samples per second (source audio data)
+ *                            (ex. 44100, 48000)
+ *                  bits: number of bits per pcm sample (16)
+ *                  n_channels: number of channels (i.e. mono(1), stereo(2)...)
+ *
+ * Returns          none
+ *
+ ******************************************************************************/
+extern void BTA_DmPcmInitSamples(uint32_t src_sps, uint32_t bits,
+                                 uint32_t n_channels);
+
+/*******************************************************************************
+ * Function         BTA_DmPcmResample
+ *
+ * Description      Down sampling utility to convert higher sampling rate into
+ *                  8K/16bits
+ *                  PCM samples.
+ *
+ * Parameters       p_src: pointer to the buffer where the original sampling PCM
+ *                              are stored.
+ *                  in_bytes:  Length of the input PCM sample buffer in byte.
+ *                  p_dst: pointer to the buffer which is to be used to store
+ *                         the converted PCM samples.
+ *
+ *
+ * Returns          int32_t: number of samples converted.
+ *
+ ******************************************************************************/
+extern int32_t BTA_DmPcmResample(void* p_src, uint32_t in_bytes, void* p_dst);
+#endif
 
 /* BLE related API functions */
 /*******************************************************************************
@@ -1091,6 +1432,11 @@ extern void BTA_DmCloseACL(const RawAddress& bd_addr, bool remove_dev,
  ******************************************************************************/
 extern void BTA_DmBleSecurityGrant(const RawAddress& bd_addr,
                                    tBTA_DM_BLE_SEC_GRANT res);
+
+/**
+ * Set BLE connectable mode to auto connect
+ */
+extern void BTA_DmBleStartAutoConn();
 
 /*******************************************************************************
  *
@@ -1187,6 +1533,88 @@ extern void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
 
 /*******************************************************************************
  *
+ * Function         BTA_DmSetBleConnScanParams
+ *
+ * Description      This function is called to set scan parameters used in
+ *                  BLE connection request
+ *
+ * Parameters:      scan_interval    - scan interval
+ *                  scan_window      - scan window
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_DmSetBleConnScanParams(uint32_t scan_interval,
+                                       uint32_t scan_window);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DmSearchExt
+ *
+ * Description      This function searches for peer Bluetooth devices. It
+ *                  performs an inquiry and gets the remote name for devices.
+ *                  Service discovery is done if services is non zero
+ *
+ * Parameters       p_dm_inq: inquiry conditions
+ *                  services: if service is not empty, service discovery will be
+ *                            done.
+ *                            for all GATT based service condition, put
+ *                            num_uuid, and p_uuid is the pointer to the list of
+ *                            UUID values.
+ *                  p_cback: callback functino when search is completed.
+ *
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_DmSearchExt(tBTA_DM_INQ* p_dm_inq,
+                            tBTA_SERVICE_MASK_EXT* p_services,
+                            tBTA_DM_SEARCH_CBACK* p_cback);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DmDiscoverExt
+ *
+ * Description      This function does service discovery for services of a
+ *                  peer device. When services.num_uuid is 0, it indicates all
+ *                  GATT based services are to be searched; other wise a list of
+ *                  UUID of interested services should be provided through
+ *                  services.p_uuid.
+ *
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_DmDiscoverExt(const RawAddress& bd_addr,
+                              tBTA_SERVICE_MASK_EXT* p_services,
+                              tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search);
+
+/*******************************************************************************
+ *
+ * Function         BTA_DmDiscoverByTransport
+ *
+ * Description      This function does service discovery on particular transport
+ *                  for services of a
+ *                  peer device. When services.num_uuid is 0, it indicates all
+ *                  GATT based services are to be searched; other wise a list of
+ *                  UUID of interested services should be provided through
+ *                  p_services->p_uuid.
+ *
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
+                                      tBTA_SERVICE_MASK_EXT* p_services,
+                                      tBTA_DM_SEARCH_CBACK* p_cback,
+                                      bool sdp_search,
+                                      tBTA_TRANSPORT transport);
+
+/*******************************************************************************
+ *
  * Function         BTA_DmSetEncryption
  *
  * Description      This function is called to ensure that connection is
@@ -1209,9 +1637,9 @@ extern void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
  *
  ******************************************************************************/
 extern void BTA_DmSetEncryption(const RawAddress& bd_addr,
-                                tBT_TRANSPORT transport,
+                                tBTA_TRANSPORT transport,
                                 tBTA_DM_ENCRYPT_CBACK* p_callback,
-                                tBTM_BLE_SEC_ACT sec_act);
+                                tBTA_DM_BLE_SEC_ACT sec_act);
 
 /*******************************************************************************
  *
@@ -1277,9 +1705,7 @@ extern void BTA_DmBleEnableRemotePrivacy(const RawAddress& bd_addr,
  ******************************************************************************/
 extern void BTA_DmBleUpdateConnectionParams(const RawAddress& bd_addr,
                                             uint16_t min_int, uint16_t max_int,
-                                            uint16_t latency, uint16_t timeout,
-                                            uint16_t min_ce_len,
-                                            uint16_t max_ce_len);
+                                            uint16_t latency, uint16_t timeout);
 
 /*******************************************************************************
  *
@@ -1317,5 +1743,17 @@ extern void BTA_DmBleGetEnergyInfo(tBTA_BLE_ENERGY_INFO_CBACK* p_cmpl_cback);
  *
  ******************************************************************************/
 extern void BTA_VendorInit(void);
+
+/*******************************************************************************
+ *
+ * Function         BTA_BrcmCleanup
+ *
+ * Description      This function frees up Broadcom specific VS specific dynamic
+ *                  memory
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+extern void BTA_VendorCleanup(void);
 
 #endif /* BTA_API_H */

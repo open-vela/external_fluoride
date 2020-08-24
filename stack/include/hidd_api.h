@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,6 +89,17 @@ extern tHID_STATUS HID_DevRegister(tHID_DEV_HOST_CALLBACK* host_cback);
  *
  ******************************************************************************/
 extern tHID_STATUS HID_DevDeregister(void);
+
+/*******************************************************************************
+ *
+ * Function         HID_DevSetSecurityLevel
+ *
+ * Description      Sets security level for HID device connections
+ *
+ * Returns          tHID_STATUS
+ *
+ ******************************************************************************/
+extern tHID_STATUS HID_DevSetSecurityLevel(uint8_t sec_lvl);
 
 /*******************************************************************************
  *

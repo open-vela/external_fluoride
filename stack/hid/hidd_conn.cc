@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright 2016 The Android Open Source Project
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,9 +42,7 @@
 #include "hidd_api.h"
 #include "hidd_int.h"
 
-#include "bta/include/bta_api.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
 
 static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
                                    uint16_t psm, uint8_t id);
@@ -56,17 +54,17 @@ static void hidd_l2cif_disconnect_cfm(uint16_t cid, uint16_t result);
 static void hidd_l2cif_data_ind(uint16_t cid, BT_HDR* p_msg);
 static void hidd_l2cif_cong_ind(uint16_t cid, bool congested);
 
-static const tL2CAP_APPL_INFO dev_reg_info = {
-    hidd_l2cif_connect_ind,
-    hidd_l2cif_connect_cfm,
-    hidd_l2cif_config_ind,
-    hidd_l2cif_config_cfm,
-    hidd_l2cif_disconnect_ind,
-    hidd_l2cif_disconnect_cfm,
-    hidd_l2cif_data_ind,
-    hidd_l2cif_cong_ind,
-    NULL,
-    NULL /* tL2CA_CREDITS_RECEIVED_CB */};
+static const tL2CAP_APPL_INFO dev_reg_info = {hidd_l2cif_connect_ind,
+                                              hidd_l2cif_connect_cfm,
+                                              NULL,
+                                              hidd_l2cif_config_ind,
+                                              hidd_l2cif_config_cfm,
+                                              hidd_l2cif_disconnect_ind,
+                                              hidd_l2cif_disconnect_cfm,
+                                              NULL,
+                                              hidd_l2cif_data_ind,
+                                              hidd_l2cif_cong_ind,
+                                              NULL};
 
 /*******************************************************************************
  *
@@ -192,6 +190,17 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
     return;
   }
 
+  if (p_dev->in_use && bd_addr != p_dev->addr) {
+    HIDD_TRACE_WARNING(
+        "%s: incoming connections from different device, rejecting", __func__);
+    L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_NO_RESOURCES, 0);
+    return;
+  } else if (!p_dev->in_use) {
+    p_dev->in_use = TRUE;
+    p_dev->addr = bd_addr;
+    p_dev->state = HIDD_DEV_NO_CONN;
+  }
+
   p_hcon = &hd_cb.device.conn;
 
   switch (psm) {
@@ -232,21 +241,19 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
 
   // for CTRL we need to go through security and we reply in callback from there
   if (psm == HID_PSM_CONTROL) {
-    // We are ready to accept connection from this device, since we aren't
-    // connected to anything and are in the correct state.
-    p_dev->in_use = TRUE;
-    p_dev->addr = bd_addr;
-    p_dev->state = HIDD_DEV_NO_CONN;
-
     p_hcon->conn_flags = 0;
     p_hcon->ctrl_cid = cid;
     p_hcon->ctrl_id = id;
     p_hcon->disc_reason = HID_L2CAP_CONN_FAIL;
 
     p_hcon->conn_state = HID_CONN_STATE_SECURITY;
+    if (btm_sec_mx_access_request(p_dev->addr, HID_PSM_CONTROL, FALSE,
+                                  BTM_SEC_PROTO_HID, HIDD_NOSEC_CHN,
+                                  &hidd_sec_check_complete,
+                                  p_dev) == BTM_CMD_STARTED) {
+      L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_PENDING, L2CAP_CONN_OK);
+    }
 
-    // Assume security check ok
-    hidd_sec_check_complete(nullptr, BT_TRANSPORT_BR_EDR, p_dev, BTM_SUCCESS);
     return;
   }
 
@@ -308,10 +315,9 @@ static void hidd_l2cif_connect_cfm(uint16_t cid, uint16_t result) {
     p_hcon->disc_reason =
         HID_L2CAP_CONN_FAIL; /* in case disconnected before sec completed */
 
-    // Assume security check ok
-    hidd_sec_check_complete_orig(nullptr, BT_TRANSPORT_BR_EDR, p_dev,
-                                 BTM_SUCCESS);
-
+    btm_sec_mx_access_request(p_dev->addr, HID_PSM_CONTROL, TRUE,
+                              BTM_SEC_PROTO_HID, HIDD_SEC_CHN,
+                              &hidd_sec_check_complete_orig, p_dev);
   } else {
     p_hcon->conn_state = HID_CONN_STATE_CONFIG;
     L2CA_ConfigReq(cid, &hd_cb.l2cap_intr_cfg);
@@ -611,12 +617,6 @@ static void hidd_l2cif_data_ind(uint16_t cid, BT_HDR* p_msg) {
 
   HIDD_TRACE_EVENT("%s: cid=%04x", __func__, cid);
 
-  if (p_msg->len < 1) {
-    HIDD_TRACE_ERROR("Invalid data length, ignore");
-    osi_free(p_msg);
-    return;
-  }
-
   p_hcon = &hd_cb.device.conn;
 
   if (p_hcon->conn_state == HID_CONN_STATE_UNUSED ||
@@ -759,28 +759,12 @@ tHID_STATUS hidd_conn_reg(void) {
   hd_cb.l2cap_intr_cfg.flush_to_present = TRUE;
   hd_cb.l2cap_intr_cfg.flush_to = HID_DEV_FLUSH_TO;
 
-  if (!BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_HIDD_SEC_CTRL,
-                                  BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT,
-                                  HID_PSM_CONTROL)) {
-    HIDD_TRACE_ERROR("Security Registration 1 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_HIDD_INTR, BTM_SEC_NONE,
-                                  HID_PSM_INTERRUPT)) {
-    HIDD_TRACE_ERROR("Security Registration 5 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&dev_reg_info,
-                     false /* enable_snoop */, nullptr, hd_cb.l2cap_cfg.mtu)) {
+  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&dev_reg_info)) {
     HIDD_TRACE_ERROR("HID Control (device) registration failed");
     return (HID_ERR_L2CAP_FAILED);
   }
 
-  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&dev_reg_info,
-                     false /* enable_snoop */, nullptr,
-                     hd_cb.l2cap_intr_cfg.mtu)) {
+  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&dev_reg_info)) {
     L2CA_Deregister(HID_PSM_CONTROL);
     HIDD_TRACE_ERROR("HID Interrupt (device) registration failed");
     return (HID_ERR_L2CAP_FAILED);

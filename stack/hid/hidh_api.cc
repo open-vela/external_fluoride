@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,10 +34,6 @@
 #include "hiddefs.h"
 #include "hidh_api.h"
 #include "hidh_int.h"
-#include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
-
-using bluetooth::Uuid;
 
 tHID_HOST_CTB hh_cb;
 
@@ -55,11 +51,14 @@ static void hidh_search_callback(uint16_t sdp_result);
 tHID_STATUS HID_HostGetSDPRecord(const RawAddress& addr,
                                  tSDP_DISCOVERY_DB* p_db, uint32_t db_len,
                                  tHID_HOST_SDP_CALLBACK* sdp_cback) {
+  tSDP_UUID uuid_list;
 
   if (hh_cb.sdp_busy) return HID_ERR_SDP_BUSY;
 
+  uuid_list.len = 2;
+  uuid_list.uu.uuid16 = UUID_SERVCLASS_HUMAN_INTERFACE;
+
   hh_cb.p_sdp_db = p_db;
-  Uuid uuid_list = Uuid::From16Bit(UUID_SERVCLASS_HUMAN_INTERFACE);
   SDP_InitDiscoveryDb(p_db, db_len, 1, &uuid_list, 0, NULL);
 
   if (SDP_ServiceSearchRequest(addr, p_db, hidh_search_callback)) {
@@ -93,9 +92,12 @@ static void hidh_search_callback(uint16_t sdp_result) {
   tSDP_DISCOVERY_DB* p_db = hh_cb.p_sdp_db;
   tSDP_DISC_REC* p_rec;
   tSDP_DISC_ATTR *p_attr, *p_subattr1, *p_subattr2, *p_repdesc;
+  tBT_UUID hid_uuid;
   tHID_DEV_SDP_INFO* p_nvi = &hh_cb.sdp_rec;
   uint16_t attr_mask = 0;
 
+  hid_uuid.len = LEN_UUID_16;
+  hid_uuid.uu.uuid16 = UUID_SERVCLASS_HUMAN_INTERFACE;
 
   hh_cb.sdp_busy = false;
 
@@ -104,8 +106,7 @@ static void hidh_search_callback(uint16_t sdp_result) {
     return;
   }
 
-  Uuid hid_uuid = Uuid::From16Bit(UUID_SERVCLASS_HUMAN_INTERFACE);
-  p_rec = SDP_FindServiceUUIDInDb(p_db, hid_uuid, NULL);
+  p_rec = SDP_FindServiceUUIDInDb(p_db, &hid_uuid, NULL);
   if (p_rec == NULL) {
     hh_cb.sdp_cback(HID_SDP_NO_SERV_UUID, 0, NULL);
     return;
@@ -297,8 +298,8 @@ tHID_STATUS HID_HostDeregister(void) {
   if (!hh_cb.reg_flag) return (HID_ERR_NOT_REGISTERED);
 
   for (i = 0; i < HID_HOST_MAX_DEVICES; i++) {
-    HID_HostRemoveDev(i);
     alarm_free(hh_cb.devices[i].conn.process_repage_timer);
+    HID_HostRemoveDev(i);
   }
 
   hidh_conn_dereg();
@@ -463,21 +464,95 @@ tHID_STATUS HID_HostCloseDev(uint8_t dev_handle) {
   return hidh_conn_disconnect(dev_handle);
 }
 
-tHID_STATUS HID_HostSetSecurityLevel() {
-  if (!BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_HIDH_SEC_CTRL,
-                                  BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_ENCRYPT |
-                                      BTM_SEC_OUT_AUTHENTICATE |
-                                      BTM_SEC_OUT_ENCRYPT,
-                                  HID_PSM_CONTROL)) {
+tHID_STATUS HID_HostSetSecurityLevel(const char serv_name[], uint8_t sec_lvl) {
+  if (!BTM_SetSecurityLevel(false, serv_name, BTM_SEC_SERVICE_HIDH_SEC_CTRL,
+                            sec_lvl, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
+                            HID_SEC_CHN)) {
     HIDH_TRACE_ERROR("Security Registration 1 failed");
     return (HID_ERR_NO_RESOURCES);
   }
 
-  if (!BTM_SimpleSetSecurityLevel(BTM_SEC_SERVICE_HIDH_INTR, BTM_SEC_NONE,
-                                  HID_PSM_INTERRUPT)) {
+  if (!BTM_SetSecurityLevel(true, serv_name, BTM_SEC_SERVICE_HIDH_SEC_CTRL,
+                            sec_lvl, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
+                            HID_SEC_CHN)) {
+    HIDH_TRACE_ERROR("Security Registration 2 failed");
+    return (HID_ERR_NO_RESOURCES);
+  }
+
+  if (!BTM_SetSecurityLevel(false, serv_name, BTM_SEC_SERVICE_HIDH_NOSEC_CTRL,
+                            BTM_SEC_NONE, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
+                            HID_NOSEC_CHN)) {
+    HIDH_TRACE_ERROR("Security Registration 3 failed");
+    return (HID_ERR_NO_RESOURCES);
+  }
+
+  if (!BTM_SetSecurityLevel(true, serv_name, BTM_SEC_SERVICE_HIDH_NOSEC_CTRL,
+                            BTM_SEC_NONE, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
+                            HID_NOSEC_CHN)) {
+    HIDH_TRACE_ERROR("Security Registration 4 failed");
+    return (HID_ERR_NO_RESOURCES);
+  }
+
+  if (!BTM_SetSecurityLevel(true, serv_name, BTM_SEC_SERVICE_HIDH_INTR,
+                            BTM_SEC_NONE, HID_PSM_INTERRUPT, BTM_SEC_PROTO_HID,
+                            0)) {
     HIDH_TRACE_ERROR("Security Registration 5 failed");
     return (HID_ERR_NO_RESOURCES);
   }
 
+  if (!BTM_SetSecurityLevel(false, serv_name, BTM_SEC_SERVICE_HIDH_INTR,
+                            BTM_SEC_NONE, HID_PSM_INTERRUPT, BTM_SEC_PROTO_HID,
+                            0)) {
+    HIDH_TRACE_ERROR("Security Registration 6 failed");
+    return (HID_ERR_NO_RESOURCES);
+  }
+
   return (HID_SUCCESS);
+}
+
+/******************************************************************************
+ *
+ * Function         hid_known_hid_device
+ *
+ * Description      check if this device is  of type HID Device
+ *
+ * Returns          true if device is HID Device else false
+ *
+ ******************************************************************************/
+bool hid_known_hid_device(const RawAddress& bd_addr) {
+  uint8_t i;
+  tBTM_INQ_INFO* p_inq_info = BTM_InqDbRead(bd_addr);
+
+  if (!hh_cb.reg_flag) return false;
+
+  /* First  check for class of device , if Inq DB has information about this
+   * device*/
+  if (p_inq_info != NULL) {
+    /* Check if remote major device class is of type BTM_COD_MAJOR_PERIPHERAL */
+    if ((p_inq_info->results.dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) ==
+        BTM_COD_MAJOR_PERIPHERAL) {
+      HIDH_TRACE_DEBUG(
+          "hid_known_hid_device:dev found in InqDB & COD matches HID dev");
+      return true;
+    }
+  } else {
+    /* Look for this device in security device DB */
+    tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
+    if ((p_dev_rec != NULL) &&
+        ((p_dev_rec->dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) ==
+         BTM_COD_MAJOR_PERIPHERAL)) {
+      HIDH_TRACE_DEBUG(
+          "hid_known_hid_device:dev found in SecDevDB & COD matches HID dev");
+      return true;
+    }
+  }
+
+  /* Find an entry for this device in hh_cb.devices array */
+  for (i = 0; i < HID_HOST_MAX_DEVICES; i++) {
+    if ((hh_cb.devices[i].in_use) && bd_addr == hh_cb.devices[i].addr)
+      return true;
+  }
+  /* Check if this device is marked as HID Device in IOP Dev */
+  HIDH_TRACE_DEBUG("hid_known_hid_device:remote is not HID device");
+  return false;
 }
