@@ -18,10 +18,7 @@
 
 #include <cstdint>
 #include <forward_list>
-#include <memory>
-#include <type_traits>
 
-#include "packet/custom_field_fixed_size_interface.h"
 #include "packet/view.h"
 
 namespace bluetooth {
@@ -63,13 +60,11 @@ class Iterator : public std::iterator<std::random_access_iterator_tag, uint8_t> 
 
   size_t NumBytesRemaining() const;
 
-  Iterator Subrange(size_t index, size_t length) const;
-
   // Get the next sizeof(FixedWidthPODType) bytes and return the filled type
-  template <typename FixedWidthPODType, typename std::enable_if<std::is_pod<FixedWidthPODType>::value, int>::type = 0>
+  template <typename FixedWidthPODType>
   FixedWidthPODType extract() {
-    static_assert(std::is_pod<FixedWidthPODType>::value, "Iterator::extract requires a fixed-width type.");
-    FixedWidthPODType extracted_value{};
+    static_assert(std::is_pod<FixedWidthPODType>::value, "Iterator::extract requires an fixed type.");
+    FixedWidthPODType extracted_value;
     uint8_t* value_ptr = (uint8_t*)&extracted_value;
 
     for (size_t i = 0; i < sizeof(FixedWidthPODType); i++) {
@@ -79,21 +74,10 @@ class Iterator : public std::iterator<std::random_access_iterator_tag, uint8_t> 
     return extracted_value;
   }
 
-  template <typename T, typename std::enable_if<std::is_base_of_v<CustomFieldFixedSizeInterface<T>, T>, int>::type = 0>
-  T extract() {
-    T extracted_value{};
-    for (size_t i = 0; i < CustomFieldFixedSizeInterface<T>::length(); i++) {
-      size_t index = (little_endian ? i : CustomFieldFixedSizeInterface<T>::length() - i - 1);
-      extracted_value.data()[index] = *((*this)++);
-    }
-    return extracted_value;
-  }
-
  private:
   std::forward_list<View> data_;
   size_t index_;
-  size_t begin_;
-  size_t end_;
+  size_t length_;
 };
 
 }  // namespace packet

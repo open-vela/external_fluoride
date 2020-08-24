@@ -48,10 +48,7 @@
 #include "btif_gatt_util.h"
 #include "btif_storage.h"
 #include "osi/include/log.h"
-#include "stack/include/acl_api.h"
-#include "stack/include/acl_api_types.h"
 #include "stack/include/btu.h"
-#include "types/bt_transport.h"
 #include "vendor_api.h"
 
 using base::Bind;
@@ -77,22 +74,29 @@ extern const btgatt_callbacks_t* bt_gatt_callbacks;
     }                                                                          \
   } while (0)
 
-#define CHECK_BTGATT_INIT()                             \
-  do {                                                  \
-    if (bt_gatt_callbacks == NULL) {                    \
-      LOG_WARN("%s: BTGATT not initialized", __func__); \
-      return BT_STATUS_NOT_READY;                       \
-    } else {                                            \
-      LOG_VERBOSE("%s", __func__);                      \
-    }                                                   \
+#define CHECK_BTGATT_INIT()                                      \
+  do {                                                           \
+    if (bt_gatt_callbacks == NULL) {                             \
+      LOG_WARN(LOG_TAG, "%s: BTGATT not initialized", __func__); \
+      return BT_STATUS_NOT_READY;                                \
+    } else {                                                     \
+      LOG_VERBOSE(LOG_TAG, "%s", __func__);                      \
+    }                                                            \
   } while (0)
 
+#define BLE_RESOLVE_ADDR_MSB                                                   \
+  0x40                             /* bit7, bit6 is 01 to be resolvable random \
+                                      */
+#define BLE_RESOLVE_ADDR_MASK 0xc0 /* bit 6, and bit7 */
+inline bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x) {
+  return ((x.address)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB;
+}
 namespace {
 
 uint8_t rssi_request_client_if;
 
 void btif_gattc_upstreams_evt(uint16_t event, char* p_param) {
-  LOG_VERBOSE("%s: Event %d", __func__, event);
+  LOG_VERBOSE(LOG_TAG, "%s: Event %d", __func__, event);
 
   tBTA_GATTC* p_data = (tBTA_GATTC*)p_param;
   switch (event) {
@@ -155,7 +159,7 @@ void btif_gattc_upstreams_evt(uint16_t event, char* p_param) {
     }
 
     case BTA_GATTC_ACL_EVT:
-      LOG_DEBUG("BTA_GATTC_ACL_EVT: status = %d", p_data->status);
+      LOG_DEBUG(LOG_TAG, "BTA_GATTC_ACL_EVT: status = %d", p_data->status);
       /* Ignore for now */
       break;
 
@@ -191,7 +195,7 @@ void btif_gattc_upstreams_evt(uint16_t event, char* p_param) {
       break;
 
     default:
-      LOG_ERROR("%s: Unhandled event (%d)!", __func__, event);
+      LOG_ERROR(LOG_TAG, "%s: Unhandled event (%d)!", __func__, event);
       break;
   }
 }
@@ -220,7 +224,7 @@ bt_status_t btif_gattc_register_app(const Uuid& uuid) {
   CHECK_BTGATT_INIT();
 
   return do_in_jni_thread(Bind(
-      [](const Uuid& uuid, bool eatt_support) {
+      [](const Uuid& uuid) {
         BTA_GATTC_AppRegister(
             bta_gattc_cback,
             base::Bind(
@@ -232,10 +236,9 @@ bt_status_t btif_gattc_register_app(const Uuid& uuid) {
                       },
                       uuid, client_id, status));
                 },
-                uuid),
-            eatt_support);
+                uuid));
       },
-      uuid, false));
+      uuid));
 }
 
 void btif_gattc_unregister_app_impl(int client_if) {
@@ -253,7 +256,7 @@ void btif_gattc_open_impl(int client_if, RawAddress address, bool is_direct,
   // Ensure device is in inquiry database
   int addr_type = 0;
   int device_type = 0;
-  tBT_TRANSPORT transport = (tBT_TRANSPORT)BT_TRANSPORT_LE;
+  tGATT_TRANSPORT transport = (tGATT_TRANSPORT)GATT_TRANSPORT_LE;
 
   if (btif_get_address_type(address, &addr_type) &&
       btif_get_device_type(address, &device_type) &&
@@ -279,23 +282,23 @@ void btif_gattc_open_impl(int client_if, RawAddress address, bool is_direct,
   }
 
   // Determine transport
-  if (transport_p != BT_TRANSPORT_AUTO) {
+  if (transport_p != GATT_TRANSPORT_AUTO) {
     transport = transport_p;
   } else {
     switch (device_type) {
       case BT_DEVICE_TYPE_BREDR:
-        transport = BT_TRANSPORT_BR_EDR;
+        transport = GATT_TRANSPORT_BR_EDR;
         break;
 
       case BT_DEVICE_TYPE_BLE:
-        transport = BT_TRANSPORT_LE;
+        transport = GATT_TRANSPORT_LE;
         break;
 
       case BT_DEVICE_TYPE_DUMO:
-        if (transport_p == BT_TRANSPORT_LE)
-          transport = BT_TRANSPORT_LE;
+        if (transport_p == GATT_TRANSPORT_LE)
+          transport = GATT_TRANSPORT_LE;
         else
-          transport = BT_TRANSPORT_BR_EDR;
+          transport = GATT_TRANSPORT_BR_EDR;
         break;
     }
   }

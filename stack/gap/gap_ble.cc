@@ -24,7 +24,6 @@
 #include <queue>
 #include "gap_api.h"
 #include "gatt_api.h"
-#include "types/bt_transport.h"
 
 using base::StringPrintf;
 using bluetooth::Uuid;
@@ -54,7 +53,7 @@ typedef struct {
 void server_attr_request_cback(uint16_t, uint32_t, tGATTS_REQ_TYPE,
                                tGATTS_DATA*);
 void client_connect_cback(tGATT_IF, const RawAddress&, uint16_t, bool,
-                          tGATT_DISCONN_REASON, tBT_TRANSPORT);
+                          tGATT_DISCONN_REASON, tGATT_TRANSPORT);
 void client_cmpl_cback(uint16_t, tGATTC_OPTYPE, tGATT_STATUS,
                        tGATT_CL_COMPLETE*);
 
@@ -287,7 +286,7 @@ void cl_op_cmpl(tGAP_CLCB& clcb, bool status, uint16_t len, uint8_t* p_name) {
 /** Client connection callback */
 void client_connect_cback(tGATT_IF, const RawAddress& bda, uint16_t conn_id,
                           bool connected, tGATT_DISCONN_REASON reason,
-                          tBT_TRANSPORT) {
+                          tGATT_TRANSPORT) {
   tGAP_CLCB* p_clcb = find_clcb_by_bd_addr(bda);
   if (p_clcb == NULL) return;
 
@@ -402,7 +401,7 @@ void gap_attr_db_init(void) {
   Uuid app_uuid = Uuid::From128BitBE(tmp);
   gatt_attr.fill({});
 
-  gatt_if = GATT_Register(app_uuid, &gap_cback, false);
+  gatt_if = GATT_Register(app_uuid, &gap_cback);
 
   GATT_StartIf(gatt_if);
 
@@ -412,26 +411,23 @@ void gap_attr_db_init(void) {
   Uuid addr_res_uuid = Uuid::From16Bit(GATT_UUID_GAP_CENTRAL_ADDR_RESOL);
 
   btgatt_db_element_t service[] = {
-    {
-        .uuid = svc_uuid,
-        .type = BTGATT_DB_PRIMARY_SERVICE,
-    },
-    {.uuid = name_uuid,
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_PRIMARY_SERVICE, .uuid = svc_uuid},
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = name_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ},
-    {.uuid = icon_uuid,
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = icon_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ},
-    {.uuid = addr_res_uuid,
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = addr_res_uuid,
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ}
 #if (BTM_PERIPHERAL_ENABLED == TRUE) /* Only needed for peripheral testing */
     ,
-    {.uuid = Uuid::From16Bit(GATT_UUID_GAP_PREF_CONN_PARAM),
-     .type = BTGATT_DB_CHARACTERISTIC,
+    {.type = BTGATT_DB_CHARACTERISTIC,
+     .uuid = Uuid::From16Bit(GATT_UUID_GAP_PREF_CONN_PARAM),
      .properties = GATT_CHAR_PROP_BIT_READ,
      .permissions = GATT_PERM_READ}
 #endif
@@ -533,6 +529,21 @@ bool GAP_BleReadPeerPrefConnParams(const RawAddress& peer_bda) {
 bool GAP_BleReadPeerDevName(const RawAddress& peer_bda,
                             tGAP_BLE_CMPL_CBACK* p_cback) {
   return accept_client_operation(peer_bda, GATT_UUID_GAP_DEVICE_NAME, p_cback);
+}
+
+/*******************************************************************************
+ *
+ * Function         GAP_BleReadPeerAddressResolutionCap
+ *
+ * Description      Start a process to read peer address resolution capability
+ *
+ * Returns          true if request accepted
+ *
+ ******************************************************************************/
+bool GAP_BleReadPeerAddressResolutionCap(const RawAddress& peer_bda,
+                                         tGAP_BLE_CMPL_CBACK* p_cback) {
+  return accept_client_operation(peer_bda, GATT_UUID_GAP_CENTRAL_ADDR_RESOL,
+                                 p_cback);
 }
 
 /*******************************************************************************
