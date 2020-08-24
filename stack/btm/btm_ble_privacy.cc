@@ -24,6 +24,7 @@
 #include <string.h>
 #include "bt_target.h"
 
+#if (BLE_PRIVACY_SPT == TRUE)
 #include "ble_advertiser.h"
 #include "bt_types.h"
 #include "btm_int.h"
@@ -908,3 +909,4 @@ void btm_ble_resolving_list_init(uint8_t max_irk_list_sz) {
   btm_ble_clear_resolving_list();
   btm_cb.ble_ctr_cb.resolving_list_avail_size = max_irk_list_sz;
 }
+#endif
