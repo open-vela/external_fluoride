@@ -71,6 +71,10 @@
 #define BTA_HH_LE_INCLUDED TRUE
 #endif
 
+#ifndef BTA_AR_INCLUDED
+#define BTA_AR_INCLUDED TRUE
+#endif
+
 #ifndef BTA_AV_SINK_INCLUDED
 #define BTA_AV_SINK_INCLUDED FALSE
 #endif
