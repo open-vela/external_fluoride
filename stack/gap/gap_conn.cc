@@ -19,15 +19,13 @@
 #include <base/strings/stringprintf.h>
 #include <string.h>
 #include "bt_target.h"
-#include "bt_utils.h"
-#include "btm_int.h"
-#include "btu.h"
 #include "device/include/controller.h"
 #include "gap_api.h"
-#include "l2c_int.h"
+#include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/mutex.h"
+#include "stack/btm/btm_sec.h"
 
 using base::StringPrintf;
 
@@ -117,12 +115,10 @@ void gap_conn_init(void) {
   memset(&conn, 0, sizeof(tGAP_CONN));
   conn.reg_info.pL2CA_ConnectInd_Cb = gap_connect_ind;
   conn.reg_info.pL2CA_ConnectCfm_Cb = gap_connect_cfm;
-  conn.reg_info.pL2CA_ConnectPnd_Cb = NULL;
   conn.reg_info.pL2CA_ConfigInd_Cb = gap_config_ind;
   conn.reg_info.pL2CA_ConfigCfm_Cb = gap_config_cfm;
   conn.reg_info.pL2CA_DisconnectInd_Cb = gap_disconnect_ind;
   conn.reg_info.pL2CA_DisconnectCfm_Cb = NULL;
-  conn.reg_info.pL2CA_QoSViolationInd_Cb = NULL;
   conn.reg_info.pL2CA_DataInd_Cb = gap_data_ind;
   conn.reg_info.pL2CA_CongestionStatus_Cb = gap_congestion_ind;
   conn.reg_info.pL2CA_TxComplete_Cb = gap_tx_complete_ind;
@@ -249,7 +245,7 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
   /* Register the PSM with L2CAP */
   if (transport == BT_TRANSPORT_BR_EDR) {
     p_ccb->psm = L2CA_Register(psm, &conn.reg_info, false /* enable_snoop */,
-                               &p_ccb->ertm_info);
+                               &p_ccb->ertm_info, L2CAP_MTU_SIZE);
     if (p_ccb->psm == 0) {
       LOG(ERROR) << StringPrintf("%s: Failure registering PSM 0x%04x", __func__,
                                  psm);
@@ -296,8 +292,7 @@ uint16_t GAP_ConnOpen(const char* p_serv_name, uint8_t service_id,
     p_ccb->con_state = GAP_CCB_STATE_CONN_SETUP;
 
     /* mark security done flag, when security is not required */
-    if ((security & (BTM_SEC_OUT_AUTHORIZE | BTM_SEC_OUT_AUTHENTICATE |
-                     BTM_SEC_OUT_ENCRYPT)) == 0)
+    if ((security & (BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_ENCRYPT)) == 0)
       p_ccb->con_flags |= GAP_CCB_FLAGS_SEC_DONE;
 
     /* Check if L2CAP started the connection process */
@@ -446,40 +441,6 @@ int GAP_GetRxQueueCnt(uint16_t handle, uint32_t* p_rx_queue_count) {
   return (rc);
 }
 
-/*******************************************************************************
- *
- * Function         GAP_ConnBTRead
- *
- * Description      Bluetooth-aware applications will call this function after
- *                  receiving GAP_EVT_RXDATA event.
- *
- * Parameters:      handle      - Handle of the connection returned in the Open
- *                  pp_buf      - pointer to address of buffer with data,
- *
- * Returns          BT_PASS             - data read
- *                  GAP_ERR_BAD_HANDLE  - invalid handle
- *                  GAP_NO_DATA_AVAIL   - no data available
- *
- ******************************************************************************/
-uint16_t GAP_ConnBTRead(uint16_t gap_handle, BT_HDR** pp_buf) {
-  tGAP_CCB* p_ccb = gap_find_ccb_by_handle(gap_handle);
-  BT_HDR* p_buf;
-
-  if (!p_ccb) return (GAP_ERR_BAD_HANDLE);
-
-  p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_ccb->rx_queue);
-
-  if (p_buf) {
-    *pp_buf = p_buf;
-
-    p_ccb->rx_queue_size -= p_buf->len;
-    return (BT_PASS);
-  } else {
-    *pp_buf = NULL;
-    return (GAP_NO_DATA_AVAIL);
-  }
-}
-
 /* Try to write the queued data to l2ca. Return true on success, or if queue is
  * congested. False if error occured when writing. */
 static bool gap_try_write_queued_data(tGAP_CCB* p_ccb) {
@@ -541,67 +502,6 @@ uint16_t GAP_ConnWriteData(uint16_t gap_handle, BT_HDR* msg) {
   if (!gap_try_write_queued_data(p_ccb)) return GAP_ERR_BAD_STATE;
 
   return (BT_PASS);
-}
-
-/*******************************************************************************
- *
- * Function         GAP_ConnReconfig
- *
- * Description      Applications can call this function to reconfigure the
- *                  connection.
- *
- * Parameters:      handle      - Handle of the connection
- *                  p_cfg       - Pointer to new configuration
- *
- * Returns          BT_PASS                 - config process started
- *                  GAP_ERR_BAD_HANDLE      - invalid handle
- *
- ******************************************************************************/
-uint16_t GAP_ConnReconfig(uint16_t gap_handle, tL2CAP_CFG_INFO* p_cfg) {
-  tGAP_CCB* p_ccb = gap_find_ccb_by_handle(gap_handle);
-
-  if (!p_ccb) return (GAP_ERR_BAD_HANDLE);
-
-  p_ccb->cfg = *p_cfg;
-
-  if (p_ccb->con_state == GAP_CCB_STATE_CONNECTED)
-    L2CA_ConfigReq(p_ccb->connection_id, p_cfg);
-
-  return (BT_PASS);
-}
-
-/*******************************************************************************
- *
- * Function         GAP_ConnSetIdleTimeout
- *
- * Description      Higher layers call this function to set the idle timeout for
- *                  a connection, or for all future connections. The "idle
- *                  timeout" is the amount of time that a connection can remain
- *                  up with no L2CAP channels on it. A timeout of zero means
- *                  that the connection will be torn down immediately when the
- *                  last channel is removed. A timeout of 0xFFFF means no
- *                  timeout. Values are in seconds.
- *
- * Parameters:      handle      - Handle of the connection
- *                  timeout     - in secs
- *                                0 = immediate disconnect when last channel is
- *                                    removed
- *                                0xFFFF = no idle timeout
- *
- * Returns          BT_PASS                 - config process started
- *                  GAP_ERR_BAD_HANDLE      - invalid handle
- *
- ******************************************************************************/
-uint16_t GAP_ConnSetIdleTimeout(uint16_t gap_handle, uint16_t timeout) {
-  tGAP_CCB* p_ccb;
-
-  p_ccb = gap_find_ccb_by_handle(gap_handle);
-  if (p_ccb == NULL) return (GAP_ERR_BAD_HANDLE);
-
-  if (L2CA_SetIdleTimeout(p_ccb->connection_id, timeout, false))
-    return (BT_PASS);
-  else
-    return (GAP_ERR_BAD_HANDLE);
 }
 
 /*******************************************************************************
@@ -841,8 +741,8 @@ static void gap_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
   /* initiate security process, if needed */
   if ((p_ccb->con_flags & GAP_CCB_FLAGS_SEC_DONE) == 0 &&
       p_ccb->transport != BT_TRANSPORT_LE) {
-    btm_sec_mx_access_request(p_ccb->rem_dev_address, p_ccb->psm, true, 0, 0,
-                              &gap_sec_check_complete, p_ccb);
+    // Assume security check is done by L2cap
+    gap_sec_check_complete(nullptr, BT_TRANSPORT_BR_EDR, p_ccb, BTM_SUCCESS);
   }
 
   /* If the connection response contains success status, then */
@@ -868,7 +768,7 @@ static void gap_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
       gap_checks_con_flags(p_ccb);
     }
   } else {
-    /* Tell the user if he has a callback */
+    /* Tell the user if there is a callback */
     if (p_ccb->p_callback)
       (*p_ccb->p_callback)(p_ccb->gap_handle, GAP_EVT_CONN_CLOSED, nullptr);
 
