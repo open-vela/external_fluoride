@@ -85,7 +85,7 @@
 #endif
 
 #ifndef AVRCP_DEFAULT_VERSION
-#define AVRCP_DEFAULT_VERSION AVRCP_1_5_STRING
+#define AVRCP_DEFAULT_VERSION AVRCP_1_4_STRING
 #endif
 
 /* state machine states */
@@ -558,7 +558,6 @@ static void bta_av_api_register(tBTA_AV_DATA* p_data) {
       reg.ret_tout = BTA_AV_RET_TOUT;
       reg.sig_tout = BTA_AV_SIG_TOUT;
       reg.idle_tout = BTA_AV_IDLE_TOUT;
-      reg.sec_mask = BTA_SEC_AUTHENTICATE;
       reg.scb_index = p_scb->hdi;
       bta_ar_reg_avdt(&reg, bta_av_conn_cback);
       bta_sys_role_chg_register(&bta_av_sys_rs_cback);
