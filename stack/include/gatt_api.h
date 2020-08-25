@@ -21,6 +21,7 @@
 #include "bt_target.h"
 #include "btm_ble_api.h"
 #include "gattdefs.h"
+#include "types/bt_transport.h"
 
 /*****************************************************************************
  *  Constants
@@ -44,6 +45,8 @@
 #define GATT_INSUF_ENCRYPTION 0x0f
 #define GATT_UNSUPPORT_GRP_TYPE 0x10
 #define GATT_INSUF_RESOURCE 0x11
+#define GATT_DATABASE_OUT_OF_SYNC 0x12
+#define GATT_VALUE_NOT_ALLOWED 0x13
 
 #define GATT_ILLEGAL_PARAMETER 0x87
 #define GATT_NO_RESOURCES 0x80
@@ -339,12 +342,6 @@ typedef union {
 
 } tGATTS_RSP;
 
-/* Transports for the primary service  */
-#define GATT_TRANSPORT_LE BT_TRANSPORT_LE
-#define GATT_TRANSPORT_BR_EDR BT_TRANSPORT_BR_EDR
-#define GATT_TRANSPORT_LE_BR_EDR (BT_TRANSPORT_LE | BT_TRANSPORT_BR_EDR)
-typedef uint8_t tGATT_TRANSPORT;
-
 #define GATT_PREP_WRITE_CANCEL 0x00
 #define GATT_PREP_WRITE_EXEC 0x01
 typedef uint8_t tGATT_EXEC_FLAG;
@@ -409,14 +406,6 @@ enum {
   GATT_DISC_MAX         /* maximnun discover type */
 };
 typedef uint8_t tGATT_DISC_TYPE;
-
-/* Discover parameters of different discovery types
-*/
-typedef struct {
-  bluetooth::Uuid service;
-  uint16_t s_handle;
-  uint16_t e_handle;
-} tGATT_DISC_PARAM;
 
 /* GATT read type enumeration
 */
@@ -825,13 +814,19 @@ extern tGATT_STATUS GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu);
  *
  * Parameters       conn_id: connection identifier.
  *                  disc_type:discovery type.
- *                  p_param: parameters of discovery requirement.
+ *                  start_handle and end_handle: range of handles for discovery
+ *                  uuid: uuid to discovery. set to Uuid::kEmpty for requests
+ *                        that don't need it
  *
  * Returns          GATT_SUCCESS if command received/sent successfully.
  *
  ******************************************************************************/
 extern tGATT_STATUS GATTC_Discover(uint16_t conn_id, tGATT_DISC_TYPE disc_type,
-                                   tGATT_DISC_PARAM* p_param);
+                                   uint16_t start_handle, uint16_t end_handle,
+                                   const bluetooth::Uuid& uuid);
+extern tGATT_STATUS GATTC_Discover(uint16_t conn_id, tGATT_DISC_TYPE disc_type,
+                                   uint16_t start_handle, uint16_t end_handle);
+
 /*******************************************************************************
  *
  * Function         GATTC_Read
@@ -913,7 +908,7 @@ extern tGATT_STATUS GATTC_SendHandleValueConfirm(uint16_t conn_id,
  *
  ******************************************************************************/
 extern void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
-                                tGATT_TRANSPORT transport);
+                                tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -924,13 +919,14 @@ extern void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
  *
  * Parameter        p_app_uuid128: Application UUID
  *                  p_cb_info: callback functions.
+ *                  eatt_support: set support for eatt
  *
  * Returns          0 for error, otherwise the index of the client registered
  *                  with GATT
  *
  ******************************************************************************/
 extern tGATT_IF GATT_Register(const bluetooth::Uuid& p_app_uuid128,
-                              tGATT_CBACK* p_cb_info);
+                              tGATT_CBACK* p_cb_info, bool eatt_support);
 
 /*******************************************************************************
  *
@@ -1084,7 +1080,8 @@ extern void gatt_free(void);
 // initiated outside GATT.
 extern void gatt_notify_enc_cmpl(const RawAddress& bd_addr);
 
-// Reset bg device list.
-extern void gatt_reset_bgdev_list(void);
+/** Reset bg device list. If called after controller reset, set |after_reset| to
+ * true, as there is no need to wipe controller white list in this case. */
+extern void gatt_reset_bgdev_list(bool after_reset);
 
 #endif /* GATT_API_H */

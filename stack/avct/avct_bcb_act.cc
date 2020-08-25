@@ -33,6 +33,7 @@
 #include "bt_utils.h"
 #include "btm_api.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
 
 /* action function list */
 const tAVCT_BCB_ACTION avct_bcb_action[] = {
@@ -106,7 +107,7 @@ void avct_bcb_chnl_open(tAVCT_BCB* p_bcb, UNUSED_ATTR tAVCT_LCB_EVT* p_data) {
   BTM_SetOutService(p_lcb->peer_addr, BTM_SEC_SERVICE_AVCTP_BROWSE, 0);
 
   /* Set the FCR options: Browsing channel mandates ERTM */
-  ertm_info.preferred_mode = avct_l2c_br_fcr_opts_def.mode;
+  ertm_info.preferred_mode = L2CAP_FCR_ERTM_MODE;
   ertm_info.allowed_modes = L2CAP_FCR_CHAN_OPT_ERTM;
   ertm_info.user_rx_buf_size = BT_DEFAULT_BUFFER_SIZE;
   ertm_info.user_tx_buf_size = BT_DEFAULT_BUFFER_SIZE;

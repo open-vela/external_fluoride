@@ -26,13 +26,13 @@
 
 #include "bt_common.h"
 #include "bta_api.h"
-#include "bta_closure_api.h"
 #include "bta_dm_int.h"
 #include "bta_sys.h"
 #include "bta_sys_int.h"
 #include "btm_api.h"
-#include "btm_int.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
+#include "stack/include/btu.h"
 #include "utl.h"
 
 using bluetooth::Uuid;
@@ -44,72 +44,24 @@ using bluetooth::Uuid;
 static const tBTA_SYS_REG bta_dm_search_reg = {bta_dm_search_sm_execute,
                                                bta_dm_search_sm_disable};
 
-/*******************************************************************************
- *
- * Function         BTA_EnableBluetooth
- *
- * Description      Enables bluetooth service.  This function must be
- *                  called before any other functions in the BTA API are called.
- *
- *
- * Returns          tBTA_STATUS
- *
- ******************************************************************************/
-tBTA_STATUS BTA_EnableBluetooth(tBTA_DM_SEC_CBACK* p_cback) {
-  /* Bluetooth disabling is in progress */
-  if (bta_dm_cb.disabling) return BTA_FAILURE;
-
+void BTA_dm_init() {
   bta_sys_register(BTA_ID_DM_SEARCH, &bta_dm_search_reg);
-
   /* if UUID list is not provided as static data */
   bta_sys_eir_register(bta_dm_eir_update_uuid);
-
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_enable, p_cback));
-  return BTA_SUCCESS;
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DisableBluetooth
- *
- * Description      Disables bluetooth service.  This function is called when
- *                  the application no longer needs bluetooth service
- *
- * Returns          void
- *
- ******************************************************************************/
-tBTA_STATUS BTA_DisableBluetooth(void) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_disable));
-  return BTA_SUCCESS;
 }
 
 /** Enables bluetooth device under test mode */
 void BTA_EnableTestMode(void) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(base::IgnoreResult(BTM_EnableTestMode)));
-}
-
-/** Disable bluetooth device under test mode */
-void BTA_DisableTestMode(void) {
-  do_in_bta_thread(FROM_HERE, base::Bind(BTM_DeviceReset, nullptr));
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(base::IgnoreResult(BTM_EnableTestMode)));
 }
 
 /** This function sets the Bluetooth name of local device */
 void BTA_DmSetDeviceName(char* p_name) {
-  std::vector<uint8_t> name(BD_NAME_LEN);
-  strlcpy((char*)name.data(), p_name, BD_NAME_LEN);
+  std::vector<uint8_t> name(BD_NAME_LEN + 1);
+  strlcpy((char*)name.data(), p_name, BD_NAME_LEN + 1);
 
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_set_dev_name, name));
-}
-
-/** This function sets the Bluetooth connectable, discoverable, pairable and
- * conn paired only modes of local device
- */
-void BTA_DmSetVisibility(tBTA_DM_DISC disc_mode, tBTA_DM_CONN conn_mode,
-                         uint8_t pairable_mode, uint8_t conn_paired_only) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_set_visibility, disc_mode, conn_mode,
-                              pairable_mode, conn_paired_only));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_set_dev_name, name));
 }
 
 /*******************************************************************************
@@ -124,16 +76,12 @@ void BTA_DmSetVisibility(tBTA_DM_DISC disc_mode, tBTA_DM_CONN conn_mode,
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmSearch(tBTA_DM_INQ* p_dm_inq, tBTA_SERVICE_MASK services,
-                  tBTA_DM_SEARCH_CBACK* p_cback) {
+void BTA_DmSearch(tBTA_DM_SEARCH_CBACK* p_cback) {
   tBTA_DM_API_SEARCH* p_msg =
       (tBTA_DM_API_SEARCH*)osi_calloc(sizeof(tBTA_DM_API_SEARCH));
 
   p_msg->hdr.event = BTA_DM_API_SEARCH_EVT;
-  memcpy(&p_msg->inq_params, p_dm_inq, sizeof(tBTA_DM_INQ));
-  p_msg->services = services;
   p_msg->p_cback = p_cback;
-  p_msg->rs_res = BTA_DM_RS_NONE;
 
   bta_sys_sendmsg(p_msg);
 }
@@ -149,10 +97,23 @@ void BTA_DmSearch(tBTA_DM_INQ* p_dm_inq, tBTA_SERVICE_MASK services,
  *
  ******************************************************************************/
 void BTA_DmSearchCancel(void) {
-  BT_HDR* p_msg = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
-
-  p_msg->event = BTA_DM_API_SEARCH_CANCEL_EVT;
-  bta_sys_sendmsg(p_msg);
+  switch (bta_dm_search_get_state()) {
+    case BTA_DM_SEARCH_IDLE:
+      bta_dm_search_cancel_notify();
+      break;
+    case BTA_DM_SEARCH_ACTIVE:
+      bta_dm_search_set_state(BTA_DM_SEARCH_CANCELLING);
+      bta_dm_search_cancel();
+      break;
+    case BTA_DM_SEARCH_CANCELLING:
+      bta_dm_search_clear_queue();
+      bta_dm_search_cancel_notify();
+      break;
+    case BTA_DM_DISCOVER_ACTIVE:
+      bta_dm_search_set_state(BTA_DM_SEARCH_CANCELLING);
+      bta_dm_search_cancel_notify();
+      break;
+  }
 }
 
 /*******************************************************************************
@@ -166,65 +127,30 @@ void BTA_DmSearchCancel(void) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmDiscover(const RawAddress& bd_addr, tBTA_SERVICE_MASK services,
-                    tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search) {
+void BTA_DmDiscover(const RawAddress& bd_addr, tBTA_DM_SEARCH_CBACK* p_cback,
+                    tBT_TRANSPORT transport) {
   tBTA_DM_API_DISCOVER* p_msg =
       (tBTA_DM_API_DISCOVER*)osi_calloc(sizeof(tBTA_DM_API_DISCOVER));
 
   p_msg->hdr.event = BTA_DM_API_DISCOVER_EVT;
   p_msg->bd_addr = bd_addr;
-  p_msg->services = services;
+  p_msg->transport = transport;
   p_msg->p_cback = p_cback;
-  p_msg->sdp_search = sdp_search;
-
-  bta_sys_sendmsg(p_msg);
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmDiscoverUUID
- *
- * Description      This function does service discovery for services of a
- *                  peer device
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmDiscoverUUID(const RawAddress& bd_addr, const Uuid& uuid,
-                        tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search) {
-  tBTA_DM_API_DISCOVER* p_msg =
-      (tBTA_DM_API_DISCOVER*)osi_malloc(sizeof(tBTA_DM_API_DISCOVER));
-
-  p_msg->hdr.event = BTA_DM_API_DISCOVER_EVT;
-  p_msg->bd_addr = bd_addr;
-  p_msg->services = BTA_USER_SERVICE_MASK;  // Not exposed at API level
-  p_msg->p_cback = p_cback;
-  p_msg->sdp_search = sdp_search;
-
-  p_msg->num_uuid = 0;
-  p_msg->p_uuid = NULL;
-  p_msg->uuid = uuid;
 
   bta_sys_sendmsg(p_msg);
 }
 
 /** This function initiates a bonding procedure with a peer device */
-void BTA_DmBond(const RawAddress& bd_addr) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_bond, bd_addr, BTA_TRANSPORT_UNKNOWN));
-}
-
-/** This function initiates a bonding procedure with a peer device */
-void BTA_DmBondByTransport(const RawAddress& bd_addr,
-                           tBTA_TRANSPORT transport) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_bond, bd_addr, transport));
+void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
+                tBT_TRANSPORT transport, int device_type) {
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_bond, bd_addr, addr_type,
+                                          transport, device_type));
 }
 
 /** This function cancels the bonding procedure with a peer device
  */
 void BTA_DmBondCancel(const RawAddress& bd_addr) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_bond_cancel, bd_addr));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_bond_cancel, bd_addr));
 }
 
 /*******************************************************************************
@@ -250,7 +176,8 @@ void BTA_DmPinReply(const RawAddress& bd_addr, bool accept, uint8_t pin_len,
     memcpy(msg->p_pin, p_pin, pin_len);
   }
 
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_pin_reply, base::Passed(&msg)));
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(bta_dm_pin_reply, base::Passed(&msg)));
 }
 
 /*******************************************************************************
@@ -267,7 +194,7 @@ void BTA_DmPinReply(const RawAddress& bd_addr, bool accept, uint8_t pin_len,
  *
  ******************************************************************************/
 void BTA_DmLocalOob(void) {
-  do_in_bta_thread(FROM_HERE, base::Bind(BTM_ReadLocalOobData));
+  do_in_main_thread(FROM_HERE, base::Bind(BTM_ReadLocalOobData));
 }
 
 /*******************************************************************************
@@ -281,7 +208,7 @@ void BTA_DmLocalOob(void) {
  *
  ******************************************************************************/
 void BTA_DmConfirm(const RawAddress& bd_addr, bool accept) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_confirm, bd_addr, accept));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_confirm, bd_addr, accept));
 }
 
 /*******************************************************************************
@@ -296,22 +223,15 @@ void BTA_DmConfirm(const RawAddress& bd_addr, bool accept) {
  *
  ******************************************************************************/
 void BTA_DmAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                     LINK_KEY link_key, tBTA_SERVICE_MASK trusted_mask,
-                     bool is_trusted, uint8_t key_type, tBTA_IO_CAP io_cap,
+                     const LinkKey& link_key, uint8_t key_type,
                      uint8_t pin_length) {
   std::unique_ptr<tBTA_DM_API_ADD_DEVICE> msg =
       std::make_unique<tBTA_DM_API_ADD_DEVICE>();
 
   msg->bd_addr = bd_addr;
-  msg->tm = trusted_mask;
-  msg->is_trusted = is_trusted;
-  msg->io_cap = io_cap;
-
-  if (link_key) {
-    msg->link_key_known = true;
-    msg->key_type = key_type;
-    memcpy(msg->link_key, link_key, LINK_KEY_LEN);
-  }
+  msg->link_key_known = true;
+  msg->key_type = key_type;
+  msg->link_key = link_key;
 
   /* Load device class if specified */
   if (dev_class) {
@@ -323,14 +243,14 @@ void BTA_DmAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
   memset(msg->features, 0, sizeof(msg->features));
   msg->pin_length = pin_length;
 
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_add_device, base::Passed(&msg)));
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(bta_dm_add_device, base::Passed(&msg)));
 }
 
 /** This function removes a device fromthe security database list of peer
  * device. It manages unpairing even while connected */
 tBTA_STATUS BTA_DmRemoveDevice(const RawAddress& bd_addr) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_remove_device, bd_addr));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_remove_device, bd_addr));
   return BTA_SUCCESS;
 }
 
@@ -443,8 +363,8 @@ tBTA_STATUS BTA_DmSetLocalDiRecord(tBTA_DI_RECORD* p_device_info,
  ******************************************************************************/
 void BTA_DmAddBleKey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
                      tBTA_LE_KEY_TYPE key_type) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_add_blekey, bd_addr, *p_le_key, key_type));
+  do_in_main_thread(
+      FROM_HERE, base::Bind(bta_dm_add_blekey, bd_addr, *p_le_key, key_type));
 }
 
 /*******************************************************************************
@@ -464,8 +384,8 @@ void BTA_DmAddBleKey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
  ******************************************************************************/
 void BTA_DmAddBleDevice(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
                         tBT_DEVICE_TYPE dev_type) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_add_ble_device, bd_addr,
-                                         addr_type, dev_type));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_add_ble_device, bd_addr,
+                                          addr_type, dev_type));
 }
 
 /*******************************************************************************
@@ -484,8 +404,8 @@ void BTA_DmAddBleDevice(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
  ******************************************************************************/
 void BTA_DmBlePasskeyReply(const RawAddress& bd_addr, bool accept,
                            uint32_t passkey) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_ble_passkey_reply, bd_addr,
-                                         accept, accept ? passkey : 0));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_ble_passkey_reply, bd_addr,
+                                          accept, accept ? passkey : 0));
 }
 
 /*******************************************************************************
@@ -502,8 +422,8 @@ void BTA_DmBlePasskeyReply(const RawAddress& bd_addr, bool accept,
  *
  ******************************************************************************/
 void BTA_DmBleConfirmReply(const RawAddress& bd_addr, bool accept) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_ble_confirm_reply, bd_addr, accept));
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(bta_dm_ble_confirm_reply, bd_addr, accept));
 }
 
 /*******************************************************************************
@@ -520,7 +440,7 @@ void BTA_DmBleConfirmReply(const RawAddress& bd_addr, bool accept) {
  ******************************************************************************/
 void BTA_DmBleSecurityGrant(const RawAddress& bd_addr,
                             tBTA_DM_BLE_SEC_GRANT res) {
-  do_in_bta_thread(FROM_HERE, base::Bind(BTM_SecurityGrant, bd_addr, res));
+  do_in_main_thread(FROM_HERE, base::Bind(BTM_SecurityGrant, bd_addr, res));
 }
 
 /*******************************************************************************
@@ -546,165 +466,9 @@ void BTA_DmSetBlePrefConnParams(const RawAddress& bd_addr,
                                 uint16_t min_conn_int, uint16_t max_conn_int,
                                 uint16_t slave_latency,
                                 uint16_t supervision_tout) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_ble_set_conn_params, bd_addr, min_conn_int,
-                              max_conn_int, slave_latency, supervision_tout));
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmSetBleConnScanParams
- *
- * Description      This function is called to set scan parameters used in
- *                  BLE connection request
- *
- * Parameters:      scan_interval    - scan interval
- *                  scan_window      - scan window
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmSetBleConnScanParams(uint32_t scan_interval, uint32_t scan_window) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_ble_set_conn_scan_params,
-                                         scan_interval, scan_window));
-}
-
-/** Set BLE connectable mode to auto connect */
-void BTA_DmBleStartAutoConn() {
-  do_in_bta_thread(FROM_HERE, base::Bind(BTM_BleStartAutoConn));
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_discover_send_msg
- *
- * Description      This function send discover message to BTA task.
- *
- * Returns          void
- *
- ******************************************************************************/
-static void bta_dm_discover_send_msg(const RawAddress& bd_addr,
-                                     tBTA_SERVICE_MASK_EXT* p_services,
-                                     tBTA_DM_SEARCH_CBACK* p_cback,
-                                     bool sdp_search,
-                                     tBTA_TRANSPORT transport) {
-  const size_t len =
-      p_services
-          ? (sizeof(tBTA_DM_API_DISCOVER) + sizeof(Uuid) * p_services->num_uuid)
-          : sizeof(tBTA_DM_API_DISCOVER);
-  tBTA_DM_API_DISCOVER* p_msg = (tBTA_DM_API_DISCOVER*)osi_calloc(len);
-
-  p_msg->hdr.event = BTA_DM_API_DISCOVER_EVT;
-  p_msg->bd_addr = bd_addr;
-  p_msg->p_cback = p_cback;
-  p_msg->sdp_search = sdp_search;
-  p_msg->transport = transport;
-
-  if (p_services != NULL) {
-    p_msg->services = p_services->srvc_mask;
-    p_msg->num_uuid = p_services->num_uuid;
-    if (p_services->num_uuid != 0) {
-      p_msg->p_uuid = (Uuid*)(p_msg + 1);
-      memcpy(p_msg->p_uuid, p_services->p_uuid,
-             sizeof(Uuid) * p_services->num_uuid);
-    }
-  }
-
-  bta_sys_sendmsg(p_msg);
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmDiscoverByTransport
- *
- * Description      This function does service discovery on particular transport
- *                  for services of a
- *                  peer device. When services.num_uuid is 0, it indicates all
- *                  GATT based services are to be searched; otherwise a list of
- *                  UUID of interested services should be provided through
- *                  p_services->p_uuid.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmDiscoverByTransport(const RawAddress& bd_addr,
-                               tBTA_SERVICE_MASK_EXT* p_services,
-                               tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search,
-                               tBTA_TRANSPORT transport) {
-  bta_dm_discover_send_msg(bd_addr, p_services, p_cback, sdp_search, transport);
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmDiscoverExt
- *
- * Description      This function does service discovery for services of a
- *                  peer device. When services.num_uuid is 0, it indicates all
- *                  GATT based services are to be searched; other wise a list of
- *                  UUID of interested services should be provided through
- *                  p_services->p_uuid.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmDiscoverExt(const RawAddress& bd_addr,
-                       tBTA_SERVICE_MASK_EXT* p_services,
-                       tBTA_DM_SEARCH_CBACK* p_cback, bool sdp_search) {
-  bta_dm_discover_send_msg(bd_addr, p_services, p_cback, sdp_search,
-                           BTA_TRANSPORT_UNKNOWN);
-}
-
-/*******************************************************************************
- *
- * Function         BTA_DmSearchExt
- *
- * Description      This function searches for peer Bluetooth devices. It
- *                  performs an inquiry and gets the remote name for devices.
- *                  Service discovery is done if services is non zero
- *
- * Parameters       p_dm_inq: inquiry conditions
- *                  p_services: if service is not empty, service discovery will
- *                              be done. For all GATT based service conditions,
- *                              put num_uuid, and p_uuid is the pointer to the
- *                              list of UUID values.
- *                  p_cback: callback function when search is completed.
- *
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_DmSearchExt(tBTA_DM_INQ* p_dm_inq, tBTA_SERVICE_MASK_EXT* p_services,
-                     tBTA_DM_SEARCH_CBACK* p_cback) {
-  const size_t len =
-      p_services
-          ? (sizeof(tBTA_DM_API_SEARCH) + sizeof(Uuid) * p_services->num_uuid)
-          : sizeof(tBTA_DM_API_SEARCH);
-  tBTA_DM_API_SEARCH* p_msg = (tBTA_DM_API_SEARCH*)osi_calloc(len);
-
-  p_msg->hdr.event = BTA_DM_API_SEARCH_EVT;
-  memcpy(&p_msg->inq_params, p_dm_inq, sizeof(tBTA_DM_INQ));
-  p_msg->p_cback = p_cback;
-  p_msg->rs_res = BTA_DM_RS_NONE;
-
-  if (p_services != NULL) {
-    p_msg->services = p_services->srvc_mask;
-    p_msg->num_uuid = p_services->num_uuid;
-
-    if (p_services->num_uuid != 0) {
-      p_msg->p_uuid = (Uuid*)(p_msg + 1);
-      memcpy(p_msg->p_uuid, p_services->p_uuid,
-             sizeof(Uuid) * p_services->num_uuid);
-    } else {
-      p_msg->p_uuid = NULL;
-    }
-  }
-
-  bta_sys_sendmsg(p_msg);
+  do_in_main_thread(
+      FROM_HERE, base::Bind(bta_dm_ble_set_conn_params, bd_addr, min_conn_int,
+                            max_conn_int, slave_latency, supervision_tout));
 }
 
 /*******************************************************************************
@@ -729,7 +493,7 @@ void BTA_DmBleUpdateConnectionParams(const RawAddress& bd_addr,
                                      uint16_t min_int, uint16_t max_int,
                                      uint16_t latency, uint16_t timeout,
                                      uint16_t min_ce_len, uint16_t max_ce_len) {
-  do_in_bta_thread(
+  do_in_main_thread(
       FROM_HERE, base::Bind(bta_dm_ble_update_conn_params, bd_addr, min_int,
                             max_int, latency, timeout, min_ce_len, max_ce_len));
 }
@@ -747,8 +511,8 @@ void BTA_DmBleUpdateConnectionParams(const RawAddress& bd_addr,
  ******************************************************************************/
 void BTA_DmBleConfigLocalPrivacy(bool privacy_enable) {
 #if (BLE_PRIVACY_SPT == TRUE)
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_ble_config_local_privacy, privacy_enable));
+  do_in_main_thread(
+      FROM_HERE, base::Bind(bta_dm_ble_config_local_privacy, privacy_enable));
 #else
   UNUSED(privacy_enable);
 #endif
@@ -766,15 +530,15 @@ void BTA_DmBleConfigLocalPrivacy(bool privacy_enable) {
  *
  ******************************************************************************/
 void BTA_DmBleGetEnergyInfo(tBTA_BLE_ENERGY_INFO_CBACK* p_cmpl_cback) {
-  do_in_bta_thread(FROM_HERE,
-                   base::Bind(bta_dm_ble_get_energy_info, p_cmpl_cback));
+  do_in_main_thread(FROM_HERE,
+                    base::Bind(bta_dm_ble_get_energy_info, p_cmpl_cback));
 }
 
 /** This function is to set maximum LE data packet size */
 void BTA_DmBleSetDataLength(const RawAddress& remote_device,
                             uint16_t tx_data_length) {
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_ble_set_data_length,
-                                         remote_device, tx_data_length));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_ble_set_data_length,
+                                          remote_device, tx_data_length));
 }
 
 /*******************************************************************************
@@ -799,12 +563,12 @@ void BTA_DmBleSetDataLength(const RawAddress& remote_device,
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmSetEncryption(const RawAddress& bd_addr, tBTA_TRANSPORT transport,
+void BTA_DmSetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport,
                          tBTA_DM_ENCRYPT_CBACK* p_callback,
-                         tBTA_DM_BLE_SEC_ACT sec_act) {
+                         tBTM_BLE_SEC_ACT sec_act) {
   APPL_TRACE_API("%s", __func__);
-  do_in_bta_thread(FROM_HERE, base::Bind(bta_dm_set_encryption, bd_addr,
-                                         transport, p_callback, sec_act));
+  do_in_main_thread(FROM_HERE, base::Bind(bta_dm_set_encryption, bd_addr,
+                                          transport, p_callback, sec_act));
 }
 
 /*******************************************************************************
@@ -821,8 +585,8 @@ void BTA_DmSetEncryption(const RawAddress& bd_addr, tBTA_TRANSPORT transport,
  *
  ******************************************************************************/
 void BTA_DmCloseACL(const RawAddress& bd_addr, bool remove_dev,
-                    tBTA_TRANSPORT transport) {
-  do_in_bta_thread(
+                    tBT_TRANSPORT transport) {
+  do_in_main_thread(
       FROM_HERE, base::Bind(bta_dm_close_acl, bd_addr, remove_dev, transport));
 }
 
@@ -844,7 +608,7 @@ void BTA_DmCloseACL(const RawAddress& bd_addr, bool remove_dev,
 extern void BTA_DmBleObserve(bool start, uint8_t duration,
                              tBTA_DM_SEARCH_CBACK* p_results_cb) {
   APPL_TRACE_API("%s:start = %d ", __func__, start);
-  do_in_bta_thread(
+  do_in_main_thread(
       FROM_HERE, base::Bind(bta_dm_ble_observe, start, duration, p_results_cb));
 }
 
@@ -858,29 +622,3 @@ extern void BTA_DmBleObserve(bool start, uint8_t duration,
  *
  ******************************************************************************/
 void BTA_VendorInit(void) { APPL_TRACE_API("BTA_VendorInit"); }
-
-/*******************************************************************************
- *
- * Function         BTA_VendorCleanup
- *
- * Description      This function frees up Broadcom specific VS specific dynamic
- *                  memory
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_VendorCleanup(void) {
-  tBTM_BLE_VSC_CB cmn_ble_vsc_cb;
-  BTM_BleGetVendorCapabilities(&cmn_ble_vsc_cb);
-
-  if (cmn_ble_vsc_cb.max_filter > 0) {
-    btm_ble_adv_filter_cleanup();
-#if (BLE_PRIVACY_SPT == TRUE)
-    btm_ble_resolving_list_cleanup();
-#endif
-  }
-
-  if (cmn_ble_vsc_cb.tot_scan_results_strg > 0) btm_ble_batchscan_cleanup();
-
-  if (cmn_ble_vsc_cb.adv_inst_max > 0) btm_ble_multi_adv_cleanup();
-}

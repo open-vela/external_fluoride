@@ -1,10 +1,15 @@
 subdirs = [
+    "apex",
     "binder",
     "build",
     "btif",
     "btcore",
+    "common",
     "audio_a2dp_hw",
+    "audio_bluetooth_hw",
+    "audio_hal_interface",
     "audio_hearing_aid_hw",
+    "gd",
     "hci",
     "utils",
     "device",
@@ -22,3 +27,10 @@ subdirs = [
     "tools",
     "proto",
 ]
+
+filegroup {
+    name: "BluetoothTestConfigTemplate",
+    srcs: [
+        "AndroidTestTemplate.xml",
+    ],
+}
