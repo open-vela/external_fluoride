@@ -1443,6 +1443,8 @@ bool BTM_GetSecurityFlagsByTransport(const RawAddress& bd_addr,
  ******************************************************************************/
 void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len);
 
+bool BTM_SimpleSetSecurityLevel(uint8_t service_id, uint16_t sec_level,
+                                uint16_t psm);
 /*******************************************************************************
  *
  * Function         BTM_SetSecurityLevel
@@ -1458,6 +1460,19 @@ void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len);
 bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
                           uint8_t service_id, uint16_t sec_level, uint16_t psm,
                           uint32_t mx_proto_id, uint32_t mx_chan_id);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetOutService
+ *
+ * Description      This function is called to set the service for
+ *                  outgoing connection.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_SetOutService(const RawAddress& bd_addr, uint8_t service_id,
+                       uint32_t mx_chan_id);
 
 /*******************************************************************************
  *
