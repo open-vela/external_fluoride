@@ -1400,7 +1400,8 @@ void bta_av_connect_req(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
     return;
   }
 
-  AVDT_ConnectReq(p_scb->PeerAddress(), p_scb->hdi, &bta_av_proc_stream_evt);
+  AVDT_ConnectReq(p_scb->PeerAddress(), p_scb->hdi, BTA_SEC_AUTHENTICATE,
+                  &bta_av_proc_stream_evt);
 }
 
 /*******************************************************************************
@@ -2691,7 +2692,8 @@ void bta_av_rcfg_connect(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
     /* let bta_av_rcfg_failed report fail */
     bta_av_rcfg_failed(p_scb, NULL);
   } else {
-    AVDT_ConnectReq(p_scb->PeerAddress(), p_scb->hdi, &bta_av_proc_stream_evt);
+    AVDT_ConnectReq(p_scb->PeerAddress(), p_scb->hdi, BTA_SEC_AUTHENTICATE,
+                    &bta_av_proc_stream_evt);
   }
 }
 
@@ -2722,7 +2724,8 @@ void bta_av_rcfg_discntd(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
     /* report close event & go to init state */
     bta_av_ssm_execute(p_scb, BTA_AV_STR_DISC_FAIL_EVT, NULL);
   } else {
-    AVDT_ConnectReq(p_scb->PeerAddress(), p_scb->hdi, &bta_av_proc_stream_evt);
+    AVDT_ConnectReq(p_scb->PeerAddress(), p_scb->hdi, BTA_SEC_AUTHENTICATE,
+                    &bta_av_proc_stream_evt);
   }
 }
 
