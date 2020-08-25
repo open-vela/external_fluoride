@@ -38,18 +38,15 @@
 #include "bta_jv_int.h"
 #include "bta_sys.h"
 #include "btm_api.h"
-#include "btm_int.h"
-#include "device/include/controller.h"
 #include "gap_api.h"
 #include "l2c_api.h"
 #include "osi/include/allocator.h"
 #include "port_api.h"
 #include "rfcdefs.h"
 #include "sdp_api.h"
-#include "stack/l2cap/l2c_int.h"
-#include "utl.h"
 
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
 
 using bluetooth::Uuid;
 
@@ -578,9 +575,7 @@ bool bta_jv_check_psm(uint16_t psm) {
 
         case AVCT_PSM: /* 0x17 */
         case AVDT_PSM: /* 0x19 */
-          if ((!bta_sys_is_register(BTA_ID_AV)) &&
-              (!bta_sys_is_register(BTA_ID_AVK)))
-            ret = true;
+          if (!bta_sys_is_register(BTA_ID_AV)) ret = true;
           break;
 
         default:
@@ -928,10 +923,6 @@ void bta_jv_l2cap_connect(int32_t type, tBTA_SEC sec_mask, tBTA_JV_ROLE role,
   cfg.mtu_present = true;
   cfg.mtu = rx_mtu;
 
-  /* TODO: DM role manager
-  L2CA_SetDesireRole(role);
-  */
-
   uint8_t sec_id = bta_jv_alloc_sec_id();
   tBTA_JV_L2CAP_CL_INIT evt_data;
   evt_data.sec_id = sec_id;
@@ -1084,10 +1075,6 @@ void bta_jv_l2cap_start_server(int32_t type, tBTA_SEC sec_mask,
     cfg.mtu_present = false;
     cfg.mtu = 0;
   }
-
-  /* TODO DM role manager
-  L2CA_SetDesireRole(role);
-  */
 
   uint8_t sec_id = bta_jv_alloc_sec_id();
   uint16_t max_mps = 0xffff;  // Let GAP_ConnOpen set the max_mps.
@@ -1335,29 +1322,23 @@ void bta_jv_rfcomm_connect(tBTA_SEC sec_mask, tBTA_JV_ROLE role,
   uint32_t event_mask = BTA_JV_RFC_EV_MASK;
   tPORT_STATE port_state;
 
-  /* TODO DM role manager
-  L2CA_SetDesireRole(role);
-  */
-
   uint8_t sec_id = bta_jv_alloc_sec_id();
 
   tBTA_JV_RFCOMM_CL_INIT evt_data;
   memset(&evt_data, 0, sizeof(evt_data));
   evt_data.sec_id = sec_id;
   evt_data.status = BTA_JV_SUCCESS;
-  if (0 == sec_id ||
-      !BTM_SetSecurityLevel(true, "", sec_id, sec_mask, BT_PSM_RFCOMM,
-                            BTM_SEC_PROTO_RFCOMM, remote_scn)) {
+  if (0 == sec_id) {
     evt_data.status = BTA_JV_FAILURE;
     LOG(ERROR) << __func__ << ": sec_id=" << +sec_id
-               << " is zero or BTM_SetSecurityLevel failed, remote_scn:"
-               << +remote_scn;
+               << " is zero, remote_scn:" << +remote_scn;
   }
 
   if (evt_data.status == BTA_JV_SUCCESS &&
-      RFCOMM_CreateConnection(UUID_SERVCLASS_SERIAL_PORT, remote_scn, false,
-                              BTA_JV_DEF_RFC_MTU, peer_bd_addr, &handle,
-                              bta_jv_port_mgmt_cl_cback) != PORT_SUCCESS) {
+      RFCOMM_CreateConnectionWithSecurity(
+          UUID_SERVCLASS_SERIAL_PORT, remote_scn, false, BTA_JV_DEF_RFC_MTU,
+          peer_bd_addr, &handle, bta_jv_port_mgmt_cl_cback, sec_id,
+          sec_mask) != PORT_SUCCESS) {
     LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
     evt_data.status = BTA_JV_FAILURE;
   }
@@ -1649,9 +1630,6 @@ void bta_jv_rfcomm_start_server(tBTA_SEC sec_mask, tBTA_JV_ROLE role,
   tBTA_JV_PCB* p_pcb;
   tBTA_JV_RFCOMM_START evt_data;
 
-  /* TODO DM role manager
-  L2CA_SetDesireRole(role);
-  */
   memset(&evt_data, 0, sizeof(evt_data));
   evt_data.status = BTA_JV_FAILURE;
   VLOG(2) << __func__ << ": sec id in use=" << get_sec_id_used()
@@ -1660,16 +1638,15 @@ void bta_jv_rfcomm_start_server(tBTA_SEC sec_mask, tBTA_JV_ROLE role,
   do {
     sec_id = bta_jv_alloc_sec_id();
 
-    if (0 == sec_id ||
-        !BTM_SetSecurityLevel(false, "JV PORT", sec_id, sec_mask, BT_PSM_RFCOMM,
-                              BTM_SEC_PROTO_RFCOMM, local_scn)) {
+    if (0 == sec_id) {
       LOG(ERROR) << __func__ << ": run out of sec_id";
       break;
     }
 
-    if (RFCOMM_CreateConnection(sec_id, local_scn, true, BTA_JV_DEF_RFC_MTU,
-                                RawAddress::kAny, &handle,
-                                bta_jv_port_mgmt_sr_cback) != PORT_SUCCESS) {
+    if (RFCOMM_CreateConnectionWithSecurity(
+            sec_id, local_scn, true, BTA_JV_DEF_RFC_MTU, RawAddress::kAny,
+            &handle, bta_jv_port_mgmt_sr_cback, sec_id,
+            sec_mask) != PORT_SUCCESS) {
       LOG(ERROR) << __func__ << ": RFCOMM_CreateConnection failed";
       break;
     }
@@ -1890,15 +1867,6 @@ static struct fc_channel* fcchan_get(uint16_t chan, char create) {
   static tL2CAP_FIXED_CHNL_REG fcr = {
       .pL2CA_FixedConn_Cb = fcchan_conn_chng_cbk,
       .pL2CA_FixedData_Cb = fcchan_data_cbk,
-      .fixed_chnl_opts =
-          {
-              .mode = L2CAP_FCR_BASIC_MODE,
-              .tx_win_sz = 1,
-              .max_transmit = 0xFF,
-              .rtrans_tout = 2000,
-              .mon_tout = 12000,
-              .mps = 670,
-          },
       .default_idle_tout = 0xffff,
   };
 
