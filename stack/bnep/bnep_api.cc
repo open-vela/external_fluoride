@@ -25,6 +25,7 @@
 #include "bnep_api.h"
 #include <string.h>
 #include "bnep_int.h"
+#include "stack/btm/btm_sec.h"
 
 using bluetooth::Uuid;
 
@@ -126,7 +127,8 @@ void BNEP_Deregister(void) {
  *
  ******************************************************************************/
 tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda, const Uuid& src_uuid,
-                          const Uuid& dst_uuid, uint16_t* p_handle) {
+                          const Uuid& dst_uuid, uint16_t* p_handle,
+                          uint32_t mx_chan_id) {
   uint16_t cid;
   tBNEP_CONN* p_bcb = bnepu_find_bcb_by_bd_addr(p_rem_bda);
 
@@ -159,19 +161,14 @@ tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda, const Uuid& src_uuid,
     BNEP_TRACE_API("BNEP initiating security procedures for src uuid %s",
                    p_bcb->src_uuid.ToString().c_str());
 
-#if (BNEP_DO_AUTH_FOR_ROLE_SWITCH == TRUE)
-    btm_sec_mx_access_request(p_bcb->rem_bda, BT_PSM_BNEP, true,
-                              BTM_SEC_PROTO_BNEP, src_uuid.As32Bit(),
-                              &bnep_sec_check_complete, p_bcb);
-#else
-    bnep_sec_check_complete(p_bcb->rem_bda, p_bcb, BTM_SUCCESS);
-#endif
-
+    bnep_sec_check_complete(&p_bcb->rem_bda, BT_TRANSPORT_BR_EDR, p_bcb,
+                            BTM_SUCCESS);
   } else {
     /* Transition to the next appropriate state, waiting for connection confirm.
      */
     p_bcb->con_state = BNEP_STATE_CONN_START;
 
+    BTM_SetOutService(p_rem_bda, BTM_SEC_SERVICE_BNEP_PANU, mx_chan_id);
     cid = L2CA_ConnectReq(BT_PSM_BNEP, p_bcb->rem_bda);
     if (cid != 0) {
       p_bcb->l2cap_cid = cid;
@@ -340,7 +337,7 @@ tBNEP_RESULT BNEP_WriteBuf(uint16_t handle, const RawAddress& p_dest_addr,
   p_bcb = &(bnep_cb.bcb[handle - 1]);
   /* Check MTU size */
   if (p_buf->len > BNEP_MTU_SIZE) {
-    BNEP_TRACE_ERROR("BNEP_Write() length %d exceeded MTU %d", p_buf->len,
+    BNEP_TRACE_ERROR("%s length %d exceeded MTU %d", __func__, p_buf->len,
                      BNEP_MTU_SIZE);
     osi_free(p_buf);
     return (BNEP_MTU_EXCEDED);
@@ -349,7 +346,7 @@ tBNEP_RESULT BNEP_WriteBuf(uint16_t handle, const RawAddress& p_dest_addr,
   /* Check if the packet should be filtered out */
   p_data = (uint8_t*)(p_buf + 1) + p_buf->offset;
   if (bnep_is_packet_allowed(p_bcb, p_dest_addr, protocol, fw_ext_present,
-                             p_data) != BNEP_SUCCESS) {
+                             p_data, p_buf->len) != BNEP_SUCCESS) {
     /*
     ** If packet is filtered and ext headers are present
     ** drop the data and forward the ext headers
@@ -361,6 +358,11 @@ tBNEP_RESULT BNEP_WriteBuf(uint16_t handle, const RawAddress& p_dest_addr,
       org_len = p_buf->len;
       new_len = 0;
       do {
+        if ((new_len + 2) > org_len) {
+          osi_free(p_buf);
+          return BNEP_IGNORE_CMD;
+        }
+
         ext = *p_data++;
         length = *p_data++;
         p_data += length;
@@ -437,7 +439,7 @@ tBNEP_RESULT BNEP_Write(uint16_t handle, const RawAddress& p_dest_addr,
 
   /* Check MTU size. Consider the possibility of having extension headers */
   if (len > BNEP_MTU_SIZE) {
-    BNEP_TRACE_ERROR("BNEP_Write() length %d exceeded MTU %d", len,
+    BNEP_TRACE_ERROR("%s length %d exceeded MTU %d", __func__, len,
                      BNEP_MTU_SIZE);
     return (BNEP_MTU_EXCEDED);
   }
@@ -448,7 +450,7 @@ tBNEP_RESULT BNEP_Write(uint16_t handle, const RawAddress& p_dest_addr,
 
   /* Check if the packet should be filtered out */
   if (bnep_is_packet_allowed(p_bcb, p_dest_addr, protocol, fw_ext_present,
-                             p_data) != BNEP_SUCCESS) {
+                             p_data, len) != BNEP_SUCCESS) {
     /*
     ** If packet is filtered and ext headers are present
     ** drop the data and forward the ext headers
@@ -461,6 +463,10 @@ tBNEP_RESULT BNEP_Write(uint16_t handle, const RawAddress& p_dest_addr,
       new_len = 0;
       p = p_data;
       do {
+        if ((new_len + 2) > org_len) {
+          return BNEP_IGNORE_CMD;
+        }
+
         ext = *p_data++;
         length = *p_data++;
         p_data += length;

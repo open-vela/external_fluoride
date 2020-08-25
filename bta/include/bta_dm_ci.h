@@ -29,19 +29,6 @@
 /*****************************************************************************
  *  Function Declarations
  ****************************************************************************/
-/*******************************************************************************
- *
- * Function         bta_dm_ci_io_req
- *
- * Description      This function must be called in response to function
- *                  bta_dm_co_io_req(), if *p_oob_data is set to BTA_OOB_UNKNOWN
- *                  by bta_dm_co_io_req().
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void bta_dm_ci_io_req(const RawAddress& bd_addr, tBTA_IO_CAP io_cap,
-                             tBTA_OOB_DATA oob_data, tBTA_AUTH_REQ auth_req);
 
 /*******************************************************************************
  *
@@ -55,7 +42,7 @@ extern void bta_dm_ci_io_req(const RawAddress& bd_addr, tBTA_IO_CAP io_cap,
  *
  ******************************************************************************/
 extern void bta_dm_ci_rmt_oob(bool accept, const RawAddress& bd_addr,
-                              BT_OCTET16 c, BT_OCTET16 r);
+                              const Octet16& c, const Octet16& r);
 /*******************************************************************************
  *
  * Function         bta_dm_sco_ci_data_ready
