@@ -20,9 +20,8 @@
 #include <vector>
 
 #include "device.h"
-#include "include/link.h"
 #include "include/phy.h"
-#include "packets/link_layer/link_layer_packet_view.h"
+#include "packets/link_layer_packets.h"
 #include "polled_socket.h"
 
 namespace test_vendor_lib {
@@ -43,17 +42,22 @@ class LinkLayerSocketDevice : public Device {
 
   virtual void Initialize(const std::vector<std::string>&) override {}
 
-  virtual void IncomingPacket(packets::LinkLayerPacketView packet) override;
+  virtual void IncomingPacket(
+      model::packets::LinkLayerPacketView packet) override;
 
   virtual void TimerTick() override;
+
+  static constexpr size_t kSizeBytes = sizeof(uint32_t);
 
  private:
   net::PolledSocket socket_;
   Phy::Type phy_type_;
-  size_t bytes_left_{0};
-  size_t offset_;
+  bool receiving_size_{true};
+  size_t bytes_left_{kSizeBytes};
+  size_t offset_{0};
+  std::shared_ptr<std::vector<uint8_t>> size_bytes_;
   std::shared_ptr<std::vector<uint8_t>> received_;
-  std::vector<packets::LinkLayerPacketView> packet_queue_;
+  std::vector<model::packets::LinkLayerPacketView> packet_queue_;
 };
 
 }  // namespace test_vendor_lib

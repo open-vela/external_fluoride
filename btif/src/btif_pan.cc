@@ -197,16 +197,15 @@ static inline int btpan_role_to_bta(int btpan_role) {
 
 static volatile int btpan_dev_local_role;
 #if (BTA_PAN_INCLUDED == TRUE)
-static tBTA_PAN_ROLE_INFO bta_panu_info = {PANU_SERVICE_NAME, 0, PAN_SECURITY};
-static tBTA_PAN_ROLE_INFO bta_pan_nap_info = {PAN_NAP_SERVICE_NAME, 1,
-                                              PAN_SECURITY};
+static tBTA_PAN_ROLE_INFO bta_panu_info = {PANU_SERVICE_NAME, 0};
+static tBTA_PAN_ROLE_INFO bta_pan_nap_info = {PAN_NAP_SERVICE_NAME, 1};
 #endif
 
 static bt_status_t btpan_enable(int local_role) {
 #if (BTA_PAN_INCLUDED == TRUE)
   BTIF_TRACE_DEBUG("%s - local_role: %d", __func__, local_role);
   int bta_pan_role = btpan_role_to_bta(local_role);
-  BTA_PanSetRole(bta_pan_role, &bta_panu_info, NULL, &bta_pan_nap_info);
+  BTA_PanSetRole(bta_pan_role, &bta_panu_info, &bta_pan_nap_info);
   btpan_dev_local_role = local_role;
   return BT_STATUS_SUCCESS;
 #else
@@ -420,8 +419,7 @@ int btpan_tap_send(int tap_fd, const RawAddress& src, const RawAddress& dst,
     char packet[TAP_MAX_PKT_WRITE_LEN + sizeof(tETH_HDR)];
     memcpy(packet, &eth_hdr, sizeof(tETH_HDR));
     if (len > TAP_MAX_PKT_WRITE_LEN) {
-      LOG_ERROR(LOG_TAG, "btpan_tap_send eth packet size:%d is exceeded limit!",
-                len);
+      LOG_ERROR("btpan_tap_send eth packet size:%d is exceeded limit!", len);
       return -1;
     }
     memcpy(packet + sizeof(tETH_HDR), buf, len);
@@ -616,7 +614,7 @@ static void bta_pan_callback_transfer(uint16_t event, char* p_param) {
       bt_status_t status;
       btpan_conn_t* conn = btpan_find_conn_handle(p_data->open.handle);
 
-      LOG_VERBOSE(LOG_TAG, "%s pan connection open status: %d", __func__,
+      LOG_VERBOSE("%s pan connection open status: %d", __func__,
                   p_data->open.status);
       if (p_data->open.status == BTA_PAN_SUCCESS) {
         state = BTPAN_STATE_CONNECTED;
@@ -638,7 +636,7 @@ static void bta_pan_callback_transfer(uint16_t event, char* p_param) {
       break;
     }
     case BTA_PAN_CLOSE_EVT: {
-      LOG_INFO(LOG_TAG, "%s: event = BTA_PAN_CLOSE_EVT handle %d", __func__,
+      LOG_INFO("%s: event = BTA_PAN_CLOSE_EVT handle %d", __func__,
                p_data->close.handle);
       btpan_conn_t* conn = btpan_find_conn_handle(p_data->close.handle);
       btpan_close_conn(conn);

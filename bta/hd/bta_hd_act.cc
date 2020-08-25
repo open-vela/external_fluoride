@@ -62,7 +62,7 @@ static bool check_descriptor(uint8_t* data, uint16_t length,
 
       case 0x85:  // Report ID
         *has_report_id = TRUE;
-
+        [[fallthrough]];
       default:
         ptr += (item & 0x03);
         break;
@@ -90,8 +90,6 @@ void bta_hd_api_enable(tBTA_HD_DATA* p_data) {
   HID_DevInit();
 
   memset(&bta_hd_cb, 0, sizeof(tBTA_HD_CB));
-
-  HID_DevSetSecurityLevel(BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT);
 
   /* store parameters */
   bta_hd_cb.p_cback = p_data->api_enable.p_cback;

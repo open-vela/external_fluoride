@@ -24,6 +24,7 @@
 #include "ble_advertiser.h"
 #include "ble_advertiser_hci_interface.h"
 #include "btm_int_types.h"
+#include "stack/btm/btm_ble_int.h"
 
 #include <string.h>
 #include <queue>
@@ -170,7 +171,7 @@ class BleAdvertisingManagerImpl
                    weak_factory_.GetWeakPtr()));
   }
 
-  ~BleAdvertisingManagerImpl() { adv_inst.clear(); }
+  ~BleAdvertisingManagerImpl() override { adv_inst.clear(); }
 
   void GetOwnAddress(uint8_t inst_id, GetAddressCallback cb) override {
     cb.Run(adv_inst[inst_id].own_address_type, adv_inst[inst_id].own_address);
@@ -257,7 +258,7 @@ class BleAdvertisingManagerImpl
               p_inst->own_address = bda;
 
               alarm_set_on_mloop(p_inst->adv_raddr_timer,
-                                 BTM_BLE_PRIVATE_ADDR_INT_MS,
+                                 btm_get_next_private_addrress_interval_ms(),
                                  btm_ble_adv_raddr_timer_timeout, p_inst);
               cb.Run(p_inst->inst_id, BTM_BLE_MULTI_ADV_SUCCESS);
             },
@@ -429,7 +430,8 @@ class BleAdvertisingManagerImpl
             c->self->adv_inst[c->inst_id].tx_power = tx_power;
 
             if (c->self->adv_inst[c->inst_id].own_address_type == BLE_ADDR_PUBLIC) {
-              c->self->StartAdvertisingSetAfterAddressPart(std::move(c));
+              auto self = c->self;
+              self->StartAdvertisingSetAfterAddressPart(std::move(c));
               return;
             }
 
@@ -449,7 +451,8 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                c->self->StartAdvertisingSetAfterAddressPart(std::move(c));
+                auto self = c->self;
+                self->StartAdvertisingSetAfterAddressPart(std::move(c));
           }, base::Passed(&c)));
         }, base::Passed(&c)));
     }, base::Passed(&c)));
@@ -492,11 +495,11 @@ class BleAdvertisingManagerImpl
                           return;
                         }
 
+                        auto self = c->self;
                         if (c->periodic_params.enable) {
-                          c->self->StartAdvertisingSetPeriodicPart(
-                              std::move(c));
+                          self->StartAdvertisingSetPeriodicPart(std::move(c));
                         } else {
-                          c->self->StartAdvertisingSetFinish(std::move(c));
+                          self->StartAdvertisingSetFinish(std::move(c));
                         }
                       },
                       base::Passed(&c)));
@@ -550,7 +553,8 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                c->self->StartAdvertisingSetFinish(std::move(c));
+                auto self = c->self;
+                self->StartAdvertisingSetFinish(std::move(c));
 
               }, base::Passed(&c)));
         }, base::Passed(&c)));
@@ -689,13 +693,17 @@ class BleAdvertisingManagerImpl
     p_inst->advertising_interval = p_params->adv_int_min;
     const RawAddress& peer_address = RawAddress::kEmpty;
 
+    // sid must be in range 0x00 to 0x0F. Since no controller supports more than
+    // 16 advertisers, it's safe to make sid equal to inst_id.
+    uint8_t sid = p_inst->inst_id % 0x0F;
+
     GetHciInterface()->SetParameters(
         p_inst->inst_id, p_params->advertising_event_properties,
         p_params->adv_int_min, p_params->adv_int_max, p_params->channel_map,
         p_inst->own_address_type, p_inst->own_address, 0x00, peer_address,
         p_params->adv_filter_policy, p_inst->tx_power,
         p_params->primary_advertising_phy, 0x00,
-        p_params->secondary_advertising_phy, 0x01 /* TODO: proper SID */,
+        p_params->secondary_advertising_phy, sid,
         p_params->scan_request_notification_enable, cb);
 
     // TODO: re-enable only if it was enabled, properly call
@@ -728,16 +736,13 @@ class BleAdvertisingManagerImpl
       data.insert(data.begin(), flags.begin(), flags.end());
     }
 
-    // Find and fill TX Power with the correct value
-    if (data.size()) {
-      size_t i = 0;
-      while (i < data.size()) {
-        uint8_t type = data[i + 1];
-        if (type == HCI_EIR_TX_POWER_LEVEL_TYPE) {
-          data[i + 2] = adv_inst[inst_id].tx_power;
-        }
-        i += data[i] + 1;
+    // Find and fill TX Power with the correct value.
+    // The TX Power section is a 3 byte section.
+    for (size_t i = 0; (i + 2) < data.size();) {
+      if (data[i + 1] == HCI_EIR_TX_POWER_LEVEL_TYPE) {
+        data[i + 2] = adv_inst[inst_id].tx_power;
       }
+      i += data[i] + 1;
     }
 
     VLOG(1) << "data is: " << base::HexEncode(data.data(), data.size());
@@ -791,8 +796,9 @@ class BleAdvertisingManagerImpl
     int length = moreThanOnePacket ? ADV_DATA_LEN_MAX : dataSize - offset;
     int newOffset = offset + length;
 
+    auto dataData = data.data();
     sender.Run(
-        inst_id, operation, length, data.data() + offset,
+        inst_id, operation, length, dataData + offset,
         Bind(&BleAdvertisingManagerImpl::DivideAndSendDataRecursively, false,
              inst_id, std::move(data), newOffset, std::move(done_cb), sender));
   }
