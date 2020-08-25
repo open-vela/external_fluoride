@@ -135,6 +135,8 @@ void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len);
  * Returns          true if registered OK, else false
  *
  ******************************************************************************/
+bool BTM_SimpleSetSecurityLevel(uint8_t service_id, uint16_t sec_level,
+                                uint16_t psm);
 bool BTM_SetSecurityLevel(bool is_originator, const char* p_name,
                           uint8_t service_id, uint16_t sec_level, uint16_t psm,
                           uint32_t mx_proto_id, uint32_t mx_chan_id);
@@ -379,6 +381,23 @@ bool BTM_BothEndsSupportSecureConnections(const RawAddress& bd_addr);
  *
  ******************************************************************************/
 bool BTM_PeerSupportsSecureConnections(const RawAddress& bd_addr);
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetOutService
+ *
+ * Description      This function is called to set the service for
+ *                  outgoing connections.
+ *
+ *                  If the profile/application calls BTM_SetSecurityLevel
+ *                  before initiating a connection, this function does not
+ *                  need to be called.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_SetOutService(const RawAddress& bd_addr, uint8_t service_id,
+                       uint32_t mx_chan_id);
 
 /*******************************************************************************
  *

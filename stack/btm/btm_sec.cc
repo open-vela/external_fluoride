@@ -52,6 +52,7 @@
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
 extern void bta_dm_remove_device(const RawAddress& bd_addr);
+extern void bta_dm_process_remove_device(const RawAddress& bd_addr);
 
 /*******************************************************************************
  *             L O C A L    F U N C T I O N     P R O T O T Y P E S            *
@@ -350,6 +351,12 @@ void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len) {
 }
 
 #define BTM_NO_AVAIL_SEC_SERVICES ((uint16_t)0xffff)
+
+bool BTM_SimpleSetSecurityLevel(uint8_t service_id, uint16_t sec_level,
+                                uint16_t psm) {
+  return BTM_SetSecurityLevel(true, "", service_id, sec_level, psm, 0, 0) &&
+         BTM_SetSecurityLevel(false, "", service_id, sec_level, psm, 0, 0);
+}
 
 /*******************************************************************************
  *
@@ -1381,6 +1388,44 @@ bool BTM_PeerSupportsSecureConnections(const RawAddress& bd_addr) {
   }
 
   return (p_dev_rec->remote_supports_secure_connections);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_SetOutService
+ *
+ * Description      This function is called to set the service for
+ *                  outgoing connections.
+ *
+ *                  If the profile/application calls BTM_SetSecurityLevel
+ *                  before initiating a connection, this function does not
+ *                  need to be called.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTM_SetOutService(const RawAddress& bd_addr, uint8_t service_id,
+                       uint32_t mx_chan_id) {
+  tBTM_SEC_DEV_REC* p_dev_rec;
+  tBTM_SEC_SERV_REC* p_serv_rec = &btm_cb.sec_serv_rec[0];
+
+  btm_cb.p_out_serv = p_serv_rec;
+  p_dev_rec = btm_find_dev(bd_addr);
+
+  for (int i = 0; i < BTM_SEC_MAX_SERVICE_RECORDS; i++, p_serv_rec++) {
+    if ((p_serv_rec->security_flags & BTM_SEC_IN_USE) &&
+        (p_serv_rec->service_id == service_id) &&
+        (p_serv_rec->orig_mx_chan_id == mx_chan_id)) {
+      BTM_TRACE_API(
+          "BTM_SetOutService p_out_serv id %d, psm 0x%04x, proto_id %d, "
+          "chan_id %d",
+          p_serv_rec->service_id, p_serv_rec->psm, p_serv_rec->mx_proto_id,
+          p_serv_rec->orig_mx_chan_id);
+      btm_cb.p_out_serv = p_serv_rec;
+      if (p_dev_rec) p_dev_rec->p_cur_service = p_serv_rec;
+      break;
+    }
+  }
 }
 
 /************************************************************************
@@ -2530,6 +2575,13 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
+  if (btm_sec_is_a_bonded_dev(p)) {
+    BTM_TRACE_WARNING(
+        "%s: Incoming bond request, but %s is already bonded (removing)",
+        __func__, p.ToString().c_str());
+    bta_dm_process_remove_device(p);
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2558,7 +2610,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
-
+ 
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -3898,7 +3950,8 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
    */
   if (is_sample_ltk(p_dev_rec->ble.keys.pltk)) {
     android_errorWriteLog(0x534e4554, "128437297");
-    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: " << p_dev_rec->bd_addr;
+    LOG(INFO) << __func__ << " removing bond to device that used sample LTK: "
+              << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
   }
