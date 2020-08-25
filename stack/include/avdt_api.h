@@ -900,7 +900,7 @@ extern uint16_t AVDT_WriteReqOpt(uint8_t handle, BT_HDR* p_pkt,
  *
  ******************************************************************************/
 extern uint16_t AVDT_ConnectReq(const RawAddress& bd_addr,
-                                uint8_t channel_index,
+                                uint8_t channel_index, uint8_t sec_mask,
                                 tAVDT_CTRL_CBACK* p_cback);
 
 /*******************************************************************************
