@@ -72,20 +72,16 @@ class LeSecurityTest(GdBaseTestClass):
         self.cert_security = PyLeSecurity(self.cert)
         self.dut_hci = PyHci(self.dut)
 
-        raw_addr = self.dut.hci_controller.GetMacAddress(empty_proto.Empty()).address
-
         self.dut_address = common.BluetoothAddressWithType(
-            address=common.BluetoothAddress(address=raw_addr), type=common.PUBLIC_DEVICE_ADDRESS)
+            address=common.BluetoothAddress(address=bytes(b'DD:05:04:03:02:01')), type=common.RANDOM_DEVICE_ADDRESS)
         privacy_policy = le_initiator_address_facade.PrivacyPolicy(
-            address_policy=le_initiator_address_facade.AddressPolicy.USE_PUBLIC_ADDRESS,
+            address_policy=le_initiator_address_facade.AddressPolicy.USE_STATIC_ADDRESS,
             address_with_type=self.dut_address)
         self.dut.security.SetLeInitiatorAddressPolicy(privacy_policy)
         self.cert_address = common.BluetoothAddressWithType(
-            address=common.BluetoothAddress(
-                address=self.cert.hci_controller.GetMacAddress(empty_proto.Empty()).address),
-            type=common.PUBLIC_DEVICE_ADDRESS)
+            address=common.BluetoothAddress(address=bytes(b'C5:11:FF:AA:33:22')), type=common.RANDOM_DEVICE_ADDRESS)
         cert_privacy_policy = le_initiator_address_facade.PrivacyPolicy(
-            address_policy=le_initiator_address_facade.AddressPolicy.USE_PUBLIC_ADDRESS,
+            address_policy=le_initiator_address_facade.AddressPolicy.USE_STATIC_ADDRESS,
             address_with_type=self.cert_address)
         self.cert.security.SetLeInitiatorAddressPolicy(cert_privacy_policy)
 
@@ -106,7 +102,7 @@ class LeSecurityTest(GdBaseTestClass):
             interval_min=512,
             interval_max=768,
             event_type=le_advertising_facade.AdvertisingEventType.ADV_IND,
-            address_type=self.cert_address.type,
+            address_type=common.RANDOM_DEVICE_ADDRESS,
             channel_map=7,
             filter_policy=le_advertising_facade.AdvertisingFilterPolicy.ALL_DEVICES)
         request = le_advertising_facade.CreateAdvertiserRequest(config=config)
@@ -123,7 +119,7 @@ class LeSecurityTest(GdBaseTestClass):
             interval_min=512,
             interval_max=768,
             event_type=le_advertising_facade.AdvertisingEventType.ADV_IND,
-            address_type=self.dut_address.type,
+            address_type=common.RANDOM_DEVICE_ADDRESS,
             channel_map=7,
             filter_policy=le_advertising_facade.AdvertisingFilterPolicy.ALL_DEVICES)
         request = le_advertising_facade.CreateAdvertiserRequest(config=config)
@@ -707,7 +703,6 @@ class LeSecurityTest(GdBaseTestClass):
             assertThat(self.dut_security.get_bond_stream()).emits(SecurityMatchers.BondMsg(BondMsgType.DEVICE_UNBONDED))
 
             self.dut_security.wait_device_disconnect(self.cert_address)
-            self.cert_security.wait_device_disconnect(self.dut_address)
 
     @metadata(
         pts_test_id="SM/SLA/SCOB/BV-02-C", pts_test_name="Out of Band, IUT Responder, Secure Connections – Success")
@@ -772,7 +767,6 @@ class LeSecurityTest(GdBaseTestClass):
 
             assertThat(self.dut_security.get_bond_stream()).emits(SecurityMatchers.BondMsg(BondMsgType.DEVICE_UNBONDED))
 
-            self.cert_security.wait_device_disconnect(self.dut_address)
             self.dut_security.wait_device_disconnect(self.cert_address)
 
     @metadata(
@@ -843,7 +837,6 @@ class LeSecurityTest(GdBaseTestClass):
             assertThat(self.dut_security.get_bond_stream()).emits(SecurityMatchers.BondMsg(BondMsgType.DEVICE_UNBONDED))
 
             self.dut_security.wait_device_disconnect(self.cert_address)
-            self.cert_security.wait_device_disconnect(self.dut_address)
 
     @metadata(
         pts_test_id="SM/MAS/SCOB/BV-04-C",
@@ -913,4 +906,3 @@ class LeSecurityTest(GdBaseTestClass):
             assertThat(self.dut_security.get_bond_stream()).emits(SecurityMatchers.BondMsg(BondMsgType.DEVICE_UNBONDED))
 
             self.dut_security.wait_device_disconnect(self.cert_address)
-            self.cert_security.wait_device_disconnect(self.dut_address)
