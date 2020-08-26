@@ -125,6 +125,7 @@ void l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
   tL2C_CONN_INFO ci;
   tL2C_LCB* p_lcb;
   tL2C_CCB* p_ccb;
+  tBTM_SEC_DEV_REC* p_dev_info = NULL;
 
   /* Save the parameters */
   ci.status = status;
@@ -169,7 +170,13 @@ void l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
     l2cu_send_peer_info_req(p_lcb, L2CAP_EXTENDED_FEATURES_INFO_TYPE);
 
     /* Tell BTM Acl management about the link */
-    btm_acl_created(ci.bd_addr, handle, p_lcb->LinkRole(), BT_TRANSPORT_BR_EDR);
+    p_dev_info = btm_find_dev(p_bda);
+    if (p_dev_info != NULL)
+      btm_acl_created(ci.bd_addr, handle, p_lcb->LinkRole(),
+                      BT_TRANSPORT_BR_EDR);
+    else
+      btm_acl_created(ci.bd_addr, handle, p_lcb->LinkRole(),
+                      BT_TRANSPORT_BR_EDR);
 
     BTM_SetLinkSuperTout(ci.bd_addr, acl_get_link_supervision_timeout());
 
