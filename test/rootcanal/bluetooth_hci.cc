@@ -164,6 +164,8 @@ Return<void> BluetoothHci::initialize_impl(
   controller_->RegisterTaskCancel(
       [this](AsyncTaskId task) { async_manager_.CancelAsyncTask(task); });
 
+  test_model_.Reset();
+
   // Add the controller as a device in the model.
   size_t controller_index = test_model_.Add(controller_);
   size_t low_energy_phy_index =
@@ -223,7 +225,6 @@ Return<void> BluetoothHci::initialize_impl(
 
 Return<void> BluetoothHci::close() {
   LOG_INFO("%s", __func__);
-  test_model_.Reset();
   return Void();
 }
 
