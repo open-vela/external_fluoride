@@ -260,6 +260,24 @@ tBTA_JV_STATUS BTA_JvL2capClose(uint32_t handle) {
 
 /*******************************************************************************
  *
+ * Function         BTA_JvL2capCloseLE
+ *
+ * Description      This function closes an L2CAP client connection for Fixed
+ *                  Channels Function is idempotent and no callbacks are called!
+ *
+ * Returns          BTA_JV_SUCCESS, if the request is being processed.
+ *                  BTA_JV_FAILURE, otherwise.
+ *
+ ******************************************************************************/
+tBTA_JV_STATUS BTA_JvL2capCloseLE(uint32_t handle) {
+  VLOG(2) << __func__;
+
+  do_in_main_thread(FROM_HERE, Bind(&bta_jv_l2cap_close_fixed, handle));
+  return BTA_JV_SUCCESS;
+}
+
+/*******************************************************************************
+ *
  * Function         BTA_JvL2capStartServer
  *
  * Description      This function starts an L2CAP server and listens for an
@@ -289,6 +307,28 @@ void BTA_JvL2capStartServer(int conn_type, tBTA_SEC sec_mask, tBTA_JV_ROLE role,
 
 /*******************************************************************************
  *
+ * Function         BTA_JvL2capStartServerLE
+ *
+ * Description      This function starts an LE L2CAP server and listens for an
+ *                  L2CAP connection from a remote Bluetooth device.  When the
+ *                  server is started successfully, tBTA_JV_L2CAP_CBACK is
+ *                  called with BTA_JV_L2CAP_START_EVT.  When the connection is
+ *                  established, tBTA_JV_L2CAP_CBACK is called with
+ *                  BTA_JV_L2CAP_OPEN_EVT.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void BTA_JvL2capStartServerLE(uint16_t local_chan, tBTA_JV_L2CAP_CBACK* p_cback,
+                              uint32_t l2cap_socket_id) {
+  VLOG(2) << __func__;
+  CHECK(p_cback);
+  do_in_main_thread(FROM_HERE, Bind(&bta_jv_l2cap_start_server_le, local_chan,
+                                    p_cback, l2cap_socket_id));
+}
+
+/*******************************************************************************
+ *
  * Function         BTA_JvL2capStopServer
  *
  * Description      This function stops the L2CAP server. If the server has an
@@ -304,6 +344,25 @@ tBTA_JV_STATUS BTA_JvL2capStopServer(uint16_t local_psm,
 
   do_in_main_thread(
       FROM_HERE, Bind(&bta_jv_l2cap_stop_server, local_psm, l2cap_socket_id));
+  return BTA_JV_SUCCESS;
+}
+
+/*******************************************************************************
+ *
+ * Function         BTA_JvL2capStopServerLE
+ *
+ * Description      This function stops the LE L2CAP server. If the server has
+ *                  an active connection, it would be closed.
+ *
+ * Returns          BTA_JV_SUCCESS, if the request is being processed.
+ *                  BTA_JV_FAILURE, otherwise.
+ *
+ ******************************************************************************/
+tBTA_JV_STATUS BTA_JvL2capStopServerLE(uint16_t local_chan,
+                                       uint32_t l2cap_socket_id) {
+  VLOG(2) << __func__;
+
+  do_in_main_thread(FROM_HERE, Bind(&bta_jv_l2cap_stop_server_le, local_chan));
   return BTA_JV_SUCCESS;
 }
 
@@ -395,6 +454,26 @@ tBTA_JV_STATUS BTA_JvL2capWrite(uint32_t handle, uint32_t req_id, BT_HDR* msg,
   do_in_main_thread(FROM_HERE, Bind(&bta_jv_l2cap_write, handle, req_id, msg,
                                     user_id, &bta_jv_cb.l2c_cb[handle]));
   return BTA_JV_SUCCESS;
+}
+
+/*******************************************************************************
+ *
+ * Function         BTA_JvL2capWriteFixed
+ *
+ * Description      This function writes data to an L2CAP connection
+ *                  When the operation is complete, tBTA_JV_L2CAP_CBACK is
+ *                  called with BTA_JV_L2CAP_WRITE_EVT. Works for
+ *                  fixed-channel connections. This function takes ownership of
+ *                  p_data, and will osi_free it.
+ *
+ ******************************************************************************/
+void BTA_JvL2capWriteFixed(uint16_t channel, const RawAddress& addr,
+                           uint32_t req_id, tBTA_JV_L2CAP_CBACK* p_cback,
+                           BT_HDR* msg, uint32_t user_id) {
+  VLOG(2) << __func__;
+
+  do_in_main_thread(FROM_HERE, Bind(&bta_jv_l2cap_write_fixed, channel, addr,
+                                    req_id, msg, user_id, p_cback));
 }
 
 /*******************************************************************************
