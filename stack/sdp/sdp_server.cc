@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,27 +23,19 @@
  *
  ******************************************************************************/
 
-#include <cutils/log.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <log/log.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_types.h"
-#include "bt_utils.h"
-#include "btu.h"
 
-#include "hcidefs.h"
-#include "hcimsgs.h"
-#include "l2cdefs.h"
-
+#include "avrc_defs.h"
+#include "device/include/interop.h"
 #include "osi/include/osi.h"
 #include "sdp_api.h"
 #include "sdpint.h"
 
 #if (SDP_SERVER_ENABLED == TRUE)
-
-extern fixed_queue_t* btu_general_alarm_queue;
 
 /* Maximum number of bytes to reserve out of SDP MTU for response data */
 #define SDP_MAX_SERVICE_RSPHDR_LEN 12
@@ -121,8 +113,8 @@ void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg) {
   uint16_t trans_num, param_len;
 
   /* Start inactivity timer */
-  alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
-                     sdp_conn_timer_timeout, p_ccb, btu_general_alarm_queue);
+  alarm_set_on_mloop(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                     sdp_conn_timer_timeout, p_ccb);
 
   if (p_req + sizeof(pdu_id) + sizeof(trans_num) > p_req_end) {
     android_errorWriteLog(0x534e4554, "69384124");
@@ -558,6 +550,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
   tSDP_RECORD* p_rec;
   tSDP_ATTR_SEQ attr_seq, attr_seq_sav;
   tSDP_ATTRIBUTE* p_attr;
+  tSDP_ATTRIBUTE attr_sav;
   bool maxxed_out = false, is_cont = false;
   uint8_t* p_seq_start;
   uint16_t seq_len, attr_len;
@@ -637,7 +630,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
        p_rec; p_rec = sdp_db_service_search(p_rec, &uid_seq)) {
     /* Allow space for attribute sequence type and length */
     p_seq_start = p_rsp;
-    if (p_ccb->cont_info.last_attr_seq_desc_sent == false) {
+    if (!p_ccb->cont_info.last_attr_seq_desc_sent) {
       /* See if there is enough room to include a new service in the current
        * response */
       rem_len = max_list_len - (int16_t)(p_rsp - &p_ccb->rsp_list[0]);
@@ -656,6 +649,19 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
                                        attr_seq.attr_entry[xx].end);
 
       if (p_attr) {
+        // Check if the attribute contain AVRCP profile description list
+        uint16_t avrcp_version = sdpu_is_avrcp_profile_description_list(p_attr);
+        if (avrcp_version > AVRC_REV_1_4 &&
+            interop_match_addr(INTEROP_AVRCP_1_4_ONLY,
+                               &(p_ccb->device_address))) {
+          SDP_TRACE_DEBUG(
+              "%s, device=%s is only accept AVRCP 1.4, reply AVRCP 1.4 "
+              "instead.",
+              __func__, p_ccb->device_address.ToString().c_str());
+          memcpy(&attr_sav, p_attr, sizeof(tSDP_ATTRIBUTE));
+          attr_sav.value_ptr[attr_sav.len - 1] = 0x04;
+          p_attr = &attr_sav;
+        }
         /* Check if attribute fits. Assume 3-byte value type/length */
         rem_len = max_list_len - (int16_t)(p_rsp - &p_ccb->rsp_list[0]);
 
@@ -719,7 +725,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
     }
 
     /* Go back and put the type and length into the buffer */
-    if (p_ccb->cont_info.last_attr_seq_desc_sent == false) {
+    if (!p_ccb->cont_info.last_attr_seq_desc_sent) {
       seq_len = sdpu_get_attrib_seq_len(p_rec, &attr_seq_sav);
       if (seq_len != 0) {
         UINT8_TO_BE_STREAM(p_seq_start,
@@ -835,5 +841,4 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
   /* Send the buffer through L2CAP */
   L2CA_DataWrite(p_ccb->connection_id, p_buf);
 }
-
 #endif /* SDP_SERVER_ENABLED == TRUE */

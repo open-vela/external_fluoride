@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2005-2012 Broadcom Corporation
+ *  Copyright 2005-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -108,29 +108,27 @@ typedef struct {
 /* data type for BTA_HH_API_ENABLE_EVT */
 typedef struct {
   BT_HDR hdr;
-  uint8_t sec_mask;
   uint8_t service_name[BTA_SERVICE_NAME_LEN + 1];
   tBTA_HH_CBACK* p_cback;
 } tBTA_HH_API_ENABLE;
 
 typedef struct {
   BT_HDR hdr;
-  BD_ADDR bd_addr;
-  uint8_t sec_mask;
+  RawAddress bd_addr;
   tBTA_HH_PROTO_MODE mode;
 } tBTA_HH_API_CONN;
 
 /* internal event data from BTE HID callback */
 typedef struct {
   BT_HDR hdr;
-  BD_ADDR addr;
+  RawAddress addr;
   uint32_t data;
   BT_HDR* p_data;
 } tBTA_HH_CBACK_DATA;
 
 typedef struct {
   BT_HDR hdr;
-  BD_ADDR bda;
+  RawAddress bda;
   uint16_t attr_mask;
   uint16_t sub_event;
   uint8_t sub_class;
@@ -175,7 +173,7 @@ typedef struct {
   uint8_t index;
   bool in_use;
   uint8_t srvc_inst_id;
-  uint8_t char_inst_id;
+  uint16_t char_inst_id;
   tBTA_HH_RPT_TYPE rpt_type;
   uint16_t uuid;
   uint8_t rpt_id;
@@ -217,12 +215,11 @@ typedef struct {
 /* device control block */
 typedef struct {
   tBTA_HH_DEV_DSCP_INFO dscp_info; /* report descriptor and DI information */
-  BD_ADDR addr;                    /* BD-Addr of the HID device */
+  RawAddress addr;                 /* BD-Addr of the HID device */
   uint16_t attr_mask;              /* attribute mask */
   uint16_t w4_evt;                 /* W4_handshake event name */
   uint8_t index;                   /* index number referenced to handle index */
   uint8_t sub_class;               /* Cod sub class */
-  uint8_t sec_mask;                /* security mask */
   uint8_t app_id;                  /* application ID for this connection */
   uint8_t hid_handle;          /* device handle : low 4 bits for regular HID:
                                   HID_HOST_MAX_DEVICES can not exceed 15;
@@ -284,9 +281,9 @@ typedef struct {
   uint8_t cb_index[BTA_HH_MAX_KNOWN];     /* maintain a CB index
                                         map to dev handle */
 #if (BTA_HH_LE_INCLUDED == TRUE)
-  uint8_t le_cb_index[BTA_HH_MAX_DEVICE]; /* maintain a CB index map to LE dev
+  uint8_t le_cb_index[BTA_HH_LE_MAX_KNOWN]; /* maintain a CB index map to LE dev
                                              handle */
-  tBTA_GATTC_IF gatt_if;
+  tGATT_IF gatt_if;
 #endif
   tBTA_HH_CBACK* p_cback; /* Application callbacks */
   tSDP_DISCOVERY_DB* p_disc_db;
@@ -323,7 +320,7 @@ extern void bta_hh_open_cmpl_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data);
 extern void bta_hh_open_failure(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data);
 
 /* utility functions */
-extern uint8_t bta_hh_find_cb(BD_ADDR bda);
+extern uint8_t bta_hh_find_cb(const RawAddress& bda);
 extern void bta_hh_parse_keybd_rpt(tBTA_HH_BOOT_RPT* p_kb_data,
                                    uint8_t* p_report, uint16_t report_len);
 extern void bta_hh_parse_mice_rpt(tBTA_HH_BOOT_RPT* p_kb_data,
@@ -348,16 +345,18 @@ extern void bta_hh_api_enable(tBTA_HH_DATA* p_data);
 extern void bta_hh_api_disable(void);
 extern void bta_hh_disc_cmpl(void);
 
-extern tBTA_HH_STATUS bta_hh_read_ssr_param(BD_ADDR bd_addr,
+extern tBTA_HH_STATUS bta_hh_read_ssr_param(const RawAddress& bd_addr,
                                             uint16_t* p_max_ssr_lat,
                                             uint16_t* p_min_ssr_tout);
 
 /* functions for LE HID */
 extern void bta_hh_le_enable(void);
-extern bool bta_hh_le_is_hh_gatt_if(tBTA_GATTC_IF client_if);
+extern bool bta_hh_le_is_hh_gatt_if(tGATT_IF client_if);
 extern void bta_hh_le_deregister(void);
-extern bool bta_hh_is_le_device(tBTA_HH_DEV_CB* p_cb, BD_ADDR remote_bda);
-extern void bta_hh_le_open_conn(tBTA_HH_DEV_CB* p_cb, BD_ADDR remote_bda);
+extern bool bta_hh_is_le_device(tBTA_HH_DEV_CB* p_cb,
+                                const RawAddress& remote_bda);
+extern void bta_hh_le_open_conn(tBTA_HH_DEV_CB* p_cb,
+                                const RawAddress& remote_bda);
 extern void bta_hh_le_api_disc_act(tBTA_HH_DEV_CB* p_cb);
 extern void bta_hh_le_get_dscp_act(tBTA_HH_DEV_CB* p_cb);
 extern void bta_hh_le_write_dev_act(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data);
@@ -368,13 +367,11 @@ extern void bta_hh_le_open_fail(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data);
 extern void bta_hh_gatt_open(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data);
 extern void bta_hh_gatt_close(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data);
 extern void bta_hh_start_security(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_buf);
-extern void bta_hh_start_srvc_discovery(tBTA_HH_DEV_CB* p_cb,
-                                        tBTA_HH_DATA* p_buf);
+
 extern void bta_hh_start_security(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_buf);
 extern void bta_hh_security_cmpl(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_buf);
 extern void bta_hh_le_notify_enc_cmpl(tBTA_HH_DEV_CB* p_cb,
                                       tBTA_HH_DATA* p_data);
-extern void bta_hh_ci_load_rpt(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_buf);
 
 #if (BTA_HH_DEBUG == TRUE)
 extern void bta_hh_trace_dev_db(void);

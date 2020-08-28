@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -60,8 +60,7 @@ extern void bta_ar_init(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void bta_ar_reg_avdt(tAVDT_REG* p_reg, tAVDT_CTRL_CBACK* p_cback,
-                            tBTA_SYS_ID sys_id);
+extern void bta_ar_reg_avdt(AvdtpRcb* p_reg, tAVDT_CTRL_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -72,7 +71,7 @@ extern void bta_ar_reg_avdt(tAVDT_REG* p_reg, tAVDT_CTRL_CBACK* p_cback,
  * Returns          void
  *
  ******************************************************************************/
-extern void bta_ar_dereg_avdt(tBTA_SYS_ID sys_id);
+extern void bta_ar_dereg_avdt();
 
 /*******************************************************************************
  *
@@ -86,7 +85,8 @@ extern void bta_ar_dereg_avdt(tBTA_SYS_ID sys_id);
  * Returns          void
  *
  ******************************************************************************/
-extern void bta_ar_avdt_conn(tBTA_SYS_ID sys_id, BD_ADDR bd_addr);
+extern void bta_ar_avdt_conn(tBTA_SYS_ID sys_id, const RawAddress& bd_addr,
+                             uint8_t scb_index);
 
 /*******************************************************************************
  *
@@ -97,8 +97,7 @@ extern void bta_ar_avdt_conn(tBTA_SYS_ID sys_id, BD_ADDR bd_addr);
  * Returns          void
  *
  ******************************************************************************/
-extern void bta_ar_reg_avct(uint16_t mtu, uint16_t mtu_br, uint8_t sec_mask,
-                            tBTA_SYS_ID sys_id);
+extern void bta_ar_reg_avct(uint16_t mtu, uint16_t mtu_br);
 
 /*******************************************************************************
  *
@@ -109,7 +108,7 @@ extern void bta_ar_reg_avct(uint16_t mtu, uint16_t mtu_br, uint8_t sec_mask,
  * Returns          void
  *
  ******************************************************************************/
-extern void bta_ar_dereg_avct(tBTA_SYS_ID sys_id);
+extern void bta_ar_dereg_avct();
 
 /******************************************************************************
  *
@@ -122,8 +121,7 @@ extern void bta_ar_dereg_avct(tBTA_SYS_ID sys_id);
  *****************************************************************************/
 extern void bta_ar_reg_avrc(uint16_t service_uuid, const char* p_service_name,
                             const char* p_provider_name, uint16_t categories,
-                            tBTA_SYS_ID sys_id, bool browse_supported,
-                            uint16_t profile_version);
+                            bool browse_supported, uint16_t profile_version);
 
 /******************************************************************************
  *
@@ -135,6 +133,6 @@ extern void bta_ar_reg_avrc(uint16_t service_uuid, const char* p_service_name,
  * Returns          void
  *
  *****************************************************************************/
-extern void bta_ar_dereg_avrc(uint16_t service_uuid, tBTA_SYS_ID sys_id);
+extern void bta_ar_dereg_avrc(uint16_t service_uuid);
 
 #endif /* BTA_AR_API_H */

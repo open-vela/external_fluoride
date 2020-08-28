@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -48,7 +48,6 @@ typedef uint8_t tBTA_PAN_EVT;
 
 /* pan roles */
 #define BTA_PAN_ROLE_PANU PAN_ROLE_CLIENT
-#define BTA_PAN_ROLE_GN PAN_ROLE_GN_SERVER
 #define BTA_PAN_ROLE_NAP PAN_ROLE_NAP_SERVER
 
 typedef uint8_t tBTA_PAN_ROLE;
@@ -57,8 +56,6 @@ typedef uint8_t tBTA_PAN_ROLE;
 typedef struct {
   const char* p_srv_name; /* service name for the PAN role */
   uint8_t app_id;         /* application id */
-  tBTA_SEC sec_mask;      /* security setting for the role */
-
 } tBTA_PAN_ROLE_INFO;
 
 /* Event associated with BTA_PAN_SET_ROLE_EVT */
@@ -69,14 +66,14 @@ typedef struct {
 
 /* Event associated with BTA_PAN_OPENING_EVT */
 typedef struct {
-  BD_ADDR bd_addr; /* BD address of peer device. */
+  RawAddress bd_addr; /* BD address of peer device. */
   uint16_t handle; /* Handle associated with this connection. */
 
 } tBTA_PAN_OPENING;
 
 /* Event associated with BTA_PAN_OPEN_EVT */
 typedef struct {
-  BD_ADDR bd_addr;          /* BD address of peer device. */
+  RawAddress bd_addr;       /* BD address of peer device. */
   uint16_t handle;          /* Handle associated with this connection. */
   tBTA_PAN_STATUS status;   /* status of open event */
   tBTA_PAN_ROLE local_role; /* Local device PAN role for the connection */
@@ -146,7 +143,6 @@ extern void BTA_PanDisable(void);
  *
  ******************************************************************************/
 void BTA_PanSetRole(tBTA_PAN_ROLE role, tBTA_PAN_ROLE_INFO* p_user_info,
-                    tBTA_PAN_ROLE_INFO* p_gn_info,
                     tBTA_PAN_ROLE_INFO* p_nap_info);
 
 /*******************************************************************************
@@ -161,7 +157,7 @@ void BTA_PanSetRole(tBTA_PAN_ROLE role, tBTA_PAN_ROLE_INFO* p_user_info,
  * Returns          void
  *
  ******************************************************************************/
-void BTA_PanOpen(BD_ADDR bd_addr, tBTA_PAN_ROLE local_role,
+void BTA_PanOpen(const RawAddress& bd_addr, tBTA_PAN_ROLE local_role,
                  tBTA_PAN_ROLE peer_role);
 
 /*******************************************************************************

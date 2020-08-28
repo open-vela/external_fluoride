@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2011-2012 Broadcom Corporation
+ *  Copyright 2011-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
  *
  ******************************************************************************/
 
+#define LOG_TAG "bt_bta_av"
+
 #include <base/logging.h>
 
 #include "bt_target.h"
@@ -36,6 +38,7 @@
 #include "bta_sys.h"
 
 #include "osi/include/allocator.h"
+#include "osi/include/log.h"
 
 /*****************************************************************************
  *  Constants
@@ -56,8 +59,7 @@ static const tBTA_SYS_REG bta_av_reg = {bta_av_hdl_event, BTA_AvDisable};
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AvEnable(tBTA_SEC sec_mask, tBTA_AV_FEAT features,
-                  tBTA_AV_CBACK* p_cback) {
+void BTA_AvEnable(tBTA_AV_FEAT features, tBTA_AV_CBACK* p_cback) {
   tBTA_AV_API_ENABLE* p_buf =
       (tBTA_AV_API_ENABLE*)osi_malloc(sizeof(tBTA_AV_API_ENABLE));
 
@@ -67,7 +69,6 @@ void BTA_AvEnable(tBTA_SEC sec_mask, tBTA_AV_FEAT features,
   p_buf->hdr.event = BTA_AV_API_ENABLE_EVT;
   p_buf->p_cback = p_cback;
   p_buf->features = features;
-  p_buf->sec_mask = sec_mask;
 
   bta_sys_sendmsg(p_buf);
 }
@@ -151,16 +152,19 @@ void BTA_AvDeregister(tBTA_AV_HNDL hndl) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AvOpen(BD_ADDR bd_addr, tBTA_AV_HNDL handle, bool use_rc,
-                tBTA_SEC sec_mask, uint16_t uuid) {
+void BTA_AvOpen(const RawAddress& bd_addr, tBTA_AV_HNDL handle, bool use_rc,
+                uint16_t uuid) {
+  LOG_INFO("%s: peer %s bta_handle:0x%x use_rc=%s uuid=0x%x", __func__,
+           bd_addr.ToString().c_str(), handle, (use_rc) ? "true" : "false",
+           uuid);
+
   tBTA_AV_API_OPEN* p_buf =
       (tBTA_AV_API_OPEN*)osi_malloc(sizeof(tBTA_AV_API_OPEN));
 
   p_buf->hdr.event = BTA_AV_API_OPEN_EVT;
   p_buf->hdr.layer_specific = handle;
-  bdcpy(p_buf->bd_addr, bd_addr);
+  p_buf->bd_addr = bd_addr;
   p_buf->use_rc = use_rc;
-  p_buf->sec_mask = sec_mask;
   p_buf->switch_res = BTA_AV_RS_NONE;
   p_buf->uuid = uuid;
 
@@ -177,6 +181,8 @@ void BTA_AvOpen(BD_ADDR bd_addr, tBTA_AV_HNDL handle, bool use_rc,
  *
  ******************************************************************************/
 void BTA_AvClose(tBTA_AV_HNDL handle) {
+  LOG_INFO("%s: bta_handle:0x%x", __func__, handle);
+
   BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
 
   p_buf->event = BTA_AV_API_CLOSE_EVT;
@@ -194,12 +200,14 @@ void BTA_AvClose(tBTA_AV_HNDL handle) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AvDisconnect(BD_ADDR bd_addr) {
+void BTA_AvDisconnect(const RawAddress& bd_addr) {
+  LOG_INFO("%s: peer %s", __func__, bd_addr.ToString().c_str());
+
   tBTA_AV_API_DISCNT* p_buf =
       (tBTA_AV_API_DISCNT*)osi_malloc(sizeof(tBTA_AV_API_DISCNT));
 
   p_buf->hdr.event = BTA_AV_API_DISCONNECT_EVT;
-  bdcpy(p_buf->bd_addr, bd_addr);
+  p_buf->bd_addr = bd_addr;
 
   bta_sys_sendmsg(p_buf);
 }
@@ -213,10 +221,13 @@ void BTA_AvDisconnect(BD_ADDR bd_addr) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AvStart(void) {
+void BTA_AvStart(tBTA_AV_HNDL handle) {
+  LOG_INFO("%s: bta_handle=0x%x", __func__, handle);
+
   BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
 
   p_buf->event = BTA_AV_API_START_EVT;
+  p_buf->layer_specific = handle;
 
   bta_sys_sendmsg(p_buf);
 }
@@ -231,6 +242,8 @@ void BTA_AvStart(void) {
  *
  ******************************************************************************/
 void BTA_AvOffloadStart(tBTA_AV_HNDL hndl) {
+  LOG_INFO("%s: bta_handle=0x%x", __func__, hndl);
+
   BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR));
 
   p_buf->event = BTA_AV_API_OFFLOAD_START_EVT;
@@ -270,11 +283,15 @@ void BTA_AvOffloadStartRsp(tBTA_AV_HNDL hndl, tBTA_AV_STATUS status) {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AvStop(bool suspend) {
+void BTA_AvStop(tBTA_AV_HNDL handle, bool suspend) {
+  LOG_INFO("%s: bta_handle=0x%x suspend=%s", __func__, handle,
+           logbool(suspend).c_str());
+
   tBTA_AV_API_STOP* p_buf =
       (tBTA_AV_API_STOP*)osi_malloc(sizeof(tBTA_AV_API_STOP));
 
   p_buf->hdr.event = BTA_AV_API_STOP_EVT;
+  p_buf->hdr.layer_specific = handle;
   p_buf->flush = true;
   p_buf->suspend = suspend;
   p_buf->reconfig_stop = false;
@@ -298,6 +315,9 @@ void BTA_AvStop(bool suspend) {
 void BTA_AvReconfig(tBTA_AV_HNDL hndl, bool suspend, uint8_t sep_info_idx,
                     uint8_t* p_codec_info, uint8_t num_protect,
                     const uint8_t* p_protect_info) {
+  LOG_INFO("%s: bta_handle=0x%x suspend=%s sep_info_idx=%d", __func__, hndl,
+           logbool(suspend).c_str(), sep_info_idx);
+
   tBTA_AV_API_RCFG* p_buf =
       (tBTA_AV_API_RCFG*)osi_malloc(sizeof(tBTA_AV_API_RCFG) + num_protect);
 

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,17 +31,6 @@
 #include "osi/include/fixed_queue.h"
 #include "port_api.h"
 #include "rfcdefs.h"
-
-/* Local events passed when application event is sent from the api to PORT */
-/* ???*/
-#define PORT_EVENT_OPEN (1 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_CONTROL (2 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_SET_STATE (3 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_SET_CALLBACK (5 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_WRITE (6 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_PURGE (7 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_SEND_ERROR (8 | BT_EVT_TO_BTU_SP_EVT)
-#define PORT_EVENT_FLOW_CONTROL (9 | BT_EVT_TO_BTU_SP_EVT)
 
 /*
  * Flow control configuration values for the mux
@@ -90,9 +79,9 @@ typedef struct {
 typedef struct {
   alarm_t* mcb_timer;   /* MCB timer */
   fixed_queue_t* cmd_q; /* Queue for command messages on this mux */
-  uint8_t port_inx[RFCOMM_MAX_DLCI + 1]; /* Array for quick access to  */
-                                         /* tPORT based on dlci        */
-  BD_ADDR bd_addr;                       /* BD ADDR of the peer if initiator */
+  uint8_t port_handles[RFCOMM_MAX_DLCI + 1]; /* Array for quick access to  */
+  /* port handles based on dlci        */
+  RawAddress bd_addr;                    /* BD ADDR of the peer if initiator */
   uint16_t lcid;                         /* Local cid used for this channel */
   uint16_t peer_l2cap_mtu; /* Max frame that can be sent to peer L2CAP */
   uint8_t state;           /* Current multiplexer channel state */
@@ -114,12 +103,6 @@ typedef struct {
  * RFCOMM Port Connection Control Block
 */
 typedef struct {
-#define RFC_PORT_STATE_IDLE 0
-#define RFC_PORT_STATE_WAIT_START 1
-#define RFC_PORT_STATE_OPENING 2
-#define RFC_PORT_STATE_OPENED 3
-#define RFC_PORT_STATE_CLOSING 4
-
   uint8_t state; /* Current state of the connection */
 
 #define RFC_RSP_PN 0x01
@@ -139,7 +122,7 @@ typedef struct {
  * Define control block containing information about PORT connection
 */
 typedef struct {
-  uint8_t inx; /* Index of this control block in the port_info array */
+  uint8_t handle;  // Starting from 1, unique for this object
   bool in_use; /* True when structure is allocated */
 
 #define PORT_STATE_CLOSED 0
@@ -152,7 +135,7 @@ typedef struct {
   uint8_t scn;   /* Service channel number */
   uint16_t uuid; /* Service UUID */
 
-  BD_ADDR bd_addr; /* BD ADDR of the device for the multiplexer channel */
+  RawAddress bd_addr; /* BD ADDR of the device for the multiplexer channel */
   bool is_server;  /* true if the server application */
   uint8_t dlci;    /* DLCI of the connection */
 
@@ -215,14 +198,14 @@ typedef struct {
 /*
  * Functions provided by the port_utils.cc
 */
-extern tPORT* port_allocate_port(uint8_t dlci, BD_ADDR bd_addr);
+extern tPORT* port_allocate_port(uint8_t dlci, const RawAddress& bd_addr);
 extern void port_set_defaults(tPORT* p_port);
 extern void port_select_mtu(tPORT* p_port);
 extern void port_release_port(tPORT* p_port);
 extern tPORT* port_find_mcb_dlci_port(tRFC_MCB* p_mcb, uint8_t dlci);
-extern tRFC_MCB* port_find_mcb(BD_ADDR bd_addr);
+extern tRFC_MCB* port_find_mcb(const RawAddress& bd_addr);
 extern tPORT* port_find_dlci_port(uint8_t dlci);
-extern tPORT* port_find_port(uint8_t dlci, BD_ADDR bd_addr);
+extern tPORT* port_find_port(uint8_t dlci, const RawAddress& bd_addr);
 extern uint32_t port_get_signal_changes(tPORT* p_port, uint8_t old_signals,
                                         uint8_t signal);
 extern uint32_t port_flow_control_user(tPORT* p_port);

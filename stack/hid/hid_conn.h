@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -63,6 +63,5 @@ typedef struct hid_conn {
 #define HID_NOSEC_CHN 2
 
 #define HIDD_SEC_CHN 3
-#define HIDD_NOSEC_CHN 4
 
 #endif
