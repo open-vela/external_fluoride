@@ -91,3 +91,11 @@ void CustomField::GenInserter(std::ostream& s) const {
 void CustomField::GenValidator(std::ostream&) const {
   // Do nothing.
 }
+
+void CustomField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
+  s << accessor << "->ToString()";
+}
+
+void CustomField::GenBuilderParameterFromView(std::ostream& s) const {
+  s << "*view.Get" << util::UnderscoreToCamelCase(GetName()) << "()";
+}
