@@ -44,6 +44,9 @@ const int num_adv_instances = 16;
  * whole stack. They will be removed, or changed into mocks one by one in the
  * future, as the refactoring progresses */
 bool BTM_BleLocalPrivacyEnabled() { return true; }
+uint16_t BTM_ReadDiscoverability(uint16_t* p_window, uint16_t* p_interval) {
+  return true;
+}
 void btm_acl_update_conn_addr(uint16_t conn_handle, const RawAddress& address) {
 }
 void btm_gen_resolvable_private_addr(
@@ -64,8 +67,6 @@ alarm_t* alarm_new_periodic(const char* name) { return nullptr; }
 alarm_t* alarm_new(const char* name) { return nullptr; }
 void alarm_free(alarm_t* alarm) {}
 const controller_t* controller_get_interface() { return nullptr; }
-
-uint64_t btm_get_next_private_addrress_interval_ms() { return 15 * 60 * 1000; }
 
 namespace {
 void DoNothing(uint8_t) {}
@@ -130,7 +131,7 @@ class AdvertiserHciMock : public BleAdvertiserHciInterface {
                    cmd_complete);
   };
 
-  bool QuirkAdvertiserZeroHandle() override { return false; }
+  bool QuirkAdvertiserZeroHandle() { return false; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(AdvertiserHciMock);
@@ -152,7 +153,7 @@ class BleAdvertisingManagerTest : public testing::Test {
 
   std::unique_ptr<AdvertiserHciMock> hci_mock;
 
-  void SetUp() override {
+  virtual void SetUp() {
     hci_mock.reset(new AdvertiserHciMock());
 
     base::Callback<void(uint8_t)> inst_cnt_Cb;
@@ -167,7 +168,7 @@ class BleAdvertisingManagerTest : public testing::Test {
     inst_cnt_Cb.Run(num_adv_instances);
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     BleAdvertisingManager::CleanUp();
     hci_mock.reset();
   }

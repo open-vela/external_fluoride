@@ -33,7 +33,6 @@
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "stack/gatt/connection_manager.h"
-#include "types/bt_transport.h"
 
 using bluetooth::Uuid;
 
@@ -709,7 +708,6 @@ tGATT_STATUS GATTC_Read(uint16_t conn_id, tGATT_READ_TYPE type,
   p_clcb->op_subtype = type;
   p_clcb->auth_req = p_read->by_handle.auth_req;
   p_clcb->counter = 0;
-  p_clcb->read_req_current_mtu = p_tcb->payload_size;
 
   switch (type) {
     case GATT_READ_BY_TYPE:
@@ -935,13 +933,12 @@ void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
  *
  * Parameter        p_app_uuid128: Application UUID
  *                  p_cb_info: callback functions.
- *                  eatt_support: indicate eatt support.
  *
  * Returns          0 for error, otherwise the index of the client registered
  *                  with GATT
  *
  ******************************************************************************/
-tGATT_IF GATT_Register(const Uuid& app_uuid128, tGATT_CBACK* p_cb_info, bool eatt_support) {
+tGATT_IF GATT_Register(const Uuid& app_uuid128, tGATT_CBACK* p_cb_info) {
   tGATT_REG* p_reg;
   uint8_t i_gatt_if = 0;
   tGATT_IF gatt_if = 0;
@@ -965,8 +962,8 @@ tGATT_IF GATT_Register(const Uuid& app_uuid128, tGATT_CBACK* p_cb_info, bool eat
       gatt_if = p_reg->gatt_if = (tGATT_IF)i_gatt_if;
       p_reg->app_cb = *p_cb_info;
       p_reg->in_use = true;
-      p_reg->eatt_support = eatt_support;
-      LOG(INFO) << "allocated gatt_if=" << +gatt_if << " eatt support " << int(eatt_support);
+
+      LOG(INFO) << "allocated gatt_if=" << +gatt_if;
       return gatt_if;
     }
   }
@@ -1060,7 +1057,7 @@ void GATT_StartIf(tGATT_IF gatt_if) {
   RawAddress bda;
   uint8_t start_idx, found_idx;
   uint16_t conn_id;
-  tBT_TRANSPORT transport;
+  tGATT_TRANSPORT transport;
 
   VLOG(1) << __func__ << " gatt_if=" << +gatt_if;
   p_reg = gatt_get_regcb(gatt_if);
