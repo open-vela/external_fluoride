@@ -35,6 +35,7 @@
 
 #include "bt_common.h"
 #include "bta_gattc_int.h"
+#include "bta_sys.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
 #include "btm_int.h"
@@ -135,7 +136,7 @@ tGATT_STATUS bta_gattc_discover_pri_service(uint16_t conn_id,
   tBTA_GATTC_CLCB* p_clcb = bta_gattc_find_clcb_by_conn_id(conn_id);
   if (!p_clcb) return GATT_ERROR;
 
-  if (p_clcb->transport == BT_TRANSPORT_LE) {
+  if (p_clcb->transport == BTA_TRANSPORT_LE) {
     return GATTC_Discover(conn_id, disc_type, 0x0001, 0xFFFF);
   }
 
@@ -675,7 +676,7 @@ void bta_gattc_get_gatt_db(uint16_t conn_id, uint16_t start_handle,
                            int* count) {
   tBTA_GATTC_CLCB* p_clcb = bta_gattc_find_clcb_by_conn_id(conn_id);
 
-  LOG_DEBUG("%s", __func__);
+  LOG_DEBUG(LOG_TAG, "%s", __func__);
   if (p_clcb == NULL) {
     LOG(ERROR) << "Unknown conn_id=" << loghex(conn_id);
     return;
