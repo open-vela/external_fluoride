@@ -33,7 +33,7 @@
 #include "hidd_api.h"
 #include "hidd_int.h"
 #include "hiddefs.h"
-#include "log/log.h"
+#include "stack/btm/btm_sec.h"
 
 tHID_DEV_CTB hd_cb;
 
@@ -122,50 +122,6 @@ tHID_STATUS HID_DevDeregister(void) {
   hidd_conn_dereg();
 
   hd_cb.reg_flag = FALSE;
-
-  return (HID_SUCCESS);
-}
-
-tHID_STATUS HID_DevSetSecurityLevel(uint8_t sec_lvl) {
-  HIDD_TRACE_API("%s", __func__);
-
-  if (!BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_HIDD_SEC_CTRL, sec_lvl,
-                            HID_PSM_CONTROL, BTM_SEC_PROTO_HID, HIDD_SEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 1 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_HIDD_SEC_CTRL, sec_lvl,
-                            HID_PSM_CONTROL, BTM_SEC_PROTO_HID, HIDD_SEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 2 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_HIDD_NOSEC_CTRL,
-                            BTM_SEC_NONE, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
-                            HIDD_NOSEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 3 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_HIDD_NOSEC_CTRL,
-                            BTM_SEC_NONE, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
-                            HIDD_NOSEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 4 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_HIDD_INTR, BTM_SEC_NONE,
-                            HID_PSM_INTERRUPT, BTM_SEC_PROTO_HID, 0)) {
-    HIDD_TRACE_ERROR("Security Registration 5 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_HIDD_INTR, BTM_SEC_NONE,
-                            HID_PSM_INTERRUPT, BTM_SEC_PROTO_HID, 0)) {
-    HIDD_TRACE_ERROR("Security Registration 6 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
 
   return (HID_SUCCESS);
 }
@@ -320,10 +276,6 @@ tHID_STATUS HID_DevAddRecord(uint32_t handle, char* p_name, char* p_description,
       UINT8_TO_BE_STREAM(p, (TEXT_STR_DESC_TYPE << 3) | SIZE_IN_NEXT_BYTE);
       UINT8_TO_BE_STREAM(p, desc_len);
       ARRAY_TO_BE_STREAM(p, p_desc_data, (int)desc_len);
-
-      if (desc_len > HIDD_APP_DESCRIPTOR_LEN - 6) {
-        android_errorWriteLog(0x534e4554, "113572366");
-      }
 
       result &= SDP_AddAttribute(handle, ATTR_ID_HID_DESCRIPTOR_LIST,
                                  DATA_ELE_SEQ_DESC_TYPE, p - p_buf, p_buf);

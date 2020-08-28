@@ -71,6 +71,9 @@
 */
 #define AVDT_MARKER_SET 0x80
 
+#define MAX_2MBPS_AVDTP_MTU 663   // 2DH5 MTU=679, -12 for AVDTP, -4 for L2CAP
+#define MAX_3MBPS_AVDTP_MTU 1005  // 3DH5 MTU=1021, -12 for AVDTP, -4 for L2CAP
+
 /* SEP Type.  This indicates the stream endpoint type. */
 #define AVDT_TSEP_SRC 0     /* Source SEP */
 #define AVDT_TSEP_SNK 1     /* Sink SEP */
@@ -274,7 +277,6 @@ class AvdtpRcb {
         ret_tout(0),
         sig_tout(0),
         idle_tout(0),
-        sec_mask(0),
         scb_index(0) {}
   AvdtpRcb& operator=(const AvdtpRcb&) = default;
 
@@ -283,7 +285,6 @@ class AvdtpRcb {
     ret_tout = 0;
     sig_tout = 0;
     idle_tout = 0;
-    sec_mask = 0;
     scb_index = 0;
   }
 
@@ -291,7 +292,6 @@ class AvdtpRcb {
   uint8_t ret_tout;  /* AVDTP signaling retransmission timeout */
   uint8_t sig_tout;  /* AVDTP signaling message timeout */
   uint8_t idle_tout; /* AVDTP idle signaling channel timeout */
-  uint8_t sec_mask;  /* Security mask for BTM_SetSecurityLevel() */
   uint8_t scb_index; /* The Stream Control Block index */
 };
 
@@ -897,7 +897,7 @@ extern uint16_t AVDT_WriteReqOpt(uint8_t handle, BT_HDR* p_pkt,
  *
  ******************************************************************************/
 extern uint16_t AVDT_ConnectReq(const RawAddress& bd_addr,
-                                uint8_t channel_index, uint8_t sec_mask,
+                                uint8_t channel_index,
                                 tAVDT_CTRL_CBACK* p_cback);
 
 /*******************************************************************************
@@ -925,19 +925,6 @@ extern uint16_t AVDT_DisconnectReq(const RawAddress& bd_addr,
  *
  ******************************************************************************/
 extern uint16_t AVDT_GetL2CapChannel(uint8_t handle);
-
-/*******************************************************************************
- *
- * Function         AVDT_GetSignalChannel
- *
- * Description      Get the L2CAP CID used by the signal channel of the given
- *                  handle.
- *
- * Returns          CID if successful, otherwise 0.
- *
- ******************************************************************************/
-extern uint16_t AVDT_GetSignalChannel(uint8_t handle,
-                                      const RawAddress& bd_addr);
 
 /*******************************************************************************
  *

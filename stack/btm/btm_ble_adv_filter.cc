@@ -18,11 +18,6 @@
 
 #define LOG_TAG "bt_btm_ble"
 
-#include <base/bind.h>
-#include <string.h>
-#include <algorithm>
-#include <vector>
-
 #include "bt_target.h"
 
 #include "bt_types.h"
@@ -33,6 +28,13 @@
 #include "device/include/controller.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
+
+#include <string.h>
+#include <algorithm>
+#include <vector>
+
+#include <base/bind.h>
+#include <base/bind_helpers.h>
 
 using base::Bind;
 using bluetooth::Uuid;
@@ -314,7 +316,7 @@ void BTM_LE_PF_local_name(tBTM_BLE_SCAN_COND_OP action,
 
   /* send local name filter */
   btu_hcif_send_cmd_with_cb(
-      FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+      FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
       base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_LOCAL_NAME, cb));
 
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
@@ -377,7 +379,7 @@ void BTM_LE_PF_manu_data(tBTM_BLE_SCAN_COND_OP action,
   }
 
   btu_hcif_send_cmd_with_cb(
-      FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+      FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
       base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_MANU_DATA, cb));
 
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
@@ -415,7 +417,7 @@ void BTM_LE_PF_srvc_data_pattern(tBTM_BLE_SCAN_COND_OP action,
   }
 
   btu_hcif_send_cmd_with_cb(
-      FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+      FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
       base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_SRVC_DATA, cb));
 
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
@@ -499,7 +501,6 @@ void BTM_LE_PF_addr_filter(tBTM_BLE_SCAN_COND_OP action,
   UINT8_TO_STREAM(p, filt_index);
 
   if (action != BTM_BLE_SCAN_COND_CLEAR) {
-#if (BLE_PRIVACY_SPT == TRUE)
     if (addr.type == BLE_ADDR_PUBLIC_ID) {
       LOG(INFO) << __func__ << " Filter address " << addr.bda
                 << " has type PUBLIC_ID, try to get identity address";
@@ -507,7 +508,6 @@ void BTM_LE_PF_addr_filter(tBTM_BLE_SCAN_COND_OP action,
        * this call will have no effect. */
       btm_random_pseudo_to_identity_addr(&addr.bda, &addr.type);
     }
-#endif
 
     LOG(INFO) << __func__
               << " Adding scan filter with peer address: " << addr.bda;
@@ -518,7 +518,7 @@ void BTM_LE_PF_addr_filter(tBTM_BLE_SCAN_COND_OP action,
 
   /* send address filter */
   btu_hcif_send_cmd_with_cb(
-      FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+      FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
       base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_ADDR, cb));
 
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
@@ -589,12 +589,10 @@ void BTM_LE_PF_uuid_filter(tBTM_BLE_SCAN_COND_OP action,
   }
 
   /* send UUID filter update */
-  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
                             base::Bind(&btm_flt_update_cb, evt_type, cb));
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
 }
-
-void DoNothing(uint8_t a, uint8_t b, uint8_t c) {}
 
 void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
                    std::vector<ApcfCommand> commands,
@@ -620,7 +618,8 @@ void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
         target_addr.bda = cmd.address;
         target_addr.type = cmd.addr_type;
 
-        BTM_LE_PF_addr_filter(action, filt_index, target_addr, Bind(DoNothing));
+        BTM_LE_PF_addr_filter(action, filt_index, target_addr,
+                              base::DoNothing());
         break;
       }
 
@@ -632,24 +631,24 @@ void BTM_LE_PF_set(tBTM_BLE_PF_FILT_INDEX filt_index,
       case BTM_BLE_PF_SRVC_SOL_UUID: {
         BTM_LE_PF_uuid_filter(action, filt_index, cmd.type, cmd.uuid,
                               BTM_BLE_PF_LOGIC_AND, cmd.uuid_mask,
-                              Bind(DoNothing));
+                              base::DoNothing());
         break;
       }
 
       case BTM_BLE_PF_LOCAL_NAME: {
-        BTM_LE_PF_local_name(action, filt_index, cmd.name, Bind(DoNothing));
+        BTM_LE_PF_local_name(action, filt_index, cmd.name, base::DoNothing());
         break;
       }
 
       case BTM_BLE_PF_MANU_DATA: {
         BTM_LE_PF_manu_data(action, filt_index, cmd.company, cmd.company_mask,
-                            cmd.data, cmd.data_mask, Bind(DoNothing));
+                            cmd.data, cmd.data_mask, base::DoNothing());
         break;
       }
 
       case BTM_BLE_PF_SRVC_DATA_PATTERN: {
         BTM_LE_PF_srvc_data_pattern(action, filt_index, cmd.data, cmd.data_mask,
-                                    Bind(DoNothing));
+                                    base::DoNothing());
         break;
       }
 
@@ -715,7 +714,7 @@ void BTM_LE_PF_clear(tBTM_BLE_PF_FILT_INDEX filt_index,
   UINT8_TO_STREAM(p, BTM_BLE_PF_LOGIC_OR);
 
   btu_hcif_send_cmd_with_cb(
-      FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+      FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
       base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_FEAT_SEL, cb));
 
   memset(&btm_ble_adv_filt_cb.cur_filter_target, 0, sizeof(tBLE_BD_ADDR));
@@ -800,7 +799,7 @@ void BTM_BleAdvFilterParamSetup(
             BTM_BLE_ADV_FILT_TRACK_NUM;
 
     btu_hcif_send_cmd_with_cb(
-        FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param, len,
+        FROM_HERE, HCI_BLE_ADV_FILTER, param, len,
         base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_FEAT_SEL, cb));
   } else if (BTM_BLE_SCAN_COND_DELETE == action) {
     /* select feature based on control block settings */
@@ -810,7 +809,7 @@ void BTM_BleAdvFilterParamSetup(
     UINT8_TO_STREAM(p, filt_index);
 
     btu_hcif_send_cmd_with_cb(
-        FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param,
+        FROM_HERE, HCI_BLE_ADV_FILTER, param,
         (uint8_t)(BTM_BLE_ADV_FILT_META_HDR_LENGTH),
         base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_FEAT_SEL, cb));
   } else if (BTM_BLE_SCAN_COND_CLEAR == action) {
@@ -822,7 +821,7 @@ void BTM_BleAdvFilterParamSetup(
     UINT8_TO_STREAM(p, BTM_BLE_SCAN_COND_CLEAR);
 
     btu_hcif_send_cmd_with_cb(
-        FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param,
+        FROM_HERE, HCI_BLE_ADV_FILTER, param,
         (uint8_t)(BTM_BLE_ADV_FILT_META_HDR_LENGTH - 1),
         base::Bind(&btm_flt_update_cb, BTM_BLE_META_PF_FEAT_SEL, cb));
   }
@@ -873,7 +872,7 @@ void BTM_BleEnableDisableFilterFeature(uint8_t enable,
   UINT8_TO_STREAM(p, BTM_BLE_META_PF_ENABLE);
   UINT8_TO_STREAM(p, enable);
 
-  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_BLE_ADV_FILTER_OCF, param,
+  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_BLE_ADV_FILTER, param,
                             BTM_BLE_PCF_ENABLE_LEN,
                             base::Bind(&enable_cmpl_cback, p_stat_cback));
 }
@@ -900,19 +899,4 @@ void btm_ble_adv_filter_init(void) {
     btm_ble_adv_filt_cb.p_addr_filter_count = (tBTM_BLE_PF_COUNT*)osi_malloc(
         sizeof(tBTM_BLE_PF_COUNT) * cmn_ble_vsc_cb.max_filter);
   }
-}
-
-/*******************************************************************************
- *
- * Function         btm_ble_adv_filter_cleanup
- *
- * Description      This function de-initializes the adv filter control block
- *
- * Parameters
- *
- * Returns          status
- *
- ******************************************************************************/
-void btm_ble_adv_filter_cleanup(void) {
-  osi_free_and_reset((void**)&btm_ble_adv_filt_cb.p_addr_filter_count);
 }

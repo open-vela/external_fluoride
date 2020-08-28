@@ -112,7 +112,7 @@ static void bta_hf_client_sco_conn_rsp(tBTA_HF_CLIENT_CB* client_cb,
       resp = esco_parameters_for_codec(ESCO_CODEC_CVSD);
     } else {
       if (client_cb->negotiated_codec == BTA_AG_CODEC_MSBC) {
-        resp = esco_parameters_for_codec(ESCO_CODEC_MSBC_T1);
+        resp = esco_parameters_for_codec(ESCO_CODEC_MSBC_T2);
       } else {
         // default codec
         resp = esco_parameters_for_codec(ESCO_CODEC_CVSD);
@@ -305,6 +305,7 @@ static void bta_hf_client_sco_event(tBTA_HF_CLIENT_CB* client_cb,
         case BTA_HF_CLIENT_SCO_LISTEN_E:
           /* create SCO listen connection */
           bta_hf_client_sco_create(client_cb, false);
+          break;
 
         case BTA_HF_CLIENT_SCO_OPEN_E:
           /* remove listening connection */

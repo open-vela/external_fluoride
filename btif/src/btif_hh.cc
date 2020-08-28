@@ -75,14 +75,6 @@ static int btif_hh_keylockstates = 0;  // The current key state of each key
 
 #define BTIF_TIMEOUT_VUP_MS (3 * 1000)
 
-#ifndef BTUI_HH_SECURITY
-#define BTUI_HH_SECURITY (BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)
-#endif
-
-#ifndef BTUI_HH_MOUSE_SECURITY
-#define BTUI_HH_MOUSE_SECURITY (BTA_SEC_NONE)
-#endif
-
 /* HH request events */
 typedef enum {
   BTIF_HH_CONNECT_REQ_EVT = 0,
@@ -143,7 +135,6 @@ extern void bta_hh_co_send_hid_info(btif_hh_device_t* p_dev,
                                     uint8_t ctry_code, int dscp_len,
                                     uint8_t* p_dscp);
 extern bool check_cod(const RawAddress* remote_bdaddr, uint32_t cod);
-extern void btif_dm_cb_remove_bond(const RawAddress* bd_addr);
 extern bool check_cod_hid(const RawAddress* remote_bdaddr);
 extern int scru_ascii_2_hex(char* p_ascii, int len, uint8_t* p_hex);
 extern void btif_dm_hh_open_failed(RawAddress* bdaddr);
@@ -464,7 +455,7 @@ void btif_hh_remove_device(RawAddress bd_addr) {
     p_added_dev = &btif_hh_cb.added_devices[i];
     if (p_added_dev->bd_addr == bd_addr) {
       BTA_HhRemoveDev(p_added_dev->dev_handle);
-      btif_storage_remove_hid_info(&(p_added_dev->bd_addr));
+      btif_storage_remove_hid_info(p_added_dev->bd_addr);
       memset(&(p_added_dev->bd_addr), 0, 6);
       p_added_dev->dev_handle = BTA_HH_INVALID_HANDLE;
       break;
@@ -537,11 +528,21 @@ bt_status_t btif_hh_virtual_unplug(const RawAddress* bd_addr) {
   p_dev = btif_hh_find_dev_by_bda(*bd_addr);
   if ((p_dev != NULL) && (p_dev->dev_status == BTHH_CONN_STATE_CONNECTED) &&
       (p_dev->attr_mask & HID_VIRTUAL_CABLE)) {
-    BTIF_TRACE_DEBUG("%s Sending BTA_HH_CTRL_VIRTUAL_CABLE_UNPLUG", __func__);
+    BTIF_TRACE_DEBUG("%s: Sending BTA_HH_CTRL_VIRTUAL_CABLE_UNPLUG for: %s", __func__,
+                     bd_addr->ToString().c_str());
     /* start the timer */
     btif_hh_start_vup_timer(bd_addr);
     p_dev->local_vup = true;
     BTA_HhSendCtrl(p_dev->dev_handle, BTA_HH_CTRL_VIRTUAL_CABLE_UNPLUG);
+    return BT_STATUS_SUCCESS;
+  } else if ((p_dev != NULL) &&
+             (p_dev->dev_status == BTHH_CONN_STATE_CONNECTED)) {
+    BTIF_TRACE_ERROR("%s: Virtual unplug not suported, disconnecting device: %s",
+                     __func__, bd_addr->ToString().c_str());
+    /* start the timer */
+    btif_hh_start_vup_timer(bd_addr);
+    p_dev->local_vup = true;
+    BTA_HhClose(p_dev->dev_handle);
     return BT_STATUS_SUCCESS;
   } else {
     BTIF_TRACE_ERROR("%s: Error, device %s not opened, status = %d", __func__,
@@ -603,10 +604,9 @@ bt_status_t btif_hh_connect(const RawAddress* bd_addr) {
    request from host, for subsequent user initiated connection. If the remote is
    not in
    pagescan mode, we will do 2 retries to connect before giving up */
-  tBTA_SEC sec_mask = BTUI_HH_SECURITY;
   btif_hh_cb.status = BTIF_HH_DEV_CONNECTING;
   btif_hh_cb.pending_conn_address = *bd_addr;
-  BTA_HhOpen(*bd_addr, BTA_HH_PROTO_RPT_MODE, sec_mask);
+  BTA_HhOpen(*bd_addr);
 
   // TODO(jpawlowski); make cback accept const and remove tmp!
   auto tmp = *bd_addr;
@@ -675,11 +675,26 @@ void btif_hh_service_registration(bool enable) {
       btif_hd_service_registration();
     }
   } else if (enable) {
-    BTA_HhEnable(BTA_SEC_ENCRYPT, bte_hh_evt);
+    BTA_HhEnable(bte_hh_evt);
   } else {
     btif_hh_cb.service_dereg_active = TRUE;
     BTA_HhDisable();
   }
+}
+
+/*******************************************************************************
+ *
+ *
+ * Function         btif_hh_getreport
+ *
+ * Description      getreport initiated from the BTIF thread context
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btif_hh_getreport(btif_hh_device_t* p_dev, bthh_report_type_t r_type,
+                       uint8_t reportId, uint16_t bufferSize) {
+  BTA_HhGetReport(p_dev->dev_handle, r_type, reportId, bufferSize);
 }
 
 /*****************************************************************************
@@ -940,7 +955,7 @@ static void btif_hh_upstreams_evt(uint16_t event, char* p_param) {
       }
       if (p_dev->fd < 0) {
         LOG_ERROR(
-            LOG_TAG,
+
             "BTA_HH_GET_DSCP_EVT: Error, failed to find the uhid driver...");
         return;
       }
@@ -1064,7 +1079,7 @@ static void btif_hh_upstreams_evt(uint16_t event, char* p_param) {
       break;
 
     case BTA_HH_API_ERR_EVT:
-      LOG_INFO(LOG_TAG, "BTA_HH API_ERR");
+      LOG_INFO("BTA_HH API_ERR");
       break;
 
     default:
@@ -1530,7 +1545,7 @@ static bt_status_t set_report(RawAddress* bd_addr,
     /* Build a SetReport data buffer */
     // TODO
     hex_bytes_filled = ascii_2_hex(report, len, hexbuf);
-    LOG_INFO(LOG_TAG, "Hex bytes filled, hex value: %d", hex_bytes_filled);
+    LOG_INFO("Hex bytes filled, hex value: %d", hex_bytes_filled);
     if (hex_bytes_filled) {
       BT_HDR* p_buf = create_pbuf(hex_bytes_filled, hexbuf);
       if (p_buf == NULL) {
@@ -1672,7 +1687,7 @@ static const bthh_interface_t bthhInterface = {
 bt_status_t btif_hh_execute_service(bool b_enable) {
   if (b_enable) {
     /* Enable and register with BTA-HH */
-    BTA_HhEnable(BTUI_HH_SECURITY, bte_hh_evt);
+    BTA_HhEnable(bte_hh_evt);
   } else {
     /* Disable HH */
     BTA_HhDisable();
