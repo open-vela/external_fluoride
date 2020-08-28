@@ -41,8 +41,8 @@ using TestAvrcpPacket = TestPacketType<Packet>;
 using TestBrowsePacket = TestPacketType<BrowsePacket>;
 
 using ::testing::_;
-using ::testing::MockFunction;
 using ::testing::Mock;
+using ::testing::MockFunction;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::SaveArg;
@@ -813,16 +813,24 @@ TEST_F(AvrcpDeviceTest, getFolderItemsMtuTest) {
       base::Bind([](MockFunction<void(uint8_t, bool, const AvrcpResponse&)>* a,
                     uint8_t b, bool c, AvrcpResponse d) { a->Call(b, c, d); },
                  &response_cb);
-  Device device(RawAddress::kAny, true, cb, 0xFFFF, truncated_packet->size());
+
+  Device device(RawAddress::kAny, true, cb, 0xFFFF,
+                truncated_packet->size() + FolderItem::kHeaderSize() + 5);
   device.RegisterInterfaces(&interface, &a2dp_interface, nullptr);
 
   FolderInfo info0 = {"test_id0", true, "Test Folder0"};
   FolderInfo info1 = {"test_id1", true, "Test Folder1"};
-  FolderInfo info2 = {"test_id1", true, "Truncated folder"};
+  FolderInfo info2 = {"test_id2", true, "Truncated folder"};
+  // Used to ensure that adding an item that would fit in the MTU fails if
+  // adding a large item failed.
+  FolderInfo small_info = {"test_id2", true, "Small"};
+
   ListItem item0 = {ListItem::FOLDER, info0, SongInfo()};
   ListItem item1 = {ListItem::FOLDER, info1, SongInfo()};
-  ListItem item2 = {ListItem::FOLDER, info1, SongInfo()};
-  std::vector<ListItem> list0 = {item0, item1, item2};
+  ListItem item2 = {ListItem::FOLDER, info2, SongInfo()};
+  ListItem item3 = {ListItem::FOLDER, small_info, SongInfo()};
+
+  std::vector<ListItem> list0 = {item0, item1, item2, item3};
   EXPECT_CALL(interface, GetFolderItems(_, "", _))
       .WillRepeatedly(InvokeCb<2>(list0));
 
@@ -1348,6 +1356,126 @@ TEST_F(AvrcpDeviceTest, invalidRegisterNotificationTest) {
 
   auto reg_notif_request = TestAvrcpPacket::Make(register_notification_invalid);
   SendMessage(1, reg_notif_request);
+}
+
+TEST_F(AvrcpDeviceTest, invalidVendorPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = RejectBuilder::MakeBuilder(static_cast<CommandPdu>(0), Status::INVALID_COMMAND);
+  EXPECT_CALL(response_cb, Call(1, false, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestAvrcpPacket::Make(short_vendor_packet);
+  SendMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidCapabilitiesPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = RejectBuilder::MakeBuilder(CommandPdu::GET_CAPABILITIES, Status::INVALID_PARAMETER);
+  EXPECT_CALL(response_cb, Call(1, false, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestAvrcpPacket::Make(short_get_capabilities_request);
+  SendMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidGetElementAttributesPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = RejectBuilder::MakeBuilder(CommandPdu::GET_ELEMENT_ATTRIBUTES, Status::INVALID_PARAMETER);
+  EXPECT_CALL(response_cb, Call(1, false, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestAvrcpPacket::Make(short_get_element_attributes_request);
+  SendMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidPlayItemPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = RejectBuilder::MakeBuilder(CommandPdu::PLAY_ITEM, Status::INVALID_PARAMETER);
+  EXPECT_CALL(response_cb, Call(1, false, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestAvrcpPacket::Make(short_play_item_request);
+  SendMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidSetAddressedPlayerPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = RejectBuilder::MakeBuilder(CommandPdu::SET_ADDRESSED_PLAYER, Status::INVALID_PARAMETER);
+  EXPECT_CALL(response_cb, Call(1, false, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestAvrcpPacket::Make(short_set_addressed_player_request);
+  SendMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidBrowsePacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = GeneralRejectBuilder::MakeBuilder(Status::INVALID_COMMAND);
+  EXPECT_CALL(response_cb, Call(1, false, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestBrowsePacket::Make(short_browse_packet);
+  SendBrowseMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidGetFolderItemsPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = GetFolderItemsResponseBuilder::MakePlayerListBuilder(Status::INVALID_PARAMETER, 0x0000, 0xFFFF);
+  EXPECT_CALL(response_cb, Call(1, true, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestBrowsePacket::Make(short_get_folder_items_request);
+  SendBrowseMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidGetTotalNumberOfItemsPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = GetTotalNumberOfItemsResponseBuilder::MakeBuilder(Status::INVALID_PARAMETER, 0x0000, 0xFFFF);
+  EXPECT_CALL(response_cb, Call(1, true, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestBrowsePacket::Make(short_get_total_number_of_items_request);
+  SendBrowseMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidChangePathPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = ChangePathResponseBuilder::MakeBuilder(Status::INVALID_PARAMETER, 0);
+  EXPECT_CALL(response_cb, Call(1, true, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestBrowsePacket::Make(short_change_path_request);
+  SendBrowseMessage(1, short_packet);
+}
+
+TEST_F(AvrcpDeviceTest, invalidGetItemAttributesPacketTest) {
+  MockMediaInterface interface;
+  NiceMock<MockA2dpInterface> a2dp_interface;
+
+  test_device->RegisterInterfaces(&interface, &a2dp_interface, nullptr);
+
+  auto rsp = GetItemAttributesResponseBuilder::MakeBuilder(Status::INVALID_PARAMETER, 0xFFFF);
+  EXPECT_CALL(response_cb, Call(1, true, matchPacket(std::move(rsp)))).Times(1);
+  auto short_packet = TestBrowsePacket::Make(short_get_item_attributes_request);
+  SendBrowseMessage(1, short_packet);
 }
 
 }  // namespace avrcp
