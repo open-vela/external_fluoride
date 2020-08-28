@@ -18,7 +18,6 @@
 
 #include <unordered_map>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "hci/address.h"
@@ -94,14 +93,14 @@ TEST(AddressTest, test_equals) {
   Address bdaddr3;
   Address::FromString(test_addr, bdaddr1);
   Address::FromString(test_addr, bdaddr2);
-  ASSERT_TRUE(bdaddr1 == bdaddr2);
-  ASSERT_FALSE(bdaddr1 != bdaddr2);
-  ASSERT_TRUE(bdaddr1 == bdaddr1);
-  ASSERT_FALSE(bdaddr1 != bdaddr1);
+  EXPECT_TRUE(bdaddr1 == bdaddr2);
+  EXPECT_FALSE(bdaddr1 != bdaddr2);
+  EXPECT_TRUE(bdaddr1 == bdaddr1);
+  EXPECT_FALSE(bdaddr1 != bdaddr1);
 
   Address::FromString(test_addr2, bdaddr3);
-  ASSERT_FALSE(bdaddr2 == bdaddr3);
-  ASSERT_TRUE(bdaddr2 != bdaddr3);
+  EXPECT_FALSE(bdaddr2 == bdaddr3);
+  EXPECT_TRUE(bdaddr2 != bdaddr3);
 }
 
 TEST(AddressTest, test_less_than) {
@@ -110,12 +109,12 @@ TEST(AddressTest, test_less_than) {
   Address bdaddr3;
   Address::FromString(test_addr, bdaddr1);
   Address::FromString(test_addr, bdaddr2);
-  ASSERT_FALSE(bdaddr1 < bdaddr2);
-  ASSERT_FALSE(bdaddr1 < bdaddr1);
+  EXPECT_FALSE(bdaddr1 < bdaddr2);
+  EXPECT_FALSE(bdaddr1 < bdaddr1);
 
   Address::FromString(test_addr2, bdaddr3);
-  ASSERT_TRUE(bdaddr2 < bdaddr3);
-  ASSERT_FALSE(bdaddr3 < bdaddr2);
+  EXPECT_TRUE(bdaddr2 < bdaddr3);
+  EXPECT_FALSE(bdaddr3 < bdaddr2);
 }
 
 TEST(AddressTest, test_more_than) {
@@ -124,12 +123,12 @@ TEST(AddressTest, test_more_than) {
   Address bdaddr3;
   Address::FromString(test_addr, bdaddr1);
   Address::FromString(test_addr, bdaddr2);
-  ASSERT_FALSE(bdaddr1 > bdaddr2);
-  ASSERT_FALSE(bdaddr1 > bdaddr1);
+  EXPECT_FALSE(bdaddr1 > bdaddr2);
+  EXPECT_FALSE(bdaddr1 > bdaddr1);
 
   Address::FromString(test_addr2, bdaddr3);
-  ASSERT_FALSE(bdaddr2 > bdaddr3);
-  ASSERT_TRUE(bdaddr3 > bdaddr2);
+  EXPECT_FALSE(bdaddr2 > bdaddr3);
+  EXPECT_TRUE(bdaddr3 > bdaddr2);
 }
 
 TEST(AddressTest, test_less_than_or_equal) {
@@ -138,12 +137,12 @@ TEST(AddressTest, test_less_than_or_equal) {
   Address bdaddr3;
   Address::FromString(test_addr, bdaddr1);
   Address::FromString(test_addr, bdaddr2);
-  ASSERT_TRUE(bdaddr1 <= bdaddr2);
-  ASSERT_TRUE(bdaddr1 <= bdaddr1);
+  EXPECT_TRUE(bdaddr1 <= bdaddr2);
+  EXPECT_TRUE(bdaddr1 <= bdaddr1);
 
   Address::FromString(test_addr2, bdaddr3);
-  ASSERT_TRUE(bdaddr2 <= bdaddr3);
-  ASSERT_FALSE(bdaddr3 <= bdaddr2);
+  EXPECT_TRUE(bdaddr2 <= bdaddr3);
+  EXPECT_FALSE(bdaddr3 <= bdaddr2);
 }
 
 TEST(AddressTest, test_more_than_or_equal) {
@@ -152,12 +151,12 @@ TEST(AddressTest, test_more_than_or_equal) {
   Address bdaddr3;
   Address::FromString(test_addr, bdaddr1);
   Address::FromString(test_addr, bdaddr2);
-  ASSERT_TRUE(bdaddr1 >= bdaddr2);
-  ASSERT_TRUE(bdaddr1 >= bdaddr1);
+  EXPECT_TRUE(bdaddr1 >= bdaddr2);
+  EXPECT_TRUE(bdaddr1 >= bdaddr1);
 
   Address::FromString(test_addr2, bdaddr3);
-  ASSERT_FALSE(bdaddr2 >= bdaddr3);
-  ASSERT_TRUE(bdaddr3 >= bdaddr2);
+  EXPECT_FALSE(bdaddr2 >= bdaddr3);
+  EXPECT_TRUE(bdaddr3 >= bdaddr2);
 }
 
 TEST(AddressTest, test_copy) {
@@ -166,41 +165,39 @@ TEST(AddressTest, test_copy) {
   Address::FromString(test_addr, bdaddr1);
   bdaddr2 = bdaddr1;
 
-  ASSERT_TRUE(bdaddr1 == bdaddr2);
+  EXPECT_TRUE(bdaddr1 == bdaddr2);
 }
 
 TEST(AddressTest, IsValidAddress) {
-  ASSERT_FALSE(Address::IsValidAddress(""));
-  ASSERT_FALSE(Address::IsValidAddress("000000000000"));
-  ASSERT_FALSE(Address::IsValidAddress("00:00:00:00:0000"));
-  ASSERT_FALSE(Address::IsValidAddress("00:00:00:00:00:0"));
-  ASSERT_FALSE(Address::IsValidAddress("00:00:00:00:00:0;"));
-  ASSERT_TRUE(Address::IsValidAddress("00:00:00:00:00:00"));
-  ASSERT_TRUE(Address::IsValidAddress("AB:cd:00:00:00:00"));
-  ASSERT_FALSE(Address::IsValidAddress("aB:cD:eF:Gh:iJ:Kl"));
+  EXPECT_FALSE(Address::IsValidAddress(""));
+  EXPECT_FALSE(Address::IsValidAddress("000000000000"));
+  EXPECT_FALSE(Address::IsValidAddress("00:00:00:00:0000"));
+  EXPECT_FALSE(Address::IsValidAddress("00:00:00:00:00:0"));
+  EXPECT_FALSE(Address::IsValidAddress("00:00:00:00:00:0;"));
+  EXPECT_TRUE(Address::IsValidAddress("00:00:00:00:00:00"));
+  EXPECT_TRUE(Address::IsValidAddress("AB:cd:00:00:00:00"));
+  EXPECT_FALSE(Address::IsValidAddress("aB:cD:eF:Gh:iJ:Kl"));
 }
 
 TEST(AddressTest, BdAddrFromString) {
-  Address addr = {};
+  Address addr;
+  memset(&addr, 0, sizeof(addr));
 
-  ASSERT_TRUE(Address::FromString("00:00:00:00:00:00", addr));
+  EXPECT_TRUE(Address::FromString("00:00:00:00:00:00", addr));
   const Address result0 = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
-  ASSERT_EQ(0, memcmp(addr.data(), result0.data(), Address::kLength));
+  EXPECT_EQ(0, memcmp(&addr, &result0, sizeof(addr)));
 
-  ASSERT_TRUE(Address::FromString("ab:01:4C:d5:21:9f", addr));
+  EXPECT_TRUE(Address::FromString("ab:01:4C:d5:21:9f", addr));
   const Address result1 = {{0x9f, 0x21, 0xd5, 0x4c, 0x01, 0xab}};
-  ASSERT_EQ("ab:01:4c:d5:21:9f", addr.ToString());
-  ASSERT_EQ("ab:01:4c:d5:21:9f", result1.ToString());
-  ASSERT_THAT(addr.address, testing::ElementsAre(0x9f, 0x21, 0xd5, 0x4c, 0x01, 0xab));
-  ASSERT_EQ(0, memcmp(addr.data(), result1.data(), Address::kLength));
+  EXPECT_EQ(0, memcmp(&addr, &result1, sizeof(addr)));
 }
 
 TEST(AddressTest, BdAddrFromStringToStringEquivalent) {
   std::string address = "c1:c2:c3:d1:d2:d3";
   Address addr;
 
-  ASSERT_TRUE(Address::FromString(address, addr));
-  ASSERT_EQ(addr.ToString(), address);
+  EXPECT_TRUE(Address::FromString(address, addr));
+  EXPECT_EQ(addr.ToString(), address);
 }
 
 TEST(AddressTest, BdAddrSameValueSameOrder) {
@@ -208,28 +205,28 @@ TEST(AddressTest, BdAddrSameValueSameOrder) {
   Address addr2{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}};
   // Test if two addresses with same byte value have the same hash
   struct std::hash<bluetooth::hci::Address> hasher;
-  ASSERT_EQ(hasher(addr1), hasher(addr2));
+  EXPECT_EQ(hasher(addr1), hasher(addr2));
   // Test if two addresses with the same hash and the same value, they will
   // still map to the same value
   std::unordered_map<Address, int> data = {};
   data[addr1] = 5;
   data[addr2] = 8;
-  ASSERT_EQ(data[addr1], data[addr2]);
+  EXPECT_EQ(data[addr1], data[addr2]);
 }
 
 TEST(AddressTest, BdAddrHashDifferentForDifferentAddressesZeroAddr) {
   Address addr1{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}};
   struct std::hash<Address> hasher;
-  ASSERT_NE(hasher(addr1), hasher(Address::kEmpty));
+  EXPECT_NE(hasher(addr1), hasher(Address::kEmpty));
 }
 
 TEST(AddressTest, BdAddrHashDifferentForDifferentAddressesFullAddr) {
   Address addr1{{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}};
   struct std::hash<Address> hasher;
-  ASSERT_NE(hasher(addr1), hasher(Address::kAny));
+  EXPECT_NE(hasher(addr1), hasher(Address::kAny));
 }
 
 TEST(AddressTest, BdAddrHashDifferentForDifferentAddressesZeroAndFullAddr) {
   struct std::hash<Address> hasher;
-  ASSERT_NE(hasher(Address::kEmpty), hasher(Address::kAny));
+  EXPECT_NE(hasher(Address::kEmpty), hasher(Address::kAny));
 }
