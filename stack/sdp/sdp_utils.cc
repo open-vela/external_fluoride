@@ -22,24 +22,19 @@
  *
  ******************************************************************************/
 
-#include <netinet/in.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <utility>
 #include <vector>
 
 #include "bt_common.h"
 #include "bt_types.h"
+#include "btif_config.h"
 
-#include "hcidefs.h"
-#include "hcimsgs.h"
-#include "l2cdefs.h"
-
+#include "avrc_defs.h"
 #include "sdp_api.h"
 #include "sdpint.h"
 
-#include "btu.h"
 #include "common/metrics.h"
 
 using bluetooth::Uuid;
@@ -281,6 +276,17 @@ void sdpu_log_attribute_metrics(const RawAddress& bda,
           bda, android::bluetooth::DeviceInfoSrcEnum::DEVICE_INFO_INTERNAL,
           ss.str(), loghex(di_record.rec.vendor), loghex(di_record.rec.product),
           loghex(di_record.rec.version), "");
+
+      std::string bda_string = bda.ToString();
+      // write manufacturer, model, HW version to config
+      btif_config_set_int(bda_string, BT_CONFIG_KEY_SDP_DI_MANUFACTURER,
+                          di_record.rec.vendor);
+      btif_config_set_int(bda_string, BT_CONFIG_KEY_SDP_DI_MODEL,
+                          di_record.rec.product);
+      btif_config_set_int(bda_string, BT_CONFIG_KEY_SDP_DI_HW_VERSION,
+                          di_record.rec.version);
+      btif_config_set_int(bda_string, BT_CONFIG_KEY_SDP_DI_VENDOR_ID_SRC,
+                          di_record.rec.vendor_id_source);
     }
   }
 }
@@ -1149,4 +1155,42 @@ uint8_t* sdpu_build_partial_attrib_entry(uint8_t* p_out, tSDP_ATTRIBUTE* p_attr,
 
   osi_free(p_attr_buff);
   return p_out;
+}
+/*******************************************************************************
+ *
+ * Function         sdpu_is_avrcp_profile_description_list
+ *
+ * Description      This function is to check if attirbute contain AVRCP profile
+ *                  description list
+ *
+ *                  p_attr: attibute to be check
+ *
+ * Returns          AVRCP profile version if matched, else 0
+ *
+ ******************************************************************************/
+uint16_t sdpu_is_avrcp_profile_description_list(tSDP_ATTRIBUTE* p_attr) {
+  if (p_attr->id != ATTR_ID_BT_PROFILE_DESC_LIST || p_attr->len != 8) {
+    return 0;
+  }
+
+  uint8_t* p_uuid = p_attr->value_ptr + 3;
+  // Check if AVRCP profile UUID
+  if (p_uuid[0] != 0x11 || p_uuid[1] != 0xe) {
+    return 0;
+  }
+  uint8_t p_version = *(p_uuid + 4);
+  switch (p_version) {
+    case 0x0:
+      return AVRC_REV_1_0;
+    case 0x3:
+      return AVRC_REV_1_3;
+    case 0x4:
+      return AVRC_REV_1_4;
+    case 0x5:
+      return AVRC_REV_1_5;
+    case 0x6:
+      return AVRC_REV_1_6;
+    default:
+      return 0;
+  }
 }

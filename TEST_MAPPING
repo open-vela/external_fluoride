@@ -70,6 +70,10 @@
       "host" : true
     },
     {
+      "name" : "net_test_btm_iso",
+      "host" : true
+    },
+    {
       "name" : "net_test_btpackets",
       "host" : true
     },
@@ -80,6 +84,24 @@
     {
       "name" : "net_test_btif_rc",
       "host" : true
+    },
+    {
+      "name" : "net_test_stack_gatt_native",
+      "host" : true
+    },
+    {
+      "name" : "net_test_stack_a2dp_native",
+      "host" : true
+    },
+    {
+      "name" : "net_test_btif_config_cache",
+      "host" : true
+    },
+    {
+      "name" : "net_test_hf_client_add_record"
+    },
+    {
+      "name" : "net_test_btif_hf_client_service"
     }
   ]
 }
