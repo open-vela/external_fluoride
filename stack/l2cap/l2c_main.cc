@@ -24,19 +24,16 @@
 
 #define LOG_TAG "bt_l2c_main"
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_target.h"
-#include "btu.h"
-#include "device/include/controller.h"
 #include "hci/include/btsnoop.h"
 #include "hcimsgs.h"
 #include "l2c_api.h"
 #include "l2c_int.h"
 #include "l2cdefs.h"
+#include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
@@ -188,7 +185,6 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
     return;
   }
 
-#if (L2CAP_NUM_FIXED_CHNLS > 0)
   if ((rcv_cid >= L2CAP_FIRST_FIXED_CHNL) &&
       (rcv_cid <= L2CAP_LAST_FIXED_CHNL) &&
       (l2cb.fixed_reg[rcv_cid - L2CAP_FIRST_FIXED_CHNL].pL2CA_FixedData_Cb !=
@@ -196,10 +192,7 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
     /* only process fixed channel data when link is open or wait for data
      * indication */
     if (!p_lcb || p_lcb->link_state == LST_DISCONNECTING ||
-        !l2cu_initialize_fixed_ccb(
-            p_lcb, rcv_cid,
-            &l2cb.fixed_reg[rcv_cid - L2CAP_FIRST_FIXED_CHNL]
-                 .fixed_chnl_opts)) {
+        !l2cu_initialize_fixed_ccb(p_lcb, rcv_cid)) {
       osi_free(p_msg);
       return;
     }
@@ -214,7 +207,6 @@ void l2c_rcv_acl_data(BT_HDR* p_msg) {
           rcv_cid, p_lcb->remote_bd_addr, p_msg);
     return;
   }
-#endif
 
   if (!p_ccb) {
     osi_free(p_msg);
@@ -333,7 +325,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
            * we will ignore it and let a higher protocol timeout take care of it
            */
           L2CAP_TRACE_WARNING("L2CAP - MTU rej Handle: %d MTU: %d",
-                              p_lcb->handle, rej_mtu);
+                              p_lcb->Handle(), rej_mtu);
         }
         if (rej_reason == L2CAP_CMD_REJ_INVALID_CID) {
           uint16_t lcid, rcid;
@@ -403,10 +395,10 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
 
         if (p_rcb->psm == BT_PSM_RFCOMM) {
           btsnoop_get_interface()->add_rfc_l2c_channel(
-              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
         } else if (p_rcb->log_packets) {
           btsnoop_get_interface()->whitelist_l2c_channel(
-              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
         }
 
         l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_REQ, &con_info);
@@ -443,10 +435,10 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         tL2C_RCB* p_rcb = p_ccb->p_rcb;
         if (p_rcb->psm == BT_PSM_RFCOMM) {
           btsnoop_get_interface()->add_rfc_l2c_channel(
-              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
         } else if (p_rcb->log_packets) {
           btsnoop_get_interface()->whitelist_l2c_channel(
-              p_lcb->handle, p_ccb->local_cid, p_ccb->remote_cid);
+              p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
         }
 
         break;
@@ -734,17 +726,6 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         l2cu_send_peer_echo_rsp(p_lcb, id, p, cmd_len);
         break;
 
-      case L2CAP_CMD_ECHO_RSP:
-        if (p_lcb->p_echo_rsp_cb) {
-          tL2CA_ECHO_RSP_CB* p_cb = p_lcb->p_echo_rsp_cb;
-
-          /* Zero out the callback in case app immediately calls us again */
-          p_lcb->p_echo_rsp_cb = NULL;
-
-          (*p_cb)(L2CAP_PING_RESULT_OK);
-        }
-        break;
-
       case L2CAP_CMD_INFO_REQ: {
         uint16_t info_type;
         if (p + 2 > p_next_cmd) return;
@@ -765,24 +746,19 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         STREAM_TO_UINT16(info_type, p);
         STREAM_TO_UINT16(result, p);
 
-        p_lcb->info_rx_bits |= (1 << info_type);
-
         if ((info_type == L2CAP_EXTENDED_FEATURES_INFO_TYPE) &&
             (result == L2CAP_INFO_RESP_RESULT_SUCCESS)) {
           if (p + 4 > p_next_cmd) return;
           STREAM_TO_UINT32(p_lcb->peer_ext_fea, p);
 
-#if (L2CAP_NUM_FIXED_CHNLS > 0)
           if (p_lcb->peer_ext_fea & L2CAP_EXTFEA_FIXED_CHNLS) {
             l2cu_send_peer_info_req(p_lcb, L2CAP_FIXED_CHANNELS_INFO_TYPE);
             break;
           } else {
             l2cu_process_fixed_chnl_resp(p_lcb);
           }
-#endif
         }
 
-#if (L2CAP_NUM_FIXED_CHNLS > 0)
         if (info_type == L2CAP_FIXED_CHANNELS_INFO_TYPE) {
           if (result == L2CAP_INFO_RESP_RESULT_SUCCESS) {
             if (p + L2CAP_FIXED_CHNL_ARRAY_SIZE > p_next_cmd) {
@@ -794,7 +770,6 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
 
           l2cu_process_fixed_chnl_resp(p_lcb);
         }
-#endif
         tL2C_CONN_INFO ci;
         ci.status = HCI_SUCCESS;
         ci.bd_addr = p_lcb->remote_bd_addr;
@@ -864,6 +839,11 @@ void l2c_process_held_packets(bool timed_out) {
  *
  ******************************************************************************/
 void l2c_init(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    // L2CAP init should be handled by GD stack manager
+    return;
+  }
+
   int16_t xx;
 
   memset(&l2cb, 0, sizeof(tL2C_CB));
@@ -878,19 +858,11 @@ void l2c_init(void) {
     l2cb.ccb_pool[xx].p_next_ccb = &l2cb.ccb_pool[xx + 1];
   }
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   /* it will be set to L2CAP_PKT_START_NON_FLUSHABLE if controller supports */
   l2cb.non_flushable_pbf = L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT;
-#endif
 
   l2cb.p_free_ccb_first = &l2cb.ccb_pool[0];
   l2cb.p_free_ccb_last = &l2cb.ccb_pool[MAX_L2CAP_CHANNELS - 1];
-
-#ifdef L2CAP_DESIRED_LINK_ROLE
-  l2cb.desire_role = L2CAP_DESIRED_LINK_ROLE;
-#else
-  l2cb.desire_role = HCI_ROLE_SLAVE;
-#endif
 
   /* Set the default idle timeout */
   l2cb.idle_timeout = L2CAP_LINK_INACTIVITY_TOUT;
@@ -922,6 +894,11 @@ void l2c_init(void) {
 }
 
 void l2c_free(void) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    // L2CAP cleanup should be handled by GD stack manager
+    return;
+  }
+
   list_free(l2cb.rcv_pending_q);
   l2cb.rcv_pending_q = NULL;
 }
@@ -971,9 +948,7 @@ uint8_t l2c_data_write(uint16_t cid, BT_HDR* p_data, uint16_t flags) {
     return (L2CAP_DW_FAILED);
   }
 
-#ifndef TESTER
-  /* Tester may send any amount of data. otherwise sending message bigger than
-   * mtu size of peer is a violation of protocol */
+  /* Sending message bigger than mtu size of peer is a violation of protocol */
   uint16_t mtu;
 
   if (p_ccb->p_lcb->transport == BT_TRANSPORT_LE)
@@ -989,7 +964,6 @@ uint8_t l2c_data_write(uint16_t cid, BT_HDR* p_data, uint16_t flags) {
     osi_free(p_data);
     return (L2CAP_DW_FAILED);
   }
-#endif
 
   /* channel based, packet based flushable or non-flushable */
   p_data->layer_specific = flags;
