@@ -28,7 +28,7 @@
 #include "bt_common.h"
 #include "bt_utils.h"
 #include "gatt_int.h"
-#include "l2c_api.h"
+#include "l2c_int.h"
 #include "log/log.h"
 #include "osi/include/osi.h"
 
@@ -1013,8 +1013,8 @@ void gatt_process_mtu_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb, uint16_t len,
       tcb.payload_size = mtu;
   }
 
-  L2CA_SetLeFixedChannelTxDataLength(tcb.peer_bda, L2CAP_ATT_CID,
-                                     tcb.payload_size);
+  l2cble_set_fixed_channel_tx_data_length(tcb.peer_bda, L2CAP_ATT_CID,
+                                          tcb.payload_size);
   gatt_end_operation(p_clcb, status, NULL);
 }
 /*******************************************************************************
