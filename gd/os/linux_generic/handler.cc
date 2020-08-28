@@ -18,7 +18,6 @@
 
 #include <sys/eventfd.h>
 #include <unistd.h>
-
 #include <cstring>
 
 #include "common/bind.h"
@@ -33,13 +32,12 @@
 
 namespace bluetooth {
 namespace os {
-using common::OnceClosure;
 
 Handler::Handler(Thread* thread)
     : tasks_(new std::queue<OnceClosure>()), thread_(thread), fd_(eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK)) {
   ASSERT(fd_ != -1);
-  reactable_ = thread_->GetReactor()->Register(
-      fd_, common::Bind(&Handler::handle_next_event, common::Unretained(this)), common::Closure());
+  reactable_ = thread_->GetReactor()->Register(fd_, common::Bind(&Handler::handle_next_event, common::Unretained(this)),
+                                               common::Closure());
 }
 
 Handler::~Handler() {
@@ -57,7 +55,6 @@ void Handler::Post(OnceClosure closure) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (was_cleared()) {
-      LOG_WARN("Posting to a handler which has been cleared");
       return;
     }
     tasks_->emplace(std::move(closure));
