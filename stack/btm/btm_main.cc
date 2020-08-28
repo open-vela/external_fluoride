@@ -63,12 +63,12 @@ void btm_init(void) {
   btm_acl_init();    /* ACL Database and Structures */
   /* Security Manager Database and Structures */
   if (stack_config_get_interface()->get_pts_secure_only_mode())
-    btm_sec_init(BTM_SEC_MODE_SC);
+    btm_cb.security_mode = BTM_SEC_MODE_SC;
   else
-    btm_sec_init(BTM_SEC_MODE_SP);
-#if (BTM_SCO_INCLUDED == TRUE)
+    btm_cb.security_mode = BTM_SEC_MODE_SP;
+  btm_cb.pairing_bda = RawAddress::kAny;
+
   btm_sco_init(); /* SCO Database and Structures (If included) */
-#endif
 
   btm_cb.sec_dev_rec = list_new(osi_free);
 

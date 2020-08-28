@@ -21,7 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 
 #ifndef FALSE
 #define FALSE false
@@ -81,6 +80,9 @@
 /* HCI command from upper layer     */
 #define BT_EVT_TO_BTU_HCI_CMD 0x1600
 
+/* ISO Data from HCI                */
+#define BT_EVT_TO_BTU_HCI_ISO 0x1700
+
 /* L2CAP segment(s) transmitted     */
 #define BT_EVT_TO_BTU_L2C_SEG_XMIT 0x1900
 
@@ -120,6 +122,8 @@
 #define BT_EVT_TO_LM_HCI_ACL_ACK 0x2b00
 /* LM Diagnostics commands          */
 #define BT_EVT_TO_LM_DIAG 0x2c00
+/* HCI ISO Data                     */
+#define BT_EVT_TO_LM_HCI_ISO 0x2d00
 
 #define BT_EVT_TO_BTM_CMDS 0x2f00
 #define BT_EVT_TO_BTM_PM_MDCHG_EVT (0x0001 | BT_EVT_TO_BTM_CMDS)
@@ -210,6 +214,10 @@
 /* BTIF Events */
 #define BT_EVT_BTIF 0xA000
 #define BT_EVT_CONTEXT_SWITCH_EVT (0x0001 | BT_EVT_BTIF)
+
+/* ISO Layer specific */
+#define BT_ISO_HDR_CONTAINS_TS (0x0001)
+#define BT_ISO_HDR_OFFSET_POINTS_DATA (0x0002)
 
 /* Define the header of each buffer used in the Bluetooth stack.
  */
@@ -414,6 +422,10 @@ typedef struct {
   do {                        \
     (p) += 2;                 \
   } while (0)
+#define STREAM_SKIP_UINT32(p) \
+  do {                        \
+    (p) += 4;                 \
+  } while (0)
 
 /*******************************************************************************
  * Macros to get and put bytes to and from a field (Little Endian format).
@@ -562,15 +574,30 @@ typedef uint8_t tAMP_KEY_TYPE;
 #define BT_OCTET8_LEN 8
 typedef uint8_t BT_OCTET8[BT_OCTET8_LEN]; /* octet array: size 16 */
 
-#define LINK_KEY_LEN 16
-typedef uint8_t LINK_KEY[LINK_KEY_LEN]; /* Link Key */
-
 #define AMP_LINK_KEY_LEN 32
 typedef uint8_t
     AMP_LINK_KEY[AMP_LINK_KEY_LEN]; /* Dedicated AMP and GAMP Link Keys */
 
-#define BT_OCTET16_LEN 16
-typedef uint8_t BT_OCTET16[BT_OCTET16_LEN]; /* octet array: size 16 */
+/* Some C files include this header file */
+#ifdef __cplusplus
+
+#include <array>
+
+constexpr int OCTET16_LEN = 16;
+typedef std::array<uint8_t, OCTET16_LEN> Octet16;
+
+constexpr int LINK_KEY_LEN = OCTET16_LEN;
+typedef Octet16 LinkKey; /* Link Key */
+
+/* Sample LTK from BT Spec 5.1 | Vol 6, Part C 1
+ * 0x4C68384139F574D836BCF34E9DFB01BF */
+constexpr Octet16 SAMPLE_LTK = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
+                                0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
+inline bool is_sample_ltk(const Octet16& ltk) {
+  return ltk == SAMPLE_LTK;
+}
+
+#endif
 
 #define PIN_CODE_LEN 16
 typedef uint8_t PIN_CODE[PIN_CODE_LEN]; /* Pin Code (upto 128 bits) MSB is 0 */
@@ -622,9 +649,9 @@ typedef struct {
 } FLOW_SPEC;
 
 /* Values for service_type */
-#define NO_TRAFFIC 0
-#define BEST_EFFORT 1
-#define GUARANTEED 2
+#define SVC_TYPE_NO_TRAFFIC 0
+#define SVC_TYPE_BEST_EFFORT 1
+#define SVC_TYPE_GUARANTEED 2
 
 /* Service class of the CoD */
 #define SERV_CLASS_NETWORKING (1 << 1)
@@ -726,23 +753,48 @@ typedef struct {
 #define BLE_ADDR_RANDOM_ID 0x03
 #define BLE_ADDR_ANONYMOUS 0xFF
 typedef uint8_t tBLE_ADDR_TYPE;
-#define BLE_ADDR_TYPE_MASK (BLE_ADDR_RANDOM | BLE_ADDR_PUBLIC)
 
-#define BT_TRANSPORT_INVALID 0
-#define BT_TRANSPORT_BR_EDR 1
-#define BT_TRANSPORT_LE 2
-typedef uint8_t tBT_TRANSPORT;
-
-#define PHY_LE_1M_MASK 1
-#define PHY_LE_2M_MASK 2
-#define PHY_LE_CODED_MASK 4
-
-#define BLE_ADDR_IS_STATIC(x) (((x)[0] & 0xC0) == 0xC0)
+/* BLE ADDR type ID bit */
+#define BLE_ADDR_TYPE_ID_BIT 0x02
 
 #ifdef __cplusplus
+constexpr uint8_t kBleAddressPublicDevice = BLE_ADDR_PUBLIC;
+constexpr uint8_t kBleAddressRandomDevice = BLE_ADDR_RANDOM;
+constexpr uint8_t kBleAddressIdentityBit = BLE_ADDR_TYPE_ID_BIT;
+constexpr uint8_t kBleAddressPublicIdentity =
+    kBleAddressIdentityBit | kBleAddressPublicDevice;
+constexpr uint8_t kBleAddressRandomIdentity =
+    kBleAddressIdentityBit | kBleAddressRandomDevice;
+
+constexpr uint8_t kResolvableAddressMask = 0xc0;
+constexpr uint8_t kResolvableAddressMsb = 0x40;
+
 struct tBLE_BD_ADDR {
   tBLE_ADDR_TYPE type;
   RawAddress bda;
+  bool AddressEquals(const RawAddress& other) const { return other == bda; }
+  bool IsPublicDeviceType() const { return type == kBleAddressPublicDevice; }
+  bool IsRandomDeviceType() const { return type == kBleAddressRandomDevice; }
+  bool IsPublicIdentityType() const {
+    return type == kBleAddressPublicIdentity;
+  }
+  bool lsRandomIdentityType() const {
+    return type == kBleAddressRandomIdentity;
+  }
+  bool IsAddressResolvable() const {
+    return ((bda.address)[0] & kResolvableAddressMask) == kResolvableAddressMsb;
+  }
+  bool IsPublic() const { return type & 0x01; }
+  bool IsResolvablePrivateAddress() const {
+    return IsAddressResolvable() && IsRandomDeviceType();
+  }
+  bool IsIdentityType() const {
+    return IsPublicIdentityType() || lsRandomIdentityType();
+  }
+  bool TypeWithoutIdentityEquals(const tBLE_ADDR_TYPE other) const {
+    return (other & ~kBleAddressIdentityBit) ==
+           (type & ~kBleAddressIdentityBit);
+  }
 };
 #endif
 
@@ -763,96 +815,33 @@ typedef uint8_t tBT_DEVICE_TYPE;
 #define BT_TRACE_LEVEL_DEBUG 5   /* Full debug messages                  */
 #define BT_TRACE_LEVEL_VERBOSE 6 /* Verbose debug messages               */
 
-#define MAX_TRACE_LEVEL 6
-
-/* Define New Trace Type Definition */
-/* TRACE_CTRL_TYPE                  0x^^000000*/
-#define TRACE_CTRL_MASK 0xff000000
-#define TRACE_GET_CTRL(x) ((((uint32_t)(x)) & TRACE_CTRL_MASK) >> 24)
-
 #define TRACE_CTRL_GENERAL 0x00000000
-#define TRACE_CTRL_STR_RESOURCE 0x01000000
-#define TRACE_CTRL_SEQ_FLOW 0x02000000
-#define TRACE_CTRL_MAX_NUM 3
 
-/* LAYER SPECIFIC                   0x00^^0000*/
 #define TRACE_LAYER_MASK 0x00ff0000
 #define TRACE_GET_LAYER(x) ((((uint32_t)(x)) & TRACE_LAYER_MASK) >> 16)
 
 #define TRACE_LAYER_NONE 0x00000000
-#define TRACE_LAYER_USB 0x00010000
-#define TRACE_LAYER_SERIAL 0x00020000
-#define TRACE_LAYER_SOCKET 0x00030000
-#define TRACE_LAYER_RS232 0x00040000
-#define TRACE_LAYER_TRANS_MAX_NUM 5
-#define TRACE_LAYER_TRANS_ALL 0x007f0000
-#define TRACE_LAYER_LC 0x00050000
-#define TRACE_LAYER_LM 0x00060000
 #define TRACE_LAYER_HCI 0x00070000
 #define TRACE_LAYER_L2CAP 0x00080000
 #define TRACE_LAYER_RFCOMM 0x00090000
 #define TRACE_LAYER_SDP 0x000a0000
-#define TRACE_LAYER_TCS 0x000b0000
-#define TRACE_LAYER_OBEX 0x000c0000
 #define TRACE_LAYER_BTM 0x000d0000
-#define TRACE_LAYER_ICP 0x00110000
-#define TRACE_LAYER_HSP2 0x00120000
-#define TRACE_LAYER_SPP 0x00130000
-#define TRACE_LAYER_CTP 0x00140000
-#define TRACE_LAYER_BPP 0x00150000
-#define TRACE_LAYER_HCRP 0x00160000
-#define TRACE_LAYER_FTP 0x00170000
-#define TRACE_LAYER_OPP 0x00180000
-#define TRACE_LAYER_BTU 0x00190000
-#define TRACE_LAYER_GKI 0x001a0000 /* OBSOLETED */
 #define TRACE_LAYER_BNEP 0x001b0000
 #define TRACE_LAYER_PAN 0x001c0000
-#define TRACE_LAYER_HFP 0x001d0000
 #define TRACE_LAYER_HID 0x001e0000
-#define TRACE_LAYER_BIP 0x001f0000
 #define TRACE_LAYER_AVP 0x00200000
 #define TRACE_LAYER_A2DP 0x00210000
-#define TRACE_LAYER_SAP 0x00220000
-#define TRACE_LAYER_AMP 0x00230000
-#define TRACE_LAYER_MCA 0x00240000
-#define TRACE_LAYER_ATT 0x00250000
 #define TRACE_LAYER_SMP 0x00260000
-#define TRACE_LAYER_NFC 0x00270000
-#define TRACE_LAYER_NCI 0x00280000
-#define TRACE_LAYER_LLCP 0x00290000
-#define TRACE_LAYER_NDEF 0x002a0000
-#define TRACE_LAYER_RW 0x002b0000
-#define TRACE_LAYER_CE 0x002c0000
-#define TRACE_LAYER_P2P 0x002d0000
-#define TRACE_LAYER_SNEP 0x002e0000
-#define TRACE_LAYER_CHO 0x002f0000
-#define TRACE_LAYER_NFA 0x00300000
 
 #define TRACE_LAYER_MAX_NUM 0x0031
 
-/* TRACE_ORIGINATOR                 0x0000^^00*/
 #define TRACE_ORG_MASK 0x0000ff00
 #define TRACE_GET_ORG(x) ((((uint32_t)(x)) & TRACE_ORG_MASK) >> 8)
 
 #define TRACE_ORG_STACK 0x00000000
-#define TRACE_ORG_HCI_TRANS 0x00000100
-#define TRACE_ORG_PROTO_DISP 0x00000200
-#define TRACE_ORG_RPC 0x00000300
-#define TRACE_ORG_GKI 0x00000400 /* OBSOLETED */
 #define TRACE_ORG_APPL 0x00000500
-#define TRACE_ORG_SCR_WRAPPER 0x00000600
-#define TRACE_ORG_SCR_ENGINE 0x00000700
 #define TRACE_ORG_USER_SCR 0x00000800
-#define TRACE_ORG_TESTER 0x00000900
-#define TRACE_ORG_MAX_NUM 10 /* 32-bit mask; must be < 32 */
-#define TRACE_LITE_ORG_MAX_NUM 6
-#define TRACE_ORG_ALL 0x03ff
-#define TRACE_ORG_RPC_TRANS 0x04
 
-#define TRACE_ORG_REG 0x00000909
-#define TRACE_ORG_REG_SUCCESS 0x0000090a
-
-/* TRACE_TYPE                       0x000000^^*/
 #define TRACE_TYPE_MASK 0x000000ff
 #define TRACE_GET_TYPE(x) (((uint32_t)(x)) & TRACE_TYPE_MASK)
 
@@ -861,60 +850,6 @@ typedef uint8_t tBT_DEVICE_TYPE;
 #define TRACE_TYPE_API 0x00000002
 #define TRACE_TYPE_EVENT 0x00000003
 #define TRACE_TYPE_DEBUG 0x00000004
-#define TRACE_TYPE_STACK_ONLY_MAX TRACE_TYPE_DEBUG
-#define TRACE_TYPE_TX 0x00000005
-#define TRACE_TYPE_RX 0x00000006
-#define TRACE_TYPE_DEBUG_ASSERT 0x00000007
-#define TRACE_TYPE_GENERIC 0x00000008
-#define TRACE_TYPE_REG 0x00000009
-#define TRACE_TYPE_REG_SUCCESS 0x0000000a
-#define TRACE_TYPE_CMD_TX 0x0000000b
-#define TRACE_TYPE_EVT_TX 0x0000000c
-#define TRACE_TYPE_ACL_TX 0x0000000d
-#define TRACE_TYPE_CMD_RX 0x0000000e
-#define TRACE_TYPE_EVT_RX 0x0000000f
-#define TRACE_TYPE_ACL_RX 0x00000010
-#define TRACE_TYPE_TARGET_TRACE 0x00000011
-#define TRACE_TYPE_SCO_TX 0x00000012
-#define TRACE_TYPE_SCO_RX 0x00000013
-
-#define TRACE_TYPE_MAX_NUM 20
-#define TRACE_TYPE_ALL 0xffff
-
-/* Define color for script type */
-#define SCR_COLOR_DEFAULT 0
-#define SCR_COLOR_TYPE_COMMENT 1
-#define SCR_COLOR_TYPE_COMMAND 2
-#define SCR_COLOR_TYPE_EVENT 3
-#define SCR_COLOR_TYPE_SELECT 4
-
-/* Define protocol trace flag values */
-#define SCR_PROTO_TRACE_HCI_SUMMARY 0x00000001
-#define SCR_PROTO_TRACE_HCI_DATA 0x00000002
-#define SCR_PROTO_TRACE_L2CAP 0x00000004
-#define SCR_PROTO_TRACE_RFCOMM 0x00000008
-#define SCR_PROTO_TRACE_SDP 0x00000010
-#define SCR_PROTO_TRACE_TCS 0x00000020
-#define SCR_PROTO_TRACE_OBEX 0x00000040
-#define SCR_PROTO_TRACE_OAPP 0x00000080 /* OBEX Application Profile */
-#define SCR_PROTO_TRACE_AMP 0x00000100
-#define SCR_PROTO_TRACE_BNEP 0x00000200
-#define SCR_PROTO_TRACE_AVP 0x00000400
-#define SCR_PROTO_TRACE_MCA 0x00000800
-#define SCR_PROTO_TRACE_ATT 0x00001000
-#define SCR_PROTO_TRACE_SMP 0x00002000
-#define SCR_PROTO_TRACE_NCI 0x00004000
-#define SCR_PROTO_TRACE_LLCP 0x00008000
-#define SCR_PROTO_TRACE_NDEF 0x00010000
-#define SCR_PROTO_TRACE_RW 0x00020000
-#define SCR_PROTO_TRACE_CE 0x00040000
-#define SCR_PROTO_TRACE_SNEP 0x00080000
-#define SCR_PROTO_TRACE_CHO 0x00100000
-#define SCR_PROTO_TRACE_ALL 0x001fffff
-#define SCR_PROTO_TRACE_HCI_LOGGING_VSE \
-  0x0800 /* Brcm vs event for logmsg and protocol traces */
-
-#define MAX_SCRIPT_TYPE 5
 
 #define TCS_PSM_INTERCOM 5
 #define TCS_PSM_CORDLESS 7
@@ -922,16 +857,5 @@ typedef uint8_t tBT_DEVICE_TYPE;
 /* Define PSMs HID uses */
 #define HID_PSM_CONTROL 0x0011
 #define HID_PSM_INTERRUPT 0x0013
-
-/* Define a function for logging */
-typedef void(BT_LOG_FUNC)(int trace_type, const char* fmt_str, ...);
-
-static inline bool is_sample_ltk(const BT_OCTET16 ltk) {
-  /* Sample LTK from BT Spec 5.1 | Vol 6, Part C 1
-   * 0x4C68384139F574D836BCF34E9DFB01BF */
-  const uint8_t SAMPLE_LTK[] = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
-                                0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
-  return memcmp(ltk, SAMPLE_LTK, BT_OCTET16_LEN) == 0;
-}
 
 #endif
