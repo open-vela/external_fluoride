@@ -20,6 +20,7 @@
 #define BTM_BLE_INT_TYPES_H
 
 #include "osi/include/alarm.h"
+#include "stack/include/btm_ble_api_types.h"
 
 /* scanning enable status */
 #define BTM_BLE_SCAN_ENABLE 0x01
@@ -75,15 +76,6 @@
 /* discard the sec request while encryption is started but not completed */
 #define BTM_BLE_SEC_REQ_ACT_DISCARD 3
 typedef uint8_t tBTM_BLE_SEC_REQ_ACT;
-
-#define BLE_STATIC_PRIVATE_MSB_MASK 0x3f
-/*  most significant bit, bit7, bit6 is 01 to be resolvable random */
-#define BLE_RESOLVE_ADDR_MSB 0x40
-/* bit 6, and bit7 */
-#define BLE_RESOLVE_ADDR_MASK 0xc0
-inline bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x) {
-  return ((x.address)[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB;
-}
 
 /* LE scan activity bit mask, continue with LE inquiry bits */
 /* observe is in progress */
@@ -166,21 +158,6 @@ typedef struct {
   alarm_t* refresh_raddr_timer;
 } tBTM_LE_RANDOM_CB;
 
-typedef struct {
-  uint16_t min_conn_int;
-  uint16_t max_conn_int;
-  uint16_t slave_latency;
-  uint16_t supervision_tout;
-
-} tBTM_LE_CONN_PRAMS;
-
-typedef struct {
-  RawAddress bd_addr;
-  uint8_t attr;
-  bool is_connected;
-  bool in_use;
-} tBTM_LE_BG_CONN_DEV;
-
 /* white list using state as a bit mask */
 constexpr uint8_t BTM_BLE_WL_IDLE = 0;
 constexpr uint8_t BTM_BLE_WL_INIT = 1;
@@ -202,18 +179,8 @@ typedef struct { void* p_param; } tBTM_BLE_CONN_REQ;
 
 /* LE state request */
 #define BTM_BLE_STATE_INVALID 0
-#define BTM_BLE_STATE_CONN_ADV 1
 #define BTM_BLE_STATE_INIT 2
-#define BTM_BLE_STATE_MASTER 3
-#define BTM_BLE_STATE_SLAVE 4
-#define BTM_BLE_STATE_LO_DUTY_DIR_ADV 5
-#define BTM_BLE_STATE_HI_DUTY_DIR_ADV 6
-#define BTM_BLE_STATE_NON_CONN_ADV 7
-#define BTM_BLE_STATE_PASSIVE_SCAN 8
-#define BTM_BLE_STATE_ACTIVE_SCAN 9
-#define BTM_BLE_STATE_SCAN_ADV 10
 #define BTM_BLE_STATE_MAX 11
-typedef uint8_t tBTM_BLE_STATE;
 
 #define BTM_BLE_STATE_CONN_ADV_BIT 0x0001
 #define BTM_BLE_STATE_INIT_BIT 0x0002
@@ -231,8 +198,6 @@ typedef uint16_t tBTM_BLE_STATE_MASK;
 #define BTM_BLE_STATE_ALL_ADV_MASK                                  \
   (BTM_BLE_STATE_CONN_ADV_BIT | BTM_BLE_STATE_LO_DUTY_DIR_ADV_BIT | \
    BTM_BLE_STATE_HI_DUTY_DIR_ADV_BIT | BTM_BLE_STATE_SCAN_ADV_BIT)
-#define BTM_BLE_STATE_ALL_SCAN_MASK \
-  (BTM_BLE_STATE_PASSIVE_SCAN_BIT | BTM_BLE_STATE_ACTIVE_SCAN_BIT)
 #define BTM_BLE_STATE_ALL_CONN_MASK \
   (BTM_BLE_STATE_MASTER_BIT | BTM_BLE_STATE_SLAVE_BIT)
 
@@ -261,10 +226,6 @@ typedef struct {
 #define BTM_PRIVACY_MIXED \
   3 /* BLE privacy mixed mode, broadcom propietary mode */
 typedef uint8_t tBTM_PRIVACY_MODE;
-
-/* data length change event callback */
-typedef void(tBTM_DATA_LENGTH_CHANGE_CBACK)(uint16_t max_tx_length,
-                                            uint16_t max_rx_length);
 
 /* Define BLE Device Management control structure
 */
@@ -295,7 +256,6 @@ typedef struct {
 
   bool enabled;
 
-#if (BLE_PRIVACY_SPT == TRUE)
   bool mixed_mode;                   /* privacy 1.2 mixed mode is on or not */
   tBTM_PRIVACY_MODE privacy_mode;    /* privacy mode */
   uint8_t resolving_list_avail_size; /* resolving list available size */
@@ -303,7 +263,6 @@ typedef struct {
   tBTM_BLE_RL_STATE suspended_rl_state;     /* Suspended resolving list state */
   uint8_t* irk_list_mask; /* IRK list availability mask, up to max entry bits */
   tBTM_BLE_RL_STATE rl_state; /* Resolving list state */
-#endif
 
   /* current BLE link state */
   tBTM_BLE_STATE_MASK cur_states; /* bit mask of tBTM_BLE_STATE */
