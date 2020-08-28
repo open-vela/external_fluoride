@@ -60,7 +60,6 @@
 #include "btif_storage.h"
 #include "btif_util.h"
 #include "btu.h"
-#include "common/metric_id_allocator.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
 #include "device/include/interop.h"
@@ -73,7 +72,6 @@
 #include "stack_config.h"
 
 using bluetooth::Uuid;
-using bluetooth::common::MetricIdAllocator;
 /******************************************************************************
  *  Constants & Macros
  *****************************************************************************/
@@ -507,15 +505,6 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
   BTIF_TRACE_DEBUG("%s: state=%d, prev_state=%d, sdp_attempts = %d", __func__,
                    state, pairing_cb.state, pairing_cb.sdp_attempts);
 
-  if (state == BT_BOND_STATE_NONE) {
-    MetricIdAllocator::GetInstance().ForgetDevice(bd_addr);
-  } else if (state == BT_BOND_STATE_BONDED) {
-    MetricIdAllocator::GetInstance().AllocateId(bd_addr);
-    if (!MetricIdAllocator::GetInstance().SaveDevice(bd_addr)) {
-      LOG(FATAL) << __func__ << ": Fail to save metric id for device "
-                 << bd_addr;
-    }
-  }
   auto tmp = bd_addr;
   HAL_CBACK(bt_hal_cbacks, bond_state_changed_cb, status, &tmp, state);
 
@@ -674,7 +663,7 @@ static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
   bool is_hid = check_cod(&bd_addr, COD_HID_POINTING);
   bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_BOND_STATE_BONDING);
 
-  int device_type = 0;
+  int device_type;
   int addr_type;
   std::string addrstr = bd_addr.ToString();
   const char* bdstr = addrstr.c_str();
@@ -708,7 +697,7 @@ static void btif_dm_cb_create_bond(const RawAddress& bd_addr,
     if (status != BT_STATUS_SUCCESS)
       bond_state_changed(status, bd_addr, BT_BOND_STATE_NONE);
   } else {
-    BTA_DmBond(bd_addr, addr_type, transport);
+    BTA_DmBondByTransport(bd_addr, transport);
   }
   /*  Track  originator of bond creation  */
   pairing_cb.is_local_initiated = true;
@@ -936,8 +925,8 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
  ******************************************************************************/
 static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   bt_bdname_t bd_name;
-  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   uint32_t cod;
+  bool is_incoming = !(pairing_cb.state == BT_BOND_STATE_BONDING);
   int dev_type;
 
   BTIF_TRACE_DEBUG("%s", __func__);
@@ -1119,6 +1108,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
 
       LOG_WARN(LOG_TAG, "%s: Incoming HID Connection", __func__);
       bt_property_t prop;
+      RawAddress bd_addr;
       Uuid uuid = Uuid::From16Bit(UUID_SERVCLASS_HUMAN_INTERFACE);
 
       prop.type = BT_PROPERTY_UUIDS;
@@ -1163,7 +1153,6 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
     // Do not call bond_state_changed_cb yet. Wait until remote service
     // discovery is complete
   } else {
-    bool is_bonded_device_removed = false;
     // Map the HCI fail reason  to  bt status
     switch (p_auth_cmpl->fail_reason) {
       case HCI_ERR_PAGE_TIMEOUT:
@@ -1182,17 +1171,14 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
         break;
 
       case HCI_ERR_PAIRING_NOT_ALLOWED:
-        is_bonded_device_removed =
-            (btif_storage_remove_bonded_device(&bd_addr) == BT_STATUS_SUCCESS);
+        btif_storage_remove_bonded_device(&bd_addr);
         status = BT_STATUS_AUTH_REJECTED;
         break;
 
       /* map the auth failure codes, so we can retry pairing if necessary */
       case HCI_ERR_AUTH_FAILURE:
       case HCI_ERR_KEY_MISSING:
-        is_bonded_device_removed =
-            (btif_storage_remove_bonded_device(&bd_addr) == BT_STATUS_SUCCESS);
-        [[fallthrough]];
+        btif_storage_remove_bonded_device(&bd_addr);
       case HCI_ERR_HOST_REJECT_SECURITY:
       case HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE:
       case HCI_ERR_UNIT_KEY_USED:
@@ -1222,14 +1208,9 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       /* Remove Device as bonded in nvram as authentication failed */
       BTIF_TRACE_DEBUG("%s(): removing hid pointing device from nvram",
                        __func__);
-      is_bonded_device_removed =
-          (btif_storage_remove_bonded_device(&bd_addr) == BT_STATUS_SUCCESS);
+      btif_storage_remove_bonded_device(&bd_addr);
     }
-    // Report bond state change to java only if we are bonding to a device or
-    // a device is removed from the pairing list.
-    if (pairing_cb.state == BT_BOND_STATE_BONDING || is_bonded_device_removed) {
-      bond_state_changed(status, bd_addr, state);
-    }
+    bond_state_changed(status, bd_addr, state);
   }
 }
 
