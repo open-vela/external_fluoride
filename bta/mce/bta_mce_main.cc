@@ -1,7 +1,8 @@
 /******************************************************************************
  *
  *  Copyright 2014 The Android Open Source Project
-
+ *  Copyright 2003-2012 Broadcom Corporation
+ *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at:
@@ -22,49 +23,51 @@
  *
  ******************************************************************************/
 
-#include <stdlib.h>
+#include <stddef.h>
 
 #include "bta_api.h"
-#include "bta_sdp_api.h"
-#include "bta_sdp_int.h"
+#include "bta_mce_api.h"
+#include "bta_mce_int.h"
 #include "bta_sys.h"
 
 /*****************************************************************************
  * Constants and types
  ****************************************************************************/
 
-tBTA_SDP_CB bta_sdp_cb;
+tBTA_MCE_CB bta_mce_cb;
 
 /* state machine action enumeration list */
-#define BTA_SDP_NUM_ACTIONS (BTA_SDP_MAX_INT_EVT & 0x00ff)
+#define BTA_MCE_NUM_ACTIONS (BTA_MCE_MAX_INT_EVT & 0x00ff)
 
 /* type for action functions */
-typedef void (*tBTA_SDP_ACTION)(tBTA_SDP_MSG* p_data);
+typedef void (*tBTA_MCE_ACTION)(tBTA_MCE_MSG* p_data);
 
 /* action function list */
-const tBTA_SDP_ACTION bta_sdp_action[] = {
-    bta_sdp_enable,        /* BTA_SDP_API_ENABLE_EVT */
-    bta_sdp_search,        /* BTA_SDP_API_SEARCH_EVT */
-    bta_sdp_create_record, /* BTA_SDP_API_CREATE_RECORD_USER_EVT */
-    bta_sdp_remove_record, /* BTA_SDP_API_REMOVE_RECORD_USER_EVT */
+const tBTA_MCE_ACTION bta_mce_action[] = {
+    bta_mce_enable,                   /* BTA_MCE_API_ENABLE_EVT */
+    bta_mce_get_remote_mas_instances, /* BTA_MCE_API_GET_REMOTE_MAS_INSTANCES_EVT
+                                         */
 };
 
 /*******************************************************************************
- * Function         bta_sdp_sm_execute
  *
- * Description      State machine event handling function for SDP search
+ * Function         bta_mce_sm_execute
+ *
+ * Description      State machine event handling function for MCE
+ *
  *
  * Returns          void
+ *
  ******************************************************************************/
-bool bta_sdp_sm_execute(BT_HDR* p_msg) {
+bool bta_mce_sm_execute(BT_HDR* p_msg) {
   if (p_msg == NULL) return false;
 
   bool ret = false;
   uint16_t action = (p_msg->event & 0x00ff);
 
   /* execute action functions */
-  if (action < BTA_SDP_NUM_ACTIONS) {
-    (*bta_sdp_action[action])((tBTA_SDP_MSG*)p_msg);
+  if (action < BTA_MCE_NUM_ACTIONS) {
+    (*bta_mce_action[action])((tBTA_MCE_MSG*)p_msg);
     ret = true;
   }
 
