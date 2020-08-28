@@ -25,6 +25,8 @@
 #include "bnep_api.h"
 #include <string.h>
 #include "bnep_int.h"
+#include "bta/include/bta_api.h"
+#include "stack/btm/btm_sec.h"
 
 using bluetooth::Uuid;
 
@@ -126,7 +128,8 @@ void BNEP_Deregister(void) {
  *
  ******************************************************************************/
 tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda, const Uuid& src_uuid,
-                          const Uuid& dst_uuid, uint16_t* p_handle) {
+                          const Uuid& dst_uuid, uint16_t* p_handle,
+                          uint32_t mx_chan_id) {
   uint16_t cid;
   tBNEP_CONN* p_bcb = bnepu_find_bcb_by_bd_addr(p_rem_bda);
 
@@ -159,20 +162,15 @@ tBNEP_RESULT BNEP_Connect(const RawAddress& p_rem_bda, const Uuid& src_uuid,
     BNEP_TRACE_API("BNEP initiating security procedures for src uuid %s",
                    p_bcb->src_uuid.ToString().c_str());
 
-#if (BNEP_DO_AUTH_FOR_ROLE_SWITCH == TRUE)
-    btm_sec_mx_access_request(p_bcb->rem_bda, BT_PSM_BNEP, true,
-                              BTM_SEC_PROTO_BNEP, src_uuid.As32Bit(),
-                              &bnep_sec_check_complete, p_bcb);
-#else
-    bnep_sec_check_complete(p_bcb->rem_bda, p_bcb, BTM_SUCCESS);
-#endif
-
+    bnep_sec_check_complete(&p_bcb->rem_bda, BT_TRANSPORT_BR_EDR, p_bcb,
+                            BTM_SUCCESS);
   } else {
     /* Transition to the next appropriate state, waiting for connection confirm.
      */
     p_bcb->con_state = BNEP_STATE_CONN_START;
 
-    cid = L2CA_ConnectReq(BT_PSM_BNEP, p_bcb->rem_bda);
+    cid = L2CA_ConnectReq2(BT_PSM_BNEP, p_bcb->rem_bda,
+                           BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT);
     if (cid != 0) {
       p_bcb->l2cap_cid = cid;
 

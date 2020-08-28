@@ -137,14 +137,6 @@ enum {
 };
 typedef uint8_t tBTA_HH_STATUS;
 
-#define BTA_HH_VIRTUAL_CABLE HID_VIRTUAL_CABLE
-#define BTA_HH_NORMALLY_CONNECTABLE HID_NORMALLY_CONNECTABLE
-#define BTA_HH_RECONN_INIT HID_RECONN_INIT
-#define BTA_HH_SDP_DISABLE HID_SDP_DISABLE
-#define BTA_HH_BATTERY_POWER HID_BATTERY_POWER
-#define BTA_HH_REMOTE_WAKE HID_REMOTE_WAKE
-#define BTA_HH_SUP_TOUT_AVLBL HID_SUP_TOUT_AVLBL
-#define BTA_HH_SEC_REQUIRED HID_SEC_REQUIRED
 typedef uint16_t tBTA_HH_ATTR_MASK;
 
 /* supported type of device and corresponding application ID */
@@ -311,7 +303,7 @@ typedef void(tBTA_HH_CBACK)(tBTA_HH_EVT event, tBTA_HH* p_data);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HhEnable(tBTA_SEC sec_mask, tBTA_HH_CBACK* p_cback);
+extern void BTA_HhEnable(tBTA_HH_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -335,8 +327,7 @@ extern void BTA_HhDisable(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HhOpen(const RawAddress& dev_bda, tBTA_HH_PROTO_MODE mode,
-                       tBTA_SEC sec_mask);
+extern void BTA_HhOpen(const RawAddress& dev_bda);
 
 /*******************************************************************************
  *
@@ -496,26 +487,5 @@ extern void BTA_HhAddDev(const RawAddress& bda, tBTA_HH_ATTR_MASK attr_mask,
  *
  ******************************************************************************/
 extern void BTA_HhRemoveDev(uint8_t dev_handle);
-
-/*******************************************************************************
- *
- *              Parsing Utility Functions
- *
- ******************************************************************************/
-/*******************************************************************************
- *
- * Function         BTA_HhParseBootRpt
- *
- * Description      This utility function parse a boot mode report.
- *
- * Returns          void
- *
- ******************************************************************************/
-extern void BTA_HhParseBootRpt(tBTA_HH_BOOT_RPT* p_data, uint8_t* p_report,
-                               uint16_t report_len);
-
-/* test commands */
-extern void bta_hh_le_hid_read_rpt_clt_cfg(const RawAddress& bd_addr,
-                                           uint8_t rpt_id);
 
 #endif /* BTA_HH_API_H */
