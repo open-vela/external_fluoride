@@ -425,16 +425,11 @@ void bta_sdp_enable(tBTA_SDP_DM_CBACK* p_cback) {
  * Returns      void
  *
  ******************************************************************************/
-void bta_sdp_search(tBTA_SDP_API_SEARCH* p_data) {
-  if (p_data == NULL) {
-    APPL_TRACE_DEBUG("SDP control block handle is null");
-    return;
-  }
+void bta_sdp_search(const RawAddress bd_addr, const bluetooth::Uuid uuid) {
   tBTA_SDP_STATUS status = BTA_SDP_FAILURE;
 
   APPL_TRACE_DEBUG("%s in, sdp_active:%d", __func__, bta_sdp_cb.sdp_active);
 
-  const Uuid& uuid = p_data->uuid;
   if (bta_sdp_cb.sdp_active != BTA_SDP_ACTIVE_NONE) {
     /* SDP is still in progress */
     status = BTA_SDP_BUSY;
@@ -442,18 +437,17 @@ void bta_sdp_search(tBTA_SDP_API_SEARCH* p_data) {
       tBTA_SDP_SEARCH_COMP result;
       memset(&result, 0, sizeof(result));
       result.uuid = uuid;
-      result.remote_addr = p_data->bd_addr;
+      result.remote_addr = bd_addr;
       result.status = status;
       tBTA_SDP bta_sdp;
       bta_sdp.sdp_search_comp = result;
       bta_sdp_cb.p_dm_cback(BTA_SDP_SEARCH_COMP_EVT, &bta_sdp, NULL);
     }
-    osi_free(p_data);
     return;
   }
 
   bta_sdp_cb.sdp_active = BTA_SDP_ACTIVE_YES;
-  bta_sdp_cb.remote_addr = p_data->bd_addr;
+  bta_sdp_cb.remote_addr = bd_addr;
 
   /* initialize the search for the uuid */
   APPL_TRACE_DEBUG("%s init discovery with UUID: %s", __func__,
@@ -463,9 +457,9 @@ void bta_sdp_search(tBTA_SDP_API_SEARCH* p_data) {
 
   Uuid* bta_sdp_search_uuid = (Uuid*)osi_malloc(sizeof(Uuid));
   *bta_sdp_search_uuid = uuid;
-  if (!SDP_ServiceSearchAttributeRequest2(
-          p_data->bd_addr, p_bta_sdp_cfg->p_sdp_db, bta_sdp_search_cback,
-          (void*)bta_sdp_search_uuid)) {
+  if (!SDP_ServiceSearchAttributeRequest2(bd_addr, p_bta_sdp_cfg->p_sdp_db,
+                                          bta_sdp_search_cback,
+                                          (void*)bta_sdp_search_uuid)) {
     bta_sdp_cb.sdp_active = BTA_SDP_ACTIVE_NONE;
 
     /* failed to start SDP. report the failure right away */
@@ -473,7 +467,7 @@ void bta_sdp_search(tBTA_SDP_API_SEARCH* p_data) {
       tBTA_SDP_SEARCH_COMP result;
       memset(&result, 0, sizeof(result));
       result.uuid = uuid;
-      result.remote_addr = p_data->bd_addr;
+      result.remote_addr = bd_addr;
       result.status = status;
       tBTA_SDP bta_sdp;
       bta_sdp.sdp_search_comp = result;
@@ -483,7 +477,6 @@ void bta_sdp_search(tBTA_SDP_API_SEARCH* p_data) {
   /*
   else report the result when the cback is called
   */
-  osi_free(p_data);
 }
 
 /*******************************************************************************
