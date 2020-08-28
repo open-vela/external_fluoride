@@ -35,6 +35,7 @@
 #include <hardware/bt_hearing_aid.h>
 #include <hardware/bt_hf_client.h>
 #include <hardware/bt_hh.h>
+#include <hardware/bt_mce.h>
 #include <hardware/bt_pan.h>
 #include <hardware/bt_rc.h>
 #include <hardware/bt_sdp.h>
@@ -108,6 +109,8 @@ extern const bthh_interface_t* btif_hh_get_interface();
 extern const bthd_interface_t* btif_hd_get_interface();
 /*pan*/
 extern const btpan_interface_t* btif_pan_get_interface();
+/*map client*/
+extern const btmce_interface_t* btif_mce_get_interface();
 /* gatt */
 extern const btgatt_interface_t* btif_gatt_get_interface();
 /* avrc target */
