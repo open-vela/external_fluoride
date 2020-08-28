@@ -219,7 +219,7 @@ bt_status_t btif_storage_load_bonded_hid_info(void);
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_remove_hid_info(RawAddress* remote_bd_addr);
+bt_status_t btif_storage_remove_hid_info(const RawAddress& remote_bd_addr);
 
 /** Loads information about bonded hearing aid devices */
 void btif_storage_load_bonded_hearing_aids();
@@ -230,6 +230,13 @@ void btif_storage_remove_hearing_aid(const RawAddress& address);
 /** Set/Unset the hearing aid device HEARING_AID_IS_WHITE_LISTED flag. */
 void btif_storage_set_hearing_aid_white_list(const RawAddress& address,
                                              bool add_to_whitelist);
+
+/** Stores information about GATT Client supported features support */
+void btif_storage_set_gatt_cl_supp_feat(const RawAddress& bd_addr,
+                                        uint8_t feat);
+
+/** Get client supported features */
+uint8_t btif_storage_get_gatt_cl_supp_feat(const RawAddress& bd_addr);
 
 /** Get the hearing aid device properties. */
 bool btif_storage_get_hearing_aid_prop(
@@ -255,7 +262,7 @@ bt_status_t btif_storage_add_ble_bonding_key(RawAddress* remote_bd_addr,
                                              const uint8_t* key,
                                              uint8_t key_type,
                                              uint8_t key_length);
-bt_status_t btif_storage_get_ble_bonding_key(RawAddress* remote_bd_addr,
+bt_status_t btif_storage_get_ble_bonding_key(const RawAddress& remote_bd_addr,
                                              uint8_t key_type,
                                              uint8_t* key_value,
                                              int key_length);
@@ -294,7 +301,7 @@ bt_status_t btif_storage_load_hidd(void);
  *
  ******************************************************************************/
 
-bt_status_t btif_storage_set_hidd(RawAddress* remote_bd_addr);
+bt_status_t btif_storage_set_hidd(const RawAddress& remote_bd_addr);
 
 /*******************************************************************************
  *
