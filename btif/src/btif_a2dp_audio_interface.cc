@@ -137,15 +137,15 @@ static A2dpOffloadAudioStats a2dp_offload_audio_stats;
 
 class BluetoothAudioHost : public IBluetoothAudioHost {
  public:
-  Return<void> startStream() override {
+  Return<void> startStream() {
     btif_a2dp_audio_send_start_req();
     return Void();
   }
-  Return<void> suspendStream() override {
+  Return<void> suspendStream() {
     btif_a2dp_audio_send_suspend_req();
     return Void();
   }
-  Return<void> stopStream() override {
+  Return<void> stopStream() {
     btif_a2dp_audio_send_stop_req();
     return Void();
   }
@@ -160,9 +160,9 @@ class BluetoothAudioHost : public IBluetoothAudioHost {
 
 class BluetoothAudioDeathRecipient : public hidl_death_recipient {
  public:
-  void serviceDied(
+  virtual void serviceDied(
       uint64_t /*cookie*/,
-      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) override {
+      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) {
     LOG_ERROR(LOG_TAG, "%s", __func__);
     // Restart the session on the correct thread
     do_in_main_thread(FROM_HERE,

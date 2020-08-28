@@ -20,12 +20,10 @@
 #include <vector>
 
 #include "device.h"
-#include "hci/address.h"
-#include "packets/link_layer_packets.h"
+#include "packets/link_layer/link_layer_packet_view.h"
+#include "types/address.h"
 
 namespace test_vendor_lib {
-
-using ::bluetooth::hci::Address;
 
 class Sniffer : public Device {
  public:
@@ -44,8 +42,7 @@ class Sniffer : public Device {
     return "sniffer";
   }
 
-  virtual void IncomingPacket(
-      model::packets::LinkLayerPacketView packet) override;
+  virtual void IncomingPacket(packets::LinkLayerPacketView packet) override;
 
   virtual void TimerTick() override;
 

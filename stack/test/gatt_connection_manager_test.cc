@@ -61,11 +61,11 @@ void BTM_SetLeConnectionModeToSlow() {
 
 namespace connection_manager {
 class BleConnectionManager : public testing::Test {
-  void SetUp() override {
+  virtual void SetUp() {
     localWhiteListMock = std::make_unique<WhiteListMock>();
   }
 
-  void TearDown() override {
+  virtual void TearDown() {
     connection_manager::reset(true);
     AlarmMock::Reset();
     localWhiteListMock.reset();

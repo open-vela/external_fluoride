@@ -30,6 +30,7 @@
 
 #include "bt_common.h"
 #include "bt_target.h"
+#include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hci/include/btsnoop.h"
