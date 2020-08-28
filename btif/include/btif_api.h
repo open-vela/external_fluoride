@@ -105,6 +105,19 @@ bool is_restricted_mode(void);
 
 /*******************************************************************************
  *
+ * Function         is_niap_mode
+ *
+ * Description      Checks if BT was enabled in single user mode. In this
+ *                  mode, use of keystore for key attestation of LTK is limitee
+ *                  to this mode defined by UserManager.
+ *
+ * Returns          bool
+ *
+ ******************************************************************************/
+bool is_niap_mode(void);
+
+/*******************************************************************************
+ *
  * Function         is_atv_device
  *
  * Description      Returns true if the local device is an Android TV
