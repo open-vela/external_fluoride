@@ -15,17 +15,18 @@
  */
 
 #include "hal/hci_hal_host_rootcanal.h"
-#include "hal/hci_hal.h"
 
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
 #include <chrono>
 #include <csignal>
 #include <mutex>
 #include <queue>
 
+#include "hal/hci_hal.h"
 #include "hal/snoop_logger.h"
 #include "os/log.h"
 #include "os/reactor.h"
@@ -38,11 +39,13 @@ constexpr uint8_t kH4Command = 0x01;
 constexpr uint8_t kH4Acl = 0x02;
 constexpr uint8_t kH4Sco = 0x03;
 constexpr uint8_t kH4Event = 0x04;
+constexpr uint8_t kH4Iso = 0x05;
 
 constexpr uint8_t kH4HeaderSize = 1;
 constexpr uint8_t kHciAclHeaderSize = 4;
 constexpr uint8_t kHciScoHeaderSize = 3;
 constexpr uint8_t kHciEvtHeaderSize = 2;
+constexpr uint8_t kHciIsoHeaderSize = 4;
 constexpr int kBufSize = 1024 + 4 + 1;  // DeviceProperties::acl_data_packet_size_ + ACL header + H4 header
 
 int ConnectToRootCanal(const std::string& server, int port) {
@@ -87,9 +90,6 @@ int ConnectToRootCanal(const std::string& server, int port) {
 namespace bluetooth {
 namespace hal {
 
-const std::string SnoopLogger::DefaultFilePath = "/tmp/btsnoop_hci.log";
-const bool SnoopLogger::AlwaysFlush = true;
-
 class HciHalHostRootcanal : public HciHal {
  public:
   void registerIncomingPacketCallback(HciHalCallbacks* callback) override {
@@ -117,7 +117,7 @@ class HciHalHostRootcanal : public HciHal {
     std::lock_guard<std::mutex> lock(api_mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(command);
-    btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::CMD);
+    btsnoop_logger_->Capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::CMD);
     packet.insert(packet.cbegin(), kH4Command);
     write_to_rootcanal_fd(packet);
   }
@@ -126,7 +126,7 @@ class HciHalHostRootcanal : public HciHal {
     std::lock_guard<std::mutex> lock(api_mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(data);
-    btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::ACL);
+    btsnoop_logger_->Capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::ACL);
     packet.insert(packet.cbegin(), kH4Acl);
     write_to_rootcanal_fd(packet);
   }
@@ -135,7 +135,7 @@ class HciHalHostRootcanal : public HciHal {
     std::lock_guard<std::mutex> lock(api_mutex_);
     ASSERT(sock_fd_ != INVALID_FD);
     std::vector<uint8_t> packet = std::move(data);
-    btsnoop_logger_->capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::SCO);
+    btsnoop_logger_->Capture(packet, SnoopLogger::Direction::OUTGOING, SnoopLogger::PacketType::SCO);
     packet.insert(packet.cbegin(), kH4Sco);
     write_to_rootcanal_fd(packet);
   }
@@ -151,7 +151,8 @@ class HciHalHostRootcanal : public HciHal {
     sock_fd_ = ConnectToRootCanal(config_->GetServerAddress(), config_->GetPort());
     ASSERT(sock_fd_ != INVALID_FD);
     reactable_ = hci_incoming_thread_.GetReactor()->Register(
-        sock_fd_, common::Bind(&HciHalHostRootcanal::incoming_packet_received, common::Unretained(this)),
+        sock_fd_,
+        common::Bind(&HciHalHostRootcanal::incoming_packet_received, common::Unretained(this)),
         common::Closure());
     btsnoop_logger_ = GetDependency<SnoopLogger>();
     LOG_INFO("Rootcanal HAL opened successfully");
@@ -196,7 +197,8 @@ class HciHalHostRootcanal : public HciHal {
     hci_outgoing_queue_.emplace(packet);
     if (hci_outgoing_queue_.size() == 1) {
       hci_incoming_thread_.GetReactor()->ModifyRegistration(
-          reactable_, common::Bind(&HciHalHostRootcanal::incoming_packet_received, common::Unretained(this)),
+          reactable_,
+          common::Bind(&HciHalHostRootcanal::incoming_packet_received, common::Unretained(this)),
           common::Bind(&HciHalHostRootcanal::send_packet_ready, common::Unretained(this)));
     }
   }
@@ -211,7 +213,8 @@ class HciHalHostRootcanal : public HciHal {
     }
     if (hci_outgoing_queue_.empty()) {
       this->hci_incoming_thread_.GetReactor()->ModifyRegistration(
-          this->reactable_, common::Bind(&HciHalHostRootcanal::incoming_packet_received, common::Unretained(this)),
+          this->reactable_,
+          common::Bind(&HciHalHostRootcanal::incoming_packet_received, common::Unretained(this)),
           common::Closure());
     }
   }
@@ -242,16 +245,18 @@ class HciHalHostRootcanal : public HciHal {
 
       uint8_t hci_evt_parameter_total_length = buf[2];
       ssize_t payload_size;
-      RUN_NO_INTR(payload_size =
-                      recv(sock_fd_, buf + kH4HeaderSize + kHciEvtHeaderSize, hci_evt_parameter_total_length, 0));
+      RUN_NO_INTR(
+          payload_size = recv(sock_fd_, buf + kH4HeaderSize + kHciEvtHeaderSize, hci_evt_parameter_total_length, 0));
       ASSERT_LOG(payload_size != -1, "Can't receive from socket: %s", strerror(errno));
-      ASSERT_LOG(payload_size == hci_evt_parameter_total_length,
-                 "malformed HCI event total parameter size received: %zu != %d", payload_size,
-                 hci_evt_parameter_total_length);
+      ASSERT_LOG(
+          payload_size == hci_evt_parameter_total_length,
+          "malformed HCI event total parameter size received: %zu != %d",
+          payload_size,
+          hci_evt_parameter_total_length);
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciEvtHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::EVT);
+      btsnoop_logger_->Capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::EVT);
       {
         std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
         if (incoming_packet_callback_ == nullptr) {
@@ -271,13 +276,16 @@ class HciHalHostRootcanal : public HciHal {
       int payload_size;
       RUN_NO_INTR(payload_size = recv(sock_fd_, buf + kH4HeaderSize + kHciAclHeaderSize, hci_acl_data_total_length, 0));
       ASSERT_LOG(payload_size != -1, "Can't receive from socket: %s", strerror(errno));
-      ASSERT_LOG(payload_size == hci_acl_data_total_length, "malformed ACL length received: %d != %d", payload_size,
-                 hci_acl_data_total_length);
+      ASSERT_LOG(
+          payload_size == hci_acl_data_total_length,
+          "malformed ACL length received: %d != %d",
+          payload_size,
+          hci_acl_data_total_length);
       ASSERT_LOG(hci_acl_data_total_length <= kBufSize - kH4HeaderSize - kHciAclHeaderSize, "packet too long");
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciAclHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::ACL);
+      btsnoop_logger_->Capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::ACL);
       {
         std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
         if (incoming_packet_callback_ == nullptr) {
@@ -301,7 +309,7 @@ class HciHalHostRootcanal : public HciHal {
 
       HciPacket receivedHciPacket;
       receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciScoHeaderSize + payload_size);
-      btsnoop_logger_->capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::SCO);
+      btsnoop_logger_->Capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::SCO);
       {
         std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
         if (incoming_packet_callback_ == nullptr) {
@@ -309,6 +317,30 @@ class HciHalHostRootcanal : public HciHal {
           return;
         }
         incoming_packet_callback_->scoDataReceived(receivedHciPacket);
+      }
+    }
+
+    if (buf[0] == kH4Iso) {
+      RUN_NO_INTR(received_size = recv(sock_fd_, buf + kH4HeaderSize, kHciIsoHeaderSize, 0));
+      ASSERT_LOG(received_size != -1, "Can't receive from socket: %s", strerror(errno));
+      ASSERT_LOG(received_size == kHciIsoHeaderSize, "malformed ISO header received");
+
+      uint8_t hci_iso_data_total_length = buf[3];
+      int payload_size;
+      RUN_NO_INTR(payload_size = recv(sock_fd_, buf + kH4HeaderSize + kHciIsoHeaderSize, hci_iso_data_total_length, 0));
+      ASSERT_LOG(payload_size != -1, "Can't receive from socket: %s", strerror(errno));
+      ASSERT_LOG(payload_size == hci_iso_data_total_length, "malformed ISO packet received: size mismatch");
+
+      HciPacket receivedHciPacket;
+      receivedHciPacket.assign(buf + kH4HeaderSize, buf + kH4HeaderSize + kHciIsoHeaderSize + payload_size);
+      btsnoop_logger_->Capture(receivedHciPacket, SnoopLogger::Direction::INCOMING, SnoopLogger::PacketType::ISO);
+      {
+        std::lock_guard<std::mutex> incoming_packet_callback_lock(incoming_packet_callback_mutex_);
+        if (incoming_packet_callback_ == nullptr) {
+          LOG_INFO("Dropping a ISO packet after processing");
+          return;
+        }
+        incoming_packet_callback_->isoDataReceived(receivedHciPacket);
       }
     }
     memset(buf, 0, kBufSize);
