@@ -29,7 +29,18 @@
 
 static const char BTIF_CONFIG_MODULE[] = "btif_config_module";
 
-bool btif_config_has_section(const char* section);
+static const std::string BT_CONFIG_KEY_SDP_DI_MANUFACTURER =
+    "SdpDiManufacturer";
+static const std::string BT_CONFIG_KEY_SDP_DI_MODEL = "SdpDiModel";
+static const std::string BT_CONFIG_KEY_SDP_DI_HW_VERSION =
+    "SdpDiHardwareVersion";
+static const std::string BT_CONFIG_KEY_SDP_DI_VENDOR_ID_SRC =
+    "SdpDiVendorIdSource";
+
+static const std::string BT_CONFIG_KEY_REMOTE_VER_MFCT = "Manufacturer";
+static const std::string BT_CONFIG_KEY_REMOTE_VER_VER = "LmpVer";
+static const std::string BT_CONFIG_KEY_REMOTE_VER_SUBVER = "LmpSubVer";
+
 bool btif_config_exist(const std::string& section, const std::string& key);
 bool btif_config_get_int(const std::string& section, const std::string& key,
                          int* value);
@@ -52,7 +63,7 @@ bool btif_config_remove(const std::string& section, const std::string& key);
 size_t btif_config_get_bin_length(const std::string& section,
                                   const std::string& key);
 
-std::list<section_t>& btif_config_sections();
+std::vector<RawAddress> btif_config_get_paired_devices();
 
 void btif_config_save(void);
 void btif_config_flush(void);
