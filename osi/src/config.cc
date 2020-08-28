@@ -17,6 +17,7 @@
  ******************************************************************************/
 
 #include "osi/include/config.h"
+#include "log/log.h"
 
 #include <base/files/file_util.h>
 #include <base/logging.h>
@@ -24,7 +25,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
-#include <log/log.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -185,7 +185,7 @@ void config_set_string(config_t* config, const std::string& section,
   }
 
   std::string value_no_newline;
-  size_t newline_position = value.find('\n');
+  size_t newline_position = value.find("\n");
   if (newline_position != std::string::npos) {
     android_errorWriteLog(0x534e4554, "70808273");
     value_no_newline = value.substr(0, newline_position);
@@ -236,11 +236,10 @@ bool config_save(const config_t& config, const std::string& filename) {
   // Steps to ensure content of config file gets to disk:
   //
   // 1) Open and write to temp file (e.g. bt_config.conf.new).
-  // 2) Flush the stream buffer to the temp file.
-  // 3) Sync the temp file to disk with fsync().
-  // 4) Rename temp file to actual config file (e.g. bt_config.conf).
+  // 2) Sync the temp file to disk with fsync().
+  // 3) Rename temp file to actual config file (e.g. bt_config.conf).
   //    This ensures atomic update.
-  // 5) Sync directory that has the conf file with fsync().
+  // 4) Sync directory that has the conf file with fsync().
   //    This ensures directory entries are up-to-date.
   int dir_fd = -1;
   FILE* fp = nullptr;
@@ -283,13 +282,6 @@ bool config_save(const config_t& config, const std::string& filename) {
   if (fprintf(fp, "%s", serialized.str().c_str()) < 0) {
     LOG(ERROR) << __func__ << ": unable to write to file '" << temp_filename
                << "': " << strerror(errno);
-    goto error;
-  }
-
-  // Flush the stream buffer to the temp file.
-  if (fflush(fp) < 0) {
-    LOG(ERROR) << __func__ << ": unable to write flush buffer to file '"
-               << temp_filename << "': " << strerror(errno);
     goto error;
   }
 

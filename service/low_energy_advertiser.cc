@@ -16,15 +16,13 @@
 
 #include "service/low_energy_advertiser.h"
 
+#include <base/bind.h>
+#include <base/logging.h>
+
 #include "service/adapter.h"
 #include "service/logging_helpers.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hcidefs.h"
-
-#include <base/bind.h>
-#include <base/bind_helpers.h>
-#include <base/callback.h>
-#include <base/logging.h>
 
 using std::lock_guard;
 using std::mutex;
@@ -55,7 +53,7 @@ int GetAdvertisingIntervalUnit(AdvertiseSettings::Mode mode) {
       ms = kAdvertisingIntervalLowMs;
       break;
     case AdvertiseSettings::MODE_LOW_POWER:
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    // Fall through
     default:
       ms = kAdvertisingIntervalHighMs;
       break;
@@ -79,7 +77,7 @@ int8_t GetAdvertisingTxPower(AdvertiseSettings::TxPowerLevel tx_power) {
       power = -7;
       break;
     case AdvertiseSettings::TX_POWER_LEVEL_HIGH:
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    // Fall through
     default:
       power = 1;
       break;
@@ -115,6 +113,8 @@ void GetAdvertiseParams(const AdvertiseSettings& settings, bool has_scan_rsp,
   out_params->scan_request_notification_enable = 0;
 }
 
+void DoNothing(uint8_t status) {}
+
 }  // namespace
 
 // LowEnergyAdvertiser implementation
@@ -133,7 +133,8 @@ LowEnergyAdvertiser::~LowEnergyAdvertiser() {
 
   // Stop advertising and ignore the result.
   hal::BluetoothGattInterface::Get()->GetAdvertiserHALInterface()->Enable(
-      advertiser_id_, false, base::DoNothing(), 0, 0, base::DoNothing());
+      advertiser_id_, false, base::Bind(&DoNothing), 0, 0,
+      base::Bind(&DoNothing));
   hal::BluetoothGattInterface::Get()->GetAdvertiserHALInterface()->Unregister(
       advertiser_id_);
 }

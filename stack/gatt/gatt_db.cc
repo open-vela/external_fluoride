@@ -601,10 +601,10 @@ tGATT_STATUS gatts_write_attr_perm_check(tGATT_SVC_DB* p_db, uint8_t op_code,
           break;
 
         case GATT_UUID_CHAR_CLIENT_CONFIG:
-          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+        /* fall through */
         case GATT_UUID_CHAR_SRVR_CONFIG:
           max_size = 2;
-          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+        /* fall through */
         case GATT_UUID_CHAR_DESCRIPTION:
         default: /* any other must be character value declaration */
           status = GATT_SUCCESS;

@@ -23,8 +23,6 @@
 #include <unistd.h>
 
 #include <base/bind.h>
-#include <base/bind_helpers.h>
-#include <base/callback.h>
 #include <algorithm>
 #include <array>
 #include <condition_variable>
@@ -78,6 +76,8 @@ static bluetooth::gatt::ServerInternals* g_internal = nullptr;
 enum { kPipeReadEnd = 0, kPipeWriteEnd = 1, kPipeNumEnds = 2 };
 
 }  // namespace
+
+void DoNothing(uint8_t p) {}
 
 namespace bluetooth {
 namespace gatt {
@@ -354,11 +354,11 @@ void RegisterClientCallback(int status, int client_if,
   // Setup our advertisement. This has no callback.
   g_internal->gatt->advertiser->SetData(0 /* std_inst */, false,
                                         {/*TODO: put inverval 2,2 here*/},
-                                        base::DoNothing());
+                                        base::Bind(&DoNothing));
 
   g_internal->gatt->advertiser->Enable(
       0 /* std_inst */, true, base::Bind(&EnableAdvertisingCallback),
-      0 /* no duration */, 0 /* no maxExtAdvEvent*/, base::DoNothing());
+      0 /* no duration */, 0 /* no maxExtAdvEvent*/, base::Bind(&DoNothing));
 }
 
 void ServiceStoppedCallback(int status, int server_if, int srvc_handle) {
@@ -579,7 +579,7 @@ bool Server::SetAdvertisement(const std::vector<Uuid>& ids,
 
   // Setup our advertisement. This has no callback.
   internal_->gatt->advertiser->SetData(0, false, /* beacon, not scan response */
-                                       {}, base::DoNothing());
+                                       {}, base::Bind(&DoNothing));
   // transmit_name,               /* name */
   // 2, 2,                         interval
   // mutable_manufacturer_data,
@@ -605,7 +605,7 @@ bool Server::SetScanResponse(const std::vector<Uuid>& ids,
 
   // Setup our advertisement. This has no callback.
   internal_->gatt->advertiser->SetData(0, true, /* scan response */
-                                       {}, base::DoNothing());
+                                       {}, base::Bind(&DoNothing));
   // transmit_name,              /* name */
   // false,                      /* no txpower */
   // 2, 2,                        interval

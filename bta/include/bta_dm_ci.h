@@ -55,7 +55,7 @@ extern void bta_dm_ci_io_req(const RawAddress& bd_addr, tBTA_IO_CAP io_cap,
  *
  ******************************************************************************/
 extern void bta_dm_ci_rmt_oob(bool accept, const RawAddress& bd_addr,
-                              const Octet16& c, const Octet16& r);
+                              BT_OCTET16 c, BT_OCTET16 r);
 /*******************************************************************************
  *
  * Function         bta_dm_sco_ci_data_ready

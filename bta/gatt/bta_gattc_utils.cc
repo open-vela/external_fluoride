@@ -204,7 +204,7 @@ void bta_gattc_clcb_dealloc(tBTA_GATTC_CLCB* p_clcb) {
     p_srcb->mtu = 0;
 
     // clear reallocating
-    p_srcb->gatt_database.Clear();
+    std::vector<tBTA_GATTC_SERVICE>().swap(p_srcb->srvc_cache);
   }
 
   osi_free_and_reset((void**)&p_clcb->p_q_cmd);
@@ -296,8 +296,8 @@ tBTA_GATTC_SERV* bta_gattc_srcb_alloc(const RawAddress& bda) {
 
   if (p_tcb != NULL) {
     // clear reallocating
-    p_tcb->gatt_database.Clear();
-    p_tcb->pending_discovery.Clear();
+    std::vector<tBTA_GATTC_SERVICE>().swap(p_tcb->srvc_cache);
+    std::vector<tBTA_GATTC_SERVICE>().swap(p_tcb->pending_discovery);
     *p_tcb = tBTA_GATTC_SERV();
 
     p_tcb->in_use = true;
