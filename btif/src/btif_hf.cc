@@ -69,6 +69,10 @@ namespace headset {
   { BTIF_HSAG_SERVICE_NAME, BTIF_HFAG_SERVICE_NAME }
 #endif
 
+#ifndef BTIF_HF_SECURITY
+#define BTIF_HF_SECURITY (BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)
+#endif
+
 #ifndef BTIF_HF_FEATURES
 #define BTIF_HF_FEATURES                                       \
   (BTA_AG_FEAT_3WAY | BTA_AG_FEAT_ECNR | BTA_AG_FEAT_REJECT |  \
@@ -315,48 +319,12 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
     case BTA_AG_OPEN_EVT:
       // Check if an outoging connection is pending
       if (btif_hf_cb[idx].is_initiator) {
-        if ((p_data->open.status != BTA_AG_SUCCESS) &&
-            btif_hf_cb[idx].state != BTHF_CONNECTION_STATE_CONNECTING) {
-          if (p_data->open.bd_addr == btif_hf_cb[idx].connected_bda) {
-            LOG(WARNING) << __func__ << ": btif_hf_cb state["
-                         << p_data->open.status
-                         << "] is not expected, possible connection collision, "
-                            "ignoring AG open "
-                            "failure event for the same device "
-                         << p_data->open.bd_addr;
-          } else {
-            LOG(WARNING) << __func__ << ": btif_hf_cb state["
-                         << p_data->open.status
-                         << "] is not expected, possible connection collision, "
-                            "ignoring AG open failure "
-                            "event for the different devices btif_hf_cb bda: "
-                         << btif_hf_cb[idx].connected_bda
-                         << ", p_data bda: " << p_data->open.bd_addr
-                         << ", report disconnect state for p_data bda.";
-            bt_hf_callbacks->ConnectionStateCallback(
-                BTHF_CONNECTION_STATE_DISCONNECTED, &(p_data->open.bd_addr));
-          }
-          break;
-        }
-
         CHECK_EQ(btif_hf_cb[idx].state, BTHF_CONNECTION_STATE_CONNECTING)
             << "Control block must be in connecting state when initiating";
         CHECK(!btif_hf_cb[idx].connected_bda.IsEmpty())
             << "Remote device address must not be empty when initiating";
-        if (btif_hf_cb[idx].connected_bda != p_data->open.bd_addr) {
-          LOG(WARNING) << __func__
-                       << ": possible connection collision, ignore the "
-                          "outgoing connection for the "
-                          "different devices btif_hf_cb bda: "
-                       << btif_hf_cb[idx].connected_bda
-                       << ", p_data bda: " << p_data->open.bd_addr
-                       << ", report disconnect state for btif_hf_cb bda.";
-          bt_hf_callbacks->ConnectionStateCallback(
-              BTHF_CONNECTION_STATE_DISCONNECTED,
-              &(btif_hf_cb[idx].connected_bda));
-          reset_control_block(&btif_hf_cb[idx]);
-          btif_queue_advance();
-        }
+        CHECK_EQ(btif_hf_cb[idx].connected_bda, p_data->open.bd_addr)
+            << "Incoming message's address must match expected one";
       }
       if (p_data->open.status == BTA_AG_SUCCESS) {
         // In case this is an incoming connection
@@ -663,7 +631,7 @@ static bt_status_t connect_int(RawAddress* bd_addr, uint16_t uuid) {
   hf_cb->connected_bda = *bd_addr;
   hf_cb->is_initiator = true;
   hf_cb->peer_feat = 0;
-  BTA_AgOpen(hf_cb->handle, hf_cb->connected_bda);
+  BTA_AgOpen(hf_cb->handle, hf_cb->connected_bda, BTIF_HF_SECURITY);
   return BT_STATUS_SUCCESS;
 }
 
@@ -1356,18 +1324,14 @@ void HeadsetInterface::Cleanup() {
   BTIF_TRACE_EVENT("%s", __func__);
 
   btif_queue_cleanup(UUID_SERVCLASS_AG_HANDSFREE);
-
-  tBTA_SERVICE_MASK mask = btif_get_enabled_services_mask();
+  if (bt_hf_callbacks) {
 #if (defined(BTIF_HF_SERVICES) && (BTIF_HF_SERVICES & BTA_HFP_SERVICE_MASK))
-  if ((mask & (1 << BTA_HFP_SERVICE_ID)) != 0) {
     btif_disable_service(BTA_HFP_SERVICE_ID);
-  }
 #else
-  if ((mask & (1 << BTA_HSP_SERVICE_ID)) != 0) {
     btif_disable_service(BTA_HSP_SERVICE_ID);
-  }
 #endif
-  do_in_jni_thread(FROM_HERE, base::Bind([]() { bt_hf_callbacks = nullptr; }));
+    bt_hf_callbacks = nullptr;
+  }
 }
 
 bt_status_t HeadsetInterface::SetScoAllowed(bool value) {
@@ -1423,7 +1387,8 @@ bt_status_t ExecuteService(bool b_enable) {
     /* Enable and register with BTA-AG */
     BTA_AgEnable(bte_hf_evt);
     for (uint8_t app_id = 0; app_id < btif_max_hf_clients; app_id++) {
-      BTA_AgRegister(BTIF_HF_SERVICES, btif_hf_features, service_names, app_id);
+      BTA_AgRegister(BTIF_HF_SERVICES, BTIF_HF_SECURITY, btif_hf_features,
+                     service_names, app_id);
     }
   } else {
     /* De-register AG */
