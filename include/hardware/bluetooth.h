@@ -473,11 +473,10 @@ typedef struct {
    * The |is_niap_mode| flag inits the adapter in NIAP mode.
    * The |config_compare_result| flag show the config checksum check result if
    * is in NIAP mode.
-   * The |init_flags| are config flags that cannot change during run.
    * The |is_atv| flag indicates whether the local device is an Android TV
    */
   int (*init)(bt_callbacks_t* callbacks, bool guest_mode, bool is_niap_mode,
-              int config_compare_result, const char** init_flags, bool is_atv);
+              int config_compare_result, bool is_atv);
 
   /** Enable Bluetooth. */
   int (*enable)();
