@@ -22,14 +22,12 @@
 
 #include "os/handler.h"
 
-#include "hci/acl_manager/le_acl_connection.h"
+#include "hci/acl_manager.h"
 #include "hci/address.h"
 #include "hci/address_with_type.h"
-#include "hci/le_advertising_manager.h"
 #include "l2cap/internal/parameter_provider.h"
 #include "l2cap/internal/scheduler.h"
 #include "l2cap/le/fixed_channel_manager.h"
-#include "l2cap/le/internal/dynamic_channel_service_manager_impl.h"
 #include "l2cap/le/internal/fixed_channel_service_manager_impl.h"
 #include "l2cap/le/internal/link.h"
 
@@ -38,24 +36,13 @@ namespace l2cap {
 namespace le {
 namespace internal {
 
-class LinkManager : public hci::acl_manager::LeConnectionCallbacks {
+class LinkManager : public hci::LeConnectionCallbacks {
  public:
-  LinkManager(
-      os::Handler* l2cap_handler,
-      hci::AclManager* acl_manager,
-      hci::LeAdvertisingManager* le_advertising_manager,
-      FixedChannelServiceManagerImpl* service_manager,
-      DynamicChannelServiceManagerImpl* dynamic_service_manager,
-      l2cap::internal::ParameterProvider* parameter_provider)
-      : l2cap_handler_(l2cap_handler),
-        acl_manager_(acl_manager),
-        le_advertising_manager_(le_advertising_manager),
-        fixed_channel_service_manager_(service_manager),
-        dynamic_channel_service_manager_(dynamic_service_manager),
+  LinkManager(os::Handler* l2cap_handler, hci::AclManager* acl_manager, FixedChannelServiceManagerImpl* service_manager,
+              l2cap::internal::ParameterProvider* parameter_provider)
+      : l2cap_handler_(l2cap_handler), acl_manager_(acl_manager), fixed_channel_service_manager_(service_manager),
         parameter_provider_(parameter_provider) {
     acl_manager_->RegisterLeCallbacks(this, l2cap_handler_);
-    le_advertising_manager_->RegisterSetTerminatedCallback(
-        l2cap_handler->BindOn(this, &LinkManager::OnAdvertisingSetTerminated));
   }
 
   struct PendingFixedChannelConnection {
@@ -71,10 +58,9 @@ class LinkManager : public hci::acl_manager::LeConnectionCallbacks {
 
   Link* GetLink(hci::AddressWithType address_with_type);
   void OnLeConnectSuccess(hci::AddressWithType connecting_address_with_type,
-                          std::unique_ptr<hci::acl_manager::LeAclConnection> acl_connection) override;
+                          std::unique_ptr<hci::AclConnection> acl_connection) override;
   void OnLeConnectFail(hci::AddressWithType address_with_type, hci::ErrorCode reason) override;
-  void OnAdvertisingSetTerminated(
-      bluetooth::hci::ErrorCode status, uint16_t connnection_handle, hci::AddressWithType advertiser_address);
+  void OnDisconnect(hci::AddressWithType address_with_type, hci::ErrorCode status);
 
   // FixedChannelManager methods
 
@@ -86,13 +72,10 @@ class LinkManager : public hci::acl_manager::LeConnectionCallbacks {
   void ConnectDynamicChannelServices(hci::AddressWithType device,
                                      Link::PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm);
 
-  void OnDisconnect(hci::AddressWithType address_with_type);
-
  private:
   // Dependencies
   os::Handler* l2cap_handler_;
   hci::AclManager* acl_manager_;
-  hci::LeAdvertisingManager* le_advertising_manager_;
   FixedChannelServiceManagerImpl* fixed_channel_service_manager_;
   DynamicChannelServiceManagerImpl* dynamic_channel_service_manager_;
   l2cap::internal::ParameterProvider* parameter_provider_;
