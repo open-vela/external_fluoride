@@ -14,15 +14,16 @@
 // limitations under the License.
 //
 
-#define LOG_TAG "root_canal"
-
 #include "test_environment.h"
 
-#include <base/logging.h>
-#include <utils/Log.h>
 #include <future>
 
-#include "hci_internals.h"
+#include <client/linux/handler/exception_handler.h>
+
+#include <backtrace/Backtrace.h>
+#include <backtrace/backtrace_constants.h>
+
+#include "os/log.h"
 
 using ::android::bluetooth::root_canal::TestEnvironment;
 
@@ -30,17 +31,55 @@ constexpr uint16_t kTestPort = 6401;
 constexpr uint16_t kHciServerPort = 6402;
 constexpr uint16_t kLinkServerPort = 6403;
 
+bool crash_callback(const void* crash_context, size_t crash_context_size,
+                    __attribute__((unused)) void* context) {
+  pid_t tid = BACKTRACE_CURRENT_THREAD;
+  if (crash_context_size >=
+      sizeof(google_breakpad::ExceptionHandler::CrashContext)) {
+    auto* ctx =
+        static_cast<const google_breakpad::ExceptionHandler::CrashContext*>(
+            crash_context);
+    tid = ctx->tid;
+    int signal_number = ctx->siginfo.si_signo;
+    LOG_ERROR("Process crashed, signal: %s[%d], tid: %d",
+              strsignal(signal_number), signal_number, ctx->tid);
+  } else {
+    LOG_ERROR("Process crashed, signal: unknown, tid: unknown");
+  }
+  std::unique_ptr<Backtrace> backtrace(
+      Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
+  if (backtrace == nullptr) {
+    LOG_ERROR("Failed to create backtrace object");
+    return false;
+  }
+  if (!backtrace->Unwind(0)) {
+    LOG_ERROR("backtrace->Unwind failed");
+    return false;
+  }
+  LOG_ERROR("Backtrace:");
+  for (size_t i = 0; i < backtrace->NumFrames(); i++) {
+    LOG_ERROR("%s", backtrace->FormatFrameData(i).c_str());
+  }
+  return true;
+}
+
 int main(int argc, char** argv) {
-  ALOGI("main");
+  google_breakpad::MinidumpDescriptor descriptor(
+      google_breakpad::MinidumpDescriptor::kMicrodumpOnConsole);
+  google_breakpad::ExceptionHandler eh(descriptor, nullptr, nullptr, nullptr,
+                                       true, -1);
+  eh.set_crash_handler(crash_callback);
+
+  LOG_INFO("main");
   uint16_t test_port = kTestPort;
   uint16_t hci_server_port = kHciServerPort;
   uint16_t link_server_port = kLinkServerPort;
 
   for (int arg = 0; arg < argc; arg++) {
     int port = atoi(argv[arg]);
-    ALOGI("%d: %s (%d)", arg, argv[arg], port);
+    LOG_INFO("%d: %s (%d)", arg, argv[arg], port);
     if (port < 0 || port > 0xffff) {
-      ALOGW("%s out of range", argv[arg]);
+      LOG_WARN("%s out of range", argv[arg]);
     } else {
       switch (arg) {
         case 0:  // executable name
@@ -55,7 +94,7 @@ int main(int argc, char** argv) {
           link_server_port = port;
           break;
         default:
-          ALOGW("Ignored option %s", argv[arg]);
+          LOG_WARN("Ignored option %s", argv[arg]);
       }
     }
   }
