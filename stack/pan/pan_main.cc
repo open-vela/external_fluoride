@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 1999-2012 Broadcom Corporation
+ *  Copyright (C) 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,9 +36,11 @@
 #include "sdp_api.h"
 #include "sdpdefs.h"
 
-using bluetooth::Uuid;
-
 tPAN_CB pan_cb;
+
+#define UUID_CONSTANT_PART 12
+uint8_t constant_pan_uuid[UUID_CONSTANT_PART] = {
+    0, 0, 0x10, 0, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb};
 
 /*******************************************************************************
  *
@@ -87,63 +89,127 @@ void pan_register_with_bnep(void) {
  * Returns          none
  *
  ******************************************************************************/
-void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
-                     const Uuid& remote_uuid, const Uuid& local_uuid,
-                     bool is_role_change) {
-  /* If we are in GN or NAP role and have one or more active connections and the
-   * received connection is for user role reject it. If we are in user role with
-   * one connection active reject the connection. Allocate PCB and store the
-   * parameters. Make bridge request to the host system if connection is for NAP
-   */
+void pan_conn_ind_cb(uint16_t handle, BD_ADDR p_bda, tBT_UUID* remote_uuid,
+                     tBT_UUID* local_uuid, bool is_role_change) {
+  tPAN_CONN* pcb;
+  uint8_t req_role;
+  bool wrong_uuid;
 
-  if (!remote_uuid.Is16Bit()) {
+  /*
+  ** If we are in GN or NAP role and have one or more
+  ** active connections and the received connection is
+  ** for user role reject it.
+  ** If we are in user role with one connection active
+  ** reject the connection.
+  ** Allocate PCB and store the parameters
+  ** Make bridge request to the host system if connection
+  ** is for NAP
+  */
+  wrong_uuid = false;
+  if (remote_uuid->len == 16) {
+    /*
+    ** If the UUID is 16 bytes forst two bytes should be zeros
+    ** and last 12 bytes should match the spec defined constant value
+    */
+    if (memcmp(constant_pan_uuid, remote_uuid->uu.uuid128 + 4,
+               UUID_CONSTANT_PART))
+      wrong_uuid = true;
+
+    if (remote_uuid->uu.uuid128[0] || remote_uuid->uu.uuid128[1])
+      wrong_uuid = true;
+
+    /* Extract the 16 bit equivalent of the UUID */
+    remote_uuid->uu.uuid16 = (uint16_t)((remote_uuid->uu.uuid128[2] << 8) |
+                                        remote_uuid->uu.uuid128[3]);
+    remote_uuid->len = 2;
+  }
+  if (remote_uuid->len == 4) {
+    /* First two bytes should be zeros */
+    if (remote_uuid->uu.uuid32 & 0xFFFF0000) wrong_uuid = true;
+
+    remote_uuid->uu.uuid16 = (uint16_t)remote_uuid->uu.uuid32;
+    remote_uuid->len = 2;
+  }
+
+  if (wrong_uuid) {
     PAN_TRACE_ERROR("PAN Connection failed because of wrong remote UUID ");
     BNEP_ConnectResp(handle, BNEP_CONN_FAILED_SRC_UUID);
     return;
   }
 
-  if (!local_uuid.Is16Bit()) {
+  wrong_uuid = false;
+  if (local_uuid->len == 16) {
+    /*
+    ** If the UUID is 16 bytes forst two bytes should be zeros
+    ** and last 12 bytes should match the spec defined constant value
+    */
+    if (memcmp(constant_pan_uuid, local_uuid->uu.uuid128 + 4,
+               UUID_CONSTANT_PART))
+      wrong_uuid = true;
+
+    if (local_uuid->uu.uuid128[0] || local_uuid->uu.uuid128[1])
+      wrong_uuid = true;
+
+    /* Extract the 16 bit equivalent of the UUID */
+    local_uuid->uu.uuid16 = (uint16_t)((local_uuid->uu.uuid128[2] << 8) |
+                                       local_uuid->uu.uuid128[3]);
+    local_uuid->len = 2;
+  }
+  if (local_uuid->len == 4) {
+    /* First two bytes should be zeros */
+    if (local_uuid->uu.uuid32 & 0xFFFF0000) wrong_uuid = true;
+
+    local_uuid->uu.uuid16 = (uint16_t)local_uuid->uu.uuid32;
+    local_uuid->len = 2;
+  }
+
+  if (wrong_uuid) {
     PAN_TRACE_ERROR("PAN Connection failed because of wrong local UUID ");
     BNEP_ConnectResp(handle, BNEP_CONN_FAILED_DST_UUID);
     return;
   }
 
-  uint16_t remote_uuid16 = remote_uuid.As16Bit();
-  uint16_t local_uuid16 = local_uuid.As16Bit();
-
   PAN_TRACE_EVENT(
-      "%s - handle %d, current role %d, dst uuid 0x%x, src uuid 0x%x, role "
-      "change %s",
-      __func__, handle, pan_cb.role, local_uuid16, remote_uuid16,
+      "pan_conn_ind_cb - for handle %d, current role %d, dst uuid 0x%x, src "
+      "uuid 0x%x, role change %s",
+      handle, pan_cb.role, local_uuid->uu.uuid16, remote_uuid->uu.uuid16,
       is_role_change ? "YES" : "NO");
+  /* The acceptable UUID size is only 2 */
+  if (remote_uuid->len != 2) {
+    PAN_TRACE_ERROR("PAN Connection failed because of wrong UUID size %d",
+                    remote_uuid->len);
+    BNEP_ConnectResp(handle, BNEP_CONN_FAILED_UUID_SIZE);
+    return;
+  }
 
   /* Check if the source UUID is a valid one */
-  if (remote_uuid16 != UUID_SERVCLASS_PANU &&
-      remote_uuid16 != UUID_SERVCLASS_NAP &&
-      remote_uuid16 != UUID_SERVCLASS_GN) {
-    PAN_TRACE_ERROR("Src UUID 0x%x is not valid", remote_uuid16);
+  if (remote_uuid->uu.uuid16 != UUID_SERVCLASS_PANU &&
+      remote_uuid->uu.uuid16 != UUID_SERVCLASS_NAP &&
+      remote_uuid->uu.uuid16 != UUID_SERVCLASS_GN) {
+    PAN_TRACE_ERROR("Src UUID 0x%x is not valid", remote_uuid->uu.uuid16);
     BNEP_ConnectResp(handle, BNEP_CONN_FAILED_SRC_UUID);
     return;
   }
 
   /* Check if the destination UUID is a valid one */
-  if (local_uuid16 != UUID_SERVCLASS_PANU &&
-      local_uuid16 != UUID_SERVCLASS_NAP && local_uuid16 != UUID_SERVCLASS_GN) {
-    PAN_TRACE_ERROR("Dst UUID 0x%x is not valid", local_uuid16);
+  if (local_uuid->uu.uuid16 != UUID_SERVCLASS_PANU &&
+      local_uuid->uu.uuid16 != UUID_SERVCLASS_NAP &&
+      local_uuid->uu.uuid16 != UUID_SERVCLASS_GN) {
+    PAN_TRACE_ERROR("Dst UUID 0x%x is not valid", remote_uuid->uu.uuid16);
     BNEP_ConnectResp(handle, BNEP_CONN_FAILED_DST_UUID);
     return;
   }
 
   /* Check if currently we support the destination role requested */
   if (((!(pan_cb.role & UUID_SERVCLASS_PANU)) &&
-       local_uuid16 == UUID_SERVCLASS_PANU) ||
+       local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU) ||
       ((!(pan_cb.role & UUID_SERVCLASS_GN)) &&
-       local_uuid16 == UUID_SERVCLASS_GN) ||
+       local_uuid->uu.uuid16 == UUID_SERVCLASS_GN) ||
       ((!(pan_cb.role & UUID_SERVCLASS_NAP)) &&
-       local_uuid16 == UUID_SERVCLASS_NAP)) {
+       local_uuid->uu.uuid16 == UUID_SERVCLASS_NAP)) {
     PAN_TRACE_ERROR(
         "PAN Connection failed because of unsupported destination UUID 0x%x",
-        local_uuid16);
+        local_uuid->uu.uuid16);
     BNEP_ConnectResp(handle, BNEP_CONN_FAILED_DST_UUID);
     return;
   }
@@ -154,10 +220,11 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
    * Note: the remote is the initiator.
    */
   bool is_valid_interaction = false;
-  switch (remote_uuid16) {
+  switch (remote_uuid->uu.uuid16) {
     case UUID_SERVCLASS_NAP:
     case UUID_SERVCLASS_GN:
-      if (local_uuid16 == UUID_SERVCLASS_PANU) is_valid_interaction = true;
+      if (local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU)
+        is_valid_interaction = true;
       break;
     case UUID_SERVCLASS_PANU:
       is_valid_interaction = true;
@@ -167,24 +234,23 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
    * Explicitly disable connections to the local PANU if the remote is
    * not PANU.
    */
-  if ((local_uuid16 == UUID_SERVCLASS_PANU) &&
-      (remote_uuid16 != UUID_SERVCLASS_PANU)) {
+  if ((local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU) &&
+      (remote_uuid->uu.uuid16 != UUID_SERVCLASS_PANU)) {
     is_valid_interaction = false;
   }
   if (!is_valid_interaction) {
     PAN_TRACE_ERROR(
         "PAN Connection failed because of invalid PAN profile roles "
         "interaction: Remote UUID 0x%x Local UUID 0x%x",
-        remote_uuid16, local_uuid16);
+        remote_uuid->uu.uuid16, local_uuid->uu.uuid16);
     BNEP_ConnectResp(handle, BNEP_CONN_FAILED_SRC_UUID);
     return;
   }
 
-  uint8_t req_role;
   /* Requested destination role is */
-  if (local_uuid16 == UUID_SERVCLASS_PANU)
+  if (local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU)
     req_role = PAN_ROLE_CLIENT;
-  else if (local_uuid16 == UUID_SERVCLASS_GN)
+  else if (local_uuid->uu.uuid16 == UUID_SERVCLASS_GN)
     req_role = PAN_ROLE_GN_SERVER;
   else
     req_role = PAN_ROLE_NAP_SERVER;
@@ -192,9 +258,9 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
   /* If the connection indication is for the existing connection
   ** Check if the new destination role is acceptable
   */
-  tPAN_CONN* pcb = pan_get_pcb_by_handle(handle);
+  pcb = pan_get_pcb_by_handle(handle);
   if (pcb) {
-    if (pan_cb.num_conns > 1 && local_uuid16 == UUID_SERVCLASS_PANU) {
+    if (pan_cb.num_conns > 1 && local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU) {
       /* There are connections other than this one
       ** so we cann't accept PANU role. Reject
       */
@@ -207,14 +273,14 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
 
     /* If it is already in connected state check for bridging status */
     if (pcb->con_state == PAN_STATE_CONNECTED) {
-      PAN_TRACE_EVENT("PAN Role changing New Src 0x%x Dst 0x%x", remote_uuid16,
-                      local_uuid16);
+      PAN_TRACE_EVENT("PAN Role changing New Src 0x%x Dst 0x%x",
+                      remote_uuid->uu.uuid16, local_uuid->uu.uuid16);
 
       pcb->prv_src_uuid = pcb->src_uuid;
       pcb->prv_dst_uuid = pcb->dst_uuid;
 
       if (pcb->src_uuid == UUID_SERVCLASS_NAP &&
-          local_uuid16 != UUID_SERVCLASS_NAP) {
+          local_uuid->uu.uuid16 != UUID_SERVCLASS_NAP) {
         /* Remove bridging */
         if (pan_cb.pan_bridge_req_cb)
           (*pan_cb.pan_bridge_req_cb)(pcb->rem_bda, false);
@@ -222,8 +288,8 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
     }
     /* Set the latest active PAN role */
     pan_cb.active_role = req_role;
-    pcb->src_uuid = local_uuid16;
-    pcb->dst_uuid = remote_uuid16;
+    pcb->src_uuid = local_uuid->uu.uuid16;
+    pcb->dst_uuid = remote_uuid->uu.uuid16;
     BNEP_ConnectResp(handle, BNEP_SUCCESS);
     return;
   } else {
@@ -231,7 +297,7 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
     ** we already have a connection then reject the request.
     ** If we have a connection in PANU role then reject it
     */
-    if (pan_cb.num_conns && (local_uuid16 == UUID_SERVCLASS_PANU ||
+    if (pan_cb.num_conns && (local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU ||
                              pan_cb.active_role == PAN_ROLE_CLIENT)) {
       PAN_TRACE_ERROR("PAN already have a connection and can't be user");
       BNEP_ConnectResp(handle, BNEP_CONN_FAILED_DST_UUID);
@@ -248,11 +314,12 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
     return;
   }
 
-  PAN_TRACE_EVENT("PAN connection destination UUID is 0x%x", local_uuid16);
+  PAN_TRACE_EVENT("PAN connection destination UUID is 0x%x",
+                  local_uuid->uu.uuid16);
   /* Set the latest active PAN role */
   pan_cb.active_role = req_role;
-  pcb->src_uuid = local_uuid16;
-  pcb->dst_uuid = remote_uuid16;
+  pcb->src_uuid = local_uuid->uu.uuid16;
+  pcb->dst_uuid = remote_uuid->uu.uuid16;
   pcb->con_state = PAN_STATE_CONN_START;
   pan_cb.num_conns++;
 
@@ -279,8 +346,7 @@ void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
  * Returns          none
  *
  ******************************************************************************/
-void pan_connect_state_cb(uint16_t handle,
-                          UNUSED_ATTR const RawAddress& rem_bda,
+void pan_connect_state_cb(uint16_t handle, UNUSED_ATTR BD_ADDR rem_bda,
                           tBNEP_RESULT result, bool is_role_change) {
   tPAN_CONN* pcb;
   uint8_t peer_role;
@@ -379,9 +445,9 @@ void pan_connect_state_cb(uint16_t handle,
  * Returns          none
  *
  ******************************************************************************/
-void pan_data_ind_cb(uint16_t handle, const RawAddress& src,
-                     const RawAddress& dst, uint16_t protocol, uint8_t* p_data,
-                     uint16_t len, bool ext) {
+void pan_data_ind_cb(uint16_t handle, uint8_t* src, uint8_t* dst,
+                     uint16_t protocol, uint8_t* p_data, uint16_t len,
+                     bool ext) {
   tPAN_CONN* pcb;
   uint16_t i;
   bool forward;
@@ -411,14 +477,14 @@ void pan_data_ind_cb(uint16_t handle, const RawAddress& src,
   }
 
   /* Check if it is broadcast packet */
-  if (dst.address[0] & 0x01) {
+  if (dst[0] & 0x01) {
     PAN_TRACE_DEBUG("PAN received broadcast packet on handle %d, src uuid 0x%x",
                     handle, pcb->src_uuid);
     for (i = 0; i < MAX_PAN_CONNS; i++) {
       if (pan_cb.pcb[i].con_state == PAN_STATE_CONNECTED &&
           pan_cb.pcb[i].handle != handle &&
           pcb->src_uuid == pan_cb.pcb[i].src_uuid) {
-        BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, &src, ext);
+        BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, src, ext);
       }
     }
 
@@ -433,8 +499,8 @@ void pan_data_ind_cb(uint16_t handle, const RawAddress& src,
   for (i = 0; i < MAX_PAN_CONNS; i++) {
     if (pan_cb.pcb[i].con_state == PAN_STATE_CONNECTED &&
         pcb->src_uuid == pan_cb.pcb[i].src_uuid) {
-      if (pan_cb.pcb[i].rem_bda == dst) {
-        BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, &src, ext);
+      if (memcmp(pan_cb.pcb[i].rem_bda, dst, BD_ADDR_LEN) == 0) {
+        BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, src, ext);
         return;
       }
     }
@@ -473,9 +539,8 @@ void pan_data_ind_cb(uint16_t handle, const RawAddress& src,
  * Returns          none
  *
  ******************************************************************************/
-void pan_data_buf_ind_cb(uint16_t handle, const RawAddress& src,
-                         const RawAddress& dst, uint16_t protocol,
-                         BT_HDR* p_buf, bool ext) {
+void pan_data_buf_ind_cb(uint16_t handle, uint8_t* src, uint8_t* dst,
+                         uint16_t protocol, BT_HDR* p_buf, bool ext) {
   tPAN_CONN *pcb, *dst_pcb;
   tBNEP_RESULT result;
   uint16_t i, len;
@@ -511,7 +576,7 @@ void pan_data_buf_ind_cb(uint16_t handle, const RawAddress& src,
 
   /* Check if it is broadcast or multicast packet */
   if (pcb->src_uuid != UUID_SERVCLASS_PANU) {
-    if (dst.address[0] & 0x01) {
+    if (dst[0] & 0x01) {
       PAN_TRACE_DEBUG(
           "PAN received broadcast packet on handle %d, src uuid 0x%x", handle,
           pcb->src_uuid);
@@ -519,7 +584,7 @@ void pan_data_buf_ind_cb(uint16_t handle, const RawAddress& src,
         if (pan_cb.pcb[i].con_state == PAN_STATE_CONNECTED &&
             pan_cb.pcb[i].handle != handle &&
             pcb->src_uuid == pan_cb.pcb[i].src_uuid) {
-          BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, &src,
+          BNEP_Write(pan_cb.pcb[i].handle, dst, p_data, len, protocol, src,
                      ext);
         }
       }
@@ -543,7 +608,7 @@ void pan_data_buf_ind_cb(uint16_t handle, const RawAddress& src,
           __func__, dst_pcb->handle, len);
 
       result =
-          BNEP_Write(dst_pcb->handle, dst, p_data, len, protocol, &src, ext);
+          BNEP_Write(dst_pcb->handle, dst, p_data, len, protocol, src, ext);
       if (result != BNEP_SUCCESS && result != BNEP_IGNORE_CMD)
         PAN_TRACE_ERROR("Failed to write data for PAN connection handle %d",
                         dst_pcb->handle);
@@ -568,10 +633,10 @@ void pan_data_buf_ind_cb(uint16_t handle, const RawAddress& src,
  * Function         pan_proto_filt_ind_cb
  *
  * Description      This function is registered with BNEP to receive tx data
- *          flow status
+ *					flow status
  *
  * Parameters:      handle      - handle for the connection
- *          event       - flow status
+ *					event       - flow status
  *
  * Returns          none
  *

@@ -1,5 +1,5 @@
 //
-//  Copyright 2015 Google, Inc.
+//  Copyright (C) 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@
 
 #if !defined(OS_GENERIC)
 #include "service/ipc/binder/ipc_handler_binder.h"
-#else
-#include "service/ipc/dbus/ipc_handler_dbus.h"
 #endif  // !defined(OS_GENERIC)
 #include "service/ipc/ipc_handler_linux.h"
 
@@ -34,7 +32,6 @@ IPCManager::~IPCManager() {
   // holding a reference to them. Instead, explicitly stop them here.
   if (BinderStarted()) binder_handler_->Stop();
   if (LinuxStarted()) linux_handler_->Stop();
-  if (DBusStarted()) dbus_handler_->Stop();
 }
 
 bool IPCManager::Start(Type type, Delegate* delegate) {
@@ -51,7 +48,6 @@ bool IPCManager::Start(Type type, Delegate* delegate) {
         return false;
       }
       return true;
-
 #if !defined(OS_GENERIC)
     case TYPE_BINDER:
       if (BinderStarted()) {
@@ -65,21 +61,7 @@ bool IPCManager::Start(Type type, Delegate* delegate) {
         return false;
       }
       return true;
-#else
-    case TYPE_DBUS:
-      if (DBusStarted()) {
-        LOG(ERROR) << "IPCManagerDBus already started.";
-        return false;
-      }
-
-      dbus_handler_ = new IPCHandlerDBus(adapter_, delegate);
-      if (!dbus_handler_->Run()) {
-        dbus_handler_ = nullptr;
-        return false;
-      }
-      return true;
 #endif  // !defined(OS_GENERIC)
-
     default:
       LOG(ERROR) << "Unsupported IPC type given: " << type;
   }
@@ -90,7 +72,5 @@ bool IPCManager::Start(Type type, Delegate* delegate) {
 bool IPCManager::BinderStarted() const { return binder_handler_.get(); }
 
 bool IPCManager::LinuxStarted() const { return linux_handler_.get(); }
-
-bool IPCManager::DBusStarted() const { return dbus_handler_.get(); }
 
 }  // namespace ipc

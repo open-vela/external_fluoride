@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2003-2012 Broadcom Corporation
+ *  Copyright (C) 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 #include "bta_sys.h"
 #include "gatt_api.h"
 
-#include <base/strings/stringprintf.h>
 #include "bt_common.h"
 
 /*****************************************************************************
@@ -60,20 +59,20 @@ typedef uint16_t tBTA_GATTS_INT_EVT;
 /* internal strucutre for GATTC register API  */
 typedef struct {
   BT_HDR hdr;
-  bluetooth::Uuid app_uuid;
+  tBT_UUID app_uuid;
   tBTA_GATTS_CBACK* p_cback;
 } tBTA_GATTS_API_REG;
 
 typedef struct {
   BT_HDR hdr;
-  tGATT_IF server_if;
+  tBTA_GATTS_IF server_if;
 } tBTA_GATTS_INT_START_IF;
 
 typedef tBTA_GATTS_INT_START_IF tBTA_GATTS_API_DEREG;
 
 typedef struct {
   BT_HDR hdr;
-  tGATT_IF server_if;
+  tBTA_GATTS_IF server_if;
   btgatt_db_element_t* service;
   uint16_t count;
 } tBTA_GATTS_API_ADD_SERVICE;
@@ -83,27 +82,27 @@ typedef struct {
   uint16_t attr_id;
   uint16_t len;
   bool need_confirm;
-  uint8_t value[GATT_MAX_ATTR_LEN];
+  uint8_t value[BTA_GATT_MAX_ATTR_LEN];
 } tBTA_GATTS_API_INDICATION;
 
 typedef struct {
   BT_HDR hdr;
   uint32_t trans_id;
-  tGATT_STATUS status;
-  tGATTS_RSP* p_rsp;
+  tBTA_GATT_STATUS status;
+  tBTA_GATTS_RSP* p_rsp;
 } tBTA_GATTS_API_RSP;
 
 typedef struct {
   BT_HDR hdr;
-  tGATT_TRANSPORT transport;
+  tBTA_GATT_TRANSPORT transport;
 } tBTA_GATTS_API_START;
 
 typedef struct {
   BT_HDR hdr;
-  RawAddress remote_bda;
-  tGATT_IF server_if;
+  BD_ADDR remote_bda;
+  tBTA_GATTS_IF server_if;
   bool is_direct;
-  tGATT_TRANSPORT transport;
+  tBTA_GATT_TRANSPORT transport;
 
 } tBTA_GATTS_API_OPEN;
 
@@ -125,14 +124,14 @@ typedef union {
 /* application registration control block */
 typedef struct {
   bool in_use;
-  bluetooth::Uuid app_uuid;
+  tBT_UUID app_uuid;
   tBTA_GATTS_CBACK* p_cback;
-  tGATT_IF gatt_if;
+  tBTA_GATTS_IF gatt_if;
 } tBTA_GATTS_RCB;
 
 /* service registration control block */
 typedef struct {
-  bluetooth::Uuid service_uuid; /* service UUID */
+  tBT_UUID service_uuid; /* service UUID */
   uint16_t service_id;   /* service start handle */
   uint8_t rcb_idx;
   uint8_t idx; /* self index of serviec CB */
@@ -176,9 +175,11 @@ extern void bta_gatts_open(tBTA_GATTS_CB* p_cb, tBTA_GATTS_DATA* p_msg);
 extern void bta_gatts_cancel_open(tBTA_GATTS_CB* p_cb, tBTA_GATTS_DATA* p_msg);
 extern void bta_gatts_close(tBTA_GATTS_CB* p_cb, tBTA_GATTS_DATA* p_msg);
 
-extern tBTA_GATTS_RCB* bta_gatts_find_app_rcb_by_app_if(tGATT_IF server_if);
+extern bool bta_gatts_uuid_compare(tBT_UUID tar, tBT_UUID src);
+extern tBTA_GATTS_RCB* bta_gatts_find_app_rcb_by_app_if(
+    tBTA_GATTS_IF server_if);
 extern uint8_t bta_gatts_find_app_rcb_idx_by_app_if(tBTA_GATTS_CB* p_cb,
-                                                    tGATT_IF server_if);
+                                                    tBTA_GATTS_IF server_if);
 extern uint8_t bta_gatts_alloc_srvc_cb(tBTA_GATTS_CB* p_cb, uint8_t rcb_idx);
 extern tBTA_GATTS_SRVC_CB* bta_gatts_find_srvc_cb_by_srvc_id(
     tBTA_GATTS_CB* p_cb, uint16_t service_id);

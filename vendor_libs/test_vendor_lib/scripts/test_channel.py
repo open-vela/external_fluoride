@@ -168,40 +168,50 @@ class TestChannelShell(cmd.Cmd):
     cmd.Cmd.__init__(self)
     self._test_channel = test_channel
 
-  def do_add(self, args):
+  def do_clear(self, args):
     """
-    Arguments: dev_type_str
-    Add a new device of type dev_type_str.
+    Arguments: None.
+    Resets the controller to its original, unmodified state.
     """
-    self._test_channel.send_command('add', args.split())
+    self._test_channel.send_command('CLEAR', [])
 
-  def do_del(self, args):
+  def do_clear_event_delay(self, args):
     """
-    Arguments: device index
-    Delete the device with the specified index.
+    Arguments: None.
+    Clears the response delay set by set_event_delay.
     """
-    self._test_channel.send_command('del', args.split())
+    self._test_channel.send_command('CLEAR_EVENT_DELAY', args.split())
 
-  def do_get(self, args):
+  def do_discover(self, args):
     """
-    Arguments: dev_num attr_str
-    Get the value of the attribute attr_str from device dev_num.
+    Arguments: name_1 name_2 ...
+    Sends an inquiry result for named device(s). If no names are provided, a
+    random name is used instead.
     """
-    self._test_channel.send_command('get', args.split())
+    if len(args) == 0:
+      args = generate_random_name()
+    device_list = [self._test_channel.discover_new_device(arg) for arg in \
+                   args.split()]
+    device_names_and_addresses = []
+    for device in device_list:
+      device_names_and_addresses.append(device.get_name())
+      device_names_and_addresses.append(device.get_address())
+    self._test_channel.send_command('DISCOVER', device_names_and_addresses)
 
-  def do_set(self, args):
+  def do_set_event_delay(self, args):
     """
-    Arguments: dev_num attr_str val
-    Set the value of the attribute attr_str from device dev_num equal to val.
+    Arguments: interval_in_ms
+    Sets the response delay for all event packets sent from the controller back
+    to the HCI.
     """
-    self._test_channel.send_command('set', args.split())
+    self._test_channel.send_command('SET_EVENT_DELAY', args.split())
 
-  def do_list(self, args):
+  def do_timeout_all(self, args):
     """
-    Arguments: [dev_num [attr]]
-    List the devices from the controller, optionally filtered by device and attr.
+    Arguments: None.
+    Causes all HCI commands to timeout.
     """
-    self._test_channel.send_command('list', args.split())
+    self._test_channel.send_command('TIMEOUT_ALL', [])
 
   def do_quit(self, args):
     """
@@ -212,15 +222,6 @@ class TestChannelShell(cmd.Cmd):
     self._test_channel.close()
     print 'Goodbye.'
     return True
-
-  def do_help(self, args):
-    """
-    Arguments: [dev_num [attr]]
-    List the commands available, optionally filtered by device and attr.
-    """
-    self._test_channel.send_command('help', args.split())
-    if (len(args) == 0):
-      cmd.Cmd.do_help(self, args)
 
 def main(argv):
   if len(argv) != 2:
