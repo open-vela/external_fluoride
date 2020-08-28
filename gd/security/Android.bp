@@ -4,8 +4,6 @@ filegroup {
         "ecc/multprecision.cc",
         "ecc/p_256_ecc_pp.cc",
         "ecdh_keys.cc",
-        "facade_configuration_api.cc",
-        "l2cap_security_module_interface.cc",
         "pairing_handler_le.cc",
         "pairing_handler_le_legacy.cc",
         "pairing_handler_le_secure_connections.cc",
@@ -14,7 +12,6 @@ filegroup {
         "security_module.cc",
         ":BluetoothSecurityChannelSources",
         ":BluetoothSecurityPairingSources",
-        ":BluetoothSecurityRecordSources",
     ],
 }
 
@@ -28,7 +25,6 @@ filegroup {
         "test/pairing_handler_le_pair_test.cc",
         ":BluetoothSecurityChannelTestSources",
         ":BluetoothSecurityPairingTestSources",
-        ":BluetoothSecurityRecordTestSources",
     ],
 }
 
