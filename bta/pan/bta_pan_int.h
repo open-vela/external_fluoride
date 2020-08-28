@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -70,16 +70,10 @@ typedef struct {
 typedef struct {
   BT_HDR hdr;                               /* Event header */
   char user_name[BTA_SERVICE_NAME_LEN + 1]; /* Service name */
-  char gn_name[BTA_SERVICE_NAME_LEN + 1];   /* Service name */
   char nap_name[BTA_SERVICE_NAME_LEN + 1];  /* Service name */
   tBTA_PAN_ROLE role;
   uint8_t user_app_id;
-  uint8_t gn_app_id;
   uint8_t nap_app_id;
-  tBTA_SEC user_sec_mask; /* Security mask */
-  tBTA_SEC gn_sec_mask;   /* Security mask */
-  tBTA_SEC nap_sec_mask;  /* Security mask */
-
 } tBTA_PAN_API_SET_ROLE;
 
 /* data type for BTA_PAN_API_OPEN_EVT */
@@ -87,7 +81,7 @@ typedef struct {
   BT_HDR hdr;               /* Event header */
   tBTA_PAN_ROLE local_role; /* local role */
   tBTA_PAN_ROLE peer_role;  /* peer role */
-  BD_ADDR bd_addr;          /* peer bdaddr */
+  RawAddress bd_addr;       /* peer bdaddr */
 } tBTA_PAN_API_OPEN;
 
 /* data type for BTA_PAN_CI_TX_FLOW_EVT */
@@ -115,7 +109,7 @@ typedef union {
 
 /* state machine control block */
 typedef struct {
-  BD_ADDR bd_addr; /* peer bdaddr */
+  RawAddress bd_addr; /* peer bdaddr */
   fixed_queue_t*
       data_queue;    /* Queue of buffers waiting to be passed to application */
   uint16_t handle;   /* BTA PAN/BNEP handle */
@@ -143,8 +137,8 @@ typedef struct {
 /* pan data param */
 typedef struct {
   BT_HDR hdr;
-  BD_ADDR src;
-  BD_ADDR dst;
+  RawAddress src;
+  RawAddress dst;
   uint16_t protocol;
   bool ext;
   bool forward;
@@ -173,13 +167,11 @@ extern void bta_pan_disable(void);
 extern void bta_pan_set_role(tBTA_PAN_DATA* p_data);
 extern void bta_pan_open(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_api_close(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
-extern void bta_pan_set_shutdown(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_rx_path(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_tx_path(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_tx_flow(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_conn_open(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_conn_close(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
-extern void bta_pan_writebuf(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_write_buf(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 extern void bta_pan_free_buf(tBTA_PAN_SCB* p_scb, tBTA_PAN_DATA* p_data);
 

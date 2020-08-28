@@ -1,5 +1,5 @@
 #
-#  Copyright (C) 2015 Google, Inc.
+#  Copyright 2015 Google, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
 
 static_library("btcore") {
   sources = [
-    "src/bdaddr.cc",
     "src/device_class.cc",
     "src/hal_util.cc",
     "src/module.cc",
     "src/property.cc",
-    "src/uuid.cc",
     "src/osi_module.cc",
   ]
 
@@ -40,7 +38,6 @@ executable("net_test_btcore") {
   sources = [
     "test/device_class_test.cc",
     "test/property_test.cc",
-    "test/uuid_test.cc",
     "//osi/test/AllocationTestHarness.cc",
   ]
 
@@ -52,6 +49,7 @@ executable("net_test_btcore") {
   deps = [
     "//btcore",
     "//osi",
+    "//types",
     "//third_party/googletest:gtest_main",
     "//third_party/libchrome:base",
   ]

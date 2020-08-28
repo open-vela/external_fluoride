@@ -1,7 +1,7 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 The Android Open Source Project
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2016 The Android Open Source Project
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,10 +33,9 @@
 #include "hidd_api.h"
 #include "hidd_int.h"
 #include "hiddefs.h"
+#include "stack/btm/btm_sec.h"
 
-#if HID_DYNAMIC_MEMORY == FALSE
 tHID_DEV_CTB hd_cb;
-#endif
 
 /*******************************************************************************
  *
@@ -123,50 +122,6 @@ tHID_STATUS HID_DevDeregister(void) {
   hidd_conn_dereg();
 
   hd_cb.reg_flag = FALSE;
-
-  return (HID_SUCCESS);
-}
-
-tHID_STATUS HID_DevSetSecurityLevel(uint8_t sec_lvl) {
-  HIDD_TRACE_API("%s", __func__);
-
-  if (!BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_HIDD_SEC_CTRL, sec_lvl,
-                            HID_PSM_CONTROL, BTM_SEC_PROTO_HID, HIDD_SEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 1 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_HIDD_SEC_CTRL, sec_lvl,
-                            HID_PSM_CONTROL, BTM_SEC_PROTO_HID, HIDD_SEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 2 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_HIDD_NOSEC_CTRL,
-                            BTM_SEC_NONE, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
-                            HIDD_NOSEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 3 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_HIDD_NOSEC_CTRL,
-                            BTM_SEC_NONE, HID_PSM_CONTROL, BTM_SEC_PROTO_HID,
-                            HIDD_NOSEC_CHN)) {
-    HIDD_TRACE_ERROR("Security Registration 4 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_HIDD_INTR, BTM_SEC_NONE,
-                            HID_PSM_INTERRUPT, BTM_SEC_PROTO_HID, 0)) {
-    HIDD_TRACE_ERROR("Security Registration 5 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
-
-  if (!BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_HIDD_INTR, BTM_SEC_NONE,
-                            HID_PSM_INTERRUPT, BTM_SEC_PROTO_HID, 0)) {
-    HIDD_TRACE_ERROR("Security Registration 6 failed");
-    return (HID_ERR_NO_RESOURCES);
-  }
 
   return (HID_SUCCESS);
 }
@@ -295,7 +250,13 @@ tHID_STATUS HID_DevAddRecord(uint32_t handle, char* p_name, char* p_description,
       uint8_t* p_buf;
       uint8_t seq_len = 4 + desc_len;
 
-      p_buf = (uint8_t*)osi_malloc(2048);
+      if (desc_len > HIDD_APP_DESCRIPTOR_LEN) {
+        HIDD_TRACE_ERROR("%s: descriptor length = %d, larger than max %d",
+                         __func__, desc_len, HIDD_APP_DESCRIPTOR_LEN);
+        return HID_ERR_NOT_REGISTERED;
+      };
+
+      p_buf = (uint8_t*)osi_malloc(HIDD_APP_DESCRIPTOR_LEN + 6);
 
       if (p_buf == NULL) {
         HIDD_TRACE_ERROR("%s: Buffer allocation failure for size = 2048 ",
@@ -424,9 +385,9 @@ tHID_STATUS HID_DevVirtualCableUnplug(void) {
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-tHID_STATUS HID_DevPlugDevice(BD_ADDR addr) {
+tHID_STATUS HID_DevPlugDevice(const RawAddress& addr) {
   hd_cb.device.in_use = TRUE;
-  memcpy(hd_cb.device.addr, addr, sizeof(BD_ADDR));
+  hd_cb.device.addr = addr;
 
   return HID_SUCCESS;
 }
@@ -440,8 +401,8 @@ tHID_STATUS HID_DevPlugDevice(BD_ADDR addr) {
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-tHID_STATUS HID_DevUnplugDevice(BD_ADDR addr) {
-  if (!memcmp(hd_cb.device.addr, addr, sizeof(BD_ADDR))) {
+tHID_STATUS HID_DevUnplugDevice(const RawAddress& addr) {
+  if (hd_cb.device.addr == addr) {
     hd_cb.device.in_use = FALSE;
     hd_cb.device.conn.conn_state = HID_CONN_STATE_UNUSED;
     hd_cb.device.conn.ctrl_cid = 0;
@@ -566,11 +527,11 @@ tHID_STATUS HID_DevReportError(uint8_t error) {
  * Returns          tHID_STATUS
  *
  ******************************************************************************/
-tHID_STATUS HID_DevGetDevice(BD_ADDR* addr) {
+tHID_STATUS HID_DevGetDevice(RawAddress* addr) {
   HIDD_TRACE_API("%s", __func__);
 
   if (hd_cb.device.in_use) {
-    memcpy(addr, hd_cb.device.addr, sizeof(BD_ADDR));
+    *addr = hd_cb.device.addr;
   } else {
     return HID_ERR_NOT_REGISTERED;
   }

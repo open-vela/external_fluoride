@@ -1,7 +1,7 @@
 /******************************************************************************
  *
  *  Copyright (c) 2014 The Android Open Source Project
- *  Copyright (C) 2004-2012 Broadcom Corporation
+ *  Copyright 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
  *
  ******************************************************************************/
 
+#include <base/logging.h>
 #include <string.h>
 
 #include "bt_utils.h"
@@ -31,6 +32,7 @@
 #include "bta_hf_client_int.h"
 #include "osi/include/osi.h"
 #include "port_api.h"
+#include "stack/btm/btm_sec.h"
 
 /*******************************************************************************
  *
@@ -97,9 +99,12 @@ static void bta_hf_client_mgmt_cback(uint32_t code, uint16_t port_handle) {
       APPL_TRACE_DEBUG("%s: allocating a new CB for incoming connection",
                        __func__);
       // Find the BDADDR of the peer device
-      BD_ADDR peer_addr;
-      uint16_t lcid;
-      PORT_CheckConnection(port_handle, peer_addr, &lcid);
+      RawAddress peer_addr = RawAddress::kEmpty;
+      uint16_t lcid = 0;
+      int status = PORT_CheckConnection(port_handle, &peer_addr, &lcid);
+      if (status != PORT_SUCCESS) {
+        LOG(ERROR) << __func__ << ": PORT_CheckConnection returned " << status;
+      }
 
       // Since we accepted a remote request we should allocate a handle first.
       uint16_t tmp_handle = -1;
@@ -123,18 +128,19 @@ static void bta_hf_client_mgmt_cback(uint32_t code, uint16_t port_handle) {
     } else {
       APPL_TRACE_ERROR("%s: PORT_SUCCESS, ignoring handle = %d", __func__,
                        port_handle);
+      osi_free(p_buf);
       return;
     }
   } else if (client_cb != NULL &&
              port_handle == client_cb->conn_handle) { /* code != PORT_SUC */
-    APPL_TRACE_ERROR(
-        "%s: closing port handle %d "
-        "dev %02x:%02x:%02x:%02x:%02x:%02x",
-        __func__, port_handle, client_cb->peer_addr[0], client_cb->peer_addr[1],
-        client_cb->peer_addr[2], client_cb->peer_addr[3],
-        client_cb->peer_addr[4], client_cb->peer_addr[5]);
+    LOG(ERROR) << __func__ << ": closing port handle " << port_handle << "dev "
+               << client_cb->peer_addr;
 
     RFCOMM_RemoveServer(port_handle);
+    p_buf->hdr.event = BTA_HF_CLIENT_RFC_CLOSE_EVT;
+  } else if (client_cb == NULL) {
+    // client_cb is already cleaned due to hfp client disabled.
+    // Assigned a valid event value to header and send this message anyway.
     p_buf->hdr.event = BTA_HF_CLIENT_RFC_CLOSE_EVT;
   }
 
@@ -176,14 +182,11 @@ void bta_hf_client_start_server() {
     return;
   }
 
-  BTM_SetSecurityLevel(false, "", BTM_SEC_SERVICE_HF_HANDSFREE,
-                       bta_hf_client_cb_arr.serv_sec_mask, BT_PSM_RFCOMM,
-                       BTM_SEC_PROTO_RFCOMM, bta_hf_client_cb_arr.scn);
-
-  port_status = RFCOMM_CreateConnection(
+  port_status = RFCOMM_CreateConnectionWithSecurity(
       UUID_SERVCLASS_HF_HANDSFREE, bta_hf_client_cb_arr.scn, true,
-      BTA_HF_CLIENT_MTU, (uint8_t*)bd_addr_any,
-      &(bta_hf_client_cb_arr.serv_handle), bta_hf_client_mgmt_cback);
+      BTA_HF_CLIENT_MTU, RawAddress::kAny, &(bta_hf_client_cb_arr.serv_handle),
+      bta_hf_client_mgmt_cback, BTM_SEC_SERVICE_HF_HANDSFREE,
+      BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT);
 
   APPL_TRACE_DEBUG("%s: started rfcomm server with handle %d", __func__,
                    bta_hf_client_cb_arr.serv_handle);
@@ -237,13 +240,11 @@ void bta_hf_client_rfc_do_open(tBTA_HF_CLIENT_DATA* p_data) {
     return;
   }
 
-  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_HF_HANDSFREE,
-                       client_cb->cli_sec_mask, BT_PSM_RFCOMM,
-                       BTM_SEC_PROTO_RFCOMM, client_cb->peer_scn);
-  if (RFCOMM_CreateConnection(UUID_SERVCLASS_HF_HANDSFREE, client_cb->peer_scn,
-                              false, BTA_HF_CLIENT_MTU, client_cb->peer_addr,
-                              &(client_cb->conn_handle),
-                              bta_hf_client_mgmt_cback) == PORT_SUCCESS) {
+  if (RFCOMM_CreateConnectionWithSecurity(
+          UUID_SERVCLASS_HF_HANDSFREE, client_cb->peer_scn, false,
+          BTA_HF_CLIENT_MTU, client_cb->peer_addr, &(client_cb->conn_handle),
+          bta_hf_client_mgmt_cback, BTM_SEC_SERVICE_HF_HANDSFREE,
+          BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT) == PORT_SUCCESS) {
     bta_hf_client_setup_port(client_cb->conn_handle);
     APPL_TRACE_DEBUG("bta_hf_client_rfc_do_open : conn_handle = %d",
                      client_cb->conn_handle);
@@ -287,7 +288,7 @@ void bta_hf_client_rfc_do_close(tBTA_HF_CLIENT_DATA* p_data) {
     /* Cancel SDP if it had been started. */
     if (client_cb->p_disc_db) {
       (void)SDP_CancelServiceSearch(client_cb->p_disc_db);
-      bta_hf_client_free_db(NULL);
+      osi_free_and_reset((void**)&client_cb->p_disc_db);
     }
   }
 }

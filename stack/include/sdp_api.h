@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -52,9 +52,6 @@
 /* Define the PSM that SDP uses */
 #define SDP_PSM 0x0001
 
-/* Legacy #define to avoid code changes - SDP UUID is same as BT UUID */
-#define tSDP_UUID tBT_UUID
-
 /* Masks for attr_value field of tSDP_DISC_ATTR */
 #define SDP_DISC_ATTR_LEN_MASK 0x0FFF
 #define SDP_DISC_ATTR_TYPE(len_type) ((len_type) >> 12)
@@ -72,7 +69,7 @@ typedef void(tSDP_DISC_CMPL_CB)(uint16_t result);
 typedef void(tSDP_DISC_CMPL_CB2)(uint16_t result, void* user_data);
 
 typedef struct {
-  BD_ADDR peer_addr;
+  RawAddress peer_addr;
   uint16_t peer_mtu;
 } tSDP_DR_OPEN;
 
@@ -85,9 +82,6 @@ typedef union {
   tSDP_DR_OPEN open;
   tSDP_DR_DATA data;
 } tSDP_DATA;
-
-/* Define a callback function for when discovery result is received. */
-typedef void(tSDP_DISC_RES_CB)(uint16_t event, tSDP_DATA* p_data);
 
 /* Define a structure to hold the discovered service information. */
 typedef struct {
@@ -112,7 +106,7 @@ typedef struct t_sdp_disc_rec {
   tSDP_DISC_ATTR* p_first_attr;      /* First attribute of record    */
   struct t_sdp_disc_rec* p_next_rec; /* Addr of next linked record   */
   uint32_t time_read;                /* The time the record was read */
-  BD_ADDR remote_bd_addr;            /* Remote BD address            */
+  RawAddress remote_bd_addr;         /* Remote BD address            */
 } tSDP_DISC_REC;
 
 typedef struct {
@@ -120,7 +114,7 @@ typedef struct {
   uint32_t mem_free;          /* Memory still available       */
   tSDP_DISC_REC* p_first_rec; /* Addr of first record in DB   */
   uint16_t num_uuid_filters;  /* Number of UUIds to filter    */
-  tSDP_UUID uuid_filters[SDP_MAX_UUID_FILTERS]; /* UUIDs to filter      */
+  bluetooth::Uuid uuid_filters[SDP_MAX_UUID_FILTERS]; /* UUIDs to filter */
   uint16_t num_attr_filters; /* Number of attribute filters  */
   uint16_t attr_filters[SDP_MAX_ATTR_FILTERS]; /* Attributes to filter */
   uint8_t* p_free_mem; /* Pointer to free memory       */
@@ -176,7 +170,7 @@ typedef struct t_sdp_di_get_record {
  *
  ******************************************************************************/
 bool SDP_InitDiscoveryDb(tSDP_DISCOVERY_DB* p_db, uint32_t len,
-                         uint16_t num_uuid, tSDP_UUID* p_uuid_list,
+                         uint16_t num_uuid, const bluetooth::Uuid* p_uuid_list,
                          uint16_t num_attr, uint16_t* p_attr_list);
 
 /*******************************************************************************
@@ -200,8 +194,8 @@ bool SDP_CancelServiceSearch(tSDP_DISCOVERY_DB* p_db);
  * Returns          true if discovery started, false if failed.
  *
  ******************************************************************************/
-bool SDP_ServiceSearchRequest(uint8_t* p_bd_addr, tSDP_DISCOVERY_DB* p_db,
-                              tSDP_DISC_CMPL_CB* p_cb);
+bool SDP_ServiceSearchRequest(const RawAddress& p_bd_addr,
+                              tSDP_DISCOVERY_DB* p_db, tSDP_DISC_CMPL_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -216,7 +210,7 @@ bool SDP_ServiceSearchRequest(uint8_t* p_bd_addr, tSDP_DISCOVERY_DB* p_db,
  * Returns          true if discovery started, false if failed.
  *
  ******************************************************************************/
-bool SDP_ServiceSearchAttributeRequest(uint8_t* p_bd_addr,
+bool SDP_ServiceSearchAttributeRequest(const RawAddress& p_bd_addr,
                                        tSDP_DISCOVERY_DB* p_db,
                                        tSDP_DISC_CMPL_CB* p_cb);
 
@@ -234,27 +228,12 @@ bool SDP_ServiceSearchAttributeRequest(uint8_t* p_bd_addr,
  * Returns          true if discovery started, false if failed.
  *
  ******************************************************************************/
-bool SDP_ServiceSearchAttributeRequest2(uint8_t* p_bd_addr,
+bool SDP_ServiceSearchAttributeRequest2(const RawAddress& p_bd_addr,
                                         tSDP_DISCOVERY_DB* p_db,
                                         tSDP_DISC_CMPL_CB2* p_cb,
                                         void* user_data);
 
 /* API of utilities to find data in the local discovery database */
-
-/*******************************************************************************
- *
- * Function         SDP_FindAttributeInDb
- *
- * Description      This function queries an SDP database for a specific
- *                  attribute. If the p_start_rec pointer is NULL, it looks from
- *                  the beginning of the database, else it continues from the
- *                  next record after p_start_rec.
- *
- * Returns          Pointer to matching record, or NULL
- *
- ******************************************************************************/
-tSDP_DISC_REC* SDP_FindAttributeInDb(tSDP_DISCOVERY_DB* p_db, uint16_t attr_id,
-                                     tSDP_DISC_REC* p_start_rec);
 
 /*******************************************************************************
  *
@@ -295,13 +274,13 @@ tSDP_DISC_REC* SDP_FindServiceInDb(tSDP_DISCOVERY_DB* p_db,
  *
  * NOTE             the only difference between this function and the previous
  *                  function "SDP_FindServiceInDb()" is that this function takes
- *                  a tBT_UUID input.
+ *                  a Uuid input.
  *
  * Returns          Pointer to record containing service class, or NULL
  *
  ******************************************************************************/
 tSDP_DISC_REC* SDP_FindServiceUUIDInDb(tSDP_DISCOVERY_DB* p_db,
-                                       tBT_UUID* p_uuid,
+                                       const bluetooth::Uuid& uuid,
                                        tSDP_DISC_REC* p_start_rec);
 
 /*******************************************************************************
@@ -317,7 +296,8 @@ tSDP_DISC_REC* SDP_FindServiceUUIDInDb(tSDP_DISCOVERY_DB* p_db,
  * Returns          true if found, otherwise false.
  *
  ******************************************************************************/
-bool SDP_FindServiceUUIDInRec_128bit(tSDP_DISC_REC* p_rec, tBT_UUID* p_uuid);
+bool SDP_FindServiceUUIDInRec_128bit(tSDP_DISC_REC* p_rec,
+                                     bluetooth::Uuid* p_uuid);
 
 /*******************************************************************************
  *
@@ -347,20 +327,6 @@ tSDP_DISC_REC* SDP_FindServiceInDb_128bit(tSDP_DISCOVERY_DB* p_db,
  ******************************************************************************/
 bool SDP_FindProtocolListElemInRec(tSDP_DISC_REC* p_rec, uint16_t layer_uuid,
                                    tSDP_PROTOCOL_ELEM* p_elem);
-
-/*******************************************************************************
- *
- * Function         SDP_FindAddProtoListsElemInRec
- *
- * Description      This function looks at a specific discovery record for a
- *                  protocol list element.
- *
- * Returns          true if found, false if not
- *                  If found, the passed protocol list element is filled in.
- *
- ******************************************************************************/
-bool SDP_FindAddProtoListsElemInRec(tSDP_DISC_REC* p_rec, uint16_t layer_uuid,
-                                    tSDP_PROTOCOL_ELEM* p_elem);
 
 /*******************************************************************************
  *
@@ -409,21 +375,6 @@ uint32_t SDP_CreateRecord(void);
  *
  ******************************************************************************/
 bool SDP_DeleteRecord(uint32_t handle);
-
-/*******************************************************************************
- *
- * Function         SDP_ReadRecord
- *
- * Description      This function is called to get the raw data of the record
- *                  with the given handle from the database.
- *
- * Returns          -1, if the record is not found.
- *                  Otherwise, the offset (0 or 1) to start of data in p_data.
- *
- *                  The size of data copied into p_data is in *p_data_len.
- *
- ******************************************************************************/
-int32_t SDP_ReadRecord(uint32_t handle, uint8_t* p_data, int32_t* p_data_len);
 
 /*******************************************************************************
  *
@@ -583,8 +534,9 @@ uint16_t SDP_SetLocalDiRecord(tSDP_DI_RECORD* device_info, uint32_t* p_handle);
  * Returns          SDP_SUCCESS if query started successfully, else error
  *
  ******************************************************************************/
-uint16_t SDP_DiDiscover(BD_ADDR remote_device, tSDP_DISCOVERY_DB* p_db,
-                        uint32_t len, tSDP_DISC_CMPL_CB* p_cb);
+uint16_t SDP_DiDiscover(const RawAddress& remote_device,
+                        tSDP_DISCOVERY_DB* p_db, uint32_t len,
+                        tSDP_DISC_CMPL_CB* p_cb);
 
 /*******************************************************************************
  *
@@ -635,11 +587,6 @@ uint8_t SDP_SetTraceLevel(uint8_t new_level);
  * Returns          true if found, otherwise false.
  *
  ******************************************************************************/
-bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, tBT_UUID* p_uuid);
-
-// Converts UUID-16 to UUID-128 by including the base UUID.
-// |uuid16| is the 2-byte UUID to convert.
-// The result with the expanded 128-bit UUID is stored in |p_uuid128|.
-void sdpu_uuid16_to_uuid128(uint16_t uuid16, uint8_t* p_uuid128);
+bool SDP_FindServiceUUIDInRec(tSDP_DISC_REC* p_rec, bluetooth::Uuid* p_uuid);
 
 #endif /* SDP_API_H */

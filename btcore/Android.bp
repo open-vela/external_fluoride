@@ -6,23 +6,19 @@ cc_library_static {
     local_include_dirs: ["include"],
     include_dirs: ["system/bt"],
     srcs: [
-        "src/bdaddr.cc",
         "src/device_class.cc",
         "src/hal_util.cc",
         "src/module.cc",
         "src/osi_module.cc",
         "src/property.cc",
-        "src/uuid.cc",
     ],
     shared_libs: [
         "liblog",
     ],
+    header_libs: ["libbluetooth_headers"],
     host_supported: true,
     target: {
-        darwin: {
-            enabled: false,
-        },
-        linux: {
+        linux_glibc: {
             cflags: ["-D_GNU_SOURCE"],
         },
     },
@@ -39,10 +35,8 @@ cc_test {
     local_include_dirs: ["include"],
     include_dirs: ["system/bt"],
     srcs: [
-        "test/bdaddr_test.cc",
         "test/device_class_test.cc",
         "test/property_test.cc",
-        "test/uuid_test.cc",
     ],
     shared_libs: [
         "liblog",
@@ -53,9 +47,4 @@ cc_test {
         "libosi",
     ],
     host_supported: true,
-    target: {
-        darwin: {
-            enabled: false,
-        }
-    }
 }

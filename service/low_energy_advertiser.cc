@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@
 
 #include "service/low_energy_advertiser.h"
 
-#include <base/bind.h>
-#include <base/logging.h>
-
 #include "service/adapter.h"
-#include "service/common/bluetooth/util/address_helper.h"
 #include "service/logging_helpers.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hcidefs.h"
+
+#include <base/bind.h>
+#include <base/bind_helpers.h>
+#include <base/callback.h>
+#include <base/logging.h>
 
 using std::lock_guard;
 using std::mutex;
@@ -54,7 +55,7 @@ int GetAdvertisingIntervalUnit(AdvertiseSettings::Mode mode) {
       ms = kAdvertisingIntervalLowMs;
       break;
     case AdvertiseSettings::MODE_LOW_POWER:
-    // Fall through
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     default:
       ms = kAdvertisingIntervalHighMs;
       break;
@@ -78,7 +79,7 @@ int8_t GetAdvertisingTxPower(AdvertiseSettings::TxPowerLevel tx_power) {
       power = -7;
       break;
     case AdvertiseSettings::TX_POWER_LEVEL_HIGH:
-    // Fall through
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     default:
       power = 1;
       break;
@@ -114,14 +115,12 @@ void GetAdvertiseParams(const AdvertiseSettings& settings, bool has_scan_rsp,
   out_params->scan_request_notification_enable = 0;
 }
 
-void DoNothing(uint8_t status) {}
-
 }  // namespace
 
 // LowEnergyAdvertiser implementation
 // ========================================================
 
-LowEnergyAdvertiser::LowEnergyAdvertiser(const UUID& uuid, int advertiser_id)
+LowEnergyAdvertiser::LowEnergyAdvertiser(const Uuid& uuid, int advertiser_id)
     : app_identifier_(uuid),
       advertiser_id_(advertiser_id),
       adv_started_(false),
@@ -134,8 +133,7 @@ LowEnergyAdvertiser::~LowEnergyAdvertiser() {
 
   // Stop advertising and ignore the result.
   hal::BluetoothGattInterface::Get()->GetAdvertiserHALInterface()->Enable(
-      advertiser_id_, false, base::Bind(&DoNothing), 0, 0,
-      base::Bind(&DoNothing));
+      advertiser_id_, false, base::DoNothing(), 0, 0, base::DoNothing());
   hal::BluetoothGattInterface::Get()->GetAdvertiserHALInterface()->Unregister(
       advertiser_id_);
 }
@@ -227,7 +225,7 @@ bool LowEnergyAdvertiser::IsStoppingAdvertising() const {
   return IsAdvertisingStarted() && adv_stop_callback_;
 }
 
-const UUID& LowEnergyAdvertiser::GetAppIdentifier() const {
+const Uuid& LowEnergyAdvertiser::GetAppIdentifier() const {
   return app_identifier_;
 }
 
@@ -295,13 +293,13 @@ LowEnergyAdvertiserFactory::LowEnergyAdvertiserFactory() {}
 LowEnergyAdvertiserFactory::~LowEnergyAdvertiserFactory() {}
 
 bool LowEnergyAdvertiserFactory::RegisterInstance(
-    const UUID& app_uuid, const RegisterCallback& callback) {
+    const Uuid& app_uuid, const RegisterCallback& callback) {
   VLOG(1) << __func__;
   lock_guard<mutex> lock(pending_calls_lock_);
 
   if (pending_calls_.find(app_uuid) != pending_calls_.end()) {
-    LOG(ERROR) << "Low-Energy advertiser with given UUID already registered - "
-               << "UUID: " << app_uuid.ToString();
+    LOG(ERROR) << "Low-Energy advertiser with given Uuid already registered - "
+               << "Uuid: " << app_uuid.ToString();
     return false;
   }
 
@@ -320,7 +318,7 @@ bool LowEnergyAdvertiserFactory::RegisterInstance(
 }
 
 void LowEnergyAdvertiserFactory::RegisterAdvertiserCallback(
-    const RegisterCallback& callback, const UUID& app_uuid,
+    const RegisterCallback& callback, const Uuid& app_uuid,
     uint8_t advertiser_id, uint8_t status) {
   VLOG(1) << __func__;
   lock_guard<mutex> lock(pending_calls_lock_);

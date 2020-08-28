@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 1999-2012 Broadcom Corporation
+ *  Copyright 1999-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
  *
  *****************************************************************************/
 
+#include <base/logging.h>
 #include <stdio.h>
 #include <string.h>
 #include "bnep_api.h"
@@ -34,6 +35,7 @@
 #include "pan_int.h"
 #include "sdp_api.h"
 #include "sdpdefs.h"
+#include "stack/btm/btm_sec.h"
 
 static const uint8_t pan_proto_elem_data[] = {
     0x35, 0x18,       /* data element sequence of length 0x18 bytes */
@@ -44,7 +46,7 @@ static const uint8_t pan_proto_elem_data[] = {
     0x19, 0x00, 0x0F, /* UUID for BNEP - 0x000F */
     0x09, 0x01,
     0x00, /* BNEP specific parameter 0 -- Version of BNEP = version 1 = 0x0001
-             */
+           */
     0x35,
     0x06, /* BNEP specific parameter 1 -- Supported network packet type list */
     0x09, 0x08, 0x00, /* network packet type IPv4 = 0x0800 */
@@ -60,8 +62,8 @@ static const uint8_t pan_proto_elem_data[] = {
  * Returns
  *
  ******************************************************************************/
-uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
-                               const char* p_name, const char* p_desc) {
+uint32_t pan_register_with_sdp(uint16_t uuid, const char* p_name,
+                               const char* p_desc) {
   uint32_t sdp_handle;
   uint16_t browse_list = UUID_SERVCLASS_PUBLIC_BROWSE_GROUP;
   uint16_t security = 0;
@@ -99,7 +101,8 @@ uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
                    (uint8_t)(strlen(p_desc) + 1), (uint8_t*)p_desc);
 
   /* Security description */
-  if (sec_mask) {
+  // Only NAP and PANU has service level security; GN has no security
+  if (uuid == UUID_SERVCLASS_NAP || uuid == UUID_SERVCLASS_PANU) {
     UINT16_TO_BE_FIELD(&security, 0x0001);
   }
   SDP_AddAttribute(sdp_handle, ATTR_ID_SECURITY_DESCRIPTION, UINT_DESC_TYPE, 2,
@@ -122,40 +125,6 @@ uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
     UINT32_TO_BE_STREAM(p, NetAccessRate);
     SDP_AddAttribute(sdp_handle, ATTR_ID_MAX_NET_ACCESS_RATE, UINT_DESC_TYPE, 4,
                      array);
-
-    /* Register with Security Manager for the specific security level */
-    if ((!BTM_SetSecurityLevel(true, p_name, BTM_SEC_SERVICE_BNEP_NAP, sec_mask,
-                               BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
-                               UUID_SERVCLASS_NAP)) ||
-        (!BTM_SetSecurityLevel(false, p_name, BTM_SEC_SERVICE_BNEP_NAP,
-                               sec_mask, BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
-                               UUID_SERVCLASS_NAP))) {
-      PAN_TRACE_ERROR("PAN Security Registration failed for PANU");
-    }
-  }
-#endif
-#if (PAN_SUPPORTS_ROLE_GN == TRUE)
-  if (uuid == UUID_SERVCLASS_GN) {
-    if ((!BTM_SetSecurityLevel(true, p_name, BTM_SEC_SERVICE_BNEP_GN, sec_mask,
-                               BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
-                               UUID_SERVCLASS_GN)) ||
-        (!BTM_SetSecurityLevel(false, p_name, BTM_SEC_SERVICE_BNEP_GN, sec_mask,
-                               BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
-                               UUID_SERVCLASS_GN))) {
-      PAN_TRACE_ERROR("PAN Security Registration failed for GN");
-    }
-  }
-#endif
-#if (PAN_SUPPORTS_ROLE_PANU == TRUE)
-  if (uuid == UUID_SERVCLASS_PANU) {
-    if ((!BTM_SetSecurityLevel(true, p_name, BTM_SEC_SERVICE_BNEP_PANU,
-                               sec_mask, BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
-                               UUID_SERVCLASS_PANU)) ||
-        (!BTM_SetSecurityLevel(false, p_name, BTM_SEC_SERVICE_BNEP_PANU,
-                               sec_mask, BT_PSM_BNEP, BTM_SEC_PROTO_BNEP,
-                               UUID_SERVCLASS_PANU))) {
-      PAN_TRACE_ERROR("PAN Security Registration failed for PANU");
-    }
   }
 #endif
 
@@ -174,7 +143,7 @@ uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
  * Returns
  *
  ******************************************************************************/
-tPAN_CONN* pan_allocate_pcb(BD_ADDR p_bda, uint16_t handle) {
+tPAN_CONN* pan_allocate_pcb(const RawAddress& p_bda, uint16_t handle) {
   uint16_t i;
 
   for (i = 0; i < MAX_PAN_CONNS; i++) {
@@ -185,14 +154,14 @@ tPAN_CONN* pan_allocate_pcb(BD_ADDR p_bda, uint16_t handle) {
 
   for (i = 0; i < MAX_PAN_CONNS; i++) {
     if (pan_cb.pcb[i].con_state != PAN_STATE_IDLE &&
-        memcmp(pan_cb.pcb[i].rem_bda, p_bda, BD_ADDR_LEN) == 0)
+        pan_cb.pcb[i].rem_bda == p_bda)
       return NULL;
   }
 
   for (i = 0; i < MAX_PAN_CONNS; i++) {
     if (pan_cb.pcb[i].con_state == PAN_STATE_IDLE) {
       memset(&(pan_cb.pcb[i]), 0, sizeof(tPAN_CONN));
-      memcpy(pan_cb.pcb[i].rem_bda, p_bda, BD_ADDR_LEN);
+      pan_cb.pcb[i].rem_bda = p_bda;
       pan_cb.pcb[i].handle = handle;
       return &(pan_cb.pcb[i]);
     }
@@ -230,18 +199,17 @@ tPAN_CONN* pan_get_pcb_by_handle(uint16_t handle) {
  * Returns
  *
  ******************************************************************************/
-tPAN_CONN* pan_get_pcb_by_addr(BD_ADDR p_bda) {
+tPAN_CONN* pan_get_pcb_by_addr(const RawAddress& p_bda) {
   uint16_t i;
 
   for (i = 0; i < MAX_PAN_CONNS; i++) {
     if (pan_cb.pcb[i].con_state == PAN_STATE_IDLE) continue;
 
-    if (memcmp(pan_cb.pcb[i].rem_bda, p_bda, BD_ADDR_LEN) == 0)
-      return &(pan_cb.pcb[i]);
+    if (pan_cb.pcb[i].rem_bda == p_bda) return &(pan_cb.pcb[i]);
 
     /*
     if (pan_cb.pcb[i].mfilter_present &&
-        (memcmp (p_bda, pan_cb.pcb[i].multi_cast_bridge, BD_ADDR_LEN) == 0))
+        p_bda == pan_cb.pcb[i].multi_cast_bridge)
         return &(pan_cb.pcb[i]);
     */
   }
@@ -301,21 +269,15 @@ void pan_release_pcb(tPAN_CONN* p_pcb) {
 void pan_dump_status(void) {
 #if (PAN_SUPPORTS_DEBUG_DUMP == TRUE)
   uint16_t i;
-  char buff[200];
   tPAN_CONN* p_pcb;
 
   PAN_TRACE_DEBUG("PAN role %x, active role %d, num_conns %d", pan_cb.role,
                   pan_cb.active_role, pan_cb.num_conns);
 
   for (i = 0, p_pcb = pan_cb.pcb; i < MAX_PAN_CONNS; i++, p_pcb++) {
-    snprintf(buff, sizeof(buff),
-             "%d state %d, handle %d, src 0x%x, dst 0x%x, BD %x.%x.%x.%x.%x.%x",
-             i, p_pcb->con_state, p_pcb->handle, p_pcb->src_uuid,
-             p_pcb->dst_uuid, p_pcb->rem_bda[0], p_pcb->rem_bda[1],
-             p_pcb->rem_bda[2], p_pcb->rem_bda[3], p_pcb->rem_bda[4],
-             p_pcb->rem_bda[5]);
-
-    PAN_TRACE_DEBUG(buff);
+    VLOG(1) << +i << " state:" << p_pcb->con_state
+            << ", handle:" << p_pcb->handle << ", src" << p_pcb->src_uuid
+            << ", BD:" << p_pcb->rem_bda;
   }
 #endif
 }

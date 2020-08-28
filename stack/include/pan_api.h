@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2001-2012 Broadcom Corporation
+ *  Copyright 2001-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,7 +45,6 @@
 
 /* Bit map for PAN roles */
 #define PAN_ROLE_CLIENT 0x01     /* PANU role */
-#define PAN_ROLE_GN_SERVER 0x02  /* GN role */
 #define PAN_ROLE_NAP_SERVER 0x04 /* NAP role */
 
 /* Bitmap to indicate the usage of the Data */
@@ -96,7 +95,7 @@ typedef uint8_t tPAN_RESULT;
  *      to the application. The second parameter true means
  *      to create the bridge and false means to remove it.
 */
-typedef void(tPAN_CONN_STATE_CB)(uint16_t handle, BD_ADDR bd_addr,
+typedef void(tPAN_CONN_STATE_CB)(uint16_t handle, const RawAddress& bd_addr,
                                  tPAN_RESULT state, bool is_role_change,
                                  uint8_t src_role, uint8_t dst_role);
 
@@ -105,7 +104,7 @@ typedef void(tPAN_CONN_STATE_CB)(uint16_t handle, BD_ADDR bd_addr,
  *      whether to create the bridge or remove it. true means
  *      to create the bridge and false means to remove it.
 */
-typedef void(tPAN_BRIDGE_REQ_CB)(BD_ADDR bd_addr, bool state);
+typedef void(tPAN_BRIDGE_REQ_CB)(const RawAddress& bd_addr, bool state);
 
 /* Data received indication callback prototype. Parameters are
  *              Source BD/Ethernet Address
@@ -118,9 +117,10 @@ typedef void(tPAN_BRIDGE_REQ_CB)(BD_ADDR bd_addr, bool state);
  *                      false - Use it for internal stack
  *                      true  - Send it across the ethernet as well
 */
-typedef void(tPAN_DATA_IND_CB)(uint16_t handle, BD_ADDR src, BD_ADDR dst,
-                               uint16_t protocol, uint8_t* p_data, uint16_t len,
-                               bool ext, bool forward);
+typedef void(tPAN_DATA_IND_CB)(uint16_t handle, const RawAddress& src,
+                               const RawAddress& dst, uint16_t protocol,
+                               uint8_t* p_data, uint16_t len, bool ext,
+                               bool forward);
 
 /* Data buffer received indication callback prototype. Parameters are
  *              Source BD/Ethernet Address
@@ -132,9 +132,9 @@ typedef void(tPAN_DATA_IND_CB)(uint16_t handle, BD_ADDR src, BD_ADDR dst,
  *                      false - Use it for internal stack
  *                      true  - Send it across the ethernet as well
 */
-typedef void(tPAN_DATA_BUF_IND_CB)(uint16_t handle, BD_ADDR src, BD_ADDR dst,
-                                   uint16_t protocol, BT_HDR* p_buf, bool ext,
-                                   bool forward);
+typedef void(tPAN_DATA_BUF_IND_CB)(uint16_t handle, const RawAddress& src,
+                                   const RawAddress& dst, uint16_t protocol,
+                                   BT_HDR* p_buf, bool ext, bool forward);
 
 /* Flow control callback for TX data. Parameters are
  *              Handle to the connection
@@ -239,7 +239,6 @@ extern void PAN_Deregister(void);
  *
  * Parameters:      role        - is bit map of roles to be active
  *                                      PAN_ROLE_CLIENT is for PANU role
- *                                      PAN_ROLE_GN_SERVER is for GN role
  *                                      PAN_ROLE_NAP_SERVER is for NAP role
  *                  sec_mask    - Security mask for different roles
  *                                      It is array of uint8_t. The bytes
@@ -247,7 +246,6 @@ extern void PAN_Deregister(void);
  *                                      GN and NAP in order
  *
  *                  p_user_name - Service name for PANU role
- *                  p_gn_name   - Service name for GN role
  *                  p_nap_name  - Service name for NAP role
  *                                  Can be NULL if user wants it to be default
  *
@@ -255,8 +253,7 @@ extern void PAN_Deregister(void);
  *                  PAN_FAILURE     - if the role is not valid
  *
  ******************************************************************************/
-extern tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
-                               const char* p_user_name, const char* p_gn_name,
+extern tPAN_RESULT PAN_SetRole(uint8_t role, const char* p_user_name,
                                const char* p_nap_name);
 
 /*******************************************************************************
@@ -270,7 +267,6 @@ extern tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
  *                  src_role    - Role of the local device for the connection
  *                  dst_role    - Role of the remote device for the connection
  *                                      PAN_ROLE_CLIENT is for PANU role
- *                                      PAN_ROLE_GN_SERVER is for GN role
  *                                      PAN_ROLE_NAP_SERVER is for NAP role
  *                  *handle     - Pointer for returning Handle to the connection
  *
@@ -282,7 +278,7 @@ extern tPAN_RESULT PAN_SetRole(uint8_t role, uint8_t* sec_mask,
  *                                     allowed at that point of time
  *
  ******************************************************************************/
-extern tPAN_RESULT PAN_Connect(BD_ADDR rem_bda, uint8_t src_role,
+extern tPAN_RESULT PAN_Connect(const RawAddress& rem_bda, uint8_t src_role,
                                uint8_t dst_role, uint16_t* handle);
 
 /*******************************************************************************
@@ -323,9 +319,9 @@ extern tPAN_RESULT PAN_Disconnect(uint16_t handle);
  *                                           there is an error in sending data
  *
  ******************************************************************************/
-extern tPAN_RESULT PAN_Write(uint16_t handle, BD_ADDR dst, BD_ADDR src,
-                             uint16_t protocol, uint8_t* p_data, uint16_t len,
-                             bool ext);
+extern tPAN_RESULT PAN_Write(uint16_t handle, const RawAddress& dst,
+                             const RawAddress& src, uint16_t protocol,
+                             uint8_t* p_data, uint16_t len, bool ext);
 
 /*******************************************************************************
  *
@@ -349,8 +345,9 @@ extern tPAN_RESULT PAN_Write(uint16_t handle, BD_ADDR dst, BD_ADDR src,
  *                                           there is an error in sending data
  *
  ******************************************************************************/
-extern tPAN_RESULT PAN_WriteBuf(uint16_t handle, BD_ADDR dst, BD_ADDR src,
-                                uint16_t protocol, BT_HDR* p_buf, bool ext);
+extern tPAN_RESULT PAN_WriteBuf(uint16_t handle, const RawAddress& dst,
+                                const RawAddress& src, uint16_t protocol,
+                                BT_HDR* p_buf, bool ext);
 
 /*******************************************************************************
  *
