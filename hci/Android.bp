@@ -31,7 +31,7 @@ cc_library_static {
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/include",
+        "system/bt/internal_include",
         "system/bt/btcore/include",
         "system/bt/stack/include",
         "system/bt/utils/include",
@@ -44,13 +44,14 @@ cc_library_static {
 // ========================================================
 cc_test {
     name: "net_test_hci",
+    test_suites: ["device-tests"],
     defaults: ["libbt-hci_defaults"],
     local_include_dirs: [
         "include",
     ],
     include_dirs: [
         "system/bt",
-        "system/bt/include",
+        "system/bt/internal_include",
         "system/bt/btcore/include",
         "system/bt/osi/test",
         "system/bt/stack/include",
@@ -72,6 +73,6 @@ cc_test {
         "libosi-AllocationTestHarness",
         "libcutils",
         "libbtcore",
-        "libbt-protos",
+        "libbt-protos-lite",
     ],
 }

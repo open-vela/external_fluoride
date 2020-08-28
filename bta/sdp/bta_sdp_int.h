@@ -2,8 +2,8 @@
 
 /******************************************************************************
  *
- *  Copyright (C) 2014 The Android Open Source Project
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2014 The Android Open Source Project
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -58,8 +58,8 @@ typedef struct {
 /* data type for BTA_SDP_API_SEARCH_EVT */
 typedef struct {
   BT_HDR hdr;
-  BD_ADDR bd_addr;
-  tSDP_UUID uuid;
+  RawAddress bd_addr;
+  bluetooth::Uuid uuid;
 } tBTA_SDP_API_SEARCH;
 
 /* data type for BTA_SDP_API_SEARCH_EVT */
@@ -80,7 +80,7 @@ typedef union {
 /* SDP control block */
 typedef struct {
   uint8_t sdp_active; /* see BTA_SDP_SDP_ACT_* */
-  BD_ADDR remote_addr;
+  RawAddress remote_addr;
   tBTA_SDP_DM_CBACK* p_dm_cback;
 } tBTA_SDP_CB;
 

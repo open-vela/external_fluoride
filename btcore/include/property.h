@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <bluetooth/uuid.h>
 #include <hardware/bluetooth.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -41,14 +42,14 @@ bool property_equals(const bt_property_t* p1, const bt_property_t* p2);
 // using |property_free| or |property_free_array|.
 // Parameter must not be NULL. A copy of the parameter is made and
 // stored in the property.
-bt_property_t* property_new_addr(const bt_bdaddr_t* addr);
+bt_property_t* property_new_addr(const RawAddress* addr);
 bt_property_t* property_new_device_class(const bt_device_class_t* dc);
 bt_property_t* property_new_device_type(bt_device_type_t device_type);
 bt_property_t* property_new_discovery_timeout(const uint32_t timeout);
 bt_property_t* property_new_name(const char* name);
 bt_property_t* property_new_rssi(const int8_t rssi);
 bt_property_t* property_new_scan_mode(bt_scan_mode_t scan_mode);
-bt_property_t* property_new_uuids(const bt_uuid_t* uuid, size_t count);
+bt_property_t* property_new_uuids(const bluetooth::Uuid* uuid, size_t count);
 
 // Property resource frees both property and value.
 void property_free(bt_property_t* property);
@@ -68,7 +69,7 @@ bool property_is_uuids(const bt_property_t* property);
 
 // Value conversion convenience methods. The contents of the property are
 // properly typed and returned to the caller. |property| must not be NULL.
-const bt_bdaddr_t* property_as_addr(const bt_property_t* property);
+const RawAddress* property_as_addr(const bt_property_t* property);
 const bt_device_class_t* property_as_device_class(
     const bt_property_t* property);
 bt_device_type_t property_as_device_type(const bt_property_t* property);
@@ -76,5 +77,5 @@ uint32_t property_as_discovery_timeout(const bt_property_t* property);
 const bt_bdname_t* property_as_name(const bt_property_t* property);
 int8_t property_as_rssi(const bt_property_t* property);
 bt_scan_mode_t property_as_scan_mode(const bt_property_t* property);
-const bt_uuid_t* property_as_uuids(const bt_property_t* property,
-                                   size_t* count);
+const bluetooth::Uuid* property_as_uuids(const bt_property_t* property,
+                                         size_t* count);

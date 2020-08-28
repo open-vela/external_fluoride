@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ class BluetoothGattInterface {
     // "btgatt_scanner_callbacks_t" in the HAL API definitions.
 
     virtual void ScanResultCallback(
-        BluetoothGattInterface* gatt_iface, const bt_bdaddr_t& bda, int rssi,
+        BluetoothGattInterface* gatt_iface, const RawAddress& bda, int rssi,
         std::vector<uint8_t> adv_data);  // NOLINT(pass-by-value)
   };
 
@@ -67,15 +67,15 @@ class BluetoothGattInterface {
 
     virtual void RegisterClientCallback(BluetoothGattInterface* gatt_iface,
                                         int status, int client_if,
-                                        const bt_uuid_t& app_uuid);
+                                        const bluetooth::Uuid& app_uuid);
 
     virtual void ConnectCallback(BluetoothGattInterface* gatt_iface,
                                  int conn_id, int status, int client_if,
-                                 const bt_bdaddr_t& bda);
+                                 const RawAddress& bda);
 
     virtual void DisconnectCallback(BluetoothGattInterface* gatt_iface,
                                     int conn_id, int status, int client_if,
-                                    const bt_bdaddr_t& bda);
+                                    const RawAddress& bda);
 
     virtual void SearchCompleteCallback(BluetoothGattInterface* gatt_iface,
                                         int conn_id, int status);
@@ -85,7 +85,7 @@ class BluetoothGattInterface {
         int registered, uint16_t handle);
 
     virtual void NotifyCallback(BluetoothGattInterface* gatt_iface, int conn_id,
-                                btgatt_notify_params_t* p_data);
+                                const btgatt_notify_params_t& p_data);
 
     virtual void WriteCharacteristicCallback(BluetoothGattInterface* gatt_iface,
                                              int conn_id, int status,
@@ -99,7 +99,8 @@ class BluetoothGattInterface {
                                     int conn_id, int status, int mtu);
 
     virtual void GetGattDbCallback(BluetoothGattInterface* gatt_iface,
-                                   int conn_id, btgatt_db_element_t* gatt_db,
+                                   int conn_id,
+                                   const btgatt_db_element_t* gatt_db,
                                    int size);
 
     virtual void ServicesRemovedCallback(BluetoothGattInterface* gatt_iface,
@@ -107,7 +108,8 @@ class BluetoothGattInterface {
                                          uint16_t end_handle);
 
     virtual void ServicesAddedCallback(BluetoothGattInterface* gatt_iface,
-                                       int conn_id, btgatt_db_element_t* added,
+                                       int conn_id,
+                                       const btgatt_db_element_t& added,
                                        int added_count);
   };
 
@@ -118,11 +120,11 @@ class BluetoothGattInterface {
 
     virtual void RegisterServerCallback(BluetoothGattInterface* gatt_iface,
                                         int status, int server_if,
-                                        const bt_uuid_t& app_uuid);
+                                        const bluetooth::Uuid& app_uuid);
 
     virtual void ConnectionCallback(BluetoothGattInterface* gatt_iface,
                                     int conn_id, int server_if, int connected,
-                                    const bt_bdaddr_t& bda);
+                                    const RawAddress& bda);
 
     virtual void ServiceAddedCallback(
         BluetoothGattInterface* gatt_iface, int status, int server_if,
@@ -138,27 +140,27 @@ class BluetoothGattInterface {
 
     virtual void RequestReadCharacteristicCallback(
         BluetoothGattInterface* gatt_iface, int conn_id, int trans_id,
-        const bt_bdaddr_t& bda, int attr_handle, int offset, bool is_long);
+        const RawAddress& bda, int attr_handle, int offset, bool is_long);
 
     virtual void RequestReadDescriptorCallback(
         BluetoothGattInterface* gatt_iface, int conn_id, int trans_id,
-        const bt_bdaddr_t& bda, int attr_handle, int offset, bool is_long);
+        const RawAddress& bda, int attr_handle, int offset, bool is_long);
 
     virtual void RequestWriteCharacteristicCallback(
         BluetoothGattInterface* gatt_iface, int conn_id, int trans_id,
-        const bt_bdaddr_t& bda, int attr_handle, int offset, bool need_rsp,
+        const RawAddress& bda, int attr_handle, int offset, bool need_rsp,
         bool is_prep,
         std::vector<uint8_t> value);  // NOLINT(pass-by-value)
 
     virtual void RequestWriteDescriptorCallback(
         BluetoothGattInterface* gatt_iface, int conn_id, int trans_id,
-        const bt_bdaddr_t& bda, int attr_handle, int offset, bool need_rsp,
+        const RawAddress& bda, int attr_handle, int offset, bool need_rsp,
         bool is_prep,
         std::vector<uint8_t> value);  // NOLINT(pass-by-alue)
 
     virtual void RequestExecWriteCallback(BluetoothGattInterface* gatt_iface,
                                           int conn_id, int trans_id,
-                                          const bt_bdaddr_t& bda,
+                                          const RawAddress& bda,
                                           int exec_write);
 
     virtual void ResponseConfirmationCallback(

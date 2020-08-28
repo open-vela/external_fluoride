@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2002-2012 Broadcom Corporation
+ *  Copyright 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -69,8 +69,8 @@ typedef union {
   tAVDT_MULTI suspend_ind;
 } tAVDTC_CTRL;
 
-typedef void tAVDTC_CTRL_CBACK(uint8_t handle, BD_ADDR bd_addr, uint8_t event,
-                               tAVDTC_CTRL* p_data);
+typedef void tAVDTC_CTRL_CBACK(uint8_t handle, const RawAddress& bd_addr,
+                               uint8_t event, tAVDTC_CTRL* p_data);
 
 /*******************************************************************************
  *
@@ -94,7 +94,7 @@ extern void AVDTC_Init(tAVDTC_CTRL_CBACK* p_cback);
  * Returns          void
  *
  ******************************************************************************/
-extern void AVDTC_DiscoverRsp(BD_ADDR bd_addr, uint8_t label,
+extern void AVDTC_DiscoverRsp(const RawAddress& bd_addr, uint8_t label,
                               tAVDT_SEP_INFO sep_info[], uint8_t num_seps);
 
 /*******************************************************************************
@@ -106,7 +106,8 @@ extern void AVDTC_DiscoverRsp(BD_ADDR bd_addr, uint8_t label,
  * Returns          void
  *
  ******************************************************************************/
-extern void AVDTC_GetCapRsp(BD_ADDR bd_addr, uint8_t label, tAVDT_CFG* p_cap);
+extern void AVDTC_GetCapRsp(const RawAddress& bd_addr, uint8_t label,
+                            AvdtpSepConfig* p_cap);
 
 /*******************************************************************************
  *
@@ -117,8 +118,8 @@ extern void AVDTC_GetCapRsp(BD_ADDR bd_addr, uint8_t label, tAVDT_CFG* p_cap);
  * Returns          void
  *
  ******************************************************************************/
-extern void AVDTC_GetAllCapRsp(BD_ADDR bd_addr, uint8_t label,
-                               tAVDT_CFG* p_cap);
+extern void AVDTC_GetAllCapRsp(const RawAddress& bd_addr, uint8_t label,
+                               AvdtpSepConfig* p_cap);
 
 /*******************************************************************************
  *
@@ -140,7 +141,8 @@ extern void AVDTC_GetConfigReq(uint8_t handle);
  * Returns          void
  *
  ******************************************************************************/
-extern void AVDTC_GetConfigRsp(uint8_t handle, uint8_t label, tAVDT_CFG* p_cfg);
+extern void AVDTC_GetConfigRsp(uint8_t handle, uint8_t label,
+                               AvdtpSepConfig* p_cfg);
 
 /*******************************************************************************
  *
@@ -230,7 +232,7 @@ extern void AVDTC_AbortRsp(uint8_t handle, uint8_t label);
  * Returns          void
  *
  ******************************************************************************/
-extern void AVDTC_Rej(uint8_t handle, BD_ADDR bd_addr, uint8_t cmd,
+extern void AVDTC_Rej(uint8_t handle, const RawAddress& bd_addr, uint8_t cmd,
                       uint8_t label, uint8_t err_code, uint8_t err_param);
 
 #endif /* AVDT_CAPI_H */

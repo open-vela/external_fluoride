@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 The Android Open Source Project
+ *  Copyright 2016 The Android Open Source Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "bt_trace.h"
 #include "hcidefs.h"
 #include "stack/include/smp_api.h"
+#include "stack/smp/p_256_ecc_pp.h"
 #include "stack/smp/smp_int.h"
 
 /*
@@ -55,19 +56,19 @@
  */
 
 // Set remote bda to 0xB1B2B3B4B5B6
-bool BTM_ReadRemoteConnectionAddr(BD_ADDR pseudo_addr, BD_ADDR conn_addr,
+bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr,
+                                  RawAddress& conn_addr,
                                   tBLE_ADDR_TYPE* p_addr_type) {
-  const uint8_t local_bda[] = {0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6};
-  memcpy(conn_addr, local_bda, sizeof(local_bda));
+  conn_addr = RawAddress({0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6});
   *p_addr_type = 0x00;
   return true;
 }
 
 // Set local_bda to 0xA1A2A3A4A5A6
-void BTM_ReadConnectionAddr(BD_ADDR remote_bda, BD_ADDR local_conn_addr,
+void BTM_ReadConnectionAddr(const RawAddress& remote_bda,
+                            RawAddress& local_conn_addr,
                             tBLE_ADDR_TYPE* p_addr_type) {
-  const uint8_t local_bda[] = {0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6};
-  memcpy(local_conn_addr, local_bda, sizeof(local_bda));
+  local_conn_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
   *p_addr_type = 0x01;
 }
 
@@ -84,7 +85,7 @@ extern void smp_gen_p1_4_confirm(tSMP_CB* p_cb,
                                  tBLE_ADDR_TYPE remote_bd_addr_type,
                                  BT_OCTET16 p1);
 
-extern void smp_gen_p2_4_confirm(tSMP_CB* p_cb, BD_ADDR remote_bda,
+extern void smp_gen_p2_4_confirm(tSMP_CB* p_cb, const RawAddress& remote_bda,
                                  BT_OCTET16 p2);
 
 extern tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, BT_OCTET16 rand,
@@ -170,7 +171,7 @@ class SmpCalculateConfirmTest : public Test {
 // Test smp_gen_p2_4_confirm function implementation
 TEST_F(SmpCalculateConfirmTest, test_smp_gen_p2_4_confirm_as_master) {
   BT_OCTET16 p2;
-  BD_ADDR remote_bda;
+  RawAddress remote_bda;
   tBLE_ADDR_TYPE remote_bd_addr_type = 0;
   BTM_ReadRemoteConnectionAddr(p_cb_.pairing_bda, remote_bda,
                                &remote_bd_addr_type);
@@ -186,7 +187,7 @@ TEST_F(SmpCalculateConfirmTest, test_smp_gen_p2_4_confirm_as_master) {
 // Test smp_gen_p1_4_confirm and SMP_Encrypt function implementation
 TEST_F(SmpCalculateConfirmTest, test_SMP_Encrypt_as_master) {
   BT_OCTET16 p1;
-  BD_ADDR remote_bda;
+  RawAddress remote_bda;
   tBLE_ADDR_TYPE remote_bd_addr_type = 0;
   BTM_ReadRemoteConnectionAddr(p_cb_.pairing_bda, remote_bda,
                                &remote_bd_addr_type);
@@ -224,4 +225,87 @@ TEST_F(SmpCalculateConfirmTest, test_smp_calculate_comfirm_as_master) {
   dump_uint128_reverse(output.param_buf, confirm_str);
   ASSERT_THAT(confirm_str, StrEq(expected_confirm_str));
 }
+
+// Test ECC point validation
+TEST(SmpEccValidationTest, test_valid_points) {
+  Point p;
+
+  // Test data from Bluetooth Core Specification
+  // Version 5.0 | Vol 2, Part G | 7.1.2
+
+  // Sample 1
+  p.x[7] = 0x20b003d2;
+  p.x[6] = 0xf297be2c;
+  p.x[5] = 0x5e2c83a7;
+  p.x[4] = 0xe9f9a5b9;
+  p.x[3] = 0xeff49111;
+  p.x[2] = 0xacf4fddb;
+  p.x[1] = 0xcc030148;
+  p.x[0] = 0x0e359de6;
+
+  p.y[7] = 0xdc809c49;
+  p.y[6] = 0x652aeb6d;
+  p.y[5] = 0x63329abf;
+  p.y[4] = 0x5a52155c;
+  p.y[3] = 0x766345c2;
+  p.y[2] = 0x8fed3024;
+  p.y[1] = 0x741c8ed0;
+  p.y[0] = 0x1589d28b;
+
+  EXPECT_TRUE(ECC_ValidatePoint(p));
+
+  // Sample 2
+  p.x[7] = 0x2c31a47b;
+  p.x[6] = 0x5779809e;
+  p.x[5] = 0xf44cb5ea;
+  p.x[4] = 0xaf5c3e43;
+  p.x[3] = 0xd5f8faad;
+  p.x[2] = 0x4a8794cb;
+  p.x[1] = 0x987e9b03;
+  p.x[0] = 0x745c78dd;
+
+  p.y[7] = 0x91951218;
+  p.y[6] = 0x3898dfbe;
+  p.y[5] = 0xcd52e240;
+  p.y[4] = 0x8e43871f;
+  p.y[3] = 0xd0211091;
+  p.y[2] = 0x17bd3ed4;
+  p.y[1] = 0xeaf84377;
+  p.y[0] = 0x43715d4f;
+
+  EXPECT_TRUE(ECC_ValidatePoint(p));
 }
+
+TEST(SmpEccValidationTest, test_invalid_points) {
+  Point p;
+  multiprecision_init(p.x, 8);
+  multiprecision_init(p.y, 8);
+
+  EXPECT_FALSE(ECC_ValidatePoint(p));
+
+  // Sample 1
+  p.x[7] = 0x20b003d2;
+  p.x[6] = 0xf297be2c;
+  p.x[5] = 0x5e2c83a7;
+  p.x[4] = 0xe9f9a5b9;
+  p.x[3] = 0xeff49111;
+  p.x[2] = 0xacf4fddb;
+  p.x[1] = 0xcc030148;
+  p.x[0] = 0x0e359de6;
+
+  EXPECT_FALSE(ECC_ValidatePoint(p));
+
+  p.y[7] = 0xdc809c49;
+  p.y[6] = 0x652aeb6d;
+  p.y[5] = 0x63329abf;
+  p.y[4] = 0x5a52155c;
+  p.y[3] = 0x766345c2;
+  p.y[2] = 0x8fed3024;
+  p.y[1] = 0x741c8ed0;
+  p.y[0] = 0x1589d28b;
+
+  p.y[0]--;
+
+  EXPECT_FALSE(ECC_ValidatePoint(p));
+}
+}  // namespace testing

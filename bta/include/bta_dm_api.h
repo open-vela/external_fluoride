@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2006-2012 Broadcom Corporation
+ *  Copyright 2006-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,6 +27,6 @@
 #include "stack/include/bt_types.h"
 
 // Brings connection to active mode
-void bta_dm_pm_active(BD_ADDR peer_addr);
+void bta_dm_pm_active(const RawAddress& peer_addr);
 
 #endif /* BTA_DM_API_H */
