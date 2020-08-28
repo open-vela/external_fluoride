@@ -23,10 +23,9 @@
 #include "btm_int.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
+#include "l2c_int.h"
 #include "stack/gatt/connection_manager.h"
-#include "stack/include/acl_api.h"
 #include "stack/include/hcimsgs.h"
-#include "stack/include/l2cap_hci_link_interface.h"
 
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
@@ -105,7 +104,9 @@ void btm_ble_create_ll_conn_complete(uint8_t status) {
 /** LE connection complete. */
 void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
                            bool enhanced) {
+#if (BLE_PRIVACY_SPT == TRUE)
   uint8_t peer_addr_type;
+#endif
   RawAddress local_rpa, peer_rpa;
   uint8_t role, status, bda_type;
   uint16_t handle;
@@ -132,6 +133,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
                : android::bluetooth::hci::BLE_EVT_CONN_COMPLETE_EVT;
 
   if (status == HCI_SUCCESS) {
+#if (BLE_PRIVACY_SPT == TRUE)
     peer_addr_type = bda_type;
     bool addr_is_rpa =
         (peer_addr_type == BLE_ADDR_RANDOM && BTM_BLE_IS_RESOLVE_BDA(bda));
@@ -157,7 +159,6 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         if (!btm_ble_init_pseudo_addr(match_rec, bda)) {
           /* assign the original address to be the current report address */
           bda = match_rec->ble.pseudo_addr;
-          bda_type = match_rec->ble.ble_addr_type;
         } else {
           bda = match_rec->bd_addr;
         }
@@ -165,6 +166,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         LOG(INFO) << __func__ << ": unable to match and resolve random address";
       }
     }
+#endif
     // Log for the HCI success case after resolving Bluetooth address
     bluetooth::common::LogLinkLayerConnectionEvent(
         &bda, handle, android::bluetooth::DIRECTION_UNKNOWN,
@@ -183,6 +185,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
     l2cble_conn_comp(handle, role, bda, bda_type, conn_interval, conn_latency,
                      conn_timeout);
 
+#if (BLE_PRIVACY_SPT == TRUE)
     if (enhanced) {
       btm_ble_refresh_local_resolvable_private_addr(bda, local_rpa);
 
@@ -190,6 +193,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         btm_ble_refresh_peer_resolvable_private_addr(bda, peer_rpa,
                                                      BLE_ADDR_RANDOM);
     }
+#endif
   } else {
     // Log for non HCI success case
     bluetooth::common::LogLinkLayerConnectionEvent(
@@ -201,10 +205,14 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
     role = HCI_ROLE_UNKNOWN;
     if (status != HCI_ERR_ADVERTISING_TIMEOUT) {
       btm_ble_set_conn_st(BLE_CONN_IDLE);
+#if (BLE_PRIVACY_SPT == TRUE)
       btm_ble_disable_resolving_list(BTM_BLE_RL_INIT, true);
+#endif
     } else {
+#if (BLE_PRIVACY_SPT == TRUE)
       btm_cb.ble_ctr_cb.inq_var.adv_mode = BTM_BLE_ADV_DISABLE;
       btm_ble_disable_resolving_list(BTM_BLE_RL_ADV, true);
+#endif
     }
   }
 

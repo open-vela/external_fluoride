@@ -20,8 +20,6 @@
 #include <memory>
 #include <mutex>
 
-#include "common/callback.h"
-#include "os/handler.h"
 #include "os/thread.h"
 #include "os/utils.h"
 
@@ -33,8 +31,8 @@ namespace os {
 // itself from the thread.
 class RepeatingAlarm {
  public:
-  // Create and register a repeating alarm on a given handler
-  explicit RepeatingAlarm(Handler* handler);
+  // Create and register a repeating alarm on given thread
+  explicit RepeatingAlarm(Thread* thread);
 
   // Unregister this alarm from the thread and release resource
   ~RepeatingAlarm();
@@ -42,14 +40,14 @@ class RepeatingAlarm {
   DISALLOW_COPY_AND_ASSIGN(RepeatingAlarm);
 
   // Schedule a repeating alarm with given period
-  void Schedule(common::Closure task, std::chrono::milliseconds period);
+  void Schedule(Closure task, std::chrono::milliseconds period);
 
   // Cancel the alarm. No-op if it's not armed.
   void Cancel();
 
  private:
-  common::Closure task_;
-  Handler* handler_;
+  Closure task_;
+  Thread* thread_;
   int fd_ = 0;
   Reactor::Reactable* token_;
   mutable std::mutex mutex_;

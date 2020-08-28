@@ -46,13 +46,13 @@ class TestPacket : public HciPacket {
 class IteratorTest : public ::testing::Test {
  public:
   IteratorTest() = default;
-  ~IteratorTest() override = default;
+  ~IteratorTest() = default;
 
-  void SetUp() override {
+  void SetUp() {
     packet = TestPacket::make_new_packet(complete_l2cap_packet);
   }
 
-  void TearDown() override {
+  void TearDown() {
     packet.reset();
   }
 
