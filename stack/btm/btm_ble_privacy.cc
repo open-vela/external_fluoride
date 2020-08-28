@@ -24,13 +24,13 @@
 #include <string.h>
 #include "bt_target.h"
 
-#if (BLE_PRIVACY_SPT == TRUE)
 #include "ble_advertiser.h"
 #include "bt_types.h"
 #include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hcimsgs.h"
+#include "stack/btm/btm_dev.h"
 #include "vendor_hcidefs.h"
 
 /* RPA offload VSC specifics */
@@ -908,26 +908,3 @@ void btm_ble_resolving_list_init(uint8_t max_irk_list_sz) {
   btm_ble_clear_resolving_list();
   btm_cb.ble_ctr_cb.resolving_list_avail_size = max_irk_list_sz;
 }
-
-/*******************************************************************************
- *
- * Function         btm_ble_resolving_list_cleanup
- *
- * Description      Cleanup resolving list dynamic memory
- *
- * Parameters
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_ble_resolving_list_cleanup(void) {
-  tBTM_BLE_RESOLVE_Q* p_q = &btm_cb.ble_ctr_cb.resolving_list_pend_q;
-
-  osi_free_and_reset((void**)&p_q->resolve_q_random_pseudo);
-  osi_free_and_reset((void**)&p_q->resolve_q_action);
-
-  controller_get_interface()->set_ble_resolving_list_max_size(0);
-
-  osi_free_and_reset((void**)&btm_cb.ble_ctr_cb.irk_list_mask);
-}
-#endif

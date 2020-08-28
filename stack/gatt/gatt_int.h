@@ -26,6 +26,7 @@
 #include "gatt_api.h"
 #include "osi/include/fixed_queue.h"
 
+#include <base/bind.h>
 #include <base/strings/stringprintf.h>
 #include <string.h>
 #include <list>
@@ -193,6 +194,7 @@ typedef struct {
   tGATT_IF gatt_if; /* one based */
   bool in_use;
   uint8_t listening; /* if adv for all has been enabled */
+  bool eatt_support;
 } tGATT_REG;
 
 struct tGATT_CLCB;
@@ -379,6 +381,16 @@ typedef struct {
   tGATT_PROFILE_CLCB profile_clcb[GATT_MAX_APPS];
   uint16_t
       handle_of_h_r; /* Handle of the handles reused characteristic value */
+  uint16_t handle_cl_supported_feat;
+  uint16_t handle_sr_supported_feat;
+  uint8_t
+      gatt_svr_supported_feat_mask; /* Local supported features as a server */
+
+  /* Supported features as a client. To be written to remote device.
+   * Note this is NOT a value of the characteristic with handle
+   * handle_cl_support_feat, as that one should be written by remote device.
+   */
+  uint8_t gatt_cl_supported_feat_mask;
 
   tGATT_APPL_INFO cb_info;
 
@@ -417,6 +429,10 @@ extern void gatt_add_a_bonded_dev_for_srv_chg(const RawAddress& bda);
 
 /* from gatt_attr.cc */
 extern uint16_t gatt_profile_find_conn_id_by_bd_addr(const RawAddress& bda);
+
+extern bool gatt_profile_get_eatt_support(
+    const RawAddress& remote_bda,
+    base::OnceCallback<void(const RawAddress&, bool)> cb);
 
 /* Functions provided by att_protocol.cc */
 extern tGATT_STATUS attp_send_cl_msg(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
@@ -573,5 +589,9 @@ extern tGATT_STATUS gatts_read_attr_perm_check(tGATT_SVC_DB* p_db, bool is_long,
                                                tGATT_SEC_FLAG sec_flag,
                                                uint8_t key_size);
 extern bluetooth::Uuid* gatts_get_service_uuid(tGATT_SVC_DB* p_db);
+
+/* gatt_sr_hash.cc */
+extern Octet16 gatts_calculate_database_hash(
+    std::list<tGATT_SRV_LIST_ELEM>* lst_ptr);
 
 #endif
