@@ -33,7 +33,9 @@
 #include "hcimsgs.h"
 
 #include "btm_ble_int.h"
+#include "stack/btm/btm_dev.h"
 #include "stack/crypto_toolbox/crypto_toolbox.h"
+#include "stack/include/acl_api.h"
 
 /* This function generates Resolvable Private Address (RPA) from Identity
  * Resolving Key |irk| and |random|*/
@@ -99,57 +101,6 @@ uint64_t btm_get_next_private_addrress_interval_ms() {
   const uint64_t interval_random_part_max_ms = (8 * 60 * 1000);
 
   return interval_min_ms + std::rand() % interval_random_part_max_ms;
-}
-
-/*******************************************************************************
- *
- * Function         btm_gen_non_resolve_paddr_cmpl
- *
- * Description      This is the callback function when non-resolvable private
- *                  function is generated and write to controller.
- *
- * Returns          void
- *
- ******************************************************************************/
-static void btm_gen_non_resolve_paddr_cmpl(BT_OCTET8 rand) {
-  tBTM_LE_RANDOM_CB* p_cb = &btm_cb.ble_ctr_cb.addr_mgnt_cb;
-  tBTM_BLE_ADDR_CBACK* p_cback = p_cb->p_generate_cback;
-  void* p_data = p_cb->p;
-  uint8_t* pp;
-  RawAddress static_random;
-
-  BTM_TRACE_EVENT("btm_gen_non_resolve_paddr_cmpl");
-
-  p_cb->p_generate_cback = NULL;
-  pp = rand;
-  STREAM_TO_BDADDR(static_random, pp);
-  /* mask off the 2 MSB */
-  static_random.address[0] &= BLE_STATIC_PRIVATE_MSB_MASK;
-
-  /* report complete */
-  if (p_cback) (*p_cback)(static_random, p_data);
-}
-/*******************************************************************************
- *
- * Function         btm_gen_non_resolvable_private_addr
- *
- * Description      This function generate a non-resolvable private address.
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_gen_non_resolvable_private_addr(tBTM_BLE_ADDR_CBACK* p_cback,
-                                         void* p) {
-  tBTM_LE_RANDOM_CB* p_mgnt_cb = &btm_cb.ble_ctr_cb.addr_mgnt_cb;
-
-  BTM_TRACE_EVENT("btm_gen_non_resolvable_private_addr");
-
-  if (p_mgnt_cb->p_generate_cback != NULL) return;
-
-  p_mgnt_cb->p_generate_cback = p_cback;
-  p_mgnt_cb->p = p;
-  btsnd_hcic_ble_rand(base::Bind(&btm_gen_non_resolve_paddr_cmpl));
 }
 
 /*******************************************************************************
@@ -271,7 +222,6 @@ tBTM_SEC_DEV_REC* btm_ble_resolve_random_addr(const RawAddress& random_bda) {
 /** Find the security record whose LE identity address is matching */
 tBTM_SEC_DEV_REC* btm_find_dev_by_identity_addr(const RawAddress& bd_addr,
                                                 uint8_t addr_type) {
-#if (BLE_PRIVACY_SPT == TRUE)
   list_node_t* end = list_end(btm_cb.sec_dev_rec);
   for (list_node_t* node = list_begin(btm_cb.sec_dev_rec); node != end;
        node = list_next(node)) {
@@ -288,7 +238,6 @@ tBTM_SEC_DEV_REC* btm_find_dev_by_identity_addr(const RawAddress& bd_addr,
       return p_dev_rec;
     }
   }
-#endif
 
   return NULL;
 }
@@ -303,7 +252,6 @@ tBTM_SEC_DEV_REC* btm_find_dev_by_identity_addr(const RawAddress& bd_addr,
  ******************************************************************************/
 bool btm_identity_addr_to_random_pseudo(RawAddress* bd_addr,
                                         uint8_t* p_addr_type, bool refresh) {
-#if (BLE_PRIVACY_SPT == TRUE)
   tBTM_SEC_DEV_REC* p_dev_rec =
       btm_find_dev_by_identity_addr(*bd_addr, *p_addr_type);
 
@@ -322,7 +270,6 @@ bool btm_identity_addr_to_random_pseudo(RawAddress* bd_addr,
     *p_addr_type = p_dev_rec->ble.ble_addr_type;
     return true;
   }
-#endif
   return false;
 }
 
@@ -336,7 +283,6 @@ bool btm_identity_addr_to_random_pseudo(RawAddress* bd_addr,
  ******************************************************************************/
 bool btm_random_pseudo_to_identity_addr(RawAddress* random_pseudo,
                                         uint8_t* p_identity_addr_type) {
-#if (BLE_PRIVACY_SPT == TRUE)
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(*random_pseudo);
 
   if (p_dev_rec != NULL) {
@@ -348,7 +294,6 @@ bool btm_random_pseudo_to_identity_addr(RawAddress* random_pseudo,
       return true;
     }
   }
-#endif
   return false;
 }
 
@@ -364,10 +309,6 @@ bool btm_random_pseudo_to_identity_addr(RawAddress* random_pseudo,
 void btm_ble_refresh_peer_resolvable_private_addr(const RawAddress& pseudo_bda,
                                                   const RawAddress& rpa,
                                                   uint8_t rra_type) {
-#if (BLE_PRIVACY_SPT == TRUE)
-  uint8_t rra_dummy = false;
-  if (rpa.IsEmpty()) rra_dummy = true;
-
   /* update security record here, in adv event or connection complete process */
   tBTM_SEC_DEV_REC* p_sec_rec = btm_find_dev(pseudo_bda);
   if (p_sec_rec != NULL) {
@@ -376,7 +317,7 @@ void btm_ble_refresh_peer_resolvable_private_addr(const RawAddress& pseudo_bda,
     /* unknown, if dummy address, set to static */
     if (rra_type == BTM_BLE_ADDR_PSEUDO)
       p_sec_rec->ble.active_addr_type =
-          rra_dummy ? BTM_BLE_ADDR_STATIC : BTM_BLE_ADDR_RRA;
+          rpa.IsEmpty() ? BTM_BLE_ADDR_STATIC : BTM_BLE_ADDR_RRA;
     else
       p_sec_rec->ble.active_addr_type = rra_type;
   } else {
@@ -388,56 +329,13 @@ void btm_ble_refresh_peer_resolvable_private_addr(const RawAddress& pseudo_bda,
                   p_sec_rec->ble.active_addr_type);
 
   /* connection refresh remote address */
-  tACL_CONN* p_acl = btm_bda_to_acl(p_sec_rec->bd_addr, BT_TRANSPORT_LE);
-  if (p_acl == NULL)
-    p_acl = btm_bda_to_acl(p_sec_rec->ble.pseudo_addr, BT_TRANSPORT_LE);
-
-  if (p_acl != NULL) {
-    if (rra_type == BTM_BLE_ADDR_PSEUDO) {
-      /* use identity address, resolvable_private_addr is empty */
-      if (rra_dummy) {
-        p_acl->active_remote_addr_type = p_sec_rec->ble.identity_addr_type;
-        p_acl->active_remote_addr = p_sec_rec->ble.identity_addr;
-      } else {
-        p_acl->active_remote_addr_type = BLE_ADDR_RANDOM;
-        p_acl->active_remote_addr = rpa;
-      }
-    } else {
-      p_acl->active_remote_addr_type = rra_type;
-      p_acl->active_remote_addr = rpa;
-    }
-
-    BTM_TRACE_DEBUG("p_acl->active_remote_addr_type: %d ",
-                    p_acl->active_remote_addr_type);
-    VLOG(1) << __func__ << " conn_addr: " << p_acl->active_remote_addr;
-  }
-#endif
-}
-
-/*******************************************************************************
- *
- * Function         btm_ble_refresh_local_resolvable_private_addr
- *
- * Description      This function refresh the currently used resolvable private
- *                  address for the active link to the remote device
- *
- ******************************************************************************/
-void btm_ble_refresh_local_resolvable_private_addr(
-    const RawAddress& pseudo_addr, const RawAddress& local_rpa) {
-#if (BLE_PRIVACY_SPT == TRUE)
-  tACL_CONN* p = btm_bda_to_acl(pseudo_addr, BT_TRANSPORT_LE);
-
-  if (p != NULL) {
-    if (btm_cb.ble_ctr_cb.privacy_mode != BTM_PRIVACY_NONE) {
-      p->conn_addr_type = BLE_ADDR_RANDOM;
-      if (!local_rpa.IsEmpty())
-        p->conn_addr = local_rpa;
-      else
-        p->conn_addr = btm_cb.ble_ctr_cb.addr_mgnt_cb.private_addr;
-    } else {
-      p->conn_addr_type = BLE_ADDR_PUBLIC;
-      p->conn_addr = *controller_get_interface()->get_address();
+  if (!acl_refresh_remote_address(p_sec_rec, p_sec_rec->bd_addr,
+                                  BT_TRANSPORT_LE, rra_type, rpa)) {
+    // Try looking up the pseudo random address
+    if (!acl_refresh_remote_address(p_sec_rec, p_sec_rec->ble.pseudo_addr,
+                                    BT_TRANSPORT_LE, rra_type, rpa)) {
+      BTM_TRACE_ERROR("%s Unknown device to refresh remote device", __func__);
     }
   }
-#endif
 }
+
