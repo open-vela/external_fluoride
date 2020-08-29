@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <flatbuffers/flatbuffers.h>
 #include <functional>
 #include <future>
 #include <map>
@@ -24,7 +23,6 @@
 #include <vector>
 
 #include "common/bind.h"
-#include "dumpsys_data_generated.h"
 #include "os/handler.h"
 #include "os/log.h"
 #include "os/thread.h"
@@ -32,37 +30,29 @@
 namespace bluetooth {
 
 class Module;
-class ModuleDumper;
 class ModuleRegistry;
-class TestModuleRegistry;
-class FuzzTestModuleRegistry;
 
 class ModuleFactory {
  friend ModuleRegistry;
- friend FuzzTestModuleRegistry;
+ public:
+  ModuleFactory(std::function<Module*()> ctor);
 
-public:
- ModuleFactory(std::function<Module*()> ctor);
-
-private:
- std::function<Module*()> ctor_;
+ private:
+  std::function<Module*()> ctor_;
 };
 
 class ModuleList {
- friend Module;
  friend ModuleRegistry;
-
-public:
- template <class T>
- void add() {
-   list_.push_back(&T::Factory);
- }
+ friend Module;
+ public:
+  template <class T>
+  void add() {
+    list_.push_back(&T::Factory);
+  }
 
  private:
   std::vector<const ModuleFactory*> list_;
 };
-
-using DumpsysDataFinisher = std::function<void(DumpsysDataBuilder* dumpsys_data_builder)>;
 
 // Each leaf node module must have a factory like so:
 //
@@ -72,10 +62,7 @@ using DumpsysDataFinisher = std::function<void(DumpsysDataBuilder* dumpsys_data_
 // The module registry will also use the factory as the identifier
 // for that module.
 class Module {
-  friend ModuleDumper;
-  friend ModuleRegistry;
-  friend TestModuleRegistry;
-
+ friend ModuleRegistry;
  public:
   virtual ~Module() = default;
  protected:
@@ -89,9 +76,6 @@ class Module {
   // Release all resources, you're about to be deleted
   virtual void Stop() = 0;
 
-  // Get relevant state data from the module
-  virtual DumpsysDataFinisher GetDumpsysData(flatbuffers::FlatBufferBuilder* builder) const;
-
   virtual std::string ToString() const;
 
   ::bluetooth::os::Handler* GetHandler() const;
@@ -101,16 +85,6 @@ class Module {
   template <class T>
   T* GetDependency() const {
     return static_cast<T*>(GetDependency(&T::Factory));
-  }
-
-  template <typename Functor, typename... Args>
-  void Call(Functor&& functor, Args&&... args) {
-    GetHandler()->Call(std::forward<Functor>(functor), std::forward<Args>(args)...);
-  }
-
-  template <typename T, typename Functor, typename... Args>
-  void CallOn(T* obj, Functor&& functor, Args&&... args) {
-    GetHandler()->CallOn(obj, std::forward<Functor>(functor), std::forward<Args>(args)...);
   }
 
  private:
@@ -123,7 +97,6 @@ class Module {
 
 class ModuleRegistry {
  friend Module;
- friend ModuleDumper;
  friend class StackManager;
  public:
   template <class T>
@@ -158,33 +131,16 @@ class ModuleRegistry {
   std::vector<const ModuleFactory*> start_order_;
 };
 
-class ModuleDumper {
- public:
-  ModuleDumper(const ModuleRegistry& module_registry, const char* title)
-      : module_registry_(module_registry), title_(title) {}
-  void DumpState(std::string* output) const;
-
- private:
-  const ModuleRegistry& module_registry_;
-  const std::string title_;
-};
-
 class TestModuleRegistry : public ModuleRegistry {
  public:
   void InjectTestModule(const ModuleFactory* module, Module* instance) {
     start_order_.push_back(module);
     started_modules_[module] = instance;
     set_registry_and_handler(instance, &test_thread);
-    instance->Start();
   }
 
   Module* GetModuleUnderTest(const ModuleFactory* module) const {
     return Get(module);
-  }
-
-  template <class T>
-  T* GetModuleUnderTest() const {
-    return static_cast<T*>(GetModuleUnderTest(&T::Factory));
   }
 
   os::Handler* GetTestModuleHandler(const ModuleFactory* module) const {
@@ -196,40 +152,15 @@ class TestModuleRegistry : public ModuleRegistry {
   }
 
   bool SynchronizeModuleHandler(const ModuleFactory* module, std::chrono::milliseconds timeout) const {
-    return SynchronizeHandler(GetTestModuleHandler(module), timeout);
-  }
-
-  bool SynchronizeHandler(os::Handler* handler, std::chrono::milliseconds timeout) const {
     std::promise<void> promise;
     auto future = promise.get_future();
+    os::Handler* handler = GetTestModuleHandler(module);
     handler->Post(common::BindOnce(&std::promise<void>::set_value, common::Unretained(&promise)));
     return future.wait_for(timeout) == std::future_status::ready;
   }
 
  private:
   os::Thread test_thread{"test_thread", os::Thread::Priority::NORMAL};
-};
-
-class FuzzTestModuleRegistry : public TestModuleRegistry {
- public:
-  template <class T>
-  T* Inject(const ModuleFactory* overriding) {
-    Module* instance = T::Factory.ctor_();
-    InjectTestModule(overriding, instance);
-    return static_cast<T*>(instance);
-  }
-
-  template <class T>
-  T* Start() {
-    return ModuleRegistry::Start<T>(&GetTestThread());
-  }
-
-  void WaitForIdleAndStopAll() {
-    if (!GetTestThread().GetReactor()->WaitForIdle(std::chrono::milliseconds(100))) {
-      LOG_ERROR("idle timed out");
-    }
-    StopAll();
-  }
 };
 
 }  // namespace bluetooth
