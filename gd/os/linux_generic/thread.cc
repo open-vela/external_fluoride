@@ -17,9 +17,8 @@
 #include "os/thread.h"
 
 #include <fcntl.h>
-#include <sys/syscall.h>
 #include <unistd.h>
-
+#include <sys/syscall.h>
 #include <cerrno>
 #include <cstring>
 
@@ -33,7 +32,9 @@ constexpr int kRealTimeFifoSchedulingPriority = 1;
 }
 
 Thread::Thread(const std::string& name, const Priority priority)
-    : name_(name), reactor_(), running_thread_(&Thread::run, this, priority) {}
+    : name_(name),
+      reactor_(),
+      running_thread_(&Thread::run, this, priority) {}
 
 void Thread::run(Priority priority) {
   if (priority == Priority::REAL_TIME) {

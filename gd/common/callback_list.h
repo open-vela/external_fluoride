@@ -17,7 +17,6 @@
 #pragma once
 
 #include <utility>
-
 #include "base/callback_list.h"
 #include "os/handler.h"
 
