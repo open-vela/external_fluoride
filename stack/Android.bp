@@ -102,7 +102,6 @@ cc_library_static {
         "bnep/bnep_utils.cc",
         "btm/ble_advertiser_hci_interface.cc",
         "acl/btm_acl.cc",
-        "acl/ble_acl.cc",
         "btm/btm_ble.cc",
         "btm/btm_ble_addr.cc",
         "btm/btm_ble_adv_filter.cc",
@@ -479,6 +478,39 @@ cc_test {
     },
 }
 
+cc_test {
+    name: "net_test_stack_a2dp_native",
+    defaults: ["fluoride_defaults"],
+    test_suites: ["device-tests"],
+    host_supported: true,
+    include_dirs: [
+        "external/libldac/inc",
+        "system/bt",
+        "system/bt/stack/include",
+    ],
+    srcs: [
+        "test/a2dp/a2dp_vendor_ldac_decoder_test.cc",
+        "test/a2dp/misc_fake.cc",
+    ],
+    shared_libs: [
+        "libcrypto",
+        "libcutils",
+        "libprotobuf-cpp-lite",
+    ],
+    static_libs: [
+        "libbt-common",
+        "libbt-protos-lite",
+        "liblog",
+        "libosi",
+        "libosi-AllocationTestHarness",
+    ],
+    sanitize: {
+        address: true,
+        cfi: true,
+        misc_undefined: ["bounds"],
+    },
+}
+
 // gatt sr hash test
 cc_test {
     name: "net_test_stack_gatt_sr_hash_native",
@@ -503,7 +535,6 @@ cc_test {
         "libbt-common",
     ],
 }
-
 
 // Iso manager unit tests
 cc_test {
