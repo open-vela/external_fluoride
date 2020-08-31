@@ -33,6 +33,7 @@
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "stack/gatt/connection_manager.h"
+#include "types/bt_transport.h"
 
 using bluetooth::Uuid;
 
@@ -909,16 +910,11 @@ void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
 
   tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bd_addr, transport);
   if (p_tcb != NULL) {
-    if (p_tcb->att_lcid == L2CAP_ATT_CID) {
-      status = L2CA_SetFixedChannelTout(bd_addr, L2CAP_ATT_CID, idle_tout);
+    status = L2CA_SetFixedChannelTout(bd_addr, L2CAP_ATT_CID, idle_tout);
 
-      if (idle_tout == GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP)
-        L2CA_SetIdleTimeoutByBdAddr(p_tcb->peer_bda,
-                                    GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP,
-                                    BT_TRANSPORT_LE);
-    } else {
-      status = L2CA_SetIdleTimeout(p_tcb->att_lcid, idle_tout, false);
-    }
+    if (idle_tout == GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP)
+      L2CA_SetIdleTimeoutByBdAddr(
+          p_tcb->peer_bda, GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP, BT_TRANSPORT_LE);
   }
 
   VLOG(1) << __func__ << " idle_tout=" << idle_tout << ", status=" << +status
@@ -934,12 +930,13 @@ void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
  *
  * Parameter        p_app_uuid128: Application UUID
  *                  p_cb_info: callback functions.
+ *                  eatt_support: indicate eatt support.
  *
  * Returns          0 for error, otherwise the index of the client registered
  *                  with GATT
  *
  ******************************************************************************/
-tGATT_IF GATT_Register(const Uuid& app_uuid128, tGATT_CBACK* p_cb_info) {
+tGATT_IF GATT_Register(const Uuid& app_uuid128, tGATT_CBACK* p_cb_info, bool eatt_support) {
   tGATT_REG* p_reg;
   uint8_t i_gatt_if = 0;
   tGATT_IF gatt_if = 0;
@@ -963,8 +960,8 @@ tGATT_IF GATT_Register(const Uuid& app_uuid128, tGATT_CBACK* p_cb_info) {
       gatt_if = p_reg->gatt_if = (tGATT_IF)i_gatt_if;
       p_reg->app_cb = *p_cb_info;
       p_reg->in_use = true;
-
-      LOG(INFO) << "allocated gatt_if=" << +gatt_if;
+      p_reg->eatt_support = eatt_support;
+      LOG(INFO) << "allocated gatt_if=" << +gatt_if << " eatt support " << int(eatt_support);
       return gatt_if;
     }
   }
@@ -1058,7 +1055,7 @@ void GATT_StartIf(tGATT_IF gatt_if) {
   RawAddress bda;
   uint8_t start_idx, found_idx;
   uint16_t conn_id;
-  tGATT_TRANSPORT transport;
+  tBT_TRANSPORT transport;
 
   VLOG(1) << __func__ << " gatt_if=" << +gatt_if;
   p_reg = gatt_get_regcb(gatt_if);
