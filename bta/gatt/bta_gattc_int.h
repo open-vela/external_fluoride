@@ -28,14 +28,12 @@
 
 #include "bta_gatt_api.h"
 #include "bta_sys.h"
-#include "database_builder.h"
 #include "osi/include/fixed_queue.h"
 
 #include "bt_common.h"
 
 #include <base/logging.h>
 #include <base/strings/stringprintf.h>
-#include "types/bt_transport.h"
 
 /*****************************************************************************
  *  Constants and data types
@@ -72,9 +70,9 @@ typedef uint16_t tBTA_GATTC_INT_EVT;
 #define BTA_GATTC_CL_MAX 32
 #endif
 
-/* max known devices GATTC can support in Bluetooth spec */
+/* max known devices GATTC can support */
 #ifndef BTA_GATTC_KNOWN_SR_MAX
-#define BTA_GATTC_KNOWN_SR_MAX 255
+#define BTA_GATTC_KNOWN_SR_MAX 10
 #endif
 
 #define BTA_GATTC_CONN_MAX GATT_MAX_PHY_CHANNEL
@@ -91,7 +89,7 @@ typedef struct {
   RawAddress remote_bda;
   tGATT_IF client_if;
   bool is_direct;
-  tBT_TRANSPORT transport;
+  tBTA_TRANSPORT transport;
   uint8_t initiating_phys;
   bool opportunistic;
 } tBTA_GATTC_API_OPEN;
@@ -208,11 +206,13 @@ typedef struct {
 
   uint8_t state;
 
-  gatt::Database gatt_database;
+  std::vector<tBTA_GATTC_SERVICE> srvc_cache;
   uint8_t update_count; /* indication received */
   uint8_t num_clcb;     /* number of associated CLCB */
 
-  gatt::DatabaseBuilder pending_discovery;
+  std::vector<tBTA_GATTC_SERVICE> pending_discovery;
+  std::vector<tBTA_GATTC_SERVICE>::iterator pending_service;
+  std::vector<tBTA_GATTC_CHARACTERISTIC>::iterator pending_char;
 
   uint8_t srvc_hdl_chg; /* service handle change indication pending */
   uint16_t attr_index;  /* cahce NV saving/loading attribute index */
@@ -221,7 +221,7 @@ typedef struct {
 } tBTA_GATTC_SERV;
 
 #ifndef BTA_GATTC_NOTIF_REG_MAX
-#define BTA_GATTC_NOTIF_REG_MAX 64
+#define BTA_GATTC_NOTIF_REG_MAX 15
 #endif
 
 typedef struct {
@@ -245,7 +245,7 @@ typedef struct {
 typedef struct {
   uint16_t bta_conn_id; /* client channel ID, unique for clcb */
   RawAddress bda;
-  tBT_TRANSPORT transport;  /* channel transport */
+  tBTA_TRANSPORT transport; /* channel transport */
   tBTA_GATTC_RCB* p_rcb;    /* pointer to the registration CB */
   tBTA_GATTC_SERV* p_srcb;  /* server cache CB */
   tBTA_GATTC_DATA* p_q_cmd; /* command in queue waiting for execution */
@@ -319,7 +319,7 @@ extern bool bta_gattc_sm_execute(tBTA_GATTC_CLCB* p_clcb, uint16_t event,
 extern void bta_gattc_disable();
 extern void bta_gattc_register(const bluetooth::Uuid& app_uuid,
                                tBTA_GATTC_CBACK* p_data,
-                               BtaAppRegisterCallback cb, bool eatt_support);
+                               BtaAppRegisterCallback cb);
 extern void bta_gattc_process_api_open(tBTA_GATTC_DATA* p_msg);
 extern void bta_gattc_process_api_open_cancel(tBTA_GATTC_DATA* p_msg);
 extern void bta_gattc_deregister(tBTA_GATTC_RCB* p_clreg);
@@ -373,8 +373,8 @@ extern void bta_gattc_cancel_bk_conn(tBTA_GATTC_API_CANCEL_OPEN* p_data);
 extern void bta_gattc_send_open_cback(tBTA_GATTC_RCB* p_clreg,
                                       tGATT_STATUS status,
                                       const RawAddress& remote_bda,
-                                      uint16_t conn_id, tBT_TRANSPORT transport,
-                                      uint16_t mtu);
+                                      uint16_t conn_id,
+                                      tBTA_TRANSPORT transport, uint16_t mtu);
 extern void bta_gattc_process_api_refresh(const RawAddress& remote_bda);
 extern void bta_gattc_cfg_mtu(tBTA_GATTC_CLCB* p_clcb, tBTA_GATTC_DATA* p_data);
 extern void bta_gattc_listen(tBTA_GATTC_DATA* p_msg);
@@ -383,15 +383,15 @@ extern void bta_gattc_broadcast(tBTA_GATTC_DATA* p_msg);
 /* utility functions */
 extern tBTA_GATTC_CLCB* bta_gattc_find_clcb_by_cif(uint8_t client_if,
                                                    const RawAddress& remote_bda,
-                                                   tBT_TRANSPORT transport);
+                                                   tBTA_TRANSPORT transport);
 extern tBTA_GATTC_CLCB* bta_gattc_find_clcb_by_conn_id(uint16_t conn_id);
 extern tBTA_GATTC_CLCB* bta_gattc_clcb_alloc(tGATT_IF client_if,
                                              const RawAddress& remote_bda,
-                                             tBT_TRANSPORT transport);
+                                             tBTA_TRANSPORT transport);
 extern void bta_gattc_clcb_dealloc(tBTA_GATTC_CLCB* p_clcb);
 extern tBTA_GATTC_CLCB* bta_gattc_find_alloc_clcb(tGATT_IF client_if,
                                                   const RawAddress& remote_bda,
-                                                  tBT_TRANSPORT transport);
+                                                  tBTA_TRANSPORT transport);
 extern tBTA_GATTC_RCB* bta_gattc_cl_get_regcb(uint8_t client_if);
 extern tBTA_GATTC_SERV* bta_gattc_find_srcb(const RawAddress& bda);
 extern tBTA_GATTC_SERV* bta_gattc_srcb_alloc(const RawAddress& bda);
@@ -427,23 +427,27 @@ extern tGATT_STATUS bta_gattc_discover_pri_service(uint16_t conn_id,
                                                    uint8_t disc_type);
 extern void bta_gattc_search_service(tBTA_GATTC_CLCB* p_clcb,
                                      bluetooth::Uuid* p_uuid);
-extern const std::list<gatt::Service>* bta_gattc_get_services(uint16_t conn_id);
-extern const gatt::Service* bta_gattc_get_service_for_handle(uint16_t conn_id,
-                                                             uint16_t handle);
-const gatt::Characteristic* bta_gattc_get_characteristic_srcb(
-    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
-extern const gatt::Service* bta_gattc_get_service_for_handle_srcb(
-    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
-extern const gatt::Characteristic* bta_gattc_get_characteristic(
+extern std::vector<tBTA_GATTC_SERVICE>* bta_gattc_get_services(
+    uint16_t conn_id);
+extern const tBTA_GATTC_SERVICE* bta_gattc_get_service_for_handle(
     uint16_t conn_id, uint16_t handle);
-extern const gatt::Descriptor* bta_gattc_get_descriptor(uint16_t conn_id,
-                                                        uint16_t handle);
-extern const gatt::Characteristic* bta_gattc_get_owning_characteristic(
+tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_characteristic_srcb(
+    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
+extern tBTA_GATTC_SERVICE* bta_gattc_get_service_for_handle_srcb(
+    tBTA_GATTC_SERV* p_srcb, uint16_t handle);
+extern tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_characteristic(uint16_t conn_id,
+                                                               uint16_t handle);
+extern const tBTA_GATTC_DESCRIPTOR* bta_gattc_get_descriptor(uint16_t conn_id,
+                                                             uint16_t handle);
+extern const tBTA_GATTC_CHARACTERISTIC* bta_gattc_get_owning_characteristic(
     uint16_t conn_id, uint16_t handle);
 extern void bta_gattc_get_gatt_db(uint16_t conn_id, uint16_t start_handle,
                                   uint16_t end_handle, btgatt_db_element_t** db,
                                   int* count);
-extern void bta_gattc_init_cache(tBTA_GATTC_SERV* p_srvc_cb);
+extern tGATT_STATUS bta_gattc_init_cache(tBTA_GATTC_SERV* p_srvc_cb);
+extern void bta_gattc_rebuild_cache(tBTA_GATTC_SERV* p_srcv, uint16_t num_attr,
+                                    tBTA_GATTC_NV_ATTR* attr);
+extern void bta_gattc_cache_save(tBTA_GATTC_SERV* p_srvc_cb, uint16_t conn_id);
 extern void bta_gattc_reset_discover_st(tBTA_GATTC_SERV* p_srcb,
                                         tGATT_STATUS status);
 
@@ -452,7 +456,7 @@ extern tBTA_GATTC_CONN* bta_gattc_conn_find(const RawAddress& remote_bda);
 extern tBTA_GATTC_CONN* bta_gattc_conn_find_alloc(const RawAddress& remote_bda);
 extern bool bta_gattc_conn_dealloc(const RawAddress& remote_bda);
 
-extern bool bta_gattc_cache_load(tBTA_GATTC_SERV* p_srcb);
+extern bool bta_gattc_cache_load(tBTA_GATTC_CLCB* p_clcb);
 extern void bta_gattc_cache_reset(const RawAddress& server_bda);
 
 #endif /* BTA_GATTC_INT_H */
