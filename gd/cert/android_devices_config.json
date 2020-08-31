@@ -10,9 +10,8 @@
                     "grpc_port": "8898",
                     "grpc_root_server_port": "8896",
                     "signal_port": "8894",
-                    "label": "cert",
+                    "label": "cert_stack",
                     "serial_number": "CERT",
-                    "name": "Cert Device",
                     "cmd":
                     [
                         "adb",
@@ -22,8 +21,7 @@
                         "/system/bin/bluetooth_stack_with_facade",
                         "--grpc-port=$(grpc_port)",
                         "--root-server-port=$(grpc_root_server_port)",
-                        "--btsnoop=/data/misc/bluetooth/logs/btsnoop_hci.log",
-                        "--btconfig=/data/misc/bluedroid/bt_config.conf",
+                        "--btsnoop=data/misc/bluetooth/logs/btsnoop_hci.log",
                         "--signal-port=$(signal_port)"
                     ]
                 },
@@ -31,9 +29,8 @@
                     "grpc_port": "8899",
                     "grpc_root_server_port": "8897",
                     "signal_port": "8895",
-                    "label": "dut",
+                    "label": "stack_under_test",
                     "serial_number": "DUT",
-                    "name": "DUT Device",
                     "cmd":
                     [
                         "adb",
@@ -43,8 +40,7 @@
                         "/system/bin/bluetooth_stack_with_facade",
                         "--grpc-port=$(grpc_port)",
                         "--root-server-port=$(grpc_root_server_port)",
-                        "--btsnoop=/data/misc/bluetooth/logs/btsnoop_hci.log",
-                        "--btconfig=/data/misc/bluedroid/bt_config.conf",
+                        "--btsnoop=data/misc/bluetooth/logs/btsnoop_hci.log",
                         "--signal-port=$(signal_port)"
                     ]
                 }
