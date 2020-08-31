@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 //
 #include "logging_helpers.h"
 
-#include <string.h>
+#include "types/bt_transport.h"
 
 #include <string>
 
@@ -46,9 +46,9 @@ const char* BtAvAudioStateText(const btav_audio_state_t state) {
 
 const char* BtTransportText(const btgatt_transport_t t) {
   switch (t) {
-    CASE_RETURN_TEXT(GATT_TRANSPORT_AUTO);
-    CASE_RETURN_TEXT(GATT_TRANSPORT_BREDR);
-    CASE_RETURN_TEXT(GATT_TRANSPORT_LE);
+    CASE_RETURN_TEXT(BT_TRANSPORT_AUTO);
+    CASE_RETURN_TEXT(BT_TRANSPORT_BR_EDR);
+    CASE_RETURN_TEXT(BT_TRANSPORT_LE);
     default:
       return "unknown transport";
   }

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2009-2012 Broadcom Corporation
+ *  Copyright 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,13 +38,7 @@
 #define PANU_SERVICE_NAME "Android Network User"
 #define TAP_IF_NAME "bt-pan"
 #define TAP_MAX_PKT_WRITE_LEN 2000
-#ifndef PAN_SECURITY
-#define PAN_SECURITY                                                         \
-  (BTM_SEC_IN_AUTHENTICATE | BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_IN_ENCRYPT | \
-   BTM_SEC_OUT_ENCRYPT)
-#endif
 
-#define PAN_STATE_UNKNOWN 0
 #define PAN_STATE_OPEN 1
 #define PAN_STATE_CLOSE 2
 #ifndef PAN_ROLE_INACTIVE

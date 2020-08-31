@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2003-2012 Broadcom Corporation
+ *  Copyright 2003-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ typedef struct {
  * Returns          void
  *
  ******************************************************************************/
-extern void AVCT_Register(uint16_t mtu, uint16_t mtu_br, uint8_t sec_mask);
+extern void AVCT_Register(uint16_t mtu, uint16_t mtu_br);
 
 /*******************************************************************************
  *
