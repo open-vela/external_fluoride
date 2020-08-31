@@ -32,7 +32,6 @@
 
 #include "bt_common.h"
 #include "bta_api.h"
-#include "bta_closure_int.h"
 #include "bta_sys.h"
 #include "bta_sys_int.h"
 #include "btm_api.h"
@@ -51,16 +50,12 @@
 /* system manager control block definition */
 tBTA_SYS_CB bta_sys_cb;
 
-fixed_queue_t* btu_bta_alarm_queue;
 extern thread_t* bt_workqueue_thread;
 
 /* trace level */
 /* TODO Hard-coded trace levels -  Needs to be configurable */
 uint8_t appl_trace_level = BT_TRACE_LEVEL_WARNING;  // APPL_INITIAL_TRACE_LEVEL;
 uint8_t btif_trace_level = BT_TRACE_LEVEL_WARNING;
-
-// Communication queue between btu_task and bta.
-extern fixed_queue_t* btu_bta_msg_queue;
 
 static const tBTA_SYS_REG bta_sys_hw_reg = {bta_sys_sm_execute, NULL};
 
@@ -180,10 +175,6 @@ const tBTA_SYS_ST_TBL bta_sys_st_tbl[] = {bta_sys_hw_off, bta_sys_hw_starting,
 void bta_sys_init(void) {
   memset(&bta_sys_cb, 0, sizeof(tBTA_SYS_CB));
 
-  btu_bta_alarm_queue = fixed_queue_new(SIZE_MAX);
-
-  alarm_register_processing_queue(btu_bta_alarm_queue, bt_workqueue_thread);
-
   appl_trace_level = APPL_INITIAL_TRACE_LEVEL;
 
   /* register BTA SYS message handler */
@@ -195,14 +186,9 @@ void bta_sys_init(void) {
 #if (defined BTA_AR_INCLUDED) && (BTA_AR_INCLUDED == true)
   bta_ar_init();
 #endif
-
-  bta_closure_init(bta_sys_register, bta_sys_sendmsg);
 }
 
 void bta_sys_free(void) {
-  alarm_unregister_processing_queue(btu_bta_alarm_queue);
-  fixed_queue_free(btu_bta_alarm_queue, NULL);
-  btu_bta_alarm_queue = NULL;
 }
 
 /*******************************************************************************
@@ -553,6 +539,27 @@ void bta_sys_sendmsg(void* p_msg) {
 
 /*******************************************************************************
  *
+ * Function         do_in_bta_thread
+ *
+ * Description      Post a closure to be ran in the bta thread
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void do_in_bta_thread(const tracked_objects::Location& from_here,
+                      const base::Closure& task) {
+  base::MessageLoop* bta_message_loop = get_message_loop();
+
+  if (!bta_message_loop || !bta_message_loop->task_runner().get()) {
+    APPL_TRACE_ERROR("%s: MessageLooper not initialized", __func__);
+    return;
+  }
+
+  bta_message_loop->task_runner()->PostTask(from_here, task);
+}
+
+/*******************************************************************************
+ *
  * Function         bta_sys_start_timer
  *
  * Description      Start a protocol timer for the specified amount
@@ -568,8 +575,7 @@ void bta_sys_start_timer(alarm_t* alarm, period_ms_t interval, uint16_t event,
   p_buf->event = event;
   p_buf->layer_specific = layer_specific;
 
-  alarm_set_on_queue(alarm, interval, bta_sys_sendmsg, p_buf,
-                     btu_bta_alarm_queue);
+  alarm_set_on_mloop(alarm, interval, bta_sys_sendmsg, p_buf);
 }
 
 /*******************************************************************************
