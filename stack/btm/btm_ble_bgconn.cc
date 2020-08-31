@@ -30,7 +30,8 @@
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hcimsgs.h"
-#include "l2c_int.h"
+#include "stack/btm/btm_dev.h"
+#include "stack/include/acl_api.h"
 
 extern void btm_send_hci_create_connection(
     uint16_t scan_int, uint16_t scan_win, uint8_t init_filter_policy,
@@ -370,7 +371,7 @@ bool btm_ble_start_auto_conn() {
   }
 
   if (btm_ble_get_conn_st() != BLE_CONN_IDLE ||
-      !background_connections_pending() || !l2cu_can_allocate_lcb()) {
+      !background_connections_pending()) {
     return false;
   }
 
@@ -378,14 +379,12 @@ bool btm_ble_start_auto_conn() {
 
   btm_execute_wl_dev_operation();
 
-#if (BLE_PRIVACY_SPT == TRUE)
   btm_ble_enable_resolving_list_for_platform(BTM_BLE_RL_INIT);
   if (btm_cb.ble_ctr_cb.rl_state != BTM_BLE_RL_IDLE &&
       controller_get_interface()->supports_ble_privacy()) {
     own_addr_type |= BLE_ADDR_TYPE_ID_BIT;
     peer_addr_type |= BLE_ADDR_TYPE_ID_BIT;
   }
-#endif
 
   btm_send_hci_create_connection(
       scan_int,                       /* uint16_t scan_int      */
