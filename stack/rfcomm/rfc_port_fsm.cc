@@ -36,7 +36,6 @@
 
 #include <set>
 #include "hci/include/btsnoop.h"
-#include "stack/btm/btm_sec.h"
 
 static const std::set<uint16_t> uuid_logging_whitelist = {
     UUID_SERVCLASS_HEADSET_AUDIO_GATEWAY,
@@ -120,9 +119,9 @@ void rfc_port_sm_state_closed(tPORT* p_port, uint16_t event, void* p_data) {
   switch (event) {
     case RFC_EVENT_OPEN:
       p_port->rfc.state = RFC_STATE_ORIG_WAIT_SEC_CHECK;
-      btm_sec_mx_access_request(p_port->rfc.p_mcb->bd_addr, true,
-                                (uint32_t)(p_port->dlci / 2),
-                                &rfc_sec_check_complete, p_port);
+      btm_sec_mx_access_request(
+          p_port->rfc.p_mcb->bd_addr, BT_PSM_RFCOMM, true, BTM_SEC_PROTO_RFCOMM,
+          (uint32_t)(p_port->dlci / 2), &rfc_sec_check_complete, p_port);
       return;
 
     case RFC_EVENT_CLOSE:
@@ -142,7 +141,8 @@ void rfc_port_sm_state_closed(tPORT* p_port, uint16_t event, void* p_data) {
 
       /* Open will be continued after security checks are passed */
       p_port->rfc.state = RFC_STATE_TERM_WAIT_SEC_CHECK;
-      btm_sec_mx_access_request(p_port->rfc.p_mcb->bd_addr, false,
+      btm_sec_mx_access_request(p_port->rfc.p_mcb->bd_addr, BT_PSM_RFCOMM,
+                                false, BTM_SEC_PROTO_RFCOMM,
                                 (uint32_t)(p_port->dlci / 2),
                                 &rfc_sec_check_complete, p_port);
       return;
@@ -657,7 +657,7 @@ void rfc_process_rpn(tRFC_MCB* p_mcb, bool is_command, bool is_request,
     return;
   }
 
-  /* If we sent a request for port parameters to the peer it is replying with */
+  /* If we sent a request for port parameters to the peer he is replying with */
   /* mask 0. */
   rfc_port_timer_stop(p_port);
 

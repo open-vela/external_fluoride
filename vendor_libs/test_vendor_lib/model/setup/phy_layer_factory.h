@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <list>
 #include <memory>
 #include <vector>
 
@@ -45,21 +44,19 @@ class PhyLayerFactory {
 
   void UnregisterPhyLayer(uint32_t id);
 
-  void UnregisterAllPhyLayers();
-
   virtual void TimerTick();
 
   virtual std::string ToString() const;
 
  protected:
   virtual void Send(
-      std::shared_ptr<model::packets::LinkLayerPacketBuilder> packet,
+      const std::shared_ptr<model::packets::LinkLayerPacketBuilder> packet,
       uint32_t id);
   virtual void Send(model::packets::LinkLayerPacketView packet, uint32_t id);
 
  private:
   Phy::Type phy_type_;
-  std::list<std::shared_ptr<PhyLayer>> phy_layers_;
+  std::vector<std::shared_ptr<PhyLayer>> phy_layers_;
   uint32_t next_id_{1};
   const uint32_t factory_id_;
 };
@@ -69,19 +66,22 @@ class PhyLayerImpl : public PhyLayer {
   PhyLayerImpl(Phy::Type phy_type, uint32_t id,
                const std::function<void(model::packets::LinkLayerPacketView)>&
                    device_receive,
-               uint32_t device_id, PhyLayerFactory* factory);
-  ~PhyLayerImpl() override;
+               uint32_t device_id,
+               const std::shared_ptr<PhyLayerFactory> factory);
+  virtual ~PhyLayerImpl() override;
 
-  void Send(
-      std::shared_ptr<model::packets::LinkLayerPacketBuilder> packet) override;
+  virtual void Send(
+      const std::shared_ptr<model::packets::LinkLayerPacketBuilder> packet)
+      override;
   void Send(model::packets::LinkLayerPacketView packet) override;
   void Receive(model::packets::LinkLayerPacketView packet) override;
   void Unregister() override;
   bool IsFactoryId(uint32_t factory_id) override;
   void TimerTick() override;
 
+  uint32_t device_id_;
 
  private:
-  PhyLayerFactory* factory_;
+  std::shared_ptr<PhyLayerFactory> factory_;
 };
 }  // namespace test_vendor_lib
