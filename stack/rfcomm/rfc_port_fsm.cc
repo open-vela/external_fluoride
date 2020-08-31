@@ -36,6 +36,7 @@
 
 #include <set>
 #include "hci/include/btsnoop.h"
+#include "stack/btm/btm_sec.h"
 
 static const std::set<uint16_t> uuid_logging_whitelist = {
     UUID_SERVCLASS_HEADSET_AUDIO_GATEWAY,
@@ -657,7 +658,7 @@ void rfc_process_rpn(tRFC_MCB* p_mcb, bool is_command, bool is_request,
     return;
   }
 
-  /* If we sent a request for port parameters to the peer he is replying with */
+  /* If we sent a request for port parameters to the peer it is replying with */
   /* mask 0. */
   rfc_port_timer_stop(p_port);
 
