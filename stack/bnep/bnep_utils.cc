@@ -607,16 +607,8 @@ void bnep_process_setup_conn_req(tBNEP_CONN* p_bcb, uint8_t* p_setup,
   BNEP_TRACE_EVENT(
       "BNEP initiating security check for incoming call for uuid %s",
       p_bcb->src_uuid.ToString().c_str());
-#if (BNEP_DO_AUTH_FOR_ROLE_SWITCH == FALSE)
-  if (p_bcb->con_flags & BNEP_FLAGS_CONN_COMPLETED)
-    bnep_sec_check_complete(p_bcb->rem_bda, p_bcb, BTM_SUCCESS);
-  else
-#endif
-    btm_sec_mx_access_request(p_bcb->rem_bda, BT_PSM_BNEP, false,
-                              BTM_SEC_PROTO_BNEP, p_bcb->src_uuid.As32Bit(),
-                              &bnep_sec_check_complete, p_bcb);
-
-  return;
+  bnep_sec_check_complete(&p_bcb->rem_bda, BT_TRANSPORT_BR_EDR, p_bcb,
+                          BTM_SUCCESS);
 }
 
 /*******************************************************************************
@@ -685,7 +677,7 @@ void bnep_process_setup_conn_responce(tBNEP_CONN* p_bcb, uint8_t* p_setup) {
       alarm_cancel(p_bcb->conn_timer);
       p_bcb->re_transmits = 0;
 
-      /* Tell the user if he has a callback */
+      /* Tell the user if there is a callback */
       if (bnep_cb.p_conn_state_cb)
         (*bnep_cb.p_conn_state_cb)(p_bcb->handle, p_bcb->rem_bda, resp, true);
 
@@ -695,7 +687,7 @@ void bnep_process_setup_conn_responce(tBNEP_CONN* p_bcb, uint8_t* p_setup) {
 
       L2CA_DisconnectReq(p_bcb->l2cap_cid);
 
-      /* Tell the user if he has a callback */
+      /* Tell the user if there is a callback */
       if ((p_bcb->con_flags & BNEP_FLAGS_IS_ORIG) && (bnep_cb.p_conn_state_cb))
         (*bnep_cb.p_conn_state_cb)(p_bcb->handle, p_bcb->rem_bda, resp, false);
 
@@ -1194,7 +1186,7 @@ void bnep_sec_check_complete(UNUSED_ATTR const RawAddress* bd_addr,
 
       L2CA_DisconnectReq(p_bcb->l2cap_cid);
 
-      /* Tell the user if he has a callback */
+      /* Tell the user if there is a callback */
       if (bnep_cb.p_conn_state_cb)
         (*bnep_cb.p_conn_state_cb)(p_bcb->handle, p_bcb->rem_bda,
                                    BNEP_SECURITY_FAIL, is_role_change);
