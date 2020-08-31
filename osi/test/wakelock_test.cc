@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2016 Google, Inc.
+ *  Copyright 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ static bt_os_callouts_t bt_wakelock_callouts = {
 
 class WakelockTest : public AllocationTestHarness {
  protected:
-  virtual void SetUp() {
+  void SetUp() override {
     AllocationTestHarness::SetUp();
 
 // TODO (jamuraa): maybe use base::CreateNewTempDirectory instead?
@@ -69,7 +69,7 @@ class WakelockTest : public AllocationTestHarness {
     creat(unlock_path_.c_str(), S_IRWXU);
   }
 
-  virtual void TearDown() {
+  void TearDown() override {
     is_wake_lock_acquired = false;
     wakelock_cleanup();
     wakelock_set_os_callouts(NULL);

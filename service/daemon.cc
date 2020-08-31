@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2015 Google, Inc.
+//  Copyright 2015 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,8 +19,11 @@
 #include <memory>
 
 #include <base/logging.h>
+#include <base/run_loop.h>
 
 #include "service/adapter.h"
+#include "service/hal/bluetooth_av_interface.h"
+#include "service/hal/bluetooth_avrcp_interface.h"
 #include "service/hal/bluetooth_gatt_interface.h"
 #include "service/hal/bluetooth_interface.h"
 #include "service/ipc/ipc_manager.h"
@@ -44,7 +47,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     CleanUpBluetoothStack();
   }
 
-  void StartMainLoop() override { message_loop_->Run(); }
+  void StartMainLoop() override { base::RunLoop().Run(); }
 
   Settings* GetSettings() const override { return settings_.get(); }
 
@@ -56,7 +59,7 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
   // ipc::IPCManager::Delegate implementation:
   void OnIPCHandlerStarted(ipc::IPCManager::Type /* type */) override {
     if (!settings_->EnableOnStart()) return;
-    adapter_->Enable(false /* start_restricted */);
+    adapter_->Enable();
   }
 
   void OnIPCHandlerStopped(ipc::IPCManager::Type /* type */) override {
@@ -67,6 +70,10 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
     if (!hal::BluetoothInterface::Initialize()) goto failed;
 
     if (!hal::BluetoothGattInterface::Initialize()) goto failed;
+
+    if (!hal::BluetoothAvInterface::Initialize()) goto failed;
+
+    if (!hal::BluetoothAvrcpInterface::Initialize()) goto failed;
 
     return true;
 
@@ -80,6 +87,10 @@ class DaemonImpl : public Daemon, public ipc::IPCManager::Delegate {
       hal::BluetoothGattInterface::CleanUp();
     if (hal::BluetoothInterface::IsInitialized())
       hal::BluetoothInterface::CleanUp();
+    if (hal::BluetoothAvInterface::IsInitialized())
+      hal::BluetoothAvInterface::CleanUp();
+    if (hal::BluetoothAvrcpInterface::IsInitialized())
+      hal::BluetoothAvrcpInterface::CleanUp();
   }
 
   void CleanUpBluetoothStack() {

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2014 Google, Inc.
+ *  Copyright 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ typedef enum {
   HCI_PACKET_ACL_DATA = 2,
   HCI_PACKET_SCO_DATA = 3,
   HCI_PACKET_EVENT = 4,
+  HCI_PACKET_ISO_DATA = 5,
 } hci_packet_t;
 
 typedef struct {
@@ -118,8 +119,10 @@ static int hci_packet_to_event(hci_packet_t packet) {
       return MSG_STACK_TO_HC_HCI_ACL;
     case HCI_PACKET_SCO_DATA:
       return MSG_STACK_TO_HC_HCI_SCO;
+    case HCI_PACKET_ISO_DATA:
+      return MSG_STACK_TO_HC_HCI_ISO;
     default:
-      LOG_ERROR(LOG_TAG, "%s unsupported packet type: %d", __func__, packet);
+      LOG_ERROR("%s unsupported packet type: %d", __func__, packet);
       return -1;
   }
 }
@@ -136,7 +139,7 @@ static void accept_ready(socket_t* socket, UNUSED_ATTR void* context) {
   client->socket = socket;
 
   if (!list_append(clients, client)) {
-    LOG_ERROR(LOG_TAG, "%s unable to add client to list.", __func__);
+    LOG_ERROR("%s unable to add client to list.", __func__);
     client_free(client);
     return;
   }
@@ -180,7 +183,7 @@ static void read_ready(UNUSED_ATTR socket_t* socket, void* context) {
       memcpy(buf->data, buffer + 3, packet_len);
       hci->transmit_downward(buf->event, buf);
     } else {
-      LOG_ERROR(LOG_TAG, "%s dropping injected packet of length %zu", __func__,
+      LOG_ERROR("%s dropping injected packet of length %zu", __func__,
                 packet_len);
     }
 

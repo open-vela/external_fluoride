@@ -1,25 +1,25 @@
-//
-// Copyright 2016 The Android Open Source Project
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
+/*
+ * Copyright 2016 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#include "async_manager.h"
+#include "model/setup/async_manager.h"
+
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <cstring>
 #include <vector>
-
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -48,8 +48,7 @@ class AsyncManagerSocketTest : public ::testing::Test {
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(kPort);
     int reuse_flag = 1;
-    EXPECT_FALSE(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse_flag,
-                            sizeof(reuse_flag)) < 0);
+    EXPECT_FALSE(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse_flag, sizeof(reuse_flag)) < 0);
     EXPECT_FALSE(bind(fd, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0);
 
     listen(fd, 1);
@@ -69,7 +68,7 @@ class AsyncManagerSocketTest : public ::testing::Test {
 
   void ReadIncomingMessage(int fd) {
     int n = TEMP_FAILURE_RETRY(read(fd, server_buffer_, kBufferSize - 1));
-    EXPECT_FALSE(n < 0);
+    ASSERT_FALSE(n < 0);
 
     if (n == 0) {  // got EOF
       async_manager_.StopWatchingFileDescriptor(fd);
@@ -87,15 +86,14 @@ class AsyncManagerSocketTest : public ::testing::Test {
     async_manager_.WatchFdForNonBlockingReads(socket_fd_, [this](int fd) {
       int connection_fd = AcceptConnection(fd);
 
-      async_manager_.WatchFdForNonBlockingReads(
-          connection_fd, [this](int fd) { ReadIncomingMessage(fd); });
+      async_manager_.WatchFdForNonBlockingReads(connection_fd, [this](int fd) { ReadIncomingMessage(fd); });
     });
   }
 
   void TearDown() override {
     async_manager_.StopWatchingFileDescriptor(socket_fd_);
     close(socket_fd_);
-    EXPECT_TRUE(CheckBufferEquals());
+    ASSERT_TRUE(CheckBufferEquals());
   }
 
   int ConnectClient() {
@@ -112,8 +110,7 @@ class AsyncManagerSocketTest : public ::testing::Test {
     serv_addr.sin_addr.s_addr = *(reinterpret_cast<in_addr_t*>(server->h_addr));
     serv_addr.sin_port = htons(kPort);
 
-    int result =
-        connect(socket_cli_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+    int result = connect(socket_cli_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
     EXPECT_FALSE(result < 0);
 
     return socket_cli_fd;
@@ -122,12 +119,12 @@ class AsyncManagerSocketTest : public ::testing::Test {
   void WriteFromClient(int socket_cli_fd) {
     strcpy(client_buffer_, "1");
     int n = write(socket_cli_fd, client_buffer_, strlen(client_buffer_));
-    EXPECT_TRUE(n > 0);
+    ASSERT_TRUE(n > 0);
   }
 
   void AwaitServerResponse(int socket_cli_fd) {
     int n = read(socket_cli_fd, client_buffer_, 1);
-    EXPECT_TRUE(n > 0);
+    ASSERT_TRUE(n > 0);
   }
 
  private:
@@ -169,6 +166,89 @@ TEST_F(AsyncManagerSocketTest, TestMultipleConnections) {
     AwaitServerResponse(socket_cli_fd[i]);
     close(socket_cli_fd[i]);
   }
+}
+
+class AsyncManagerTest : public ::testing::Test {
+ public:
+  AsyncManager async_manager_;
+};
+
+TEST_F(AsyncManagerTest, TestSetupTeardown) {}
+
+TEST_F(AsyncManagerTest, TestCancelTask) {
+  AsyncUserId user1 = async_manager_.GetNextUserId();
+  bool task1_ran = false;
+  bool* task1_ran_ptr = &task1_ran;
+  AsyncTaskId task1_id =
+      async_manager_.ExecAsync(user1, std::chrono::milliseconds(2),
+                               [task1_ran_ptr]() { *task1_ran_ptr = true; });
+  ASSERT_TRUE(async_manager_.CancelAsyncTask(task1_id));
+  ASSERT_FALSE(task1_ran);
+}
+
+TEST_F(AsyncManagerTest, TestCancelLongTask) {
+  AsyncUserId user1 = async_manager_.GetNextUserId();
+  bool task1_ran = false;
+  bool* task1_ran_ptr = &task1_ran;
+  AsyncTaskId task1_id =
+      async_manager_.ExecAsync(user1, std::chrono::milliseconds(2),
+                               [task1_ran_ptr]() { *task1_ran_ptr = true; });
+  bool task2_ran = false;
+  bool* task2_ran_ptr = &task2_ran;
+  AsyncTaskId task2_id =
+      async_manager_.ExecAsync(user1, std::chrono::seconds(2),
+                               [task2_ran_ptr]() { *task2_ran_ptr = true; });
+  ASSERT_FALSE(task1_ran);
+  ASSERT_FALSE(task2_ran);
+  while (!task1_ran)
+    ;
+  ASSERT_FALSE(async_manager_.CancelAsyncTask(task1_id));
+  ASSERT_FALSE(task2_ran);
+  ASSERT_TRUE(async_manager_.CancelAsyncTask(task2_id));
+}
+
+TEST_F(AsyncManagerTest, TestCancelAsyncTasksFromUser) {
+  AsyncUserId user1 = async_manager_.GetNextUserId();
+  AsyncUserId user2 = async_manager_.GetNextUserId();
+  bool task1_ran = false;
+  bool* task1_ran_ptr = &task1_ran;
+  bool task2_ran = false;
+  bool* task2_ran_ptr = &task2_ran;
+  bool task3_ran = false;
+  bool* task3_ran_ptr = &task3_ran;
+  bool task4_ran = false;
+  bool* task4_ran_ptr = &task4_ran;
+  bool task5_ran = false;
+  bool* task5_ran_ptr = &task5_ran;
+  AsyncTaskId task1_id =
+      async_manager_.ExecAsync(user1, std::chrono::milliseconds(2),
+                               [task1_ran_ptr]() { *task1_ran_ptr = true; });
+  AsyncTaskId task2_id =
+      async_manager_.ExecAsync(user1, std::chrono::seconds(2),
+                               [task2_ran_ptr]() { *task2_ran_ptr = true; });
+  AsyncTaskId task3_id =
+      async_manager_.ExecAsync(user1, std::chrono::milliseconds(2),
+                               [task3_ran_ptr]() { *task3_ran_ptr = true; });
+  AsyncTaskId task4_id =
+      async_manager_.ExecAsync(user1, std::chrono::seconds(2),
+                               [task4_ran_ptr]() { *task4_ran_ptr = true; });
+  AsyncTaskId task5_id =
+      async_manager_.ExecAsync(user2, std::chrono::milliseconds(2),
+                               [task5_ran_ptr]() { *task5_ran_ptr = true; });
+  ASSERT_FALSE(task1_ran);
+  while (!task1_ran || !task3_ran || !task5_ran)
+    ;
+  ASSERT_TRUE(task1_ran);
+  ASSERT_FALSE(task2_ran);
+  ASSERT_TRUE(task3_ran);
+  ASSERT_FALSE(task4_ran);
+  ASSERT_TRUE(task5_ran);
+  async_manager_.CancelAsyncTasksFromUser(user1);
+  ASSERT_FALSE(async_manager_.CancelAsyncTask(task1_id));
+  ASSERT_FALSE(async_manager_.CancelAsyncTask(task2_id));
+  ASSERT_FALSE(async_manager_.CancelAsyncTask(task3_id));
+  ASSERT_FALSE(async_manager_.CancelAsyncTask(task4_id));
+  ASSERT_FALSE(async_manager_.CancelAsyncTask(task5_id));
 }
 
 }  // namespace test_vendor_lib

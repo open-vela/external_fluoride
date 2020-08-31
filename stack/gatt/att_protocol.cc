@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright (C) 2008-2014 Broadcom Corporation
+ *  Copyright 2008-2014 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #define GATT_START_END_HANDLE_SIZE 4
 
 using base::StringPrintf;
+using bluetooth::Uuid;
 /**********************************************************************
  *   ATT protocl message building utility                              *
  **********************************************************************/
@@ -124,9 +125,9 @@ BT_HDR* attp_build_err_cmd(uint8_t cmd_code, uint16_t err_handle,
  *
  ******************************************************************************/
 BT_HDR* attp_build_browse_cmd(uint8_t op_code, uint16_t s_hdl, uint16_t e_hdl,
-                              tBT_UUID uuid) {
+                              const bluetooth::Uuid& uuid) {
   const size_t payload_size =
-      (GATT_OP_CODE_SIZE) + (GATT_START_END_HANDLE_SIZE) + (LEN_UUID_128);
+      (GATT_OP_CODE_SIZE) + (GATT_START_END_HANDLE_SIZE) + (Uuid::kNumBytes128);
   BT_HDR* p_buf =
       (BT_HDR*)osi_malloc(sizeof(BT_HDR) + payload_size + L2CAP_MIN_OFFSET);
 
@@ -351,9 +352,7 @@ BT_HDR* attp_build_sr_msg(tGATT_TCB& tcb, uint8_t op_code,
           "ATT_RSP_READ_BLOB/GATT_RSP_PREPARE_WRITE: len = %d offset = %d",
           p_msg->attr_value.len, p_msg->attr_value.offset);
       offset = p_msg->attr_value.offset;
-    /* Coverity: [FALSE-POSITIVE error] intended fall through */
-    /* Missing break statement between cases in switch statement */
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case GATT_RSP_READ_BY_TYPE:
     case GATT_RSP_READ:
     case GATT_HANDLE_VALUE_NOTIF:
@@ -481,7 +480,7 @@ tGATT_STATUS attp_send_cl_msg(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 
     case GATT_REQ_READ_BLOB:
       offset = p_msg->read_blob.offset;
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case GATT_REQ_READ:
       handle =
           (op_code == GATT_REQ_READ) ? p_msg->handle : p_msg->read_blob.handle;
@@ -497,7 +496,7 @@ tGATT_STATUS attp_send_cl_msg(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 
     case GATT_REQ_PREPARE_WRITE:
       offset = p_msg->attr_value.offset;
-    /* fall through */
+      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
     case GATT_REQ_WRITE:
     case GATT_CMD_WRITE:
     case GATT_SIGN_CMD_WRITE:
