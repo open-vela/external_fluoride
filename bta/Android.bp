@@ -34,6 +34,7 @@ cc_defaults {
 cc_library_static {
     name: "libbt-bta",
     defaults: ["fluoride_bta_defaults"],
+    cflags: ["-Wno-implicit-fallthrough"],
     srcs: [
         "ag/bta_ag_act.cc",
         "ag/bta_ag_api.cc",
@@ -91,6 +92,10 @@ cc_library_static {
         "jv/bta_jv_act.cc",
         "jv/bta_jv_api.cc",
         "jv/bta_jv_cfg.cc",
+        "mce/bta_mce_act.cc",
+        "mce/bta_mce_api.cc",
+        "mce/bta_mce_cfg.cc",
+        "mce/bta_mce_main.cc",
         "pan/bta_pan_act.cc",
         "pan/bta_pan_api.cc",
         "pan/bta_pan_ci.cc",
@@ -129,7 +134,6 @@ cc_test {
         "libprotobuf-cpp-lite",
     ],
     static_libs: [
-        "crypto_toolbox_for_tests",
         "libbtcore",
         "libbt-bta",
         "libbt-audio-hal-interface",
@@ -138,34 +142,4 @@ cc_test {
         "libosi",
         "libbt-common",
     ],
-}
-
-// bta hf client add record tests for target
-// ========================================================
-cc_test {
-    name: "net_test_hf_client_add_record",
-    defaults: ["fluoride_defaults"],
-    test_suites: ["device-tests"],
-    include_dirs: [
-        "system/bt",
-        "system/bt/bta/include",
-        "system/bt/bta/sys",
-        "system/bt/btif/include",
-        "system/bt/internal_include",
-        "system/bt/stack/include",
-        "system/bt/utils/include",
-    ],
-    srcs: [
-        "test/bta_hf_client_add_record_test.cc",
-    ],
-    header_libs: ["libbluetooth_headers"],
-    shared_libs: [
-        "libcutils",
-        "liblog",
-    ],
-    static_libs: [
-        "libbluetooth-types",
-        "libosi",
-    ],
-    cflags: ["-DBUILDCFG"],
 }

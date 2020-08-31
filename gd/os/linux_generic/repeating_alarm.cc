@@ -17,12 +17,9 @@
 #include "os/repeating_alarm.h"
 
 #include <sys/timerfd.h>
+#include <cstring>
 #include <unistd.h>
 
-#include <cstring>
-
-#include "common/bind.h"
-#include "os/linux_generic/linux.h"
 #include "os/log.h"
 #include "os/utils.h"
 
@@ -34,29 +31,31 @@
 
 namespace bluetooth {
 namespace os {
-using common::Closure;
 
-RepeatingAlarm::RepeatingAlarm(Handler* handler) : handler_(handler), fd_(TIMERFD_CREATE(ALARM_CLOCK, 0)) {
+RepeatingAlarm::RepeatingAlarm(Thread* thread)
+  : thread_(thread),
+    fd_(timerfd_create(ALARM_CLOCK, 0)) {
   ASSERT(fd_ != -1);
 
-  token_ = handler_->thread_->GetReactor()->Register(
-      fd_, common::Bind(&RepeatingAlarm::on_fire, common::Unretained(this)), common::Closure());
+  token_ = thread_->GetReactor()->Register(fd_, [this] { on_fire(); }, nullptr);
 }
 
 RepeatingAlarm::~RepeatingAlarm() {
-  handler_->thread_->GetReactor()->Unregister(token_);
+  thread_->GetReactor()->Unregister(token_);
 
   int close_status;
-  RUN_NO_INTR(close_status = TIMERFD_CLOSE(fd_));
+  RUN_NO_INTR(close_status = close(fd_));
   ASSERT(close_status != -1);
 }
 
 void RepeatingAlarm::Schedule(Closure task, std::chrono::milliseconds period) {
   std::lock_guard<std::mutex> lock(mutex_);
   long period_ms = period.count();
-  itimerspec timer_itimerspec{{period_ms / 1000, period_ms % 1000 * 1000000},
-                              {period_ms / 1000, period_ms % 1000 * 1000000}};
-  int result = TIMERFD_SETTIME(fd_, 0, &timer_itimerspec, nullptr);
+  itimerspec timer_itimerspec{
+    {period_ms / 1000, period_ms % 1000 * 1000000},
+    {period_ms / 1000, period_ms % 1000 * 1000000}
+  };
+  int result = timerfd_settime(fd_, 0, &timer_itimerspec, nullptr);
   ASSERT(result == 0);
 
   task_ = std::move(task);
@@ -65,7 +64,7 @@ void RepeatingAlarm::Schedule(Closure task, std::chrono::milliseconds period) {
 void RepeatingAlarm::Cancel() {
   std::lock_guard<std::mutex> lock(mutex_);
   itimerspec disarm_itimerspec{/* disarm timer */};
-  int result = TIMERFD_SETTIME(fd_, 0, &disarm_itimerspec, nullptr);
+  int result = timerfd_settime(fd_, 0, &disarm_itimerspec, nullptr);
   ASSERT(result == 0);
 }
 
@@ -75,7 +74,7 @@ void RepeatingAlarm::on_fire() {
   uint64_t times_invoked;
   auto bytes_read = read(fd_, &times_invoked, sizeof(uint64_t));
   lock.unlock();
-  task.Run();
+  task();
   ASSERT(bytes_read == static_cast<ssize_t>(sizeof(uint64_t)));
 }
 
