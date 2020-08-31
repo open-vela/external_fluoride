@@ -19,9 +19,7 @@
 
 #include "a2dp_vendor_ldac_encoder.h"
 
-#ifndef OS_GENERIC
 #include <cutils/trace.h>
-#endif
 #include <dlfcn.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -549,9 +547,7 @@ void a2dp_vendor_ldac_send_frames(uint64_t timestamp_us) {
                              a2dp_ldac_encoder_cb.TxQueueLength, flag_enable);
       if (prev_eqmid != a2dp_ldac_encoder_cb.last_ldac_abr_eqmid)
         a2dp_ldac_encoder_cb.ldac_abr_adjustments++;
-#ifndef OS_GENERIC
       ATRACE_INT("LDAC ABR level", a2dp_ldac_encoder_cb.last_ldac_abr_eqmid);
-#endif
     }
     // Transcode frame and enqueue
     a2dp_ldac_encode_frames(nb_frame);

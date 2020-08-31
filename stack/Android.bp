@@ -19,9 +19,6 @@ cc_library_static {
         "smp",
         "srvc",
     ],
-    header_libs: [
-        "libhardware_headers",
-    ],
     include_dirs: [
         "external/aac/libAACenc/include",
         "external/aac/libSYS/include",
@@ -270,7 +267,6 @@ cc_test {
         "libcutils",
     ],
     static_libs: [
-        "libbluetooth-types",
         "liblog",
         "libgmock",
     ],
@@ -288,7 +284,6 @@ cc_test {
         "test/ad_parser_unittest.cc",
     ],
     static_libs: [
-        "libbluetooth-types",
         "liblog",
         "libgmock",
     ],
@@ -319,7 +314,6 @@ cc_test {
         "libprotobuf-cpp-lite",
     ],
     static_libs: [
-        "libbluetooth-types",
         "libgmock",
         "libosi",
         "libbt-protos",
