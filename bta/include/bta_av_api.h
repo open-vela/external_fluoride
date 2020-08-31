@@ -34,12 +34,6 @@
 /*****************************************************************************
  *  Constants and data types
  ****************************************************************************/
-/* Set to TRUE if seperate authorization prompt desired for AVCTP besides A2DP
- * authorization */
-/* Typically FALSE when AVRCP is used in conjunction with A2DP */
-#ifndef BTA_AV_WITH_AVCTP_AUTHORIZATION
-#define BTA_AV_WITH_AVCTP_AUTHORIZATION FALSE
-#endif
 
 /* AV status values */
 #define BTA_AV_SUCCESS 0        /* successful operation */
@@ -400,7 +394,6 @@ typedef struct {
       p_meta_co_ids; /* the metadata Get Capabilities response for company id */
   const uint8_t* p_meta_evt_ids; /* the the metadata Get Capabilities response
                                     for event id */
-  const tBTA_AV_ACT* p_act_tbl;  /* action function table for audio stream */
   char avrc_controller_name[BTA_SERVICE_NAME_LEN]; /* Default AVRCP controller
                                                       name */
   char avrc_target_name[BTA_SERVICE_NAME_LEN]; /* Default AVRCP target name*/
@@ -423,8 +416,7 @@ typedef struct {
  * Returns          void
  *
  ******************************************************************************/
-void BTA_AvEnable(tBTA_SEC sec_mask, tBTA_AV_FEAT features,
-                  tBTA_AV_CBACK* p_cback);
+void BTA_AvEnable(tBTA_AV_FEAT features, tBTA_AV_CBACK* p_cback);
 
 /*******************************************************************************
  *
@@ -478,7 +470,7 @@ void BTA_AvDeregister(tBTA_AV_HNDL hndl);
  *
  ******************************************************************************/
 void BTA_AvOpen(const RawAddress& bd_addr, tBTA_AV_HNDL handle, bool use_rc,
-                tBTA_SEC sec_mask, uint16_t uuid);
+                uint16_t uuid);
 
 /*******************************************************************************
  *

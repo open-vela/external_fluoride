@@ -27,11 +27,13 @@
 #include "hci/facade/facade.h"
 #include "hci/facade/le_acl_manager_facade.h"
 #include "hci/facade/le_advertising_manager_facade.h"
+#include "hci/facade/le_initiator_address_facade.h"
 #include "hci/facade/le_scanning_manager_facade.h"
 #include "hci/hci_layer.h"
 #include "hci/le_advertising_manager.h"
 #include "hci/le_scanning_manager.h"
 #include "l2cap/classic/facade.h"
+#include "l2cap/le/facade.h"
 #include "neighbor/connectability.h"
 #include "neighbor/discoverability.h"
 #include "neighbor/facade/facade.h"
@@ -43,9 +45,10 @@
 #include "security/facade.h"
 #include "security/security_module.h"
 #include "shim/dumpsys.h"
+#include "shim/facade/facade.h"
 #include "shim/l2cap.h"
 #include "stack_manager.h"
-#include "storage/legacy.h"
+#include "storage/storage_module.h"
 
 namespace bluetooth {
 namespace facade {
@@ -58,8 +61,10 @@ class RootFacadeService : public ::bluetooth::facade::RootFacade::Service {
  public:
   RootFacadeService(int grpc_port) : grpc_port_(grpc_port) {}
 
-  ::grpc::Status StartStack(::grpc::ServerContext* context, const ::bluetooth::facade::StartStackRequest* request,
-                            ::bluetooth::facade::StartStackResponse* response) override {
+  ::grpc::Status StartStack(
+      ::grpc::ServerContext* context,
+      const ::bluetooth::facade::StartStackRequest* request,
+      ::bluetooth::facade::StartStackResponse* response) override {
     if (is_running_) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "stack is running");
     }
@@ -83,14 +88,18 @@ class RootFacadeService : public ::bluetooth::facade::RootFacade::Service {
         modules.add<::bluetooth::hci::facade::ControllerFacadeModule>();
         modules.add<::bluetooth::hci::facade::LeAclManagerFacadeModule>();
         modules.add<::bluetooth::hci::facade::LeAdvertisingManagerFacadeModule>();
+        modules.add<::bluetooth::hci::facade::LeInitiatorAddressFacadeModule>();
         modules.add<::bluetooth::hci::facade::LeScanningManagerFacadeModule>();
         modules.add<::bluetooth::neighbor::facade::NeighborFacadeModule>();
         break;
       case BluetoothModule::L2CAP:
         modules.add<::bluetooth::hci::facade::ControllerFacadeModule>();
+        modules.add<::bluetooth::hci::facade::LeAdvertisingManagerFacadeModule>();
+        modules.add<::bluetooth::hci::facade::LeInitiatorAddressFacadeModule>();
         modules.add<::bluetooth::neighbor::facade::NeighborFacadeModule>();
         modules.add<::bluetooth::facade::ReadOnlyPropertyServerModule>();
         modules.add<::bluetooth::l2cap::classic::L2capClassicModuleFacadeModule>();
+        modules.add<::bluetooth::l2cap::le::L2capLeModuleFacadeModule>();
         modules.add<::bluetooth::hci::facade::HciLayerFacadeModule>();
         break;
       case BluetoothModule::SECURITY:
@@ -105,18 +114,8 @@ class RootFacadeService : public ::bluetooth::facade::RootFacade::Service {
         modules.add<::bluetooth::hci::facade::LeScanningManagerFacadeModule>();
         break;
       case BluetoothModule::SHIM:
-        modules.add<::bluetooth::neighbor::ConnectabilityModule>();
-        modules.add<::bluetooth::neighbor::DiscoverabilityModule>();
-        modules.add<::bluetooth::neighbor::InquiryModule>();
-        modules.add<::bluetooth::neighbor::NameModule>();
-        modules.add<::bluetooth::shim::Dumpsys>();
+        modules.add<::bluetooth::shim::facade::ShimFacadeModule>();
         modules.add<::bluetooth::shim::L2cap>();
-        modules.add<::bluetooth::neighbor::PageModule>();
-        modules.add<::bluetooth::hci::HciLayer>();
-        modules.add<::bluetooth::hci::LeAdvertisingManager>();
-        modules.add<::bluetooth::hci::LeScanningManager>();
-        modules.add<::bluetooth::security::SecurityModule>();
-        modules.add<::bluetooth::storage::LegacyModule>();
         break;
       default:
         return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "invalid module under test");
@@ -134,8 +133,10 @@ class RootFacadeService : public ::bluetooth::facade::RootFacade::Service {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status StopStack(::grpc::ServerContext* context, const ::bluetooth::facade::StopStackRequest* request,
-                           ::bluetooth::facade::StopStackResponse* response) override {
+  ::grpc::Status StopStack(
+      ::grpc::ServerContext* context,
+      const ::bluetooth::facade::StopStackRequest* request,
+      ::bluetooth::facade::StopStackResponse* response) override {
     if (!is_running_) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "stack is not running");
     }
