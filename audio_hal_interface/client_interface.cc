@@ -73,7 +73,7 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
                          const android::sp<IBluetoothAudioProvider>& provider)
       : sink_(sink), provider_(provider){};
 
-  Return<void> startStream() override {
+  Return<void> startStream() {
     BluetoothAudioCtrlAck ack = sink_->StartRequest();
     if (ack != BluetoothAudioCtrlAck::PENDING) {
       auto hidl_retval =
@@ -85,7 +85,7 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
     return Void();
   }
 
-  Return<void> suspendStream() override {
+  Return<void> suspendStream() {
     BluetoothAudioCtrlAck ack = sink_->SuspendRequest();
     if (ack != BluetoothAudioCtrlAck::PENDING) {
       auto hidl_retval =
@@ -97,13 +97,12 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
     return Void();
   }
 
-  Return<void> stopStream() override {
+  Return<void> stopStream() {
     sink_->StopRequest();
     return Void();
   }
 
-  Return<void> getPresentationPosition(
-      getPresentationPosition_cb _hidl_cb) override {
+  Return<void> getPresentationPosition(getPresentationPosition_cb _hidl_cb) {
     uint64_t remote_delay_report_ns;
     uint64_t total_bytes_read;
     timespec data_position;
@@ -129,7 +128,7 @@ class BluetoothAudioPortImpl : public IBluetoothAudioPort {
     return Void();
   }
 
-  Return<void> updateMetadata(const SourceMetadata& sourceMetadata) override {
+  Return<void> updateMetadata(const SourceMetadata& sourceMetadata) {
     LOG(INFO) << __func__ << ": " << sourceMetadata.tracks.size()
               << " track(s)";
     // refer to StreamOut.impl.h within Audio HAL (AUDIO_HAL_VERSION_5_0)
@@ -167,8 +166,7 @@ class BluetoothAudioDeathRecipient
       : bluetooth_audio_clientif_(clientif), message_loop_(message_loop) {}
   void serviceDied(
       uint64_t /*cookie*/,
-      const ::android::wp<::android::hidl::base::V1_0::IBase>& /*who*/)
-      override {
+      const ::android::wp<::android::hidl::base::V1_0::IBase>& /*who*/) {
     LOG(WARNING) << __func__ << ": restarting connection with new Audio Hal";
     if (bluetooth_audio_clientif_ != nullptr && message_loop_ != nullptr) {
       // restart the session on the correct thread
@@ -191,8 +189,19 @@ BluetoothAudioClientInterface::BluetoothAudioClientInterface(IBluetoothTransport
                                                              bluetooth::common::MessageLoopThread* message_loop)
     : sink_(sink), provider_(nullptr), session_started_(false), mDataMQ(nullptr),
       death_recipient_(new BluetoothAudioDeathRecipient(this, message_loop)) {
-  if (IsSupported()) {
-    FetchAudioProvider();
+  auto service_manager = android::hardware::defaultServiceManager1_2();
+  CHECK(service_manager != nullptr);
+  size_t instance_count = 0;
+  auto listManifestByInterface_cb = [&instance_count](const hidl_vec<android::hardware::hidl_string>& instanceNames) {
+    instance_count = instanceNames.size();
+    LOG(INFO) << "listManifestByInterface_cb returns " << instance_count << " instance(s)";
+  };
+  auto hidl_retval = service_manager->listManifestByInterface(kFullyQualifiedInterfaceName, listManifestByInterface_cb);
+  if (!hidl_retval.isOk()) {
+    LOG(FATAL) << __func__ << ": IServiceManager::listByInterface failure: " << hidl_retval.description();
+  }
+  if (instance_count > 0) {
+    fetch_audio_provider();
   } else {
     LOG(WARNING) << "IBluetoothAudioProvidersFactory not declared";
   }
@@ -212,57 +221,7 @@ BluetoothAudioClientInterface::GetAudioCapabilities() const {
   return capabilities_;
 }
 
-bool BluetoothAudioClientInterface::IsSupported() {
-  auto service_manager = android::hardware::defaultServiceManager1_2();
-  CHECK(service_manager != nullptr);
-  size_t instance_count = 0;
-  auto listManifestByInterface_cb =
-      [&instance_count](
-          const hidl_vec<android::hardware::hidl_string>& instanceNames) {
-        instance_count = instanceNames.size();
-        LOG(INFO) << "listManifestByInterface_cb returns " << instance_count
-                  << " instance(s)";
-      };
-  auto hidl_retval = service_manager->listManifestByInterface(
-      kFullyQualifiedInterfaceName, listManifestByInterface_cb);
-  if (!hidl_retval.isOk()) {
-    LOG(FATAL) << __func__ << ": IServiceManager::listByInterface failure: "
-               << hidl_retval.description();
-    return false;
-  }
-  return (instance_count > 0);
-}
-
-std::vector<AudioCapabilities>
-BluetoothAudioClientInterface::GetAudioCapabilities(SessionType session_type) {
-  std::vector<AudioCapabilities> capabilities(0);
-  if (!IsSupported()) return capabilities;
-
-  android::sp<IBluetoothAudioProvidersFactory> providersFactory =
-      IBluetoothAudioProvidersFactory::getService();
-  CHECK(providersFactory != nullptr)
-      << "IBluetoothAudioProvidersFactory::getService() failed";
-  LOG(INFO) << "IBluetoothAudioProvidersFactory::getService() returned "
-            << providersFactory.get()
-            << (providersFactory->isRemote() ? " (remote)" : " (local)");
-
-  auto getProviderCapabilities_cb =
-      [&capabilities](const hidl_vec<AudioCapabilities>& audioCapabilities) {
-        for (auto capability : audioCapabilities) {
-          capabilities.push_back(capability);
-        }
-      };
-  auto hidl_retval = providersFactory->getProviderCapabilities(
-      session_type, getProviderCapabilities_cb);
-  if (!hidl_retval.isOk()) {
-    LOG(FATAL) << __func__
-               << ": BluetoothAudioHal::getProviderCapabilities failure: "
-               << hidl_retval.description();
-  }
-  return capabilities;
-}
-
-void BluetoothAudioClientInterface::FetchAudioProvider() {
+void BluetoothAudioClientInterface::fetch_audio_provider() {
   if (provider_ != nullptr) {
     LOG(WARNING) << __func__ << ": reflash";
   }
@@ -274,16 +233,20 @@ void BluetoothAudioClientInterface::FetchAudioProvider() {
             << providersFactory.get()
             << (providersFactory->isRemote() ? " (remote)" : " (local)");
 
+  std::promise<void> getProviderCapabilities_promise;
+  auto getProviderCapabilities_future =
+      getProviderCapabilities_promise.get_future();
   auto getProviderCapabilities_cb =
-      [& capabilities = this->capabilities_](
+      [& capabilities = this->capabilities_, &getProviderCapabilities_promise](
           const hidl_vec<AudioCapabilities>& audioCapabilities) {
-        capabilities.clear();
         for (auto capability : audioCapabilities) {
           capabilities.push_back(capability);
         }
+        getProviderCapabilities_promise.set_value();
       };
   auto hidl_retval = providersFactory->getProviderCapabilities(
       sink_->GetSessionType(), getProviderCapabilities_cb);
+  getProviderCapabilities_future.get();
   if (!hidl_retval.isOk()) {
     LOG(FATAL) << __func__ << ": BluetoothAudioHal::getProviderCapabilities failure: " << hidl_retval.description();
     return;
@@ -527,12 +490,9 @@ size_t BluetoothAudioClientInterface::WriteAudioData(uint8_t* p_buf,
 void BluetoothAudioClientInterface::RenewAudioProviderAndSession() {
   // NOTE: must be invoked on the same thread where this
   // BluetoothAudioClientInterface is running
-  FetchAudioProvider();
-  if (session_started_) {
-    LOG(INFO) << __func__ << ": Restart the session while audio HAL recovering";
-    session_started_ = false;
-    StartSession();
-  }
+  fetch_audio_provider();
+  session_started_ = false;
+  StartSession();
 }
 
 }  // namespace audio
