@@ -35,7 +35,6 @@
 #include <hardware/bt_hearing_aid.h>
 #include <hardware/bt_hf_client.h>
 #include <hardware/bt_hh.h>
-#include <hardware/bt_mce.h>
 #include <hardware/bt_pan.h>
 #include <hardware/bt_rc.h>
 #include <hardware/bt_sdp.h>
@@ -89,7 +88,6 @@ bool restricted_mode = false;
 bool niap_mode = false;
 const int CONFIG_COMPARE_ALL_PASS = 0b11;
 int niap_config_compare_result = CONFIG_COMPARE_ALL_PASS;
-bool is_local_device_atv = false;
 
 /*******************************************************************************
  *  Externs
@@ -110,8 +108,6 @@ extern const bthh_interface_t* btif_hh_get_interface();
 extern const bthd_interface_t* btif_hd_get_interface();
 /*pan*/
 extern const btpan_interface_t* btif_pan_get_interface();
-/*map client*/
-extern const btmce_interface_t* btif_mce_get_interface();
 /* gatt */
 extern const btgatt_interface_t* btif_gatt_get_interface();
 /* avrc target */
@@ -143,7 +139,7 @@ static bool is_profile(const char* p1, const char* p2) {
 
 static int init(bt_callbacks_t* callbacks, bool start_restricted,
                 bool is_niap_mode, int config_compare_result,
-                const char** init_flags, bool is_atv) {
+                const char** init_flags) {
   LOG_INFO("%s: start restricted = %d ; niap = %d, config compare result = %d",
            __func__, start_restricted, is_niap_mode, config_compare_result);
 
@@ -159,7 +155,6 @@ static int init(bt_callbacks_t* callbacks, bool start_restricted,
   restricted_mode = start_restricted;
   niap_mode = is_niap_mode;
   niap_config_compare_result = config_compare_result;
-  is_local_device_atv = is_atv;
 
   stack_manager_get_interface()->init_stack();
   btif_debug_init();
@@ -189,8 +184,6 @@ bool is_niap_mode() { return niap_mode; }
 int get_niap_config_compare_result() {
   return niap_mode ? niap_config_compare_result : CONFIG_COMPARE_ALL_PASS;
 }
-
-bool is_atv_device() { return is_local_device_atv; }
 
 static int get_adapter_properties(void) {
   if (!btif_is_enabled()) return BT_STATUS_NOT_READY;
