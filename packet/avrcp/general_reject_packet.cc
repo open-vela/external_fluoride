@@ -19,9 +19,11 @@
 namespace bluetooth {
 namespace avrcp {
 
-std::unique_ptr<GeneralRejectBuilder> GeneralRejectBuilder::MakeBuilder(Status reason) {
+std::unique_ptr<GeneralRejectBuilder> GeneralRejectBuilder::MakeBuilder(
+    BrowsePdu pdu, Status reason) {
   std::unique_ptr<GeneralRejectBuilder> builder =
-      std::unique_ptr<GeneralRejectBuilder>(new GeneralRejectBuilder(reason));
+      std::unique_ptr<GeneralRejectBuilder>(
+          new GeneralRejectBuilder(pdu, reason));
 
   return builder;
 }

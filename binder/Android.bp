@@ -8,8 +8,9 @@ cc_library_shared {
     srcs: [
         "android/bluetooth/bluetooth_device.cc",
         "android/bluetooth/IBluetoothSocketManager.aidl",
+        "android/os/parcel_file_descriptor.cc",
         "android/os/parcel_uuid.cc",
-        /* TODO: Uncomment this files as they get converted one-by-one into native implementation
+/* TODO: Uncomment this files as they get converted one-by-one into native implementation
         "android/bluetooth/IBluetooth.aidl",
         "android/bluetooth/IBluetoothA2dp.aidl",
         "android/bluetooth/IBluetoothA2dpSink.aidl",
@@ -19,6 +20,8 @@ cc_library_shared {
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
         "android/bluetooth/IBluetoothHeadsetPhone.aidl",
+        "android/bluetooth/IBluetoothHealth.aidl",
+        "android/bluetooth/IBluetoothHealthCallback.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
@@ -35,25 +38,25 @@ cc_library_shared {
         "android/bluetooth/IBluetoothHidDeviceCallback.aidl",
         "android/bluetooth/IBluetoothGatt.aidl",
         "android/bluetooth/IBluetoothGattCallback.aidl",
-        "android/bluetooth/IBluetoothMetadataListener.aidl",
         "android/bluetooth/IBluetoothGattServerCallback.aidl",
         "android/bluetooth/le/IAdvertisingSetCallback.aidl",
         "android/bluetooth/le/IPeriodicAdvertisingCallback.aidl",
         "android/bluetooth/le/IScannerCallback.aidl"
-        */
-    ],
-    export_include_dirs: ["./"],
+*/
+     ],
+    export_include_dirs: [ "./"],
     aidl: {
         export_aidl_headers: true,
         include_dirs: [
             "frameworks/native/aidl/binder",
 
-            /* required for android.os.ParcelUuid, and android.os.ParcelFileDescriptor */
+             /* required for android.os.ParcelUuid, and android.os.ParcelFileDescriptor */
             "frameworks/base/core/java",
             "system/bt/binder",
         ],
     },
     include_dirs: [
+        "libnativehelper/include/nativehelper",
         "system/bt/types",
     ],
     shared_libs: [
@@ -75,9 +78,6 @@ cc_library_shared {
         "-Wextra",
         "-Wno-unused-parameter",
     ],
-    sanitize: {
-        scs: true,
-    },
 }
 
 // AIDL interface between libbluetooth-binder and framework.jar
@@ -93,6 +93,8 @@ filegroup {
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
         "android/bluetooth/IBluetoothHeadsetPhone.aidl",
+        "android/bluetooth/IBluetoothHealth.aidl",
+        "android/bluetooth/IBluetoothHealthCallback.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
@@ -110,7 +112,6 @@ filegroup {
         "android/bluetooth/IBluetoothHidDeviceCallback.aidl",
         "android/bluetooth/IBluetoothGatt.aidl",
         "android/bluetooth/IBluetoothGattCallback.aidl",
-        "android/bluetooth/IBluetoothMetadataListener.aidl",
         "android/bluetooth/IBluetoothGattServerCallback.aidl",
         "android/bluetooth/le/IAdvertisingSetCallback.aidl",
         "android/bluetooth/le/IPeriodicAdvertisingCallback.aidl",

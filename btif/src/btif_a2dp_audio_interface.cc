@@ -40,13 +40,11 @@
 #include "btif_av.h"
 #include "btif_av_co.h"
 #include "btif_hf.h"
-#include "common/metrics.h"
-#include "common/time_util.h"
+#include "osi/include/metrics.h"
 #include "osi/include/osi.h"
-#include "stack/include/btu.h"
 
-using bluetooth::common::A2dpSessionMetrics;
-using bluetooth::common::BluetoothMetricsLogger;
+using system_bt_osi::A2dpSessionMetrics;
+using system_bt_osi::BluetoothMetricsLogger;
 
 using android::hardware::bluetooth::a2dp::V1_0::IBluetoothAudioOffload;
 using android::hardware::bluetooth::a2dp::V1_0::IBluetoothAudioHost;
@@ -109,11 +107,11 @@ class A2dpOffloadAudioStats {
   }
   void LogAudioStart() {
     std::lock_guard<std::recursive_mutex> lock(lock_);
-    audio_start_time_ms_ = bluetooth::common::time_get_os_boottime_ms();
+    audio_start_time_ms_ = time_get_os_boottime_ms();
   }
   void LogAudioStop() {
     std::lock_guard<std::recursive_mutex> lock(lock_);
-    audio_stop_time_ms_ = bluetooth::common::time_get_os_boottime_ms();
+    audio_stop_time_ms_ = time_get_os_boottime_ms();
   }
   void LogAudioStopMetricsAndReset() {
     std::lock_guard<std::recursive_mutex> lock(lock_);
@@ -137,22 +135,22 @@ static A2dpOffloadAudioStats a2dp_offload_audio_stats;
 
 class BluetoothAudioHost : public IBluetoothAudioHost {
  public:
-  Return<void> startStream() override {
+  Return<void> startStream() {
     btif_a2dp_audio_send_start_req();
     return Void();
   }
-  Return<void> suspendStream() override {
+  Return<void> suspendStream() {
     btif_a2dp_audio_send_suspend_req();
     return Void();
   }
-  Return<void> stopStream() override {
+  Return<void> stopStream() {
     btif_a2dp_audio_send_stop_req();
     return Void();
   }
 
   // TODO : Delay reporting
   /*    Return<void> a2dp_get_sink_latency() {
-          LOG_INFO("%s:start ", __func__);
+          LOG_INFO(LOG_TAG,"%s:start ", __func__);
           btif_a2dp_audio_send_sink_latency();
           return Void();
       }*/
@@ -160,13 +158,13 @@ class BluetoothAudioHost : public IBluetoothAudioHost {
 
 class BluetoothAudioDeathRecipient : public hidl_death_recipient {
  public:
-  void serviceDied(
+  virtual void serviceDied(
       uint64_t /*cookie*/,
-      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) override {
-    LOG_ERROR("%s", __func__);
+      const wp<::android::hidl::base::V1_0::IBase>& /*who*/) {
+    LOG_ERROR(LOG_TAG, "%s", __func__);
     // Restart the session on the correct thread
-    do_in_main_thread(FROM_HERE,
-                      base::Bind(&btif_a2dp_audio_interface_restart_session));
+    do_in_bta_thread(FROM_HERE,
+                     base::Bind(&btif_a2dp_audio_interface_restart_session));
   }
 };
 sp<BluetoothAudioDeathRecipient> bluetoothAudioDeathRecipient =
@@ -193,7 +191,7 @@ static Status mapToStatus(uint8_t resp) {
 
 static void btif_a2dp_get_codec_configuration(
     CodecConfiguration* p_codec_info) {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   tBT_A2DP_OFFLOAD a2dp_offload;
   A2dpCodecConfig* a2dpCodecConfig = bta_av_get_a2dp_current_codec();
   a2dpCodecConfig->getCodecSpecificConfig(&a2dp_offload);
@@ -207,7 +205,7 @@ static void btif_a2dp_get_codec_configuration(
               BTA_AV_CODEC_TYPE_SBC;
       p_codec_info->codecSpecific.sbcData.codecParameters =
           a2dp_offload.codec_info[0];
-      LOG_INFO(" %s: codec parameters =%d", __func__,
+      LOG_INFO(LOG_TAG, " %s: codec parameters =%d", __func__,
                a2dp_offload.codec_info[0]);
       p_codec_info->codecSpecific.sbcData.minBitpool =
           a2dp_offload.codec_info[1];
@@ -251,8 +249,8 @@ static void btif_a2dp_get_codec_configuration(
   } else {
     p_codec_info->peerMtu = peer_param.peer_mtu;
   }
-  LOG_INFO("%s: peer MTU: %d effective MTU: %d result MTU: %d", __func__,
-           peer_param.peer_mtu, effectiveMtu, p_codec_info->peerMtu);
+  LOG_INFO(LOG_TAG, "%s: peer MTU: %d effective MTU: %d result MTU: %d",
+           __func__, peer_param.peer_mtu, effectiveMtu, p_codec_info->peerMtu);
 
   p_codec_info->sampleRate =
       (::android::hardware::bluetooth::a2dp::V1_0::SampleRate)
@@ -267,29 +265,31 @@ static void btif_a2dp_get_codec_configuration(
 }
 
 static void btif_a2dp_audio_interface_init() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
 
   btAudio = IBluetoothAudioOffload::getService();
   CHECK(btAudio != nullptr);
 
   auto death_link = btAudio->linkToDeath(bluetoothAudioDeathRecipient, 0);
   if (!death_link.isOk()) {
-    LOG_ERROR("%s: Cannot observe the Bluetooth Audio HAL's death", __func__);
+    LOG_ERROR(LOG_TAG, "%s: Cannot observe the Bluetooth Audio HAL's death",
+              __func__);
   }
 
-  LOG_DEBUG("%s: IBluetoothAudioOffload::getService() returned %p (%s)",
-            __func__, btAudio.get(),
-            (btAudio->isRemote() ? "remote" : "local"));
+  LOG_DEBUG(
+      LOG_TAG, "%s: IBluetoothAudioOffload::getService() returned %p (%s)",
+      __func__, btAudio.get(), (btAudio->isRemote() ? "remote" : "local"));
 
-  LOG_INFO("%s:Init returned", __func__);
+  LOG_INFO(LOG_TAG, "%s:Init returned", __func__);
 }
 
 static void btif_a2dp_audio_interface_deinit() {
-  LOG_INFO("%s: start", __func__);
+  LOG_INFO(LOG_TAG, "%s: start", __func__);
   if (btAudio != nullptr) {
     auto death_unlink = btAudio->unlinkToDeath(bluetoothAudioDeathRecipient);
     if (!death_unlink.isOk()) {
-      LOG_ERROR("%s: Error unlinking death observer from Bluetooth Audio HAL",
+      LOG_ERROR(LOG_TAG,
+                "%s: Error unlinking death observer from Bluetooth Audio HAL",
                 __func__);
     }
   }
@@ -297,9 +297,9 @@ static void btif_a2dp_audio_interface_deinit() {
 }
 
 void btif_a2dp_audio_interface_start_session() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionStart(
-      bluetooth::common::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
+      system_bt_osi::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
   a2dp_offload_audio_stats.Reset();
   btif_a2dp_audio_interface_init();
   CHECK(btAudio != nullptr);
@@ -310,24 +310,25 @@ void btif_a2dp_audio_interface_start_session() {
 }
 
 void btif_a2dp_audio_interface_end_session() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   a2dp_offload_audio_stats.LogAudioStopMetricsAndReset();
   BluetoothMetricsLogger::GetInstance()->LogBluetoothSessionEnd(
-      bluetooth::common::DISCONNECT_REASON_UNKNOWN, 0);
+      system_bt_osi::DISCONNECT_REASON_UNKNOWN, 0);
   a2dp_offload_audio_stats.Reset();
   if (btAudio == nullptr) return;
   auto ret = btAudio->endSession();
   if (!ret.isOk()) {
-    LOG_ERROR("HAL server is dead");
+    LOG_ERROR(LOG_TAG, "HAL server is dead");
   }
   btif_a2dp_audio_interface_deinit();
 }
 
 // Conditionally restart the session only if it was started before
 static void btif_a2dp_audio_interface_restart_session() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   if (btAudio == nullptr) {
-    LOG_INFO("%s: nothing to restart - session was not started", __func__);
+    LOG_INFO(LOG_TAG, "%s: nothing to restart - session was not started",
+             __func__);
     return;
   }
   btAudio = nullptr;
@@ -335,13 +336,10 @@ static void btif_a2dp_audio_interface_restart_session() {
 }
 
 void btif_a2dp_audio_on_started(tBTA_AV_STATUS status) {
-  LOG_INFO("%s: status = %d", __func__, status);
+  LOG_INFO(LOG_TAG, "%s: status = %d", __func__, status);
   if (btAudio != nullptr) {
     if (a2dp_cmd_pending == A2DP_CTRL_CMD_START) {
-      if (status != A2DP_CTRL_ACK_PENDING) {
-        a2dp_cmd_pending = A2DP_CTRL_CMD_NONE;
-      }
-      LOG_INFO("%s: calling method onStarted", __func__);
+      LOG_INFO(LOG_TAG, "%s: calling method onStarted", __func__);
       auto hal_status = mapToStatus(status);
       btAudio->streamStarted(hal_status);
       if (hal_status == Status::SUCCESS) {
@@ -352,13 +350,10 @@ void btif_a2dp_audio_on_started(tBTA_AV_STATUS status) {
 }
 
 void btif_a2dp_audio_on_suspended(tBTA_AV_STATUS status) {
-  LOG_INFO("%s: status = %d", __func__, status);
+  LOG_INFO(LOG_TAG, "%s: status = %d", __func__, status);
   if (btAudio != nullptr) {
     if (a2dp_cmd_pending == A2DP_CTRL_CMD_SUSPEND) {
-      if (status != A2DP_CTRL_ACK_PENDING) {
-        a2dp_cmd_pending = A2DP_CTRL_CMD_NONE;
-      }
-      LOG_INFO("calling method onSuspended");
+      LOG_INFO(LOG_TAG, "calling method onSuspended");
       auto hal_status = mapToStatus(status);
       btAudio->streamSuspended(hal_status);
       if (hal_status == Status::SUCCESS) {
@@ -369,16 +364,16 @@ void btif_a2dp_audio_on_suspended(tBTA_AV_STATUS status) {
 }
 
 void btif_a2dp_audio_on_stopped(tBTA_AV_STATUS status) {
-  LOG_INFO("%s: status = %d", __func__, status);
+  LOG_INFO(LOG_TAG, "%s: status = %d", __func__, status);
   if (btAudio != nullptr && a2dp_cmd_pending == A2DP_CTRL_CMD_START) {
-    a2dp_cmd_pending = A2DP_CTRL_CMD_NONE;
-    LOG_INFO("%s: Remote disconnected when start under progress", __func__);
+    LOG_INFO(LOG_TAG, "%s: Remote disconnected when start under progress",
+             __func__);
     btAudio->streamStarted(mapToStatus(A2DP_CTRL_ACK_DISCONNECT_IN_PROGRESS));
     a2dp_offload_audio_stats.LogAudioStopMetricsAndReset();
   }
 }
 void btif_a2dp_audio_send_start_req() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   uint8_t resp;
   resp = btif_a2dp_audio_process_request(A2DP_CTRL_CMD_START);
   if (btAudio != nullptr) {
@@ -387,11 +382,11 @@ void btif_a2dp_audio_send_start_req() {
     if (status == Status::SUCCESS) {
       a2dp_offload_audio_stats.LogAudioStart();
     }
-    if (!ret.isOk()) LOG_ERROR("HAL server died");
+    if (!ret.isOk()) LOG_ERROR(LOG_TAG, "HAL server died");
   }
 }
 void btif_a2dp_audio_send_suspend_req() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   uint8_t resp;
   resp = btif_a2dp_audio_process_request(A2DP_CTRL_CMD_SUSPEND);
   if (btAudio != nullptr) {
@@ -400,29 +395,30 @@ void btif_a2dp_audio_send_suspend_req() {
     if (status == Status::SUCCESS) {
       a2dp_offload_audio_stats.LogAudioStopMetricsAndReset();
     }
-    if (!ret.isOk()) LOG_ERROR("HAL server died");
+    if (!ret.isOk()) LOG_ERROR(LOG_TAG, "HAL server died");
   }
 }
 
 void btif_a2dp_audio_send_stop_req() {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   btif_a2dp_audio_process_request(A2DP_CTRL_CMD_STOP);
   a2dp_offload_audio_stats.LogAudioStopMetricsAndReset();
 }
 
 /*void btif_a2dp_audio_send_sink_latency()
 {
-  LOG_INFO("%s", __func__);
+  LOG_INFO(LOG_TAG, "%s", __func__);
   uint16_t sink_latency = btif_av_get_sink_latency();
   if (btAudio != nullptr) {
     auto ret = btAudio->a2dp_on_get_sink_latency(sink_latency);
-    if (!ret.isOk()) LOG_ERROR("server died");
+    if (!ret.isOk()) LOG_ERROR(LOG_TAG, "server died");
   }
 }*/
 
 uint8_t btif_a2dp_audio_process_request(uint8_t cmd) {
-  LOG_INFO("%s: cmd: %s", __func__,
+  LOG_INFO(LOG_TAG, "%s: cmd: %s", __func__,
            audio_a2dp_hw_dump_ctrl_event((tA2DP_CTRL_CMD)cmd));
+  a2dp_cmd_pending = cmd;
   uint8_t status;
   switch (cmd) {
     case A2DP_CTRL_CMD_START:
@@ -465,7 +461,7 @@ uint8_t btif_a2dp_audio_process_request(uint8_t cmd) {
       APPL_TRACE_WARNING("%s: A2DP command %s while AV stream is not ready",
                          __func__,
                          audio_a2dp_hw_dump_ctrl_event((tA2DP_CTRL_CMD)cmd));
-      status = A2DP_CTRL_ACK_FAILURE;
+      return A2DP_CTRL_ACK_FAILURE;
       break;
 
     case A2DP_CTRL_CMD_STOP:
@@ -476,7 +472,7 @@ uint8_t btif_a2dp_audio_process_request(uint8_t cmd) {
         break;
       }
       btif_av_stream_stop(RawAddress::kEmpty);
-      status = A2DP_CTRL_ACK_SUCCESS;
+      return A2DP_CTRL_ACK_SUCCESS;
       break;
 
     case A2DP_CTRL_CMD_SUSPEND:
@@ -504,12 +500,7 @@ uint8_t btif_a2dp_audio_process_request(uint8_t cmd) {
       status = A2DP_CTRL_ACK_FAILURE;
       break;
   }
-  LOG_INFO("a2dp-ctrl-cmd : %s DONE returning status %d",
+  LOG_INFO(LOG_TAG, "a2dp-ctrl-cmd : %s DONE returning status %d",
            audio_a2dp_hw_dump_ctrl_event((tA2DP_CTRL_CMD)cmd), status);
-  if (status == A2DP_CTRL_ACK_PENDING) {
-    a2dp_cmd_pending = cmd;
-  } else {
-    a2dp_cmd_pending = A2DP_CTRL_CMD_NONE;
-  }
   return status;
 }

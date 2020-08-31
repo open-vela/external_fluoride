@@ -33,8 +33,6 @@
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_sec.h"
-#include "stack/include/acl_api.h"
 
 using base::StringPrintf;
 using bluetooth::Uuid;
@@ -307,10 +305,10 @@ tGATT_STATUS gatts_db_read_attr_value_by_type(
         (type.As16Bit() == GATT_UUID_GAP_DEVICE_NAME)) {
       if ((flag & (BTM_SEC_LINK_KEY_KNOWN | BTM_SEC_FLAG_ENCRYPTED)) ==
           BTM_SEC_LINK_KEY_KNOWN) {
-        if (acl_ble_is_role_master(tcb.peer_bda)) {
+        tACL_CONN* p = btm_bda_to_acl(tcb.peer_bda, BT_TRANSPORT_LE);
+        if ((p != NULL) && (p->link_role == BTM_ROLE_MASTER))
           btm_ble_set_encryption(tcb.peer_bda, BTM_BLE_SEC_ENCRYPT,
-                                 HCI_ROLE_MASTER);
-        }
+                                 p->link_role);
       }
     }
   }
@@ -603,10 +601,10 @@ tGATT_STATUS gatts_write_attr_perm_check(tGATT_SVC_DB* p_db, uint8_t op_code,
           break;
 
         case GATT_UUID_CHAR_CLIENT_CONFIG:
-          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+        /* fall through */
         case GATT_UUID_CHAR_SRVR_CONFIG:
           max_size = 2;
-          FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+        /* fall through */
         case GATT_UUID_CHAR_DESCRIPTION:
         default: /* any other must be character value declaration */
           status = GATT_SUCCESS;

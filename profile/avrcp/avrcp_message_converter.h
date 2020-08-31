@@ -19,7 +19,7 @@
 #include <iostream>
 #include <vector>
 
-#include "packet/avrcp/avrcp_packet.h"
+#include "avrcp_packet.h"
 
 // These classes are temporary placeholders to easily switch between BT_HDR and
 // packets.
@@ -41,7 +41,7 @@ class VectorPacket : public ::bluetooth::Packet {
 
   const std::vector<uint8_t>& GetData() { return *data_; };
 
-  virtual std::string ToString() const override {
+  virtual std::string ToString() const {
     std::stringstream ss;
     ss << "VectorPacket:" << std::endl;
     ss << "  └ Payload =";

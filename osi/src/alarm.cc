@@ -46,11 +46,12 @@
 #include "osi/include/semaphore.h"
 #include "osi/include/thread.h"
 #include "osi/include/wakelock.h"
-#include "stack/include/btu.h"
 
 using base::Bind;
 using base::CancelableClosure;
 using base::MessageLoop;
+
+extern base::MessageLoop* get_message_loop();
 
 // Callback and timer threads should run at RT priority in order to ensure they
 // meet audio deadlines.  Use this priority for all audio/timer related thread.
@@ -58,8 +59,8 @@ static const int THREAD_RT_PRIORITY = 1;
 
 typedef struct {
   size_t count;
-  uint64_t total_ms;
-  uint64_t max_ms;
+  period_ms_t total_ms;
+  period_ms_t max_ms;
 } stat_t;
 
 // Alarm-related information and statistics
@@ -69,7 +70,7 @@ typedef struct {
   size_t canceled_count;
   size_t rescheduled_count;
   size_t total_updates;
-  uint64_t last_update_ms;
+  period_ms_t last_update_ms;
   stat_t overdue_scheduling;
   stat_t premature_scheduling;
 } alarm_stats_t;
@@ -92,10 +93,10 @@ struct alarm_t {
   // mutex to provide a guarantee to its caller that the callback will not be
   // in progress when it returns.
   std::shared_ptr<std::recursive_mutex> callback_mutex;
-  uint64_t creation_time_ms;
-  uint64_t period_ms;
-  uint64_t deadline_ms;
-  uint64_t prev_deadline_ms;  // Previous deadline - used for accounting of
+  period_ms_t creation_time;
+  period_ms_t period;
+  period_ms_t deadline;
+  period_ms_t prev_deadline;  // Previous deadline - used for accounting of
                               // periodic timers
   bool is_periodic;
   fixed_queue_t* queue;  // The processing queue to add this alarm to
@@ -113,6 +114,12 @@ struct alarm_t {
 // unit tests to run faster. It should not be modified by production code.
 int64_t TIMER_INTERVAL_FOR_WAKELOCK_IN_MS = 3000;
 static const clockid_t CLOCK_ID = CLOCK_BOOTTIME;
+
+#if (KERNEL_MISSING_CLOCK_BOOTTIME_ALARM == TRUE)
+static const clockid_t CLOCK_ID_ALARM = CLOCK_BOOTTIME;
+#else
+static const clockid_t CLOCK_ID_ALARM = CLOCK_BOOTTIME_ALARM;
+#endif
 
 // This mutex ensures that the |alarm_set|, |alarm_cancel|, and alarm callback
 // functions execute serially and not concurrently. As a result, this mutex
@@ -134,8 +141,8 @@ static fixed_queue_t* default_callback_queue;
 
 static alarm_t* alarm_new_internal(const char* name, bool is_periodic);
 static bool lazy_initialize(void);
-static uint64_t now_ms(void);
-static void alarm_set_internal(alarm_t* alarm, uint64_t period_ms,
+static period_ms_t now(void);
+static void alarm_set_internal(alarm_t* alarm, period_ms_t period,
                                alarm_callback_t cb, void* data,
                                fixed_queue_t* queue, bool for_msg_loop);
 static void alarm_cancel_internal(alarm_t* alarm);
@@ -146,16 +153,16 @@ static void alarm_queue_ready(fixed_queue_t* queue, void* context);
 static void timer_callback(void* data);
 static void callback_dispatch(void* context);
 static bool timer_create_internal(const clockid_t clock_id, timer_t* timer);
-static void update_scheduling_stats(alarm_stats_t* stats, uint64_t now_ms,
-                                    uint64_t deadline_ms);
+static void update_scheduling_stats(alarm_stats_t* stats, period_ms_t now_ms,
+                                    period_ms_t deadline_ms);
 // Registers |queue| for processing alarm callbacks on |thread|.
 // |queue| may not be NULL. |thread| may not be NULL.
 static void alarm_register_processing_queue(fixed_queue_t* queue,
                                             thread_t* thread);
 
-static void update_stat(stat_t* stat, uint64_t delta_ms) {
-  if (stat->max_ms < delta_ms) stat->max_ms = delta_ms;
-  stat->total_ms += delta_ms;
+static void update_stat(stat_t* stat, period_ms_t delta) {
+  if (stat->max_ms < delta) stat->max_ms = delta;
+  stat->total_ms += delta;
   stat->count++;
 }
 
@@ -198,31 +205,30 @@ void alarm_free(alarm_t* alarm) {
   osi_free(alarm);
 }
 
-uint64_t alarm_get_remaining_ms(const alarm_t* alarm) {
+period_ms_t alarm_get_remaining_ms(const alarm_t* alarm) {
   CHECK(alarm != NULL);
-  uint64_t remaining_ms = 0;
-  uint64_t just_now_ms = now_ms();
+  period_ms_t remaining_ms = 0;
+  period_ms_t just_now = now();
 
   std::lock_guard<std::mutex> lock(alarms_mutex);
-  if (alarm->deadline_ms > just_now_ms)
-    remaining_ms = alarm->deadline_ms - just_now_ms;
+  if (alarm->deadline > just_now) remaining_ms = alarm->deadline - just_now;
 
   return remaining_ms;
 }
 
-void alarm_set(alarm_t* alarm, uint64_t interval_ms, alarm_callback_t cb,
+void alarm_set(alarm_t* alarm, period_ms_t interval_ms, alarm_callback_t cb,
                void* data) {
   alarm_set_internal(alarm, interval_ms, cb, data, default_callback_queue,
                      false);
 }
 
-void alarm_set_on_mloop(alarm_t* alarm, uint64_t interval_ms,
+void alarm_set_on_mloop(alarm_t* alarm, period_ms_t interval_ms,
                         alarm_callback_t cb, void* data) {
   alarm_set_internal(alarm, interval_ms, cb, data, NULL, true);
 }
 
 // Runs in exclusion with alarm_cancel and timer_callback.
-static void alarm_set_internal(alarm_t* alarm, uint64_t period_ms,
+static void alarm_set_internal(alarm_t* alarm, period_ms_t period,
                                alarm_callback_t cb, void* data,
                                fixed_queue_t* queue, bool for_msg_loop) {
   CHECK(alarms != NULL);
@@ -231,8 +237,8 @@ static void alarm_set_internal(alarm_t* alarm, uint64_t period_ms,
 
   std::lock_guard<std::mutex> lock(alarms_mutex);
 
-  alarm->creation_time_ms = now_ms();
-  alarm->period_ms = period_ms;
+  alarm->creation_time = now();
+  alarm->period = period;
   alarm->queue = queue;
   alarm->callback = cb;
   alarm->data = data;
@@ -246,7 +252,7 @@ void alarm_cancel(alarm_t* alarm) {
   CHECK(alarms != NULL);
   if (!alarm) return;
 
-  std::shared_ptr<std::recursive_mutex> local_mutex_ref;
+  std::shared_ptr<std::recursive_mutex> local_mutex_ref = alarm->callback_mutex;
   {
     std::lock_guard<std::mutex> lock(alarms_mutex);
     local_mutex_ref = alarm->callback_mutex;
@@ -265,8 +271,8 @@ static void alarm_cancel_internal(alarm_t* alarm) {
 
   remove_pending_alarm(alarm);
 
-  alarm->deadline_ms = 0;
-  alarm->prev_deadline_ms = 0;
+  alarm->deadline = 0;
+  alarm->prev_deadline = 0;
   alarm->callback = NULL;
   alarm->data = NULL;
   alarm->stats.canceled_count++;
@@ -317,36 +323,34 @@ static bool lazy_initialize(void) {
 
   alarms = list_new(NULL);
   if (!alarms) {
-    LOG_ERROR("%s unable to allocate alarm list.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to allocate alarm list.", __func__);
     goto error;
   }
 
   if (!timer_create_internal(CLOCK_ID, &timer)) goto error;
   timer_initialized = true;
 
-  if (!timer_create_internal(CLOCK_BOOTTIME_ALARM, &wakeup_timer)) {
-    if (!timer_create_internal(CLOCK_BOOTTIME, &wakeup_timer)) {
-      goto error;
-    }
-  }
+  if (!timer_create_internal(CLOCK_ID_ALARM, &wakeup_timer)) goto error;
   wakeup_timer_initialized = true;
 
   alarm_expired = semaphore_new(0);
   if (!alarm_expired) {
-    LOG_ERROR("%s unable to create alarm expired semaphore", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to create alarm expired semaphore", __func__);
     goto error;
   }
 
   default_callback_thread =
       thread_new_sized("alarm_default_callbacks", SIZE_MAX);
   if (default_callback_thread == NULL) {
-    LOG_ERROR("%s unable to create default alarm callbacks thread.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to create default alarm callbacks thread.",
+              __func__);
     goto error;
   }
   thread_set_rt_priority(default_callback_thread, THREAD_RT_PRIORITY);
   default_callback_queue = fixed_queue_new(SIZE_MAX);
   if (default_callback_queue == NULL) {
-    LOG_ERROR("%s unable to create default alarm callbacks queue.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to create default alarm callbacks queue.",
+              __func__);
     goto error;
   }
   alarm_register_processing_queue(default_callback_queue,
@@ -355,7 +359,7 @@ static bool lazy_initialize(void) {
   dispatcher_thread_active = true;
   dispatcher_thread = thread_new("alarm_dispatcher");
   if (!dispatcher_thread) {
-    LOG_ERROR("%s unable to create alarm callback thread.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to create alarm callback thread.", __func__);
     goto error;
   }
   thread_set_rt_priority(dispatcher_thread, THREAD_RT_PRIORITY);
@@ -386,12 +390,13 @@ error:
   return false;
 }
 
-static uint64_t now_ms(void) {
+static period_ms_t now(void) {
   CHECK(alarms != NULL);
 
   struct timespec ts;
   if (clock_gettime(CLOCK_ID, &ts) == -1) {
-    LOG_ERROR("%s unable to get current time: %s", __func__, strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to get current time: %s", __func__,
+              strerror(errno));
     return 0;
   }
 
@@ -423,23 +428,22 @@ static void schedule_next_instance(alarm_t* alarm) {
   if (alarm->callback) remove_pending_alarm(alarm);
 
   // Calculate the next deadline for this alarm
-  uint64_t just_now_ms = now_ms();
-  uint64_t ms_into_period = 0;
-  if ((alarm->is_periodic) && (alarm->period_ms != 0))
-    ms_into_period =
-        ((just_now_ms - alarm->creation_time_ms) % alarm->period_ms);
-  alarm->deadline_ms = just_now_ms + (alarm->period_ms - ms_into_period);
+  period_ms_t just_now = now();
+  period_ms_t ms_into_period = 0;
+  if ((alarm->is_periodic) && (alarm->period != 0))
+    ms_into_period = ((just_now - alarm->creation_time) % alarm->period);
+  alarm->deadline = just_now + (alarm->period - ms_into_period);
 
   // Add it into the timer list sorted by deadline (earliest deadline first).
   if (list_is_empty(alarms) ||
-      ((alarm_t*)list_front(alarms))->deadline_ms > alarm->deadline_ms) {
+      ((alarm_t*)list_front(alarms))->deadline > alarm->deadline) {
     list_prepend(alarms, alarm);
   } else {
     for (list_node_t* node = list_begin(alarms); node != list_end(alarms);
          node = list_next(node)) {
       list_node_t* next = list_next(node);
       if (next == list_end(alarms) ||
-          ((alarm_t*)list_node(next))->deadline_ms > alarm->deadline_ms) {
+          ((alarm_t*)list_node(next))->deadline > alarm->deadline) {
         list_insert_after(alarms, node, alarm);
         break;
       }
@@ -469,17 +473,17 @@ static void reschedule_root_alarm(void) {
   if (list_is_empty(alarms)) goto done;
 
   next = static_cast<alarm_t*>(list_front(alarms));
-  next_expiration = next->deadline_ms - now_ms();
+  next_expiration = next->deadline - now();
   if (next_expiration < TIMER_INTERVAL_FOR_WAKELOCK_IN_MS) {
     if (!timer_set) {
       if (!wakelock_acquire()) {
-        LOG_ERROR("%s unable to acquire wake lock", __func__);
+        LOG_ERROR(LOG_TAG, "%s unable to acquire wake lock", __func__);
         goto done;
       }
     }
 
-    timer_time.it_value.tv_sec = (next->deadline_ms / 1000);
-    timer_time.it_value.tv_nsec = (next->deadline_ms % 1000) * 1000000LL;
+    timer_time.it_value.tv_sec = (next->deadline / 1000);
+    timer_time.it_value.tv_nsec = (next->deadline % 1000) * 1000000LL;
 
     // It is entirely unsafe to call timer_settime(2) with a zeroed timerspec
     // for timers with *_ALARM clock IDs. Although the man page states that the
@@ -504,10 +508,11 @@ static void reschedule_root_alarm(void) {
     struct itimerspec wakeup_time;
     memset(&wakeup_time, 0, sizeof(wakeup_time));
 
-    wakeup_time.it_value.tv_sec = (next->deadline_ms / 1000);
-    wakeup_time.it_value.tv_nsec = (next->deadline_ms % 1000) * 1000000LL;
+    wakeup_time.it_value.tv_sec = (next->deadline / 1000);
+    wakeup_time.it_value.tv_nsec = (next->deadline % 1000) * 1000000LL;
     if (timer_settime(wakeup_timer, TIMER_ABSTIME, &wakeup_time, NULL) == -1)
-      LOG_ERROR("%s unable to set wakeup timer: %s", __func__, strerror(errno));
+      LOG_ERROR(LOG_TAG, "%s unable to set wakeup timer: %s", __func__,
+                strerror(errno));
   }
 
 done:
@@ -518,7 +523,7 @@ done:
   }
 
   if (timer_settime(timer, TIMER_ABSTIME, &timer_time, NULL) == -1)
-    LOG_ERROR("%s unable to set timer: %s", __func__, strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to set timer: %s", __func__, strerror(errno));
 
   // If next expiration was in the past (e.g. short timer that got context
   // switched) then the timer might have diarmed itself. Detect this case and
@@ -536,7 +541,7 @@ done:
     if (time_to_expire.it_value.tv_sec == 0 &&
         time_to_expire.it_value.tv_nsec == 0) {
       LOG_DEBUG(
-
+          LOG_TAG,
           "%s alarm expiration too close for posix timers, switching to guns",
           __func__);
       semaphore_post(alarm_expired);
@@ -558,25 +563,20 @@ static void alarm_ready_generic(alarm_t* alarm,
   if (alarm == NULL) {
     return;  // The alarm was probably canceled
   }
-
   //
   // If the alarm is not periodic, we've fully serviced it now, and can reset
   // some of its internal state. This is useful to distinguish between expired
   // alarms and active ones.
   //
-  if (!alarm->callback) {
-    LOG(FATAL) << __func__
-               << ": timer callback is NULL! Name=" << alarm->stats.name;
-  }
   alarm_callback_t callback = alarm->callback;
   void* data = alarm->data;
-  uint64_t deadline_ms = alarm->deadline_ms;
+  period_ms_t deadline = alarm->deadline;
   if (alarm->is_periodic) {
     // The periodic alarm has been rescheduled and alarm->deadline has been
     // updated, hence we need to use the previous deadline.
-    deadline_ms = alarm->prev_deadline_ms;
+    deadline = alarm->prev_deadline;
   } else {
-    alarm->deadline_ms = 0;
+    alarm->deadline = 0;
     alarm->callback = NULL;
     alarm->data = NULL;
     alarm->queue = NULL;
@@ -589,7 +589,7 @@ static void alarm_ready_generic(alarm_t* alarm,
   lock.unlock();
 
   // Update the statistics
-  update_scheduling_stats(&alarm->stats, now_ms(), deadline_ms);
+  update_scheduling_stats(&alarm->stats, now(), deadline);
 
   // NOTE: Do NOT access "alarm" after the callback, as a safety precaution
   // in case the callback itself deleted the alarm.
@@ -630,8 +630,7 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
     // We're done here if there are no alarms or the alarm at the front is in
     // the future. Exit right away since there's nothing left to do.
     if (list_is_empty(alarms) ||
-        (alarm = static_cast<alarm_t*>(list_front(alarms)))->deadline_ms >
-            now_ms()) {
+        (alarm = static_cast<alarm_t*>(list_front(alarms)))->deadline > now()) {
       reschedule_root_alarm();
       continue;
     }
@@ -639,7 +638,7 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
     list_remove(alarms, alarm);
 
     if (alarm->is_periodic) {
-      alarm->prev_deadline_ms = alarm->deadline_ms;
+      alarm->prev_deadline = alarm->deadline;
       schedule_next_instance(alarm);
       alarm->stats.rescheduled_count++;
     }
@@ -647,21 +646,21 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
 
     // Enqueue the alarm for processing
     if (alarm->for_msg_loop) {
-      if (!get_main_message_loop()) {
-        LOG_ERROR("%s: message loop already NULL. Alarm: %s", __func__,
+      if (!get_message_loop()) {
+        LOG_ERROR(LOG_TAG, "%s: message loop already NULL. Alarm: %s", __func__,
                   alarm->stats.name);
         continue;
       }
 
       alarm->closure.i.Reset(Bind(alarm_ready_mloop, alarm));
-      get_main_message_loop()->task_runner()->PostTask(
-          FROM_HERE, alarm->closure.i.callback());
+      get_message_loop()->task_runner()->PostTask(FROM_HERE,
+                                                  alarm->closure.i.callback());
     } else {
       fixed_queue_enqueue(alarm->queue, alarm);
     }
   }
 
-  LOG_DEBUG("%s Callback thread exited", __func__);
+  LOG_DEBUG(LOG_TAG, "%s Callback thread exited", __func__);
 }
 
 static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
@@ -681,17 +680,17 @@ static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
   sigevent.sigev_notify_function = (void (*)(union sigval))timer_callback;
   sigevent.sigev_notify_attributes = &thread_attr;
   if (timer_create(clock_id, &sigevent, timer) == -1) {
-    LOG_ERROR("%s unable to create timer with clock %d: %s", __func__, clock_id,
-              strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to create timer with clock %d: %s", __func__,
+              clock_id, strerror(errno));
     if (clock_id == CLOCK_BOOTTIME_ALARM) {
-      LOG_ERROR(
-          "The kernel might not have support for "
-          "timer_create(CLOCK_BOOTTIME_ALARM): "
-          "https://lwn.net/Articles/429925/");
-      LOG_ERROR(
-          "See following patches: "
-          "https://git.kernel.org/cgit/linux/kernel/git/torvalds/"
-          "linux.git/log/?qt=grep&q=CLOCK_BOOTTIME_ALARM");
+      LOG_ERROR(LOG_TAG,
+                "The kernel might not have support for "
+                "timer_create(CLOCK_BOOTTIME_ALARM): "
+                "https://lwn.net/Articles/429925/");
+      LOG_ERROR(LOG_TAG,
+                "See following patches: "
+                "https://git.kernel.org/cgit/linux/kernel/git/torvalds/"
+                "linux.git/log/?qt=grep&q=CLOCK_BOOTTIME_ALARM");
     }
     return false;
   }
@@ -699,24 +698,24 @@ static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
   return true;
 }
 
-static void update_scheduling_stats(alarm_stats_t* stats, uint64_t now_ms,
-                                    uint64_t deadline_ms) {
+static void update_scheduling_stats(alarm_stats_t* stats, period_ms_t now_ms,
+                                    period_ms_t deadline_ms) {
   stats->total_updates++;
   stats->last_update_ms = now_ms;
 
   if (deadline_ms < now_ms) {
     // Overdue scheduling
-    uint64_t delta_ms = now_ms - deadline_ms;
+    period_ms_t delta_ms = now_ms - deadline_ms;
     update_stat(&stats->overdue_scheduling, delta_ms);
   } else if (deadline_ms > now_ms) {
     // Premature scheduling
-    uint64_t delta_ms = deadline_ms - now_ms;
+    period_ms_t delta_ms = deadline_ms - now_ms;
     update_stat(&stats->premature_scheduling, delta_ms);
   }
 }
 
 static void dump_stat(int fd, stat_t* stat, const char* description) {
-  uint64_t average_time_ms = 0;
+  period_ms_t average_time_ms = 0;
   if (stat->count != 0) average_time_ms = stat->total_ms / stat->count;
 
   dprintf(fd, "%-51s: %llu / %llu / %llu\n", description,
@@ -734,7 +733,7 @@ void alarm_debug_dump(int fd) {
     return;
   }
 
-  uint64_t just_now_ms = now_ms();
+  period_ms_t just_now = now();
 
   dprintf(fd, "  Total Alarms: %zu\n\n", list_length(alarms));
 
@@ -758,9 +757,9 @@ void alarm_debug_dump(int fd) {
 
     dprintf(fd, "%-51s: %llu / %llu / %lld\n",
             "    Time in ms (since creation/interval/remaining)",
-            (unsigned long long)(just_now_ms - alarm->creation_time_ms),
-            (unsigned long long)alarm->period_ms,
-            (long long)(alarm->deadline_ms - just_now_ms));
+            (unsigned long long)(just_now - alarm->creation_time),
+            (unsigned long long)alarm->period,
+            (long long)(alarm->deadline - just_now));
 
     dump_stat(fd, &stats->overdue_scheduling,
               "    Overdue scheduling time in ms (total/max/avg)");

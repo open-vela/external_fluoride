@@ -115,7 +115,7 @@ void RFCOMM_DlcEstablishRsp(tRFC_MCB* p_mcb, uint8_t dlci,
 
 /*******************************************************************************
  *
- * Function         RFCOMM_ParameterNegotiationRequest
+ * Function         RFCOMM_ParNegReq
  *
  * Description      This function is called by the user app to start
  *                  DLC parameter negotiation.  Port emulation can send this
@@ -124,8 +124,7 @@ void RFCOMM_DlcEstablishRsp(tRFC_MCB* p_mcb, uint8_t dlci,
  *                  block.
  *
  ******************************************************************************/
-void RFCOMM_ParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
-                                        uint16_t mtu) {
+void RFCOMM_ParNegReq(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu) {
   uint8_t flow;
   uint8_t cl;
   uint8_t k;
@@ -167,14 +166,14 @@ void RFCOMM_ParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
 
 /*******************************************************************************
  *
- * Function         RFCOMM_ParameterNegotiationResponse
+ * Function         RFCOMM_ParNegRsp
  *
  * Description      This function is called by the user app to acknowledge
  *                  DLC parameter negotiation.
  *
  ******************************************************************************/
-void RFCOMM_ParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
-                                         uint16_t mtu, uint8_t cl, uint8_t k) {
+void RFCOMM_ParNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl,
+                      uint8_t k) {
   if (p_mcb->state != RFC_MX_STATE_CONNECTED) return;
 
   /* Send Parameter Negotiation Response UIH frame */
@@ -183,7 +182,7 @@ void RFCOMM_ParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
 
 /*******************************************************************************
  *
- * Function         RFCOMM_PortParameterNegotiationRequest
+ * Function         RFCOMM_PortNegReq
  *
  * Description      This function is called by the user app to start
  *                  Remote Port parameter negotiation.  Port emulation can
@@ -192,8 +191,7 @@ void RFCOMM_ParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
  *                  control block.
  *
  ******************************************************************************/
-void RFCOMM_PortParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
-                                            tPORT_STATE* p_pars) {
+void RFCOMM_PortNegReq(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_STATE* p_pars) {
   if (p_mcb->state != RFC_MX_STATE_CONNECTED) {
     PORT_PortNegCnf(p_mcb, dlci, nullptr, RFCOMM_ERROR);
     return;
@@ -217,15 +215,14 @@ void RFCOMM_PortParameterNegotiationRequest(tRFC_MCB* p_mcb, uint8_t dlci,
 
 /*******************************************************************************
  *
- * Function         RFCOMM_PortParameterNegotiationResponse
+ * Function         RFCOMM_PortNegRsp
  *
  * Description      This function is called by the user app to acknowledge
  *                  Port parameters negotiation.
  *
  ******************************************************************************/
-void RFCOMM_PortParameterNegotiationResponse(tRFC_MCB* p_mcb, uint8_t dlci,
-                                             tPORT_STATE* p_pars,
-                                             uint16_t param_mask) {
+void RFCOMM_PortNegRsp(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_STATE* p_pars,
+                       uint16_t param_mask) {
   if (p_mcb->state != RFC_MX_STATE_CONNECTED) return;
 
   rfc_send_rpn(p_mcb, dlci, false, p_pars, param_mask);

@@ -42,10 +42,7 @@ const uint32_t bta_av_meta_caps_co_ids[] = {AVRC_CO_METADATA, AVRC_CO_BROADCOM};
 
 /* AVRCP supported categories */
 #define BTA_AV_RC_SUPF_CT (AVRC_SUPF_CT_CAT2)
-#define BTA_AVK_RC_SUPF_CT (AVRC_SUPF_CT_CAT1 |                     \
-                            AVRC_SUPF_CT_BROWSE |                   \
-                            AVRC_SUPF_CT_COVER_ART_GET_IMAGE_PROP | \
-                            AVRC_SUPF_CT_COVER_ART_GET_IMAGE)
+#define BTA_AVK_RC_SUPF_CT (AVRC_SUPF_CT_CAT1 | AVRC_SUPF_CT_BROWSE)
 #define BTA_AVK_RC_SUPF_TG (AVRC_SUPF_TG_CAT2)
 
 /* AVRCP Controller and Targer default name */
@@ -137,7 +134,7 @@ const tBTA_AV_CFG bta_av_cfg = {
     BTA_AV_RC_SUPF_CT,     /* AVRCP controller categories */
     BTA_AV_RC_SUPF_TG,     /* AVRCP target categories */
     672,                   /* AVDTP signaling channel MTU at L2CAP */
-    MAX_3MBPS_AVDTP_MTU,   /* AVDTP audio transport channel MTU at L2CAP */
+    BTA_AV_MAX_A2DP_MTU,   /* AVDTP audio transport channel MTU at L2CAP */
     bta_av_audio_flush_to, /* AVDTP audio transport channel flush
                               timeout */
     6,                     /* AVDTP audio channel max data queue size */
@@ -150,6 +147,7 @@ const tBTA_AV_CFG bta_av_cfg = {
                                  for company id */
     bta_av_meta_caps_evt_ids, /* the the metadata Get Capabilities
                                  response for event id */
+    NULL,                     /* the action function table for audio stream */
     BTA_AV_RC_CT_NAME,        /* Default AVRCP controller name */
     BTA_AV_RC_TG_NAME         /* Default AVRCP target name */
 };
@@ -163,7 +161,7 @@ const tBTA_AV_CFG bta_avk_cfg = {
     BTA_AVK_RC_SUPF_CT,    /* AVRCP controller categories */
     BTA_AVK_RC_SUPF_TG,    /* AVRCP target categories */
     672,                   /* AVDTP signaling channel MTU at L2CAP */
-    MAX_3MBPS_AVDTP_MTU,   /* AVDTP audio transport channel MTU at L2CAP */
+    BTA_AV_MAX_A2DP_MTU,   /* AVDTP audio transport channel MTU at L2CAP */
     bta_av_audio_flush_to, /* AVDTP audio transport channel flush timeout */
     6,                     /* AVDTP audio channel max data queue size */
     false, /* true, to accept AVRC 1.3 group nevigation command */
@@ -175,6 +173,7 @@ const tBTA_AV_CFG bta_avk_cfg = {
                                   for company id */
     bta_avk_meta_caps_evt_ids, /* the the metadata Get Capabilities
                                   response for event id */
+    NULL,                      /* the action function table for audio stream */
     {0},                       /* Default AVRCP controller name */
     {0},                       /* Default AVRCP target name */
 };
@@ -187,7 +186,7 @@ const tBTA_AV_CFG bta_av_cfg_compatibility = {
     BTA_AV_RC_SUPF_CT,     /* AVRCP controller categories */
     AVRC_SUPF_TG_CAT1,     /* Only support CAT1 for AVRCP1.3 */
     672,                   /* AVDTP signaling channel MTU at L2CAP */
-    MAX_3MBPS_AVDTP_MTU,   /* AVDTP audio transport channel MTU at L2CAP */
+    BTA_AV_MAX_A2DP_MTU,   /* AVDTP audio transport channel MTU at L2CAP */
     bta_av_audio_flush_to, /* AVDTP audio transport channel flush timeout */
     6,                     /* AVDTP audio channel max data queue size */
     false, /* true, to accept AVRC 1.3 group nevigation command */
@@ -200,6 +199,7 @@ const tBTA_AV_CFG bta_av_cfg_compatibility = {
     bta_av_meta_caps_evt_ids_avrcp13, /* the the metadata Get Capabilities
                                          response for event id, compatible
                                          with AVRCP1.3 */
+    NULL,              /* the action function table for audio stream */
     BTA_AV_RC_CT_NAME, /* Default AVRCP controller name */
     BTA_AV_RC_TG_NAME  /* Default AVRCP target name */
 };
