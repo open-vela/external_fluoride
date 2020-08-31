@@ -22,7 +22,6 @@
 #include "bt_target.h"
 #include "gatt_api.h"
 #include "gattdefs.h"
-#include "types/bt_transport.h"
 
 #define DIS_SUCCESS GATT_SUCCESS
 #define DIS_ILLEGAL_PARAM GATT_ILLEGAL_PARAMETER
@@ -43,6 +42,8 @@ typedef uint8_t tDIS_STATUS;
 #define DIS_ATTR_IEEE_DATA_BIT 0x0080
 #define DIS_ATTR_PNP_ID_BIT 0x0100
 typedef uint16_t tDIS_ATTR_MASK;
+
+#define DIS_ATTR_ALL_MASK 0xffff
 
 typedef tDIS_ATTR_MASK tDIS_ATTR_BIT;
 
@@ -101,7 +102,7 @@ typedef uint8_t tBA_LEVEL_DESCR;
 typedef struct {
   bool is_pri;
   tBA_LEVEL_DESCR ba_level_descr;
-  tBT_TRANSPORT transport;
+  tGATT_TRANSPORT transport;
   tBA_CBACK* p_cback;
 
 } tBA_REG_INFO;
