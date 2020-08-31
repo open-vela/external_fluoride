@@ -19,10 +19,9 @@
 #pragma once
 
 #include "device/include/interop.h"
-#include "raw_address.h"
 
 typedef struct {
-  RawAddress addr;
+  bt_bdaddr_t addr;
   size_t length;
   interop_feature_t feature;
 } interop_addr_entry_t;

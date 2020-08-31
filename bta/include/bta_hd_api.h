@@ -79,11 +79,11 @@ typedef struct {
 typedef struct {
   tBTA_HD_STATUS status;
   bool in_use;
-  RawAddress bda;
+  BD_ADDR bda;
 } tBTA_HD_REG_STATUS;
 
 typedef struct {
-  RawAddress bda;
+  BD_ADDR bda;
   tBTA_HD_STATUS status;
 } tBTA_HD_CONN;
 
@@ -215,7 +215,7 @@ extern void BTA_HdVirtualCableUnplug(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdConnect(const RawAddress& addr);
+extern void BTA_HdConnect(BD_ADDR addr);
 
 /*******************************************************************************
  *
@@ -237,7 +237,7 @@ extern void BTA_HdDisconnect(void);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdAddDevice(const RawAddress& addr);
+extern void BTA_HdAddDevice(BD_ADDR addr);
 
 /*******************************************************************************
  *
@@ -248,7 +248,7 @@ extern void BTA_HdAddDevice(const RawAddress& addr);
  * Returns          void
  *
  ******************************************************************************/
-extern void BTA_HdRemoveDevice(const RawAddress& addr);
+extern void BTA_HdRemoveDevice(BD_ADDR addr);
 
 /*******************************************************************************
  *

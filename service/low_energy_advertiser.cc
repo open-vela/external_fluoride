@@ -20,6 +20,7 @@
 #include <base/logging.h>
 
 #include "service/adapter.h"
+#include "service/common/bluetooth/util/address_helper.h"
 #include "service/logging_helpers.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hcidefs.h"

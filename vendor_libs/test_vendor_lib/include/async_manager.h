@@ -8,6 +8,8 @@
 #include "errno.h"
 #include "stdio.h"
 
+#include "osi/include/log.h"
+
 #include <chrono>
 #include <functional>
 #include <memory>

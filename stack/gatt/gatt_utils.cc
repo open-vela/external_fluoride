@@ -35,9 +35,6 @@
 #include "gattdefs.h"
 #include "l2cdefs.h"
 #include "sdp_api.h"
-
-using base::StringPrintf;
-
 /* check if [x, y] and [a, b] have overlapping range */
 #define GATT_VALIDATE_HANDLE_RANGE(x, y, a, b) ((y) >= (a) && (x) <= (b))
 
@@ -80,6 +77,8 @@ static const uint8_t base_uuid[LEN_UUID_128] = {
     0xFB, 0x34, 0x9B, 0x5F, 0x80, 0x00, 0x00, 0x80,
     0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
+extern fixed_queue_t* btu_general_alarm_queue;
+
 /*******************************************************************************
  *
  * Function         gatt_free_pending_ind
@@ -90,7 +89,7 @@ static const uint8_t base_uuid[LEN_UUID_128] = {
  *
  ******************************************************************************/
 void gatt_free_pending_ind(tGATT_TCB* p_tcb) {
-  VLOG(1) << __func__;
+  GATT_TRACE_DEBUG("%s", __func__);
 
   if (p_tcb->pending_ind_q == NULL) return;
 
@@ -110,15 +109,15 @@ void gatt_free_pending_ind(tGATT_TCB* p_tcb) {
  * Returns       None
  *
  ******************************************************************************/
-void gatt_delete_dev_from_srv_chg_clt_list(const RawAddress& bd_addr) {
-  VLOG(1) << __func__;
+void gatt_delete_dev_from_srv_chg_clt_list(BD_ADDR bd_addr) {
+  GATT_TRACE_DEBUG("gatt_delete_dev_from_srv_chg_clt_list");
 
   tGATTS_SRV_CHG* p_buf = gatt_is_bda_in_the_srv_chg_clt_list(bd_addr);
   if (p_buf != NULL) {
     if (gatt_cb.cb_info.p_srv_chg_callback) {
       /* delete from NV */
       tGATTS_SRV_CHG_REQ req;
-      req.srv_chg.bda = bd_addr;
+      memcpy(req.srv_chg.bda, bd_addr, BD_ADDR_LEN);
       (*gatt_cb.cb_info.p_srv_chg_callback)(GATTS_SRV_CHG_CMD_REMOVE_CLIENT,
                                             &req, NULL);
     }
@@ -136,18 +135,18 @@ void gatt_delete_dev_from_srv_chg_clt_list(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 void gatt_set_srv_chg(void) {
-  VLOG(1) << __func__;
+  GATT_TRACE_DEBUG("gatt_set_srv_chg");
 
   if (fixed_queue_is_empty(gatt_cb.srv_chg_clt_q)) return;
 
   list_t* list = fixed_queue_get_list(gatt_cb.srv_chg_clt_q);
   for (const list_node_t* node = list_begin(list); node != list_end(list);
        node = list_next(node)) {
-    VLOG(1) << "found a srv_chg clt";
+    GATT_TRACE_DEBUG("found a srv_chg clt");
 
     tGATTS_SRV_CHG* p_buf = (tGATTS_SRV_CHG*)list_node(node);
     if (!p_buf->srv_changed) {
-      VLOG(1) << "set srv_changed to true";
+      GATT_TRACE_DEBUG("set srv_changed to true");
       p_buf->srv_changed = true;
       tGATTS_SRV_CHG_REQ req;
       memcpy(&req.srv_chg, p_buf, sizeof(tGATTS_SRV_CHG));
@@ -171,7 +170,8 @@ void gatt_set_srv_chg(void) {
 tGATT_VALUE* gatt_add_pending_ind(tGATT_TCB* p_tcb, tGATT_VALUE* p_ind) {
   tGATT_VALUE* p_buf = (tGATT_VALUE*)osi_malloc(sizeof(tGATT_VALUE));
 
-  VLOG(1) << __func__ << "enqueue a pending indication";
+  GATT_TRACE_DEBUG("%s", __func__);
+  GATT_TRACE_DEBUG("enqueue a pending indication");
 
   memcpy(p_buf, p_ind, sizeof(tGATT_VALUE));
   fixed_queue_enqueue(p_tcb->pending_ind_q, p_buf);
@@ -191,7 +191,9 @@ tGATT_VALUE* gatt_add_pending_ind(tGATT_TCB* p_tcb, tGATT_VALUE* p_ind) {
  ******************************************************************************/
 tGATTS_SRV_CHG* gatt_add_srv_chg_clt(tGATTS_SRV_CHG* p_srv_chg) {
   tGATTS_SRV_CHG* p_buf = (tGATTS_SRV_CHG*)osi_malloc(sizeof(tGATTS_SRV_CHG));
-  VLOG(1) << __func__ << "enqueue a srv chg client";
+
+  GATT_TRACE_DEBUG("%s", __func__);
+  GATT_TRACE_DEBUG("enqueue a srv chg client");
 
   memcpy(p_buf, p_srv_chg, sizeof(tGATTS_SRV_CHG));
   fixed_queue_enqueue(gatt_cb.srv_chg_clt_q, p_buf);
@@ -259,24 +261,27 @@ void gatt_free_srvc_db_buffer_app_id(tBT_UUID* p_app_id) {
  * Returns           true if found
  *
  ******************************************************************************/
-bool gatt_find_the_connected_bda(uint8_t start_idx, RawAddress& bda,
+bool gatt_find_the_connected_bda(uint8_t start_idx, BD_ADDR bda,
                                  uint8_t* p_found_idx,
                                  tBT_TRANSPORT* p_transport) {
   uint8_t i;
   bool found = false;
-  VLOG(1) << __func__ << " start_idx=" << +start_idx;
+  GATT_TRACE_DEBUG("gatt_find_the_connected_bda start_idx=%d", start_idx);
 
   for (i = start_idx; i < GATT_MAX_PHY_CHANNEL; i++) {
     if (gatt_cb.tcb[i].in_use && gatt_cb.tcb[i].ch_state == GATT_CH_OPEN) {
-      bda = gatt_cb.tcb[i].peer_bda;
+      memcpy(bda, gatt_cb.tcb[i].peer_bda, BD_ADDR_LEN);
       *p_found_idx = i;
       *p_transport = gatt_cb.tcb[i].transport;
       found = true;
-      VLOG(1) << " bda :" << bda;
+      GATT_TRACE_DEBUG(
+          "gatt_find_the_connected_bda bda :%02x-%02x-%02x-%02x-%02x-%02x",
+          bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
       break;
     }
   }
-  VLOG(1) << StringPrintf(" found=%d found_idx=%d", found, i);
+  GATT_TRACE_DEBUG("gatt_find_the_connected_bda found=%d found_idx=%d", found,
+                   i);
   return found;
 }
 
@@ -293,8 +298,8 @@ bool gatt_find_the_connected_bda(uint8_t start_idx, RawAddress& bda,
 bool gatt_is_srv_chg_ind_pending(tGATT_TCB* p_tcb) {
   bool srv_chg_ind_pending = false;
 
-  VLOG(1) << __func__
-          << " is_queue_empty=" << fixed_queue_is_empty(p_tcb->pending_ind_q);
+  GATT_TRACE_DEBUG("gatt_is_srv_chg_ind_pending is_queue_empty=%d",
+                   fixed_queue_is_empty(p_tcb->pending_ind_q));
 
   if (p_tcb->indicate_handle == gatt_cb.handle_of_h_r) {
     srv_chg_ind_pending = true;
@@ -310,7 +315,7 @@ bool gatt_is_srv_chg_ind_pending(tGATT_TCB* p_tcb) {
     }
   }
 
-  VLOG(1) << __func__ << "srv_chg_ind_pending = %d", srv_chg_ind_pending;
+  GATT_TRACE_DEBUG("srv_chg_ind_pending = %d", srv_chg_ind_pending);
   return srv_chg_ind_pending;
 }
 
@@ -324,10 +329,12 @@ bool gatt_is_srv_chg_ind_pending(tGATT_TCB* p_tcb) {
  * Returns         pointer to the found elemenet otherwise NULL
  *
  ******************************************************************************/
-tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(const RawAddress& bda) {
+tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(BD_ADDR bda) {
   tGATTS_SRV_CHG* p_buf = NULL;
 
-  VLOG(1) << __func__ << ": " << bda;
+  GATT_TRACE_DEBUG(
+      "gatt_is_bda_in_the_srv_chg_clt_list :%02x-%02x-%02x-%02x-%02x-%02x",
+      bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
 
   if (fixed_queue_is_empty(gatt_cb.srv_chg_clt_q)) return NULL;
 
@@ -335,8 +342,8 @@ tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(const RawAddress& bda) {
   for (const list_node_t* node = list_begin(list); node != list_end(list);
        node = list_next(node)) {
     tGATTS_SRV_CHG* p_buf = (tGATTS_SRV_CHG*)list_node(node);
-    if (bda == p_buf->bda) {
-      VLOG(1) << "bda is in the srv chg clt list";
+    if (!memcmp(bda, p_buf->bda, BD_ADDR_LEN)) {
+      GATT_TRACE_DEBUG("bda is in the srv chg clt list");
       break;
     }
   }
@@ -353,12 +360,13 @@ tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(const RawAddress& bda) {
  * Returns          GATT_INDEX_INVALID if not found. Otherwise index to the tcb.
  *
  ******************************************************************************/
-bool gatt_is_bda_connected(const RawAddress& bda) {
+bool gatt_is_bda_connected(BD_ADDR bda) {
   uint8_t i = 0;
   bool connected = false;
 
   for (i = 0; i < GATT_MAX_PHY_CHANNEL; i++) {
-    if (gatt_cb.tcb[i].in_use && gatt_cb.tcb[i].peer_bda == bda) {
+    if (gatt_cb.tcb[i].in_use &&
+        !memcmp(gatt_cb.tcb[i].peer_bda, bda, BD_ADDR_LEN)) {
       connected = true;
       break;
     }
@@ -375,12 +383,11 @@ bool gatt_is_bda_connected(const RawAddress& bda) {
  * Returns          GATT_INDEX_INVALID if not found. Otherwise index to the tcb.
  *
  ******************************************************************************/
-uint8_t gatt_find_i_tcb_by_addr(const RawAddress& bda,
-                                tBT_TRANSPORT transport) {
+uint8_t gatt_find_i_tcb_by_addr(BD_ADDR bda, tBT_TRANSPORT transport) {
   uint8_t i = 0;
 
   for (; i < GATT_MAX_PHY_CHANNEL; i++) {
-    if (gatt_cb.tcb[i].peer_bda == bda &&
+    if (!memcmp(gatt_cb.tcb[i].peer_bda, bda, BD_ADDR_LEN) &&
         gatt_cb.tcb[i].transport == transport) {
       return i;
     }
@@ -415,8 +422,7 @@ tGATT_TCB* gatt_get_tcb_by_idx(uint8_t tcb_idx) {
  * Returns          NULL if not found. Otherwise index to the tcb.
  *
  ******************************************************************************/
-tGATT_TCB* gatt_find_tcb_by_addr(const RawAddress& bda,
-                                 tBT_TRANSPORT transport) {
+tGATT_TCB* gatt_find_tcb_by_addr(BD_ADDR bda, tBT_TRANSPORT transport) {
   tGATT_TCB* p_tcb = NULL;
   uint8_t i = 0;
 
@@ -435,8 +441,7 @@ tGATT_TCB* gatt_find_tcb_by_addr(const RawAddress& bda,
  * Returns          GATT_INDEX_INVALID if not found. Otherwise index to the tcb.
  *
  ******************************************************************************/
-tGATT_TCB* gatt_allocate_tcb_by_bdaddr(const RawAddress& bda,
-                                       tBT_TRANSPORT transport) {
+tGATT_TCB* gatt_allocate_tcb_by_bdaddr(BD_ADDR bda, tBT_TRANSPORT transport) {
   /* search for existing tcb with matching bda    */
   uint8_t j = gatt_find_i_tcb_by_addr(bda, transport);
   if (j != GATT_INDEX_INVALID) return &gatt_cb.tcb[j];
@@ -454,7 +459,7 @@ tGATT_TCB* gatt_allocate_tcb_by_bdaddr(const RawAddress& bda,
     p_tcb->in_use = true;
     p_tcb->tcb_idx = i;
     p_tcb->transport = transport;
-    p_tcb->peer_bda = bda;
+    memcpy(p_tcb->peer_bda, bda, BD_ADDR_LEN);
     return p_tcb;
   }
 
@@ -634,12 +639,12 @@ bool gatt_parse_uuid_from_cmd(tBT_UUID* p_uuid_rec, uint16_t uuid_size,
 
     /* do not allow 32 bits UUID in ATT PDU now */
     case LEN_UUID_32:
-      LOG(ERROR) << "DO NOT ALLOW 32 BITS UUID IN ATT PDU";
+      GATT_TRACE_ERROR("DO NOT ALLOW 32 BITS UUID IN ATT PDU");
       return false;
     case 0:
     default:
       if (uuid_size != 0) ret = false;
-      LOG(WARNING) << __func__ << ": invalid uuid size";
+      GATT_TRACE_WARNING("gatt_parse_uuid_from_cmd invalid uuid size");
       break;
   }
 
@@ -668,8 +673,8 @@ void gatt_start_rsp_timer(tGATT_CLCB* p_clcb) {
   if (p_clcb->gatt_rsp_timer_ent == NULL) {
     p_clcb->gatt_rsp_timer_ent = alarm_new("gatt.gatt_rsp_timer_ent");
   }
-  alarm_set_on_mloop(p_clcb->gatt_rsp_timer_ent, timeout_ms, gatt_rsp_timeout,
-                     p_clcb);
+  alarm_set_on_queue(p_clcb->gatt_rsp_timer_ent, timeout_ms, gatt_rsp_timeout,
+                     p_clcb, btu_general_alarm_queue);
 }
 
 /*******************************************************************************
@@ -682,8 +687,9 @@ void gatt_start_rsp_timer(tGATT_CLCB* p_clcb) {
  *
  ******************************************************************************/
 void gatt_start_conf_timer(tGATT_TCB* p_tcb) {
-  alarm_set_on_mloop(p_tcb->conf_timer, GATT_WAIT_FOR_RSP_TIMEOUT_MS,
-                     gatt_indication_confirmation_timeout, p_tcb);
+  alarm_set_on_queue(p_tcb->conf_timer, GATT_WAIT_FOR_RSP_TIMEOUT_MS,
+                     gatt_indication_confirmation_timeout, p_tcb,
+                     btu_general_alarm_queue);
 }
 
 /*******************************************************************************
@@ -697,8 +703,8 @@ void gatt_start_conf_timer(tGATT_TCB* p_tcb) {
  ******************************************************************************/
 void gatt_start_ind_ack_timer(tGATT_TCB& tcb) {
   /* start notification cache timer */
-  alarm_set_on_mloop(tcb.ind_ack_timer, GATT_WAIT_FOR_RSP_TIMEOUT_MS,
-                     gatt_ind_ack_timeout, &tcb);
+  alarm_set_on_queue(tcb.ind_ack_timer, GATT_WAIT_FOR_RSP_TIMEOUT_MS,
+                     gatt_ind_ack_timeout, &tcb, btu_general_alarm_queue);
 }
 
 /*******************************************************************************
@@ -714,16 +720,16 @@ void gatt_rsp_timeout(void* data) {
   tGATT_CLCB* p_clcb = (tGATT_CLCB*)data;
 
   if (p_clcb == NULL || p_clcb->p_tcb == NULL) {
-    LOG(WARNING) << __func__ << " clcb is already deleted";
+    GATT_TRACE_WARNING("%s clcb is already deleted", __func__);
     return;
   }
   if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY &&
       p_clcb->op_subtype == GATT_DISC_SRVC_ALL &&
       p_clcb->retry_count < GATT_REQ_RETRY_LIMIT) {
     uint8_t rsp_code;
-    LOG(WARNING) << __func__ << " retry discovery primary service";
+    GATT_TRACE_WARNING("%s retry discovery primary service", __func__);
     if (p_clcb != gatt_cmd_dequeue(*p_clcb->p_tcb, &rsp_code)) {
-      LOG(ERROR) << __func__ << " command queue out of sync, disconnect";
+      GATT_TRACE_ERROR("%s command queue out of sync, disconnect", __func__);
     } else {
       p_clcb->retry_count++;
       gatt_act_discovery(p_clcb);
@@ -731,7 +737,7 @@ void gatt_rsp_timeout(void* data) {
     }
   }
 
-  LOG(WARNING) << __func__ << " disconnecting...";
+  GATT_TRACE_WARNING("%s disconnecting...", __func__);
   gatt_disconnect(p_clcb->p_tcb);
 }
 
@@ -747,7 +753,7 @@ void gatt_rsp_timeout(void* data) {
 void gatt_indication_confirmation_timeout(void* data) {
   tGATT_TCB* p_tcb = (tGATT_TCB*)data;
 
-  LOG(WARNING) << __func__ << " disconnecting...";
+  GATT_TRACE_WARNING("%s disconnecting...", __func__);
   gatt_disconnect(p_tcb);
 }
 
@@ -764,7 +770,7 @@ void gatt_ind_ack_timeout(void* data) {
   tGATT_TCB* p_tcb = (tGATT_TCB*)data;
   CHECK(p_tcb);
 
-  LOG(WARNING) << __func__ << ": send ack now";
+  GATT_TRACE_WARNING("%s send ack now", __func__);
   p_tcb->ind_count = 0;
   attp_send_cl_msg(*p_tcb, nullptr, GATT_HANDLE_VALUE_CONF, NULL);
 }
@@ -799,7 +805,7 @@ std::list<tGATT_SRV_LIST_ELEM>::iterator gatt_sr_find_i_rcb_by_handle(
  * Returns          void
  *
  ******************************************************************************/
-void gatt_sr_get_sec_info(const RawAddress& rem_bda, tBT_TRANSPORT transport,
+void gatt_sr_get_sec_info(BD_ADDR rem_bda, tBT_TRANSPORT transport,
                           uint8_t* p_sec_flag, uint8_t* p_key_size) {
   uint8_t sec_flag = 0;
 
@@ -827,14 +833,15 @@ void gatt_sr_send_req_callback(uint16_t conn_id, uint32_t trans_id,
   tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
 
   if (!p_reg) {
-    LOG(ERROR) << "p_reg not found discard request";
+    GATT_TRACE_ERROR("p_reg not found discard request");
     return;
   }
 
   if (p_reg->in_use && p_reg->app_cb.p_req_cb) {
     (*p_reg->app_cb.p_req_cb)(conn_id, trans_id, type, p_data);
   } else {
-    LOG(WARNING) << "Call back not found for application conn_id=" << conn_id;
+    GATT_TRACE_WARNING("Call back not found for application conn_id=%d",
+                       conn_id);
   }
 }
 
@@ -849,15 +856,15 @@ void gatt_sr_send_req_callback(uint16_t conn_id, uint32_t trans_id,
  ******************************************************************************/
 tGATT_STATUS gatt_send_error_rsp(tGATT_TCB& tcb, uint8_t err_code,
                                  uint8_t op_code, uint16_t handle, bool deq) {
+  tGATT_ERROR error;
   tGATT_STATUS status;
   BT_HDR* p_buf;
 
-  tGATT_SR_MSG msg;
-  msg.error.cmd_code = op_code;
-  msg.error.reason = err_code;
-  msg.error.handle = handle;
+  error.cmd_code = op_code;
+  error.reason = err_code;
+  error.handle = handle;
 
-  p_buf = attp_build_sr_msg(tcb, GATT_RSP_ERROR, &msg);
+  p_buf = attp_build_sr_msg(tcb, GATT_RSP_ERROR, (tGATT_SR_MSG*)&error);
   if (p_buf != NULL) {
     status = attp_send_sr_msg(tcb, p_buf);
   } else
@@ -885,8 +892,8 @@ uint32_t gatt_add_sdp_record(tBT_UUID* p_uuid, uint16_t start_hdl,
   uint8_t buff[60];
   uint8_t* p = buff;
 
-  VLOG(1) << __func__
-          << StringPrintf(" s_hdl=0x%x  s_hdl=0x%x", start_hdl, end_hdl);
+  GATT_TRACE_DEBUG("gatt_add_sdp_record s_hdl=0x%x  s_hdl=0x%x", start_hdl,
+                   end_hdl);
 
   sdp_handle = SDP_CreateRecord();
   if (sdp_handle == 0) return 0;
@@ -911,7 +918,7 @@ uint32_t gatt_add_sdp_record(tBT_UUID* p_uuid, uint16_t start_hdl,
       break;
 
     default:
-      LOG(ERROR) << "inavlid UUID len=" << +p_uuid->len;
+      GATT_TRACE_ERROR("inavlid UUID len=%d", p_uuid->len);
       SDP_DeleteRecord(sdp_handle);
       return 0;
       break;
@@ -945,8 +952,8 @@ uint32_t gatt_add_sdp_record(tBT_UUID* p_uuid, uint16_t start_hdl,
  *
  ******************************************************************************/
 void gatt_set_err_rsp(bool enable, uint8_t req_op_code, uint8_t err_status) {
-  VLOG(1) << __func__ << StringPrintf(" enable=%d op_code=%d, err_status=%d",
-                                      enable, req_op_code, err_status);
+  GATT_TRACE_DEBUG("gatt_set_err_rsp enable=%d op_code=%d, err_status=%d",
+                   enable, req_op_code, err_status);
   gatt_cb.enable_err_rsp = enable;
   gatt_cb.req_op_code = req_op_code;
   gatt_cb.err_status = err_status;
@@ -967,7 +974,7 @@ tGATT_REG* gatt_get_regcb(tGATT_IF gatt_if) {
   tGATT_REG* p_reg = NULL;
 
   if (ii < 1 || ii > GATT_MAX_APPS) {
-    LOG(WARNING) << "gatt_if out of range = " << +ii;
+    GATT_TRACE_WARNING("gatt_if out of range [ = %d]", ii);
     return NULL;
   }
 
@@ -975,7 +982,7 @@ tGATT_REG* gatt_get_regcb(tGATT_IF gatt_if) {
   p_reg = &gatt_cb.cl_rcb[ii - 1];
 
   if (!p_reg->in_use) {
-    LOG(WARNING) << "gatt_if found but not in use.";
+    GATT_TRACE_WARNING("gatt_if found but not in use.");
     return NULL;
   }
 
@@ -1035,7 +1042,6 @@ tGATT_CLCB* gatt_clcb_alloc(uint16_t conn_id) {
       break;
     }
   }
-
   return p_clcb;
 }
 
@@ -1088,11 +1094,13 @@ tGATT_TCB* gatt_find_tcb_by_cid(uint16_t lcid) {
  * Returns          total number of clcb found.
  *
  ******************************************************************************/
-uint8_t gatt_num_clcb_by_bd_addr(const RawAddress& bda) {
+uint8_t gatt_num_clcb_by_bd_addr(BD_ADDR bda) {
   uint8_t i, num = 0;
 
   for (i = 0; i < GATT_CL_MAX_LCB; i++) {
-    if (gatt_cb.clcb[i].in_use && gatt_cb.clcb[i].p_tcb->peer_bda == bda) num++;
+    if (gatt_cb.clcb[i].in_use &&
+        memcmp(gatt_cb.clcb[i].p_tcb->peer_bda, bda, BD_ADDR_LEN) == 0)
+      num++;
   }
   return num;
 }
@@ -1209,9 +1217,8 @@ void gatt_sr_update_prep_cnt(tGATT_TCB& tcb, tGATT_IF gatt_if, bool is_inc,
                              bool is_reset_first) {
   uint8_t idx = ((uint8_t)gatt_if) - 1;
 
-  VLOG(1) << StringPrintf(
-      "%s tcb idx=%d gatt_if=%d is_inc=%d is_reset_first=%d", __func__,
-      tcb.tcb_idx, gatt_if, is_inc, is_reset_first);
+  GATT_TRACE_DEBUG("%s tcb idx=%d gatt_if=%d is_inc=%d is_reset_first=%d",
+                   __func__, tcb.tcb_idx, gatt_if, is_inc, is_reset_first);
 
   if (is_reset_first) {
     gatt_sr_reset_prep_cnt(tcb);
@@ -1233,7 +1240,7 @@ void gatt_sr_update_prep_cnt(tGATT_TCB& tcb, tGATT_IF gatt_if, bool is_inc,
  * Returns         Boolean
  *
  ******************************************************************************/
-bool gatt_cancel_open(tGATT_IF gatt_if, const RawAddress& bda) {
+bool gatt_cancel_open(tGATT_IF gatt_if, BD_ADDR bda) {
   tGATT_TCB* p_tcb = NULL;
   bool status = true;
 
@@ -1241,7 +1248,8 @@ bool gatt_cancel_open(tGATT_IF gatt_if, const RawAddress& bda) {
 
   if (p_tcb) {
     if (gatt_get_ch_state(p_tcb) == GATT_CH_OPEN) {
-      LOG(ERROR) << __func__ << ": link connected Too late to cancel";
+      GATT_TRACE_ERROR(
+          "GATT_CancelConnect - link connected Too late to cancel");
       status = false;
     } else {
       gatt_update_app_use_link_flag(gatt_if, p_tcb, false, false);
@@ -1283,14 +1291,24 @@ tGATT_CLCB* gatt_cmd_dequeue(tGATT_TCB& tcb, uint8_t* p_op_code) {
   return p_clcb;
 }
 
-/** Send out the ATT message for write */
+/*******************************************************************************
+ *
+ * Function         gatt_send_write_msg
+ *
+ * Description      This real function send out the ATT message for write.
+ *
+ * Returns          status code
+ *
+ ******************************************************************************/
 uint8_t gatt_send_write_msg(tGATT_TCB& tcb, tGATT_CLCB* p_clcb, uint8_t op_code,
                             uint16_t handle, uint16_t len, uint16_t offset,
                             uint8_t* p_data) {
   tGATT_CL_MSG msg;
+
   msg.attr_value.handle = handle;
   msg.attr_value.len = len;
   msg.attr_value.offset = offset;
+
   memcpy(msg.attr_value.value, p_data, len);
 
   /* write by handle */
@@ -1317,8 +1335,8 @@ void gatt_end_operation(tGATT_CLCB* p_clcb, tGATT_STATUS status, void* p_data) {
   uint16_t conn_id;
   uint8_t operation;
 
-  VLOG(1) << __func__ << StringPrintf(" status=%d op=%d subtype=%d", status,
-                                      p_clcb->operation, p_clcb->op_subtype);
+  GATT_TRACE_DEBUG("gatt_end_operation status=%d op=%d subtype=%d", status,
+                   p_clcb->operation, p_clcb->op_subtype);
   memset(&cb_data.att_value, 0, sizeof(tGATT_VALUE));
 
   if (p_cmpl_cb != NULL && p_clcb->operation != 0) {
@@ -1337,7 +1355,7 @@ void gatt_end_operation(tGATT_CLCB* p_clcb, tGATT_STATUS status, void* p_data) {
         if (p_data) {
           cb_data.att_value = *((tGATT_VALUE*)p_data);
         } else {
-          VLOG(1) << "Rcv Prepare write rsp but no data";
+          GATT_TRACE_DEBUG("Rcv Prepare write rsp but no data");
         }
       }
     }
@@ -1363,56 +1381,68 @@ void gatt_end_operation(tGATT_CLCB* p_clcb, tGATT_STATUS status, void* p_data) {
   else if (p_cmpl_cb && op)
     (*p_cmpl_cb)(conn_id, op, status, &cb_data);
   else
-    LOG(WARNING) << __func__
-                 << StringPrintf(
-                        ": not sent out op=%d p_disc_cmpl_cb:%p p_cmpl_cb:%p",
-                        operation, p_disc_cmpl_cb, p_cmpl_cb);
+    GATT_TRACE_WARNING(
+        "gatt_end_operation not sent out op=%d p_disc_cmpl_cb:%p p_cmpl_cb:%p",
+        operation, p_disc_cmpl_cb, p_cmpl_cb);
 }
 
-/** This function cleans up the control blocks when L2CAP channel disconnect */
-void gatt_cleanup_upon_disc(const RawAddress& bda, uint16_t reason,
+/*******************************************************************************
+ *
+ * Function         gatt_cleanup_upon_disc
+ *
+ * Description      This function cleans up the control blocks when L2CAP
+ *                  channel disconnect.
+ *
+ * Returns          16 bits uuid.
+ *
+ ******************************************************************************/
+void gatt_cleanup_upon_disc(BD_ADDR bda, uint16_t reason,
                             tBT_TRANSPORT transport) {
-  VLOG(1) << __func__;
+  tGATT_TCB* p_tcb = NULL;
+  tGATT_CLCB* p_clcb;
+  uint8_t i;
+  uint16_t conn_id;
+  tGATT_REG* p_reg = NULL;
 
-  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bda, transport);
-  if (!p_tcb) return;
+  GATT_TRACE_DEBUG("gatt_cleanup_upon_disc ");
 
-  gatt_set_ch_state(p_tcb, GATT_CH_CLOSE);
-  for (uint8_t i = 0; i < GATT_CL_MAX_LCB; i++) {
-    tGATT_CLCB* p_clcb = &gatt_cb.clcb[i];
-    if (!p_clcb->in_use || p_clcb->p_tcb != p_tcb) continue;
+  p_tcb = gatt_find_tcb_by_addr(bda, transport);
+  if (p_tcb != NULL) {
+    GATT_TRACE_DEBUG("found p_tcb ");
+    gatt_set_ch_state(p_tcb, GATT_CH_CLOSE);
+    for (i = 0; i < GATT_CL_MAX_LCB; i++) {
+      p_clcb = &gatt_cb.clcb[i];
+      if (p_clcb->in_use && p_clcb->p_tcb == p_tcb) {
+        alarm_cancel(p_clcb->gatt_rsp_timer_ent);
+        GATT_TRACE_DEBUG("found p_clcb conn_id=%d", p_clcb->conn_id);
+        if (p_clcb->operation != GATTC_OPTYPE_NONE)
+          gatt_end_operation(p_clcb, GATT_ERROR, NULL);
 
-    alarm_cancel(p_clcb->gatt_rsp_timer_ent);
-    VLOG(1) << "found p_clcb conn_id=" << +p_clcb->conn_id;
-    if (p_clcb->operation == GATTC_OPTYPE_NONE) {
-      gatt_clcb_dealloc(p_clcb);
-      continue;
+        gatt_clcb_dealloc(p_clcb);
+      }
     }
 
-    gatt_end_operation(p_clcb, GATT_ERROR, NULL);
-  }
+    alarm_free(p_tcb->ind_ack_timer);
+    p_tcb->ind_ack_timer = NULL;
+    alarm_free(p_tcb->conf_timer);
+    p_tcb->conf_timer = NULL;
+    gatt_free_pending_ind(p_tcb);
+    fixed_queue_free(p_tcb->sr_cmd.multi_rsp_q, NULL);
+    p_tcb->sr_cmd.multi_rsp_q = NULL;
 
-  alarm_free(p_tcb->ind_ack_timer);
-  p_tcb->ind_ack_timer = NULL;
-  alarm_free(p_tcb->conf_timer);
-  p_tcb->conf_timer = NULL;
-  gatt_free_pending_ind(p_tcb);
-  fixed_queue_free(p_tcb->sr_cmd.multi_rsp_q, NULL);
-  p_tcb->sr_cmd.multi_rsp_q = NULL;
-
-  for (uint8_t i = 0; i < GATT_MAX_APPS; i++) {
-    tGATT_REG* p_reg = &gatt_cb.cl_rcb[i];
-    if (p_reg->in_use && p_reg->app_cb.p_conn_cb) {
-      uint16_t conn_id = GATT_CREATE_CONN_ID(p_tcb->tcb_idx, p_reg->gatt_if);
-      VLOG(1) << StringPrintf("found p_reg tcb_idx=%d gatt_if=%d  conn_id=0x%x",
-                              p_tcb->tcb_idx, p_reg->gatt_if, conn_id);
-      (*p_reg->app_cb.p_conn_cb)(p_reg->gatt_if, bda, conn_id, false, reason,
-                                 transport);
+    for (i = 0; i < GATT_MAX_APPS; i++) {
+      p_reg = &gatt_cb.cl_rcb[i];
+      if (p_reg->in_use && p_reg->app_cb.p_conn_cb) {
+        conn_id = GATT_CREATE_CONN_ID(p_tcb->tcb_idx, p_reg->gatt_if);
+        GATT_TRACE_DEBUG("found p_reg tcb_idx=%d gatt_if=%d  conn_id=0x%x",
+                         p_tcb->tcb_idx, p_reg->gatt_if, conn_id);
+        (*p_reg->app_cb.p_conn_cb)(p_reg->gatt_if, bda, conn_id, false, reason,
+                                   transport);
+      }
     }
+    *p_tcb = tGATT_TCB();
   }
-
-  *p_tcb = tGATT_TCB();
-  VLOG(1) << __func__ << ": exit";
+  GATT_TRACE_DEBUG("exit gatt_cleanup_upon_disc ");
 }
 /*******************************************************************************
  *
@@ -1471,7 +1501,7 @@ void gatt_dbg_display_uuid(tBT_UUID bt_uuid) {
   } else
     strlcpy(str_buf, "Unknown UUID 0", sizeof(str_buf));
 
-  VLOG(1) << StringPrintf("UUID=[%s]", str_buf);
+  GATT_TRACE_DEBUG("UUID=[%s]", str_buf);
 }
 
 /** Returns true if this is one of the background devices for the application,
@@ -1482,20 +1512,19 @@ bool gatt_is_bg_dev_for_app(tGATT_BG_CONN_DEV* p_dev, tGATT_IF gatt_if) {
 
 /** background connection device from the list. Returns pointer to the device
  * record, or nullptr if not found */
-tGATT_BG_CONN_DEV* gatt_find_bg_dev(const RawAddress& remote_bda) {
+tGATT_BG_CONN_DEV* gatt_find_bg_dev(BD_ADDR remote_bda) {
   for (tGATT_BG_CONN_DEV& dev : gatt_cb.bgconn_dev) {
-    if (dev.remote_bda == remote_bda) {
+    if (!memcmp(dev.remote_bda, remote_bda, BD_ADDR_LEN)) {
       return &dev;
     }
   }
   return nullptr;
 }
 
-std::list<tGATT_BG_CONN_DEV>::iterator gatt_find_bg_dev_it(
-    const RawAddress& remote_bda) {
+std::list<tGATT_BG_CONN_DEV>::iterator gatt_find_bg_dev_it(BD_ADDR remote_bda) {
   auto& list = gatt_cb.bgconn_dev;
   for (auto it = list.begin(); it != list.end(); it++) {
-    if (it->remote_bda == remote_bda) {
+    if (!memcmp(it->remote_bda, remote_bda, BD_ADDR_LEN)) {
       return it;
     }
   }
@@ -1504,14 +1533,14 @@ std::list<tGATT_BG_CONN_DEV>::iterator gatt_find_bg_dev_it(
 
 /** Add a device from the background connection list.  Returns true if device
  * added to the list, or already in list, false otherwise */
-bool gatt_add_bg_dev_list(tGATT_REG* p_reg, const RawAddress& bd_addr) {
+bool gatt_add_bg_dev_list(tGATT_REG* p_reg, BD_ADDR bd_addr) {
   tGATT_IF gatt_if = p_reg->gatt_if;
 
   tGATT_BG_CONN_DEV* p_dev = gatt_find_bg_dev(bd_addr);
   if (p_dev) {
     // device already in the whitelist, just add interested app to the list
     if (!p_dev->gatt_if.insert(gatt_if).second) {
-      LOG(ERROR) << "device already in iniator white list";
+      GATT_TRACE_ERROR("device already in iniator white list");
     }
 
     return true;
@@ -1522,13 +1551,13 @@ bool gatt_add_bg_dev_list(tGATT_REG* p_reg, const RawAddress& bd_addr) {
 
   gatt_cb.bgconn_dev.emplace_back();
   tGATT_BG_CONN_DEV& dev = gatt_cb.bgconn_dev.back();
-  dev.remote_bda = bd_addr;
+  memcpy(dev.remote_bda, bd_addr, BD_ADDR_LEN);
   dev.gatt_if.insert(gatt_if);
   return true;
 }
 
 /** Remove the application interface for the specified background device */
-bool gatt_remove_bg_dev_for_app(tGATT_IF gatt_if, const RawAddress& bd_addr) {
+bool gatt_remove_bg_dev_for_app(tGATT_IF gatt_if, BD_ADDR bd_addr) {
   tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bd_addr, BT_TRANSPORT_LE);
   bool status;
 
@@ -1539,7 +1568,7 @@ bool gatt_remove_bg_dev_for_app(tGATT_IF gatt_if, const RawAddress& bd_addr) {
 
 /** Removes all registrations for background connection for given device.
  * Returns true if anything was removed, false otherwise */
-uint8_t gatt_clear_bg_dev_for_addr(const RawAddress& bd_addr) {
+uint8_t gatt_clear_bg_dev_for_addr(BD_ADDR bd_addr) {
   auto dev_it = gatt_find_bg_dev_it(bd_addr);
   if (dev_it == gatt_cb.bgconn_dev.end()) return false;
 
@@ -1551,7 +1580,7 @@ uint8_t gatt_clear_bg_dev_for_addr(const RawAddress& bd_addr) {
 /** Remove device from the background connection device list or listening to
  * advertising list.  Returns true if device was on the list and was succesfully
  * removed */
-bool gatt_remove_bg_dev_from_list(tGATT_REG* p_reg, const RawAddress& bd_addr) {
+bool gatt_remove_bg_dev_from_list(tGATT_REG* p_reg, BD_ADDR bd_addr) {
   tGATT_IF gatt_if = p_reg->gatt_if;
   auto dev_it = gatt_find_bg_dev_it(bd_addr);
   if (dev_it == gatt_cb.bgconn_dev.end()) return false;
@@ -1606,18 +1635,17 @@ void gatt_reset_bgdev_list(void) { gatt_cb.bgconn_dev.clear(); }
  * Returns          true if connection started; false otherwise.
  *
  ******************************************************************************/
-bool gatt_update_auto_connect_dev(tGATT_IF gatt_if, bool add,
-                                  const RawAddress& bd_addr) {
+bool gatt_update_auto_connect_dev(tGATT_IF gatt_if, bool add, BD_ADDR bd_addr) {
   bool ret = false;
   tGATT_REG* p_reg;
   tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bd_addr, BT_TRANSPORT_LE);
 
-  VLOG(1) << __func__;
+  GATT_TRACE_API("%s:", __func__);
   /* Make sure app is registered */
   p_reg = gatt_get_regcb(gatt_if);
   if (p_reg == NULL) {
-    LOG(ERROR) << __func__ << " gatt_if is not registered " << +gatt_if;
-    return false;
+    GATT_TRACE_ERROR("%s - gatt_if is not registered", __func__, gatt_if);
+    return (false);
   }
 
   if (add) {
