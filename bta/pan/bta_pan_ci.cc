@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2004-2012 Broadcom Corporation
+ *  Copyright (C) 2004-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,8 +89,8 @@ void bta_pan_ci_rx_ready(uint16_t handle) {
  * Description      This function is called to enable or disable data flow on
  *                  the TX path.  The phone should call this function to
  *                  disable data flow when it is congested and cannot handle
- *                  any more data sent by bta_pan_co_tx_write().
- *                  This function is used when the
+ *                  any more data sent by bta_pan_co_tx_write() or
+ *                  bta_pan_co_tx_writebuf().  This function is used when the
  *                  TX data path is configured to use a push interface.
  *
  *
@@ -183,10 +183,10 @@ void bta_pan_ci_rx_writebuf(uint16_t handle, const RawAddress& dst,
  ******************************************************************************/
 BT_HDR* bta_pan_ci_readbuf(uint16_t handle, RawAddress& src, RawAddress& dst,
                            uint16_t* p_protocol, bool* p_ext, bool* p_forward) {
-  tBTA_PAN_SCB* p_scb = bta_pan_scb_by_handle(handle);
+  tBTA_PAN_SCB* p_scb;
   BT_HDR* p_buf;
 
-  if (p_scb == NULL) return NULL;
+  p_scb = bta_pan_scb_by_handle(handle);
 
   p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_scb->data_queue);
   if (p_buf != NULL) {

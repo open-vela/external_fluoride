@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2009-2012 Broadcom Corporation
+ *  Copyright (C) 2009-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -58,23 +58,17 @@
 #define USEC_PER_SEC 1000000L
 #define SOCK_SEND_TIMEOUT_MS 2000 /* Timeout for sending */
 #define SOCK_RECV_TIMEOUT_MS 5000 /* Timeout for receiving */
-#define SEC_TO_MS 1000
-#define SEC_TO_NS 1000000000
-#define MS_TO_NS 1000000
-#define DELAY_TO_NS 100000
-
-#define MIN_DELAY_MS 100
-#define MAX_DELAY_MS 1000
 
 // set WRITE_POLL_MS to 0 for blocking sockets, nonzero for polled non-blocking
 // sockets
 #define WRITE_POLL_MS 20
 
-#define FNLOG() LOG_VERBOSE("%s", __func__);
-#define DEBUG(fmt, ...) LOG_VERBOSE("%s: " fmt, __func__, ##__VA_ARGS__)
-#define INFO(fmt, ...) LOG_INFO("%s: " fmt, __func__, ##__VA_ARGS__)
-#define WARN(fmt, ...) LOG_WARN("%s: " fmt, __func__, ##__VA_ARGS__)
-#define ERROR(fmt, ...) LOG_ERROR("%s: " fmt, __func__, ##__VA_ARGS__)
+#define FNLOG() LOG_VERBOSE(LOG_TAG, "%s", __func__);
+#define DEBUG(fmt, ...) \
+  LOG_VERBOSE(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define INFO(fmt, ...) LOG_INFO(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define WARN(fmt, ...) LOG_WARN(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERROR(fmt, ...) LOG_ERROR(LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
 
 #define ASSERTC(cond, msg, val)                                           \
   if (!(cond)) {                                                          \
@@ -111,7 +105,6 @@ struct a2dp_audio_device {
 struct a2dp_config {
   uint32_t rate;
   uint32_t channel_mask;
-  bool is_stereo_to_mono;  // True if fetching Stereo and mixing into Mono
   int format;
 };
 
@@ -151,14 +144,11 @@ struct a2dp_stream_in {
  *  Static variables
  *****************************************************************************/
 
-static bool enable_delay_reporting = false;
-
 /*****************************************************************************
  *  Static functions
  *****************************************************************************/
 
 static size_t out_get_buffer_size(const struct audio_stream* stream);
-static uint32_t out_get_latency(const struct audio_stream_out* stream);
 
 /*****************************************************************************
  *  Externs
@@ -426,12 +416,10 @@ static int a2dp_command(struct a2dp_stream_common* common, tA2DP_CTRL_CMD cmd) {
   DEBUG("A2DP COMMAND %s", audio_a2dp_hw_dump_ctrl_event(cmd));
 
   if (common->ctrl_fd == AUDIO_SKT_DISCONNECTED) {
-    INFO("starting up or recovering from previous error: command=%s",
-         audio_a2dp_hw_dump_ctrl_event(cmd));
+    INFO("starting up or recovering from previous error");
     a2dp_open_ctrl_path(common);
     if (common->ctrl_fd == AUDIO_SKT_DISCONNECTED) {
-      ERROR("failure to open ctrl path: command=%s",
-            audio_a2dp_hw_dump_ctrl_event(cmd));
+      ERROR("failure to open ctrl path");
       return -1;
     }
   }
@@ -440,8 +428,7 @@ static int a2dp_command(struct a2dp_stream_common* common, tA2DP_CTRL_CMD cmd) {
   ssize_t sent;
   OSI_NO_INTR(sent = send(common->ctrl_fd, &cmd, 1, MSG_NOSIGNAL));
   if (sent == -1) {
-    ERROR("cmd failed (%s): command=%s", strerror(errno),
-          audio_a2dp_hw_dump_ctrl_event(cmd));
+    ERROR("cmd failed (%s)", strerror(errno));
     skt_disconnect(common->ctrl_fd);
     common->ctrl_fd = AUDIO_SKT_DISCONNECTED;
     return -1;
@@ -456,10 +443,7 @@ static int a2dp_command(struct a2dp_stream_common* common, tA2DP_CTRL_CMD cmd) {
   DEBUG("A2DP COMMAND %s DONE STATUS %d", audio_a2dp_hw_dump_ctrl_event(cmd),
         ack);
 
-  if (ack == A2DP_CTRL_ACK_INCALL_FAILURE) {
-    ERROR("A2DP COMMAND %s error %d", audio_a2dp_hw_dump_ctrl_event(cmd), ack);
-    return ack;
-  }
+  if (ack == A2DP_CTRL_ACK_INCALL_FAILURE) return ack;
   if (ack != A2DP_CTRL_ACK_SUCCESS) {
     ERROR("A2DP COMMAND %s error %d", audio_a2dp_hw_dump_ctrl_event(cmd), ack);
     return -1;
@@ -607,41 +591,25 @@ static int a2dp_read_output_audio_config(
   switch (codec_config->channel_mode) {
     case BTAV_A2DP_CODEC_CHANNEL_MODE_MONO:
       stream_config.channel_mask = AUDIO_CHANNEL_OUT_MONO;
-      stream_config.is_stereo_to_mono = true;
       break;
     case BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO:
       stream_config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
-      stream_config.is_stereo_to_mono = false;
       break;
     case BTAV_A2DP_CODEC_CHANNEL_MODE_NONE:
     default:
       ERROR("Invalid channel mode: 0x%x", codec_config->channel_mode);
       return -1;
   }
-  if (stream_config.is_stereo_to_mono) {
-    stream_config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
-  }
 
   // Update the output stream configuration
   if (update_stream_config) {
     common->cfg.rate = stream_config.rate;
     common->cfg.channel_mask = stream_config.channel_mask;
-    common->cfg.is_stereo_to_mono = stream_config.is_stereo_to_mono;
     common->cfg.format = stream_config.format;
     common->buffer_sz = audio_a2dp_hw_stream_compute_buffer_size(
         codec_config->sample_rate, codec_config->bits_per_sample,
         codec_config->channel_mode);
-    if (common->cfg.is_stereo_to_mono) {
-      // We need to fetch twice as much data from the Audio framework
-      common->buffer_sz *= 2;
-    }
   }
-
-  INFO(
-      "got output codec config (update_stream_config=%s): "
-      "sample_rate=0x%x bits_per_sample=0x%x channel_mode=0x%x",
-      update_stream_config ? "true" : "false", codec_config->sample_rate,
-      codec_config->bits_per_sample, codec_config->channel_mode);
 
   INFO(
       "got output codec capability: sample_rate=0x%x bits_per_sample=0x%x "
@@ -699,8 +667,8 @@ static int a2dp_write_output_audio_config(struct a2dp_stream_common* common) {
       codec_config.bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_32;
       break;
     case AUDIO_FORMAT_PCM_8_24_BIT:
-      // All 24-bit audio is expected in AUDIO_FORMAT_PCM_24_BIT_PACKED format
-      FALLTHROUGH_INTENDED; /* FALLTHROUGH */
+    // FALLTHROUGH
+    // All 24-bit audio is expected in AUDIO_FORMAT_PCM_24_BIT_PACKED format
     default:
       ERROR("Invalid audio format: 0x%x", common->cfg.format);
       return -1;
@@ -711,11 +679,7 @@ static int a2dp_write_output_audio_config(struct a2dp_stream_common* common) {
       codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_MONO;
       break;
     case AUDIO_CHANNEL_OUT_STEREO:
-      if (common->cfg.is_stereo_to_mono) {
-        codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_MONO;
-      } else {
-        codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO;
-      }
+      codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO;
       break;
     default:
       ERROR("Invalid channel mask: 0x%x", common->cfg.channel_mask);
@@ -741,41 +705,6 @@ static int a2dp_write_output_audio_config(struct a2dp_stream_common* common) {
       codec_config.sample_rate, codec_config.bits_per_sample,
       codec_config.channel_mode);
 
-  return 0;
-}
-
-static int a2dp_get_presentation_position_cmd(struct a2dp_stream_common* common,
-                                              uint64_t* bytes, uint16_t* delay,
-                                              struct timespec* timestamp) {
-  if ((common->ctrl_fd == AUDIO_SKT_DISCONNECTED) ||
-      (common->state != AUDIO_A2DP_STATE_STARTED)) {  // Audio is not streaming
-    return -1;
-  }
-
-  if (a2dp_command(common, A2DP_CTRL_GET_PRESENTATION_POSITION) < 0) {
-    return -1;
-  }
-
-  if (a2dp_ctrl_receive(common, bytes, sizeof(*bytes)) < 0) {
-    return -1;
-  }
-
-  if (a2dp_ctrl_receive(common, delay, sizeof(*delay)) < 0) {
-    return -1;
-  }
-
-  uint32_t seconds;
-  if (a2dp_ctrl_receive(common, &seconds, sizeof(seconds)) < 0) {
-    return -1;
-  }
-
-  uint32_t nsec;
-  if (a2dp_ctrl_receive(common, &nsec, sizeof(nsec)) < 0) {
-    return -1;
-  }
-
-  timestamp->tv_sec = seconds;
-  timestamp->tv_nsec = nsec;
   return 0;
 }
 
@@ -853,10 +782,6 @@ static int start_audio_datapath(struct a2dp_stream_common* common) {
     }
   }
   common->state = (a2dp_state_t)AUDIO_A2DP_STATE_STARTED;
-
-  /* check to see if delay reporting is enabled */
-  enable_delay_reporting = delay_reporting_enabled();
-
   return 0;
 
 error:
@@ -919,7 +844,6 @@ static ssize_t out_write(struct audio_stream_out* stream, const void* buffer,
                          size_t bytes) {
   struct a2dp_stream_out* out = (struct a2dp_stream_out*)stream;
   int sent = -1;
-  size_t write_bytes = bytes;
 
   DEBUG("write %zu bytes (fd %d)", bytes, out->common.audio_fd);
 
@@ -941,21 +865,8 @@ static ssize_t out_write(struct audio_stream_out* stream, const void* buffer,
     goto finish;
   }
 
-  // Mix the stereo into mono if necessary
-  if (out->common.cfg.is_stereo_to_mono) {
-    const size_t frames = bytes / audio_stream_out_frame_size(stream);
-    int16_t* src = (int16_t*)buffer;
-    int16_t* dst = (int16_t*)buffer;
-    for (size_t i = 0; i < frames; i++, dst++, src += 2) {
-      *dst = (int16_t)(((int32_t)src[0] + (int32_t)src[1]) >> 1);
-    }
-    write_bytes /= 2;
-    DEBUG("stereo-to-mono mixing: write %zu bytes (fd %d)", write_bytes,
-          out->common.audio_fd);
-  }
-
   lock.unlock();
-  sent = skt_write(out->common.audio_fd, buffer, write_bytes);
+  sent = skt_write(out->common.audio_fd, buffer, bytes);
   lock.lock();
 
   if (sent == -1) {
@@ -1340,44 +1251,17 @@ static int out_get_presentation_position(const struct audio_stream_out* stream,
   FNLOG();
   if (stream == NULL || frames == NULL || timestamp == NULL) return -EINVAL;
 
+  int ret = -EWOULDBLOCK;
   std::lock_guard<std::recursive_mutex> lock(*out->common.mutex);
-
-  // bytes is the total number of bytes sent by the Bluetooth stack to a
-  // remote headset
-  uint64_t bytes = 0;
-
-  // delay_report is the audio delay from the remote headset receiving data to
-  // the headset playing sound in units of 1/10ms
-  uint16_t delay_report = 0;
-
-  // If for some reason getting a delay fails or delay reports are disabled,
-  // default to old delay
-  if (enable_delay_reporting &&
-      a2dp_get_presentation_position_cmd(&out->common, &bytes, &delay_report,
-                                         timestamp) == 0) {
-    uint64_t delay_ns = delay_report * DELAY_TO_NS;
-    if (delay_ns > MIN_DELAY_MS * MS_TO_NS &&
-        delay_ns < MAX_DELAY_MS * MS_TO_NS) {
-      *frames = bytes / audio_stream_out_frame_size(stream);
-
-      timestamp->tv_nsec += delay_ns;
-      if (timestamp->tv_nsec > 1 * SEC_TO_NS) {
-        timestamp->tv_sec++;
-        timestamp->tv_nsec -= SEC_TO_NS;
-      }
-      return 0;
-    }
-  }
-
   uint64_t latency_frames =
       (uint64_t)out_get_latency(stream) * out->common.cfg.rate / 1000;
   if (out->frames_presented >= latency_frames) {
-    clock_gettime(CLOCK_MONOTONIC, timestamp);
     *frames = out->frames_presented - latency_frames;
-    return 0;
+    clock_gettime(CLOCK_MONOTONIC,
+                  timestamp);  // could also be associated with out_write().
+    ret = 0;
   }
-
-  return -EWOULDBLOCK;
+  return ret;
 }
 
 static int out_get_render_position(const struct audio_stream_out* stream,
@@ -1678,8 +1562,6 @@ static void adev_close_output_stream(struct audio_hw_device* dev,
                                      struct audio_stream_out* stream) {
   struct a2dp_audio_device* a2dp_dev = (struct a2dp_audio_device*)dev;
   struct a2dp_stream_out* out = (struct a2dp_stream_out*)stream;
-
-  INFO("%s: state %d", __func__, out->common.state);
 
   // prevent interference with adev_set_parameters.
   std::lock_guard<std::recursive_mutex> lock(*a2dp_dev->mutex);

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2002-2012 Broadcom Corporation
+ *  Copyright (C) 2002-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -107,7 +107,7 @@ extern void AVDTC_DiscoverRsp(const RawAddress& bd_addr, uint8_t label,
  *
  ******************************************************************************/
 extern void AVDTC_GetCapRsp(const RawAddress& bd_addr, uint8_t label,
-                            AvdtpSepConfig* p_cap);
+                            tAVDT_CFG* p_cap);
 
 /*******************************************************************************
  *
@@ -119,7 +119,7 @@ extern void AVDTC_GetCapRsp(const RawAddress& bd_addr, uint8_t label,
  *
  ******************************************************************************/
 extern void AVDTC_GetAllCapRsp(const RawAddress& bd_addr, uint8_t label,
-                               AvdtpSepConfig* p_cap);
+                               tAVDT_CFG* p_cap);
 
 /*******************************************************************************
  *
@@ -141,8 +141,7 @@ extern void AVDTC_GetConfigReq(uint8_t handle);
  * Returns          void
  *
  ******************************************************************************/
-extern void AVDTC_GetConfigRsp(uint8_t handle, uint8_t label,
-                               AvdtpSepConfig* p_cfg);
+extern void AVDTC_GetConfigRsp(uint8_t handle, uint8_t label, tAVDT_CFG* p_cfg);
 
 /*******************************************************************************
  *

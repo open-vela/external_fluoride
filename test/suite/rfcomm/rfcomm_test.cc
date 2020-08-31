@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2016 Google, Inc.
+ *  Copyright (C) 2016 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,16 +19,18 @@
 #include "rfcomm/rfcomm_test.h"
 #include "adapter/bluetooth_test.h"
 
-using bluetooth::Uuid;
+#include "btcore/include/uuid.h"
 
 namespace bttest {
 
-const Uuid RFCommTest::HFP_UUID = Uuid::From16Bit(0x111E);
+const bt_uuid_t RFCommTest::HFP_UUID = {{0x00, 0x00, 0x11, 0x1E, 0x00, 0x00,
+                                         0x10, 0x00, 0x80, 0x00, 0x00, 0x80,
+                                         0x5F, 0x9B, 0x34, 0xFB}};
 
 void RFCommTest::SetUp() {
   BluetoothTest::SetUp();
 
-  ASSERT_EQ(bt_interface()->enable(), BT_STATUS_SUCCESS);
+  ASSERT_EQ(bt_interface()->enable(false), BT_STATUS_SUCCESS);
   semaphore_wait(adapter_state_changed_callback_sem_);
   ASSERT_TRUE(GetState() == BT_STATE_ON);
   socket_interface_ =
@@ -38,6 +40,7 @@ void RFCommTest::SetUp() {
 
   // Find a bonded device that supports HFP
   bt_remote_bdaddr_ = RawAddress::kEmpty;
+  char value[1280];
 
   bt_property_t* bonded_devices_prop =
       GetProperty(BT_PROPERTY_ADAPTER_BONDED_DEVICES);
@@ -52,11 +55,12 @@ void RFCommTest::SetUp() {
     bt_property_t* uuid_prop =
         GetRemoteDeviceProperty(&devices[i], BT_PROPERTY_UUIDS);
     if (uuid_prop == nullptr) continue;
-    Uuid* uuids = reinterpret_cast<Uuid*>(uuid_prop->val);
-    int num_uuids = uuid_prop->len / sizeof(Uuid);
+    bt_uuid_t* uuids = (bt_uuid_t*)uuid_prop->val;
+    int num_uuids = uuid_prop->len / sizeof(bt_uuid_t);
 
     for (int j = 0; j < num_uuids; j++) {
-      if (!memcmp(uuids + j, &HFP_UUID, sizeof(Uuid))) {
+      uuid_to_string(&uuids[j], (uuid_string_t*)value);
+      if (!memcmp(uuids + j, &HFP_UUID, sizeof(bt_uuid_t))) {
         bt_remote_bdaddr_ = *(devices + i);
         break;
       }

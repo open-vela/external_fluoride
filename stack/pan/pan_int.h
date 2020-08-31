@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2001-2012 Broadcom Corporation
+ *  Copyright (C) 2001-2012 Broadcom Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,6 +32,10 @@
  * Applications should call PAN_Deregister to shutdown the profile
  */
 #define PAN_ROLE_INACTIVE 0
+
+/* Protocols supported by the host internal stack, are registered with SDP */
+#define PAN_PROTOCOL_IP 0x0800
+#define PAN_PROTOCOL_ARP 0x0806
 
 #define PAN_PROFILE_VERSION 0x0100 /* Version 1.00 */
 
@@ -94,11 +98,13 @@ extern tPAN_CB pan_cb;
 /******************************************************************************/
 extern void pan_register_with_bnep(void);
 extern void pan_conn_ind_cb(uint16_t handle, const RawAddress& p_bda,
-                            const bluetooth::Uuid& remote_uuid,
-                            const bluetooth::Uuid& local_uuid,
+                            tBT_UUID* remote_uuid, tBT_UUID* local_uuid,
                             bool is_role_change);
 extern void pan_connect_state_cb(uint16_t handle, const RawAddress& rem_bda,
                                  tBNEP_RESULT result, bool is_role_change);
+extern void pan_data_ind_cb(uint16_t handle, const RawAddress& src,
+                            const RawAddress& dst, uint16_t protocol,
+                            uint8_t* p_data, uint16_t len, bool fw_ext_present);
 extern void pan_data_buf_ind_cb(uint16_t handle, const RawAddress& src,
                                 const RawAddress& dst, uint16_t protocol,
                                 BT_HDR* p_buf, bool ext);
@@ -109,8 +115,8 @@ void pan_proto_filt_ind_cb(uint16_t handle, bool indication,
 void pan_mcast_filt_ind_cb(uint16_t handle, bool indication,
                            tBNEP_RESULT result, uint16_t num_filters,
                            uint8_t* p_filters);
-extern uint32_t pan_register_with_sdp(uint16_t uuid, const char* p_name,
-                                      const char* p_desc);
+extern uint32_t pan_register_with_sdp(uint16_t uuid, uint8_t sec_mask,
+                                      const char* p_name, const char* p_desc);
 extern tPAN_CONN* pan_allocate_pcb(const RawAddress& p_bda, uint16_t handle);
 extern tPAN_CONN* pan_get_pcb_by_handle(uint16_t handle);
 extern tPAN_CONN* pan_get_pcb_by_addr(const RawAddress& p_bda);

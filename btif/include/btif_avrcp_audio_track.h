@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 The Android Open Source Project
+ * Copyright (C) 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,7 @@
  * should eventually be
  * deleted using BtifAvrcpAudioTrackDelete (see below).
  */
-void* BtifAvrcpAudioTrackCreate(int trackFreq, int bitsPerSample,
-                                int channelCount);
+void* BtifAvrcpAudioTrackCreate(int trackFreq, int channelType);
 
 /**
  * Starts the audio track.
@@ -66,4 +65,4 @@ void BtifAvrcpAudioTrackDelete(void* handle);
  * Used only for debugging.
  */
 int BtifAvrcpAudioTrackWriteData(void* handle, void* audioBuffer,
-                                 int bufferLength);
+                                 int bufferlen);
