@@ -26,25 +26,30 @@
 
 #include <base/logging.h>
 #include <base/strings/stringprintf.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdint>
+#include <string>
 
-#include "bt_common.h"
-#include "bt_types.h"
-#include "btm_api.h"
-#include "btu.h"
-#include "device/include/controller.h"
-#include "hcidefs.h"
-#include "hcimsgs.h"
-#include "l2c_int.h"
-#include "l2cdefs.h"
+#include "btm_sec.h"
+#include "device/include/controller.h"  // TODO Remove
 #include "main/shim/l2c_api.h"
 #include "main/shim/shim.h"
-#include "osi/include/allocator.h"
 #include "osi/include/log.h"
+#include "stack/include/l2c_api.h"
+#include "stack/l2cap/l2c_int.h"
+
+void btsnd_hcic_enhanced_flush(uint16_t handle,
+                               uint8_t packet_type);  // TODO Remove
 
 using base::StringPrintf;
+
+uint16_t L2CA_Register2(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
+                        bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
+                        uint16_t required_mtu, uint16_t sec_level) {
+  auto ret =
+      L2CA_Register(psm, p_cb_info, enable_snoop, p_ertm_info, required_mtu);
+  BTM_SetSecurityLevel(false, "", 0, sec_level, psm, 0, 0);
+  return ret;
+}
 
 /*******************************************************************************
  *
@@ -61,10 +66,11 @@ using base::StringPrintf;
  *
  ******************************************************************************/
 uint16_t L2CA_Register(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
-                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info) {
+                       bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
+                       uint16_t required_mtu) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_Register(psm, p_cb_info, enable_snoop,
-                                          p_ertm_info);
+                                          p_ertm_info, required_mtu);
   }
 
   tL2C_RCB* p_rcb;
@@ -286,6 +292,12 @@ void L2CA_FreeLePSM(uint16_t psm) {
   l2cb.le_dyn_psm_assigned[psm - LE_DYNAMIC_PSM_START] = false;
 }
 
+uint16_t L2CA_ConnectReq2(uint16_t psm, const RawAddress& p_bd_addr,
+                          uint16_t sec_level) {
+  BTM_SetSecurityLevel(true, "", 0, sec_level, psm, 0, 0);
+  return L2CA_ConnectReq(psm, p_bd_addr);
+}
+
 /*******************************************************************************
  *
  * Function         L2CA_ConnectReq
@@ -305,6 +317,13 @@ uint16_t L2CA_ConnectReq(uint16_t psm, const RawAddress& p_bd_addr) {
   }
 
   return L2CA_ErtmConnectReq(psm, p_bd_addr, nullptr);
+}
+
+uint16_t L2CA_ErtmConnectReq2(uint16_t psm, const RawAddress& p_bd_addr,
+                              tL2CAP_ERTM_INFO* p_ertm_info,
+                              uint16_t sec_level) {
+  BTM_SetSecurityLevel(true, "", 0, sec_level, psm, 0, 0);
+  return L2CA_ErtmConnectReq(psm, p_bd_addr, p_ertm_info);
 }
 
 /*******************************************************************************
@@ -354,12 +373,13 @@ uint16_t L2CA_ErtmConnectReq(uint16_t psm, const RawAddress& p_bd_addr,
     /* No link. Get an LCB and start link establishment */
     p_lcb = l2cu_allocate_lcb(p_bd_addr, false, BT_TRANSPORT_BR_EDR);
     /* currently use BR/EDR for ERTM mode l2cap connection */
-    if ((p_lcb == nullptr) || (!l2cu_create_conn_br_edr(p_lcb))) {
+    if (p_lcb == nullptr) {
       LOG(WARNING) << __func__
                    << ": connection not started for PSM=" << loghex(psm)
                    << ", p_lcb=" << p_lcb;
       return 0;
     }
+    l2cu_create_conn_br_edr(p_lcb);
   }
 
   /* Allocate a channel control block */
@@ -430,11 +450,13 @@ uint16_t L2CA_ErtmConnectReq(uint16_t psm, const RawAddress& p_bd_addr,
  *                  and L2CA_DeregisterLECoc()
  *
  ******************************************************************************/
-uint16_t L2CA_RegisterLECoc(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info) {
+uint16_t L2CA_RegisterLECoc(uint16_t psm, tL2CAP_APPL_INFO* p_cb_info,
+                            uint16_t sec_level) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_RegisterLECoc(psm, p_cb_info);
   }
 
+  BTM_SetSecurityLevel(false, "", 0, sec_level, psm, 0, 0);
   L2CAP_TRACE_API("%s called for LE PSM: 0x%04x", __func__, psm);
 
   /* Verify that the required callback info has been filled in
@@ -548,10 +570,12 @@ void L2CA_DeregisterLECoc(uint16_t psm) {
  *
  ******************************************************************************/
 uint16_t L2CA_ConnectLECocReq(uint16_t psm, const RawAddress& p_bd_addr,
-                              tL2CAP_LE_CFG_INFO* p_cfg) {
+                              tL2CAP_LE_CFG_INFO* p_cfg, uint16_t sec_level) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_ConnectLECocReq(psm, p_bd_addr, p_cfg);
   }
+
+  BTM_SetSecurityLevel(true, "", 0, sec_level, psm, 0, 0);
 
   VLOG(1) << __func__ << " BDA: " << p_bd_addr
           << StringPrintf(" PSM: 0x%04x", psm);
@@ -595,7 +619,7 @@ uint16_t L2CA_ConnectLECocReq(uint16_t psm, const RawAddress& p_bd_addr,
 
   /* Save the configuration */
   if (p_cfg) {
-    memcpy(&p_ccb->local_conn_cfg, p_cfg, sizeof(tL2CAP_LE_CFG_INFO));
+    p_ccb->local_conn_cfg = *p_cfg;
     p_ccb->remote_credit_count = p_cfg->credits;
   }
 
@@ -673,7 +697,7 @@ bool L2CA_ConnectLECocRsp(const RawAddress& p_bd_addr, uint8_t id,
   }
 
   if (p_cfg) {
-    memcpy(&p_ccb->local_conn_cfg, p_cfg, sizeof(tL2CAP_LE_CFG_INFO));
+    p_ccb->local_conn_cfg = *p_cfg;
     p_ccb->remote_credit_count = p_cfg->credits;
   }
 
@@ -992,67 +1016,17 @@ bool L2CA_DisconnectRsp(uint16_t cid) {
   return (true);
 }
 
-bool L2CA_GetIdentifiers(uint16_t lcid, uint16_t* rcid, uint16_t* handle) {
+bool L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_GetIdentifiers(lcid, rcid, handle);
+    return bluetooth::shim::L2CA_GetRemoteCid(lcid, rcid);
   }
 
   tL2C_CCB* control_block = l2cu_find_ccb_by_cid(NULL, lcid);
   if (!control_block) return false;
 
   if (rcid) *rcid = control_block->remote_cid;
-  if (handle) *handle = control_block->p_lcb->handle;
 
   return true;
-}
-
-/*******************************************************************************
- *
- * Function         L2CA_SetIdleTimeout
- *
- * Description      Higher layers call this function to set the idle timeout for
- *                  a connection, or for all future connections. The "idle
- *                  timeout" is the amount of time that a connection can remain
- *                  up with no L2CAP channels on it. A timeout of zero means
- *                  that the connection will be torn down immediately when the
- *                  last channel is removed. A timeout of 0xFFFF means no
- *                  timeout. Values are in seconds.
- *
- * Returns          true if command succeeded, false if failed
- *
- * NOTE             This timeout takes effect after at least 1 channel has been
- *                  established and removed. L2CAP maintains its own timer from
- *                  whan a connection is established till the first channel is
- *                  set up.
- ******************************************************************************/
-bool L2CA_SetIdleTimeout(uint16_t cid, uint16_t timeout, bool is_global) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_SetIdleTimeout(cid, timeout, is_global);
-  }
-
-  tL2C_CCB* p_ccb;
-  tL2C_LCB* p_lcb;
-
-  if (is_global) {
-    l2cb.idle_timeout = timeout;
-  } else {
-    /* Find the channel control block. We don't know the link it is on. */
-    p_ccb = l2cu_find_ccb_by_cid(NULL, cid);
-    if (p_ccb == NULL) {
-      L2CAP_TRACE_WARNING("L2CAP - no CCB for L2CA_SetIdleTimeout, CID: %d",
-                          cid);
-      return (false);
-    }
-
-    p_lcb = p_ccb->p_lcb;
-
-    if ((p_lcb) && (p_lcb->in_use) && (p_lcb->link_state == LST_CONNECTED))
-      p_lcb->idle_timeout = timeout;
-    else
-      return (false);
-  }
-
-  return (true);
 }
 
 /*******************************************************************************
@@ -1125,47 +1099,6 @@ uint8_t L2CA_SetTraceLevel(uint8_t new_level) {
 
 /*******************************************************************************
  *
- * Function     L2CA_SetDesireRole
- *
- * Description  This function sets the desire role for L2CAP.
- *              If the new role is L2CAP_ROLE_ALLOW_SWITCH, allow switch on
- *              HciCreateConnection.
- *              If the new role is L2CAP_ROLE_DISALLOW_SWITCH, do not allow
- *              switch on HciCreateConnection.
- *
- *              If the new role is a valid role (HCI_ROLE_MASTER or
- *              HCI_ROLE_SLAVE), the desire role is set to the new value.
- *              Otherwise, it is not changed.
- *
- * Returns      the new (current) role
- *
- ******************************************************************************/
-uint8_t L2CA_SetDesireRole(uint8_t new_role) {
-  if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_SetDesireRole(new_role);
-  }
-
-  L2CAP_TRACE_API("L2CA_SetDesireRole() new:x%x, disallow_switch:%d", new_role,
-                  l2cb.disallow_switch);
-
-  if (L2CAP_ROLE_CHECK_SWITCH != (L2CAP_ROLE_CHECK_SWITCH & new_role)) {
-    /* do not process the allow_switch when both bits are set */
-    if (new_role & L2CAP_ROLE_ALLOW_SWITCH) {
-      l2cb.disallow_switch = false;
-    }
-    if (new_role & L2CAP_ROLE_DISALLOW_SWITCH) {
-      l2cb.disallow_switch = true;
-    }
-  }
-
-  if (new_role == HCI_ROLE_MASTER || new_role == HCI_ROLE_SLAVE)
-    l2cb.desire_role = new_role;
-
-  return (l2cb.desire_role);
-}
-
-/*******************************************************************************
- *
  * Function         L2CA_SetAclPriority
  *
  * Description      Sets the transmission priority for a channel.
@@ -1229,92 +1162,80 @@ bool L2CA_SetTxPriority(uint16_t cid, tL2CAP_CHNL_PRIORITY priority) {
  *                          all ACL links.
  *                  FlushTimeout: flush time out in ms
  *                           0x0000 : No automatic flush
- *                           L2CAP_NO_RETRANSMISSION : No retransmission
- *                           0x0002 - 0xFFFE : flush time out, if
- *                                            (flush_tout * 8) + 3 / 5) <=
- *                                             HCI_MAX_AUTOMATIC_FLUSH_TIMEOUT
- *                                            (in 625us slot).
- *                                    Otherwise, return false.
- *                           L2CAP_NO_AUTOMATIC_FLUSH : No automatic flush
+ *                           0x0001 : No retransmission
+ *                           0x0002 - 0x0500 : flush time out in ms
+ *                           0xffff : DEPRECATED No automatic flush (0x0000)
+ *                           >0x0500 : Illegal value
  *
  * Returns          true if command succeeded, false if failed
  *
  * NOTE             This flush timeout applies to all logical channels active on
  *                  the ACL link.
  ******************************************************************************/
-bool L2CA_SetFlushTimeout(const RawAddress& bd_addr, uint16_t flush_tout) {
+inline uint32_t ConvertMillisecondsToBasebandSlots(uint32_t milliseconds) {
+  return ((milliseconds * 8) + 3) / 5;
+}
+
+bool L2CA_SetFlushTimeout(const RawAddress& bd_addr,
+                          const uint16_t flush_timeout_in_ms) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
-    return bluetooth::shim::L2CA_SetFlushTimeout(bd_addr, flush_tout);
+    return bluetooth::shim::L2CA_SetFlushTimeout(bd_addr, flush_timeout_in_ms);
   }
 
-  tL2C_LCB* p_lcb;
-  uint16_t hci_flush_to;
-  uint32_t temp;
+  if (flush_timeout_in_ms == L2CAP_NO_AUTOMATIC_FLUSH) {
+    LOG_WARN(
+        "%s Parameter deprecated for no automatic flush; please use 0x0000",
+        __func__);
+  } else if (ConvertMillisecondsToBasebandSlots(flush_timeout_in_ms) >
+             HCI_MAX_AUTOMATIC_FLUSH_TIMEOUT) {
+    LOG_WARN(
+        "%s Unable to set flush timeout larger then controller capability:%dms",
+        __func__, flush_timeout_in_ms);
+    return false;
+  }
+
+  uint16_t flush_timeout_in_slots = 0;
 
   /* no automatic flush (infinite timeout) */
-  if (flush_tout == 0x0000) {
-    hci_flush_to = flush_tout;
-    flush_tout = L2CAP_NO_AUTOMATIC_FLUSH;
-  }
-  /* no retransmission */
-  else if (flush_tout == L2CAP_NO_RETRANSMISSION) {
+  if (flush_timeout_in_ms == 0x0000 ||
+      flush_timeout_in_ms == L2CAP_NO_AUTOMATIC_FLUSH) {
+    flush_timeout_in_slots = 0x0;
+  } else if (flush_timeout_in_ms == L2CAP_NO_RETRANSMISSION) {
+    /* no retransmission */
     /* not mandatory range for controller */
     /* Packet is flushed before getting any ACK/NACK */
     /* To do this, flush timeout should be 1 baseband slot */
-    hci_flush_to = flush_tout;
-  }
-  /* no automatic flush (infinite timeout) */
-  else if (flush_tout == L2CAP_NO_AUTOMATIC_FLUSH) {
-    hci_flush_to = 0x0000;
+    flush_timeout_in_slots = 0x0001;
   } else {
-    /* convert L2CAP flush_to to 0.625 ms units, with round */
-    temp = (((uint32_t)flush_tout * 8) + 3) / 5;
-
-    /* if L2CAP flush_to within range of HCI, set HCI flush timeout */
-    if (temp > HCI_MAX_AUTOMATIC_FLUSH_TIMEOUT) {
-      L2CAP_TRACE_WARNING(
-          "WARNING L2CA_SetFlushTimeout timeout(0x%x) is out of range",
-          flush_tout);
-      return false;
-    } else {
-      hci_flush_to = (uint16_t)temp;
-    }
+    flush_timeout_in_slots =
+        ConvertMillisecondsToBasebandSlots(flush_timeout_in_ms);
   }
 
   if (RawAddress::kAny != bd_addr) {
-    p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_BR_EDR);
+    tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_BR_EDR);
 
     if ((p_lcb) && (p_lcb->in_use) && (p_lcb->link_state == LST_CONNECTED)) {
-      if (p_lcb->link_flush_tout != flush_tout) {
-        p_lcb->link_flush_tout = flush_tout;
-
-        VLOG(1) << __func__ << " BDA: " << bd_addr << " " << flush_tout << "ms";
-
-        btsnd_hcic_write_auto_flush_tout(p_lcb->handle, hci_flush_to);
+      if (p_lcb->LinkFlushTimeout() != flush_timeout_in_ms) {
+        p_lcb->SetLinkFlushTimeout(flush_timeout_in_ms);
+        acl_write_automatic_flush_timeout(bd_addr, flush_timeout_in_slots);
       }
     } else {
       LOG(WARNING) << __func__ << " No lcb for bd_addr " << bd_addr;
-      return (false);
+      return false;
     }
   } else {
-    int xx;
-    p_lcb = &l2cb.lcb_pool[0];
-
-    for (xx = 0; xx < MAX_L2CAP_LINKS; xx++, p_lcb++) {
+    tL2C_LCB* p_lcb = &l2cb.lcb_pool[0];
+    for (int xx = 0; xx < MAX_L2CAP_LINKS; xx++, p_lcb++) {
       if ((p_lcb->in_use) && (p_lcb->link_state == LST_CONNECTED)) {
-        if (p_lcb->link_flush_tout != flush_tout) {
-          p_lcb->link_flush_tout = flush_tout;
-
-          VLOG(1) << __func__ << " BDA: " << p_lcb->remote_bd_addr << " "
-                  << flush_tout << "ms";
-
-          btsnd_hcic_write_auto_flush_tout(p_lcb->handle, hci_flush_to);
+        if (p_lcb->LinkFlushTimeout() != flush_timeout_in_ms) {
+          p_lcb->SetLinkFlushTimeout(flush_timeout_in_ms);
+          acl_write_automatic_flush_timeout(p_lcb->remote_bd_addr,
+                                            flush_timeout_in_slots);
         }
       }
     }
   }
-
-  return (true);
+  return true;
 }
 
 /*******************************************************************************
@@ -1356,7 +1277,6 @@ bool L2CA_GetPeerFeatures(const RawAddress& bd_addr, uint32_t* p_ext_feat,
   return true;
 }
 
-#if (L2CAP_NUM_FIXED_CHNLS > 0)
 /*******************************************************************************
  *
  *  Function        L2CA_RegisterFixedChannel
@@ -1403,7 +1323,6 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::L2CA_ConnectFixedChnl(fixed_cid, rem_bda);
   }
-
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
   return L2CA_ConnectFixedChnl(fixed_cid, rem_bda, phy);
 }
@@ -1460,10 +1379,7 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda,
     }
 
     // Get a CCB and link the lcb to it
-    if (!l2cu_initialize_fixed_ccb(
-            p_lcb, fixed_cid,
-            &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
-                 .fixed_chnl_opts)) {
+    if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
       L2CAP_TRACE_WARNING("%s(0x%04x) - LCB but no CCB", __func__, fixed_cid);
       return false;
     }
@@ -1490,25 +1406,24 @@ bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda,
   }
 
   // Get a CCB and link the lcb to it
-  if (!l2cu_initialize_fixed_ccb(
-          p_lcb, fixed_cid, &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
-                                 .fixed_chnl_opts)) {
-    p_lcb->disc_reason = L2CAP_CONN_NO_RESOURCES;
+  if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
+    p_lcb->SetDisconnectReason(L2CAP_CONN_NO_RESOURCES);
     L2CAP_TRACE_WARNING("%s(0x%04x) - no CCB", __func__, fixed_cid);
     l2cu_release_lcb(p_lcb);
     return false;
   }
 
-  bool ret = ((transport == BT_TRANSPORT_LE)
-                  ? l2cu_create_conn_le(p_lcb, initiating_phys)
-                  : l2cu_create_conn_br_edr(p_lcb));
-
-  if (!ret) {
-    L2CAP_TRACE_WARNING("%s() - create connection failed", __func__);
-    l2cu_release_lcb(p_lcb);
+  if (transport == BT_TRANSPORT_LE) {
+    bool ret = l2cu_create_conn_le(p_lcb, initiating_phys);
+    if (!ret) {
+      L2CAP_TRACE_WARNING("%s() - create connection failed", __func__);
+      l2cu_release_lcb(p_lcb);
+      return false;
+    }
+  } else {
+    l2cu_create_conn_br_edr(p_lcb);
   }
-
-  return ret;
+  return true;
 }
 
 /*******************************************************************************
@@ -1588,10 +1503,7 @@ uint16_t L2CA_SendFixedChnlData(uint16_t fixed_cid, const RawAddress& rem_bda,
   p_buf->layer_specific = L2CAP_FLUSHABLE_CH_BASED;
 
   if (!p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL]) {
-    if (!l2cu_initialize_fixed_ccb(
-            p_lcb, fixed_cid,
-            &l2cb.fixed_reg[fixed_cid - L2CAP_FIRST_FIXED_CHNL]
-                 .fixed_chnl_opts)) {
+    if (!l2cu_initialize_fixed_ccb(p_lcb, fixed_cid)) {
       L2CAP_TRACE_WARNING("L2CA_SendFixedChnlData() - no CCB for chnl: 0x%4x",
                           fixed_cid);
       osi_free(p_buf);
@@ -1615,7 +1527,7 @@ uint16_t L2CA_SendFixedChnlData(uint16_t fixed_cid, const RawAddress& rem_bda,
   l2c_enqueue_peer_data(p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL],
                         p_buf);
 
-  l2c_link_check_send_pkts(p_lcb, NULL, NULL);
+  l2c_link_check_send_pkts(p_lcb, 0, NULL);
 
   // If there is no dynamic CCB on the link, restart the idle timer each time
   // something is sent
@@ -1682,7 +1594,7 @@ bool L2CA_RemoveFixedChnl(uint16_t fixed_cid, const RawAddress& rem_bda) {
   p_ccb = p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL];
 
   p_lcb->p_fixed_ccbs[fixed_cid - L2CAP_FIRST_FIXED_CHNL] = NULL;
-  p_lcb->disc_reason = HCI_ERR_CONN_CAUSE_LOCAL_HOST;
+  p_lcb->SetDisconnectReason(HCI_ERR_CONN_CAUSE_LOCAL_HOST);
 
   // Retain the link for a few more seconds after SMP pairing is done, since
   // the Android platform always does service discovery after pairing is
@@ -1748,8 +1660,6 @@ bool L2CA_SetFixedChannelTout(const RawAddress& rem_bda, uint16_t fixed_cid,
   return true;
 }
 
-#endif /* #if (L2CAP_NUM_FIXED_CHNLS > 0) */
-
 /*******************************************************************************
  *
  * Function         L2CA_DataWrite
@@ -1786,7 +1696,6 @@ bool L2CA_SetChnlFlushability(uint16_t cid, bool is_flushable) {
     return bluetooth::shim::L2CA_SetChnlFlushability(cid, is_flushable);
   }
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
   tL2C_CCB* p_ccb;
 
   /* Find the channel control block. We don't know the link it is on. */
@@ -1801,8 +1710,6 @@ bool L2CA_SetChnlFlushability(uint16_t cid, bool is_flushable) {
 
   L2CAP_TRACE_API("L2CA_SetChnlFlushability()  CID: 0x%04x  is_flushable: %d",
                   cid, is_flushable);
-
-#endif
 
   return (true);
 }
@@ -1851,21 +1758,16 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
 
   /* Cannot flush eRTM buffers once they have a sequence number */
   if (p_ccb->peer_cfg.fcr.mode != L2CAP_FCR_ERTM_MODE) {
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
+    const controller_t* controller = controller_get_interface();
     if (num_to_flush != L2CAP_FLUSH_CHANS_GET) {
       /* If the controller supports enhanced flush, flush the data queued at the
        * controller */
-      if ((HCI_NON_FLUSHABLE_PB_SUPPORTED(BTM_ReadLocalFeatures())) &&
+      if (controller->supports_non_flushable_pb() &&
           (BTM_GetNumScoLinks() == 0)) {
-        if (!l2cb.is_flush_active) {
-          l2cb.is_flush_active = true;
-
-          /* The only packet type defined - 0 - Automatically-Flushable Only */
-          btsnd_hcic_enhanced_flush(p_lcb->handle, 0);
-        }
+        /* The only packet type defined - 0 - Automatically-Flushable Only */
+        btsnd_hcic_enhanced_flush(p_lcb->Handle(), 0);
       }
     }
-#endif
 
     // Iterate though list and flush the amount requested from
     // the transmit data queue that satisfy the layer and event conditions.
@@ -1891,7 +1793,7 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
     num_flushed2++;
   }
 
-  /* If app needs to track all packets, call him */
+  /* If app needs to track all packets, call it */
   if ((p_ccb->p_rcb) && (p_ccb->p_rcb->api.pL2CA_TxComplete_Cb) &&
       (num_flushed2))
     (*p_ccb->p_rcb->api.pL2CA_TxComplete_Cb)(p_ccb->local_cid, num_flushed2);
@@ -1914,4 +1816,13 @@ uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush) {
   l2cu_check_channel_congestion(p_ccb);
 
   return (num_left);
+}
+
+bool L2CA_IsLinkEstablished(const RawAddress& bd_addr,
+                            tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
+    return bluetooth::shim::L2CA_IsLinkEstablished(bd_addr, transport);
+  }
+
+  return l2cu_find_lcb_by_bd_addr(bd_addr, transport) != nullptr;
 }
