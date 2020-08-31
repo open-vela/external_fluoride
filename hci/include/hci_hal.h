@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2014 Google, Inc.
+ *  Copyright (C) 2014 Google, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ typedef enum {
   DATA_TYPE_COMMAND = 1,
   DATA_TYPE_ACL = 2,
   DATA_TYPE_SCO = 3,
-  DATA_TYPE_EVENT = 4,
-  DATA_TYPE_ISO = 5
+  DATA_TYPE_EVENT = 4
 } serial_data_type_t;
 
 typedef void (*data_ready_cb)(serial_data_type_t type);
