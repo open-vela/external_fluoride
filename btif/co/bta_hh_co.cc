@@ -37,11 +37,9 @@
 
 const char* dev_path = "/dev/uhid";
 
-#if (BTA_HH_LE_INCLUDED == TRUE)
 #include "btif_config.h"
 #define BTA_HH_NV_LOAD_MAX 16
 static tBTA_HH_RPT_CACHE_ENTRY sReportCache[BTA_HH_NV_LOAD_MAX];
-#endif
 #define GET_RPT_RSP_OFFSET 9
 #define THREAD_NORMAL_PRIORITY 0
 #define BT_HH_THREAD "bt_hh_thread"
@@ -163,7 +161,29 @@ static int uhid_read_event(btif_hh_device_t* p_dev) {
         APPL_TRACE_ERROR("%s: UHID_FEATURE: Invalid report type = %d", __func__,
                          ev.u.feature.rtype);
       break;
+    case UHID_SET_REPORT:
+      if (ret < (ssize_t)(sizeof(ev.type) + sizeof(ev.u.set_report))) {
+          APPL_TRACE_ERROR("%s: Invalid size read from uhid-dev: %zd < %zu",
+                           __func__, ret, sizeof(ev.type) + sizeof(ev.u.set_report));
+            return -EFAULT;
+        }
 
+        APPL_TRACE_DEBUG("UHID_SET_REPORT: Report type = %d, report_size = %d"
+                          , ev.u.set_report.rtype, ev.u.set_report.size);
+
+        if (ev.u.set_report.rtype == UHID_FEATURE_REPORT)
+            btif_hh_setreport(p_dev, BTHH_FEATURE_REPORT,
+                              ev.u.set_report.size, ev.u.set_report.data);
+        else if (ev.u.set_report.rtype == UHID_OUTPUT_REPORT)
+            btif_hh_setreport(p_dev, BTHH_OUTPUT_REPORT,
+                              ev.u.set_report.size, ev.u.set_report.data);
+        else if(ev.u.set_report.rtype == UHID_INPUT_REPORT)
+            btif_hh_setreport(p_dev, BTHH_INPUT_REPORT,
+                              ev.u.set_report.size, ev.u.set_report.data);
+        else
+            APPL_TRACE_ERROR("%s:UHID_SET_REPORT: Invalid Report type = %d"
+                          , __func__, ev.u.set_report.rtype);
+        break;
     default:
       APPL_TRACE_DEBUG("Invalid event from uhid-dev: %u\n", ev.type);
   }
@@ -571,7 +591,7 @@ void bta_hh_co_get_rpt_rsp(uint8_t dev_handle, uint8_t status, uint8_t* p_rpt,
   }
 
   // Send the HID report to the kernel.
-  if (p_dev->fd >= 0 && p_dev->get_rpt_snt--) {
+  if (p_dev->fd >= 0 && p_dev->get_rpt_snt > 0 && p_dev->get_rpt_snt--) {
     uint32_t* get_rpt_id =
         (uint32_t*)fixed_queue_dequeue(p_dev->get_rpt_id_queue);
     memset(&ev, 0, sizeof(ev));
@@ -592,7 +612,6 @@ void bta_hh_co_get_rpt_rsp(uint8_t dev_handle, uint8_t status, uint8_t* p_rpt,
   }
 }
 
-#if (BTA_HH_LE_INCLUDED == TRUE)
 /*******************************************************************************
  *
  * Function         bta_hh_le_co_rpt_info
@@ -687,5 +706,3 @@ void bta_hh_le_co_reset_rpt_cache(const RawAddress& remote_bda,
 
   BTIF_TRACE_DEBUG("%s() - Reset cache for bda %s", __func__, bdstr);
 }
-
-#endif  // (BTA_HH_LE_INCLUDED == TRUE)

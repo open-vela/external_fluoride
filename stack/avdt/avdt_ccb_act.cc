@@ -34,6 +34,7 @@
 #include "btm_api.h"
 #include "btu.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
 
 /*******************************************************************************
  *
@@ -76,7 +77,6 @@ static void avdt_ccb_clear_ccb(AvdtpCcb* p_ccb) {
  *
  ******************************************************************************/
 void avdt_ccb_chan_open(AvdtpCcb* p_ccb, UNUSED_ATTR tAVDT_CCB_EVT* p_data) {
-  BTM_SetOutService(p_ccb->peer_addr, BTM_SEC_SERVICE_AVDTP, AVDT_CHAN_SIG);
   avdt_ad_open_req(AVDT_CHAN_SIG, p_ccb, NULL, AVDT_INT);
 }
 
@@ -940,11 +940,6 @@ void avdt_ccb_chk_timer(AvdtpCcb* p_ccb, UNUSED_ATTR tAVDT_CCB_EVT* p_data) {
 void avdt_ccb_set_conn(AvdtpCcb* p_ccb, tAVDT_CCB_EVT* p_data) {
   /* save callback */
   p_ccb->p_conn_cback = p_data->connect.p_cback;
-
-  /* set security level */
-  BTM_SetSecurityLevel(true, "", BTM_SEC_SERVICE_AVDTP,
-                       p_data->connect.sec_mask, AVDT_PSM, BTM_SEC_PROTO_AVDT,
-                       AVDT_CHAN_SIG);
 }
 
 /*******************************************************************************

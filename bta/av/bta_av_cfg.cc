@@ -42,7 +42,10 @@ const uint32_t bta_av_meta_caps_co_ids[] = {AVRC_CO_METADATA, AVRC_CO_BROADCOM};
 
 /* AVRCP supported categories */
 #define BTA_AV_RC_SUPF_CT (AVRC_SUPF_CT_CAT2)
-#define BTA_AVK_RC_SUPF_CT (AVRC_SUPF_CT_CAT1 | AVRC_SUPF_CT_BROWSE)
+#define BTA_AVK_RC_SUPF_CT (AVRC_SUPF_CT_CAT1 |                     \
+                            AVRC_SUPF_CT_BROWSE |                   \
+                            AVRC_SUPF_CT_COVER_ART_GET_IMAGE_PROP | \
+                            AVRC_SUPF_CT_COVER_ART_GET_IMAGE)
 #define BTA_AVK_RC_SUPF_TG (AVRC_SUPF_TG_CAT2)
 
 /* AVRCP Controller and Targer default name */
@@ -147,7 +150,6 @@ const tBTA_AV_CFG bta_av_cfg = {
                                  for company id */
     bta_av_meta_caps_evt_ids, /* the the metadata Get Capabilities
                                  response for event id */
-    NULL,                     /* the action function table for audio stream */
     BTA_AV_RC_CT_NAME,        /* Default AVRCP controller name */
     BTA_AV_RC_TG_NAME         /* Default AVRCP target name */
 };
@@ -173,7 +175,6 @@ const tBTA_AV_CFG bta_avk_cfg = {
                                   for company id */
     bta_avk_meta_caps_evt_ids, /* the the metadata Get Capabilities
                                   response for event id */
-    NULL,                      /* the action function table for audio stream */
     {0},                       /* Default AVRCP controller name */
     {0},                       /* Default AVRCP target name */
 };
@@ -199,7 +200,6 @@ const tBTA_AV_CFG bta_av_cfg_compatibility = {
     bta_av_meta_caps_evt_ids_avrcp13, /* the the metadata Get Capabilities
                                          response for event id, compatible
                                          with AVRCP1.3 */
-    NULL,              /* the action function table for audio stream */
     BTA_AV_RC_CT_NAME, /* Default AVRCP controller name */
     BTA_AV_RC_TG_NAME  /* Default AVRCP target name */
 };

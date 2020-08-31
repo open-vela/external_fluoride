@@ -32,10 +32,12 @@ interface IBluetoothMapClient {
     List<BluetoothDevice> getConnectedDevices();
     List<BluetoothDevice> getDevicesMatchingConnectionStates(in int[] states);
     int getConnectionState(in BluetoothDevice device);
-    boolean setPriority(in BluetoothDevice device,in int priority);
-    int getPriority(in BluetoothDevice device);
+    boolean setConnectionPolicy(in BluetoothDevice device,in int connectionPolicy);
+    int getConnectionPolicy(in BluetoothDevice device);
     boolean sendMessage(in BluetoothDevice device, in Uri[] contacts, in  String message,
         in PendingIntent sentIntent, in PendingIntent deliveryIntent);
     boolean getUnreadMessages(in BluetoothDevice device);
     int getSupportedFeatures(in BluetoothDevice device);
+    boolean setMessageStatus(in BluetoothDevice device, in String handle,
+        in int status);
 }

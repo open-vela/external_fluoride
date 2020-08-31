@@ -69,12 +69,17 @@ class TestCommandHandler {
   // List the devices that the test knows about
   void List(const std::vector<std::string>& args);
 
+  // Change the device's MAC address
+  void SetDeviceAddress(const std::vector<std::string>& args);
+
   // Timer management functions
   void SetTimerPeriod(const std::vector<std::string>& args);
 
   void StartTimer(const std::vector<std::string>& args);
 
   void StopTimer(const std::vector<std::string>& args);
+
+  void Reset(const std::vector<std::string>& args);
 
   // For manual testing
   void AddDefaults();
