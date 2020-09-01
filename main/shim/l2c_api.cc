@@ -20,6 +20,7 @@
 #include "gd/l2cap/le/l2cap_le_module.h"
 #include "gd/os/log.h"
 #include "gd/os/queue.h"
+#include "gd/packet/raw_builder.h"
 #include "main/shim/btm.h"
 #include "main/shim/entry.h"
 #include "main/shim/helpers.h"

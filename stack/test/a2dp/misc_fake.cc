@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include "types/raw_address.h"
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-namespace bluetooth {
-namespace shim {
-
-void ACL_CreateClassicConnection(const RawAddress& raw_address);
-void ACL_CreateLeConnection(const RawAddress& raw_address);
-void ACL_WriteData(uint16_t handle, const uint8_t* data, size_t len);
-
-}  // namespace shim
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
