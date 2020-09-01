@@ -25,31 +25,35 @@
 #define LOG_TAG "bt_btm_ble"
 
 #include <base/bind.h>
+#include <base/callback.h>
 #include <base/strings/string_number_conversions.h>
-#include <cstdint>
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 #include <list>
-#include <memory>
 #include <vector>
 
-#include "common/time_util.h"
+#include "bt_types.h"
+#include "bt_utils.h"
+#include "btm_ble_api.h"
+#include "btm_int.h"
+#include "btu.h"
 #include "device/include/controller.h"
+#include "gap_api.h"
+#include "hcimsgs.h"
+#include "osi/include/osi.h"
+
+#include "advertise_data_parser.h"
+#include "btm_ble_int.h"
+#include "gatt_int.h"
+#include "gattdefs.h"
+#include "osi/include/log.h"
+#include "common/time_util.h"
+
 #include "main/shim/btm_api.h"
 #include "main/shim/shim.h"
-#include "osi/include/log.h"
-#include "stack/btm/btm_ble_int.h"
-#include "stack/btm/btm_ble_int_types.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_int_types.h"
-#include "stack/gatt/gatt_int.h"
 #include "stack/include/acl_api.h"
-#include "stack/include/advertise_data_parser.h"
-#include "stack/include/bt_types.h"
-#include "stack/include/btm_api_types.h"
-#include "stack/include/gap_api.h"
-#include "stack/include/hcimsgs.h"
-#include "types/raw_address.h"
-
-extern tBTM_CB btm_cb;
 
 #define BTM_EXT_BLE_RMT_NAME_TIMEOUT_MS (30 * 1000)
 #define MIN_ADV_LENGTH 2
@@ -688,8 +692,8 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
         if ((p_dev_rec = btm_find_or_alloc_dev(p_cb->direct_bda.bda)) != NULL &&
             p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT) {
           btm_ble_enable_resolving_list(BTM_BLE_RL_ADV);
-          p_peer_addr_ptr = p_dev_rec->ble.identity_address_with_type.bda;
-          *p_peer_addr_type = p_dev_rec->ble.identity_address_with_type.type;
+          p_peer_addr_ptr = p_dev_rec->ble.identity_addr;
+          *p_peer_addr_type = p_dev_rec->ble.identity_addr_type;
           *p_own_addr_type = BLE_ADDR_RANDOM_ID;
           return evt_type;
         }
@@ -717,8 +721,8 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
        * peer */
       tBTM_SEC_DEV_REC* p_dev_rec =
           static_cast<tBTM_SEC_DEV_REC*>(list_node(n));
-      p_peer_addr_ptr = p_dev_rec->ble.identity_address_with_type.bda;
-      *p_peer_addr_type = p_dev_rec->ble.identity_address_with_type.type;
+      p_peer_addr_ptr = p_dev_rec->ble.identity_addr;
+      *p_peer_addr_type = p_dev_rec->ble.identity_addr_type;
 
       *p_own_addr_type = BLE_ADDR_RANDOM_ID;
     } else {
@@ -1610,7 +1614,7 @@ void btm_ble_process_adv_addr(RawAddress& bda, uint8_t* addr_type) {
   if (!match && BTM_BLE_IS_RESOLVE_BDA(bda)) {
     tBTM_SEC_DEV_REC* match_rec = btm_ble_resolve_random_addr(bda);
     if (match_rec) {
-      match_rec->ble.active_addr_type = tBTM_SEC_BLE::BTM_BLE_ADDR_RRA;
+      match_rec->ble.active_addr_type = BTM_BLE_ADDR_RRA;
       match_rec->ble.cur_rand_addr = bda;
 
       if (btm_ble_init_pseudo_addr(match_rec, bda)) {
