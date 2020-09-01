@@ -1,8 +1,6 @@
 filegroup {
     name: "LibBluetoothShimSources",
     srcs: [
-        "acl.cc",
-        "acl_api.cc",
         "btif_dm.cc",
         "btm.cc",
         "btm_api.cc",
