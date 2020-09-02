@@ -106,9 +106,7 @@ void Stack::StartEverything() {
                    stack_manager_.GetInstance<neighbor::InquiryModule>());
   }
   if (common::InitFlags::GdAclEnabled()) {
-    if (!common::InitFlags::GdCoreEnabled()) {
-      acl_ = new legacy::Acl(stack_handler_);
-    }
+    acl_ = new legacy::Acl(stack_handler_);
   }
   is_running_ = true;
   if (!common::InitFlags::GdCoreEnabled()) {
