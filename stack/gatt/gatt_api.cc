@@ -431,11 +431,7 @@ tGATT_STATUS GATTS_HandleValueIndication(uint16_t conn_id, uint16_t attr_handle,
   memcpy(indication.value, p_val, val_len);
   indication.auth_req = GATT_AUTH_REQ_NONE;
 
-  uint16_t* indicate_handle_p = NULL;
-  uint16_t cid;
-
-  if (!gatt_tcb_get_cid_available_for_indication(p_tcb, p_reg->eatt_support,
-                                                 &indicate_handle_p, &cid)) {
+  if (GATT_HANDLE_IS_VALID(p_tcb->indicate_handle)) {
     VLOG(1) << "Add a pending indication";
     gatt_add_pending_ind(p_tcb, &indication);
     return GATT_SUCCESS;
@@ -447,9 +443,9 @@ tGATT_STATUS GATTS_HandleValueIndication(uint16_t conn_id, uint16_t attr_handle,
       attp_build_sr_msg(*p_tcb, GATT_HANDLE_VALUE_IND, &gatt_sr_msg);
   if (!p_msg) return GATT_NO_RESOURCES;
 
-  tGATT_STATUS cmd_status = attp_send_sr_msg(*p_tcb, cid, p_msg);
+  tGATT_STATUS cmd_status = attp_send_sr_msg(*p_tcb, p_msg);
   if (cmd_status == GATT_SUCCESS || cmd_status == GATT_CONGESTED) {
-    *indicate_handle_p = indication.handle;
+    p_tcb->indicate_handle = indication.handle;
     gatt_start_conf_timer(p_tcb);
   }
   return cmd_status;
@@ -498,13 +494,10 @@ tGATT_STATUS GATTS_HandleValueNotification(uint16_t conn_id,
   tGATT_STATUS cmd_sent;
   tGATT_SR_MSG gatt_sr_msg;
   gatt_sr_msg.attr_value = notif;
-
-  uint16_t cid = gatt_tcb_get_att_cid(*p_tcb);
-
   BT_HDR* p_buf =
       attp_build_sr_msg(*p_tcb, GATT_HANDLE_VALUE_NOTIF, &gatt_sr_msg);
   if (p_buf != NULL) {
-    cmd_sent = attp_send_sr_msg(*p_tcb, cid, p_buf);
+    cmd_sent = attp_send_sr_msg(*p_tcb, p_buf);
   } else
     cmd_sent = GATT_NO_RESOURCES;
   return cmd_sent;
@@ -526,6 +519,7 @@ tGATT_STATUS GATTS_HandleValueNotification(uint16_t conn_id,
  ******************************************************************************/
 tGATT_STATUS GATTS_SendRsp(uint16_t conn_id, uint32_t trans_id,
                            tGATT_STATUS status, tGATTS_RSP* p_msg) {
+  tGATT_STATUS cmd_sent = GATT_ILLEGAL_PARAMETER;
   tGATT_IF gatt_if = GATT_GET_GATT_IF(conn_id);
   uint8_t tcb_idx = GATT_GET_TCB_IDX(conn_id);
   tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
@@ -539,17 +533,16 @@ tGATT_STATUS GATTS_SendRsp(uint16_t conn_id, uint32_t trans_id,
     return (tGATT_STATUS)GATT_INVALID_CONN_ID;
   }
 
-  tGATT_SR_CMD* sr_res_p = gatt_sr_get_cmd_by_trans_id(p_tcb, trans_id);
-
-  if (!sr_res_p) {
+  if (p_tcb->sr_cmd.trans_id != trans_id) {
     LOG(ERROR) << "conn_id=" << loghex(conn_id)
-               << " waiting for other op_code ";
+               << " waiting for op_code=" << loghex(p_tcb->sr_cmd.op_code);
     return (GATT_WRONG_STATE);
   }
-
   /* Process App response */
-  return gatt_sr_process_app_rsp(*p_tcb, gatt_if, trans_id, sr_res_p->op_code,
-                                 status, p_msg, sr_res_p);
+  cmd_sent = gatt_sr_process_app_rsp(*p_tcb, gatt_if, trans_id,
+                                     p_tcb->sr_cmd.op_code, status, p_msg);
+
+  return cmd_sent;
 }
 
 /******************************************************************************/
@@ -600,8 +593,6 @@ tGATT_STATUS GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu) {
   tGATT_CLCB* p_clcb = gatt_clcb_alloc(conn_id);
   if (!p_clcb) return GATT_NO_RESOURCES;
 
-  /* For this request only ATT CID is valid */
-  p_clcb->cid = L2CAP_ATT_CID;
   p_clcb->p_tcb->payload_size = mtu;
   p_clcb->operation = GATTC_OPTYPE_CONFIG;
   tGATT_CL_MSG gatt_cl_msg;
@@ -718,8 +709,7 @@ tGATT_STATUS GATTC_Read(uint16_t conn_id, tGATT_READ_TYPE type,
   p_clcb->op_subtype = type;
   p_clcb->auth_req = p_read->by_handle.auth_req;
   p_clcb->counter = 0;
-  p_clcb->read_req_current_mtu =
-      gatt_tcb_get_payload_size_tx(*p_tcb, p_clcb->cid);
+  p_clcb->read_req_current_mtu = p_tcb->payload_size;
 
   switch (type) {
     case GATT_READ_BY_TYPE:
