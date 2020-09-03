@@ -71,8 +71,6 @@ typedef struct {
    * the characteristic.
    */
   uint8_t properties;
-  uint16_t extended_properties;
-
   uint16_t permissions;
 } btgatt_db_element_t;
 
