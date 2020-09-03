@@ -79,9 +79,6 @@ void Stack::StartEverything() {
   if (common::InitFlags::GdAclEnabled()) {
     modules.add<hci::AclManager>();
   }
-  if (common::InitFlags::GdSecurityEnabled()) {
-    modules.add<security::SecurityModule>();
-  }
   if (common::InitFlags::GdCoreEnabled()) {
     modules.add<att::AttModule>();
     modules.add<hci::LeAdvertisingManager>();
@@ -95,6 +92,7 @@ void Stack::StartEverything() {
     modules.add<neighbor::NameDbModule>();
     modules.add<neighbor::PageModule>();
     modules.add<neighbor::ScanModule>();
+    modules.add<security::SecurityModule>();
     modules.add<storage::StorageModule>();
     modules.add<shim::L2cap>();
   }

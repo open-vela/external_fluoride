@@ -608,8 +608,8 @@ void gatt_process_prep_write_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
  * Returns          void
  *
  ******************************************************************************/
-void gatt_process_notification(tGATT_TCB& tcb, uint16_t cid, uint8_t op_code,
-                               uint16_t len, uint8_t* p_data) {
+void gatt_process_notification(tGATT_TCB& tcb, uint8_t op_code, uint16_t len,
+                               uint8_t* p_data) {
   tGATT_VALUE value;
   tGATT_REG* p_reg;
   uint16_t conn_id;
@@ -639,7 +639,7 @@ void gatt_process_notification(tGATT_TCB& tcb, uint16_t cid, uint8_t op_code,
   if (!GATT_HANDLE_IS_VALID(value.handle)) {
     /* illegal handle, send ack now */
     if (op_code == GATT_HANDLE_VALUE_IND)
-      attp_send_cl_confirmation_msg(tcb, cid);
+      attp_send_cl_msg(tcb, nullptr, GATT_HANDLE_VALUE_CONF, NULL);
     return;
   }
 
@@ -671,16 +671,14 @@ void gatt_process_notification(tGATT_TCB& tcb, uint16_t cid, uint8_t op_code,
   if (event == GATTC_OPTYPE_INDICATION) {
     /* start a timer for app confirmation */
     if (tcb.ind_count > 0)
-      gatt_start_ind_ack_timer(tcb, cid);
+      gatt_start_ind_ack_timer(tcb);
     else /* no app to indicate, or invalid handle */
-      attp_send_cl_confirmation_msg(tcb, cid);
+      attp_send_cl_msg(tcb, nullptr, GATT_HANDLE_VALUE_CONF, NULL);
   }
 
   encrypt_status = gatt_get_link_encrypt_status(tcb);
   tGATT_CL_COMPLETE gatt_cl_complete;
   gatt_cl_complete.att_value = value;
-  gatt_cl_complete.cid = cid;
-
   for (i = 0, p_reg = gatt_cb.cl_rcb; i < GATT_MAX_APPS; i++, p_reg++) {
     if (p_reg->in_use && p_reg->app_cb.p_cmpl_cb) {
       conn_id = GATT_CREATE_CONN_ID(tcb.tcb_idx, p_reg->gatt_if);
@@ -776,12 +774,6 @@ void gatt_process_read_by_type_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
     /* discover included service */
     else if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY &&
              p_clcb->op_subtype == GATT_DISC_INC_SRVC) {
-      if (value_len < 4) {
-        android_errorWriteLog(0x534e4554, "158833854");
-        LOG(ERROR) << __func__ << " Illegal Response length, must be at least 4.";
-        gatt_end_operation(p_clcb, GATT_INVALID_PDU, NULL);
-        return;
-      }
       STREAM_TO_UINT16(record_value.incl_service.s_handle, p);
       STREAM_TO_UINT16(record_value.incl_service.e_handle, p);
 
@@ -835,12 +827,6 @@ void gatt_process_read_by_type_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
       return;
     } else /* discover characterisitic */
     {
-      if (value_len < 3) {
-        android_errorWriteLog(0x534e4554, "158778659");
-        LOG(ERROR) << __func__ << " Illegal Response length, must be at least 3.";
-        gatt_end_operation(p_clcb, GATT_INVALID_PDU, NULL);
-        return;
-      }
       STREAM_TO_UINT8(record_value.dclr_value.char_prop, p);
       STREAM_TO_UINT16(record_value.dclr_value.val_handle, p);
       if (!GATT_HANDLE_IS_VALID(record_value.dclr_value.val_handle)) {
@@ -1106,7 +1092,7 @@ void gatt_client_handle_server_rsp(tGATT_TCB& tcb, uint16_t cid,
       return;
     }
 
-    gatt_process_notification(tcb, cid, op_code, len, p_data);
+    gatt_process_notification(tcb, op_code, len, p_data);
     return;
   }
 

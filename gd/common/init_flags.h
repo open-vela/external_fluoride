@@ -23,10 +23,6 @@ class InitFlags final {
  public:
   static void Load(const char** flags);
 
-  static bool GdSecurityEnabled() {
-    return gd_security_enabled;
-  }
-
   static bool GdAclEnabled() {
     return gd_acl_enabled;
   }
@@ -51,7 +47,6 @@ class InitFlags final {
 
  private:
   static void SetAll(bool value);
-  static bool gd_security_enabled;
   static bool gd_acl_enabled;
   static bool gd_hci_enabled;
   static bool gd_controller_enabled;
