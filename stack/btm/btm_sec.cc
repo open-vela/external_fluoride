@@ -1455,8 +1455,8 @@ static void btm_sec_check_upgrade(tBTM_SEC_DEV_REC* p_dev_rec,
 }
 
 tBTM_STATUS btm_sec_l2cap_access_req_by_requirement(
-    const RawAddress& bd_addr, uint16_t security_required, uint16_t handle,
-    bool is_originator, tBTM_SEC_CALLBACK* p_callback, void* p_ref_data) {
+    const RawAddress& bd_addr, uint16_t security_required, bool is_originator,
+    tBTM_SEC_CALLBACK* p_callback, void* p_ref_data) {
   tBTM_SEC_DEV_REC* p_dev_rec;
   tBTM_STATUS rc = BTM_SUCCESS;
   bool chk_acp_auth_done = false;
@@ -1467,7 +1467,7 @@ tBTM_STATUS btm_sec_l2cap_access_req_by_requirement(
   /* Find or get oldest record */
   p_dev_rec = btm_find_or_alloc_dev(bd_addr);
 
-  p_dev_rec->hci_handle = handle;
+  p_dev_rec->hci_handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_BR_EDR);
 
   if ((!is_originator) && (security_required & BTM_SEC_MODE4_LEVEL4)) {
     bool local_supports_sc =
@@ -1663,7 +1663,7 @@ tBTM_STATUS btm_sec_l2cap_access_req_by_requirement(
  *
  ******************************************************************************/
 tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
-                                     uint16_t handle, bool is_originator,
+                                     bool is_originator,
                                      tBTM_SEC_CALLBACK* p_callback,
                                      void* p_ref_data) {
   constexpr tBT_TRANSPORT transport =
@@ -1698,9 +1698,8 @@ tBTM_STATUS btm_sec_l2cap_access_req(const RawAddress& bd_addr, uint16_t psm,
     security_required = p_serv_rec->security_flags;
   }
 
-  return btm_sec_l2cap_access_req_by_requirement(bd_addr, security_required,
-                                                 handle, is_originator,
-                                                 p_callback, p_ref_data);
+  return btm_sec_l2cap_access_req_by_requirement(
+      bd_addr, security_required, is_originator, p_callback, p_ref_data);
 }
 
 /*******************************************************************************
@@ -2442,13 +2441,6 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
@@ -2477,7 +2469,7 @@ void btm_io_capabilities_req(const RawAddress& p) {
 
   BTM_TRACE_EVENT("%s: State: %s", __func__,
                   btm_pair_state_descr(btm_cb.pairing_state));
- 
+
   BTM_TRACE_DEBUG("%s:Security mode: %d, Num Read Remote Feat pages: %d",
                   __func__, btm_cb.security_mode, p_dev_rec->num_read_pages);
 
@@ -3812,7 +3804,6 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
               << p_dev_rec->bd_addr;
 
     bta_dm_remove_device(p_dev_rec->bd_addr);
-    return;
   }
 
   BTM_TRACE_EVENT("%s after update sec_flags=0x%x", __func__,
