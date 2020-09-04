@@ -599,21 +599,21 @@ void BTA_GATTC_ExecuteWrite(uint16_t conn_id, bool is_execute) {
  * Description      This function is called to send handle value confirmation.
  *
  * Parameters       conn_id - connection ID.
- *                  cid
+ *                    p_char_id - characteristic ID to confirm.
  *
  * Returns          None
  *
  ******************************************************************************/
-void BTA_GATTC_SendIndConfirm(uint16_t conn_id, uint16_t cid) {
+void BTA_GATTC_SendIndConfirm(uint16_t conn_id, uint16_t handle) {
   tBTA_GATTC_API_CONFIRM* p_buf =
       (tBTA_GATTC_API_CONFIRM*)osi_calloc(sizeof(tBTA_GATTC_API_CONFIRM));
 
-  VLOG(1) << __func__ << ": conn_id=" << +conn_id << " cid=0x" << std::hex
-          << +cid;
+  VLOG(1) << __func__ << ": conn_id=" << +conn_id << " handle=0x" << std::hex
+          << +handle;
 
   p_buf->hdr.event = BTA_GATTC_API_CONFIRM_EVT;
   p_buf->hdr.layer_specific = conn_id;
-  p_buf->cid = cid;
+  p_buf->handle = handle;
 
   bta_sys_sendmsg(p_buf);
 }
