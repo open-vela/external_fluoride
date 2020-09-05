@@ -2110,9 +2110,7 @@ void btm_ble_set_random_address(const RawAddress& random_bda) {
 
   if (adv_mode == BTM_BLE_ADV_ENABLE)
     btsnd_hcic_ble_set_adv_enable(BTM_BLE_ADV_DISABLE);
-  if (p_ble_cb->is_ble_scan_active()) {
-    btm_ble_stop_scan();
-  }
+  if (BTM_BLE_IS_SCAN_ACTIVE(p_ble_cb->scan_activity)) btm_ble_stop_scan();
   btm_ble_suspend_bg_conn();
 
   p_cb->private_addr = random_bda;
@@ -2120,9 +2118,7 @@ void btm_ble_set_random_address(const RawAddress& random_bda) {
 
   if (adv_mode == BTM_BLE_ADV_ENABLE)
     btsnd_hcic_ble_set_adv_enable(BTM_BLE_ADV_ENABLE);
-  if (p_ble_cb->is_ble_scan_active()) {
-    btm_ble_start_scan();
-  }
+  if (BTM_BLE_IS_SCAN_ACTIVE(p_ble_cb->scan_activity)) btm_ble_start_scan();
   btm_ble_resume_bg_conn();
 }
 
