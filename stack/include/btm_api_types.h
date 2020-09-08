@@ -439,7 +439,7 @@ typedef struct {
   bool eir_complete_list;
   tBT_DEVICE_TYPE device_type;
   uint8_t inq_result_type;
-  tBLE_ADDR_TYPE ble_addr_type;
+  uint8_t ble_addr_type;
   uint16_t ble_evt_type;
   uint8_t ble_primary_phy;
   uint8_t ble_secondary_phy;
@@ -971,6 +971,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
