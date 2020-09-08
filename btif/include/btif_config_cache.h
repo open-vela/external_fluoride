@@ -55,7 +55,6 @@ class BtifConfigCache {
                               const std::string& key);
 
  private:
-  bluetooth::common::LegacyLruCache<std::string, section_t>
-      unpaired_devices_cache_;
+  bluetooth::common::LruCache<std::string, section_t> unpaired_devices_cache_;
   config_t paired_devices_list_;
 };
