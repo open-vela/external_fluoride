@@ -1051,7 +1051,7 @@
 #endif
 
 #ifndef HID_DEV_MTU_SIZE
-#define HID_DEV_MTU_SIZE 512
+#define HID_DEV_MTU_SIZE 64
 #endif
 
 #ifndef HID_DEV_FLUSH_TO
