@@ -3,6 +3,7 @@ filegroup {
     srcs: [
         "acl.cc",
         "acl_api.cc",
+        "btif_dm.cc",
         "btm.cc",
         "btm_api.cc",
         "controller.cc",

@@ -16,9 +16,10 @@
 
 #include "acl_connection_handler.h"
 
-#include "os/log.h"
+#include <hci/hci_packets.h>
 
 #include "hci/address.h"
+#include "os/log.h"
 
 using std::shared_ptr;
 
@@ -29,18 +30,16 @@ using ::bluetooth::hci::AddressType;
 using ::bluetooth::hci::AddressWithType;
 
 bool AclConnectionHandler::HasHandle(uint16_t handle) const {
-  if (acl_connections_.count(handle) == 0) {
-    return false;
-  }
-  return true;
+  return acl_connections_.count(handle) != 0;
 }
 
 uint16_t AclConnectionHandler::GetUnusedHandle() {
-  while (acl_connections_.count(last_handle_) == 1) {
-    last_handle_ = (last_handle_ + 1) % acl::kReservedHandle;
+  while (HasHandle(last_handle_) ||
+         isochronous_connection_handler_.HasHandle(last_handle_)) {
+    last_handle_ = (last_handle_ + 1) % kReservedHandle;
   }
   uint16_t unused_handle = last_handle_;
-  last_handle_ = (last_handle_ + 1) % acl::kReservedHandle;
+  last_handle_ = (last_handle_ + 1) % kReservedHandle;
   return unused_handle;
 }
 
@@ -119,7 +118,7 @@ uint16_t AclConnectionHandler::CreateConnection(Address addr,
             Phy::Type::BR_EDR});
     return handle;
   }
-  return acl::kReservedHandle;
+  return kReservedHandle;
 }
 
 uint16_t AclConnectionHandler::CreateLeConnection(AddressWithType addr,
@@ -130,7 +129,7 @@ uint16_t AclConnectionHandler::CreateLeConnection(AddressWithType addr,
         handle, AclConnection{addr, own_addr, Phy::Type::LOW_ENERGY});
     return handle;
   }
-  return acl::kReservedHandle;
+  return kReservedHandle;
 }
 
 bool AclConnectionHandler::Disconnect(uint16_t handle) {
@@ -143,7 +142,7 @@ uint16_t AclConnectionHandler::GetHandle(AddressWithType addr) const {
       return std::get<0>(pair);
     }
   }
-  return acl::kReservedHandle;
+  return kReservedHandle;
 }
 
 uint16_t AclConnectionHandler::GetHandleOnlyAddress(
@@ -153,7 +152,7 @@ uint16_t AclConnectionHandler::GetHandleOnlyAddress(
       return std::get<0>(pair);
     }
   }
-  return acl::kReservedHandle;
+  return kReservedHandle;
 }
 
 AddressWithType AclConnectionHandler::GetAddress(uint16_t handle) const {
@@ -194,6 +193,158 @@ Phy::Type AclConnectionHandler::GetPhyType(uint16_t handle) const {
     return Phy::Type::BR_EDR;
   }
   return acl_connections_.at(handle).GetPhyType();
+}
+
+std::unique_ptr<bluetooth::hci::LeSetCigParametersCompleteBuilder>
+AclConnectionHandler::SetCigParameters(
+    uint8_t id, uint32_t sdu_interval_m_to_s, uint32_t sdu_interval_s_to_m,
+    bluetooth::hci::ClockAccuracy accuracy, bluetooth::hci::Packing packing,
+    bluetooth::hci::Enable framed, uint16_t max_transport_latency_m_to_s_,
+    uint16_t max_transport_latency_s_to_m_,
+    std::vector<bluetooth::hci::CisParametersConfig>& streams) {
+  std::vector<uint16_t> handles;
+  GroupParameters group_parameters{
+      .id = id,
+      .sdu_interval_m_to_s = sdu_interval_m_to_s,
+      .sdu_interval_s_to_m = sdu_interval_s_to_m,
+      .interleaved = packing == bluetooth::hci::Packing::INTERLEAVED,
+      .framed = framed == bluetooth::hci::Enable::ENABLED,
+      .max_transport_latency_m_to_s = max_transport_latency_m_to_s_,
+      .max_transport_latency_s_to_m = max_transport_latency_s_to_m_};
+  std::vector<StreamParameters> stream_parameters;
+  for (size_t i = 0; i < streams.size(); i++) {
+    auto handle = GetUnusedHandle();
+    StreamParameters a{.group_id = group_parameters.id,
+                       .stream_id = streams[i].cis_id_,
+                       .max_sdu_s_to_m = streams[i].max_sdu_s_to_m_,
+                       .max_sdu_m_to_s = streams[i].max_sdu_m_to_s_,
+                       .handle = handle,
+                       .rtn_m_to_s = streams[i].rtn_m_to_s_,
+                       .rtn_s_to_m = streams[i].rtn_s_to_m_};
+    handles.push_back(handle);
+    stream_parameters.push_back(std::move(a));
+  }
+
+  return isochronous_connection_handler_.SetCigParameters(
+      group_parameters, stream_parameters, std::move(handles));
+}
+
+void AclConnectionHandler::CreatePendingCis(
+    bluetooth::hci::CreateCisConfig config) {
+  pending_streams_.emplace_back(std::move(config));
+}
+
+bool AclConnectionHandler::ConnectCis(uint16_t handle) {
+  size_t position;
+  bluetooth::hci::CreateCisConfig config;
+  for (position = 0; position < pending_streams_.size(); position++) {
+    if (handle == pending_streams_[position].cis_connection_handle_) {
+      config = pending_streams_[position];
+      pending_streams_.erase(pending_streams_.begin() + position);
+      break;
+    }
+  }
+  if (position == pending_streams_.size()) {
+    LOG_INFO("No pending connection with handle 0x%hx", handle);
+    return false;
+  }
+  connected_streams_.push_back(config);
+  return true;
+}
+
+bool AclConnectionHandler::RejectCis(uint16_t handle) {
+  size_t position;
+  for (position = 0; position < pending_streams_.size(); position++) {
+    if (handle == pending_streams_[position].cis_connection_handle_) {
+      pending_streams_.erase(pending_streams_.begin() + position);
+      break;
+    }
+  }
+  if (position == pending_streams_.size()) {
+    LOG_INFO("No pending connection with handle 0x%hx", handle);
+    return false;
+  }
+  return true;
+}
+
+uint16_t AclConnectionHandler::GetPendingAclHandle(uint16_t cis_handle) const {
+  size_t position;
+  uint16_t handle = 0xffff;
+  for (position = 0; position < pending_streams_.size(); position++) {
+    if (cis_handle == pending_streams_[position].cis_connection_handle_) {
+      handle = pending_streams_[position].acl_connection_handle_;
+      break;
+    }
+  }
+  if (position == pending_streams_.size()) {
+    LOG_INFO("No pending connection with handle 0x%hx", cis_handle);
+  }
+  return handle;
+}
+
+bool AclConnectionHandler::DisconnectCis(uint16_t cis_handle) {
+  size_t position;
+  for (position = 0; position < connected_streams_.size(); position++) {
+    if (cis_handle == connected_streams_[position].cis_connection_handle_) {
+      connected_streams_.erase(connected_streams_.begin() + position);
+      break;
+    }
+  }
+  if (position == connected_streams_.size()) {
+    LOG_INFO("No connected stream 0x%hx", cis_handle);
+    return false;
+  }
+  return true;
+}
+
+bluetooth::hci::ErrorCode AclConnectionHandler::RemoveCig(uint8_t cig_id) {
+  for (const auto& stream : connected_streams_) {
+    if (isochronous_connection_handler_.GetGroupId(
+            stream.cis_connection_handle_) == cig_id) {
+      return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
+    }
+  }
+  for (const auto& stream : pending_streams_) {
+    if (isochronous_connection_handler_.GetGroupId(
+            stream.cis_connection_handle_) == cig_id) {
+      return bluetooth::hci::ErrorCode::COMMAND_DISALLOWED;
+    }
+  }
+  auto status = isochronous_connection_handler_.RemoveCig(cig_id);
+  if (status == bluetooth::hci::ErrorCode::SUCCESS) {
+    // Clean up?
+  }
+  return status;
+}
+
+bool AclConnectionHandler::HasPendingCisConnection(uint16_t handle) const {
+  for (const auto& config : pending_streams_) {
+    if (config.cis_connection_handle_ == handle) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AclConnectionHandler::HasPendingCis() const {
+  return !pending_streams_.empty();
+}
+
+bool AclConnectionHandler::HasConnectedCis(uint16_t handle) const {
+  return isochronous_connection_handler_.GetStreamIsConnected(handle);
+}
+
+bool AclConnectionHandler::HasCisHandle(uint16_t handle) const {
+  return isochronous_connection_handler_.HasHandle(handle);
+}
+
+GroupParameters AclConnectionHandler::GetGroupParameters(uint8_t id) const {
+  return isochronous_connection_handler_.GetGroupParameters(id);
+}
+
+StreamParameters AclConnectionHandler::GetStreamParameters(
+    uint16_t handle) const {
+  return isochronous_connection_handler_.GetStreamParameters(handle);
 }
 
 }  // namespace test_vendor_lib
