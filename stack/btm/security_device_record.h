@@ -202,11 +202,8 @@ typedef struct {
 } tBTM_SEC_BLE;
 
 /* Peering bond type */
-typedef enum : uint8_t {
-  BOND_TYPE_UNKNOWN = 0,
-  BOND_TYPE_PERSISTENT = 1,
-  BOND_TYPE_TEMPORARY = 2
-} tBTM_BOND_TYPE;
+enum { BOND_TYPE_UNKNOWN, BOND_TYPE_PERSISTENT, BOND_TYPE_TEMPORARY };
+typedef uint8_t tBTM_BOND_TYPE;
 
 /*
  * Define structure for Security Device Record.
