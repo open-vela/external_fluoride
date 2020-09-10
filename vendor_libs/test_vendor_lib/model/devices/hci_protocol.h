@@ -19,7 +19,10 @@
 #include <functional>
 #include <vector>
 
+#include "hci.h"
+
 namespace test_vendor_lib {
+namespace hci {
 
 using PacketReadCallback = std::function<void(const std::vector<uint8_t>&)>;
 
@@ -36,4 +39,5 @@ class HciProtocol {
   static size_t WriteSafely(int fd, const uint8_t* data, size_t length);
 };
 
+}  // namespace hci
 }  // namespace test_vendor_lib
