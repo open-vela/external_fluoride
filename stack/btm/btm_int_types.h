@@ -23,6 +23,7 @@
 #include "osi/include/list.h"
 #include "stack/acl/acl.h"
 #include "stack/btm/btm_ble_int_types.h"
+#include "stack/btm/btm_sco.h"
 #include "stack/btm/security_device_record.h"
 #include "stack/include/btm_ble_api_types.h"
 
@@ -120,7 +121,121 @@ typedef void(tBTM_BT_QUALITY_REPORT_RECEIVER)(uint8_t len, uint8_t* p_stream);
 /* Define a structure to hold all the BTM data
 */
 
+typedef struct {
+  uint32_t inq_count; /* Used for determining if a response has already been */
+  /* received for the current inquiry operation. (We do not   */
+  /* want to flood the caller with multiple responses from    */
+  /* the same device.                                         */
+  RawAddress bd_addr;
+} tINQ_BDADDR;
+
+typedef struct {
+  tBTM_CMPL_CB* p_remname_cmpl_cb;
+
+#define BTM_EXT_RMT_NAME_TIMEOUT_MS (40 * 1000) /* 40 seconds */
+
+  alarm_t* remote_name_timer;
+
+  uint16_t discoverable_mode;
+  uint16_t connectable_mode;
+  uint16_t page_scan_window;
+  uint16_t page_scan_period;
+  uint16_t inq_scan_window;
+  uint16_t inq_scan_period;
+  uint16_t inq_scan_type;
+  uint16_t page_scan_type; /* current page scan type */
+
+  RawAddress remname_bda; /* Name of bd addr for active remote name request */
+#define BTM_RMT_NAME_EXT 0x1 /* Initiated through API */
+  bool remname_active; /* State of a remote name request by external API */
+
+  tBTM_CMPL_CB* p_inq_cmpl_cb;
+  tBTM_INQ_RESULTS_CB* p_inq_results_cb;
+  uint32_t inq_counter; /* Counter incremented each time an inquiry completes */
+  /* Used for determining whether or not duplicate devices */
+  /* have responded to the same inquiry */
+  tINQ_BDADDR* p_bd_db;    /* Pointer to memory that holds bdaddrs */
+  uint16_t num_bd_entries; /* Number of entries in database */
+  uint16_t max_bd_entries; /* Maximum number of entries that can be stored */
+  tINQ_DB_ENT inq_db[BTM_INQ_DB_SIZE];
+  tBTM_INQ_PARMS inqparms; /* Contains the parameters for the current inquiry */
+  tBTM_INQUIRY_CMPL
+      inq_cmpl_info; /* Status and number of responses from the last inquiry */
+
+  uint16_t per_min_delay; /* Current periodic minimum delay */
+  uint16_t per_max_delay; /* Current periodic maximum delay */
+  /* inquiry that has been cancelled*/
+  uint8_t inqfilt_type; /* Contains the inquiry filter type (BD ADDR, COD, or
+                           Clear) */
+
+#define BTM_INQ_INACTIVE_STATE 0
+#define BTM_INQ_ACTIVE_STATE \
+  3 /* Actual inquiry or periodic inquiry is in progress */
+
+  uint8_t state;      /* Current state that the inquiry process is in */
+  uint8_t inq_active; /* Bit Mask indicating type of inquiry is active */
+  bool no_inc_ssp;    /* true, to stop inquiry on incoming SSP */
+} tBTM_INQUIRY_VAR_ST;
+
 #define BTM_STATE_BUFFER_SIZE 5 /* size of state buffer */
+
+/* Define the Device Management control structure
+ */
+typedef struct {
+  tBTM_VS_EVT_CB* p_vend_spec_cb[BTM_MAX_VSE_CALLBACKS]; /* Register for vendor
+                                                            specific events  */
+
+  tBTM_CMPL_CB*
+      p_stored_link_key_cmpl_cb; /* Read/Write/Delete stored link key    */
+
+  alarm_t* read_local_name_timer; /* Read local name timer */
+  tBTM_CMPL_CB* p_rln_cmpl_cb;    /* Callback function to be called when  */
+                                  /* read local name function complete    */
+
+  alarm_t* read_rssi_timer;     /* Read RSSI timer */
+  tBTM_CMPL_CB* p_rssi_cmpl_cb; /* Callback function to be called when  */
+                                /* read RSSI function completes */
+
+  alarm_t* read_failed_contact_counter_timer; /* Read Failed Contact Counter */
+                                              /* timer */
+  tBTM_CMPL_CB* p_failed_contact_counter_cmpl_cb; /* Callback function to be */
+  /* called when read Failed Contact Counter function completes */
+
+  alarm_t*
+      read_automatic_flush_timeout_timer; /* Read Automatic Flush Timeout */
+                                          /* timer */
+  tBTM_CMPL_CB* p_automatic_flush_timeout_cmpl_cb; /* Callback function to be */
+  /* called when read Automatic Flush Timeout function completes */
+
+  alarm_t* read_link_quality_timer;
+  tBTM_CMPL_CB* p_link_qual_cmpl_cb; /* Callback function to be called when  */
+                                     /* read link quality function completes */
+
+  alarm_t* read_tx_power_timer;     /* Read tx power timer */
+  tBTM_CMPL_CB* p_tx_power_cmpl_cb; /* Callback function to be called       */
+
+  DEV_CLASS dev_class; /* Local device class                   */
+
+  tBTM_CMPL_CB*
+      p_le_test_cmd_cmpl_cb; /* Callback function to be called when
+                             LE test mode command has been sent successfully */
+
+  RawAddress read_tx_pwr_addr; /* read TX power target address     */
+
+  tBTM_BLE_LOCAL_ID_KEYS id_keys;   /* local BLE ID keys */
+  Octet16 ble_encryption_key_value; /* BLE encryption key */
+
+#if (BTM_BLE_CONFORMANCE_TESTING == TRUE)
+  bool no_disc_if_pair_fail;
+  bool enable_test_mac_val;
+  BT_OCTET8 test_mac;
+  bool enable_test_local_sign_cntr;
+  uint32_t test_local_sign_cntr;
+#endif
+
+  tBTM_IO_CAP loc_io_caps;    /* IO capability of the local device */
+  tBTM_AUTH_REQ loc_auth_req; /* the auth_req flag  */
+} tBTM_DEVCB;
 
 typedef struct {
   tBTM_CFG cfg; /* Device configuration */
