@@ -185,12 +185,6 @@ void LinkLayerController::IncomingPacket(
     }
   }
 
-  // Check connection addresses
-  if (connections_.GetHandleOnlyAddress(destination_address) !=
-      kReservedHandle) {
-    address_matches = true;
-  }
-
   // Drop packets not addressed to me
   if (!address_matches) {
     return;
@@ -410,7 +404,7 @@ void LinkLayerController::IncomingReadRemoteSupportedFeaturesResponse(
   ASSERT(view.IsValid());
   Address source = packet.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(source);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Discarding response from a disconnected device %s",
              source.ToString().c_str());
     return;
@@ -443,7 +437,7 @@ void LinkLayerController::IncomingReadRemoteExtendedFeaturesResponse(
   ASSERT(view.IsValid());
   Address source = packet.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(source);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Discarding response from a disconnected device %s",
              source.ToString().c_str());
     return;
@@ -468,7 +462,7 @@ void LinkLayerController::IncomingReadRemoteVersionResponse(
   ASSERT(view.IsValid());
   Address source = packet.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(source);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Discarding response from a disconnected device %s",
              source.ToString().c_str());
     return;
@@ -492,7 +486,7 @@ void LinkLayerController::IncomingReadClockOffsetResponse(
   ASSERT(view.IsValid());
   Address source = packet.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(source);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Discarding response from a disconnected device %s",
              source.ToString().c_str());
     return;
@@ -509,7 +503,7 @@ void LinkLayerController::IncomingDisconnectPacket(
 
   Address peer = incoming.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(peer);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Discarding disconnect from a disconnected device %s",
              peer.ToString().c_str());
     return;
@@ -529,7 +523,7 @@ void LinkLayerController::IncomingEncryptConnection(
   // TODO: Check keys
   Address peer = incoming.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(peer);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Unknown connection @%s", peer.ToString().c_str());
     return;
   }
@@ -554,7 +548,7 @@ void LinkLayerController::IncomingEncryptConnectionResponse(
   // TODO: Check keys
   uint16_t handle =
       connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Unknown connection @%s",
              incoming.GetSourceAddress().ToString().c_str());
     return;
@@ -705,7 +699,7 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
 
   uint16_t handle = connections_.GetHandle(AddressWithType(
       peer, bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS));
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Device not connected %s", peer.ToString().c_str());
     return;
   }
@@ -898,7 +892,7 @@ void LinkLayerController::HandleLeConnection(AddressWithType address,
                                              uint16_t supervision_timeout) {
   // TODO: Choose between LeConnectionComplete and LeEnhancedConnectionComplete
   uint16_t handle = connections_.CreateLeConnection(address, own_address);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_WARN("No pending connection for connection from %s",
              address.ToString().c_str());
     return;
@@ -982,7 +976,7 @@ void LinkLayerController::IncomingLeEncryptConnection(
 
   Address peer = incoming.GetSourceAddress();
   uint16_t handle = connections_.GetHandleOnlyAddress(peer);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("@%s: Unknown connection @%s",
              incoming.GetDestinationAddress().ToString().c_str(),
              peer.ToString().c_str());
@@ -1003,7 +997,7 @@ void LinkLayerController::IncomingLeEncryptConnectionResponse(
   // TODO: Check keys
   uint16_t handle =
       connections_.GetHandleOnlyAddress(incoming.GetSourceAddress());
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("@%s: Unknown connection @%s",
              incoming.GetDestinationAddress().ToString().c_str(),
              incoming.GetSourceAddress().ToString().c_str());
@@ -1138,7 +1132,7 @@ void LinkLayerController::IncomingPageResponsePacket(
   bool awaiting_authentication = connections_.AuthenticatePendingConnection();
   uint16_t handle =
       connections_.CreateConnection(peer, incoming.GetDestinationAddress());
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_WARN("No free handles");
     return;
   }
@@ -1305,7 +1299,7 @@ ErrorCode LinkLayerController::LinkKeyRequestNegativeReply(
   security_manager_.DeleteKey(address);
   // Simple pairing to get a key
   uint16_t handle = connections_.GetHandleOnlyAddress(address);
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("Device not connected %s", address.ToString().c_str());
     return ErrorCode::UNKNOWN_CONNECTION;
   }
@@ -1535,7 +1529,7 @@ void LinkLayerController::MakeSlaveConnection(const Address& addr,
 
   uint16_t handle =
       connections_.CreateConnection(addr, properties_.GetAddress());
-  if (handle == kReservedHandle) {
+  if (handle == acl::kReservedHandle) {
     LOG_INFO("CreateConnection failed");
     return;
   }
