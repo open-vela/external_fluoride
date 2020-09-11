@@ -56,8 +56,7 @@ void SecurityManagerImpl::DispatchPairingHandler(
           std::move(callback),
           user_interface_,
           user_interface_handler_,
-          record->GetPseudoAddress()->ToString(),
-          name_db_module_);
+          "TODO: grab device name properly");
       break;
     }
     default:
@@ -231,7 +230,7 @@ void SecurityManagerImpl::HandleEvent(T packet) {
     auto bd_addr = packet.GetBdAddr();
     auto event_code = packet.GetEventCode();
 
-    if (event_code != hci::EventCode::LINK_KEY_REQUEST || event_code != hci::EventCode::IO_CAPABILITY_RESPONSE) {
+    if (event_code != hci::EventCode::LINK_KEY_REQUEST) {
       LOG_ERROR("No classic pairing handler for device '%s' ready for command %s ", bd_addr.ToString().c_str(),
                 hci::EventCodeText(event_code).c_str());
       return;
@@ -627,8 +626,7 @@ SecurityManagerImpl::SecurityManagerImpl(
     channel::SecurityManagerChannel* security_manager_channel,
     hci::HciLayer* hci_layer,
     hci::AclManager* acl_manager,
-    storage::StorageModule* storage_module,
-    neighbor::NameDbModule* name_db_module)
+    storage::StorageModule* storage_module)
     : security_handler_(security_handler),
       l2cap_le_module_(l2cap_le_module),
       l2cap_manager_le_(l2cap_le_module_->GetFixedChannelManager()),
@@ -638,8 +636,7 @@ SecurityManagerImpl::SecurityManagerImpl(
       acl_manager_(acl_manager),
       storage_module_(storage_module),
       security_record_storage_(storage_module, security_handler),
-      security_database_(security_record_storage_),
-      name_db_module_(name_db_module) {
+      security_database_(security_record_storage_) {
   Init();
 
   l2cap_manager_le_->RegisterService(
