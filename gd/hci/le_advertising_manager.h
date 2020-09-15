@@ -17,6 +17,7 @@
 
 #include <memory>
 
+#include "hci/address_with_type.h"
 #include "hci/hci_packets.h"
 #include "module.h"
 
@@ -27,10 +28,9 @@ class AdvertisingConfig {
  public:
   std::vector<GapData> advertisement;
   std::vector<GapData> scan_response;
-  Address random_address;
   uint16_t interval_min;
   uint16_t interval_max;
-  AdvertisingEventType event_type;
+  AdvertisingType event_type;
   AddressType address_type;
   PeerAddressType peer_address_type;
   Address peer_address;
@@ -65,6 +65,7 @@ using AdvertiserId = int32_t;
 class LeAdvertisingManager : public bluetooth::Module {
  public:
   static constexpr AdvertiserId kInvalidId = -1;
+  static constexpr uint8_t kInvalidHandle = 0xFF;
   LeAdvertisingManager();
 
   size_t GetNumberOfAdvertisingInstances() const;
@@ -79,6 +80,9 @@ class LeAdvertisingManager : public bluetooth::Module {
       const common::Callback<void(ErrorCode, uint8_t, uint8_t)>& set_terminated_callback, os::Handler* handler);
 
   void RemoveAdvertiser(AdvertiserId id);
+
+  virtual void RegisterSetTerminatedCallback(
+      common::ContextualCallback<void(ErrorCode, uint16_t, hci::AddressWithType)> set_terminated_callback);
 
   static const ModuleFactory Factory;
 
