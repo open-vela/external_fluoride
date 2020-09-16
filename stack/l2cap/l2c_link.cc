@@ -803,6 +803,7 @@ void l2c_pin_code_request(const RawAddress& bd_addr) {
   }
 }
 
+#if (L2CAP_WAKE_PARKED_LINK == TRUE)
 /*******************************************************************************
  *
  * Function         l2c_link_check_power_mode
@@ -845,6 +846,7 @@ bool l2c_link_check_power_mode(tL2C_LCB* p_lcb) {
   }
   return false;
 }
+#endif /* L2CAP_WAKE_PARKED_LINK == TRUE) */
 
 /*******************************************************************************
  *
