@@ -40,7 +40,6 @@
 #include "gd/storage/storage_module.h"
 
 #include "main/shim/hci_layer.h"
-#include "main/shim/le_advertising_manager.h"
 #include "main/shim/stack.h"
 
 namespace bluetooth {
@@ -118,10 +117,6 @@ void Stack::StartEverything() {
   is_running_ = true;
   if (!common::InitFlags::GdCoreEnabled()) {
     bluetooth::shim::hci_on_reset_complete();
-  }
-
-  if (common::InitFlags::GdAdvertisingEnabled()) {
-    bluetooth::shim::init_advertising_manager();
   }
 }
 
