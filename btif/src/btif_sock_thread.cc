@@ -149,7 +149,7 @@ static void free_thread_slot(int h) {
   } else
     APPL_TRACE_ERROR("invalid thread handle:%d", h);
 }
-void btsock_thread_init() {
+int btsock_thread_init() {
   static int initialized;
   APPL_TRACE_DEBUG("in initialized:%d", initialized);
   if (!initialized) {
@@ -164,6 +164,7 @@ void btsock_thread_init() {
       ts[h].cmd_callback = NULL;
     }
   }
+  return true;
 }
 int btsock_thread_create(btsock_signaled_cb callback,
                          btsock_cmd_cb cmd_callback) {
