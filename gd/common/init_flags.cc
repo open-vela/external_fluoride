@@ -52,8 +52,7 @@ void InitFlags::Load(const char** flags) {
     if (kGdCoreFlag == *flags) {
       gd_core_enabled = true;
     } else if (kGdAdvertisingFlag == *flags) {
-      // TODO enable when module ready
-      // gd_advertising_enabled = true;
+      gd_advertising_enabled = true;
     } else if (kGdSecurityFlag == *flags) {
       gd_security_enabled = true;
     } else if (kGdAclFlag == *flags) {
