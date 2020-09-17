@@ -21,7 +21,7 @@
 #include <cstdlib>
 
 #ifndef LOG_TAG
-#define LOG_TAG "bluetooth"
+#define LOG_TAG "bt"
 #endif
 
 #if defined(OS_ANDROID)
