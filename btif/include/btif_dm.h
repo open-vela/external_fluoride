@@ -82,6 +82,13 @@ typedef struct {
   bool is_lidk_key_rcvd;        /* local identity key received */
 } btif_dm_ble_cb_t;
 
+#define BTIF_DM_LE_KEY_PENC BTA_LE_KEY_PENC
+#define BTIF_DM_LE_KEY_PID BTA_LE_KEY_PID
+#define BTIF_DM_LE_KEY_PCSRK BTA_LE_KEY_PCSRK
+#define BTIF_DM_LE_KEY_LENC BTA_LE_KEY_LENC
+#define BTIF_DM_LE_KEY_LID BTA_LE_KEY_LID
+#define BTIF_DM_LE_KEY_LCSRK BTA_LE_KEY_LCSRK
+
 #define BTIF_DM_LE_LOCAL_KEY_IR (1 << 0)
 #define BTIF_DM_LE_LOCAL_KEY_IRK (1 << 1)
 #define BTIF_DM_LE_LOCAL_KEY_DHK (1 << 2)
@@ -93,7 +100,7 @@ void btif_dm_get_ble_local_keys(tBTA_DM_BLE_LOCAL_KEY_MASK* p_key_mask,
                                 tBTA_BLE_LOCAL_ID_KEYS* p_id_keys);
 void btif_dm_save_ble_bonding_keys(RawAddress& bd_addr);
 void btif_dm_remove_ble_bonding_keys(void);
-void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req);
+void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent);
 
 void btif_dm_update_ble_remote_properties(const RawAddress& bd_addr,
                                           BD_NAME bd_name,
