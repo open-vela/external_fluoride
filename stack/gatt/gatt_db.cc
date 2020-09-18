@@ -232,10 +232,7 @@ static tGATT_STATUS read_attr_value(tGATT_ATTR& attr16, uint16_t offset,
   }
 
   if (uuid16 == GATT_UUID_CHAR_EXT_PROP) {
-    // sometimes this descriptor is added by users manually, we need to check if
-    // the p_value is nullptr.
-    uint16_t char_ext_prop =
-        attr16.p_value ? attr16.p_value->char_ext_prop : 0x0000;
+    uint16_t char_ext_prop = attr16.p_value->char_ext_prop;
     *p_len = 2;
     UINT16_TO_STREAM(p, char_ext_prop);
     *p_data = p;
