@@ -1751,7 +1751,7 @@ void btm_ble_connected(const RawAddress& bda, uint16_t handle, uint8_t enc_mode,
   if (!addr_matched && p_dev_rec->ble.ble_addr_type == BLE_ADDR_RANDOM) {
     p_dev_rec->ble.cur_rand_addr = bda;
   }
-  btm_cb.ble_ctr_cb.inq_var.directed_conn = BTM_BLE_ADV_IND_EVT;
+  btm_cb.ble_ctr_cb.inq_var.directed_conn = BTM_BLE_CONNECT_EVT;
 }
 
 void btm_ble_connected_from_address_with_type(
@@ -1793,6 +1793,7 @@ uint8_t btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr,
         p_dev_rec->sec_flags |= BTM_SEC_LE_AUTHENTICATED;
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
+      case SMP_CONSENT_REQ_EVT:
       case SMP_SEC_REQUEST_EVT:
         if (event == SMP_SEC_REQUEST_EVT &&
             btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) {
@@ -1800,7 +1801,9 @@ uint8_t btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr,
           break;
         }
         btm_cb.pairing_bda = bd_addr;
-        p_dev_rec->sec_state = BTM_SEC_STATE_AUTHENTICATING;
+        if (event != SMP_CONSENT_REQ_EVT) {
+          p_dev_rec->sec_state = BTM_SEC_STATE_AUTHENTICATING;
+        }
         btm_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;
         FALLTHROUGH_INTENDED; /* FALLTHROUGH */
 
