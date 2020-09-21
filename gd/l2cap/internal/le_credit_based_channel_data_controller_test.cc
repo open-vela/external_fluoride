@@ -29,7 +29,9 @@ namespace internal {
 namespace {
 
 std::unique_ptr<packet::BasePacketBuilder> CreateSdu(std::vector<uint8_t> payload) {
-  return std::make_unique<packet::RawBuilder>(std::move(payload));
+  auto raw_builder = std::make_unique<packet::RawBuilder>();
+  raw_builder->AddOctets(payload);
+  return raw_builder;
 }
 
 PacketView<kLittleEndian> GetPacketView(std::unique_ptr<packet::BasePacketBuilder> packet) {
