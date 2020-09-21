@@ -259,14 +259,8 @@ typedef struct {
   bool is_paging;     /* true, if paging is in progess */
   bool is_inquiry;    /* true, if inquiry is in progess */
   fixed_queue_t* page_queue;
-
   bool paging;
-  void set_paging() { paging = true; }
-  void reset_paging() { paging = false; }
-  bool is_paging_active() const {
-    return paging;
-  }  // TODO remove all this paging state
-
+  bool discing;
   fixed_queue_t* sec_pending_q; /* pending sequrity requests in
                                    tBTM_SEC_QUEUE_ENTRY format */
 
