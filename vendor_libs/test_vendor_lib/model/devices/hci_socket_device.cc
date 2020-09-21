@@ -71,15 +71,13 @@ HciSocketDevice::HciSocketDevice(int file_descriptor) : socket_file_descriptor_(
       't',
   });
 
-  h4_ = H4Packetizer(
+  h4_ = hci::H4Packetizer(
       socket_file_descriptor_,
       [this](const std::vector<uint8_t>& raw_command) {
         std::shared_ptr<std::vector<uint8_t>> packet_copy = std::make_shared<std::vector<uint8_t>>(raw_command);
         HandleCommand(packet_copy);
       },
-      [](const std::vector<uint8_t>&) {
-        LOG_ALWAYS_FATAL("Unexpected Event in HciSocketDevice!");
-      },
+      [](const std::vector<uint8_t>&) { LOG_ALWAYS_FATAL("Unexpected Event in HciSocketDevice!"); },
       [this](const std::vector<uint8_t>& raw_acl) {
         std::shared_ptr<std::vector<uint8_t>> packet_copy = std::make_shared<std::vector<uint8_t>>(raw_acl);
         HandleAcl(packet_copy);
@@ -90,19 +88,14 @@ HciSocketDevice::HciSocketDevice(int file_descriptor) : socket_file_descriptor_(
       },
       [this]() {
         LOG_INFO("HCI socket device disconnected");
-        socket_file_descriptor_ = -1;
         close_callback_();
       });
 
   RegisterEventChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) {
-    SendHci(PacketType::EVENT, packet);
+    SendHci(hci::PacketType::EVENT, packet);
   });
-  RegisterAclChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) {
-    SendHci(PacketType::ACL, packet);
-  });
-  RegisterScoChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) {
-    SendHci(PacketType::SCO, packet);
-  });
+  RegisterAclChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) { SendHci(hci::PacketType::ACL, packet); });
+  RegisterScoChannel([this](std::shared_ptr<std::vector<uint8_t>> packet) { SendHci(hci::PacketType::SCO, packet); });
 }
 
 void HciSocketDevice::TimerTick() {
@@ -110,12 +103,9 @@ void HciSocketDevice::TimerTick() {
   DualModeController::TimerTick();
 }
 
-void HciSocketDevice::SendHci(
-    PacketType packet_type,
-    const std::shared_ptr<std::vector<uint8_t>> packet) {
+void HciSocketDevice::SendHci(hci::PacketType packet_type, const std::shared_ptr<std::vector<uint8_t>> packet) {
   if (socket_file_descriptor_ == -1) {
-    LOG_INFO("Closed socket. Dropping packet of type %d",
-             static_cast<int>(packet_type));
+    LOG_INFO("socket_file_descriptor == -1");
     return;
   }
   uint8_t type = static_cast<uint8_t>(packet_type);
@@ -131,9 +121,7 @@ void HciSocketDevice::SendHci(
 }
 
 void HciSocketDevice::RegisterCloseCallback(std::function<void()> close_callback) {
-  if (socket_file_descriptor_ != -1) {
-    close_callback_ = close_callback;
-  }
+  close_callback_ = close_callback;
 }
 
 }  // namespace test_vendor_lib
