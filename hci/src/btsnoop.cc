@@ -71,6 +71,17 @@
 #define DEFAULT_BTSNOOP_PATH "/data/misc/bluetooth/logs/btsnoop_hci.log"
 #define BTSNOOP_MAX_PACKETS_PROPERTY "persist.bluetooth.btsnoopsize"
 
+#ifndef TEMP_FAILURE_RETRY
+#define TEMP_FAILURE_RETRY(exp)            \
+  ({                                       \
+    decltype(exp) _rc;                     \
+    do {                                   \
+      _rc = (exp);                         \
+    } while (_rc == -1 && errno == EINTR); \
+    _rc;                                   \
+  })
+#endif
+
 typedef enum {
   kCommandPacket = 1,
   kAclPacket = 2,

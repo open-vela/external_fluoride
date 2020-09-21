@@ -31,8 +31,7 @@ install_requires = [
 
 host_executables = [
     'root-canal',
-    'bluetooth_stack_with_facade',  # c++
-    'bluetooth_with_facades',  # rust
+    'bluetooth_stack_with_facade',
 ]
 
 

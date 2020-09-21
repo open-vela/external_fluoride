@@ -156,7 +156,6 @@ class ModuleRegistry {
 
   std::map<const ModuleFactory*, Module*> started_modules_;
   std::vector<const ModuleFactory*> start_order_;
-  std::string last_instance_;
 };
 
 class ModuleDumper {

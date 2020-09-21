@@ -49,7 +49,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
     acl_manager_->RegisterLeCallbacks(this, facade_handler_);
   }
 
-  ~LeAclManagerFacadeService() {
+  ~LeAclManagerFacadeService() override {
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
     for (auto& conn : acl_connections_) {
       if (conn.second.connection_ != nullptr) {
@@ -120,9 +120,8 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
       ::grpc::ServerContext* context,
       const LeConnectionCommandMsg* request,
       ::google::protobuf::Empty* response) override {
-    auto command_view =
-        ConnectionManagementCommandView::Create(AclCommandView::Create(CommandView::Create(PacketView<kLittleEndian>(
-            std::make_shared<std::vector<uint8_t>>(request->packet().begin(), request->packet().end())))));
+    auto command_view = ConnectionManagementCommandView::Create(CommandPacketView::Create(PacketView<kLittleEndian>(
+        std::make_shared<std::vector<uint8_t>>(request->packet().begin(), request->packet().end()))));
     if (!command_view.IsValid()) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid command packet");
     }
@@ -244,7 +243,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
           3,
           ClockAccuracy::PPM_20);
       LeConnectionEvent success;
-      success.set_payload(builder_to_string(std::move(builder)));
+      success.set_event(builder_to_string(std::move(builder)));
       per_connection_events_[current_connection_request_]->OnIncomingEvent(success);
     }
     current_connection_request_++;
@@ -254,7 +253,7 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
     std::unique_ptr<BasePacketBuilder> builder = LeConnectionCompleteBuilder::Create(
         reason, 0, Role::CENTRAL, address.GetAddressType(), address.GetAddress(), 0, 0, 0, ClockAccuracy::PPM_20);
     LeConnectionEvent fail;
-    fail.set_payload(builder_to_string(std::move(builder)));
+    fail.set_event(builder_to_string(std::move(builder)));
     per_connection_events_[current_connection_request_]->OnIncomingEvent(fail);
     current_connection_request_++;
   }
@@ -283,12 +282,9 @@ class LeAclManagerFacadeService : public LeAclManagerFacade::Service, public LeC
       std::unique_ptr<BasePacketBuilder> builder =
           DisconnectionCompleteBuilder::Create(ErrorCode::SUCCESS, handle_, reason);
       LeConnectionEvent disconnection;
-      disconnection.set_payload(builder_to_string(std::move(builder)));
+      disconnection.set_event(builder_to_string(std::move(builder)));
       event_stream_->OnIncomingEvent(disconnection);
     }
-
-    void OnReadRemoteVersionInformationComplete(
-        uint8_t lmp_version, uint16_t manufacturer_name, uint16_t sub_version) override {}
 
     LeConnectionManagementCallbacks* GetCallbacks() {
       return this;

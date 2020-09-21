@@ -5,7 +5,6 @@ attribute "privacy";
 table InitFlagsData {
     title:string;
     gd_advertising_enabled:bool;
-    gd_scanning_enabled:bool;
     gd_security_enabled:bool;
     gd_acl_enabled:bool;
     gd_hci_enabled:bool;

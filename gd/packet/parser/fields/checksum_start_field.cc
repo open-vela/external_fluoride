@@ -65,12 +65,3 @@ std::string ChecksumStartField::GetStartedFieldName() const {
 void ChecksumStartField::GenStringRepresentation(std::ostream&, std::string) const {
   // Print nothing for checksum start
 }
-
-std::string ChecksumStartField::GetRustDataType() const {
-  return GetDataType();
-}
-
-void ChecksumStartField::GenRustGetter(std::ostream&, Size, Size) const {
-}
-
-void ChecksumStartField::GenRustWriter(std::ostream&, Size, Size) const {}

@@ -39,6 +39,8 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
+#undef OS_GENERIC
+
 using bluetooth::common::MessageLoopThread;
 using LockGuard = std::lock_guard<std::mutex>;
 
@@ -380,8 +382,8 @@ static void btif_a2dp_sink_command_ready(BT_HDR* p_msg) {
       break;
   }
 
-  osi_free(p_msg);
   LOG_VERBOSE("%s: %s DONE", __func__, dump_media_event(p_msg->event));
+  osi_free(p_msg);
 }
 
 void btif_a2dp_sink_update_decoder(const uint8_t* p_codec_info) {
