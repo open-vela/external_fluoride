@@ -39,8 +39,6 @@ class CustomFieldDef : public TypeDef {
 
   void GenUsing(std::ostream& s) const;
 
-  void GenFixedSizeCustomFieldCheck(std::ostream& s) const;
-
   void GenCustomFieldCheck(std::ostream& s, bool little_endian) const;
 
   const std::string include_;
