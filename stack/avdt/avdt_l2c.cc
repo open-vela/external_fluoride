@@ -25,10 +25,8 @@
 #include <string.h>
 #include "avdt_api.h"
 #include "avdt_int.h"
-#include "avdtc_api.h"
 #include "bt_target.h"
 #include "bt_types.h"
-#include "bt_utils.h"
 #include "bta/include/bta_av_api.h"
 #include "btm_api.h"
 #include "btm_int.h"
@@ -36,6 +34,7 @@
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
+#include "stack/include/acl_api.h"
 
 /* callback function declarations */
 void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
@@ -51,16 +50,14 @@ void avdt_l2c_data_ind_cback(uint16_t lcid, BT_HDR* p_buf);
 /* L2CAP callback function structure */
 const tL2CAP_APPL_INFO avdt_l2c_appl = {avdt_l2c_connect_ind_cback,
                                         avdt_l2c_connect_cfm_cback,
-                                        NULL,
                                         avdt_l2c_config_ind_cback,
                                         avdt_l2c_config_cfm_cback,
                                         avdt_l2c_disconnect_ind_cback,
                                         avdt_l2c_disconnect_cfm_cback,
-                                        NULL,
                                         avdt_l2c_data_ind_cback,
                                         avdt_l2c_congestion_ind_cback,
-                                        NULL, /* tL2CA_TX_COMPLETE_CB */
-                                        NULL /* tL2CA_CREDITS_RECEIVED_CB */};
+                                        NULL,
+                                        /* tL2CA_TX_COMPLETE_CB */};
 
 /*******************************************************************************
  *
@@ -168,7 +165,6 @@ void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
   AvdtpTransportChannel* p_tbl = NULL;
   uint16_t result;
   tL2CAP_CFG_INFO cfg;
-  tBTM_STATUS rc;
 
   /* do we already have a control channel for this peer? */
   p_ccb = avdt_ccb_by_bd(bd_addr);
@@ -197,21 +193,14 @@ void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
 
       if (interop_match_addr(INTEROP_2MBPS_LINK_ONLY, &bd_addr)) {
         // Disable 3DH packets for AVDT ACL to improve sensitivity on HS
-        tACL_CONN* p_acl_cb = btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
-        btm_set_packet_types(
-            p_acl_cb,
-            (btm_cb.btm_acl_pkt_types_supported | HCI_PKT_TYPES_MASK_NO_3_DH1 |
+        btm_set_packet_types_from_address(
+            bd_addr, BT_TRANSPORT_BR_EDR,
+            (acl_get_supported_packet_types() | HCI_PKT_TYPES_MASK_NO_3_DH1 |
              HCI_PKT_TYPES_MASK_NO_3_DH3 | HCI_PKT_TYPES_MASK_NO_3_DH5));
       }
-
-      /* Check the security */
-      rc = btm_sec_mx_access_request(bd_addr, AVDT_PSM, false,
-                                     BTM_SEC_PROTO_AVDT, AVDT_CHAN_SIG,
-                                     &avdt_sec_check_complete_term, NULL);
-      if (rc == BTM_CMD_STARTED) {
-        L2CA_ConnectRsp(p_ccb->peer_addr, p_tbl->id, lcid, L2CAP_CONN_PENDING,
-                        L2CAP_CONN_OK);
-      }
+      /* Assume security check is complete */
+      avdt_sec_check_complete_term(&p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
+                                   nullptr, BTM_SUCCESS);
       return;
     }
   } else {
@@ -315,19 +304,16 @@ void avdt_l2c_connect_cfm_cback(uint16_t lcid, uint16_t result) {
             if (interop_match_addr(INTEROP_2MBPS_LINK_ONLY,
                                    (const RawAddress*)&p_ccb->peer_addr)) {
               // Disable 3DH packets for AVDT ACL to improve sensitivity on HS
-              tACL_CONN* p_acl_cb =
-                  btm_bda_to_acl(p_ccb->peer_addr, BT_TRANSPORT_BR_EDR);
-              btm_set_packet_types(
-                  p_acl_cb,
-                  (btm_cb.btm_acl_pkt_types_supported |
+              btm_set_packet_types_from_address(
+                  p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
+                  (acl_get_supported_packet_types() |
                    HCI_PKT_TYPES_MASK_NO_3_DH1 | HCI_PKT_TYPES_MASK_NO_3_DH3 |
                    HCI_PKT_TYPES_MASK_NO_3_DH5));
             }
 
-            /* Check the security */
-            btm_sec_mx_access_request(p_ccb->peer_addr, AVDT_PSM, true,
-                                      BTM_SEC_PROTO_AVDT, AVDT_CHAN_SIG,
-                                      &avdt_sec_check_complete_orig, NULL);
+            /* Assume security check is complete */
+            avdt_sec_check_complete_orig(&p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
+                                         nullptr, BTM_SUCCESS);
           }
         }
       }
