@@ -27,5 +27,6 @@
 namespace bluetooth {
 namespace shim {
 class Dumpsys;
+class L2cap;
 }  // namespace shim
 }  // namespace bluetooth

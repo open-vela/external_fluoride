@@ -1,3 +1,7 @@
 buildtools
 out
 third_party
+*.o
+.depend
+Make.dep
+tags

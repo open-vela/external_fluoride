@@ -48,13 +48,18 @@
 #include "osi/include/wakelock.h"
 #include "stack/include/btu.h"
 
+#ifndef CLOCK_BOOTTIME_ALARM
+#define CLOCK_BOOTTIME_ALARM  CLOCK_BOOTTIME
+#endif
+
 using base::Bind;
 using base::CancelableClosure;
 using base::MessageLoop;
 
 // Callback and timer threads should run at RT priority in order to ensure they
 // meet audio deadlines.  Use this priority for all audio/timer related thread.
-static const int THREAD_RT_PRIORITY = 1;
+static const int THREAD_RT_PRIORITY = PTHREAD_DEFAULT_PRIORITY;
+static sem_t g_alarm_thread_sem = SEM_INITIALIZER(0);
 
 typedef struct {
   size_t count;
@@ -195,7 +200,6 @@ void alarm_free(alarm_t* alarm) {
 
   osi_free((void*)alarm->stats.name);
   alarm->closure.~CancelableClosureInStruct();
-  alarm->callback_mutex.reset();
   osi_free(alarm);
 }
 
@@ -612,7 +616,7 @@ static void alarm_queue_ready(fixed_queue_t* queue, UNUSED_ATTR void* context) {
 
 // Callback function for wake alarms and our posix timer
 static void timer_callback(UNUSED_ATTR void* ptr) {
-  semaphore_post(alarm_expired);
+  sem_post(&g_alarm_thread_sem);
 }
 
 // Function running on |dispatcher_thread| that performs the following:
@@ -665,6 +669,16 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
   LOG_INFO("%s Callback thread exited", __func__);
 }
 
+static void *timer_dispatcher_thread(void *arg) {
+
+  while (1) {
+    sem_wait(&g_alarm_thread_sem);
+    semaphore_post(alarm_expired);
+  }
+
+  return NULL;
+}
+
 static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
   CHECK(timer != NULL);
 
@@ -696,6 +710,9 @@ static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
     }
     return false;
   }
+
+  pthread_t pid;
+  pthread_create(&pid, NULL, timer_dispatcher_thread, NULL);
 
   return true;
 }

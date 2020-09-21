@@ -20,14 +20,12 @@
 #define BTM_API_TYPES_H
 
 #include <cstdint>
-#include <string>
 
 #include "device/include/esco_parameters.h"
 #include "internal_include/bt_target.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/smp_api_types.h"
-#include "types/ble_address_with_type.h"
 #include "types/bt_transport.h"
 
 /* Device name of peer (may be truncated to save space in BTM database) */
@@ -973,27 +971,6 @@ enum : uint8_t {
 };
 typedef uint8_t tBTM_PM_STATUS;
 
-inline std::string power_mode_status_text(tBTM_PM_STATUS status) {
-  switch (status) {
-    case BTM_PM_STS_ACTIVE:
-      return std::string("active");
-    case BTM_PM_STS_HOLD:
-      return std::string("hold");
-    case BTM_PM_STS_SNIFF:
-      return std::string("sniff");
-    case BTM_PM_STS_PARK:
-      return std::string("park");
-    case BTM_PM_STS_SSR:
-      return std::string("sniff_subrating");
-    case BTM_PM_STS_PENDING:
-      return std::string("pending");
-    case BTM_PM_STS_ERROR:
-      return std::string("error");
-    default:
-      return std::string("UNKNOWN");
-  }
-}
-
 /* BTM Power manager modes */
 enum : uint8_t {
   BTM_PM_MD_ACTIVE = HCI_MODE_ACTIVE,  // 0x00
@@ -1003,33 +980,6 @@ enum : uint8_t {
   BTM_PM_MD_FORCE = 0x10 /* OR this to force ACL link to a certain mode */
 };
 typedef uint8_t tBTM_PM_MODE;
-inline bool is_legal_power_mode(tBTM_PM_MODE mode) {
-  switch (mode & ~BTM_PM_MD_FORCE) {
-    case BTM_PM_MD_ACTIVE:
-    case BTM_PM_MD_HOLD:
-    case BTM_PM_MD_SNIFF:
-    case BTM_PM_MD_PARK:
-      return true;
-    default:
-      return false;
-  }
-}
-
-inline std::string power_mode_text(tBTM_PM_MODE mode) {
-  std::string s = base::StringPrintf((mode & BTM_PM_MD_FORCE) ? "" : "forced:");
-  switch (mode & ~BTM_PM_MD_FORCE) {
-    case BTM_PM_MD_ACTIVE:
-      return s + std::string("active");
-    case BTM_PM_MD_HOLD:
-      return s + std::string("hold");
-    case BTM_PM_MD_SNIFF:
-      return s + std::string("sniff");
-    case BTM_PM_MD_PARK:
-      return s + std::string("park");
-    default:
-      return s + std::string("UNKNOWN");
-  }
-}
 
 #define BTM_PM_SET_ONLY_ID 0x80
 
@@ -1059,7 +1009,7 @@ typedef struct {
  *************************************/
 typedef void(tBTM_PM_STATUS_CBACK)(const RawAddress& p_bda,
                                    tBTM_PM_STATUS status, uint16_t value,
-                                   tHCI_STATUS hci_status);
+                                   uint8_t hci_status);
 
 /************************
  *  Stored Linkkey Types

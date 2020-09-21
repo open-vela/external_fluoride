@@ -19,6 +19,7 @@
 #pragma once
 
 #include <gd/l2cap/classic/internal/dynamic_channel_service_manager_impl.h>
+#include <gd/shim/l2cap.h>
 #include <future>
 #include <memory>
 
