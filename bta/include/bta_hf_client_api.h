@@ -45,7 +45,7 @@
 #define BTA_HF_CLIENT_PEER_ECC 0x00000080 /* Enhanced Call Control */
 #define BTA_HF_CLIENT_PEER_EXTERR 0x00000100 /* Extended error codes */
 #define BTA_HF_CLIENT_PEER_CODEC 0x00000200  /* Codec Negotiation */
-#define BTA_HF_CLIENT_PEER_S4    0x00000800  /* ESCO S4 link setting */
+#define BTA_HF_CLIENT_PEER_S4 0x00000800     /* ESCO S4 link setting */
 
 typedef uint16_t tBTA_HF_CLIENT_PEER_FEAT;
 
@@ -61,7 +61,7 @@ typedef uint16_t tBTA_HF_CLIENT_PEER_FEAT;
 #define BTA_HF_CLIENT_FEAT_ECS 0x00000020   /* Enhanced Call Status */
 #define BTA_HF_CLIENT_FEAT_ECC 0x00000040   /* Enhanced Call Control */
 #define BTA_HF_CLIENT_FEAT_CODEC 0x00000080 /* Codec Negotiation */
-#define BTA_HF_CLIENT_FEAT_S4  0x00000200   /* ESCO S4 link setting */
+#define BTA_HF_CLIENT_FEAT_S4 0x00000200    /* ESCO S4 link setting */
 
 /* HFP HF extended call handling - masks not related to any spec */
 #define BTA_HF_CLIENT_CHLD_REL \
@@ -287,7 +287,7 @@ typedef void(tBTA_HF_CLIENT_CBACK)(tBTA_HF_CLIENT_EVT event,
  * Returns          BTA_SUCCESS if OK, BTA_FAILURE otherwise.
  *
  ******************************************************************************/
-tBTA_STATUS BTA_HfClientEnable(tBTA_HF_CLIENT_CBACK* p_cback,
+tBTA_STATUS BTA_HfClientEnable(tBTA_HF_CLIENT_CBACK* p_cback, tBTA_SEC sec_mask,
                                tBTA_HF_CLIENT_FEAT features,
                                const char* p_service_name);
 
@@ -317,7 +317,8 @@ void BTA_HfClientDisable(void);
  * Returns          void
  *
  ******************************************************************************/
-void BTA_HfClientOpen(const RawAddress& bd_addr, uint16_t* p_handle);
+void BTA_HfClientOpen(const RawAddress& bd_addr, tBTA_SEC sec_mask,
+                      uint16_t* p_handle);
 
 /*******************************************************************************
  *
