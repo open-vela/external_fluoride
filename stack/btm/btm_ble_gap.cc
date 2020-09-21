@@ -603,7 +603,9 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
      * address in controller */
     if (controller_get_interface()->supports_ble_privacy()) {
       gap_ble_attr_value.addr_resolution = 1;
-      p_cb->privacy_mode = BTM_PRIVACY_1_2;
+      /* check vendor specific capability */
+      p_cb->privacy_mode =
+          btm_cb.ble_ctr_cb.mixed_mode ? BTM_PRIVACY_MIXED : BTM_PRIVACY_1_2;
     } else /* 4.1/4.0 controller */
       p_cb->privacy_mode = BTM_PRIVACY_1_1;
   }
@@ -673,15 +675,10 @@ static uint8_t btm_set_conn_mode_adv_init_addr(
   uint8_t evt_type;
   tBTM_SEC_DEV_REC* p_dev_rec;
 
-  if (p_cb->connectable_mode == BTM_BLE_NON_CONNECTABLE) {
-    if (p_cb->scan_rsp) {
-      evt_type = BTM_BLE_DISCOVER_EVT;
-    } else {
-      evt_type = BTM_BLE_NON_CONNECT_EVT;
-    }
-  } else {
-    evt_type = BTM_BLE_CONNECT_EVT;
-  }
+  evt_type =
+      (p_cb->connectable_mode == BTM_BLE_NON_CONNECTABLE)
+          ? ((p_cb->scan_rsp) ? BTM_BLE_DISCOVER_EVT : BTM_BLE_NON_CONNECT_EVT)
+          : BTM_BLE_CONNECT_EVT;
 
   if (evt_type == BTM_BLE_CONNECT_EVT) {
     evt_type = p_cb->directed_conn;
@@ -836,27 +833,34 @@ uint16_t BTM_BleReadConnectability() {
 static void btm_ble_select_adv_interval(uint8_t evt_type,
                                         uint16_t* p_adv_int_min,
                                         uint16_t* p_adv_int_max) {
-  switch (evt_type) {
-    case BTM_BLE_CONNECT_EVT:
-    case BTM_BLE_CONNECT_LO_DUTY_DIR_EVT:
-      *p_adv_int_min = *p_adv_int_max = BTM_BLE_GAP_ADV_FAST_INT_1;
-      break;
+  tBTM_BLE_INQ_CB* p_cb = &btm_cb.ble_ctr_cb.inq_var;
+  if (p_cb->adv_interval_min && p_cb->adv_interval_max) {
+    *p_adv_int_min = p_cb->adv_interval_min;
+    *p_adv_int_max = p_cb->adv_interval_max;
+  } else {
+    switch (evt_type) {
+      case BTM_BLE_CONNECT_EVT:
+      case BTM_BLE_CONNECT_LO_DUTY_DIR_EVT:
+        *p_adv_int_min = *p_adv_int_max = BTM_BLE_GAP_ADV_FAST_INT_1;
+        break;
 
-    case BTM_BLE_NON_CONNECT_EVT:
-    case BTM_BLE_DISCOVER_EVT:
-      *p_adv_int_min = *p_adv_int_max = BTM_BLE_GAP_ADV_FAST_INT_2;
-      break;
+      case BTM_BLE_NON_CONNECT_EVT:
+      case BTM_BLE_DISCOVER_EVT:
+        *p_adv_int_min = *p_adv_int_max = BTM_BLE_GAP_ADV_FAST_INT_2;
+        break;
 
       /* connectable directed event */
-    case BTM_BLE_CONNECT_DIR_EVT:
-      *p_adv_int_min = BTM_BLE_GAP_ADV_DIR_MIN_INT;
-      *p_adv_int_max = BTM_BLE_GAP_ADV_DIR_MAX_INT;
-      break;
+      case BTM_BLE_CONNECT_DIR_EVT:
+        *p_adv_int_min = BTM_BLE_GAP_ADV_DIR_MIN_INT;
+        *p_adv_int_max = BTM_BLE_GAP_ADV_DIR_MAX_INT;
+        break;
 
-    default:
-      *p_adv_int_min = *p_adv_int_max = BTM_BLE_GAP_ADV_SLOW_INT;
-      break;
+      default:
+        *p_adv_int_min = *p_adv_int_max = BTM_BLE_GAP_ADV_SLOW_INT;
+        break;
+    }
   }
+  return;
 }
 
 /*******************************************************************************
