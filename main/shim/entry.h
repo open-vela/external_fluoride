@@ -52,9 +52,6 @@ class LeScanningManager;
 }
 
 namespace l2cap {
-namespace classic {
-class L2capClassicModule;
-}  // namespace classic
 namespace le {
 class L2capLeModule;
 }  // namespace le
@@ -79,7 +76,7 @@ neighbor::ConnectabilityModule* GetConnectability();
 Dumpsys* GetDumpsys();
 neighbor::InquiryModule* GetInquiry();
 hci::HciLayer* GetHciLayer();
-l2cap::classic::L2capClassicModule* GetL2capClassicModule();
+L2cap* GetL2cap();
 l2cap::le::L2capLeModule* GetL2capLeModule();
 neighbor::NameModule* GetName();
 neighbor::PageModule* GetPage();

@@ -865,12 +865,16 @@ void btsnd_hcic_set_cig_params(
                             std::move(cb));
 }
 
-void btsnd_hcic_create_cis(uint8_t num_cis, const EXT_CIS_CREATE_CFG* cis_cfg,
-                           base::OnceCallback<void(uint8_t*, uint16_t)> cb) {
-  const int params_len = 1 + num_cis * 4;
-  uint8_t param[params_len];
-  uint8_t* pp = param;
+void btsnd_hcic_create_cis(uint8_t num_cis, const EXT_CIS_CREATE_CFG* cis_cfg) {
+  BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
+  uint8_t* pp = (uint8_t*)(p + 1);
 
+  const int param_len = 1 + num_cis * 4;
+  p->len = HCIC_PREAMBLE_SIZE + param_len;
+  p->offset = 0;
+
+  UINT16_TO_STREAM(pp, HCI_LE_CREATE_CIS);
+  UINT8_TO_STREAM(pp, param_len);
   UINT8_TO_STREAM(pp, num_cis);
 
   for (int i = 0; i < num_cis; i++) {
@@ -878,8 +882,7 @@ void btsnd_hcic_create_cis(uint8_t num_cis, const EXT_CIS_CREATE_CFG* cis_cfg,
     UINT16_TO_STREAM(pp, cis_cfg[i].acl_conn_handle);
   }
 
-  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_LE_CREATE_CIS, param, params_len,
-                            std::move(cb));
+  btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
 
 void btsnd_hcic_remove_cig(uint8_t cig_id,
@@ -1072,17 +1075,6 @@ void btsnd_hcic_remove_iso_data_path(
                             params_len, std::move(cb));
 }
 
-void btsnd_hcic_read_iso_link_quality(
-    uint16_t iso_handle, base::OnceCallback<void(uint8_t*, uint16_t)> cb) {
-  const int params_len = 2;
-  uint8_t param[params_len];
-  uint8_t* pp = param;
-
-  UINT16_TO_STREAM(pp, iso_handle);
-
-  btu_hcif_send_cmd_with_cb(FROM_HERE, HCI_LE_READ_ISO_LINK_QUALITY, param,
-                            params_len, std::move(cb));
-}
 
 void btsnd_hcic_ble_periodic_advertising_create_sync(
     uint8_t options, uint8_t adv_sid, uint8_t adv_addr_type,

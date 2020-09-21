@@ -29,7 +29,6 @@
 #include "main/shim/entry.h"
 #include "main/shim/helpers.h"
 #include "main/shim/shim.h"
-#include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int_types.h"
 #include "types/bt_transport.h"
 #include "types/raw_address.h"
@@ -667,12 +666,11 @@ void Btm::StartAdvertising() {
     return;
   }
 
-  hci::ExtendedAdvertisingConfig config = {};
-  advertiser_id_ = GetAdvertising()->ExtendedCreateAdvertiser(
-      0x00, config,
-      common::Bind([](hci::Address, hci::AddressType) { /*OnScan*/ }),
+  hci::AdvertisingConfig config = {};
+  advertiser_id_ = GetAdvertising()->CreateAdvertiser(
+      config, common::Bind([](hci::Address, hci::AddressType) { /*OnScan*/ }),
       common::Bind([](hci::ErrorCode, uint8_t, uint8_t) { /*OnTerminated*/ }),
-      0, 0, GetGdShimHandler());
+      GetGdShimHandler());
   if (advertiser_id_ == hci::LeAdvertisingManager::kInvalidId) {
     LOG_WARN("%s Unable to start advertising", __func__);
     return;
@@ -777,14 +775,6 @@ uint16_t Btm::GetAclHandle(const RawAddress& remote_bda,
 }
 
 tBLE_ADDR_TYPE Btm::GetAddressType(const RawAddress& bd_addr) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
-  if (p_dev_rec != NULL && p_dev_rec->device_type & BT_DEVICE_TYPE_BLE) {
-    if (!p_dev_rec->ble.identity_address_with_type.bda.IsEmpty()) {
-      return p_dev_rec->ble.identity_address_with_type.type;
-    } else {
-      return p_dev_rec->ble.ble_addr_type;
-    }
-  }
   if (le_address_type_cache_.count(bd_addr) == 0) {
     LOG(ERROR) << "Unknown bd_addr. Use public address";
     return BLE_ADDR_PUBLIC;

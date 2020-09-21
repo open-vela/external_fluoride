@@ -77,8 +77,8 @@ class HciLayerFuzzClient : public Module {
   }
 
   hci::HciLayer* hci_ = nullptr;
-  os::fuzz::DevNullQueue<AclView>* aclDevNull_;
-  os::fuzz::FuzzInjectQueue<AclBuilder>* aclInject_;
+  os::fuzz::DevNullQueue<AclPacketView>* aclDevNull_;
+  os::fuzz::FuzzInjectQueue<AclPacketBuilder>* aclInject_;
 
   SecurityInterface* security_interface_;
   LeSecurityInterface* le_security_interface_;

@@ -21,8 +21,6 @@
 #include "osi/include/allocator.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hci_error_code.h"
-#include "stack/include/hcidefs.h"
-#include "types/ble_address_with_type.h"
 
 namespace bluetooth {
 
@@ -68,12 +66,6 @@ inline hci::AddressWithType ToAddressWithType(const RawAddress& legacy_address,
   }
 
   return hci::AddressWithType{address, type};
-}
-
-inline hci::AddressWithType ToAddressWithTypeFromLegacy(
-    const tBLE_BD_ADDR& legacy_address_with_type) {
-  return ToAddressWithType(legacy_address_with_type.bda,
-                           legacy_address_with_type.type);
 }
 
 inline tBLE_BD_ADDR ToLegacyAddressWithType(
@@ -207,22 +199,9 @@ inline tHCI_STATUS ToLegacyHciErrorCode(hci::ErrorCode reason) {
       return HCI_ERR_LMP_ERR_TRANS_COLLISION;
     case hci::ErrorCode::ENCRYPTION_MODE_NOT_ACCEPTABLE:
       return HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE;
-    case hci::ErrorCode::ROLE_SWITCH_FAILED:
-      return static_cast<tHCI_STATUS>(hci::ErrorCode::ROLE_SWITCH_FAILED);
     case hci::ErrorCode::CONTROLLER_BUSY:
       return static_cast<tHCI_STATUS>(hci::ErrorCode::CONTROLLER_BUSY);
-    case hci::ErrorCode::CONNECTION_FAILED_ESTABLISHMENT:
-      return static_cast<tHCI_STATUS>(
-          hci::ErrorCode::CONNECTION_FAILED_ESTABLISHMENT);
   }
-}
-
-inline tHCI_MODE ToLegacyHciMode(hci::Mode mode) {
-  return static_cast<tHCI_MODE>(mode);
-}
-
-inline hci::DisconnectReason ToDisconnectReasonFromLegacy(tHCI_STATUS reason) {
-  return static_cast<hci::DisconnectReason>(reason);
 }
 
 namespace debug {
