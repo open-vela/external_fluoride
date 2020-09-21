@@ -210,8 +210,7 @@ static void bta_ag_send_result(tBTA_AG_SCB* p_scb, size_t code,
                                const char* p_arg, int16_t int_arg) {
   const tBTA_AG_RESULT* result = bta_ag_result_by_code(code);
   if (result == nullptr) {
-    LOG_ERROR(LOG_TAG, "%s Unable to lookup result for code %zu", __func__,
-              code);
+    LOG_ERROR("%s Unable to lookup result for code %zu", __func__, code);
     return;
   }
 
@@ -840,7 +839,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
   uint32_t i, ind_id;
   uint32_t bia_masked_out;
   if (p_arg == nullptr) {
-    APPL_TRACE_ERROR("%s: p_arg is null, send error and return", __func__);
+    LOG_WARN("p_arg is null for cmd 0x%x, send error and return", cmd);
     bta_ag_send_error(p_scb, BTA_AG_ERR_INV_CHAR_IN_TSTR);
     return;
   }
@@ -855,7 +854,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
   val.bd_addr = p_scb->peer_addr;
 
   if ((p_end - p_arg + 1) >= (long)sizeof(val.str)) {
-    APPL_TRACE_ERROR("%s: p_arg is too long, send error and return", __func__);
+    LOG_ERROR("p_arg is too long for cmd 0x%x, send error and return", cmd);
     bta_ag_send_error(p_scb, BTA_AG_ERR_TEXT_TOO_LONG);
     android_errorWriteLog(0x534e4554, "112860487");
     return;
