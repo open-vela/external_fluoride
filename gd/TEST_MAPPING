@@ -7,10 +7,6 @@
     {
       "name" : "bluetooth_packet_parser_test",
       "host" : true
-    },
-    {
-      "name" : "bluetooth_flatbuffer_test",
-      "host" : true
     }
   ]
 }
