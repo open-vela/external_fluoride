@@ -34,6 +34,7 @@
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
 
 AvdtpScb* AvdtpAdaptationLayer::LookupAvdtpScb(
     const AvdtpTransportChannel& tc) {
@@ -551,7 +552,8 @@ void avdt_ad_open_req(uint8_t type, AvdtpCcb* p_ccb, AvdtpScb* p_scb,
     p_tbl->state = AVDT_AD_ST_CONN;
 
     /* call l2cap connect req */
-    lcid = L2CA_ConnectReq(AVDT_PSM, p_ccb->peer_addr);
+    lcid =
+        L2CA_ConnectReq2(AVDT_PSM, p_ccb->peer_addr, BTM_SEC_OUT_AUTHENTICATE);
     if (lcid != 0) {
       /* if connect req ok, store tcid in lcid table  */
       avdtp_cb.ad.lcid_tbl[lcid - L2CAP_BASE_APPL_CID] =
