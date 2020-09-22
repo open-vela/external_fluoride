@@ -15,6 +15,8 @@
  */
 #define LOG_TAG "bt_gd_shim"
 
+#include "shim/l2cap.h"
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -29,15 +31,14 @@
 #include "hci/hci_packets.h"
 #include "l2cap/classic/dynamic_channel_manager.h"
 #include "l2cap/classic/l2cap_classic_module.h"
+#include "l2cap/classic/security_policy.h"
 #include "l2cap/psm.h"
-#include "l2cap/security_policy.h"
 #include "module.h"
 #include "os/handler.h"
 #include "os/log.h"
 #include "packet/packet_view.h"
 #include "packet/raw_builder.h"
 #include "shim/dumpsys.h"
-#include "shim/l2cap.h"
 
 namespace bluetooth {
 namespace shim {
@@ -48,8 +49,6 @@ constexpr char kModuleName[] = "shim::L2cap";
 
 constexpr bool kConnectionFailed = false;
 constexpr bool kConnectionOpened = true;
-constexpr bool kRegistrationFailed = false;
-constexpr bool kRegistrationSuccess = true;
 
 using ConnectionInterfaceDescriptor = uint16_t;
 constexpr ConnectionInterfaceDescriptor kInvalidConnectionInterfaceDescriptor = 0;
@@ -78,12 +77,19 @@ std::unique_ptr<packet::RawBuilder> MakeUniquePacket(const uint8_t* data, size_t
 
 class ConnectionInterface {
  public:
-  ConnectionInterface(ConnectionInterfaceDescriptor cid, std::unique_ptr<l2cap::classic::DynamicChannel> channel,
-                      os::Handler* handler, ConnectionClosed on_closed)
-      : cid_(cid), channel_(std::move(channel)), handler_(handler), on_data_ready_callback_(nullptr),
-        on_connection_closed_callback_(nullptr), address_(channel_->GetDevice()), on_closed_(on_closed) {
-    channel_->RegisterOnCloseCallback(
-        handler_, common::BindOnce(&ConnectionInterface::OnConnectionClosed, common::Unretained(this)));
+  ConnectionInterface(
+      ConnectionInterfaceDescriptor cid,
+      std::unique_ptr<l2cap::classic::DynamicChannel> channel,
+      os::Handler* handler,
+      ConnectionClosed on_closed)
+      : cid_(cid),
+        channel_(std::move(channel)),
+        handler_(handler),
+        on_data_ready_callback_(nullptr),
+        on_connection_closed_callback_(nullptr),
+        address_(channel_->GetDevice().GetAddress()),
+        on_closed_(on_closed) {
+    channel_->RegisterOnCloseCallback(handler_->BindOnceOn(this, &ConnectionInterface::OnConnectionClosed));
     channel_->GetQueueUpEnd()->RegisterDequeue(
         handler_, common::Bind(&ConnectionInterface::OnReadReady, common::Unretained(this)));
     dequeue_registered_ = true;
@@ -140,8 +146,11 @@ class ConnectionInterface {
   }
 
   void OnConnectionClosed(hci::ErrorCode error_code) {
-    LOG_DEBUG("Channel interface closed reason:%s cid:%hd device:%s", hci::ErrorCodeText(error_code).c_str(), cid_,
-              address_.ToString().c_str());
+    LOG_DEBUG(
+        "Channel interface closed reason:%s cid:%hd device:%s",
+        hci::ErrorCodeText(error_code).c_str(),
+        cid_,
+        address_.ToString().c_str());
     if (dequeue_registered_) {
       channel_->GetQueueUpEnd()->UnregisterDequeue();
       dequeue_registered_ = false;
@@ -195,16 +204,25 @@ class ConnectionInterfaceManager {
     return cid_to_interface_map_.size();
   }
 
-  void ConnectionOpened(ConnectionCompleteCallback on_complete, l2cap::Psm psm, ConnectionInterfaceDescriptor cid) {
+  void ConnectionOpened(
+      ConnectionCompleteCallback on_complete,
+      l2cap::Psm psm,
+      ConnectionInterfaceDescriptor cid,
+      l2cap::Cid remote_cid) {
     hci::Address address = cid_to_interface_map_[cid]->GetRemoteAddress();
     LOG_DEBUG("Connection opened address:%s psm:%hd cid:%hd", address.ToString().c_str(), psm, cid);
-    on_complete(address.ToString(), static_cast<uint16_t>(psm), static_cast<uint16_t>(cid), kConnectionOpened);
+    on_complete(
+        address.ToString(),
+        static_cast<uint16_t>(psm),
+        static_cast<uint16_t>(cid),
+        static_cast<uint16_t>(remote_cid),
+        kConnectionOpened);
   }
 
-  void ConnectionFailed(ConnectionCompleteCallback on_complete, hci::Address address, l2cap::Psm psm,
-                        ConnectionInterfaceDescriptor cid) {
+  void ConnectionFailed(
+      ConnectionCompleteCallback on_complete, hci::Address address, l2cap::Psm psm, ConnectionInterfaceDescriptor cid) {
     LOG_DEBUG("Connection failed address:%s psm:%hd", address.ToString().c_str(), psm);
-    on_complete(address.ToString(), static_cast<uint16_t>(psm), static_cast<uint16_t>(cid), kConnectionFailed);
+    on_complete(address.ToString(), static_cast<uint16_t>(psm), static_cast<uint16_t>(cid), 0, kConnectionFailed);
   }
 
   ConnectionInterfaceManager(os::Handler* handler);
@@ -254,23 +272,24 @@ void ConnectionInterfaceManager::FreeConnectionInterfaceDescriptor(ConnectionInt
   active_cid_set_.erase(cid);
 }
 
-void ConnectionInterfaceManager::ConnectionClosed(ConnectionInterfaceDescriptor cid,
-                                                  std::unique_ptr<ConnectionInterface> connection) {
+void ConnectionInterfaceManager::ConnectionClosed(
+    ConnectionInterfaceDescriptor cid, std::unique_ptr<ConnectionInterface> connection) {
   cid_to_interface_map_.erase(cid);
   FreeConnectionInterfaceDescriptor(cid);
 }
 
-void ConnectionInterfaceManager::AddConnection(ConnectionInterfaceDescriptor cid,
-                                               std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+void ConnectionInterfaceManager::AddConnection(
+    ConnectionInterfaceDescriptor cid, std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
   ASSERT(cid_to_interface_map_.count(cid) == 0);
   cid_to_interface_map_.emplace(
-      cid, std::make_unique<ConnectionInterface>(
-               cid, std::move(channel), handler_, [this](ConnectionInterfaceDescriptor cid) {
-                 LOG_DEBUG("Deleting connection interface cid:%hd", cid);
-                 auto connection = std::move(cid_to_interface_map_.at(cid));
-                 handler_->Post(common::BindOnce(&ConnectionInterfaceManager::ConnectionClosed,
-                                                 common::Unretained(this), cid, std::move(connection)));
-               }));
+      cid,
+      std::make_unique<ConnectionInterface>(
+          cid, std::move(channel), handler_, [this](ConnectionInterfaceDescriptor cid) {
+            LOG_DEBUG("Deleting connection interface cid:%hd", cid);
+            auto connection = std::move(cid_to_interface_map_.at(cid));
+            handler_->Post(common::BindOnce(
+                &ConnectionInterfaceManager::ConnectionClosed, common::Unretained(this), cid, std::move(connection)));
+          }));
 }
 
 void ConnectionInterfaceManager::RemoveConnection(ConnectionInterfaceDescriptor cid) {
@@ -285,14 +304,14 @@ bool ConnectionInterfaceManager::HasResources() const {
   return cid_to_interface_map_.size() < kMaxConnections;
 }
 
-void ConnectionInterfaceManager::SetReadDataReadyCallback(ConnectionInterfaceDescriptor cid,
-                                                          ReadDataReadyCallback on_data_ready) {
+void ConnectionInterfaceManager::SetReadDataReadyCallback(
+    ConnectionInterfaceDescriptor cid, ReadDataReadyCallback on_data_ready) {
   ASSERT(ConnectionExists(cid));
   return cid_to_interface_map_[cid]->SetReadDataReadyCallback(on_data_ready);
 }
 
-void ConnectionInterfaceManager::SetConnectionClosedCallback(ConnectionInterfaceDescriptor cid,
-                                                             ConnectionClosedCallback on_closed) {
+void ConnectionInterfaceManager::SetConnectionClosedCallback(
+    ConnectionInterfaceDescriptor cid, ConnectionClosedCallback on_closed) {
   ASSERT(ConnectionExists(cid));
   return cid_to_interface_map_[cid]->SetConnectionClosedCallback(on_closed);
 }
@@ -307,15 +326,24 @@ bool ConnectionInterfaceManager::Write(ConnectionInterfaceDescriptor cid, std::u
 
 class PendingConnection {
  public:
-  PendingConnection(ConnectionInterfaceDescriptor cid, l2cap::Psm psm, hci::Address address,
-                    ConnectionCompleteCallback on_complete, PendingConnectionOpen pending_open,
-                    PendingConnectionFail pending_fail)
-      : cid_(cid), psm_(psm), address_(address), on_complete_(std::move(on_complete)), pending_open_(pending_open),
+  PendingConnection(
+      ConnectionInterfaceDescriptor cid,
+      l2cap::Psm psm,
+      hci::Address address,
+      ConnectionCompleteCallback on_complete,
+      PendingConnectionOpen pending_open,
+      PendingConnectionFail pending_fail)
+      : cid_(cid),
+        psm_(psm),
+        address_(address),
+        on_complete_(std::move(on_complete)),
+        pending_open_(pending_open),
         pending_fail_(pending_fail) {}
 
   void OnConnectionOpen(std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
     LOG_DEBUG("Local initiated connection is open to device:%s for psm:%hd", address_.ToString().c_str(), psm_);
-    ASSERT_LOG(address_ == channel->GetDevice(), " Expected remote device does not match actual remote device");
+    ASSERT_LOG(
+        address_ == channel->GetDevice().GetAddress(), " Expected remote device does not match actual remote device");
     pending_open_(std::move(channel));
   }
 
@@ -326,15 +354,23 @@ class PendingConnection {
         LOG_WARN("Connection failed result:success hci:%s", hci::ErrorCodeText(result.hci_error).c_str());
         break;
       case l2cap::classic::DynamicChannelManager::ConnectionResultCode::FAIL_NO_SERVICE_REGISTERED:
-        LOG_DEBUG("Connection failed result:no service registered hci:%s",
-                  hci::ErrorCodeText(result.hci_error).c_str());
+        LOG_DEBUG(
+            "Connection failed result:no service registered hci:%s", hci::ErrorCodeText(result.hci_error).c_str());
         break;
       case l2cap::classic::DynamicChannelManager::ConnectionResultCode::FAIL_HCI_ERROR:
         LOG_DEBUG("Connection failed result:hci error hci:%s", hci::ErrorCodeText(result.hci_error).c_str());
         break;
       case l2cap::classic::DynamicChannelManager::ConnectionResultCode::FAIL_L2CAP_ERROR:
-        LOG_DEBUG("Connection failed result:l2cap error hci:%s l2cap:%s", hci::ErrorCodeText(result.hci_error).c_str(),
-                  l2cap::ConnectionResponseResultText(result.l2cap_connection_response_result).c_str());
+        LOG_DEBUG(
+            "Connection failed result:l2cap error hci:%s l2cap:%s",
+            hci::ErrorCodeText(result.hci_error).c_str(),
+            l2cap::ConnectionResponseResultText(result.l2cap_connection_response_result).c_str());
+        break;
+      case l2cap::classic::DynamicChannelManager::ConnectionResultCode::FAIL_REMOTE_NOT_SUPPORT:
+        LOG_DEBUG("Connection failed result:Remote not support required retransmission and flow control mode");
+        break;
+      case l2cap::classic::DynamicChannelManager::ConnectionResultCode::FAIL_SECURITY_BLOCK:
+        LOG_DEBUG("Connection failed result:security block");
         break;
     }
     pending_fail_(result);
@@ -356,91 +392,19 @@ class PendingConnection {
   DISALLOW_COPY_AND_ASSIGN(PendingConnection);
 };
 
-class ServiceInterface {
- public:
-  ServiceInterface(l2cap::Psm psm, l2cap::SecurityPolicy security_policy, ConnectionCompleteCallback on_complete,
-                   RegisterServiceComplete register_complete, ServiceConnectionOpen connection_open,
-                   RegisterServicePromise register_promise)
-      : psm_(psm), security_policy_(security_policy), on_complete_(on_complete),
-        register_complete_(std::move(register_complete)), connection_open_(std::move(connection_open)),
-        register_promise_(std::move(register_promise)) {}
-
-  void NotifyRegistered(l2cap::Psm psm) {
-    register_promise_.set_value(psm);
-  }
-
-  void NotifyUnregistered() {
-    unregister_promise_.set_value();
-  }
-
-  void UnregisterService(os::Handler* handler, UnregisterServicePromise unregister_promise,
-                         UnregisterServiceDone unregister_done) {
-    unregister_promise_ = std::move(unregister_promise);
-    unregister_done_ = std::move(unregister_done);
-
-    service_->Unregister(common::BindOnce(&ServiceInterface::OnUnregistrationComplete, common::Unretained(this)),
-                         handler);
-  }
-
-  l2cap::SecurityPolicy GetSecurityPolicy() const {
-    return security_policy_;
-  }
-
-  void OnRegistrationComplete(l2cap::classic::DynamicChannelManager::RegistrationResult result,
-                              std::unique_ptr<l2cap::classic::DynamicChannelService> service) {
-    ASSERT(service_ == nullptr);
-    ASSERT(service->GetPsm() == psm_);
-    service_ = std::move(service);
-
-    switch (result) {
-      case l2cap::classic::DynamicChannelManager::RegistrationResult::SUCCESS:
-        LOG_DEBUG("Service is registered for psm:%hd", psm_);
-        register_complete_(psm_, kRegistrationSuccess);
-        break;
-      case l2cap::classic::DynamicChannelManager::RegistrationResult::FAIL_DUPLICATE_SERVICE:
-        LOG_WARN("Failed to register duplicate service has psm:%hd", psm_);
-        register_complete_(l2cap::kDefaultPsm, kRegistrationFailed);
-        break;
-      case l2cap::classic::DynamicChannelManager::RegistrationResult::FAIL_INVALID_SERVICE:
-        LOG_WARN("Failed to register invalid service psm:%hd", psm_);
-        register_complete_(l2cap::kDefaultPsm, kRegistrationFailed);
-        break;
-    }
-  }
-
-  void OnUnregistrationComplete() {
-    LOG_DEBUG("Unregistered psm:%hd", psm_);
-    unregister_done_();
-  }
-
-  void OnConnectionOpen(std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
-    LOG_DEBUG("Remote initiated connection is open from device:%s for psm:%hd", channel->GetDevice().ToString().c_str(),
-              psm_);
-    connection_open_(on_complete_, std::move(channel));
-  }
-
- private:
-  const l2cap::Psm psm_;
-  const l2cap::SecurityPolicy security_policy_;
-  const ConnectionCompleteCallback on_complete_;
-  const RegisterServiceComplete register_complete_;
-  const ServiceConnectionOpen connection_open_;
-  RegisterServicePromise register_promise_;
-  UnregisterServicePromise unregister_promise_;
-  UnregisterServiceDone unregister_done_;
-
-  std::unique_ptr<l2cap::classic::DynamicChannelService> service_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceInterface);
-};
-
 struct L2cap::impl {
-  void RegisterService(l2cap::Psm psm, l2cap::classic::DynamicChannelConfigurationOption option,
-                       ConnectionCompleteCallback on_complete, RegisterServicePromise register_promise);
+  void RegisterService(
+      l2cap::Psm psm,
+      l2cap::classic::DynamicChannelConfigurationOption option,
+      ConnectionCompleteCallback on_complete,
+      RegisterServicePromise register_promise);
   void UnregisterService(l2cap::Psm psm, UnregisterServicePromise unregister_promise);
 
-  void CreateConnection(l2cap::Psm psm, hci::Address address, ConnectionCompleteCallback on_complete,
-                        CreateConnectionPromise create_promise);
+  void CreateConnection(
+      l2cap::Psm psm,
+      hci::Address address,
+      ConnectionCompleteCallback on_complete,
+      CreateConnectionPromise create_promise);
   void CloseConnection(ConnectionInterfaceDescriptor cid);
 
   void SetReadDataReadyCallback(ConnectionInterfaceDescriptor cid, ReadDataReadyCallback on_data_ready);
@@ -449,8 +413,6 @@ struct L2cap::impl {
   void Write(ConnectionInterfaceDescriptor cid, std::unique_ptr<packet::RawBuilder> packet);
 
   void SendLoopbackResponse(std::function<void()> function);
-
-  void Dump(int fd);
 
   impl(L2cap& module, l2cap::classic::L2capClassicModule* l2cap_module);
 
@@ -462,126 +424,136 @@ struct L2cap::impl {
 
   std::unique_ptr<l2cap::classic::DynamicChannelManager> dynamic_channel_manager_;
 
-  std::unordered_map<l2cap::Psm, std::unique_ptr<ServiceInterface>> psm_to_service_interface_map_;
+  std::unordered_map<l2cap::Psm, std::unique_ptr<l2cap::classic::DynamicChannelService>> psm_to_service_interface_map_;
 
   PendingConnectionId pending_connection_id_{0};
   std::unordered_map<PendingConnectionId, std::unique_ptr<PendingConnection>> pending_connection_map_;
 
-  void PendingConnectionOpen(PendingConnectionId id, std::unique_ptr<PendingConnection> connection,
-                             std::unique_ptr<l2cap::classic::DynamicChannel> channel);
-  void PendingConnectionFail(PendingConnectionId id, std::unique_ptr<PendingConnection> connection,
-                             l2cap::classic::DynamicChannelManager::ConnectionResult result);
-  void ServiceUnregistered(l2cap::Psm psm, std::unique_ptr<ServiceInterface> service);
-  const l2cap::SecurityPolicy GetSecurityPolicy(l2cap::Psm psm) const;
+  void PendingConnectionOpen(
+      PendingConnectionId id,
+      std::unique_ptr<PendingConnection> connection,
+      std::unique_ptr<l2cap::classic::DynamicChannel> channel);
+  void PendingConnectionFail(
+      PendingConnectionId id,
+      std::unique_ptr<PendingConnection> connection,
+      l2cap::classic::DynamicChannelManager::ConnectionResult result);
+  l2cap::classic::SecurityPolicy GetSecurityPolicy(l2cap::Psm psm) const;
 };
 
 const ModuleFactory L2cap::Factory = ModuleFactory([]() { return new L2cap(); });
 
 L2cap::impl::impl(L2cap& module, l2cap::classic::L2capClassicModule* l2cap_module)
-    : module_(module), l2cap_module_(l2cap_module), handler_(module_.GetHandler()),
+    : module_(module),
+      l2cap_module_(l2cap_module),
+      handler_(module_.GetHandler()),
       connection_interface_manager_(handler_) {
   dynamic_channel_manager_ = l2cap_module_->GetDynamicChannelManager();
 }
 
-void L2cap::impl::Dump(int fd) {
-  if (psm_to_service_interface_map_.empty()) {
-    dprintf(fd, "%s no psms registered\n", kModuleName);
-  } else {
-    for (auto& service : psm_to_service_interface_map_) {
-      dprintf(fd, "%s psm registered:%hd\n", kModuleName, service.first);
-    }
-  }
-
-  if (pending_connection_map_.empty()) {
-    dprintf(fd, "%s no pending classic connections\n", kModuleName);
-  } else {
-    for (auto& pending : pending_connection_map_) {
-      if (pending.second != nullptr) {
-        dprintf(fd, "%s pending connection:%s\n", kModuleName, pending.second->ToString().c_str());
-      } else {
-        dprintf(fd, "%s old pending connection:%d\n", kModuleName, pending.first);
-      }
-    }
-  }
-}
-
-void L2cap::impl::ServiceUnregistered(l2cap::Psm psm, std::unique_ptr<ServiceInterface> service) {
-  LOG_INFO("Unregistered service psm:%hd", psm);
-  psm_to_service_interface_map_.erase(psm);
-  service->NotifyUnregistered();
-}
-
-const l2cap::SecurityPolicy L2cap::impl::GetSecurityPolicy(l2cap::Psm psm) const {
-  l2cap::SecurityPolicy security_policy;
+l2cap::classic::SecurityPolicy L2cap::impl::GetSecurityPolicy(l2cap::Psm psm) const {
   if (psm == 1) {
-    security_policy.security_level_ = l2cap::SecurityPolicy::Level::LEVEL_0;
+    return l2cap::classic::SecurityPolicy::_SDP_ONLY_NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK;
   } else {
-    security_policy.security_level_ = l2cap::SecurityPolicy::Level::LEVEL_3;
+    return l2cap::classic::SecurityPolicy::ENCRYPTED_TRANSPORT;
   }
-  return security_policy;
 }
 
-void L2cap::impl::RegisterService(l2cap::Psm psm, l2cap::classic::DynamicChannelConfigurationOption option,
-                                  ConnectionCompleteCallback on_complete, RegisterServicePromise register_promise) {
-  ASSERT(psm_to_service_interface_map_.find(psm) == psm_to_service_interface_map_.end());
+void L2cap::impl::RegisterService(
+    l2cap::Psm psm,
+    l2cap::classic::DynamicChannelConfigurationOption option,
+    ConnectionCompleteCallback on_complete,
+    RegisterServicePromise register_promise) {
+  const l2cap::classic::SecurityPolicy security_policy = GetSecurityPolicy(psm);
 
-  const l2cap::SecurityPolicy security_policy = GetSecurityPolicy(psm);
-
-  psm_to_service_interface_map_.emplace(
+  dynamic_channel_manager_->RegisterService(
       psm,
-      std::make_unique<ServiceInterface>(
-          psm, security_policy, on_complete,
-          [this, psm](l2cap::Psm actual_psm, bool is_registered) {
-            psm_to_service_interface_map_.at(psm)->NotifyRegistered(actual_psm);
-            if (!is_registered) {
-              auto service = std::move(psm_to_service_interface_map_.at(psm));
+      option,
+      security_policy,
+      handler_->BindOnce(
+          [](RegisterServicePromise register_promise,
+             std::unordered_map<l2cap::Psm, std::unique_ptr<l2cap::classic::DynamicChannelService>>*
+                 psm_to_service_interface_map_,
+             l2cap::classic::DynamicChannelManager::RegistrationResult result,
+             std::unique_ptr<l2cap::classic::DynamicChannelService> service) {
+            std::unique_ptr<l2cap::classic::DynamicChannelService> service_ = std::move(service);
+            switch (result) {
+              case l2cap::classic::DynamicChannelManager::RegistrationResult::SUCCESS:
+                LOG_DEBUG("Service is registered for psm:%hd", service_->GetPsm());
+                register_promise.set_value(service_->GetPsm());
+                psm_to_service_interface_map_->emplace(service_->GetPsm(), std::move(service_));
+                break;
+              case l2cap::classic::DynamicChannelManager::RegistrationResult::FAIL_DUPLICATE_SERVICE:
+                LOG_WARN("Failed to register duplicate service has psm:%hd", service_->GetPsm());
+                register_promise.set_value(l2cap::kDefaultPsm);
+                break;
+              case l2cap::classic::DynamicChannelManager::RegistrationResult::FAIL_INVALID_SERVICE:
+                LOG_WARN("Failed to register invalid service psm:%hd", service_->GetPsm());
+                register_promise.set_value(l2cap::kDefaultPsm);
+                break;
             }
           },
-          [this, psm](ConnectionCompleteCallback on_complete, std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
-            ConnectionInterfaceDescriptor cid = connection_interface_manager_.AllocateConnectionInterfaceDescriptor();
-            connection_interface_manager_.AddConnection(cid, std::move(channel));
-            connection_interface_manager_.ConnectionOpened(on_complete, psm, cid);
+          std::move(register_promise),
+          &psm_to_service_interface_map_),
+      handler_->Bind(
+          [](l2cap::Psm psm,
+             ConnectionCompleteCallback on_complete,
+             ConnectionInterfaceManager* connection_interface_manager_,
+             std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+            LOG_DEBUG("Remote initiated connection is open from device:%s", channel->GetDevice().ToString().c_str());
+
+            ConnectionInterfaceDescriptor cid = connection_interface_manager_->AllocateConnectionInterfaceDescriptor();
+            uint16_t remote_cid = channel->HACK_GetRemoteCid();
+            connection_interface_manager_->AddConnection(cid, std::move(channel));
+            connection_interface_manager_->ConnectionOpened(on_complete, psm, cid, remote_cid);
             LOG_DEBUG("connection open");
           },
-          std::move(register_promise)));
-
-  bool rc = dynamic_channel_manager_->RegisterService(
-      psm, option, security_policy,
-      common::BindOnce(&ServiceInterface::OnRegistrationComplete,
-                       common::Unretained(psm_to_service_interface_map_.at(psm).get())),
-      common::Bind(&ServiceInterface::OnConnectionOpen,
-                   common::Unretained(psm_to_service_interface_map_.at(psm).get())),
-      handler_);
-  ASSERT_LOG(rc == true, "Failed to register classic service");
+          psm,
+          on_complete,
+          &connection_interface_manager_));
 }
 
 void L2cap::impl::UnregisterService(l2cap::Psm psm, UnregisterServicePromise unregister_promise) {
   ASSERT(psm_to_service_interface_map_.find(psm) != psm_to_service_interface_map_.end());
-  psm_to_service_interface_map_[psm]->UnregisterService(handler_, std::move(unregister_promise), [this, psm]() {
-    auto service = std::move(psm_to_service_interface_map_.at(psm));
-    handler_->Post(
-        common::BindOnce(&L2cap::impl::ServiceUnregistered, common::Unretained(this), psm, std::move(service)));
-  });
+
+  psm_to_service_interface_map_[psm]->Unregister(handler_->BindOnce(
+      [](std::unordered_map<l2cap::Psm, std::unique_ptr<l2cap::classic::DynamicChannelService>>*
+             psm_to_service_interface_map_,
+         UnregisterServicePromise unregister_promise,
+         l2cap::Psm psm) {
+        psm_to_service_interface_map_->erase(psm);
+        unregister_promise.set_value();
+      },
+      &psm_to_service_interface_map_,
+      std::move(unregister_promise),
+      psm));
 }
 
-void L2cap::impl::PendingConnectionOpen(PendingConnectionId id, std::unique_ptr<PendingConnection> connection,
-                                        std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+void L2cap::impl::PendingConnectionOpen(
+    PendingConnectionId id,
+    std::unique_ptr<PendingConnection> connection,
+    std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+  uint16_t remote_cid = channel->HACK_GetRemoteCid();
   connection_interface_manager_.AddConnection(connection->cid_, std::move(channel));
-  connection_interface_manager_.ConnectionOpened(std::move(connection->on_complete_), connection->psm_,
-                                                 connection->cid_);
+  connection_interface_manager_.ConnectionOpened(
+      std::move(connection->on_complete_), connection->psm_, connection->cid_, remote_cid);
   pending_connection_map_.erase(id);
 }
 
-void L2cap::impl::PendingConnectionFail(PendingConnectionId id, std::unique_ptr<PendingConnection> connection,
-                                        l2cap::classic::DynamicChannelManager::ConnectionResult result) {
-  connection_interface_manager_.ConnectionFailed(std::move(connection->on_complete_), connection->address_,
-                                                 connection->psm_, connection->cid_);
+void L2cap::impl::PendingConnectionFail(
+    PendingConnectionId id,
+    std::unique_ptr<PendingConnection> connection,
+    l2cap::classic::DynamicChannelManager::ConnectionResult result) {
+  connection_interface_manager_.ConnectionFailed(
+      std::move(connection->on_complete_), connection->address_, connection->psm_, connection->cid_);
   connection_interface_manager_.FreeConnectionInterfaceDescriptor(connection->cid_);
   pending_connection_map_.erase(id);
 }
 
-void L2cap::impl::CreateConnection(l2cap::Psm psm, hci::Address address, ConnectionCompleteCallback on_complete,
-                                   CreateConnectionPromise create_promise) {
+void L2cap::impl::CreateConnection(
+    l2cap::Psm psm,
+    hci::Address address,
+    ConnectionCompleteCallback on_complete,
+    CreateConnectionPromise create_promise) {
   ConnectionInterfaceDescriptor cid = connection_interface_manager_.AllocateConnectionInterfaceDescriptor();
   create_promise.set_value(cid);
 
@@ -592,26 +564,27 @@ void L2cap::impl::CreateConnection(l2cap::Psm psm, hci::Address address, Connect
 
   PendingConnectionId id = ++pending_connection_id_;
   pending_connection_map_.emplace(
-      id, std::make_unique<PendingConnection>(
-              cid, psm, address, on_complete,
-              [this, id](std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
-                auto connection = std::move(pending_connection_map_.at(id));
-                handler_->Post(common::BindOnce(&L2cap::impl::PendingConnectionOpen, common::Unretained(this), id,
-                                                std::move(connection), std::move(channel)));
-              },
-              [this, id](l2cap::classic::DynamicChannelManager::ConnectionResult result) {
-                auto connection = std::move(pending_connection_map_.at(id));
-                handler_->Post(common::BindOnce(&L2cap::impl::PendingConnectionFail, common::Unretained(this), id,
-                                                std::move(connection), result));
-              }));
+      id,
+      std::make_unique<PendingConnection>(
+          cid,
+          psm,
+          address,
+          on_complete,
+          [this, id](std::unique_ptr<l2cap::classic::DynamicChannel> channel) {
+            auto connection = std::move(pending_connection_map_.at(id));
+            handler_->CallOn(this, &L2cap::impl::PendingConnectionOpen, id, std::move(connection), std::move(channel));
+          },
+          [this, id](l2cap::classic::DynamicChannelManager::ConnectionResult result) {
+            auto connection = std::move(pending_connection_map_.at(id));
+            handler_->CallOn(this, &L2cap::impl::PendingConnectionFail, id, std::move(connection), result);
+          }));
 
-  bool rc = dynamic_channel_manager_->ConnectChannel(
-      address, l2cap::classic::DynamicChannelConfigurationOption(), psm,
-      common::Bind(&PendingConnection::OnConnectionOpen, common::Unretained(pending_connection_map_.at(id).get())),
-      common::BindOnce(&PendingConnection::OnConnectionFailure,
-                       common::Unretained(pending_connection_map_.at(id).get())),
-      handler_);
-  ASSERT_LOG(rc == true, "Failed to create classic connection");
+  dynamic_channel_manager_->ConnectChannel(
+      address,
+      l2cap::classic::DynamicChannelConfigurationOption(),
+      psm,
+      handler_->BindOn(pending_connection_map_.at(id).get(), &PendingConnection::OnConnectionOpen),
+      handler_->BindOnceOn(pending_connection_map_.at(id).get(), &PendingConnection::OnConnectionFailure));
 }
 
 void L2cap::impl::CloseConnection(ConnectionInterfaceDescriptor cid) {
@@ -634,8 +607,12 @@ void L2cap::impl::SendLoopbackResponse(std::function<void()> function) {
   function();
 }
 
-void L2cap::RegisterService(uint16_t raw_psm, bool use_ertm, uint16_t mtu, ConnectionCompleteCallback on_complete,
-                            RegisterServicePromise register_promise) {
+void L2cap::RegisterClassicService(
+    uint16_t raw_psm,
+    bool use_ertm,
+    uint16_t mtu,
+    ConnectionCompleteCallback on_complete,
+    RegisterServicePromise register_promise) {
   l2cap::Psm psm{raw_psm};
   l2cap::classic::DynamicChannelConfigurationOption option;
   if (use_ertm) {
@@ -643,27 +620,40 @@ void L2cap::RegisterService(uint16_t raw_psm, bool use_ertm, uint16_t mtu, Conne
         l2cap::classic::DynamicChannelConfigurationOption::RetransmissionAndFlowControlMode::ENHANCED_RETRANSMISSION;
   }
   option.incoming_mtu = mtu;
-  GetHandler()->Post(common::BindOnce(&L2cap::impl::RegisterService, common::Unretained(pimpl_.get()), psm, option,
-                                      on_complete, std::move(register_promise)));
+  GetHandler()->Post(common::BindOnce(
+      &L2cap::impl::RegisterService,
+      common::Unretained(pimpl_.get()),
+      psm,
+      option,
+      on_complete,
+      std::move(register_promise)));
 }
 
-void L2cap::UnregisterService(uint16_t raw_psm, UnregisterServicePromise unregister_promise) {
+void L2cap::UnregisterClassicService(uint16_t raw_psm, UnregisterServicePromise unregister_promise) {
   l2cap::Psm psm{raw_psm};
-  GetHandler()->Post(common::BindOnce(&L2cap::impl::UnregisterService, common::Unretained(pimpl_.get()), psm,
-                                      std::move(unregister_promise)));
+  GetHandler()->Post(common::BindOnce(
+      &L2cap::impl::UnregisterService, common::Unretained(pimpl_.get()), psm, std::move(unregister_promise)));
 }
 
-void L2cap::CreateConnection(uint16_t raw_psm, const std::string address_string, ConnectionCompleteCallback on_complete,
-                             CreateConnectionPromise create_promise) {
+void L2cap::CreateClassicConnection(
+    uint16_t raw_psm,
+    const std::string address_string,
+    ConnectionCompleteCallback on_complete,
+    CreateConnectionPromise create_promise) {
   l2cap::Psm psm{raw_psm};
   hci::Address address;
   hci::Address::FromString(address_string, address);
 
-  GetHandler()->Post(common::BindOnce(&L2cap::impl::CreateConnection, common::Unretained(pimpl_.get()), psm, address,
-                                      on_complete, std::move(create_promise)));
+  GetHandler()->Post(common::BindOnce(
+      &L2cap::impl::CreateConnection,
+      common::Unretained(pimpl_.get()),
+      psm,
+      address,
+      on_complete,
+      std::move(create_promise)));
 }
 
-void L2cap::CloseConnection(uint16_t raw_cid) {
+void L2cap::CloseClassicConnection(uint16_t raw_cid) {
   ConnectionInterfaceDescriptor cid(raw_cid);
   GetHandler()->Post(common::Bind(&L2cap::impl::CloseConnection, common::Unretained(pimpl_.get()), cid));
 }
@@ -676,8 +666,8 @@ void L2cap::SetReadDataReadyCallback(uint16_t raw_cid, ReadDataReadyCallback on_
 
 void L2cap::SetConnectionClosedCallback(uint16_t raw_cid, ConnectionClosedCallback on_closed) {
   ConnectionInterfaceDescriptor cid(raw_cid);
-  GetHandler()->Post(common::Bind(&L2cap::impl::SetConnectionClosedCallback, common::Unretained(pimpl_.get()), cid,
-                                  std::move(on_closed)));
+  GetHandler()->Post(common::Bind(
+      &L2cap::impl::SetConnectionClosedCallback, common::Unretained(pimpl_.get()), cid, std::move(on_closed)));
 }
 
 void L2cap::Write(uint16_t raw_cid, const uint8_t* data, size_t len) {
@@ -694,18 +684,14 @@ void L2cap::SendLoopbackResponse(std::function<void()> function) {
  * Module methods
  */
 void L2cap::ListDependencies(ModuleList* list) {
-  list->add<shim::Dumpsys>();
   list->add<l2cap::classic::L2capClassicModule>();
 }
 
 void L2cap::Start() {
   pimpl_ = std::make_unique<impl>(*this, GetDependency<l2cap::classic::L2capClassicModule>());
-  GetDependency<shim::Dumpsys>()->RegisterDumpsysFunction(static_cast<void*>(this),
-                                                          [this](int fd) { pimpl_->Dump(fd); });
 }
 
 void L2cap::Stop() {
-  GetDependency<shim::Dumpsys>()->UnregisterDumpsysFunction(static_cast<void*>(this));
   pimpl_.reset();
 }
 
