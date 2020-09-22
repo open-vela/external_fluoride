@@ -37,7 +37,10 @@
 #include "osi/include/osi.h"
 #include "p_256_ecc_pp.h"
 #include "smp_int.h"
+#include "stack/btm/btm_dev.h"
+#include "stack/btm/btm_sec.h"
 #include "stack/crypto_toolbox/crypto_toolbox.h"
+#include "stack/include/acl_api.h"
 
 #include <algorithm>
 
@@ -341,7 +344,7 @@ tSMP_STATUS smp_calculate_comfirm(tSMP_CB* p_cb, const Octet16& rand,
                                   Octet16* output) {
   SMP_TRACE_DEBUG("%s", __func__);
   RawAddress remote_bda;
-  tBLE_ADDR_TYPE remote_bd_addr_type = 0;
+  tBLE_ADDR_TYPE remote_bd_addr_type = BLE_ADDR_PUBLIC;
   /* get remote connection specific bluetooth address */
   if (!BTM_ReadRemoteConnectionAddr(p_cb->pairing_bda, remote_bda,
                                     &remote_bd_addr_type)) {

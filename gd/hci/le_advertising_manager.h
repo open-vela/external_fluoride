@@ -17,6 +17,7 @@
 
 #include <memory>
 
+#include "hci/address_with_type.h"
 #include "hci/hci_packets.h"
 #include "module.h"
 
@@ -27,10 +28,9 @@ class AdvertisingConfig {
  public:
   std::vector<GapData> advertisement;
   std::vector<GapData> scan_response;
-  Address random_address;
   uint16_t interval_min;
   uint16_t interval_max;
-  AdvertisingEventType event_type;
+  AdvertisingType event_type;
   AddressType address_type;
   PeerAddressType peer_address_type;
   Address peer_address;
@@ -60,11 +60,28 @@ class ExtendedAdvertisingConfig : public AdvertisingConfig {
   ExtendedAdvertisingConfig(const AdvertisingConfig& config);
 };
 
-using AdvertiserId = int32_t;
+using AdvertiserId = uint8_t;
+
+class AdvertisingCallback {
+ public:
+  enum AdvertisingStatus {
+    SUCCESS,
+    DATA_TOO_LARGE,
+    TOO_MANY_ADVERTISERS,
+    ALREADY_STARTED,
+    INTERNAL_ERROR,
+    FEATURE_UNSUPPORTED
+  };
+
+  virtual ~AdvertisingCallback() = default;
+  virtual void OnAdvertisingSetStarted(uint8_t advertiser_id, int8_t tx_power, AdvertisingStatus status) = 0;
+  virtual void onAdvertisingEnabled(uint8_t advertiser_id, bool enable, uint8_t status) = 0;
+};
 
 class LeAdvertisingManager : public bluetooth::Module {
  public:
-  static constexpr AdvertiserId kInvalidId = -1;
+  static constexpr AdvertiserId kInvalidId = 0xFF;
+  static constexpr uint8_t kInvalidHandle = 0xFF;
   LeAdvertisingManager();
 
   size_t GetNumberOfAdvertisingInstances() const;
@@ -79,6 +96,11 @@ class LeAdvertisingManager : public bluetooth::Module {
       const common::Callback<void(ErrorCode, uint8_t, uint8_t)>& set_terminated_callback, os::Handler* handler);
 
   void RemoveAdvertiser(AdvertiserId id);
+
+  void RegisterAdvertisingCallback(AdvertisingCallback* advertising_callback);
+
+  virtual void RegisterSetTerminatedCallback(
+      common::ContextualCallback<void(ErrorCode, uint16_t, hci::AddressWithType)> set_terminated_callback);
 
   static const ModuleFactory Factory;
 
