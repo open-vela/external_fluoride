@@ -28,7 +28,7 @@ namespace packet {
 
 class ByteInserter : public std::back_insert_iterator<std::vector<uint8_t>> {
  public:
-  explicit ByteInserter(std::vector<uint8_t>& vector);
+  ByteInserter(std::vector<uint8_t>& vector);
   virtual ~ByteInserter();
 
   virtual void insert_byte(uint8_t byte);
