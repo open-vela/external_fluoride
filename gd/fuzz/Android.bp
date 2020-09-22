@@ -1,0 +1,6 @@
+filegroup {
+    name: "BluetoothFuzzHelperSources",
+    srcs: [
+        "helpers.cc",
+    ],
+}

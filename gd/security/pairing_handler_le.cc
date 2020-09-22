@@ -18,8 +18,19 @@
 
 #include "security/pairing_handler_le.h"
 
+#include "os/rand.h"
+
 namespace bluetooth {
 namespace security {
+
+MyOobData PairingHandlerLe::GenerateOobData() {
+  MyOobData data{};
+  std::tie(data.private_key, data.public_key) = GenerateECDHKeyPair();
+
+  data.r = bluetooth::os::GenerateRandom<16>();
+  data.c = crypto_toolbox::f4(data.public_key.x.data(), data.public_key.x.data(), data.r, 0);
+  return data;
+}
 
 void PairingHandlerLe::PairingMain(InitialInformations i) {
   LOG_INFO("Pairing Started");
@@ -35,7 +46,8 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     std::optional<PairingEvent> pairingAccepted = WaitUiPairingAccept();
     if (!pairingAccepted || pairingAccepted->ui_value == 0) {
       LOG_INFO("User either did not accept the remote pairing, or the prompt timed out");
-      SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::UNSPECIFIED_REASON));
+      // TODO: Uncomment this one once we find a way to attempt to send packet when the link is down
+      // SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::UNSPECIFIED_REASON));
       i.OnPairingFinished(PairingFailure("User either did not accept the remote pairing, or the prompt timed out"));
       return;
     }
@@ -101,8 +113,10 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     if (IAmMaster(i)) {
       LOG_INFO("Sending start encryption request");
       SendHciLeStartEncryption(i, i.connection_handle, {0}, {0}, ltk);
+    } else {
+      auto ltk_req = WaitLeLongTermKeyRequest();
+      SendHciLeLongTermKeyReply(i, i.connection_handle, ltk);
     }
-
   } else {
     // 2.3.5.5 LE legacy pairing phase 2
     LOG_INFO("Pairing Phase 2 LE legacy pairing Started");
@@ -124,7 +138,11 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
 
     Octet16 stk = std::get<Octet16>(stage2result);
     if (IAmMaster(i)) {
+      LOG_INFO("Sending start encryption request");
       SendHciLeStartEncryption(i, i.connection_handle, {0}, {0}, stk);
+    } else {
+      auto ltk_req = WaitLeLongTermKeyRequest();
+      SendHciLeLongTermKeyReply(i, i.connection_handle, stk);
     }
   }
 
@@ -159,6 +177,14 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     i.OnPairingFinished(std::get<PairingFailure>(keyExchangeStatus));
     LOG_ERROR("Key exchange failed");
     return;
+  }
+
+  // If it's secure connections pairing, do cross-transport key derivation
+  DistributedKeys distributed_keys = std::get<DistributedKeys>(keyExchangeStatus);
+  if ((pairing_response.GetAuthReq() & AuthReqMaskSc) && distributed_keys.ltk.has_value()) {
+    bool use_h7 = (pairing_response.GetAuthReq() & AuthReqMaskCt2);
+    Octet16 link_key = crypto_toolbox::ltk_to_link_key(*(distributed_keys.ltk), use_h7);
+    distributed_keys.link_key = link_key;
   }
 
   // bool bonding = pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskBondingFlag;
@@ -283,7 +309,7 @@ DistributedKeysOrFailure PairingHandlerLe::DistributeKeys(const InitialInformati
     keys_i_receive = (~KeyMaskEnc) & keys_i_receive;
   }
 
-  LOG_INFO("Key distribution start, keys_i_send=%02x, keys_i_receive=%02x", keys_i_send, keys_i_receive);
+  LOG_INFO("Key distribution start, keys_i_send=0x%02x, keys_i_receive=0x%02x", keys_i_send, keys_i_receive);
 
   // TODO: obtain actual values!
   Octet16 my_ltk = {0};
@@ -323,8 +349,7 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
   std::optional<Octet16> ltk;                 /* Legacy only */
   std::optional<uint16_t> ediv;               /* Legacy only */
   std::optional<std::array<uint8_t, 8>> rand; /* Legacy only */
-  std::optional<Address> identity_address;
-  AddrType identity_address_type;
+  std::optional<hci::AddressWithType> identity_address;
   std::optional<Octet16> irk;
   std::optional<Octet16> signature_key;
 
@@ -367,8 +392,10 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
       return std::get<PairingFailure>(iapacket);
     }
     LOG_INFO("Received Identity Address Information");
-    identity_address = std::get<IdentityAddressInformationView>(iapacket).GetBdAddr();
-    identity_address_type = std::get<IdentityAddressInformationView>(iapacket).GetAddrType();
+    auto iapacketview = std::get<IdentityAddressInformationView>(iapacket);
+    identity_address = hci::AddressWithType(iapacketview.GetBdAddr(), iapacketview.GetAddrType() == AddrType::PUBLIC
+                                                                          ? hci::AddressType::PUBLIC_DEVICE_ADDRESS
+                                                                          : hci::AddressType::RANDOM_DEVICE_ADDRESS);
   }
 
   if (keys_i_receive & KeyMaskSign) {
@@ -382,7 +409,12 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
     signature_key = std::get<SigningInformationView>(packet).GetSignatureKey();
   }
 
-  return DistributedKeys{ltk, ediv, rand, identity_address, identity_address_type, irk, signature_key};
+  return DistributedKeys{.ltk = ltk,
+                         .ediv = ediv,
+                         .rand = rand,
+                         .identity_address = identity_address,
+                         .irk = irk,
+                         .signature_key = signature_key};
 }
 
 void PairingHandlerLe::SendKeys(const InitialInformations& i, const uint8_t& keys_i_send, Octet16 ltk, uint16_t ediv,

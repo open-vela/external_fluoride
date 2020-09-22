@@ -501,7 +501,6 @@ void BTM_LE_PF_addr_filter(tBTM_BLE_SCAN_COND_OP action,
   UINT8_TO_STREAM(p, filt_index);
 
   if (action != BTM_BLE_SCAN_COND_CLEAR) {
-#if (BLE_PRIVACY_SPT == TRUE)
     if (addr.type == BLE_ADDR_PUBLIC_ID) {
       LOG(INFO) << __func__ << " Filter address " << addr.bda
                 << " has type PUBLIC_ID, try to get identity address";
@@ -509,7 +508,6 @@ void BTM_LE_PF_addr_filter(tBTM_BLE_SCAN_COND_OP action,
        * this call will have no effect. */
       btm_random_pseudo_to_identity_addr(&addr.bda, &addr.type);
     }
-#endif
 
     LOG(INFO) << __func__
               << " Adding scan filter with peer address: " << addr.bda;
@@ -901,19 +899,4 @@ void btm_ble_adv_filter_init(void) {
     btm_ble_adv_filt_cb.p_addr_filter_count = (tBTM_BLE_PF_COUNT*)osi_malloc(
         sizeof(tBTM_BLE_PF_COUNT) * cmn_ble_vsc_cb.max_filter);
   }
-}
-
-/*******************************************************************************
- *
- * Function         btm_ble_adv_filter_cleanup
- *
- * Description      This function de-initializes the adv filter control block
- *
- * Parameters
- *
- * Returns          status
- *
- ******************************************************************************/
-void btm_ble_adv_filter_cleanup(void) {
-  osi_free_and_reset((void**)&btm_ble_adv_filt_cb.p_addr_filter_count);
 }

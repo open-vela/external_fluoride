@@ -33,9 +33,9 @@
 #include "device/include/controller.h"
 #include "hcidefs.h"
 #include "l2c_api.h"
-#include "l2c_int.h"
 #include "osi/include/osi.h"
 #include "smp_int.h"
+#include "stack/include/acl_api.h"
 
 #define SMP_PAIRING_REQ_SIZE 7
 #define SMP_CONFIRM_CMD_SIZE (OCTET16_LEN + 1)
@@ -1114,11 +1114,11 @@ bool smp_pairing_request_response_parameters_are_valid(tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 bool smp_pairing_keypress_notification_is_valid(tSMP_CB* p_cb) {
-  tBTM_SP_KEY_TYPE keypress_notification = p_cb->peer_keypress_notification;
+  tSMP_SC_KEY_TYPE keypress_notification = p_cb->peer_keypress_notification;
 
   SMP_TRACE_DEBUG("%s for cmd code 0x%02x", __func__, p_cb->rcvd_cmd_code);
 
-  if (keypress_notification >= BTM_SP_KEY_OUT_OF_RANGE) {
+  if (keypress_notification >= SMP_SC_KEY_OUT_OF_RANGE) {
     SMP_TRACE_WARNING(
         "Rcvd from the peer cmd 0x%02x with Pairing Keypress "
         "Notification value (0x%02x) out of range).",
@@ -1393,7 +1393,7 @@ void smp_collect_peer_io_capabilities(uint8_t* iocap, tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
-  tBLE_ADDR_TYPE addr_type = 0;
+  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
   RawAddress bda;
   uint8_t* p = le_addr;
 
@@ -1415,7 +1415,7 @@ void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_collect_peer_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
-  tBLE_ADDR_TYPE addr_type = 0;
+  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
   RawAddress bda;
   uint8_t* p = le_addr;
 
