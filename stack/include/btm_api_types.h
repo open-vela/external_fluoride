@@ -809,6 +809,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
@@ -986,11 +987,11 @@ typedef void(tBTM_LSTO_CBACK)(const RawAddress& remote_bda, uint16_t timeout);
  *  Power Manager Constants
  ****************************/
 /* BTM Power manager status codes */
-enum : uint8_t {
-  BTM_PM_STS_ACTIVE = HCI_MODE_ACTIVE,  // 0x00
-  BTM_PM_STS_HOLD = HCI_MODE_HOLD,      // 0x01
-  BTM_PM_STS_SNIFF = HCI_MODE_SNIFF,    // 0x02
-  BTM_PM_STS_PARK = HCI_MODE_PARK,      // 0x03
+enum {
+  BTM_PM_STS_ACTIVE = HCI_MODE_ACTIVE,
+  BTM_PM_STS_HOLD = HCI_MODE_HOLD,
+  BTM_PM_STS_SNIFF = HCI_MODE_SNIFF,
+  BTM_PM_STS_PARK = HCI_MODE_PARK,
   BTM_PM_STS_SSR,     /* report the SSR parameters in HCI_SNIFF_SUB_RATE_EVT */
   BTM_PM_STS_PENDING, /* when waiting for status from controller */
   BTM_PM_STS_ERROR    /* when HCI command status returns error */
@@ -998,11 +999,11 @@ enum : uint8_t {
 typedef uint8_t tBTM_PM_STATUS;
 
 /* BTM Power manager modes */
-enum : uint8_t {
-  BTM_PM_MD_ACTIVE = HCI_MODE_ACTIVE,  // 0x00
-  BTM_PM_MD_HOLD = HCI_MODE_HOLD,      // 0x01
-  BTM_PM_MD_SNIFF = HCI_MODE_SNIFF,    // 0x02
-  BTM_PM_MD_PARK = HCI_MODE_PARK,      // 0x03
+enum {
+  BTM_PM_MD_ACTIVE = BTM_PM_STS_ACTIVE,
+  BTM_PM_MD_HOLD = BTM_PM_STS_HOLD,
+  BTM_PM_MD_SNIFF = BTM_PM_STS_SNIFF,
+  BTM_PM_MD_PARK = BTM_PM_STS_PARK,
   BTM_PM_MD_FORCE = 0x10 /* OR this to force ACL link to a certain mode */
 };
 typedef uint8_t tBTM_PM_MODE;
@@ -1010,14 +1011,12 @@ typedef uint8_t tBTM_PM_MODE;
 #define BTM_PM_SET_ONLY_ID 0x80
 
 /* Operation codes */
-typedef enum : uint8_t {
-  /* The module wants to set the desired power mode */
-  BTM_PM_REG_SET = (1u << 0),
-  /* The module wants to receive mode change event */
-  BTM_PM_REG_NOTIF = (1u << 1),
-  /* The module does not want to involve with PM anymore */
-  BTM_PM_DEREG = (1u << 2),
-} tBTM_PM_REGISTER;
+/* The module wants to set the desired power mode */
+#define BTM_PM_REG_SET 1
+/* The module wants to receive mode change event */
+#define BTM_PM_REG_NOTIF 2
+/* The module does not want to involve with PM anymore */
+#define BTM_PM_DEREG 4
 
 /************************
  *  Power Manager Types
