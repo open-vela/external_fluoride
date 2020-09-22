@@ -1,0 +1,126 @@
+/*
+ * Copyright 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include <cstdint>
+
+#include "stack/include/bt_types.h"
+#include "stack/include/btm_status.h"
+#include "types/raw_address.h"
+
+// Note: From include/btm_api_types.h
+
+/*****************************************************************************
+ *  ACL CHANNEL MANAGEMENT
+ ****************************************************************************/
+/******************
+ *  ACL Constants
+ ******************/
+
+/* ACL Packet Types */
+#define BTM_ACL_PKT_TYPES_MASK_DM1 HCI_PKT_TYPES_MASK_DM1
+#define BTM_ACL_PKT_TYPES_MASK_DH1 HCI_PKT_TYPES_MASK_DH1
+#define BTM_ACL_PKT_TYPES_MASK_DM3 HCI_PKT_TYPES_MASK_DM3
+#define BTM_ACL_PKT_TYPES_MASK_DH3 HCI_PKT_TYPES_MASK_DH3
+#define BTM_ACL_PKT_TYPES_MASK_DM5 HCI_PKT_TYPES_MASK_DM5
+#define BTM_ACL_PKT_TYPES_MASK_DH5 HCI_PKT_TYPES_MASK_DH5
+#define BTM_ACL_PKT_TYPES_MASK_NO_2_DH1 HCI_PKT_TYPES_MASK_NO_2_DH1
+#define BTM_ACL_PKT_TYPES_MASK_NO_3_DH1 HCI_PKT_TYPES_MASK_NO_3_DH1
+#define BTM_ACL_PKT_TYPES_MASK_NO_2_DH3 HCI_PKT_TYPES_MASK_NO_2_DH3
+#define BTM_ACL_PKT_TYPES_MASK_NO_3_DH3 HCI_PKT_TYPES_MASK_NO_3_DH3
+#define BTM_ACL_PKT_TYPES_MASK_NO_2_DH5 HCI_PKT_TYPES_MASK_NO_2_DH5
+#define BTM_ACL_PKT_TYPES_MASK_NO_3_DH5 HCI_PKT_TYPES_MASK_NO_3_DH5
+
+/***************
+ *  ACL Types
+ ***************/
+
+/* Structure returned with QoS information (in tBTM_CMPL_CB callback function)
+ * in response to BTM_SetQoS call.
+ */
+typedef struct {
+  FLOW_SPEC flow;
+  uint16_t handle;
+  uint8_t status;
+} tBTM_QOS_SETUP_CMPL;
+
+/* Structure returned with read RSSI event (in tBTM_CMPL_CB callback function)
+ * in response to BTM_ReadRSSI call.
+ */
+typedef struct {
+  tBTM_STATUS status;
+  uint8_t hci_status;
+  int8_t rssi;
+  RawAddress rem_bda;
+} tBTM_RSSI_RESULT;
+
+/* Structure returned with read failed contact counter event
+ * (in tBTM_CMPL_CB callback function) in response to
+ * BTM_ReadFailedContactCounter call.
+ */
+typedef struct {
+  tBTM_STATUS status;
+  uint8_t hci_status;
+  uint16_t failed_contact_counter;
+  RawAddress rem_bda;
+} tBTM_FAILED_CONTACT_COUNTER_RESULT;
+
+/* Structure returned with read automatic flush timeout event
+ * (in tBTM_CMPL_CB callback function) in response to
+ * BTM_ReadAutomaticFlushTimeout call.
+ */
+typedef struct {
+  tBTM_STATUS status;
+  uint8_t hci_status;
+  uint16_t automatic_flush_timeout;
+  RawAddress rem_bda;
+} tBTM_AUTOMATIC_FLUSH_TIMEOUT_RESULT;
+
+/* Structure returned with read current TX power event (in tBTM_CMPL_CB callback
+ * function) in response to BTM_ReadTxPower call.
+ */
+typedef struct {
+  tBTM_STATUS status;
+  uint8_t hci_status;
+  int8_t tx_power;
+  RawAddress rem_bda;
+} tBTM_TX_POWER_RESULT;
+
+/* Structure returned with read link quality event (in tBTM_CMPL_CB callback
+ * function) in response to BTM_ReadLinkQuality call.
+ */
+typedef struct {
+  tBTM_STATUS status;
+  uint8_t hci_status;
+  uint8_t link_quality;
+  RawAddress rem_bda;
+} tBTM_LINK_QUALITY_RESULT;
+
+/* Structure returned with read inq tx power quality event (in tBTM_CMPL_CB
+ * callback function) in response to BTM_ReadInquiryRspTxPower call.
+ */
+typedef struct {
+  tBTM_STATUS status;
+  uint8_t hci_status;
+  int8_t tx_power;
+} tBTM_INQ_TXPWR_RESULT;
+
+typedef uint8_t tBTM_BL_EVENT;
+
+#define BTM_INQUIRY_STARTED 1
+#define BTM_INQUIRY_CANCELLED 2
+#define BTM_INQUIRY_COMPLETE 3
