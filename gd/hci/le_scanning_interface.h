@@ -16,22 +16,35 @@
 
 #pragma once
 
-#include "hci/command_interface.h"
+#include "common/callback.h"
 #include "hci/hci_packets.h"
+#include "os/handler.h"
+#include "os/utils.h"
 
 namespace bluetooth {
 namespace hci {
 
-constexpr hci::SubeventCode LeScanningEvents[] = {
-    hci::SubeventCode::SCAN_TIMEOUT,
-    hci::SubeventCode::ADVERTISING_REPORT,
-    hci::SubeventCode::DIRECTED_ADVERTISING_REPORT,
-    hci::SubeventCode::EXTENDED_ADVERTISING_REPORT,
-    hci::SubeventCode::PERIODIC_ADVERTISING_REPORT,
-    hci::SubeventCode::PERIODIC_ADVERTISING_SYNC_ESTABLISHED,
-    hci::SubeventCode::PERIODIC_ADVERTISING_SYNC_LOST,
-};
+class LeScanningInterface {
+ public:
+  LeScanningInterface() = default;
+  virtual ~LeScanningInterface() = default;
+  DISALLOW_COPY_AND_ASSIGN(LeScanningInterface);
 
-typedef CommandInterface<LeScanningCommandBuilder> LeScanningInterface;
+  virtual void EnqueueCommand(std::unique_ptr<LeScanningCommandBuilder> command,
+                              common::OnceCallback<void(CommandCompleteView)> on_complete, os::Handler* handler) = 0;
+
+  virtual void EnqueueCommand(std::unique_ptr<LeScanningCommandBuilder> command,
+                              common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) = 0;
+
+  static constexpr hci::SubeventCode LeScanningEvents[] = {
+      hci::SubeventCode::SCAN_TIMEOUT,
+      hci::SubeventCode::ADVERTISING_REPORT,
+      hci::SubeventCode::DIRECTED_ADVERTISING_REPORT,
+      hci::SubeventCode::EXTENDED_ADVERTISING_REPORT,
+      hci::SubeventCode::PERIODIC_ADVERTISING_REPORT,
+      hci::SubeventCode::PERIODIC_ADVERTISING_SYNC_ESTABLISHED,
+      hci::SubeventCode::PERIODIC_ADVERTISING_SYNC_LOST,
+  };
+};
 }  // namespace hci
 }  // namespace bluetooth
