@@ -21,6 +21,7 @@
 #include "bt_target.h"
 #include "btm_ble_api.h"
 #include "gattdefs.h"
+#include "types/bt_transport.h"
 
 /*****************************************************************************
  *  Constants
@@ -44,6 +45,8 @@
 #define GATT_INSUF_ENCRYPTION 0x0f
 #define GATT_UNSUPPORT_GRP_TYPE 0x10
 #define GATT_INSUF_RESOURCE 0x11
+#define GATT_DATABASE_OUT_OF_SYNC 0x12
+#define GATT_VALUE_NOT_ALLOWED 0x13
 
 #define GATT_ILLEGAL_PARAMETER 0x87
 #define GATT_NO_RESOURCES 0x80
@@ -339,12 +342,6 @@ typedef union {
 
 } tGATTS_RSP;
 
-/* Transports for the primary service  */
-#define GATT_TRANSPORT_LE BT_TRANSPORT_LE
-#define GATT_TRANSPORT_BR_EDR BT_TRANSPORT_BR_EDR
-#define GATT_TRANSPORT_LE_BR_EDR (BT_TRANSPORT_LE | BT_TRANSPORT_BR_EDR)
-typedef uint8_t tGATT_TRANSPORT;
-
 #define GATT_PREP_WRITE_CANCEL 0x00
 #define GATT_PREP_WRITE_EXEC 0x01
 typedef uint8_t tGATT_EXEC_FLAG;
@@ -474,6 +471,7 @@ typedef union {
   tGATT_VALUE att_value;
   uint16_t mtu;
   uint16_t handle;
+  uint16_t cid;
 } tGATT_CL_COMPLETE;
 
 /* GATT client operation type, used in client callback function
@@ -911,7 +909,7 @@ extern tGATT_STATUS GATTC_SendHandleValueConfirm(uint16_t conn_id,
  *
  ******************************************************************************/
 extern void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
-                                tGATT_TRANSPORT transport);
+                                tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -922,13 +920,14 @@ extern void GATT_SetIdleTimeout(const RawAddress& bd_addr, uint16_t idle_tout,
  *
  * Parameter        p_app_uuid128: Application UUID
  *                  p_cb_info: callback functions.
+ *                  eatt_support: set support for eatt
  *
  * Returns          0 for error, otherwise the index of the client registered
  *                  with GATT
  *
  ******************************************************************************/
 extern tGATT_IF GATT_Register(const bluetooth::Uuid& p_app_uuid128,
-                              tGATT_CBACK* p_cb_info);
+                              tGATT_CBACK* p_cb_info, bool eatt_support);
 
 /*******************************************************************************
  *

@@ -33,6 +33,7 @@
 #include <string.h>
 
 #include "btm_int.h" /* Included for UIPC_* macro definitions */
+#include "stack/include/acl_hci_link_interface.h"
 
 void btsnd_hcic_inquiry(const LAP inq_lap, uint8_t duration,
                         uint8_t response_cnt) {
@@ -1258,7 +1259,6 @@ void btsnd_hcic_send_keypress_notif(const RawAddress& bd_addr, uint8_t notif) {
 
 /**** end of Simple Pairing Commands ****/
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
@@ -1273,7 +1273,6 @@ void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type) {
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
-#endif
 
 /*************************
  * End of Lisbon Commands
