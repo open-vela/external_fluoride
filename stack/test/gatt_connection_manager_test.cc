@@ -10,6 +10,7 @@
 #include "osi/test/alarm_mock.h"
 
 using testing::_;
+using testing::DoAll;
 using testing::Mock;
 using testing::Return;
 using testing::SaveArg;
@@ -57,6 +58,16 @@ bool BTM_SetLeConnectionModeToFast() {
 
 void BTM_SetLeConnectionModeToSlow() {
   localWhiteListMock->SetLeConnectionModeToSlow();
+}
+
+namespace bluetooth {
+namespace shim {
+bool is_gd_shim_enabled() { return false; }
+}  // namespace shim
+}  // namespace bluetooth
+
+bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& bd_addr) {
+  return false;
 }
 
 namespace connection_manager {

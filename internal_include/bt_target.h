@@ -67,14 +67,6 @@
 #define BTA_HH_ROLE BTA_MASTER_ROLE_PREF
 #endif
 
-#ifndef BTA_HH_LE_INCLUDED
-#define BTA_HH_LE_INCLUDED TRUE
-#endif
-
-#ifndef BTA_AR_INCLUDED
-#define BTA_AR_INCLUDED TRUE
-#endif
-
 #ifndef BTA_AV_SINK_INCLUDED
 #define BTA_AV_SINK_INCLUDED FALSE
 #endif
@@ -299,16 +291,6 @@
 #define BTM_INQ_DB_SIZE 40
 #endif
 
-/* The default scan mode */
-#ifndef BTM_DEFAULT_SCAN_TYPE
-#define BTM_DEFAULT_SCAN_TYPE BTM_SCAN_TYPE_INTERLACED
-#endif
-
-/* Should connections to unknown devices be allowed when not discoverable? */
-#ifndef BTM_ALLOW_CONN_IF_NONDISCOVER
-#define BTM_ALLOW_CONN_IF_NONDISCOVER TRUE
-#endif
-
 /* Sets the Page_Scan_Window:  the length of time that the device is performing
  * a page scan. */
 #ifndef BTM_DEFAULT_CONN_WINDOW
@@ -399,11 +381,6 @@
 #define BTM_MAX_PM_RECORDS 2
 #endif
 
-/* This is set to show debug trace messages for the power manager. */
-#ifndef BTM_PM_DEBUG
-#define BTM_PM_DEBUG FALSE
-#endif
-
 /* If the user does not respond to security process requests within this many
  * seconds, a negative response would be sent automatically.
  * 30 is LMP response timeout value */
@@ -432,19 +409,6 @@
 
 #ifndef BTM_LOCAL_IO_CAPS_BLE
 #define BTM_LOCAL_IO_CAPS_BLE BTM_IO_CAP_KBDISP
-#endif
-
-/* The default MITM Protection Requirement (for Simple Pairing)
- * Possible values are BTM_AUTH_SP_YES or BTM_AUTH_SP_NO */
-#ifndef BTM_DEFAULT_AUTH_REQ
-#define BTM_DEFAULT_AUTH_REQ BTM_AUTH_SP_NO
-#endif
-
-/* The default MITM Protection Requirement for dedicated bonding using Simple
- * Pairing
- * Possible values are BTM_AUTH_AP_YES or BTM_AUTH_AP_NO */
-#ifndef BTM_DEFAULT_DD_AUTH_REQ
-#define BTM_DEFAULT_DD_AUTH_REQ BTM_AUTH_AP_YES
 #endif
 
 /* TRUE to include Sniff Subrating */
@@ -532,16 +496,6 @@
 #define L2CAP_WAKE_PARKED_LINK TRUE
 #endif
 
-/* Whether link wants to be the master or the slave. */
-#ifndef L2CAP_DESIRED_LINK_ROLE
-#define L2CAP_DESIRED_LINK_ROLE HCI_ROLE_MASTER
-#endif
-
-/* Include Non-Flushable Packet Boundary Flag feature of Lisbon */
-#ifndef L2CAP_NON_FLUSHABLE_PB_INCLUDED
-#define L2CAP_NON_FLUSHABLE_PB_INCLUDED TRUE
-#endif
-
 /* Minimum number of ACL credit for high priority link */
 #ifndef L2CAP_HIGH_PRI_MIN_XMIT_QUOTA
 #define L2CAP_HIGH_PRI_MIN_XMIT_QUOTA 5
@@ -572,11 +526,6 @@
 /* Round Robin service channels in link */
 #ifndef L2CAP_ROUND_ROBIN_CHANNEL_SERVICE
 #define L2CAP_ROUND_ROBIN_CHANNEL_SERVICE TRUE
-#endif
-
-/* used for monitoring eL2CAP data flow */
-#ifndef L2CAP_ERTM_STATS
-#define L2CAP_ERTM_STATS FALSE
 #endif
 
 /* Used for conformance testing ONLY:  When TRUE lets scriptwrapper overwrite
@@ -702,11 +651,6 @@
  * SDP
  *
  *****************************************************************************/
-
-/* This is set to enable SDP server functionality. */
-#ifndef SDP_SERVER_ENABLED
-#define SDP_SERVER_ENABLED TRUE
-#endif
 
 /* The maximum number of SDP records the server can support. */
 #ifndef SDP_MAX_RECORDS
@@ -943,14 +887,6 @@
 #define BNEP_SUPPORTS_STATUS_API TRUE
 #endif
 
-/*
- * When BNEP connection changes roles after the connection is established
- * we will do an authentication check again on the new role
-*/
-#ifndef BNEP_DO_AUTH_FOR_ROLE_SWITCH
-#define BNEP_DO_AUTH_FOR_ROLE_SWITCH TRUE
-#endif
-
 /* Maximum number of protocol filters supported. */
 #ifndef BNEP_MAX_PROT_FILTERS
 #define BNEP_MAX_PROT_FILTERS 5
@@ -1030,11 +966,6 @@
 #define PAN_SUPPORTS_ROLE_PANU TRUE
 #endif
 
-/* This will enable the GN role */
-#ifndef PAN_SUPPORTS_ROLE_GN
-#define PAN_SUPPORTS_ROLE_GN TRUE
-#endif
-
 /* This will enable the NAP role */
 #ifndef PAN_SUPPORTS_ROLE_NAP
 #define PAN_SUPPORTS_ROLE_NAP TRUE
@@ -1055,11 +986,6 @@
 #define PAN_NAP_DEFAULT_SERVICE_NAME "Network Access Point Service"
 #endif
 
-/* Default service name for GN role */
-#ifndef PAN_GN_DEFAULT_SERVICE_NAME
-#define PAN_GN_DEFAULT_SERVICE_NAME "Group Network Service"
-#endif
-
 /* Default service name for PANU role */
 #ifndef PAN_PANU_DEFAULT_SERVICE_NAME
 #define PAN_PANU_DEFAULT_SERVICE_NAME "PAN User Service"
@@ -1070,29 +996,9 @@
 #define PAN_NAP_DEFAULT_DESCRIPTION "NAP"
 #endif
 
-/* Default description for GN role service */
-#ifndef PAN_GN_DEFAULT_DESCRIPTION
-#define PAN_GN_DEFAULT_DESCRIPTION "GN"
-#endif
-
 /* Default description for PANU role service */
 #ifndef PAN_PANU_DEFAULT_DESCRIPTION
 #define PAN_PANU_DEFAULT_DESCRIPTION "PANU"
-#endif
-
-/* Default Security level for PANU role. */
-#ifndef PAN_PANU_SECURITY_LEVEL
-#define PAN_PANU_SECURITY_LEVEL 0
-#endif
-
-/* Default Security level for GN role. */
-#ifndef PAN_GN_SECURITY_LEVEL
-#define PAN_GN_SECURITY_LEVEL 0
-#endif
-
-/* Default Security level for NAP role. */
-#ifndef PAN_NAP_SECURITY_LEVEL
-#define PAN_NAP_SECURITY_LEVEL 0
 #endif
 
 /******************************************************************************
@@ -1140,7 +1046,7 @@
 #endif
 
 #ifndef HID_DEV_MTU_SIZE
-#define HID_DEV_MTU_SIZE 64
+#define HID_DEV_MTU_SIZE 512
 #endif
 
 #ifndef HID_DEV_FLUSH_TO
@@ -1248,10 +1154,6 @@
 #define BTA_AG_CIND_INFO                                                       \
   "(\"call\",(0,1)),(\"callsetup\",(0-3)),(\"service\",(0-1)),(\"signal\",(0-" \
   "5)),(\"roam\",(0,1)),(\"battchg\",(0-5)),(\"callheld\",(0-2))"
-#endif
-
-#ifndef BTA_DM_AVOID_A2DP_ROLESWITCH_ON_INQUIRY
-#define BTA_DM_AVOID_A2DP_ROLESWITCH_ON_INQUIRY TRUE
 #endif
 
 /******************************************************************************
