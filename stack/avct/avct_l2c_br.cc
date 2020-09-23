@@ -86,7 +86,7 @@ const tL2CAP_APPL_INFO avct_l2c_br_appl = {avct_l2c_br_connect_ind_cback,
                                            avct_l2c_br_config_ind_cback,
                                            avct_l2c_br_config_cfm_cback,
                                            avct_l2c_br_disconnect_ind_cback,
-                                           NULL,
+                                           avct_l2c_br_disconnect_cfm_cback,
                                            avct_l2c_br_data_ind_cback,
                                            avct_l2c_br_congestion_ind_cback,
                                            NULL,
@@ -335,6 +335,11 @@ void avct_l2c_br_disconnect_ind_cback(uint16_t lcid, bool ack_needed) {
   /* look up lcb for this channel */
   p_lcb = avct_bcb_by_lcid(lcid);
   if (p_lcb == NULL) return;
+
+  if (ack_needed) {
+    /* send L2CAP disconnect response */
+    L2CA_DisconnectRsp(lcid);
+  }
 
   tAVCT_LCB_EVT avct_lcb_evt;
   avct_lcb_evt.result = result;
