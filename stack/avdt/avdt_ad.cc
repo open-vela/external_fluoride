@@ -298,7 +298,8 @@ uint8_t avdt_ad_tc_tbl_to_idx(AvdtpTransportChannel* p_tbl) {
  * Returns          Nothing.
  *
  ******************************************************************************/
-void avdt_ad_tc_close_ind(AvdtpTransportChannel* p_tbl) {
+void avdt_ad_tc_close_ind(AvdtpTransportChannel* p_tbl,
+                          UNUSED_ATTR uint16_t reason) {
   AvdtpCcb* p_ccb;
   AvdtpScb* p_scb;
   tAVDT_SCB_TC_CLOSE close;
@@ -566,7 +567,7 @@ void avdt_ad_open_req(uint8_t type, AvdtpCcb* p_ccb, AvdtpScb* p_scb,
                        avdt_ccb_to_idx(p_ccb), p_tbl->tcid, lcid);
     } else {
       /* if connect req failed, call avdt_ad_tc_close_ind() */
-      avdt_ad_tc_close_ind(p_tbl);
+      avdt_ad_tc_close_ind(p_tbl, 0);
     }
   }
 }
@@ -596,14 +597,13 @@ void avdt_ad_close_req(uint8_t type, AvdtpCcb* p_ccb, AvdtpScb* p_scb) {
       break;
     case AVDT_AD_ST_ACP:
       /* if we're listening on this channel, send ourselves a close ind */
-      avdt_ad_tc_close_ind(p_tbl);
+      avdt_ad_tc_close_ind(p_tbl, 0);
       break;
     default:
       /* get tcid from type, scb */
       tcid = avdt_ad_type_to_tcid(type, p_scb);
 
       /* call l2cap disconnect req */
-      avdt_l2c_disconnect(
-          avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid);
+      L2CA_DisconnectReq(avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][tcid].lcid);
   }
 }
