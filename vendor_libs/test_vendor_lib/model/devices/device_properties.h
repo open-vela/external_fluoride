@@ -178,10 +178,6 @@ class DeviceProperties {
     clock_offset_ = offset;
   }
 
-  uint64_t GetEventMask() const { return event_mask_; }
-
-  void SetEventMask(uint64_t mask) { event_mask_ = mask; }
-
   // Low-Energy functions
   const Address& GetLeAddress() const {
     return le_address_;
@@ -282,14 +278,6 @@ class DeviceProperties {
     le_supported_features_ = features;
   }
 
-  bool GetLeEventSupported(bluetooth::hci::SubeventCode subevent_code) const {
-    return le_event_mask_ & (1u << static_cast<uint64_t>(subevent_code));
-  }
-
-  uint64_t GetLeEventMask() const { return le_event_mask_; }
-
-  void SetLeEventMask(uint64_t mask) { le_event_mask_ = mask; }
-
   // Specification Version 4.2, Volume 2, Part E, Section 7.8.14
   uint8_t GetLeConnectListSize() const { return le_connect_list_size_; }
 
@@ -320,7 +308,6 @@ class DeviceProperties {
   uint16_t manufacturer_name_;
   uint16_t lmp_pal_subversion_;
   uint64_t supported_features_{};
-  uint64_t event_mask_{0x00001fffffffffff};
   uint8_t authentication_enable_{};
   std::vector<uint8_t> supported_codecs_;
   std::vector<uint32_t> vendor_specific_codecs_;
@@ -341,7 +328,6 @@ class DeviceProperties {
   uint8_t le_resolving_list_size_;
   uint64_t le_supported_features_{0x075b3fd8fe8ffeff};
   uint64_t le_supported_states_;
-  uint64_t le_event_mask_{0x01f};
   std::vector<uint8_t> le_vendor_cap_;
   Address le_address_{};
   uint8_t le_address_type_{};
