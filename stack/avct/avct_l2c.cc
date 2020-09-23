@@ -50,16 +50,14 @@ void avct_l2c_data_ind_cback(uint16_t lcid, BT_HDR* p_buf);
 /* L2CAP callback function structure */
 const tL2CAP_APPL_INFO avct_l2c_appl = {avct_l2c_connect_ind_cback,
                                         avct_l2c_connect_cfm_cback,
-                                        NULL,
                                         avct_l2c_config_ind_cback,
                                         avct_l2c_config_cfm_cback,
                                         avct_l2c_disconnect_ind_cback,
                                         avct_l2c_disconnect_cfm_cback,
-                                        NULL,
                                         avct_l2c_data_ind_cback,
                                         avct_l2c_congestion_ind_cback,
-                                        NULL, /* tL2CA_TX_COMPLETE_CB */
-                                        NULL /* tL2CA_CREDITS_RECEIVED_CB */};
+                                        NULL,
+                                        /* tL2CA_TX_COMPLETE_CB */};
 
 /*******************************************************************************
  *
@@ -328,11 +326,6 @@ void avct_l2c_disconnect_ind_cback(uint16_t lcid, bool ack_needed) {
   if (p_lcb != NULL) {
     AVCT_TRACE_DEBUG("avct_l2c_disconnect_ind_cback: 0x%x, ch_state: %d", lcid,
                      p_lcb->ch_state);
-    if (ack_needed) {
-      /* send L2CAP disconnect response */
-      L2CA_DisconnectRsp(lcid);
-    }
-
     tAVCT_LCB_EVT avct_lcb_evt;
     avct_lcb_evt.result = result;
     avct_lcb_event(p_lcb, AVCT_LCB_LL_CLOSE_EVT, &avct_lcb_evt);
