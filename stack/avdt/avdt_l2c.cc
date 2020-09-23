@@ -25,8 +25,10 @@
 #include <string.h>
 #include "avdt_api.h"
 #include "avdt_int.h"
+#include "avdtc_api.h"
 #include "bt_target.h"
 #include "bt_types.h"
+#include "bt_utils.h"
 #include "bta/include/bta_av_api.h"
 #include "btm_api.h"
 #include "btm_int.h"
@@ -34,7 +36,6 @@
 #include "l2c_api.h"
 #include "l2cdefs.h"
 #include "osi/include/osi.h"
-#include "stack/include/acl_api.h"
 
 /* callback function declarations */
 void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
@@ -43,19 +44,23 @@ void avdt_l2c_connect_cfm_cback(uint16_t lcid, uint16_t result);
 void avdt_l2c_config_cfm_cback(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg);
 void avdt_l2c_config_ind_cback(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg);
 void avdt_l2c_disconnect_ind_cback(uint16_t lcid, bool ack_needed);
+void avdt_l2c_disconnect_cfm_cback(uint16_t lcid, uint16_t result);
 void avdt_l2c_congestion_ind_cback(uint16_t lcid, bool is_congested);
 void avdt_l2c_data_ind_cback(uint16_t lcid, BT_HDR* p_buf);
 
 /* L2CAP callback function structure */
 const tL2CAP_APPL_INFO avdt_l2c_appl = {avdt_l2c_connect_ind_cback,
                                         avdt_l2c_connect_cfm_cback,
+                                        NULL,
                                         avdt_l2c_config_ind_cback,
                                         avdt_l2c_config_cfm_cback,
                                         avdt_l2c_disconnect_ind_cback,
+                                        avdt_l2c_disconnect_cfm_cback,
+                                        NULL,
                                         avdt_l2c_data_ind_cback,
                                         avdt_l2c_congestion_ind_cback,
-                                        NULL,
-                                        /* tL2CA_TX_COMPLETE_CB */};
+                                        NULL, /* tL2CA_TX_COMPLETE_CB */
+                                        NULL /* tL2CA_CREDITS_RECEIVED_CB */};
 
 /*******************************************************************************
  *
@@ -104,7 +109,7 @@ static void avdt_sec_check_complete_term(const RawAddress* bd_addr,
   } else {
     L2CA_ConnectRsp(*bd_addr, p_tbl->id, p_tbl->lcid, L2CAP_CONN_SECURITY_BLOCK,
                     L2CAP_CONN_OK);
-    avdt_ad_tc_close_ind(p_tbl);
+    avdt_ad_tc_close_ind(p_tbl, L2CAP_CONN_SECURITY_BLOCK);
   }
 }
 
@@ -143,8 +148,8 @@ static void avdt_sec_check_complete_orig(const RawAddress* bd_addr,
     cfg.flush_to = p_tbl->my_flush_to;
     L2CA_ConfigReq(p_tbl->lcid, &cfg);
   } else {
-    avdt_l2c_disconnect(p_tbl->lcid);
-    avdt_ad_tc_close_ind(p_tbl);
+    L2CA_DisconnectReq(p_tbl->lcid);
+    avdt_ad_tc_close_ind(p_tbl, L2CAP_CONN_SECURITY_BLOCK);
   }
 }
 /*******************************************************************************
@@ -163,6 +168,7 @@ void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
   AvdtpTransportChannel* p_tbl = NULL;
   uint16_t result;
   tL2CAP_CFG_INFO cfg;
+  tBTM_STATUS rc;
 
   /* do we already have a control channel for this peer? */
   p_ccb = avdt_ccb_by_bd(bd_addr);
@@ -191,14 +197,21 @@ void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
 
       if (interop_match_addr(INTEROP_2MBPS_LINK_ONLY, &bd_addr)) {
         // Disable 3DH packets for AVDT ACL to improve sensitivity on HS
-        btm_set_packet_types_from_address(
-            bd_addr, BT_TRANSPORT_BR_EDR,
-            (acl_get_supported_packet_types() | HCI_PKT_TYPES_MASK_NO_3_DH1 |
+        tACL_CONN* p_acl_cb = btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
+        btm_set_packet_types(
+            p_acl_cb,
+            (btm_cb.btm_acl_pkt_types_supported | HCI_PKT_TYPES_MASK_NO_3_DH1 |
              HCI_PKT_TYPES_MASK_NO_3_DH3 | HCI_PKT_TYPES_MASK_NO_3_DH5));
       }
-      /* Assume security check is complete */
-      avdt_sec_check_complete_term(&p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
-                                   nullptr, BTM_SUCCESS);
+
+      /* Check the security */
+      rc = btm_sec_mx_access_request(bd_addr, AVDT_PSM, false,
+                                     BTM_SEC_PROTO_AVDT, AVDT_CHAN_SIG,
+                                     &avdt_sec_check_complete_term, NULL);
+      if (rc == BTM_CMD_STARTED) {
+        L2CA_ConnectRsp(p_ccb->peer_addr, p_tbl->id, lcid, L2CAP_CONN_PENDING,
+                        L2CAP_CONN_OK);
+      }
       return;
     }
   } else {
@@ -302,23 +315,26 @@ void avdt_l2c_connect_cfm_cback(uint16_t lcid, uint16_t result) {
             if (interop_match_addr(INTEROP_2MBPS_LINK_ONLY,
                                    (const RawAddress*)&p_ccb->peer_addr)) {
               // Disable 3DH packets for AVDT ACL to improve sensitivity on HS
-              btm_set_packet_types_from_address(
-                  p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
-                  (acl_get_supported_packet_types() |
+              tACL_CONN* p_acl_cb =
+                  btm_bda_to_acl(p_ccb->peer_addr, BT_TRANSPORT_BR_EDR);
+              btm_set_packet_types(
+                  p_acl_cb,
+                  (btm_cb.btm_acl_pkt_types_supported |
                    HCI_PKT_TYPES_MASK_NO_3_DH1 | HCI_PKT_TYPES_MASK_NO_3_DH3 |
                    HCI_PKT_TYPES_MASK_NO_3_DH5));
             }
 
-            /* Assume security check is complete */
-            avdt_sec_check_complete_orig(&p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
-                                         nullptr, BTM_SUCCESS);
+            /* Check the security */
+            btm_sec_mx_access_request(p_ccb->peer_addr, AVDT_PSM, true,
+                                      BTM_SEC_PROTO_AVDT, AVDT_CHAN_SIG,
+                                      &avdt_sec_check_complete_orig, NULL);
           }
         }
       }
 
       /* failure; notify adaption that channel closed */
       if (result != L2CAP_CONN_OK) {
-        avdt_ad_tc_close_ind(p_tbl);
+        avdt_ad_tc_close_ind(p_tbl, result);
       }
     }
   }
@@ -359,7 +375,7 @@ void avdt_l2c_config_cfm_cback(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg) {
       /* else failure */
       else {
         /* Send L2CAP disconnect req */
-        avdt_l2c_disconnect(lcid);
+        L2CA_DisconnectReq(lcid);
       }
     }
   }
@@ -428,19 +444,34 @@ void avdt_l2c_disconnect_ind_cback(uint16_t lcid, bool ack_needed) {
   /* look up info for this channel */
   p_tbl = avdt_ad_tc_tbl_by_lcid(lcid);
   if (p_tbl != NULL) {
-    avdt_ad_tc_close_ind(p_tbl);
+    if (ack_needed) {
+      /* send L2CAP disconnect response */
+      L2CA_DisconnectRsp(lcid);
+    }
+
+    avdt_ad_tc_close_ind(p_tbl, 0);
   }
 }
 
-void avdt_l2c_disconnect(uint16_t lcid) {
-  L2CA_DisconnectReq(lcid);
+/*******************************************************************************
+ *
+ * Function         avdt_l2c_disconnect_cfm_cback
+ *
+ * Description      This is the L2CAP disconnect confirm callback function.
+ *
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void avdt_l2c_disconnect_cfm_cback(uint16_t lcid, uint16_t result) {
   AvdtpTransportChannel* p_tbl;
 
-  AVDT_TRACE_DEBUG("avdt_l2c_disconnect_cfm_cback lcid: %d", lcid);
+  AVDT_TRACE_DEBUG("avdt_l2c_disconnect_cfm_cback lcid: %d, result: %d", lcid,
+                   result);
   /* look up info for this channel */
   p_tbl = avdt_ad_tc_tbl_by_lcid(lcid);
   if (p_tbl != NULL) {
-    avdt_ad_tc_close_ind(p_tbl);
+    avdt_ad_tc_close_ind(p_tbl, result);
   }
 }
 

@@ -1,9 +1,7 @@
 filegroup {
     name: "BluetoothCommonSources",
     srcs: [
-        "init_flags.cc",
-        "strings.cc",
-        "stop_watch.cc",
+        "link_key.cc",
     ],
 }
 
@@ -12,12 +10,7 @@ filegroup {
     srcs: [
         "blocking_queue_unittest.cc",
         "bidi_queue_unittest.cc",
-        "byte_array_test.cc",
         "observer_registry_test.cc",
-        "init_flags_test.cc",
-        "list_map_test.cc",
-        "lru_cache_test.cc",
-        "numbers_test.cc",
-        "strings_test.cc",
+        "link_key_unittest.cc",
     ],
 }

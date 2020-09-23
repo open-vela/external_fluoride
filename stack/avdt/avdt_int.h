@@ -366,6 +366,7 @@ typedef struct {
 /* data type for AVDT_CCB_API_CONNECT_REQ_EVT */
 typedef struct {
   tAVDT_CTRL_CBACK* p_cback;
+  uint8_t sec_mask;
 } tAVDT_CCB_API_CONNECT;
 
 /* data type for AVDT_CCB_API_DISCONNECT_REQ_EVT */
@@ -956,7 +957,7 @@ extern AvdtpTransportChannel* avdt_ad_tc_tbl_by_st(uint8_t type,
 extern AvdtpTransportChannel* avdt_ad_tc_tbl_by_lcid(uint16_t lcid);
 extern AvdtpTransportChannel* avdt_ad_tc_tbl_alloc(AvdtpCcb* p_ccb);
 extern uint8_t avdt_ad_tc_tbl_to_idx(AvdtpTransportChannel* p_tbl);
-extern void avdt_ad_tc_close_ind(AvdtpTransportChannel* p_tbl);
+extern void avdt_ad_tc_close_ind(AvdtpTransportChannel* p_tbl, uint16_t reason);
 extern void avdt_ad_tc_open_ind(AvdtpTransportChannel* p_tbl);
 extern void avdt_ad_tc_cong_ind(AvdtpTransportChannel* p_tbl,
                                 bool is_congested);
@@ -1002,7 +1003,5 @@ extern const tL2CAP_APPL_INFO avdt_l2c_appl;
 
 /* reject message event lookup table */
 extern const uint8_t avdt_msg_rej_2_evt[];
-
-void avdt_l2c_disconnect(uint16_t lcid);
 
 #endif /* AVDT_INT_H */
