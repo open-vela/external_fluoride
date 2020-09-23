@@ -389,7 +389,7 @@ void avct_lcb_chk_disc(tAVCT_LCB* p_lcb, tAVCT_LCB_EVT* p_data) {
  *
  ******************************************************************************/
 void avct_lcb_chnl_disc(tAVCT_LCB* p_lcb, UNUSED_ATTR tAVCT_LCB_EVT* p_data) {
-  avct_l2c_disconnect(p_lcb->ch_lcid, 0);
+  L2CA_DisconnectReq(p_lcb->ch_lcid);
 }
 
 /*******************************************************************************
