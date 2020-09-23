@@ -32,7 +32,7 @@ using ReadRemoteNameDbCallback = common::OnceCallback<void(hci::Address address,
 
 class NameDbModule : public bluetooth::Module {
  public:
-  virtual void ReadRemoteNameRequest(hci::Address address, ReadRemoteNameDbCallback callback, os::Handler* handler);
+  void ReadRemoteNameRequest(hci::Address address, ReadRemoteNameDbCallback callback, os::Handler* handler);
 
   bool IsNameCached(hci::Address address) const;
   RemoteName ReadCachedRemoteName(hci::Address address) const;
