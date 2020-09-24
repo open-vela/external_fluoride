@@ -1358,7 +1358,6 @@ tL2C_CCB* l2cu_allocate_ccb(tL2C_LCB* p_lcb, uint16_t cid) {
   p_ccb->our_cfg.qos.delay_variation = p_ccb->peer_cfg.qos.delay_variation =
       L2CAP_DEFAULT_DELAY;
 
-  p_ccb->bypass_fcs = 0;
   memset(&p_ccb->ertm_info, 0, sizeof(tL2CAP_ERTM_INFO));
   p_ccb->peer_cfg_already_rejected = false;
   p_ccb->fcr_cfg_tries = L2CAP_MAX_FCR_CFG_TRIES;
@@ -1927,12 +1926,9 @@ void l2cu_process_our_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     p_ccb->fcrb.max_held_acks = p_cfg->fcr.tx_win_sz / 3;
 
     /* Include FCS option only if peer can handle it */
-    if (p_ccb->p_lcb->peer_ext_fea & L2CAP_EXTFEA_NO_CRC) {
-      /* FCS check can be bypassed if peer also desires to bypass */
-      if (p_cfg->fcs_present && p_cfg->fcs == L2CAP_CFG_FCS_BYPASS)
-        p_ccb->bypass_fcs |= L2CAP_CFG_FCS_OUR;
-    } else
+    if ((p_ccb->p_lcb->peer_ext_fea & L2CAP_EXTFEA_NO_CRC) == 0) {
       p_cfg->fcs_present = false;
+    }
   } else {
     p_cfg->fcr.mode = L2CAP_FCR_BASIC_MODE;
   }
