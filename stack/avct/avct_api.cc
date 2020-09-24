@@ -53,15 +53,19 @@ tAVCT_CB avct_cb;
  * Returns          void
  *
  ******************************************************************************/
-void AVCT_Register() {
+void AVCT_Register(uint16_t mtu, UNUSED_ATTR uint16_t mtu_br) {
   AVCT_TRACE_API("AVCT_Register");
 
   /* initialize AVCTP data structures */
   memset(&avct_cb, 0, sizeof(tAVCT_CB));
 
+  if (mtu < AVCT_MIN_CONTROL_MTU) mtu = AVCT_MIN_CONTROL_MTU;
+  /* store mtu */
+  avct_cb.mtu = mtu;
+
   /* register PSM with L2CAP */
   L2CA_Register2(AVCT_PSM, avct_l2c_appl, true /* enable_snoop */, nullptr,
-                 kAvrcMtu, BTA_SEC_AUTHENTICATE);
+                 avct_cb.mtu, BTA_SEC_AUTHENTICATE);
 
   /* Include the browsing channel which uses eFCR */
   tL2CAP_ERTM_INFO ertm_info;
@@ -71,8 +75,11 @@ void AVCT_Register() {
   ertm_info.fcr_rx_buf_size = BT_DEFAULT_BUFFER_SIZE;
   ertm_info.fcr_tx_buf_size = BT_DEFAULT_BUFFER_SIZE;
 
+  if (mtu_br < AVCT_MIN_BROWSE_MTU) mtu_br = AVCT_MIN_BROWSE_MTU;
+  avct_cb.mtu_br = mtu_br;
+
   L2CA_Register2(AVCT_BR_PSM, avct_l2c_br_appl, true /*enable_snoop*/,
-                 &ertm_info, kAvrcBrMtu, BTA_SEC_AUTHENTICATE);
+                 &ertm_info, avct_cb.mtu_br, BTA_SEC_AUTHENTICATE);
 
 #if defined(AVCT_INITIAL_TRACE_LEVEL)
   avct_cb.trace_level = AVCT_INITIAL_TRACE_LEVEL;
