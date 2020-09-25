@@ -2808,7 +2808,7 @@ static void bta_dm_set_eir(char* local_name) {
       for (custom_uuid_idx = 0;
            custom_uuid_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID;
            custom_uuid_idx++) {
-        const Uuid& curr = bta_dm_cb.bta_custom_uuid[custom_uuid_idx].custom_uuid;
+        const Uuid& curr = bta_dm_cb.custom_uuid[custom_uuid_idx];
         if (curr.GetShortestRepresentationSize() == Uuid::kNumBytes16) {
           if (num_uuid < max_num_uuid) {
             UINT16_TO_STREAM(p, curr.As16Bit());
@@ -2841,7 +2841,7 @@ static void bta_dm_set_eir(char* local_name) {
 
     for (custom_uuid_idx = 0; custom_uuid_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID;
          custom_uuid_idx++) {
-      const Uuid& curr = bta_dm_cb.bta_custom_uuid[custom_uuid_idx].custom_uuid;
+      const Uuid& curr = bta_dm_cb.custom_uuid[custom_uuid_idx];
       if (curr.GetShortestRepresentationSize() == Uuid::kNumBytes32) {
         if (num_uuid < max_num_uuid) {
           UINT32_TO_STREAM(p, curr.As32Bit());
@@ -2870,7 +2870,7 @@ static void bta_dm_set_eir(char* local_name) {
 
     for (custom_uuid_idx = 0; custom_uuid_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID;
          custom_uuid_idx++) {
-      const Uuid& curr = bta_dm_cb.bta_custom_uuid[custom_uuid_idx].custom_uuid;
+      const Uuid& curr = bta_dm_cb.custom_uuid[custom_uuid_idx];
       if (curr.GetShortestRepresentationSize() == Uuid::kNumBytes128) {
         if (num_uuid < max_num_uuid) {
           ARRAY16_TO_STREAM(p, curr.To128BitBE().data());
@@ -2934,82 +2934,6 @@ static void bta_dm_set_eir(char* local_name) {
 }
 
 #if (BTA_EIR_CANNED_UUID_LIST != TRUE)
-/*******************************************************************************
- *
- * Function         bta_dm_get_cust_uuid_index
- *
- * Description      Get index of custom uuid from list
- *                  Note, handle equals to 0 means to find a vacant
- *                  from list.
- *
- * Returns          Index of array
- *                  bta_dm_cb.bta_custom_uuid[BTA_EIR_SERVER_NUM_CUSTOM_UUID]
- *
- ******************************************************************************/
-static uint8_t bta_dm_get_cust_uuid_index(uint32_t handle) {
-#if (BTA_EIR_SERVER_NUM_CUSTOM_UUID > 0)
-  uint8_t c_uu_idx = 0;
-
-  while(c_uu_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID &&
-      bta_dm_cb.bta_custom_uuid[c_uu_idx].handle != handle) {
-    c_uu_idx++;
-  }
-
-  return c_uu_idx;
-#else
-  return 0;
-#endif
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_update_cust_uuid
- *
- * Description      Update custom uuid with given value
- *
- * Returns          None
- *
- ******************************************************************************/
-static void bta_dm_update_cust_uuid(uint8_t c_uu_idx, const Uuid& uuid, uint32_t handle) {
-#if (BTA_EIR_SERVER_NUM_CUSTOM_UUID > 0)
-  if (c_uu_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID) {
-    tBTA_CUSTOM_UUID& curr = bta_dm_cb.bta_custom_uuid[c_uu_idx];
-    curr.custom_uuid.UpdateUuid(uuid);
-    curr.handle = handle;
-  } else {
-    APPL_TRACE_ERROR("%s invalid uuid index %d", __func__, c_uu_idx);
-  }
-#endif
-}
-
-/*******************************************************************************
- *
- * Function         bta_dm_eir_update_cust_uuid
- *
- * Description      This function adds or removes custom service UUID in EIR database.
- *
- * Returns          None
- *
- ******************************************************************************/
-void bta_dm_eir_update_cust_uuid(const tBTA_CUSTOM_UUID& curr, bool adding) {
-  APPL_TRACE_DEBUG("%s", __func__);
-#if (BTA_EIR_SERVER_NUM_CUSTOM_UUID > 0)
-  uint8_t c_uu_idx = 0;
-  if (adding) {
-    c_uu_idx = bta_dm_get_cust_uuid_index(0); /* find a vacant from uuid list */
-    bta_dm_update_cust_uuid(c_uu_idx, curr.custom_uuid, curr.handle);
-  } else {
-    c_uu_idx = bta_dm_get_cust_uuid_index(curr.handle); /* find the uuid from uuid list */
-    bta_dm_update_cust_uuid(c_uu_idx, curr.custom_uuid, 0);
-  }
-
-  /* Update EIR when UUIDs are changed */
-  if (c_uu_idx <= BTA_EIR_SERVER_NUM_CUSTOM_UUID) {
-    bta_dm_set_eir(NULL);
-  }
-#endif
-}
-
 /*******************************************************************************
  *
  * Function         bta_dm_eir_update_uuid
@@ -3275,16 +3199,6 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
-      break;
-
-    case BTM_LE_CONSENT_REQ_EVT:
-      sec_event.ble_req.bd_addr = bda;
-      p_name = BTM_SecReadDevName(bda);
-      if (p_name != NULL)
-        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
-      else
-        sec_event.ble_req.bd_name[0] = 0;
-      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:

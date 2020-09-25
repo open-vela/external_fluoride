@@ -90,10 +90,6 @@
       "host" : true
     },
     {
-      "name" : "net_test_stack_a2dp_native",
-      "host" : true
-    },
-    {
       "name" : "net_test_btif_config_cache",
       "host" : true
     },
@@ -102,10 +98,6 @@
     },
     {
       "name" : "net_test_btif_hf_client_service"
-    },
-    {
-      "name" : "net_test_bta",
-      "host" : true
     }
   ]
 }
