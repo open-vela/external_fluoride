@@ -202,8 +202,7 @@ typedef struct {
                      /* this is the real PSM that we need to connect to */
   tL2CAP_APPL_INFO api;
   tL2CAP_ERTM_INFO ertm_info;
-  uint16_t my_mtu;
-  uint16_t required_remote_mtu;
+  uint16_t required_mtu;
 } tL2C_RCB;
 
 #define L2CAP_CBB_DEFAULT_DATA_RATE_BUFF_QUOTA 100
@@ -262,6 +261,7 @@ typedef struct t_l2c_ccb {
   uint8_t flags;
 
   tL2CAP_CFG_INFO our_cfg;          /* Our saved configuration options */
+  tL2CAP_CH_CFG_BITS peer_cfg_bits; /* Store what peer wants to configure */
   tL2CAP_CFG_INFO peer_cfg;         /* Peer's saved configuration options */
 
   fixed_queue_t* xmit_hold_q; /* Transmit data hold queue */
