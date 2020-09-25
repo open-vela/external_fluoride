@@ -122,9 +122,9 @@ void bta_ar_avdt_conn(tBTA_SYS_ID sys_id, const RawAddress& bd_addr,
  * Returns          void
  *
  ******************************************************************************/
-void bta_ar_reg_avct() {
+void bta_ar_reg_avct(uint16_t mtu, uint16_t mtu_br) {
   if (bta_ar_cb.avct_registered == 0) {
-    AVCT_Register();
+    AVCT_Register(mtu, mtu_br);
   }
   bta_ar_cb.avct_registered |= BTA_AR_AV_MASK;
 }
