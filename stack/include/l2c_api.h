@@ -100,6 +100,7 @@ typedef uint8_t tL2CAP_CHNL_DATA_RATE;
 typedef struct {
 #define L2CAP_FCR_BASIC_MODE 0x00
 #define L2CAP_FCR_ERTM_MODE 0x03
+#define L2CAP_FCR_STREAM_MODE 0x04
 #define L2CAP_FCR_LE_COC_MODE 0x05
 
   uint8_t mode;
@@ -110,16 +111,6 @@ typedef struct {
   uint16_t mon_tout;
   uint16_t mps;
 } tL2CAP_FCR_OPTS;
-
-/* default options for ERTM mode */
-constexpr tL2CAP_FCR_OPTS kDefaultErtmOptions = {
-    L2CAP_FCR_ERTM_MODE,
-    10,    /* Tx window size */
-    20,    /* Maximum transmissions before disconnecting */
-    2000,  /* Retransmission timeout (2 secs) */
-    12000, /* Monitor timeout (12 secs) */
-    1010   /* MPS segment size */
-};
 
 /* Define a structure to hold the configuration parameters. Since the
  * parameters are optional, for each parameter there is a boolean to
@@ -195,9 +186,9 @@ typedef void(tL2CA_CONFIG_IND_CB)(uint16_t, tL2CAP_CFG_INFO*);
 
 /* Configuration confirm callback prototype. Parameters are
  *              Local CID assigned to the connection
- *              Config result (L2CA_CONN_OK, ...)
+ *              Pointer to configuration info
  */
-typedef void(tL2CA_CONFIG_CFM_CB)(uint16_t, uint16_t);
+typedef void(tL2CA_CONFIG_CFM_CB)(uint16_t, tL2CAP_CFG_INFO*);
 
 /* Disconnect indication callback prototype. Parameters are
  *              Local CID
@@ -259,6 +250,10 @@ typedef struct {
  */
 typedef struct {
   uint8_t preferred_mode;
+  uint16_t user_rx_buf_size;
+  uint16_t user_tx_buf_size;
+  uint16_t fcr_rx_buf_size;
+  uint16_t fcr_tx_buf_size;
 } tL2CAP_ERTM_INFO;
 
 /**
@@ -481,6 +476,29 @@ extern bool L2CA_GetPeerLECocConfig(uint16_t lcid,
 extern bool L2CA_ErtmConnectRsp(const RawAddress& p_bd_addr, uint8_t id,
                                 uint16_t lcid, uint16_t result, uint16_t status,
                                 tL2CAP_ERTM_INFO* p_ertm_info);
+
+/*******************************************************************************
+ *
+ * Function         L2CA_ConfigReq
+ *
+ * Description      Higher layers call this function to send configuration.
+ *
+ * Returns          true if configuration sent, else false
+ *
+ ******************************************************************************/
+extern bool L2CA_ConfigReq(uint16_t cid, tL2CAP_CFG_INFO* p_cfg);
+
+/*******************************************************************************
+ *
+ * Function         L2CA_ConfigRsp
+ *
+ * Description      Higher layers call this function to send a configuration
+ *                  response.
+ *
+ * Returns          true if configuration response sent, else false
+ *
+ ******************************************************************************/
+extern bool L2CA_ConfigRsp(uint16_t cid, tL2CAP_CFG_INFO* p_cfg);
 
 /*******************************************************************************
  *
