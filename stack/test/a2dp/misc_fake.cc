@@ -14,23 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "service/common/bluetooth/a2dp_codec_config.h"
+#include "stack/include/a2dp_vendor_ldac.h"
 
-#include "hci/command_interface.h"
-#include "hci/hci_packets.h"
+bluetooth::A2dpCodecConfig* bta_av_get_a2dp_current_codec(void) {
+  return nullptr;
+}
 
-namespace bluetooth {
-namespace hci {
-
-constexpr SubeventCode LeConnectionManagementEvents[] = {
-    SubeventCode::CONNECTION_COMPLETE,
-    SubeventCode::ENHANCED_CONNECTION_COMPLETE,
-    SubeventCode::CONNECTION_UPDATE_COMPLETE,
-    SubeventCode::PHY_UPDATE_COMPLETE,
-    SubeventCode::DATA_LENGTH_CHANGE,
-};
-
-typedef CommandInterface<LeConnectionManagementCommandBuilder> LeAclConnectionInterface;
-
-}  // namespace hci
-}  // namespace bluetooth
+int A2DP_VendorGetTrackSampleRateLdac(const uint8_t* p_codec_info) { return 0; }
+int A2DP_VendorGetTrackBitsPerSampleLdac(const uint8_t* p_codec_info) {
+  return 0;
+}
+int A2DP_VendorGetChannelModeCodeLdac(const uint8_t* p_codec_info) { return 0; }
