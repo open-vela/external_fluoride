@@ -123,6 +123,7 @@ typedef enum {
 #define L2CEVT_L2CA_CONNECT_RSP_NEG 23 /* connect response (failed)*/
 #define L2CEVT_L2CA_CONFIG_REQ 24      /* config request */
 #define L2CEVT_L2CA_CONFIG_RSP 25      /* config response */
+#define L2CEVT_L2CA_CONFIG_RSP_NEG 26  /* config response (failed) */
 #define L2CEVT_L2CA_DISCONNECT_REQ 27  /* disconnect request */
 #define L2CEVT_L2CA_DISCONNECT_RSP 28  /* disconnect response */
 #define L2CEVT_L2CA_DATA_READ 29       /* data read */
@@ -250,9 +251,9 @@ typedef struct t_l2c_ccb {
 #define IB_CFG_DONE 0x01
 #define OB_CFG_DONE 0x02
 #define RECONFIG_FLAG 0x04 /* True after initial configuration */
+#define CFG_DONE_MASK (IB_CFG_DONE | OB_CFG_DONE)
 
   uint8_t config_done; /* Configuration flag word */
-  uint16_t remote_config_rsp_result; /* The config rsp result from remote */
   uint8_t local_id;    /* Transaction ID for local trans */
   uint8_t remote_id;   /* Transaction ID for local */
 
@@ -486,6 +487,8 @@ typedef struct {
   uint16_t ble_round_robin_unacked; /* Round-robin unacked */
   bool ble_check_round_robin;       /* Do a round robin check */
   tL2C_RCB ble_rcb_pool[BLE_MAX_L2CAP_CLIENTS]; /* Registration info pool */
+
+  tL2CA_ECHO_DATA_CB* p_echo_data_cb; /* Echo data callback */
 
   uint16_t dyn_psm;
 

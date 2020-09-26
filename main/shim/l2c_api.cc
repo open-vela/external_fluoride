@@ -98,15 +98,30 @@ void bluetooth::shim::L2CA_FreeLePSM(uint16_t psm) {
 /**
  * Classic Connection Oriented Channel APIS
  */
+uint16_t bluetooth::shim::L2CA_ErtmConnectReq(uint16_t psm,
+                                              const RawAddress& raw_address,
+                                              tL2CAP_ERTM_INFO* p_ertm_info) {
+  return shim_l2cap.CreateConnection(psm, raw_address);
+}
+
 uint16_t bluetooth::shim::L2CA_ConnectReq(uint16_t psm,
                                           const RawAddress& raw_address) {
   return shim_l2cap.CreateConnection(psm, raw_address);
 }
 
+bool bluetooth::shim::L2CA_ErtmConnectRsp(const RawAddress& p_bd_addr,
+                                          uint8_t id, uint16_t lcid,
+                                          uint16_t result, uint16_t status,
+                                          tL2CAP_ERTM_INFO* p_ertm_info) {
+  return shim_l2cap.ConnectResponse(p_bd_addr, id, lcid, result, status,
+                                    p_ertm_info);
+}
+
 bool bluetooth::shim::L2CA_ConnectRsp(const RawAddress& p_bd_addr, uint8_t id,
                                       uint16_t lcid, uint16_t result,
                                       uint16_t status) {
-  return shim_l2cap.ConnectResponse(p_bd_addr, id, lcid, result, status);
+  return bluetooth::shim::L2CA_ErtmConnectRsp(p_bd_addr, id, lcid, result,
+                                              status, nullptr);
 }
 
 bool bluetooth::shim::L2CA_ConfigReq(uint16_t cid, tL2CAP_CFG_INFO* cfg_info) {
