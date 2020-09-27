@@ -557,7 +557,7 @@ static void rfc_mx_send_config_req(tRFC_MCB* p_mcb) {
 void rfc_on_l2cap_error(uint16_t lcid, uint16_t result) {
   tRFC_MCB* p_mcb = rfc_find_lcid_mcb(lcid);
 
-  if (result == L2CAP_CONN_NO_RESOURCES) {
+  if (result == L2CAP_CONN_OTHER_ERROR) {
     RFCOMM_TRACE_DEBUG(
         "RFCOMM_ConnectCnf retry as acceptor on pending LCID(0x%x)",
         p_mcb->pending_lcid);
@@ -611,13 +611,6 @@ void rfc_on_l2cap_error(uint16_t lcid, uint16_t result) {
  *
  ******************************************************************************/
 static void rfc_mx_conf_cnf(tRFC_MCB* p_mcb, uint16_t result) {
-  RFCOMM_TRACE_EVENT("rfc_mx_conf_cnf result:%d ", result);
-
-  if (result != L2CAP_CFG_OK) {
-    rfc_on_l2cap_error(p_mcb->lcid, L2CAP_CFG_FAILED_NO_REASON);
-    return;
-  }
-
   if (p_mcb->state == RFC_MX_STATE_CONFIGURE) {
     if (p_mcb->is_initiator) {
       p_mcb->state = RFC_MX_STATE_SABME_WAIT_UA;
