@@ -622,12 +622,6 @@ void gatt_l2cif_config_cfm_cback(uint16_t lcid, uint16_t result) {
   /* if in incorrect state */
   if (gatt_get_ch_state(p_tcb) != GATT_CH_CFG) return;
 
-  /* if result not successful */
-  if (result != L2CAP_CFG_OK) {
-    gatt_on_l2cap_error(lcid, result);
-    return;
-  }
-
   gatt_set_ch_state(p_tcb, GATT_CH_OPEN);
 
   tGATTS_SRV_CHG* p_srv_chg_clt =
