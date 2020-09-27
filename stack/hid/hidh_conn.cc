@@ -248,31 +248,6 @@ void hidh_try_repage(uint8_t dhandle) {
                  device->conn_tries, NULL);
 }
 
-static void hidh_on_l2cap_error(uint16_t l2cap_cid, uint16_t result) {
-  auto dhandle = find_conn_by_cid(l2cap_cid);
-
-  hidh_conn_disconnect(dhandle);
-
-  if (result != L2CAP_CFG_FAILED_NO_REASON) {
-#if (HID_HOST_MAX_CONN_RETRY > 0)
-    if ((hh_cb.devices[dhandle].conn_tries <= HID_HOST_MAX_CONN_RETRY) &&
-        (result == HCI_ERR_CONNECTION_TOUT || result == HCI_ERR_UNSPECIFIED ||
-         result == HCI_ERR_PAGE_TIMEOUT)) {
-      hidh_conn_retry(dhandle);
-    } else
-#endif
-    {
-      uint32_t reason = HID_L2CAP_CONN_FAIL | (uint32_t)result;
-      hh_cb.callback(dhandle, hh_cb.devices[dhandle].addr, HID_HDEV_EVT_CLOSE,
-                     reason, NULL);
-    }
-  } else {
-    uint32_t reason = HID_L2CAP_CFG_FAIL | (uint32_t)result;
-    hh_cb.callback(dhandle, hh_cb.devices[dhandle].addr, HID_HDEV_EVT_CLOSE,
-                   reason, NULL);
-  }
-}
-
 /*******************************************************************************
  *
  * Function         hidh_l2cif_connect_cfm
@@ -287,6 +262,7 @@ static void hidh_on_l2cap_error(uint16_t l2cap_cid, uint16_t result) {
 static void hidh_l2cif_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
   uint8_t dhandle;
   tHID_CONN* p_hcon = NULL;
+  uint32_t reason;
   tHID_HOST_DEV_CTB* p_dev = NULL;
 
   /* Find CCB based on CID, and verify we are in a state to accept this message
@@ -309,7 +285,25 @@ static void hidh_l2cif_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
   }
 
   if (result != L2CAP_CONN_OK) {
-    hidh_on_l2cap_error(l2cap_cid, result);
+    if (l2cap_cid == p_hcon->ctrl_cid)
+      p_hcon->ctrl_cid = 0;
+    else
+      p_hcon->intr_cid = 0;
+
+    hidh_conn_disconnect(dhandle);
+
+#if (HID_HOST_MAX_CONN_RETRY > 0)
+    if ((hh_cb.devices[dhandle].conn_tries <= HID_HOST_MAX_CONN_RETRY) &&
+        (result == HCI_ERR_CONNECTION_TOUT || result == HCI_ERR_UNSPECIFIED ||
+         result == HCI_ERR_PAGE_TIMEOUT)) {
+      hidh_conn_retry(dhandle);
+    } else
+#endif
+    {
+      reason = HID_L2CAP_CONN_FAIL | (uint32_t)result;
+      hh_cb.callback(dhandle, hh_cb.devices[dhandle].addr, HID_HDEV_EVT_CLOSE,
+                     reason, NULL);
+    }
     return;
   }
   /* receive Control Channel connect confirmation */
@@ -393,7 +387,10 @@ static void hidh_l2cif_config_cfm(uint16_t l2cap_cid, uint16_t result) {
 
   /* If configuration failed, disconnect the channel(s) */
   if (result != L2CAP_CFG_OK) {
-    hidh_on_l2cap_error(l2cap_cid, L2CAP_CFG_FAILED_NO_REASON);
+    hidh_conn_disconnect(dhandle);
+    reason = HID_L2CAP_CFG_FAIL | (uint32_t)result;
+    hh_cb.callback(dhandle, hh_cb.devices[dhandle].addr, HID_HDEV_EVT_CLOSE,
+                   reason, NULL);
     return;
   }
 
