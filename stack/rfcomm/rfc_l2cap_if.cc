@@ -119,7 +119,7 @@ void RFCOMM_ConnectInd(const RawAddress& bd_addr, uint16_t lcid,
   }
 
   if (p_mcb == nullptr) {
-    L2CA_DisconnectReq(lcid);
+    L2CA_ConnectRsp(bd_addr, id, lcid, L2CAP_CONN_NO_RESOURCES, 0);
     return;
   }
   p_mcb->lcid = lcid;
@@ -148,6 +148,7 @@ void RFCOMM_ConnectCnf(uint16_t lcid, uint16_t result) {
     /* if peer rejects our connect request but peer's connect request is pending
      */
     if (result != L2CAP_CONN_OK) {
+      rfc_on_l2cap_error(lcid, L2CAP_CONN_NO_RESOURCES);
       return;
     } else {
       RFCOMM_TRACE_DEBUG("RFCOMM_ConnectCnf peer gave up pending LCID(0x%x)",
@@ -155,7 +156,8 @@ void RFCOMM_ConnectCnf(uint16_t lcid, uint16_t result) {
 
       /* Peer gave up its connection request, make sure cleaning up L2CAP
        * channel */
-      L2CA_DisconnectReq(p_mcb->pending_lcid);
+      L2CA_ConnectRsp(p_mcb->bd_addr, p_mcb->pending_id, p_mcb->pending_lcid,
+                      L2CAP_CONN_NO_RESOURCES, 0);
 
       p_mcb->pending_lcid = 0;
     }
@@ -196,14 +198,14 @@ void RFCOMM_ConfigInd(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg) {
  *                  event to the FSM.
  *
  ******************************************************************************/
-void RFCOMM_ConfigCnf(uint16_t lcid, uint16_t initiator) {
+void RFCOMM_ConfigCnf(uint16_t lcid, uint16_t result) {
   tRFC_MCB* p_mcb = rfc_find_lcid_mcb(lcid);
 
   if (!p_mcb) {
     RFCOMM_TRACE_ERROR("RFCOMM_ConfigCnf no MCB LCID:0x%x", lcid);
     return;
   }
-  uintptr_t result_as_ptr = L2CAP_CFG_OK;
+  uintptr_t result_as_ptr = result;
   rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_CONF_CNF, (void*)result_as_ptr);
 }
 
