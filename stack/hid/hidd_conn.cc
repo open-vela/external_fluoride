@@ -43,8 +43,7 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
                                    uint16_t psm, uint8_t id);
 static void hidd_l2cif_connect_cfm(uint16_t cid, uint16_t result);
 static void hidd_l2cif_config_ind(uint16_t cid, tL2CAP_CFG_INFO* p_cfg);
-static void hidd_l2cif_config_cfm(uint16_t cid, uint16_t result,
-                                  tL2CAP_CFG_INFO* p_cfg);
+static void hidd_l2cif_config_cfm(uint16_t cid, uint16_t result);
 static void hidd_l2cif_disconnect_ind(uint16_t cid, bool ack_needed);
 static void hidd_l2cif_disconnect(uint16_t cid);
 static void hidd_l2cif_data_ind(uint16_t cid, BT_HDR* p_msg);
@@ -102,15 +101,14 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
   tHID_DEV_DEV_CTB* p_dev;
   bool accept = TRUE;  // accept by default
 
-  HIDD_TRACE_EVENT("%s: psm=%04x cid=%04x", __func__, psm, cid);
+  HIDD_TRACE_EVENT("%s: psm=%04x cid=%04x id=%02x", __func__, psm, cid, id);
 
   p_dev = &hd_cb.device;
 
   if (!hd_cb.allow_incoming) {
     HIDD_TRACE_WARNING("%s: incoming connections not allowed, rejecting",
                        __func__);
-    L2CA_DisconnectReq(cid);
-
+    L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_NO_RESOURCES, 0);
     return;
   }
 
@@ -148,7 +146,7 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
   }
 
   if (!accept) {
-    L2CA_DisconnectReq(cid);
+    L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_NO_RESOURCES, 0);
     return;
   }
 
@@ -162,14 +160,20 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
 
     p_hcon->conn_flags = 0;
     p_hcon->ctrl_cid = cid;
+    p_hcon->ctrl_id = id;
     p_hcon->disc_reason = HID_SUCCESS;
     p_hcon->conn_state = HID_CONN_STATE_CONNECTING_INTR;
+
+    L2CA_ConnectRsp(p_dev->addr, p_dev->conn.ctrl_id, p_dev->conn.ctrl_cid,
+                    L2CAP_CONN_OK, L2CAP_CONN_OK);
     return;
   }
 
   // for INTR we go directly to config state
   p_hcon->conn_state = HID_CONN_STATE_CONFIG;
   p_hcon->intr_cid = cid;
+
+  L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_OK, L2CAP_CONN_OK);
 }
 
 static void hidd_on_l2cap_error(uint16_t lcid, uint16_t result) {
@@ -263,18 +267,20 @@ static void hidd_l2cif_config_ind(uint16_t cid, tL2CAP_CFG_INFO* p_cfg) {
  * Returns          void
  *
  ******************************************************************************/
-static void hidd_l2cif_config_cfm(uint16_t cid, uint16_t initiator,
-                                  tL2CAP_CFG_INFO* p_cfg) {
-  hidd_l2cif_config_ind(cid, p_cfg);
-
+static void hidd_l2cif_config_cfm(uint16_t cid, uint16_t result) {
   tHID_CONN* p_hcon;
 
-  HIDD_TRACE_EVENT("%s: cid=%04x", __func__, cid);
+  HIDD_TRACE_EVENT("%s: cid=%04x pcfg->result=%d", __func__, cid, result);
 
   p_hcon = &hd_cb.device.conn;
 
   if (p_hcon->ctrl_cid != cid && p_hcon->intr_cid != cid) {
     HIDD_TRACE_WARNING("%s: unknown cid", __func__);
+    return;
+  }
+
+  if (result != L2CAP_CFG_OK) {
+    LOG(ERROR) << __func__ << ": invoked with non OK status";
     return;
   }
 
