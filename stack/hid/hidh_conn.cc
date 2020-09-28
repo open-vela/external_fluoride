@@ -311,8 +311,7 @@ static void hidh_l2cif_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
   }
 
   if (result != L2CAP_CONN_OK) {
-    // TODO: We need to provide the real HCI status if we want to retry.
-    LOG(ERROR) << __func__ << ": invoked with non OK status";
+    hidh_on_l2cap_error(l2cap_cid, result);
     return;
   }
   /* receive Control Channel connect confirmation */
@@ -396,7 +395,7 @@ static void hidh_l2cif_config_cfm(uint16_t l2cap_cid, uint16_t result) {
 
   /* If configuration failed, disconnect the channel(s) */
   if (result != L2CAP_CFG_OK) {
-    LOG(ERROR) << __func__ << ": invoked with non OK status";
+    hidh_on_l2cap_error(l2cap_cid, L2CAP_CFG_FAILED_NO_REASON);
     return;
   }
 
