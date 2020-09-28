@@ -245,7 +245,7 @@ void rfc_mx_sm_state_wait_conn_cnf(tRFC_MCB* p_mcb, uint16_t event,
           }
         }
 
-        rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_CONN_IND, &(p_mcb->pending_id));
+        rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_CONN_IND, nullptr);
       } else {
         PORT_CloseInd(p_mcb);
       }
@@ -584,7 +584,7 @@ void rfc_on_l2cap_error(uint16_t lcid, uint16_t result) {
       }
     }
 
-    rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_CONN_IND, &(p_mcb->pending_id));
+    rfc_mx_sm_execute(p_mcb, RFC_MX_EVENT_CONN_IND, nullptr);
   }
 
   if (result == L2CAP_CFG_FAILED_NO_REASON) {
