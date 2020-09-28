@@ -65,22 +65,34 @@ const tL2CAP_APPL_INFO avdt_l2c_appl = {
  ******************************************************************************/
 static void avdt_sec_check_complete_term(const RawAddress* bd_addr,
                                          tBT_TRANSPORT transport,
-                                         void* p_ref_data) {
+                                         UNUSED_ATTR void* p_ref_data,
+                                         uint8_t res) {
   AvdtpCcb* p_ccb = NULL;
   AvdtpTransportChannel* p_tbl;
 
+  AVDT_TRACE_DEBUG("avdt_sec_check_complete_term res: %d", res);
   p_ccb = avdt_ccb_by_bd(*bd_addr);
 
   p_tbl = avdt_ad_tc_tbl_by_st(AVDT_CHAN_SIG, p_ccb, AVDT_AD_ST_SEC_ACP);
   if (p_tbl == NULL) return;
 
-  /* store idx in LCID table, store LCID in routing table */
-  avdtp_cb.ad.lcid_tbl[p_tbl->lcid - L2CAP_BASE_APPL_CID] =
-      avdt_ad_tc_tbl_to_idx(p_tbl);
-  avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][p_tbl->tcid].lcid = p_tbl->lcid;
+  if (res == BTM_SUCCESS) {
+    /* Send response to the L2CAP layer. */
+    L2CA_ConnectRsp(*bd_addr, p_tbl->id, p_tbl->lcid, L2CAP_CONN_OK,
+                    L2CAP_CONN_OK);
 
-  /* transition to configuration state */
-  p_tbl->state = AVDT_AD_ST_CFG;
+    /* store idx in LCID table, store LCID in routing table */
+    avdtp_cb.ad.lcid_tbl[p_tbl->lcid - L2CAP_BASE_APPL_CID] =
+        avdt_ad_tc_tbl_to_idx(p_tbl);
+    avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][p_tbl->tcid].lcid = p_tbl->lcid;
+
+    /* transition to configuration state */
+    p_tbl->state = AVDT_AD_ST_CFG;
+  } else {
+    L2CA_ConnectRsp(*bd_addr, p_tbl->id, p_tbl->lcid, L2CAP_CONN_SECURITY_BLOCK,
+                    L2CAP_CONN_OK);
+    avdt_ad_tc_close_ind(p_tbl);
+  }
 }
 
 /*******************************************************************************
@@ -162,7 +174,7 @@ void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
       }
       /* Assume security check is complete */
       avdt_sec_check_complete_term(&p_ccb->peer_addr, BT_TRANSPORT_BR_EDR,
-                                   nullptr);
+                                   nullptr, BTM_SUCCESS);
       return;
     }
   } else {
@@ -195,20 +207,19 @@ void avdt_l2c_connect_ind_cback(const RawAddress& bd_addr, uint16_t lcid,
     }
   }
 
-  /* If we reject the connection, send DisconnectReq */
-  if (result != L2CAP_CONN_OK) {
-    L2CA_DisconnectReq(lcid);
-    return;
-  }
+  /* Send L2CAP connect rsp */
+  L2CA_ConnectRsp(bd_addr, id, lcid, result, 0);
 
   /* if result ok, proceed with connection */
-  /* store idx in LCID table, store LCID in routing table */
-  avdtp_cb.ad.lcid_tbl[lcid - L2CAP_BASE_APPL_CID] =
-      avdt_ad_tc_tbl_to_idx(p_tbl);
-  avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][p_tbl->tcid].lcid = lcid;
+  if (result == L2CAP_CONN_OK) {
+    /* store idx in LCID table, store LCID in routing table */
+    avdtp_cb.ad.lcid_tbl[lcid - L2CAP_BASE_APPL_CID] =
+        avdt_ad_tc_tbl_to_idx(p_tbl);
+    avdtp_cb.ad.rt_tbl[avdt_ccb_to_idx(p_ccb)][p_tbl->tcid].lcid = lcid;
 
-  /* transition to configuration state */
-  p_tbl->state = AVDT_AD_ST_CFG;
+    /* transition to configuration state */
+    p_tbl->state = AVDT_AD_ST_CFG;
+  }
 }
 
 static void avdt_on_l2cap_error(uint16_t lcid, uint16_t result) {
@@ -286,7 +297,7 @@ void avdt_l2c_connect_cfm_cback(uint16_t lcid, uint16_t result) {
  * Returns          void
  *
  ******************************************************************************/
-void avdt_l2c_config_cfm_cback(uint16_t lcid, uint16_t initiator) {
+void avdt_l2c_config_cfm_cback(uint16_t lcid, uint16_t result) {
   AvdtpTransportChannel* p_tbl;
 
   AVDT_TRACE_DEBUG("%s: lcid: %d", __func__, lcid);
@@ -298,7 +309,14 @@ void avdt_l2c_config_cfm_cback(uint16_t lcid, uint16_t initiator) {
 
     /* if in correct state */
     if (p_tbl->state == AVDT_AD_ST_CFG) {
-      avdt_ad_tc_open_ind(p_tbl);
+      /* if result successful */
+      if (result == L2CAP_CONN_OK) {
+        avdt_ad_tc_open_ind(p_tbl);
+      }
+      /* else failure */
+      else {
+        LOG(ERROR) << __func__ << ": invoked with non OK status";
+      }
     }
   }
 }
