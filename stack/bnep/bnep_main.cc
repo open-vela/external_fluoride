@@ -183,7 +183,7 @@ static void bnep_connect_cfm(uint16_t l2cap_cid, uint16_t result) {
     BNEP_TRACE_EVENT("BNEP - got conn cnf, sent cfg req, CID: 0x%x",
                      p_bcb->l2cap_cid);
   } else {
-    LOG(ERROR) << __func__ << ": invoked with non OK status";
+    bnep_on_l2cap_error(l2cap_cid, result);
   }
 }
 
@@ -238,7 +238,7 @@ static void bnep_config_cfm(uint16_t l2cap_cid, uint16_t result) {
                               BTM_SUCCESS);
     }
   } else {
-    LOG(ERROR) << __func__ << ": invoked with non OK status";
+    bnep_on_l2cap_error(l2cap_cid, result);
   }
 }
 
