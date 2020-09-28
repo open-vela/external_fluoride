@@ -82,13 +82,7 @@ class L2cap {
   uint16_t ConvertClientToRealPsm(uint16_t psm);
   void RemoveClientPsm(uint16_t client_psm);
 
-  // Legacy API entry points
-  bool ConnectResponse(const RawAddress& raw_address, uint8_t signal_id,
-                       uint16_t cid, uint16_t result, uint16_t status);
-  bool ConfigRequest(uint16_t cid, const tL2CAP_CFG_INFO* config_info);
-  bool ConfigResponse(uint16_t cid, const tL2CAP_CFG_INFO* config_info);
   bool DisconnectRequest(uint16_t cid);
-  bool DisconnectResponse(uint16_t cid);
 
   bool GetRemoteCid(uint16_t cid, uint16_t* remote_cid);
 

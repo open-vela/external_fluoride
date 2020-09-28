@@ -103,26 +103,8 @@ uint16_t bluetooth::shim::L2CA_ConnectReq(uint16_t psm,
   return shim_l2cap.CreateConnection(psm, raw_address);
 }
 
-bool bluetooth::shim::L2CA_ConnectRsp(const RawAddress& p_bd_addr, uint8_t id,
-                                      uint16_t lcid, uint16_t result,
-                                      uint16_t status) {
-  return shim_l2cap.ConnectResponse(p_bd_addr, id, lcid, result, status);
-}
-
-bool bluetooth::shim::L2CA_ConfigReq(uint16_t cid, tL2CAP_CFG_INFO* cfg_info) {
-  return shim_l2cap.ConfigRequest(cid, cfg_info);
-}
-
-bool bluetooth::shim::L2CA_ConfigRsp(uint16_t cid, tL2CAP_CFG_INFO* cfg_info) {
-  return shim_l2cap.ConfigResponse(cid, cfg_info);
-}
-
 bool bluetooth::shim::L2CA_DisconnectReq(uint16_t cid) {
   return shim_l2cap.DisconnectRequest(cid);
-}
-
-bool bluetooth::shim::L2CA_DisconnectRsp(uint16_t cid) {
-  return shim_l2cap.DisconnectResponse(cid);
 }
 
 /**
