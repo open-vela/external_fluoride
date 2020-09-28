@@ -85,8 +85,7 @@ static void gap_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
                             uint16_t psm, uint8_t l2cap_id);
 static void gap_connect_cfm(uint16_t l2cap_cid, uint16_t result);
 static void gap_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg);
-static void gap_config_cfm(uint16_t l2cap_cid, uint16_t result,
-                           tL2CAP_CFG_INFO* p_cfg);
+static void gap_config_cfm(uint16_t l2cap_cid, uint16_t result);
 static void gap_disconnect_ind(uint16_t l2cap_cid, bool ack_needed);
 static void gap_data_ind(uint16_t l2cap_cid, BT_HDR* p_msg);
 static void gap_congestion_ind(uint16_t lcid, bool is_congested);
@@ -616,6 +615,10 @@ static void gap_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid,
   p_ccb->rem_dev_address = bd_addr;
   p_ccb->connection_id = l2cap_cid;
 
+  /* Send response to the L2CAP layer. */
+  if (p_ccb->transport == BT_TRANSPORT_BR_EDR)
+    L2CA_ConnectRsp(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_OK, L2CAP_CONN_OK);
+
   if (p_ccb->transport == BT_TRANSPORT_LE) {
     L2CA_ConnectLECocRsp(bd_addr, l2cap_id, l2cap_cid, L2CAP_CONN_OK,
                          L2CAP_CONN_OK, &p_ccb->local_coc_cfg);
@@ -684,7 +687,6 @@ static void gap_sec_check_complete(const RawAddress*, tBT_TRANSPORT,
 
 static void gap_on_l2cap_error(uint16_t l2cap_cid, uint16_t result) {
   tGAP_CCB* p_ccb = gap_find_ccb_by_cid(l2cap_cid);
-  if (p_ccb == nullptr) return;
 
   /* Tell the user if there is a callback */
   if (p_ccb->p_callback)
@@ -781,19 +783,18 @@ static void gap_config_ind(uint16_t l2cap_cid, tL2CAP_CFG_INFO* p_cfg) {
  * Returns          void
  *
  ******************************************************************************/
-static void gap_config_cfm(uint16_t l2cap_cid, uint16_t initiator,
-                           tL2CAP_CFG_INFO* p_cfg) {
-  gap_config_ind(l2cap_cid, p_cfg);
-
+static void gap_config_cfm(uint16_t l2cap_cid, uint16_t result) {
   tGAP_CCB* p_ccb;
 
   /* Find CCB based on CID */
   p_ccb = gap_find_ccb_by_cid(l2cap_cid);
   if (p_ccb == NULL) return;
 
-  p_ccb->con_flags |= GAP_CCB_FLAGS_MY_CFG_DONE;
-  p_ccb->con_flags |= GAP_CCB_FLAGS_HIS_CFG_DONE;
-  gap_checks_con_flags(p_ccb);
+  if (result == L2CAP_CFG_OK) {
+    p_ccb->con_flags |= GAP_CCB_FLAGS_MY_CFG_DONE;
+    p_ccb->con_flags |= GAP_CCB_FLAGS_HIS_CFG_DONE;
+    gap_checks_con_flags(p_ccb);
+  }
 }
 
 /*******************************************************************************
