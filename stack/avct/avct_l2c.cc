@@ -39,16 +39,17 @@ void avct_l2c_config_ind_cback(uint16_t lcid, tL2CAP_CFG_INFO* p_cfg);
 void avct_l2c_disconnect_ind_cback(uint16_t lcid, bool ack_needed);
 void avct_l2c_congestion_ind_cback(uint16_t lcid, bool is_congested);
 void avct_l2c_data_ind_cback(uint16_t lcid, BT_HDR* p_buf);
-static void avct_on_l2cap_error(uint16_t lcid, uint16_t result);
 
 /* L2CAP callback function structure */
-const tL2CAP_APPL_INFO avct_l2c_appl = {
-    avct_l2c_connect_ind_cback,    avct_l2c_connect_cfm_cback,
-    avct_l2c_config_ind_cback,     avct_l2c_config_cfm_cback,
-    avct_l2c_disconnect_ind_cback, avct_l2c_data_ind_cback,
-    avct_l2c_congestion_ind_cback, NULL,
-    avct_on_l2cap_error,
-};
+const tL2CAP_APPL_INFO avct_l2c_appl = {avct_l2c_connect_ind_cback,
+                                        avct_l2c_connect_cfm_cback,
+                                        avct_l2c_config_ind_cback,
+                                        avct_l2c_config_cfm_cback,
+                                        avct_l2c_disconnect_ind_cback,
+                                        avct_l2c_data_ind_cback,
+                                        avct_l2c_congestion_ind_cback,
+                                        NULL,
+                                        /* tL2CA_TX_COMPLETE_CB */};
 
 /*******************************************************************************
  *
@@ -188,7 +189,7 @@ void avct_l2c_connect_cfm_cback(uint16_t lcid, uint16_t result) {
       }
       /* else failure */
       else {
-        LOG(ERROR) << __func__ << ": invoked with non OK status";
+        avct_on_l2cap_error(lcid, result);
       }
     } else if (p_lcb->conflict_lcid == lcid) {
       /* we must be in AVCT_CH_CFG state for the ch_lcid channel */
@@ -233,7 +234,7 @@ void avct_l2c_config_cfm_cback(uint16_t lcid, uint16_t result) {
       }
       /* else failure */
       else {
-        LOG(ERROR) << __func__ << ": invoked with non OK status";
+        avct_on_l2cap_error(lcid, result);
       }
     }
     AVCT_TRACE_DEBUG("ch_state cfc: %d ", p_lcb->ch_state);
