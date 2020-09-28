@@ -194,12 +194,15 @@ typedef void(tL2CA_CONNECT_CFM_CB)(uint16_t, uint16_t);
  */
 typedef void(tL2CA_CONFIG_IND_CB)(uint16_t, tL2CAP_CFG_INFO*);
 
+constexpr uint16_t L2CAP_INITIATOR_LOCAL = 1;
+constexpr uint16_t L2CAP_INITIATOR_REMOTE = 0;
 /* Configuration confirm callback prototype. Parameters are
  *              Local CID assigned to the connection
- *              Config result (L2CA_CONN_OK)
- *              If there is an error, tL2CA_ERROR_CB is invoked
+ *              Initiator (1 for local, 0 for remote)
+ *              Initial config from remote
+ * If there is an error, tL2CA_ERROR_CB is invoked
  */
-typedef void(tL2CA_CONFIG_CFM_CB)(uint16_t, uint16_t);
+typedef void(tL2CA_CONFIG_CFM_CB)(uint16_t, uint16_t, tL2CAP_CFG_INFO*);
 
 /* Disconnect indication callback prototype. Parameters are
  *              Local CID
@@ -680,8 +683,6 @@ extern bool L2CA_RegisterFixedChannel(uint16_t fixed_cid,
  ******************************************************************************/
 extern bool L2CA_ConnectFixedChnl(uint16_t fixed_cid,
                                   const RawAddress& bd_addr);
-extern bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& bd_addr,
-                                  uint8_t initiating_phys);
 
 /*******************************************************************************
  *
