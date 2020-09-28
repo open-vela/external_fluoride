@@ -143,6 +143,12 @@ typedef enum {
 #define LE_DYNAMIC_PSM_END 0x00FF
 #define LE_DYNAMIC_PSM_RANGE (LE_DYNAMIC_PSM_END - LE_DYNAMIC_PSM_START + 1)
 
+/* Bitmask to skip over Broadcom feature reserved (ID) to avoid sending two
+   successive ID values, '0' id only or both */
+#define L2CAP_ADJ_BRCM_ID 0x1
+#define L2CAP_ADJ_ZERO_ID 0x2
+#define L2CAP_ADJ_ID 0x3
+
 /* Return values for l2cu_process_peer_cfg_req() */
 #define L2CAP_PEER_CFG_UNACCEPTABLE 0
 #define L2CAP_PEER_CFG_OK 1
@@ -239,6 +245,7 @@ typedef struct t_l2c_ccb {
   alarm_t* l2c_ccb_timer; /* CCB Timer Entry */
 
   tL2C_RCB* p_rcb;      /* Registration CB for this Channel */
+  bool should_free_rcb; /* True if RCB was allocated on the heap */
 
 #define IB_CFG_DONE 0x01
 #define OB_CFG_DONE 0x02
@@ -404,6 +411,9 @@ typedef struct t_l2c_linkcb {
   tBT_TRANSPORT transport;
   bool is_transport_br_edr() const { return transport == BT_TRANSPORT_BR_EDR; }
   bool is_transport_ble() const { return transport == BT_TRANSPORT_LE; }
+  bool is_transport_valid() const {
+    return is_transport_ble() || is_transport_br_edr();
+  }
 
   uint8_t initiating_phys;  // LE PHY used for connection initiation
   tBLE_ADDR_TYPE ble_addr_type;
@@ -550,6 +560,7 @@ extern void l2cu_release_ccb(tL2C_CCB* p_ccb);
 extern tL2C_CCB* l2cu_find_ccb_by_cid(tL2C_LCB* p_lcb, uint16_t local_cid);
 extern tL2C_CCB* l2cu_find_ccb_by_remote_cid(tL2C_LCB* p_lcb,
                                              uint16_t remote_cid);
+extern void l2cu_adj_id(tL2C_LCB* p_lcb, uint8_t adj_mask);
 extern bool l2c_is_cmd_rejected(uint8_t cmd_code, uint8_t id, tL2C_LCB* p_lcb);
 
 extern void l2cu_send_peer_cmd_reject(tL2C_LCB* p_lcb, uint16_t reason,
@@ -623,6 +634,7 @@ extern bool l2cu_create_conn_le(tL2C_LCB* p_lcb);
 extern bool l2cu_create_conn_le(tL2C_LCB* p_lcb, uint8_t initiating_phys);
 extern void l2cu_create_conn_after_switch(tL2C_LCB* p_lcb);
 extern void l2cu_adjust_out_mps(tL2C_CCB* p_ccb);
+extern bool L2CA_DisconnectRsp(uint16_t cid);
 
 /* Functions provided by l2c_link.cc
  ***********************************
@@ -672,7 +684,8 @@ extern BT_HDR* l2c_lcc_get_next_xmit_sdu_seg(tL2C_CCB* p_ccb,
 
 /* Configuration negotiation */
 extern uint8_t l2c_fcr_chk_chan_modes(tL2C_CCB* p_ccb);
-
+extern bool l2c_fcr_adj_our_req_options(tL2C_CCB* p_ccb,
+                                        tL2CAP_CFG_INFO* p_cfg);
 extern void l2c_fcr_adj_our_rsp_options(tL2C_CCB* p_ccb,
                                         tL2CAP_CFG_INFO* p_peer_cfg);
 extern bool l2c_fcr_renegotiate_chan(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg);
