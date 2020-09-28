@@ -870,7 +870,8 @@ class HearingAidImpl : public HearingAid {
     uint16_t gap_handle = GAP_ConnOpen(
         "", service_id, false, &hearingDevice->address, psm, 514 /* MPS */,
         &cfg_info, nullptr, BTM_SEC_NONE /* TODO: request security ? */,
-        HearingAidImpl::GapCallbackStatic, BT_TRANSPORT_LE);
+        L2CAP_FCR_LE_COC_MODE, HearingAidImpl::GapCallbackStatic,
+        BT_TRANSPORT_LE);
     if (gap_handle == GAP_INVALID_HANDLE) {
       LOG(ERROR) << "UNABLE TO GET gap_handle";
       return;
