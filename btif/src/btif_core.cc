@@ -263,7 +263,8 @@ void btif_enable_bluetooth_evt() {
   int val_size = 0;
   if ((btif_config_get_str("Adapter", "Address", val, &val_size) == 0) ||
       strcmp(bdstr.c_str(), val) == 0) {
-    LOG_DEBUG("Storing the adapter address into the config file");
+    // This address is not present in the config file, save it there.
+    BTIF_TRACE_WARNING("%s: Saving the Adapter Address", __func__);
     btif_config_set_str("Adapter", "Address", bdstr.c_str());
     btif_config_save();
 
@@ -294,7 +295,7 @@ void btif_enable_bluetooth_evt() {
 #endif
 
   future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
-  LOG_INFO("Bluetooth enable event completed");
+  LOG_INFO("%s finished", __func__);
 }
 
 /*******************************************************************************
