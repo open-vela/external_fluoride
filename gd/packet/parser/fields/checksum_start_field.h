@@ -51,8 +51,6 @@ class ChecksumStartField : public PacketField {
 
   virtual std::string GetStartedFieldName() const;
 
-  virtual void GenStringRepresentation(std::ostream& s, std::string accessor) const override;
-
  private:
   std::string started_field_name_;
 };
