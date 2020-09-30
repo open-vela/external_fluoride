@@ -23,8 +23,6 @@
  *
  ******************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bt_types.h"
@@ -32,41 +30,33 @@
 #include "l2c_api.h"
 #include "l2cdefs.h"
 
-#include "btm_api.h"
-#include "btm_int.h"
-#include "btu.h"
-
 #include "hiddefs.h"
 
-#include "bt_utils.h"
 #include "hidd_api.h"
 #include "hidd_int.h"
 
+#include "bta/include/bta_api.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sec.h"
 
 static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
                                    uint16_t psm, uint8_t id);
 static void hidd_l2cif_connect_cfm(uint16_t cid, uint16_t result);
 static void hidd_l2cif_config_ind(uint16_t cid, tL2CAP_CFG_INFO* p_cfg);
-static void hidd_l2cif_config_cfm(uint16_t cid, tL2CAP_CFG_INFO* p_cfg);
+static void hidd_l2cif_config_cfm(uint16_t cid, uint16_t result,
+                                  tL2CAP_CFG_INFO* p_cfg);
 static void hidd_l2cif_disconnect_ind(uint16_t cid, bool ack_needed);
-static void hidd_l2cif_disconnect_cfm(uint16_t cid, uint16_t result);
+static void hidd_l2cif_disconnect(uint16_t cid);
 static void hidd_l2cif_data_ind(uint16_t cid, BT_HDR* p_msg);
 static void hidd_l2cif_cong_ind(uint16_t cid, bool congested);
-
+static void hidd_on_l2cap_error(uint16_t lcid, uint16_t result);
 static const tL2CAP_APPL_INFO dev_reg_info = {
-    hidd_l2cif_connect_ind,
-    hidd_l2cif_connect_cfm,
-    NULL,
-    hidd_l2cif_config_ind,
-    hidd_l2cif_config_cfm,
-    hidd_l2cif_disconnect_ind,
-    hidd_l2cif_disconnect_cfm,
-    NULL,
-    hidd_l2cif_data_ind,
-    hidd_l2cif_cong_ind,
-    NULL,
-    NULL /* tL2CA_CREDITS_RECEIVED_CB */};
+    hidd_l2cif_connect_ind,    hidd_l2cif_connect_cfm,
+    hidd_l2cif_config_ind,     hidd_l2cif_config_cfm,
+    hidd_l2cif_disconnect_ind, hidd_l2cif_data_ind,
+    hidd_l2cif_cong_ind,       NULL,
+    hidd_on_l2cap_error,
+};
 
 /*******************************************************************************
  *
@@ -82,9 +72,7 @@ static void hidd_check_config_done() {
 
   p_hcon = &hd_cb.device.conn;
 
-  if (((p_hcon->conn_flags & HID_CONN_FLAGS_ALL_CONFIGURED) ==
-       HID_CONN_FLAGS_ALL_CONFIGURED) &&
-      (p_hcon->conn_state == HID_CONN_STATE_CONFIG)) {
+  if (p_hcon->conn_state == HID_CONN_STATE_CONFIG) {
     p_hcon->conn_state = HID_CONN_STATE_CONNECTED;
 
     hd_cb.device.state = HIDD_DEV_CONNECTED;
@@ -96,73 +84,6 @@ static void hidd_check_config_done() {
       L2CA_DataWrite(p_hcon->intr_cid, hd_cb.pending_data);
       hd_cb.pending_data = NULL;
     }
-  }
-}
-
-/*******************************************************************************
- *
- * Function         hidh_sec_check_complete_term
- *
- * Description      HID security check complete callback function.
- *
- * Returns          Send L2CA_ConnectRsp OK if secutiry check succeed; otherwise
- *                  send security block L2C connection response.
- *
- ******************************************************************************/
-static void hidd_sec_check_complete(UNUSED_ATTR const RawAddress* bd_addr,
-                                    UNUSED_ATTR tBT_TRANSPORT transport,
-                                    void* p_ref_data, uint8_t res) {
-  tHID_DEV_DEV_CTB* p_dev = (tHID_DEV_DEV_CTB*)p_ref_data;
-
-  if (res == BTM_SUCCESS && p_dev->conn.conn_state == HID_CONN_STATE_SECURITY) {
-    p_dev->conn.disc_reason = HID_SUCCESS;
-    p_dev->conn.conn_state = HID_CONN_STATE_CONNECTING_INTR;
-
-    L2CA_ConnectRsp(p_dev->addr, p_dev->conn.ctrl_id, p_dev->conn.ctrl_cid,
-                    L2CAP_CONN_OK, L2CAP_CONN_OK);
-    L2CA_ConfigReq(p_dev->conn.ctrl_cid, &hd_cb.l2cap_cfg);
-  } else if (res != BTM_SUCCESS) {
-    HIDD_TRACE_WARNING("%s: connection rejected by security", __func__);
-
-    p_dev->conn.disc_reason = HID_ERR_AUTH_FAILED;
-    p_dev->conn.conn_state = HID_CONN_STATE_UNUSED;
-    L2CA_ConnectRsp(p_dev->addr, p_dev->conn.ctrl_id, p_dev->conn.ctrl_cid,
-                    L2CAP_CONN_SECURITY_BLOCK, L2CAP_CONN_OK);
-    return;
-  }
-}
-
-/*******************************************************************************
- *
- * Function         hidd_sec_check_complete_orig
- *
- * Description      HID security check complete callback function (device
-*originated)
- *
- * Returns          void
- *
- ******************************************************************************/
-void hidd_sec_check_complete_orig(UNUSED_ATTR const RawAddress* bd_addr,
-                                  UNUSED_ATTR tBT_TRANSPORT transport,
-                                  void* p_ref_data, uint8_t res) {
-  tHID_DEV_DEV_CTB* p_dev = (tHID_DEV_DEV_CTB*)p_ref_data;
-
-  if (p_dev->conn.conn_state != HID_CONN_STATE_SECURITY) {
-    HIDD_TRACE_WARNING("%s: invalid state (%02x)", __func__,
-                       p_dev->conn.conn_state);
-    return;
-  }
-
-  if (res == BTM_SUCCESS) {
-    HIDD_TRACE_EVENT("%s: security ok", __func__);
-    p_dev->conn.disc_reason = HID_SUCCESS;
-
-    p_dev->conn.conn_state = HID_CONN_STATE_CONFIG;
-    L2CA_ConfigReq(p_dev->conn.ctrl_cid, &hd_cb.l2cap_cfg);
-  } else {
-    HIDD_TRACE_WARNING("%s: security check failed (%02x)", __func__, res);
-    p_dev->conn.disc_reason = HID_ERR_AUTH_FAILED;
-    hidd_conn_disconnect();
   }
 }
 
@@ -181,14 +102,15 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
   tHID_DEV_DEV_CTB* p_dev;
   bool accept = TRUE;  // accept by default
 
-  HIDD_TRACE_EVENT("%s: psm=%04x cid=%04x id=%02x", __func__, psm, cid, id);
+  HIDD_TRACE_EVENT("%s: psm=%04x cid=%04x", __func__, psm, cid);
 
   p_dev = &hd_cb.device;
 
   if (!hd_cb.allow_incoming) {
     HIDD_TRACE_WARNING("%s: incoming connections not allowed, rejecting",
                        __func__);
-    L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_NO_RESOURCES, 0);
+    L2CA_DisconnectReq(cid);
+
     return;
   }
 
@@ -226,7 +148,7 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
   }
 
   if (!accept) {
-    L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_NO_RESOURCES, 0);
+    L2CA_DisconnectReq(cid);
     return;
   }
 
@@ -240,26 +162,25 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
 
     p_hcon->conn_flags = 0;
     p_hcon->ctrl_cid = cid;
-    p_hcon->ctrl_id = id;
-    p_hcon->disc_reason = HID_L2CAP_CONN_FAIL;
-
-    p_hcon->conn_state = HID_CONN_STATE_SECURITY;
-    if (btm_sec_mx_access_request(p_dev->addr, HID_PSM_CONTROL, FALSE,
-                                  BTM_SEC_PROTO_HID, HIDD_NOSEC_CHN,
-                                  &hidd_sec_check_complete,
-                                  p_dev) == BTM_CMD_STARTED) {
-      L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_PENDING, L2CAP_CONN_OK);
-    }
-
+    p_hcon->disc_reason = HID_SUCCESS;
+    p_hcon->conn_state = HID_CONN_STATE_CONNECTING_INTR;
     return;
   }
 
   // for INTR we go directly to config state
   p_hcon->conn_state = HID_CONN_STATE_CONFIG;
   p_hcon->intr_cid = cid;
+}
 
-  L2CA_ConnectRsp(bd_addr, id, cid, L2CAP_CONN_OK, L2CAP_CONN_OK);
-  L2CA_ConfigReq(cid, &hd_cb.l2cap_intr_cfg);
+static void hidd_on_l2cap_error(uint16_t lcid, uint16_t result) {
+  HIDD_TRACE_WARNING("%s: connection of config failed, now disconnect",
+                     __func__);
+
+  hidd_conn_disconnect();
+
+  // NOTE that the client doesn't care about error code
+  hd_cb.callback(hd_cb.device.addr, HID_DHOST_EVT_CLOSE,
+                 HID_L2CAP_CONN_FAIL | (uint32_t)result, NULL);
 }
 
 /*******************************************************************************
@@ -272,7 +193,6 @@ static void hidd_l2cif_connect_ind(const RawAddress& bd_addr, uint16_t cid,
  *
  ******************************************************************************/
 static void hidd_l2cif_connect_cfm(uint16_t cid, uint16_t result) {
-  tHID_DEV_DEV_CTB* p_dev = &hd_cb.device;
   tHID_CONN* p_hcon = &hd_cb.device.conn;
 
   HIDD_TRACE_EVENT("%s: cid=%04x result=%d", __func__, cid, result);
@@ -292,32 +212,16 @@ static void hidd_l2cif_connect_cfm(uint16_t cid, uint16_t result) {
   }
 
   if (result != L2CAP_CONN_OK) {
-    HIDD_TRACE_WARNING("%s: connection failed, now disconnect", __func__);
-
-    if (cid == p_hcon->ctrl_cid)
-      p_hcon->ctrl_cid = 0;
-    else
-      p_hcon->intr_cid = 0;
-
-    hidd_conn_disconnect();
-
-    hd_cb.callback(hd_cb.device.addr, HID_DHOST_EVT_CLOSE,
-                   HID_L2CAP_CONN_FAIL | (uint32_t)result, NULL);
+    LOG(ERROR) << __func__ << ": invoked with non OK status";
     return;
   }
 
   /* CTRL connect conf */
   if (cid == p_hcon->ctrl_cid) {
-    p_hcon->conn_state = HID_CONN_STATE_SECURITY;
-    p_hcon->disc_reason =
-        HID_L2CAP_CONN_FAIL; /* in case disconnected before sec completed */
-
-    btm_sec_mx_access_request(p_dev->addr, HID_PSM_CONTROL, TRUE,
-                              BTM_SEC_PROTO_HID, HIDD_SEC_CHN,
-                              &hidd_sec_check_complete_orig, p_dev);
+    p_hcon->disc_reason = HID_SUCCESS;
+    p_hcon->conn_state = HID_CONN_STATE_CONFIG;
   } else {
     p_hcon->conn_state = HID_CONN_STATE_CONFIG;
-    L2CA_ConfigReq(cid, &hd_cb.l2cap_intr_cfg);
   }
 
   return;
@@ -348,45 +252,6 @@ static void hidd_l2cif_config_ind(uint16_t cid, tL2CAP_CFG_INFO* p_cfg) {
     p_hcon->rem_mtu_size = HID_DEV_MTU_SIZE;
   else
     p_hcon->rem_mtu_size = p_cfg->mtu;
-
-  // accept without changes
-  p_cfg->flush_to_present = FALSE;
-  p_cfg->mtu_present = FALSE;
-  p_cfg->result = L2CAP_CFG_OK;
-
-  if (cid == p_hcon->intr_cid && hd_cb.use_in_qos && !p_cfg->qos_present) {
-    p_cfg->qos_present = TRUE;
-    memcpy(&p_cfg->qos, &hd_cb.in_qos, sizeof(FLOW_SPEC));
-  }
-
-  L2CA_ConfigRsp(cid, p_cfg);
-
-  // update flags
-  if (cid == p_hcon->ctrl_cid) {
-    p_hcon->conn_flags |= HID_CONN_FLAGS_HIS_CTRL_CFG_DONE;
-
-    if ((p_hcon->conn_flags & HID_CONN_FLAGS_IS_ORIG) &&
-        (p_hcon->conn_flags & HID_CONN_FLAGS_MY_CTRL_CFG_DONE)) {
-      p_hcon->disc_reason = HID_L2CAP_CONN_FAIL;
-      if ((p_hcon->intr_cid =
-               L2CA_ConnectReq(HID_PSM_INTERRUPT, hd_cb.device.addr)) == 0) {
-        hidd_conn_disconnect();
-        p_hcon->conn_state = HID_CONN_STATE_UNUSED;
-
-        HIDD_TRACE_WARNING("%s: could not start L2CAP connection for INTR",
-                           __func__);
-        hd_cb.callback(hd_cb.device.addr, HID_DHOST_EVT_CLOSE,
-                       HID_ERR_L2CAP_FAILED, NULL);
-        return;
-      } else {
-        p_hcon->conn_state = HID_CONN_STATE_CONNECTING_INTR;
-      }
-    }
-  } else {
-    p_hcon->conn_flags |= HID_CONN_FLAGS_HIS_INTR_CFG_DONE;
-  }
-
-  hidd_check_config_done();
 }
 
 /*******************************************************************************
@@ -398,12 +263,13 @@ static void hidd_l2cif_config_ind(uint16_t cid, tL2CAP_CFG_INFO* p_cfg) {
  * Returns          void
  *
  ******************************************************************************/
-static void hidd_l2cif_config_cfm(uint16_t cid, tL2CAP_CFG_INFO* p_cfg) {
-  tHID_CONN* p_hcon;
-  uint32_t reason;
+static void hidd_l2cif_config_cfm(uint16_t cid, uint16_t initiator,
+                                  tL2CAP_CFG_INFO* p_cfg) {
+  hidd_l2cif_config_ind(cid, p_cfg);
 
-  HIDD_TRACE_EVENT("%s: cid=%04x pcfg->result=%d", __func__, cid,
-                   p_cfg->result);
+  tHID_CONN* p_hcon;
+
+  HIDD_TRACE_EVENT("%s: cid=%04x", __func__, cid);
 
   p_hcon = &hd_cb.device.conn;
 
@@ -412,47 +278,13 @@ static void hidd_l2cif_config_cfm(uint16_t cid, tL2CAP_CFG_INFO* p_cfg) {
     return;
   }
 
-  if (p_hcon->intr_cid == cid &&
-      p_cfg->result == L2CAP_CFG_UNACCEPTABLE_PARAMS && p_cfg->qos_present) {
-    tL2CAP_CFG_INFO new_qos;
-
-    // QoS parameters not accepted for intr, try again with host proposal
-
-    memcpy(&new_qos, &hd_cb.l2cap_intr_cfg, sizeof(new_qos));
-    memcpy(&new_qos.qos, &p_cfg->qos, sizeof(FLOW_SPEC));
-    new_qos.qos_present = TRUE;
-
-    HIDD_TRACE_WARNING("%s: config failed, retry", __func__);
-
-    L2CA_ConfigReq(cid, &new_qos);
-    return;
-  } else if (p_hcon->intr_cid == cid &&
-             p_cfg->result == L2CAP_CFG_UNKNOWN_OPTIONS) {
-    // QoS not understood by remote device, try configuring without QoS
-
-    HIDD_TRACE_WARNING("%s: config failed, retry without QoS", __func__);
-
-    L2CA_ConfigReq(cid, &hd_cb.l2cap_cfg);
-    return;
-  } else if (p_cfg->result != L2CAP_CFG_OK) {
-    HIDD_TRACE_WARNING("%s: config failed, disconnecting", __func__);
-
-    hidd_conn_disconnect();
-    reason = HID_L2CAP_CFG_FAIL | (uint32_t)p_cfg->result;
-
-    hd_cb.callback(hd_cb.device.addr, HID_DHOST_EVT_CLOSE, reason, NULL);
-    return;
-  }
-
   // update flags
   if (cid == p_hcon->ctrl_cid) {
-    p_hcon->conn_flags |= HID_CONN_FLAGS_MY_CTRL_CFG_DONE;
-
-    if ((p_hcon->conn_flags & HID_CONN_FLAGS_IS_ORIG) &&
-        (p_hcon->conn_flags & HID_CONN_FLAGS_HIS_CTRL_CFG_DONE)) {
+    if (p_hcon->conn_flags & HID_CONN_FLAGS_IS_ORIG) {
       p_hcon->disc_reason = HID_L2CAP_CONN_FAIL;
       if ((p_hcon->intr_cid =
-               L2CA_ConnectReq(HID_PSM_INTERRUPT, hd_cb.device.addr)) == 0) {
+               L2CA_ConnectReq2(HID_PSM_INTERRUPT, hd_cb.device.addr,
+                                BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)) == 0) {
         hidd_conn_disconnect();
         p_hcon->conn_state = HID_CONN_STATE_UNUSED;
 
@@ -465,8 +297,6 @@ static void hidd_l2cif_config_cfm(uint16_t cid, tL2CAP_CFG_INFO* p_cfg) {
         p_hcon->conn_state = HID_CONN_STATE_CONNECTING_INTR;
       }
     }
-  } else {
-    p_hcon->conn_flags |= HID_CONN_FLAGS_MY_INTR_CFG_DONE;
   }
 
   hidd_check_config_done();
@@ -494,8 +324,6 @@ static void hidd_l2cif_disconnect_ind(uint16_t cid, bool ack_needed) {
     return;
   }
 
-  if (ack_needed) L2CA_DisconnectRsp(cid);
-
   p_hcon->conn_state = HID_CONN_STATE_DISCONNECTING;
 
   if (cid == p_hcon->ctrl_cid)
@@ -520,19 +348,12 @@ static void hidd_l2cif_disconnect_ind(uint16_t cid, bool ack_needed) {
   }
 }
 
-/*******************************************************************************
- *
- * Function         hidd_l2cif_disconnect_cfm
- *
- * Description      Handles L2CAP disconection response
- *
- * Returns          void
- *
- ******************************************************************************/
-static void hidd_l2cif_disconnect_cfm(uint16_t cid, uint16_t result) {
+static void hidd_l2cif_disconnect(uint16_t cid) {
+  L2CA_DisconnectReq(cid);
+
   tHID_CONN* p_hcon;
 
-  HIDD_TRACE_EVENT("%s: cid=%04x result=%d", __func__, cid, result);
+  HIDD_TRACE_EVENT("%s: cid=%04x", __func__, cid);
 
   p_hcon = &hd_cb.device.conn;
 
@@ -753,23 +574,20 @@ tHID_STATUS hidd_conn_reg(void) {
 
   hd_cb.l2cap_cfg.mtu_present = TRUE;
   hd_cb.l2cap_cfg.mtu = HID_DEV_MTU_SIZE;
-  hd_cb.l2cap_cfg.flush_to_present = TRUE;
-  hd_cb.l2cap_cfg.flush_to = HID_DEV_FLUSH_TO;
-
   memset(&hd_cb.l2cap_intr_cfg, 0, sizeof(tL2CAP_CFG_INFO));
   hd_cb.l2cap_intr_cfg.mtu_present = TRUE;
   hd_cb.l2cap_intr_cfg.mtu = HID_DEV_MTU_SIZE;
-  hd_cb.l2cap_intr_cfg.flush_to_present = TRUE;
-  hd_cb.l2cap_intr_cfg.flush_to = HID_DEV_FLUSH_TO;
 
-  if (!L2CA_Register(HID_PSM_CONTROL, (tL2CAP_APPL_INFO*)&dev_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+  if (!L2CA_Register2(HID_PSM_CONTROL, dev_reg_info, false /* enable_snoop */,
+                      nullptr, HID_DEV_MTU_SIZE, 0,
+                      BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)) {
     HIDD_TRACE_ERROR("HID Control (device) registration failed");
     return (HID_ERR_L2CAP_FAILED);
   }
 
-  if (!L2CA_Register(HID_PSM_INTERRUPT, (tL2CAP_APPL_INFO*)&dev_reg_info,
-                     false /* enable_snoop */, nullptr)) {
+  if (!L2CA_Register2(HID_PSM_INTERRUPT, dev_reg_info, false /* enable_snoop */,
+                      nullptr, HID_DEV_MTU_SIZE, 0,
+                      BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)) {
     L2CA_Deregister(HID_PSM_CONTROL);
     HIDD_TRACE_ERROR("HID Interrupt (device) registration failed");
     return (HID_ERR_L2CAP_FAILED);
@@ -824,11 +642,10 @@ tHID_STATUS hidd_conn_initiate(void) {
 
   p_dev->conn.conn_flags = HID_CONN_FLAGS_IS_ORIG;
 
-  BTM_SetOutService(p_dev->addr, BTM_SEC_SERVICE_HIDD_SEC_CTRL, HIDD_SEC_CHN);
-
   /* Check if L2CAP started the connection process */
-  if ((p_dev->conn.ctrl_cid = L2CA_ConnectReq(HID_PSM_CONTROL, p_dev->addr)) ==
-      0) {
+  if ((p_dev->conn.ctrl_cid =
+           L2CA_ConnectReq2(HID_PSM_CONTROL, p_dev->addr,
+                            BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT)) == 0) {
     HIDD_TRACE_WARNING("%s: could not start L2CAP connection", __func__);
     hd_cb.callback(hd_cb.device.addr, HID_DHOST_EVT_CLOSE, HID_ERR_L2CAP_FAILED,
                    NULL);
@@ -869,9 +686,9 @@ tHID_STATUS hidd_conn_disconnect(void) {
     L2CA_SetIdleTimeoutByBdAddr(hd_cb.device.addr, 0, BT_TRANSPORT_BR_EDR);
 
     if (p_hcon->intr_cid) {
-      L2CA_DisconnectReq(p_hcon->intr_cid);
+      hidd_l2cif_disconnect(p_hcon->intr_cid);
     } else if (p_hcon->ctrl_cid) {
-      L2CA_DisconnectReq(p_hcon->ctrl_cid);
+      hidd_l2cif_disconnect(p_hcon->ctrl_cid);
     }
   } else {
     HIDD_TRACE_WARNING("%s: already disconnected", __func__);
