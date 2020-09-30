@@ -1,0 +1,50 @@
+java_library_static {
+    name: "bluetooth-protos-lite",
+    host_supported: true,
+    proto: {
+        type: "lite",
+    },
+    srcs: [
+        "bluetooth/metrics/bluetooth.proto",
+        "bluetooth/bluetoothKeystore/keystore.proto",
+    ],
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.bluetooth.updatable",
+    ],
+}
+
+cc_library_static {
+    name: "libbt-protos-lite",
+    host_supported: true,
+    proto: {
+        export_proto_headers: true,
+        type: "lite",
+    },
+    srcs: [
+        "bluetooth/metrics/bluetooth.proto",
+        "bluetooth/bluetoothKeystore/keystore.proto",
+    ],
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.bluetooth.updatable",
+    ],
+}
+
+cc_library_static {
+    name: "libbluetooth-protos",
+    host_supported: true,
+    proto: {
+        export_proto_headers: true,
+        type: "lite",
+        include_dirs: ["external/protobuf/src"],
+    },
+    srcs: [
+        "bluetooth/metrics/bluetooth.proto",
+        "bluetooth/bluetoothKeystore/keystore.proto",
+    ],
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.bluetooth.updatable",
+    ],
+}

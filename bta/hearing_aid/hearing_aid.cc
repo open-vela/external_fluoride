@@ -20,12 +20,15 @@
 
 #include "bta_gatt_api.h"
 #include "bta_gatt_queue.h"
-#include "btm_int.h"
+#include "btm_api.h"
 #include "device/include/controller.h"
 #include "embdrv/g722/g722_enc_dec.h"
 #include "gap_api.h"
 #include "gatt_api.h"
 #include "osi/include/properties.h"
+#include "stack/btm/btm_sec.h"
+#include "stack/include/acl_api.h"
+#include "types/bt_transport.h"
 
 #include <base/bind.h>
 #include <base/logging.h>
@@ -91,8 +94,7 @@ Uuid LE_PSM_UUID               = Uuid::FromString("2d410339-82b6-42aa-b34e-e2e01
 // clang-format on
 
 void hearingaid_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data);
-void encryption_callback(const RawAddress*, tGATT_TRANSPORT, void*,
-                         tBTM_STATUS);
+void encryption_callback(const RawAddress*, tBT_TRANSPORT, void*, tBTM_STATUS);
 void read_rssi_cb(void* p_void);
 
 inline BT_HDR* malloc_l2cap_buf(uint16_t len) {
@@ -274,7 +276,7 @@ class HearingAidImpl : public HearingAid {
               instance->gatt_if = client_id;
               initCb.Run();
             },
-            initCb));
+            initCb), false);
   }
 
   uint16_t UpdateBleConnParams(const RawAddress& address) {
@@ -312,13 +314,13 @@ class HearingAidImpl : public HearingAid {
   void Connect(const RawAddress& address) override {
     DVLOG(2) << __func__ << " " << address;
     hearingDevices.Add(HearingDevice(address, true));
-    BTA_GATTC_Open(gatt_if, address, true, GATT_TRANSPORT_LE, false);
+    BTA_GATTC_Open(gatt_if, address, true, BT_TRANSPORT_LE, false);
   }
 
   void AddToWhiteList(const RawAddress& address) override {
     VLOG(2) << __func__ << " address: " << address;
     hearingDevices.Add(HearingDevice(address, true));
-    BTA_GATTC_Open(gatt_if, address, false, GATT_TRANSPORT_LE, false);
+    BTA_GATTC_Open(gatt_if, address, false, BT_TRANSPORT_LE, false);
   }
 
   void AddFromStorage(const HearingDevice& dev_info, uint16_t is_white_listed) {
@@ -333,8 +335,7 @@ class HearingAidImpl : public HearingAid {
       // BTM_BleSetConnScanParams(2048, 1024);
 
       /* add device into BG connection to accept remote initiated connection */
-      BTA_GATTC_Open(gatt_if, dev_info.address, false, GATT_TRANSPORT_LE,
-                     false);
+      BTA_GATTC_Open(gatt_if, dev_info.address, false, BT_TRANSPORT_LE, false);
     }
 
     callbacks->OnDeviceAvailable(dev_info.capabilities, dev_info.hi_sync_id,
@@ -345,7 +346,7 @@ class HearingAidImpl : public HearingAid {
 
   void OnGattConnected(tGATT_STATUS status, uint16_t conn_id,
                        tGATT_IF client_if, RawAddress address,
-                       tBTA_TRANSPORT transport, uint16_t mtu) {
+                       tBT_TRANSPORT transport, uint16_t mtu) {
     VLOG(2) << __func__ << ": address=" << address << ", conn_id=" << conn_id;
 
     HearingDevice* hearingDevice = hearingDevices.FindByAddress(address);
@@ -390,9 +391,7 @@ class HearingAidImpl : public HearingAid {
       hearingDevice->connection_update_status = AWAITING;
     }
 
-    tACL_CONN* p_acl = btm_bda_to_acl(address, BT_TRANSPORT_LE);
-    if (p_acl != nullptr && controller_get_interface()->supports_ble_2m_phy() &&
-        HCI_LE_2M_PHY_SUPPORTED(p_acl->peer_le_features)) {
+    if (controller_get_interface()->supports_ble_2m_phy()) {
       LOG(INFO) << address << " set preferred PHY to 2M";
       BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
     }
@@ -401,31 +400,23 @@ class HearingAidImpl : public HearingAid {
     // TODO(jpawlowski: for 16khz only 87 is required, optimize
     BTM_SetBleDataLength(address, 167);
 
-    tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(address);
-    if (p_dev_rec) {
-      if (p_dev_rec->sec_state == BTM_SEC_STATE_ENCRYPTING ||
-          p_dev_rec->sec_state == BTM_SEC_STATE_AUTHENTICATING) {
-        /* if security collision happened, wait for encryption done
-         * (BTA_GATTC_ENC_CMPL_CB_EVT) */
-        return;
-      }
+    if (BTM_SecIsSecurityPending(address)) {
+      /* if security collision happened, wait for encryption done
+       * (BTA_GATTC_ENC_CMPL_CB_EVT) */
+      return;
     }
 
     /* verify bond */
-    uint8_t sec_flag = 0;
-    BTM_GetSecurityFlagsByTransport(address, &sec_flag, BT_TRANSPORT_LE);
-
-    if (sec_flag & BTM_SEC_FLAG_ENCRYPTED) {
+    if (BTM_IsEncrypted(address, BT_TRANSPORT_LE)) {
       /* if link has been encrypted */
       OnEncryptionComplete(address, true);
       return;
     }
 
-    if (sec_flag & BTM_SEC_FLAG_LKEY_KNOWN) {
+    if (BTM_IsLinkKeyKnown(address, BT_TRANSPORT_LE)) {
       /* if bonded and link not encrypted */
-      sec_flag = BTM_BLE_SEC_ENCRYPT;
-      BTM_SetEncryption(address, BTA_TRANSPORT_LE, encryption_callback, nullptr,
-                        sec_flag);
+      BTM_SetEncryption(address, BT_TRANSPORT_LE, encryption_callback, nullptr,
+                        BTM_BLE_SEC_ENCRYPT);
       return;
     }
 
@@ -879,8 +870,7 @@ class HearingAidImpl : public HearingAid {
     uint16_t gap_handle = GAP_ConnOpen(
         "", service_id, false, &hearingDevice->address, psm, 514 /* MPS */,
         &cfg_info, nullptr, BTM_SEC_NONE /* TODO: request security ? */,
-        L2CAP_FCR_LE_COC_MODE, HearingAidImpl::GapCallbackStatic,
-        BT_TRANSPORT_LE);
+        HearingAidImpl::GapCallbackStatic, BT_TRANSPORT_LE);
     if (gap_handle == GAP_INVALID_HANDLE) {
       LOG(ERROR) << "UNABLE TO GET gap_handle";
       return;
@@ -1366,14 +1356,6 @@ class HearingAidImpl : public HearingAid {
       case GAP_EVT_CONN_UNCONGESTED:
         DVLOG(2) << "GAP_EVT_CONN_UNCONGESTED";
         break;
-
-      case GAP_EVT_LE_COC_CREDITS: {
-        auto& tmp = data->coc_credits;
-        DVLOG(2) << "GAP_EVT_LE_COC_CREDITS, for device: "
-                 << hearingDevice->address << " added" << tmp.credits_received
-                 << " credit_count: " << tmp.credit_count;
-        break;
-      }
     }
   }
 
@@ -1506,7 +1488,7 @@ class HearingAidImpl : public HearingAid {
 
     // This is needed just for the first connection. After stack is restarted,
     // code that loads device will add them to whitelist.
-    BTA_GATTC_Open(gatt_if, hearingDevice->address, false, GATT_TRANSPORT_LE,
+    BTA_GATTC_Open(gatt_if, hearingDevice->address, false, BT_TRANSPORT_LE,
                    false);
 
     callbacks->OnConnectionState(ConnectionState::DISCONNECTED, remote_bda);
@@ -1746,7 +1728,7 @@ void hearingaid_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
 
     case BTA_GATTC_SRVC_DISC_DONE_EVT:
       if (!instance) return;
-      instance->OnServiceDiscDoneEvent(p_data->remote_bda);
+      instance->OnServiceDiscDoneEvent(p_data->service_changed.remote_bda);
       break;
 
     default:
@@ -1754,7 +1736,7 @@ void hearingaid_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
   }
 }
 
-void encryption_callback(const RawAddress* address, tGATT_TRANSPORT, void*,
+void encryption_callback(const RawAddress* address, tBT_TRANSPORT, void*,
                          tBTM_STATUS status) {
   if (instance) {
     instance->OnEncryptionComplete(*address,

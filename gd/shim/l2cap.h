@@ -28,7 +28,7 @@ namespace shim {
 
 using ConnectionClosedCallback = std::function<void(uint16_t cid, int error_code)>;
 using ConnectionCompleteCallback =
-    std::function<void(std::string string_address, uint16_t psm, uint16_t cid, bool is_connected)>;
+    std::function<void(std::string string_address, uint16_t psm, uint16_t cid, uint16_t remote_cid, bool is_connected)>;
 using ReadDataReadyCallback = std::function<void(uint16_t cid, std::vector<const uint8_t> data)>;
 
 using RegisterServicePromise = std::promise<uint16_t>;
@@ -37,13 +37,21 @@ using CreateConnectionPromise = std::promise<uint16_t>;
 
 class L2cap : public bluetooth::Module {
  public:
-  void RegisterService(uint16_t psm, bool use_ertm, uint16_t mtu, ConnectionCompleteCallback on_complete,
-                       RegisterServicePromise register_promise);
-  void UnregisterService(uint16_t psm, UnregisterServicePromise unregister_promise);
+  void RegisterClassicService(
+      uint16_t psm,
+      bool use_ertm,
+      uint16_t mtu,
+      uint16_t required_remote_mtu,
+      ConnectionCompleteCallback on_complete,
+      RegisterServicePromise register_promise);
+  void UnregisterClassicService(uint16_t psm, UnregisterServicePromise unregister_promise);
 
-  void CreateConnection(uint16_t psm, const std::string address_string, ConnectionCompleteCallback on_complete,
-                        CreateConnectionPromise create_promise);
-  void CloseConnection(uint16_t cid);
+  void CreateClassicConnection(
+      uint16_t psm,
+      const std::string address_string,
+      ConnectionCompleteCallback on_complete,
+      CreateConnectionPromise create_promise);
+  void CloseClassicConnection(uint16_t cid);
 
   void SetReadDataReadyCallback(uint16_t cid, ReadDataReadyCallback on_data_ready);
   void SetConnectionClosedCallback(uint16_t cid, ConnectionClosedCallback on_closed);
