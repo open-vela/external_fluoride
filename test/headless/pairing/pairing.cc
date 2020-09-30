@@ -41,7 +41,14 @@ int bluetooth::test::headless::Pairing::Run() {
   RawAddress raw_address = options_.device_.front();
 
   return RunOnHeadlessStack<int>([raw_address]() {
-    btif_dm_create_bond(raw_address, BT_TRANSPORT_BR_EDR);
-    return BT_STATUS_SUCCESS;
+    bt_status_t status = btif_dm_create_bond(&raw_address, BT_TRANSPORT_BR_EDR);
+    switch (status) {
+      case BT_STATUS_SUCCESS:
+        break;
+      default:
+        fprintf(stdout, "Failed to create bond status:%d", status);
+        break;
+    }
+    return status;
   });
 }
