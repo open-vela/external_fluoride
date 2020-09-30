@@ -150,6 +150,7 @@ static void free_thread_slot(int h) {
 }
 void btsock_thread_init() {
   static int initialized;
+  APPL_TRACE_DEBUG("in initialized:%d", initialized);
   if (!initialized) {
     initialized = 1;
     int h;
@@ -408,9 +409,10 @@ static int process_cmd_sock(int h) {
   OSI_NO_INTR(ret = recv(fd, &cmd, sizeof(cmd), MSG_WAITALL));
 
   if (ret != sizeof(cmd)) {
-    LOG_ERROR("recv cmd errno:%d", errno);
+    APPL_TRACE_ERROR("recv cmd errno:%d", errno);
     return false;
   }
+  APPL_TRACE_DEBUG("cmd.id:%d", cmd.id);
   switch (cmd.id) {
     case CMD_ADD_FD:
       add_poll(h, cmd.fd, cmd.type, cmd.flags, cmd.user_id);
