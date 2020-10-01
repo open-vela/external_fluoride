@@ -97,8 +97,7 @@ void bta_sys_event(BT_HDR* p_msg) {
   if ((id < BTA_ID_MAX) && (bta_sys_cb.reg[id] != NULL)) {
     freebuf = (*bta_sys_cb.reg[id]->evt_hdlr)(p_msg);
   } else {
-    LOG_INFO("Ignoring receipt of unregistered event id:%s",
-             BtaIdSysText(id).c_str());
+    APPL_TRACE_WARNING("%s: Received unregistered event id %d", __func__, id);
   }
 
   if (freebuf) {
