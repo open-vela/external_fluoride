@@ -477,6 +477,7 @@ class AvdtpStreamConfig {
         p_sink_data_cback(nullptr),
         p_report_cback(nullptr),
         mtu(0),
+        flush_to(0),
         tsep(0),
         media_type(0),
         nsc_mask(0) {}
@@ -488,6 +489,7 @@ class AvdtpStreamConfig {
     p_sink_data_cback = nullptr;
     p_report_cback = nullptr;
     mtu = 0;
+    flush_to = 0;
     tsep = 0;
     media_type = 0;
     nsc_mask = 0;
@@ -499,6 +501,7 @@ class AvdtpStreamConfig {
   tAVDT_SINK_DATA_CBACK* p_sink_data_cback;  // Sink data callback function
   tAVDT_REPORT_CBACK* p_report_cback;        // Report callback function
   uint16_t mtu;        // The L2CAP MTU of the transport channel
+  uint16_t flush_to;   // The L2CAP flush timeout of the transport channel
   uint8_t tsep;        // SEP type
   uint8_t media_type;  // Media type: AVDT_MEDIA_TYPE_*
   uint16_t nsc_mask;   // Nonsupported protocol command messages
