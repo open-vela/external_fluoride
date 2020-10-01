@@ -339,10 +339,8 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_yes_no);
   }
 
-  virtual void DisplayConfirmValue(ConfirmationData data) {
-    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
-    std::string name = data.GetName();
-    uint32_t numeric_value = data.GetNumericValue();
+  virtual void DisplayConfirmValue(const bluetooth::hci::AddressWithType& peer, std::string name,
+                                   uint32_t numeric_value) {
     LOG_INFO("%s value = 0x%x", peer.ToString().c_str(), numeric_value);
     UiMsg display_with_value;
     *display_with_value.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -352,9 +350,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_with_value);
   }
 
-  void DisplayYesNoDialog(ConfirmationData data) override {
-    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
-    std::string name = data.GetName();
+  void DisplayYesNoDialog(const bluetooth::hci::AddressWithType& peer, std::string name) override {
     LOG_INFO("%s", peer.ToString().c_str());
     UiMsg display_yes_no;
     *display_yes_no.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -363,10 +359,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_yes_no);
   }
 
-  void DisplayPasskey(ConfirmationData data) override {
-    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
-    std::string name = data.GetName();
-    uint32_t passkey = data.GetNumericValue();
+  void DisplayPasskey(const bluetooth::hci::AddressWithType& peer, std::string name, uint32_t passkey) override {
     LOG_INFO("%s value = 0x%x", peer.ToString().c_str(), passkey);
     UiMsg display_passkey;
     *display_passkey.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -376,9 +369,7 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_passkey);
   }
 
-  void DisplayEnterPasskeyDialog(ConfirmationData data) override {
-    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
-    std::string name = data.GetName();
+  void DisplayEnterPasskeyDialog(const bluetooth::hci::AddressWithType& peer, std::string name) override {
     LOG_INFO("%s", peer.ToString().c_str());
     UiMsg display_passkey_input;
     *display_passkey_input.mutable_peer() = ToFacadeAddressWithType(peer);
