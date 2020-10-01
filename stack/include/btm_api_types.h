@@ -654,27 +654,21 @@ typedef uint8_t tBTM_IO_CAP;
 
 /* MITM Protection Not Required - Single Profile/non-bonding Numeric comparison
  * with automatic accept allowed */
-// NO_BONDING
 #define BTM_AUTH_SP_NO 0
 /* MITM Protection Required - Single Profile/non-bonding. Use IO Capabilities to
  * determine authentication procedure */
-// NO_BONDING_MITM_PROTECTION
 #define BTM_AUTH_SP_YES 1
 /* MITM Protection Not Required - All Profiles/dedicated bonding Numeric
  * comparison with automatic accept allowed */
-// DEDICATED_BONDING
 #define BTM_AUTH_AP_NO 2
 /* MITM Protection Required - All Profiles/dedicated bonding Use IO Capabilities
  * to determine authentication procedure */
-// DEDICATED_BONDING_MITM_PROTECTION
 #define BTM_AUTH_AP_YES 3
 /* MITM Protection Not Required - Single Profiles/general bonding Numeric
  * comparison with automatic accept allowed */
-// GENERAL_BONDING
 #define BTM_AUTH_SPGB_NO 4
 /* MITM Protection Required - Single Profiles/general bonding Use IO
  * Capabilities to determine authentication procedure */
-// GENERAL_BONDING_MITM_PROTECTION
 #define BTM_AUTH_SPGB_YES 5
 
 /* this bit is ORed with BTM_AUTH_SP_* when IO exchange for dedicated bonding */
@@ -815,6 +809,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0

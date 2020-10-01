@@ -1095,9 +1095,11 @@ void bta_av_stream_chg(tBTA_AV_SCB* p_scb, bool started) {
                    logbool(started).c_str(), started_msk);
 
   if (started) {
+    bta_av_cb.audio_streams |= started_msk;
     /* Let L2CAP know this channel is processed with high priority */
     L2CA_SetAclPriority(p_scb->PeerAddress(), L2CAP_PRIORITY_HIGH);
   } else {
+    bta_av_cb.audio_streams &= ~started_msk;
     /* Let L2CAP know this channel is processed with low priority */
     L2CA_SetAclPriority(p_scb->PeerAddress(), L2CAP_PRIORITY_NORMAL);
   }
@@ -1278,6 +1280,7 @@ void bta_av_conn_chg(tBTA_AV_DATA* p_data) {
            */
           if (p_scbi->co_started != bta_av_cb.audio_open_cnt) {
             p_scbi->co_started = bta_av_cb.audio_open_cnt;
+            L2CA_SetFlushTimeout(p_scbi->PeerAddress(), 0);
           }
         }
       }
