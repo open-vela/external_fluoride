@@ -57,8 +57,6 @@
 
 #include "smp_api.h"
 
-#include "gd/common/init_flags.h"
-
 #ifndef DEFAULT_CONF_TRACE_LEVEL
 #define DEFAULT_CONF_TRACE_LEVEL BT_TRACE_LEVEL_WARNING
 #endif
@@ -198,7 +196,7 @@ void LogMsg(uint32_t trace_set_mask, const char* fmt_str, ...) {
       LOG_INFO("%s", buffer);
       break;
     case TRACE_TYPE_DEBUG:
-      LOG_INFO("%s", buffer);
+      LOG_DEBUG("%s", buffer);
       break;
     default:
       /* we should never get this */
@@ -236,14 +234,7 @@ static void load_levels_from_config(const config_t* config) {
        functions->trc_name; ++functions) {
     int value = config_get_int(*config, CONFIG_DEFAULT_SECTION,
                                functions->trc_name, -1);
-    if (value != -1) {
-      functions->trace_level = value;
-    }
-    if (bluetooth::common::InitFlags::IsDebugLoggingEnabledForAll()) {
-      LOG_INFO("Enable logging for %s because all debug logs are enabled",
-               functions->trc_name);
-      functions->trace_level = BT_TRACE_LEVEL_VERBOSE;
-    }
+    if (value != -1) functions->trace_level = value;
     LOG_INFO("BTE_InitTraceLevels -- %s : Level %d", functions->trc_name,
              functions->trace_level);
     if (functions->p_f) functions->p_f(functions->trace_level);
