@@ -378,39 +378,39 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     }
 
     void OnMasterLinkKeyComplete(KeyFlag key_flag) override {
-      LOG_INFO("key_flag:%s", KeyFlagText(key_flag).c_str());
+      LOG_DEBUG("key_flag:%s", KeyFlagText(key_flag).c_str());
     }
 
     void OnRoleChange(Role new_role) override {
-      LOG_INFO("new_role:%d", (uint8_t)new_role);
+      LOG_DEBUG("new_role:%d", (uint8_t)new_role);
     }
 
     void OnReadLinkPolicySettingsComplete(uint16_t link_policy_settings) override {
-      LOG_INFO("link_policy_settings:%d", link_policy_settings);
+      LOG_DEBUG("link_policy_settings:%d", link_policy_settings);
     }
 
     void OnConnectionPacketTypeChanged(uint16_t packet_type) override {
-      LOG_INFO("OnConnectionPacketTypeChanged packet_type:%d", packet_type);
+      LOG_DEBUG("OnConnectionPacketTypeChanged packet_type:%d", packet_type);
     }
 
     void OnAuthenticationComplete() override {
-      LOG_INFO("OnAuthenticationComplete");
+      LOG_DEBUG("OnAuthenticationComplete");
     }
 
     void OnEncryptionChange(EncryptionEnabled enabled) override {
-      LOG_INFO("OnConnectionPacketTypeChanged enabled:%d", (uint8_t)enabled);
+      LOG_DEBUG("OnConnectionPacketTypeChanged enabled:%d", (uint8_t)enabled);
     }
 
     void OnChangeConnectionLinkKeyComplete() override {
-      LOG_INFO("OnChangeConnectionLinkKeyComplete");
+      LOG_DEBUG("OnChangeConnectionLinkKeyComplete");
     };
 
     void OnReadClockOffsetComplete(uint16_t clock_offset) override {
-      LOG_INFO("OnReadClockOffsetComplete clock_offset:%d", clock_offset);
+      LOG_DEBUG("OnReadClockOffsetComplete clock_offset:%d", clock_offset);
     };
 
     void OnModeChange(Mode current_mode, uint16_t interval) override {
-      LOG_INFO("OnModeChange Mode:%d, interval:%d", (uint8_t)current_mode, interval);
+      LOG_DEBUG("OnModeChange Mode:%d, interval:%d", (uint8_t)current_mode, interval);
     };
 
     void OnQosSetupComplete(
@@ -419,7 +419,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
         uint32_t peak_bandwidth,
         uint32_t latency,
         uint32_t delay_variation) override {
-      LOG_INFO(
+      LOG_DEBUG(
           "OnQosSetupComplete service_type:%d, token_rate:%d, peak_bandwidth:%d, latency:%d, delay_variation:%d",
           (uint8_t)service_type,
           token_rate,
@@ -435,7 +435,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
         uint32_t token_bucket_size,
         uint32_t peak_bandwidth,
         uint32_t access_latency) override {
-      LOG_INFO(
+      LOG_DEBUG(
           "OnFlowSpecificationComplete flow_direction:%d. service_type:%d, token_rate:%d, token_bucket_size:%d, "
           "peak_bandwidth:%d, access_latency:%d",
           (uint8_t)flow_direction,
@@ -447,47 +447,47 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     }
 
     void OnFlushOccurred() override {
-      LOG_INFO("OnFlushOccurred");
+      LOG_DEBUG("OnFlushOccurred");
     }
 
     void OnRoleDiscoveryComplete(Role current_role) override {
-      LOG_INFO("OnRoleDiscoveryComplete current_role:%d", (uint8_t)current_role);
+      LOG_DEBUG("OnRoleDiscoveryComplete current_role:%d", (uint8_t)current_role);
     }
 
     void OnReadAutomaticFlushTimeoutComplete(uint16_t flush_timeout) override {
-      LOG_INFO("OnReadAutomaticFlushTimeoutComplete flush_timeout:%d", flush_timeout);
+      LOG_DEBUG("OnReadAutomaticFlushTimeoutComplete flush_timeout:%d", flush_timeout);
     }
 
     void OnReadTransmitPowerLevelComplete(uint8_t transmit_power_level) override {
-      LOG_INFO("OnReadTransmitPowerLevelComplete transmit_power_level:%d", transmit_power_level);
+      LOG_DEBUG("OnReadTransmitPowerLevelComplete transmit_power_level:%d", transmit_power_level);
     }
 
     void OnReadLinkSupervisionTimeoutComplete(uint16_t link_supervision_timeout) override {
-      LOG_INFO("OnReadLinkSupervisionTimeoutComplete link_supervision_timeout:%d", link_supervision_timeout);
+      LOG_DEBUG("OnReadLinkSupervisionTimeoutComplete link_supervision_timeout:%d", link_supervision_timeout);
     }
 
     void OnReadFailedContactCounterComplete(uint16_t failed_contact_counter) override {
-      LOG_INFO("OnReadFailedContactCounterComplete failed_contact_counter:%d", failed_contact_counter);
+      LOG_DEBUG("OnReadFailedContactCounterComplete failed_contact_counter:%d", failed_contact_counter);
     }
 
     void OnReadLinkQualityComplete(uint8_t link_quality) override {
-      LOG_INFO("OnReadLinkQualityComplete link_quality:%d", link_quality);
+      LOG_DEBUG("OnReadLinkQualityComplete link_quality:%d", link_quality);
     }
 
     void OnReadAfhChannelMapComplete(AfhMode afh_mode, std::array<uint8_t, 10> afh_channel_map) override {
-      LOG_INFO("OnReadAfhChannelMapComplete afh_mode:%d", (uint8_t)afh_mode);
+      LOG_DEBUG("OnReadAfhChannelMapComplete afh_mode:%d", (uint8_t)afh_mode);
     }
 
     void OnReadRssiComplete(uint8_t rssi) override {
-      LOG_INFO("OnReadRssiComplete rssi:%d", rssi);
+      LOG_DEBUG("OnReadRssiComplete rssi:%d", rssi);
     }
 
     void OnReadClockComplete(uint32_t clock, uint16_t accuracy) override {
-      LOG_INFO("OnReadClockComplete clock:%d, accuracy:%d", clock, accuracy);
+      LOG_DEBUG("OnReadClockComplete clock:%d, accuracy:%d", clock, accuracy);
     }
 
     void OnDisconnection(ErrorCode reason) override {
-      LOG_INFO("OnDisconnection reason: %s", ErrorCodeText(reason).c_str());
+      LOG_DEBUG("OnDisconnection reason: %s", ErrorCodeText(reason).c_str());
       std::unique_ptr<BasePacketBuilder> builder =
           DisconnectionCompleteBuilder::Create(ErrorCode::SUCCESS, handle_, reason);
       ConnectionEvent disconnection;
@@ -496,7 +496,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     }
     void OnReadRemoteVersionInformationComplete(
         uint8_t lmp_version, uint16_t manufacturer_name, uint16_t sub_version) override {
-      LOG_INFO(
+      LOG_DEBUG(
           "OnReadRemoteVersionInformationComplete lmp_version:%hhu manufacturer_name:%hu sub_version:%hu",
           lmp_version,
           manufacturer_name,
