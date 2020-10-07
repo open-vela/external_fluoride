@@ -112,9 +112,8 @@ bool bluetooth::shim::L2CA_DisconnectReq(uint16_t cid) {
 /**
  * Le Connection Oriented Channel APIs
  */
-uint16_t bluetooth::shim::L2CA_RegisterLECoc(uint16_t psm,
-                                             const tL2CAP_APPL_INFO& callbacks,
-                                             uint16_t sec_level) {
+uint16_t bluetooth::shim::L2CA_RegisterLECoc(
+    uint16_t psm, const tL2CAP_APPL_INFO& callbacks) {
   LOG_INFO("UNIMPLEMENTED %s psm:%hd", __func__, psm);
   return 0;
 }
