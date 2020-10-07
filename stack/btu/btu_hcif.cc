@@ -324,7 +324,8 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_role_change_evt(p);
       break;
     case HCI_NUM_COMPL_DATA_PKTS_EVT:
-      acl_process_num_completed_pkts(p, hci_evt_len);
+      l2c_link_process_num_completed_pkts(p, hci_evt_len);
+      IsoManager::GetInstance()->HandleNumComplDataPkts(p, hci_evt_len);
       break;
     case HCI_MODE_CHANGE_EVT:
       btu_hcif_mode_change_evt(p);

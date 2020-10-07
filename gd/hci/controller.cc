@@ -149,9 +149,6 @@ struct Controller::impl {
       uint16_t handle = completed_packets.connection_handle_;
       uint16_t credits = completed_packets.host_num_of_completed_packets_;
       acl_credits_callback_.Invoke(handle, credits);
-      if (!acl_monitor_credits_callback_.IsEmpty()) {
-        acl_monitor_credits_callback_.Invoke(handle, credits);
-      }
     }
   }
 
@@ -163,26 +160,6 @@ struct Controller::impl {
   void unregister_completed_acl_packets_callback() {
     ASSERT(!acl_credits_callback_.IsEmpty());
     acl_credits_callback_ = {};
-  }
-
-  void register_completed_monitor_acl_packets_callback(CompletedAclPacketsCallback callback) {
-    ASSERT(acl_monitor_credits_callback_.IsEmpty());
-    acl_monitor_credits_callback_ = callback;
-  }
-
-  void unregister_completed_monitor_acl_packets_callback() {
-    ASSERT(!acl_monitor_credits_callback_.IsEmpty());
-    acl_monitor_credits_callback_ = {};
-  }
-
-  void register_monitor_completed_acl_packets_callback(CompletedAclPacketsCallback callback) {
-    ASSERT(acl_monitor_credits_callback_.IsEmpty());
-    acl_monitor_credits_callback_ = callback;
-  }
-
-  void unregister_monitor_completed_acl_packets_callback() {
-    ASSERT(!acl_monitor_credits_callback_.IsEmpty());
-    acl_monitor_credits_callback_ = {};
   }
 
   void read_local_name_complete_handler(CommandCompleteView view) {
@@ -800,7 +777,6 @@ struct Controller::impl {
   HciLayer* hci_;
 
   CompletedAclPacketsCallback acl_credits_callback_{};
-  CompletedAclPacketsCallback acl_monitor_credits_callback_{};
   LocalVersionInformation local_version_information_;
   std::array<uint8_t, 64> local_supported_commands_;
   uint8_t maximum_page_number_;
@@ -835,14 +811,6 @@ void Controller::RegisterCompletedAclPacketsCallback(CompletedAclPacketsCallback
 
 void Controller::UnregisterCompletedAclPacketsCallback() {
   CallOn(impl_.get(), &impl::unregister_completed_acl_packets_callback);
-}
-
-void Controller::RegisterCompletedMonitorAclPacketsCallback(CompletedAclPacketsCallback cb) {
-  CallOn(impl_.get(), &impl::register_completed_monitor_acl_packets_callback, cb);
-}
-
-void Controller::UnregisterCompletedMonitorAclPacketsCallback() {
-  CallOn(impl_.get(), &impl::unregister_completed_monitor_acl_packets_callback);
 }
 
 std::string Controller::GetLocalName() const {
