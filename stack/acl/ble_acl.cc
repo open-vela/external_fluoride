@@ -25,7 +25,6 @@
 
 void btm_ble_advertiser_notify_terminated_legacy(uint8_t status,
                                                  uint16_t connection_handle);
-void btm_ble_increment_link_topology_mask(uint8_t link_role);
 
 void acl_ble_connection_complete(const tBLE_BD_ADDR& address_with_type,
                                  uint16_t handle, uint8_t role, bool match,
@@ -34,8 +33,6 @@ void acl_ble_connection_complete(const tBLE_BD_ADDR& address_with_type,
   connection_manager::on_connection_complete(address_with_type.bda);
   btm_ble_connected(address_with_type.bda, handle, HCI_ENCRYPT_MODE_DISABLED,
                     role, address_with_type.type, match);
-
-  btm_ble_increment_link_topology_mask(role);
 
   l2cble_conn_comp(handle, role, address_with_type.bda, address_with_type.type,
                    conn_interval, conn_latency, conn_timeout);
@@ -54,8 +51,6 @@ void acl_ble_enhanced_connection_complete(
   connection_manager::on_connection_complete(address_with_type.bda);
   btm_ble_connected(address_with_type.bda, handle, HCI_ENCRYPT_MODE_DISABLED,
                     role, address_with_type.type, match);
-
-  btm_ble_increment_link_topology_mask(role);
 
   l2cble_conn_comp(handle, role, address_with_type.bda, address_with_type.type,
                    conn_interval, conn_latency, conn_timeout);
