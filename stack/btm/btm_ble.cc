@@ -667,6 +667,15 @@ bool BTM_UseLeLink(const RawAddress& bd_addr) {
   return (dev_type == BT_DEVICE_TYPE_BLE);
 }
 
+/*******************************************************************************
+ *
+ * Function         BTM_SetBleDataLength
+ *
+ * Description      This function is to set maximum BLE transmission packet size
+ *
+ * Returns          BTM_SUCCESS if success; otherwise failed.
+ *
+ ******************************************************************************/
 tBTM_STATUS BTM_SetBleDataLength(const RawAddress& bd_addr,
                                  uint16_t tx_pdu_length) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
@@ -675,20 +684,22 @@ tBTM_STATUS BTM_SetBleDataLength(const RawAddress& bd_addr,
   uint16_t tx_time = BTM_BLE_DATA_TX_TIME_MAX_LEGACY;
 
   if (!BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
-    LOG_INFO(
-        "Unable to set data length because no le acl link connected to device");
+    BTM_TRACE_ERROR("%s: Wrong mode: no LE link exist or LE not supported",
+                    __func__);
     return BTM_WRONG_MODE;
   }
 
+  BTM_TRACE_DEBUG("%s: tx_pdu_length =%d", __func__, tx_pdu_length);
+
   if (!controller_get_interface()->supports_ble_packet_extension()) {
-    LOG_INFO("Local controller unable to support le packet extension");
+    BTM_TRACE_ERROR("%s failed, request not supported", __func__);
     return BTM_ILLEGAL_VALUE;
   }
 
   uint16_t hci_handle = acl_get_hci_handle_for_hcif(bd_addr, BT_TRANSPORT_LE);
 
   if (!acl_peer_supports_ble_packet_extension(hci_handle)) {
-    LOG_INFO("Remote device unable to support le packet extension");
+    BTM_TRACE_ERROR("%s failed, peer does not support request", __func__);
     return BTM_ILLEGAL_VALUE;
   }
 
