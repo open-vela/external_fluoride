@@ -34,7 +34,6 @@
 #include "hcimsgs.h"
 #include "l2cdefs.h"
 #include "log/log.h"
-#include "osi/include/log.h"
 #include "sdp_api.h"
 #include "sdpint.h"
 
@@ -630,8 +629,9 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
 /*******************************************************************/
 
 #if (SDP_RAW_DATA_INCLUDED == TRUE)
+  SDP_TRACE_WARNING("process_service_search_attr_rsp");
   if (!sdp_copy_raw_data(p_ccb, true)) {
-    LOG_ERROR("sdp_copy_raw_data failed");
+    SDP_TRACE_ERROR("sdp_copy_raw_data failed");
     sdp_disconnect(p_ccb, SDP_ILLEGAL_PARAMETER);
     return;
   }
@@ -643,12 +643,12 @@ static void process_service_search_attr_rsp(tCONN_CB* p_ccb, uint8_t* p_reply,
   type = *p++;
 
   if ((type >> 3) != DATA_ELE_SEQ_DESC_TYPE) {
-    LOG_WARN("Wrong element in attr_rsp type:0x%02x", type);
+    SDP_TRACE_WARNING("SDP - Wrong type: 0x%02x in attr_rsp", type);
     return;
   }
   p = sdpu_get_len_from_type(p, p + p_ccb->list_len, type, &seq_len);
   if (p == NULL || (p + seq_len) > (p + p_ccb->list_len)) {
-    LOG_WARN("Illegal search attribute length");
+    SDP_TRACE_WARNING("%s: bad length", __func__);
     sdp_disconnect(p_ccb, SDP_ILLEGAL_PARAMETER);
     return;
   }
