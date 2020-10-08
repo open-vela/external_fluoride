@@ -423,12 +423,11 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     bond_events_.OnIncomingEvent(unbonded);
   }
 
-  void OnDeviceBondFailed(hci::AddressWithType peer, PairingFailure status) override {
+  void OnDeviceBondFailed(hci::AddressWithType peer) override {
     LOG_INFO("%s", peer.ToString().c_str());
     BondMsg bond_failed;
     *bond_failed.mutable_peer() = ToFacadeAddressWithType(peer);
     bond_failed.set_message_type(BondMsgType::DEVICE_BOND_FAILED);
-    bond_failed.set_reason(static_cast<uint8_t>(status.reason));
     bond_events_.OnIncomingEvent(bond_failed);
   }
 
