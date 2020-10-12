@@ -36,18 +36,26 @@
 
 #include "bt_common.h"
 #include "bt_target.h"
+#include "bta_api.h"
 #include "bta_jv_api.h"
+#include "bta_jv_co.h"
+#include "btif_common.h"
 #include "btif_sock_sdp.h"
 #include "btif_sock_thread.h"
 #include "btif_sock_util.h"
 #include "btif_uid.h"
 #include "btif_util.h"
 #include "btm_api.h"
+#include "btm_int.h"
+#include "btu.h"
 #include "common/metrics.h"
+#include "hcimsgs.h"
+#include "osi/include/compat.h"
 #include "osi/include/list.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "port_api.h"
+#include "sdp_api.h"
 
 /* The JV interface can have only one user, hence we need to call a few
  * L2CAP functions from this file. */
@@ -157,7 +165,7 @@ static rfc_slot_t* find_rfc_slot_by_id(uint32_t id) {
   for (size_t i = 0; i < ARRAY_SIZE(rfc_slots); ++i)
     if (rfc_slots[i].id == id) return &rfc_slots[i];
 
-  LOG_ERROR("%s unable to find RFCOMM slot id: %u", __func__, id);
+  LOG_ERROR(LOG_TAG, "%s unable to find RFCOMM slot id: %u", __func__, id);
   return NULL;
 }
 
@@ -195,13 +203,14 @@ static rfc_slot_t* alloc_rfc_slot(const RawAddress* addr, const char* name,
 
   rfc_slot_t* slot = find_free_slot();
   if (!slot) {
-    LOG_ERROR("%s unable to find free RFCOMM slot.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to find free RFCOMM slot.", __func__);
     return NULL;
   }
 
   int fds[2] = {INVALID_FD, INVALID_FD};
   if (socketpair(AF_LOCAL, SOCK_STREAM, 0, fds) == -1) {
-    LOG_ERROR("%s error creating socketpair: %s", __func__, strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s error creating socketpair: %s", __func__,
+              strerror(errno));
     return NULL;
   }
 
@@ -241,7 +250,7 @@ static rfc_slot_t* create_srv_accept_rfc_slot(rfc_slot_t* srv_rs,
   rfc_slot_t* accept_rs = alloc_rfc_slot(
       addr, srv_rs->service_name, srv_rs->service_uuid, srv_rs->scn, 0, false);
   if (!accept_rs) {
-    LOG_ERROR("%s unable to allocate RFCOMM slot.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to allocate RFCOMM slot.", __func__);
     return NULL;
   }
 
@@ -285,6 +294,10 @@ bt_status_t btsock_rfc_listen(const char* service_name,
 
   if ((flags & BTSOCK_FLAG_NO_SDP) == 0) {
     if (!service_uuid || service_uuid->IsEmpty()) {
+      APPL_TRACE_DEBUG(
+          "%s: service_uuid not set AND BTSOCK_FLAG_NO_SDP is not set - "
+          "changing to SPP",
+          __func__);
       // Use serial port profile to listen to specified channel
       service_uuid = &UUID_SPP;
     } else {
@@ -301,11 +314,11 @@ bt_status_t btsock_rfc_listen(const char* service_name,
   rfc_slot_t* slot =
       alloc_rfc_slot(NULL, service_name, *service_uuid, channel, flags, true);
   if (!slot) {
-    LOG_ERROR("unable to allocate RFCOMM slot");
+    LOG_ERROR(LOG_TAG, "%s unable to allocate RFCOMM slot.", __func__);
     return BT_STATUS_FAIL;
   }
-  LOG_INFO("Adding listening socket service_name: %s - channel: %d",
-           service_name, channel);
+  APPL_TRACE_DEBUG("BTA_JvGetChannelId: service_name: %s - channel: %d",
+                   service_name, channel);
   BTA_JvGetChannelId(BTA_JV_CONN_TYPE_RFCOMM, slot->id, channel);
   *sock_fd = slot->app_fd;  // Transfer ownership of fd to caller.
   /*TODO:
@@ -343,7 +356,7 @@ bt_status_t btsock_rfc_connect(const RawAddress* bd_addr,
   rfc_slot_t* slot =
       alloc_rfc_slot(bd_addr, NULL, *service_uuid, channel, flags, false);
   if (!slot) {
-    LOG_ERROR("%s unable to allocate RFCOMM slot.", __func__);
+    LOG_ERROR(LOG_TAG, "%s unable to allocate RFCOMM slot.", __func__);
     return BT_STATUS_FAIL;
   }
 
@@ -352,13 +365,14 @@ bt_status_t btsock_rfc_connect(const RawAddress* bd_addr,
         BTA_JvRfcommConnect(slot->security, slot->role, slot->scn, slot->addr,
                             rfcomm_cback, slot->id);
     if (ret != BTA_JV_SUCCESS) {
-      LOG_ERROR("%s unable to initiate RFCOMM connection: %d", __func__, ret);
+      LOG_ERROR(LOG_TAG, "%s unable to initiate RFCOMM connection: %d",
+                __func__, ret);
       cleanup_rfc_slot(slot);
       return BT_STATUS_FAIL;
     }
 
     if (!send_app_scn(slot)) {
-      LOG_ERROR("%s unable to send channel number.", __func__);
+      LOG_ERROR(LOG_TAG, "%s unable to send channel number.", __func__);
       cleanup_rfc_slot(slot);
       return BT_STATUS_FAIL;
     }
@@ -553,7 +567,7 @@ static void on_cli_rfc_connect(tBTA_JV_RFCOMM_OPEN* p_open, uint32_t id) {
   if (send_app_connect_signal(slot->fd, &slot->addr, slot->scn, 0, -1)) {
     slot->f.connected = true;
   } else {
-    LOG_ERROR("%s unable to send connect completion signal to caller.",
+    LOG_ERROR(LOG_TAG, "%s unable to send connect completion signal to caller.",
               __func__);
   }
 }
@@ -577,8 +591,8 @@ static void on_rfc_close(UNUSED_ATTR tBTA_JV_RFCOMM_CLOSE* p_close,
 
 static void on_rfc_write_done(tBTA_JV_RFCOMM_WRITE* p, uint32_t id) {
   if (p->status != BTA_JV_SUCCESS) {
-    LOG_ERROR("%s error writing to RFCOMM socket with slot %u.", __func__,
-              p->req_id);
+    LOG_ERROR(LOG_TAG, "%s error writing to RFCOMM socket with slot %u.",
+              __func__, p->req_id);
     return;
   }
 
@@ -654,7 +668,7 @@ static uint32_t rfcomm_cback(tBTA_JV_EVT event, tBTA_JV* p_data,
       break;
 
     default:
-      LOG_ERROR("%s unhandled event %d, slot id: %u", __func__, event,
+      LOG_ERROR(LOG_TAG, "%s unhandled event %d, slot id: %u", __func__, event,
                 rfcomm_slot_id);
       break;
   }
@@ -749,10 +763,10 @@ static void jv_dm_cback(tBTA_JV_EVT event, tBTA_JV* p_data, uint32_t id) {
         } else if (slot) {
           // TODO(sharvil): this is really a logic error and we should probably
           // assert.
-          LOG_ERROR(
-              "%s SDP response returned but RFCOMM slot %d did not "
-              "request SDP record.",
-              __func__, id);
+          LOG_ERROR(LOG_TAG,
+                    "%s SDP response returned but RFCOMM slot %d did not "
+                    "request SDP record.",
+                    __func__, id);
         }
       } else if (slot) {
         cleanup_rfc_slot(slot);
@@ -790,7 +804,7 @@ static sent_status_t send_data_to_app(int fd, BT_HDR* p_buf) {
 
   if (sent == -1) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) return SENT_NONE;
-    LOG_ERROR("%s error writing RFCOMM data back to app: %s", __func__,
+    LOG_ERROR(LOG_TAG, "%s error writing RFCOMM data back to app: %s", __func__,
               strerror(errno));
     return SENT_FAILED;
   }
@@ -850,10 +864,10 @@ void btsock_rfc_signaled(UNUSED_ATTR int fd, int flags, uint32_t user_id) {
         BTA_JvRfcommWrite(slot->rfc_handle, slot->id);
       }
     } else {
-      LOG_ERROR(
-          "%s socket signaled for read while disconnected, slot: %d, "
-          "channel: %d",
-          __func__, slot->id, slot->scn);
+      LOG_ERROR(LOG_TAG,
+                "%s socket signaled for read while disconnected, slot: %d, "
+                "channel: %d",
+                __func__, slot->id, slot->scn);
       need_close = true;
     }
   }
@@ -861,10 +875,10 @@ void btsock_rfc_signaled(UNUSED_ATTR int fd, int flags, uint32_t user_id) {
   if (flags & SOCK_THREAD_FD_WR) {
     // App is ready to receive more data, tell stack to enable data flow.
     if (!slot->f.connected || !flush_incoming_que_on_wr_signal(slot)) {
-      LOG_ERROR(
-          "%s socket signaled for write while disconnected (or write "
-          "failure), slot: %d, channel: %d",
-          __func__, slot->id, slot->scn);
+      LOG_ERROR(LOG_TAG,
+                "%s socket signaled for write while disconnected (or write "
+                "failure), slot: %d, channel: %d",
+                __func__, slot->id, slot->scn);
       need_close = true;
     }
   }
@@ -924,7 +938,8 @@ int bta_co_rfc_data_outgoing_size(uint32_t id, int* size) {
   if (!slot) return false;
 
   if (ioctl(slot->fd, FIONREAD, size) != 0) {
-    LOG_ERROR("%s unable to determine bytes remaining to be read on fd %d: %s",
+    LOG_ERROR(LOG_TAG,
+              "%s unable to determine bytes remaining to be read on fd %d: %s",
               __func__, slot->fd, strerror(errno));
     cleanup_rfc_slot(slot);
     return false;
@@ -942,7 +957,7 @@ int bta_co_rfc_data_outgoing(uint32_t id, uint8_t* buf, uint16_t size) {
   OSI_NO_INTR(received = recv(slot->fd, buf, size, 0));
 
   if (received != size) {
-    LOG_ERROR("%s error receiving RFCOMM data from app: %s", __func__,
+    LOG_ERROR(LOG_TAG, "%s error receiving RFCOMM data from app: %s", __func__,
               strerror(errno));
     cleanup_rfc_slot(slot);
     return false;

@@ -252,17 +252,14 @@ class PairingHandlerPairTest : public testing::Test {
     // For now, all tests are succeeding to go through Encryption. Record that in the setup.
     //  Once we test failure cases, move this to each test
     EXPECT_CALL(master_le_security_mock,
-                EnqueueCommand(_, Matcher<common::ContextualOnceCallback<void(CommandStatusView)>>(_)))
+                EnqueueCommand(_, Matcher<common::OnceCallback<void(CommandStatusView)>>(_), _))
         .Times(1)
         .WillOnce([](std::unique_ptr<LeSecurityCommandBuilder> command,
-                     common::ContextualOnceCallback<void(CommandStatusView)> on_status) {
+                     common::OnceCallback<void(CommandStatusView)> on_status, os::Handler* handler) {
           // TODO: on_status.Run();
 
           pairing_handler_a->OnHciEvent(EventBuilderToView(
               EncryptionChangeBuilder::Create(ErrorCode::SUCCESS, CONN_HANDLE_MASTER, EncryptionEnabled::ON)));
-
-          pairing_handler_b->OnHciEvent(EventBuilderToView(
-              hci::LeLongTermKeyRequestBuilder::Create(CONN_HANDLE_SLAVE, {0,0,0,0,0,0,0,0}, 0)));
 
           pairing_handler_b->OnHciEvent(EventBuilderToView(
               EncryptionChangeBuilder::Create(ErrorCode::SUCCESS, CONN_HANDLE_SLAVE, EncryptionEnabled::ON)));
@@ -422,7 +419,7 @@ TEST_F(PairingHandlerPairTest, test_secure_connections_numeric_comparison) {
   slave_setup.myPairingCapabilities.oob_data_flag = OobDataFlag::NOT_PRESENT;
   slave_setup.myPairingCapabilities.auth_req = AuthReqMaskBondingFlag | AuthReqMaskMitm | AuthReqMaskSc;
 
-  ConfirmationData data_slave;
+  uint32_t num_value_slave = 0;
   {
     std::unique_lock<std::mutex> lock(handlers_initialization_guard);
     // Initiator must be initialized after the responder.
@@ -436,14 +433,15 @@ TEST_F(PairingHandlerPairTest, test_secure_connections_numeric_comparison) {
 
     RecordPairingPromptHandling(slave_user_interface, &pairing_handler_b);
 
-    EXPECT_CALL(slave_user_interface, DisplayConfirmValue(_)).WillOnce(SaveArg<0>(&data_slave));
-    EXPECT_CALL(master_user_interface, DisplayConfirmValue(_)).WillOnce(Invoke([&](ConfirmationData data) {
-      EXPECT_EQ(data_slave.GetNumericValue(), data.GetNumericValue());
-      if (data_slave.GetNumericValue() == data.GetNumericValue()) {
-        pairing_handler_a->OnUiAction(PairingEvent::CONFIRM_YESNO, 0x01);
-        pairing_handler_b->OnUiAction(PairingEvent::CONFIRM_YESNO, 0x01);
-      }
-    }));
+    EXPECT_CALL(slave_user_interface, DisplayConfirmValue(_, _, _)).WillOnce(SaveArg<2>(&num_value_slave));
+    EXPECT_CALL(master_user_interface, DisplayConfirmValue(_, _, _))
+        .WillOnce(Invoke([&](const bluetooth::hci::AddressWithType&, std::string, uint32_t num_value) {
+          EXPECT_EQ(num_value_slave, num_value);
+          if (num_value_slave == num_value) {
+            pairing_handler_a->OnUiAction(PairingEvent::CONFIRM_YESNO, 0x01);
+            pairing_handler_b->OnUiAction(PairingEvent::CONFIRM_YESNO, 0x01);
+          }
+        }));
 
     pairing_handler_b = std::make_unique<PairingHandlerLe>(PairingHandlerLe::PHASE1, slave_setup);
   }
@@ -479,20 +477,22 @@ TEST_F(PairingHandlerPairTest, test_secure_connections_passkey_entry) {
 
     RecordPairingPromptHandling(slave_user_interface, &pairing_handler_b);
 
-    EXPECT_CALL(slave_user_interface, DisplayPasskey(_)).WillOnce(Invoke([&](ConfirmationData data) {
-      passkey_ = data.GetNumericValue();
-      ui_prompts_count++;
-      if (ui_prompts_count == 2) {
-        pairing_handler_a->OnUiAction(PairingEvent::PASSKEY, passkey_);
-      }
-    }));
+    EXPECT_CALL(slave_user_interface, DisplayPasskey(_, _, _))
+        .WillOnce(Invoke([&](const bluetooth::hci::AddressWithType& address, std::string name, uint32_t passkey) {
+          passkey_ = passkey;
+          ui_prompts_count++;
+          if (ui_prompts_count == 2) {
+            pairing_handler_a->OnUiAction(PairingEvent::PASSKEY, passkey);
+          }
+        }));
 
-    EXPECT_CALL(master_user_interface, DisplayEnterPasskeyDialog(_)).WillOnce(Invoke([&](ConfirmationData data) {
-      ui_prompts_count++;
-      if (ui_prompts_count == 2) {
-        pairing_handler_a->OnUiAction(PairingEvent::PASSKEY, passkey_);
-      }
-    }));
+    EXPECT_CALL(master_user_interface, DisplayEnterPasskeyDialog(_, _))
+        .WillOnce(Invoke([&](const bluetooth::hci::AddressWithType& address, std::string name) {
+          ui_prompts_count++;
+          if (ui_prompts_count == 2) {
+            pairing_handler_a->OnUiAction(PairingEvent::PASSKEY, passkey_);
+          }
+        }));
 
     pairing_handler_b = std::make_unique<PairingHandlerLe>(PairingHandlerLe::PHASE1, slave_setup);
   }
@@ -632,14 +632,15 @@ TEST_F(PairingHandlerPairTest, test_legacy_passkey_entry) {
 
     RecordPairingPromptHandling(slave_user_interface, &pairing_handler_b);
 
-    EXPECT_CALL(slave_user_interface, DisplayEnterPasskeyDialog(_));
-    EXPECT_CALL(master_user_interface, DisplayConfirmValue(_)).WillOnce(Invoke([&](ConfirmationData data) {
-      LOG_INFO("Passkey prompt displayed entering passkey: %08x", data.GetNumericValue());
-      std::this_thread::sleep_for(1ms);
+    EXPECT_CALL(slave_user_interface, DisplayEnterPasskeyDialog(_, _));
+    EXPECT_CALL(master_user_interface, DisplayConfirmValue(_, _, _))
+        .WillOnce(Invoke([&](const bluetooth::hci::AddressWithType&, std::string, uint32_t passkey) {
+          LOG_INFO("Passkey prompt displayed entering passkey: %08x", passkey);
+          std::this_thread::sleep_for(1ms);
 
-      // TODO: handle case where prompts are displayed in different order in the test!
-      pairing_handler_b->OnUiAction(PairingEvent::PASSKEY, data.GetNumericValue());
-    }));
+          // TODO: handle case where prompts are displayed in different order in the test!
+          pairing_handler_b->OnUiAction(PairingEvent::PASSKEY, passkey);
+        }));
 
     pairing_handler_b = std::make_unique<PairingHandlerLe>(PairingHandlerLe::PHASE1, slave_setup);
   }

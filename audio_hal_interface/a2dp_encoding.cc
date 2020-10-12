@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#define LOG_TAG "a2dp_encoding"
 
 #include "a2dp_encoding.h"
 #include "client_interface.h"
@@ -23,7 +22,6 @@
 #include "btif_av.h"
 #include "btif_av_co.h"
 #include "btif_hf.h"
-#include "osi/include/log.h"
 #include "osi/include/properties.h"
 
 namespace {

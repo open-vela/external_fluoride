@@ -57,8 +57,6 @@
 
 #include "smp_api.h"
 
-#include "gd/common/init_flags.h"
-
 #ifndef DEFAULT_CONF_TRACE_LEVEL
 #define DEFAULT_CONF_TRACE_LEVEL BT_TRACE_LEVEL_WARNING
 #endif
@@ -183,31 +181,26 @@ void LogMsg(uint32_t trace_set_mask, const char* fmt_str, ...) {
   vsnprintf(&buffer[MSG_BUFFER_OFFSET], BTE_LOG_MAX_SIZE, fmt_str, ap);
   va_end(ap);
 
-#undef LOG_TAG
-#define LOG_TAG bt_layer_tags[trace_layer]
-
   switch (TRACE_GET_TYPE(trace_set_mask)) {
     case TRACE_TYPE_ERROR:
-      LOG_ERROR("%s", buffer);
+      LOG_ERROR(bt_layer_tags[trace_layer], "%s", buffer);
       break;
     case TRACE_TYPE_WARNING:
-      LOG_WARN("%s", buffer);
+      LOG_WARN(bt_layer_tags[trace_layer], "%s", buffer);
       break;
     case TRACE_TYPE_API:
     case TRACE_TYPE_EVENT:
-      LOG_INFO("%s", buffer);
+      LOG_INFO(bt_layer_tags[trace_layer], "%s", buffer);
       break;
     case TRACE_TYPE_DEBUG:
-      LOG_INFO("%s", buffer);
+      LOG_DEBUG(bt_layer_tags[trace_layer], "%s", buffer);
       break;
     default:
       /* we should never get this */
-      LOG_ERROR("!BAD TRACE TYPE! %s", buffer);
+      LOG_ERROR(bt_layer_tags[trace_layer], "!BAD TRACE TYPE! %s", buffer);
       CHECK(TRACE_GET_TYPE(trace_set_mask) == TRACE_TYPE_ERROR);
       break;
   }
-#undef LOG_TAG
-#define LOG_TAG "bt_bte"
 }
 
 /* this function should go into BTAPP_DM for example */
@@ -236,16 +229,9 @@ static void load_levels_from_config(const config_t* config) {
        functions->trc_name; ++functions) {
     int value = config_get_int(*config, CONFIG_DEFAULT_SECTION,
                                functions->trc_name, -1);
-    if (value != -1) {
-      functions->trace_level = value;
-    }
-    if (bluetooth::common::InitFlags::IsDebugLoggingEnabledForAll()) {
-      LOG_INFO("Enable logging for %s because all debug logs are enabled",
-               functions->trc_name);
-      functions->trace_level = BT_TRACE_LEVEL_VERBOSE;
-    }
-    LOG_INFO("BTE_InitTraceLevels -- %s : Level %d", functions->trc_name,
-             functions->trace_level);
+    if (value != -1) functions->trace_level = value;
+    LOG_INFO(LOG_TAG, "BTE_InitTraceLevels -- %s : Level %d",
+             functions->trc_name, functions->trace_level);
     if (functions->p_f) functions->p_f(functions->trace_level);
   }
 }
@@ -253,7 +239,7 @@ static void load_levels_from_config(const config_t* config) {
 static future_t* init(void) {
   const stack_config_t* stack_config = stack_config_get_interface();
   if (!stack_config->get_trace_config_enabled()) {
-    LOG_INFO("using compile default trace settings");
+    LOG_INFO(LOG_TAG, "using compile default trace settings");
     return NULL;
   }
 
