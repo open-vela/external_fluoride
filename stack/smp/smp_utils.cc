@@ -33,9 +33,9 @@
 #include "device/include/controller.h"
 #include "hcidefs.h"
 #include "l2c_api.h"
+#include "l2c_int.h"
 #include "osi/include/osi.h"
 #include "smp_int.h"
-#include "stack/include/acl_api.h"
 
 #define SMP_PAIRING_REQ_SIZE 7
 #define SMP_CONFIRM_CMD_SIZE (OCTET16_LEN + 1)
@@ -340,28 +340,18 @@ bool smp_send_msg_to_L2CAP(const RawAddress& rem_bda, BT_HDR* p_toL2CAP) {
   }
 
   SMP_TRACE_EVENT("%s", __func__);
+  smp_cb.total_tx_unacked += 1;
 
   smp_log_metrics(rem_bda, true /* outgoing */,
                   p_toL2CAP->data + p_toL2CAP->offset, p_toL2CAP->len);
 
   l2cap_ret = L2CA_SendFixedChnlData(fixed_cid, rem_bda, p_toL2CAP);
   if (l2cap_ret == L2CAP_DW_FAILED) {
+    smp_cb.total_tx_unacked -= 1;
     SMP_TRACE_ERROR("SMP failed to pass msg to L2CAP");
     return false;
-  } else {
-    tSMP_CB* p_cb = &smp_cb;
-
-    if (p_cb->wait_for_authorization_complete) {
-      tSMP_INT_DATA smp_int_data;
-      smp_int_data.status = SMP_SUCCESS;
-      if (fixed_cid == L2CAP_SMP_CID) {
-        smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-      } else {
-        smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
-      }
-    }
+  } else
     return true;
-  }
 }
 
 /*******************************************************************************
@@ -1124,11 +1114,11 @@ bool smp_pairing_request_response_parameters_are_valid(tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 bool smp_pairing_keypress_notification_is_valid(tSMP_CB* p_cb) {
-  tSMP_SC_KEY_TYPE keypress_notification = p_cb->peer_keypress_notification;
+  tBTM_SP_KEY_TYPE keypress_notification = p_cb->peer_keypress_notification;
 
   SMP_TRACE_DEBUG("%s for cmd code 0x%02x", __func__, p_cb->rcvd_cmd_code);
 
-  if (keypress_notification >= SMP_SC_KEY_OUT_OF_RANGE) {
+  if (keypress_notification >= BTM_SP_KEY_OUT_OF_RANGE) {
     SMP_TRACE_WARNING(
         "Rcvd from the peer cmd 0x%02x with Pairing Keypress "
         "Notification value (0x%02x) out of range).",
@@ -1403,7 +1393,7 @@ void smp_collect_peer_io_capabilities(uint8_t* iocap, tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
-  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
+  tBLE_ADDR_TYPE addr_type = 0;
   RawAddress bda;
   uint8_t* p = le_addr;
 
@@ -1425,7 +1415,7 @@ void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_collect_peer_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
-  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
+  tBLE_ADDR_TYPE addr_type = 0;
   RawAddress bda;
   uint8_t* p = le_addr;
 

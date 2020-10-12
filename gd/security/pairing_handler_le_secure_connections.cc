@@ -18,10 +18,6 @@
 
 #include "security/pairing_handler_le.h"
 
-#include "os/rand.h"
-
-using bluetooth::os::GenerateRandom;
-
 namespace bluetooth {
 namespace security {
 
@@ -89,8 +85,7 @@ Stage1ResultOrFailure PairingHandlerLe::DoSecureConnectionsStage1(const InitialI
                                                                   const EcdhPublicKey& PKa, const EcdhPublicKey& PKb,
                                                                   const PairingRequestView& pairing_request,
                                                                   const PairingResponseView& pairing_response) {
-  if (((pairing_request.GetAuthReq() & AuthReqMaskMitm) == 0) &&
-      ((pairing_response.GetAuthReq() & AuthReqMaskMitm) == 0)) {
+  if ((pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskMitm) == 0) {
     // If both devices have not set MITM option, Just Works shall be used
     return SecureConnectionsJustWorks(i, PKa, PKb);
   }
@@ -139,14 +134,14 @@ Stage2ResultOrFailure PairingHandlerLe::DoSecureConnectionsStage2(const InitialI
   uint8_t b[7];
 
   if (IAmMaster(i)) {
-    memcpy(a, i.my_connection_address.GetAddress().data(), hci::Address::kLength);
+    memcpy(a, i.my_connection_address.GetAddress().address, 6);
     a[6] = (uint8_t)i.my_connection_address.GetAddressType();
-    memcpy(b, i.remote_connection_address.GetAddress().data(), hci::Address::kLength);
+    memcpy(b, i.remote_connection_address.GetAddress().address, 6);
     b[6] = (uint8_t)i.remote_connection_address.GetAddressType();
   } else {
-    memcpy(a, i.remote_connection_address.GetAddress().data(), hci::Address::kLength);
+    memcpy(a, i.remote_connection_address.GetAddress().address, 6);
     a[6] = (uint8_t)i.remote_connection_address.GetAddressType();
-    memcpy(b, i.my_connection_address.GetAddress().data(), hci::Address::kLength);
+    memcpy(b, i.my_connection_address.GetAddress().address, 6);
     b[6] = (uint8_t)i.my_connection_address.GetAddressType();
   }
 
@@ -288,13 +283,13 @@ Stage1ResultOrFailure PairingHandlerLe::SecureConnectionsPasskeyEntry(const Init
     constexpr uint32_t PASSKEY_MAX = 999999;
     while (passkey > PASSKEY_MAX) passkey >>= 1;
 
-    ConfirmationData data(i.remote_connection_address, i.remote_name, passkey);
-    i.user_interface_handler->Post(common::BindOnce(&UI::DisplayPasskey, common::Unretained(i.user_interface), data));
+    i.user_interface_handler->Post(common::BindOnce(&UI::DisplayPasskey, common::Unretained(i.user_interface),
+                                                    i.remote_connection_address, i.remote_name, passkey));
 
   } else if (my_iocaps == IoCapability::KEYBOARD_ONLY || remote_iocaps == IoCapability::DISPLAY_ONLY) {
-    ConfirmationData data(i.remote_connection_address, i.remote_name);
-    i.user_interface_handler->Post(
-        common::BindOnce(&UI::DisplayEnterPasskeyDialog, common::Unretained(i.user_interface), data));
+    i.user_interface_handler->Post(common::BindOnce(&UI::DisplayEnterPasskeyDialog,
+                                                    common::Unretained(i.user_interface), i.remote_connection_address,
+                                                    i.remote_name));
     std::optional<PairingEvent> response = WaitUiPasskey();
     if (!response) return PairingFailure("Passkey did not arrive!");
 
@@ -409,9 +404,8 @@ Stage1ResultOrFailure PairingHandlerLe::SecureConnectionsNumericComparison(const
 
   uint32_t number_to_display = crypto_toolbox::g2((uint8_t*)PKa.x.data(), (uint8_t*)PKb.x.data(), Na, Nb);
 
-  ConfirmationData data(i.remote_connection_address, i.remote_name, number_to_display);
-  i.user_interface_handler->Post(
-      common::BindOnce(&UI::DisplayConfirmValue, common::Unretained(i.user_interface), data));
+  i.user_interface_handler->Post(common::BindOnce(&UI::DisplayConfirmValue, common::Unretained(i.user_interface),
+                                                  i.remote_connection_address, i.remote_name, number_to_display));
 
   std::optional<PairingEvent> confirmyesno = WaitUiConfirmYesNo();
   if (!confirmyesno || confirmyesno->ui_value == 0) {
