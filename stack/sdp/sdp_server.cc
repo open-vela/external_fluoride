@@ -35,8 +35,6 @@
 #include "sdp_api.h"
 #include "sdpint.h"
 
-#if (SDP_SERVER_ENABLED == TRUE)
-
 /* Maximum number of bytes to reserve out of SDP MTU for response data */
 #define SDP_MAX_SERVICE_RSPHDR_LEN 12
 #define SDP_MAX_SERVATTR_RSPHDR_LEN 10
@@ -118,11 +116,9 @@ void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg) {
 
   if (p_req + sizeof(pdu_id) + sizeof(trans_num) > p_req_end) {
     android_errorWriteLog(0x534e4554, "69384124");
-    android_errorWriteLog(0x534e4554, "169342531");
     trans_num = 0;
     sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX,
                             SDP_TEXT_BAD_HEADER);
-    return;
   }
 
   /* The first byte in the message is the pdu type */
@@ -133,10 +129,8 @@ void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg) {
 
   if (p_req + sizeof(param_len) > p_req_end) {
     android_errorWriteLog(0x534e4554, "69384124");
-    android_errorWriteLog(0x534e4554, "169342531");
     sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX,
                             SDP_TEXT_BAD_HEADER);
-    return;
   }
 
   BE_STREAM_TO_UINT16(param_len, p_req);
@@ -845,4 +839,3 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
   /* Send the buffer through L2CAP */
   L2CA_DataWrite(p_ccb->connection_id, p_buf);
 }
-#endif /* SDP_SERVER_ENABLED == TRUE */
