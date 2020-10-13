@@ -108,23 +108,6 @@ const uint8_t codec_info_aac[AVDT_CODEC_SIZE] = {
     9            // Unused
 };
 
-const uint8_t codec_info_aac_vbr[AVDT_CODEC_SIZE] = {
-    8,           // Length (A2DP_AAC_INFO_LEN)
-    0,           // Media Type: AVDT_MEDIA_TYPE_AUDIO
-    2,           // Media Codec Type: A2DP_MEDIA_CT_AAC
-    0x80,        // Object Type: A2DP_AAC_OBJECT_TYPE_MPEG2_LC
-    0x01,        // Sampling Frequency: A2DP_AAC_SAMPLING_FREQ_44100
-    0x04,        // Channels: A2DP_AAC_CHANNEL_MODE_STEREO
-    0x80 | 0x4,  // Variable Bit Rate:
-                 // A2DP_AAC_VARIABLE_BIT_RATE_ENABLED
-                 // Bit Rate: 320000 = 0x4e200
-    0xe2,        // Bit Rate: 320000 = 0x4e200
-    0x00,        // Bit Rate: 320000 = 0x4e200
-    7,           // Unused
-    8,           // Unused
-    9            // Unused
-};
-
 const uint8_t codec_info_aac_capability[AVDT_CODEC_SIZE] = {
     8,     // Length (A2DP_AAC_INFO_LEN)
     0,     // Media Type: AVDT_MEDIA_TYPE_AUDIO
@@ -135,24 +118,6 @@ const uint8_t codec_info_aac_capability[AVDT_CODEC_SIZE] = {
     0x04,        // Channels: A2DP_AAC_CHANNEL_MODE_STEREO
     0x00 | 0x4,  // Variable Bit Rate:
                  // A2DP_AAC_VARIABLE_BIT_RATE_DISABLED
-                 // Bit Rate: 320000 = 0x4e200
-    0xe2,        // Bit Rate: 320000 = 0x4e200
-    0x00,        // Bit Rate: 320000 = 0x4e200
-    7,           // Unused
-    8,           // Unused
-    9            // Unused
-};
-
-const uint8_t codec_info_aac_vbr_capability[AVDT_CODEC_SIZE] = {
-    8,     // Length (A2DP_AAC_INFO_LEN)
-    0,     // Media Type: AVDT_MEDIA_TYPE_AUDIO
-    2,     // Media Codec Type: A2DP_MEDIA_CT_AAC
-    0x80,  // Object Type: A2DP_AAC_OBJECT_TYPE_MPEG2_LC
-    0x01,  // Sampling Frequency: A2DP_AAC_SAMPLING_FREQ_44100
-    // TODO: AAC 48.0kHz sampling rate should be added back - see b/62301376
-    0x04,        // Channels: A2DP_AAC_CHANNEL_MODE_STEREO
-    0x80 | 0x4,  // Variable Bit Rate:
-                 // A2DP_AAC_VARIABLE_BIT_RATE_ENABLED
                  // Bit Rate: 320000 = 0x4e200
     0xe2,        // Bit Rate: 320000 = 0x4e200
     0x00,        // Bit Rate: 320000 = 0x4e200
@@ -352,10 +317,6 @@ TEST_F(StackA2dpTest, test_a2dp_is_codec_valid_sbc) {
 }
 
 TEST_F(StackA2dpTest, test_a2dp_is_codec_valid_aac) {
-  ASSERT_TRUE(A2DP_IsSourceCodecValid(codec_info_aac_vbr));
-  ASSERT_TRUE(A2DP_IsSourceCodecValid(codec_info_aac_vbr_capability));
-  ASSERT_TRUE(A2DP_IsPeerSourceCodecValid(codec_info_aac_vbr));
-  ASSERT_TRUE(A2DP_IsPeerSourceCodecValid(codec_info_aac_vbr_capability));
   EXPECT_TRUE(A2DP_IsSourceCodecValid(codec_info_aac));
   EXPECT_TRUE(A2DP_IsSourceCodecValid(codec_info_aac_capability));
   EXPECT_TRUE(A2DP_IsPeerSourceCodecValid(codec_info_aac));
@@ -831,22 +792,12 @@ TEST_F(StackA2dpTest, test_a2dp_init_codec_config) {
   // Test for AAC Source
   //
   memset(&avdt_cfg, 0, sizeof(avdt_cfg));
-  ASSERT_TRUE(
+  EXPECT_TRUE(
       A2DP_InitCodecConfig(BTAV_A2DP_CODEC_INDEX_SOURCE_AAC, &avdt_cfg));
-  // Check the vbr mode status.
-  bool aac_vbr_mode_enabled =
-      avdt_cfg.codec_info[6] & A2DP_AAC_VARIABLE_BIT_RATE_MASK;
   // Compare the result codec with the local test codec info
-  if (aac_vbr_mode_enabled) {
-    for (size_t i = 0; i < codec_info_aac_vbr_capability[0] + 1; i++) {
-      ASSERT_EQ(avdt_cfg.codec_info[i], codec_info_aac_vbr_capability[i]);
-    }
-  } else {
-    for (size_t i = 0; i < codec_info_aac_capability[0] + 1; i++) {
-      ASSERT_EQ(avdt_cfg.codec_info[i], codec_info_aac_capability[i]);
-    }
+  for (size_t i = 0; i < codec_info_aac_capability[0] + 1; i++) {
+    EXPECT_EQ(avdt_cfg.codec_info[i], codec_info_aac_capability[i]);
   }
-
 // Test for content protection
 #if (BTA_AV_CO_CP_SCMS_T == TRUE)
   EXPECT_EQ(avdt_cfg.protect_info[0], AVDT_CP_LOSC);
@@ -899,6 +850,23 @@ TEST_F(A2dpCodecConfigTest, setCodecConfig) {
   // Compare the result codec with the local test codec info
   for (size_t i = 0; i < codec_info_sbc[0] + 1; i++) {
     EXPECT_EQ(codec_info_result[i], codec_info_sbc[i]);
+  }
+  EXPECT_EQ(codec_config->getAudioBitsPerSample(), 16);
+
+  // Create the codec capability - AAC
+  memset(codec_info_result, 0, sizeof(codec_info_result));
+  peer_codec_index = A2DP_SourceCodecIndex(codec_info_aac_sink_capability);
+  EXPECT_NE(peer_codec_index, BTAV_A2DP_CODEC_INDEX_MAX);
+  codec_config =
+      a2dp_codecs->findSourceCodecConfig(codec_info_aac_sink_capability);
+  EXPECT_NE(codec_config, nullptr);
+  EXPECT_TRUE(a2dp_codecs->setCodecConfig(
+      codec_info_aac_sink_capability, true /* is_capability */,
+      codec_info_result, true /* select_current_codec */));
+  EXPECT_EQ(a2dp_codecs->getCurrentCodecConfig(), codec_config);
+  // Compare the result codec with the local test codec info
+  for (size_t i = 0; i < codec_info_aac[0] + 1; i++) {
+    EXPECT_EQ(codec_info_result[i], codec_info_aac[i]);
   }
   EXPECT_EQ(codec_config->getAudioBitsPerSample(), 16);
 
@@ -1005,59 +973,6 @@ TEST_F(A2dpCodecConfigTest, setCodecConfig) {
   EXPECT_FALSE(a2dp_codecs->setCodecConfig(
       codec_info_sbc_test1, true /* is_capability */, codec_info_result,
       true /* select_current_codec */));
-
-  AvdtpSepConfig avdt_cfg;
-  memset(&avdt_cfg, 0, sizeof(avdt_cfg));
-  ASSERT_TRUE(
-      A2DP_InitCodecConfig(BTAV_A2DP_CODEC_INDEX_SOURCE_AAC, &avdt_cfg));
-  bool aac_vbr_mode_enabled =
-      avdt_cfg.codec_info[6] & A2DP_AAC_VARIABLE_BIT_RATE_MASK;
-
-  // Create the codec capability - AAC
-  memset(codec_info_result, 0, sizeof(codec_info_result));
-  peer_codec_index = A2DP_SourceCodecIndex(codec_info_aac_sink_capability);
-  ASSERT_NE(peer_codec_index, BTAV_A2DP_CODEC_INDEX_MAX);
-  codec_config =
-      a2dp_codecs->findSourceCodecConfig(codec_info_aac_sink_capability);
-  ASSERT_NE(codec_config, nullptr);
-  ASSERT_TRUE(a2dp_codecs->setCodecConfig(
-      codec_info_aac_sink_capability, true /* is_capability */,
-      codec_info_result, true /* select_current_codec */));
-  ASSERT_EQ(a2dp_codecs->getCurrentCodecConfig(), codec_config);
-  // Compare the result codec with the local test codec info
-  if (aac_vbr_mode_enabled) {
-    for (size_t i = 0; i < codec_info_aac_vbr[0] + 1; i++) {
-      ASSERT_EQ(codec_info_result[i], codec_info_aac_vbr[i]);
-    }
-  } else {
-    for (size_t i = 0; i < codec_info_aac[0] + 1; i++) {
-      ASSERT_EQ(codec_info_result[i], codec_info_aac[i]);
-    }
-  }
-  ASSERT_EQ(codec_config->getAudioBitsPerSample(), 16);
-
-  // Create the codec config - AAC with vbr
-  memset(codec_info_result, 0, sizeof(codec_info_result));
-  peer_codec_index = A2DP_SourceCodecIndex(codec_info_aac_vbr);
-  ASSERT_NE(peer_codec_index, BTAV_A2DP_CODEC_INDEX_MAX);
-  codec_config = a2dp_codecs->findSourceCodecConfig(codec_info_aac_vbr);
-  ASSERT_NE(codec_config, nullptr);
-  ASSERT_TRUE(a2dp_codecs->setCodecConfig(
-      codec_info_aac_vbr, false /* is_capability */, codec_info_result,
-      true /* select_current_codec */));
-  ASSERT_EQ(a2dp_codecs->getCurrentCodecConfig(), codec_config);
-  // Compare the result codec with the local test codec info
-  if (aac_vbr_mode_enabled) {
-    for (size_t i = 0; i < codec_info_aac[0] + 1; i++) {
-      ASSERT_EQ(codec_info_result[i], codec_info_aac_vbr[i]);
-    }
-  } else {
-    for (size_t i = 0; i < codec_info_aac[0] + 1; i++) {
-      ASSERT_EQ(codec_info_result[i], codec_info_aac[i]);
-    }
-  }
-  ASSERT_TRUE(codec_config->useRtpHeaderMarkerBit());
-
   delete a2dp_codecs;
 }
 
