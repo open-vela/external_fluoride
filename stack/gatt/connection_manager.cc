@@ -97,24 +97,24 @@ bool background_connect_add(uint8_t app_id, const RawAddress& address) {
   }
 
   auto it = bgconn_dev.find(address);
-  bool in_acceptlist = false;
+  bool in_white_list = false;
   if (it != bgconn_dev.end()) {
-    // device already in the acceptlist, just add interested app to the list
+    // device already in the whitelist, just add interested app to the list
     if (it->second.doing_bg_conn.count(app_id)) {
       LOG(INFO) << "App id=" << loghex(app_id)
                 << "already doing background connection to " << address;
       return true;
     }
 
-    // Already in acceptlist ?
+    // Already in white list ?
     if (anyone_connecting(it)) {
-      in_acceptlist = true;
+      in_white_list = true;
     }
   }
 
-  if (!in_acceptlist) {
-    // the device is not in the acceptlist
-    if (!BTM_AcceptlistAdd(address)) return false;
+  if (!in_white_list) {
+    // the device is not in the whitelist
+    if (!BTM_WhiteListAdd(address)) return false;
   }
 
   // create endtry for address, and insert app_id.
@@ -128,7 +128,7 @@ bool remove_unconditional(const RawAddress& address) {
   auto it = bgconn_dev.find(address);
   if (it == bgconn_dev.end()) return false;
 
-  BTM_AcceptlistRemove(address);
+  BTM_WhiteListRemove(address);
   bgconn_dev.erase(it);
   return true;
 }
@@ -145,8 +145,8 @@ bool background_connect_remove(uint8_t app_id, const RawAddress& address) {
 
   if (anyone_connecting(it)) return true;
 
-  // no more apps interested - remove from acceptlist and delete record
-  BTM_AcceptlistRemove(address);
+  // no more apps interested - remove from whitelist and delete record
+  BTM_WhiteListRemove(address);
   bgconn_dev.erase(it);
   return true;
 }
@@ -166,7 +166,7 @@ void on_app_deregistered(uint8_t app_id) {
       continue;
     }
 
-    BTM_AcceptlistRemove(it->first);
+    BTM_WhiteListRemove(it->first);
     it = bgconn_dev.erase(it);
   }
 }
@@ -188,10 +188,10 @@ void on_connection_complete(const RawAddress& address) {
 }
 
 /** Reset bg device list. If called after controller reset, set |after_reset| to
- * true, as there is no need to wipe controller acceptlist in this case. */
+ * true, as there is no need to wipe controller white list in this case. */
 void reset(bool after_reset) {
   bgconn_dev.clear();
-  if (!after_reset) BTM_AcceptlistClear();
+  if (!after_reset) BTM_WhiteListClear();
 }
 
 void wl_direct_connect_timeout_cb(uint8_t app_id, const RawAddress& address) {
@@ -209,7 +209,7 @@ bool direct_connect_add(uint8_t app_id, const RawAddress& address) {
     return L2CA_ConnectFixedChnl(L2CAP_ATT_CID, address);
   }
 
-  bool in_acceptlist = false;
+  bool in_white_list = false;
   auto it = bgconn_dev.find(address);
   if (it != bgconn_dev.end()) {
     // app already trying to connect to this particular device
@@ -219,20 +219,20 @@ bool direct_connect_add(uint8_t app_id, const RawAddress& address) {
       return false;
     }
 
-    // are we already in the acceptlist ?
+    // are we already in the white list ?
     if (anyone_connecting(it)) {
       LOG_WARN("Background connection attempt already in progress app_id=%x",
                app_id);
-      in_acceptlist = true;
+      in_white_list = true;
     }
   }
 
   bool params_changed = BTM_SetLeConnectionModeToFast();
 
-  if (!in_acceptlist) {
-    if (!BTM_AcceptlistAdd(address)) {
-      // if we can't add to acceptlist, turn parameters back to slow.
-      LOG_WARN("Unable to add le device to acceptlist");
+  if (!in_white_list) {
+    if (!BTM_WhiteListAdd(address)) {
+      // if we can't add to white list, turn parameters back to slow.
+      LOG_WARN("Unable to add le device to whitelist");
       if (params_changed) BTM_SetLeConnectionModeToSlow();
       return false;
     }
@@ -282,8 +282,8 @@ bool direct_connect_remove(uint8_t app_id, const RawAddress& address) {
     return true;
   }
 
-  // no more apps interested - remove from acceptlist
-  BTM_AcceptlistRemove(address);
+  // no more apps interested - remove from whitelist
+  BTM_WhiteListRemove(address);
   bgconn_dev.erase(it);
   return true;
 }
