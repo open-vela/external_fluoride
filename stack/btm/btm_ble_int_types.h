@@ -130,9 +130,9 @@ typedef struct {
   alarm_t* refresh_raddr_timer;
 } tBTM_LE_RANDOM_CB;
 
-/* acceptlist using state as a bit mask */
+/* white list using state as a bit mask */
 constexpr uint8_t BTM_BLE_WL_IDLE = 0;
-constexpr uint8_t BTM_BLE_ACCEPTLIST_INIT = 1;
+constexpr uint8_t BTM_BLE_WL_INIT = 1;
 
 /* resolving list using state as a bit mask */
 enum : uint8_t {
@@ -226,17 +226,11 @@ typedef struct {
   uint16_t scan_int;
   uint16_t scan_win;
 
-  /* acceptlist information */
+  /* white list information */
   uint8_t wl_state;
-  void set_acceptlist_process_in_progress() {
-    wl_state |= BTM_BLE_ACCEPTLIST_INIT;
-  }
-  void reset_acceptlist_process_in_progress() {
-    wl_state &= ~BTM_BLE_ACCEPTLIST_INIT;
-  }
-  bool is_acceptlist_in_progress() const {
-    return wl_state & BTM_BLE_ACCEPTLIST_INIT;
-  }
+  void set_whitelist_process_in_progress() { wl_state |= BTM_BLE_WL_INIT; }
+  void reset_whitelist_process_in_progress() { wl_state &= ~BTM_BLE_WL_INIT; }
+  bool is_whitelist_in_progress() const { return wl_state & BTM_BLE_WL_INIT; }
 
  private:
   enum : uint8_t { /* BLE connection state */
