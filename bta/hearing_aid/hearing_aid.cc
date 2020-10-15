@@ -317,17 +317,17 @@ class HearingAidImpl : public HearingAid {
     BTA_GATTC_Open(gatt_if, address, true, BT_TRANSPORT_LE, false);
   }
 
-  void AddToAcceptlist(const RawAddress& address) override {
+  void AddToWhiteList(const RawAddress& address) override {
     VLOG(2) << __func__ << " address: " << address;
     hearingDevices.Add(HearingDevice(address, true));
     BTA_GATTC_Open(gatt_if, address, false, BT_TRANSPORT_LE, false);
   }
 
-  void AddFromStorage(const HearingDevice& dev_info, uint16_t is_acceptlisted) {
+  void AddFromStorage(const HearingDevice& dev_info, uint16_t is_white_listed) {
     DVLOG(2) << __func__ << " " << dev_info.address
              << ", hiSyncId=" << loghex(dev_info.hi_sync_id)
-             << ", isAcceptlisted=" << is_acceptlisted;
-    if (is_acceptlisted) {
+             << ", isWhiteListed=" << is_white_listed;
+    if (is_white_listed) {
       hearingDevices.Add(dev_info);
 
       // TODO: we should increase the scanning window for few seconds, to get
@@ -361,7 +361,7 @@ class HearingAidImpl : public HearingAid {
 
     if (status != GATT_SUCCESS) {
       if (!hearingDevice->connecting_actively) {
-        // acceptlist connection failed, that's ok.
+        // whitelist connection failed, that's ok.
         return;
       }
 
@@ -1487,7 +1487,7 @@ class HearingAidImpl : public HearingAid {
     DoDisconnectCleanUp(hearingDevice);
 
     // This is needed just for the first connection. After stack is restarted,
-    // code that loads device will add them to acceptlist.
+    // code that loads device will add them to whitelist.
     BTA_GATTC_Open(gatt_if, hearingDevice->address, false, BT_TRANSPORT_LE,
                    false);
 
@@ -1780,12 +1780,12 @@ HearingAid* HearingAid::Get() {
 };
 
 void HearingAid::AddFromStorage(const HearingDevice& dev_info,
-                                uint16_t is_acceptlisted) {
+                                uint16_t is_white_listed) {
   if (!instance) {
     LOG(ERROR) << "Not initialized yet";
   }
 
-  instance->AddFromStorage(dev_info, is_acceptlisted);
+  instance->AddFromStorage(dev_info, is_white_listed);
 };
 
 int HearingAid::GetDeviceCount() {
