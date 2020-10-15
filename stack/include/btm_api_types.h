@@ -462,11 +462,10 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
  *  Security Manager Constants
  *******************************/
 
-typedef enum : uint8_t {
-  BTM_SEC_MODE_SERVICE = 2,
-  BTM_SEC_MODE_SP = 4,
-  BTM_SEC_MODE_SC = 6,
-} tSECURITY_MODE;
+/* Security Mode (BTM_SetSecurityMode) */
+#define BTM_SEC_MODE_SERVICE 2
+#define BTM_SEC_MODE_SP 4
+#define BTM_SEC_MODE_SC 6
 
 /* Security Service Levels [bit mask] (BTM_SetSecurityLevel)
  * Encryption should not be used without authentication
@@ -816,6 +815,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
