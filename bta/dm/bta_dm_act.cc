@@ -570,7 +570,7 @@ void bta_dm_remove_device(const RawAddress& bd_addr) {
       if (peer_device.peer_bdaddr == bd_addr) {
         peer_device.conn_state = BTA_DM_UNPAIRING;
 
-        /* Make sure device is not in white list before we disconnect */
+        /* Make sure device is not in acceptlist before we disconnect */
         GATT_CancelConnect(0, bd_addr, false);
 
         btm_remove_acl(bd_addr, peer_device.transport);
@@ -610,7 +610,7 @@ void bta_dm_remove_device(const RawAddress& bd_addr) {
       if (peer_device.peer_bdaddr == other_address) {
         peer_device.conn_state = BTA_DM_UNPAIRING;
 
-        /* Make sure device is not in white list before we disconnect */
+        /* Make sure device is not in acceptlist before we disconnect */
         GATT_CancelConnect(0, bd_addr, false);
 
         btm_remove_acl(other_address, peer_device.transport);
@@ -681,7 +681,7 @@ void bta_dm_close_acl(const RawAddress& bd_addr, bool remove_dev,
       APPL_TRACE_ERROR("unknown device, remove ACL failed");
     }
 
-    /* Make sure device is not in white list before we disconnect */
+    /* Make sure device is not in acceptlist before we disconnect */
     GATT_CancelConnect(0, bd_addr, false);
 
     /* Disconnect the ACL link */
@@ -3268,6 +3268,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                  &p_data->io_req.init_keys, &p_data->io_req.resp_keys);
       APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req,
                        p_data->io_req.oob_data);
+      break;
+
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
       break;
 
     case BTM_LE_SEC_REQUEST_EVT:
