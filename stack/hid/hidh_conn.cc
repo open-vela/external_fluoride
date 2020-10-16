@@ -68,7 +68,6 @@ static const tL2CAP_APPL_INFO hst_reg_info = {
     hidh_on_l2cap_error,       NULL,
     NULL,                      NULL
 };
-static void hidh_try_repage(uint8_t dhandle);
 
 /*******************************************************************************
  *
@@ -225,7 +224,7 @@ static void hidh_l2cif_connect_ind(const RawAddress& bd_addr,
       psm, l2cap_cid);
 }
 
-static void hidh_process_repage_timer_timeout(void* data) {
+void hidh_process_repage_timer_timeout(void* data) {
   uint8_t dhandle = PTR_TO_UINT(data);
   hidh_try_repage(dhandle);
 }
@@ -239,7 +238,7 @@ static void hidh_process_repage_timer_timeout(void* data) {
  * Returns          void
  *
  ******************************************************************************/
-static void hidh_try_repage(uint8_t dhandle) {
+void hidh_try_repage(uint8_t dhandle) {
   tHID_HOST_DEV_CTB* device;
 
   hidh_conn_initiate(dhandle);
