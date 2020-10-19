@@ -24,8 +24,6 @@
 #include "gd/hci/address_with_type.h"
 #include "gd/os/handler.h"
 #include "gd/packet/raw_builder.h"
-#include "main/shim/acl_legacy_interface.h"
-#include "stack/include/bt_types.h"
 
 namespace bluetooth {
 namespace shim {
@@ -34,38 +32,28 @@ namespace legacy {
 class Acl : public hci::acl_manager::ConnectionCallbacks,
             public hci::acl_manager::LeConnectionCallbacks {
  public:
-  Acl(os::Handler* handler, const acl_interface_t& acl_interface);
+  explicit Acl(os::Handler* handler);
   ~Acl();
 
   void CreateClassicConnection(const bluetooth::hci::Address& address);
   void CreateLeConnection(
-      const bluetooth::hci::AddressWithType& address_with_type);
-  void CancelLeConnection(
       const bluetooth::hci::AddressWithType& address_with_type);
 
   void OnLeConnectSuccess(
       hci::AddressWithType,
       std::unique_ptr<hci::acl_manager::LeAclConnection>) override;
   void OnLeConnectFail(hci::AddressWithType, hci::ErrorCode reason) override;
-  void OnLeLinkDisconnected(uint16_t handle, hci::ErrorCode reason);
 
   void OnConnectSuccess(
       std::unique_ptr<hci::acl_manager::ClassicAclConnection>) override;
   void OnConnectFail(hci::Address, hci::ErrorCode reason) override;
-  void OnClassicLinkDisconnected(uint16_t handle, hci::ErrorCode reason);
 
   void WriteData(uint16_t hci_handle,
                  std::unique_ptr<bluetooth::packet::RawBuilder> packet);
-
- protected:
-  void on_incoming_acl_credits(uint16_t handle, uint16_t credits);
-  void write_data_sync(uint16_t hci_handle,
-                       std::unique_ptr<bluetooth::packet::RawBuilder> packet);
+  void OnRead();  // TODO
 
  private:
   os::Handler* handler_;
-  const acl_interface_t acl_interface_;
-
   struct impl;
   std::unique_ptr<impl> pimpl_;
   DISALLOW_COPY_AND_ASSIGN(Acl);
