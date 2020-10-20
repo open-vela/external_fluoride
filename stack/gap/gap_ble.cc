@@ -24,7 +24,6 @@
 #include <queue>
 #include "gap_api.h"
 #include "gatt_api.h"
-#include "osi/include/log.h"
 #include "types/bt_transport.h"
 
 using base::StringPrintf;
@@ -290,19 +289,14 @@ void client_connect_cback(tGATT_IF, const RawAddress& bda, uint16_t conn_id,
                           bool connected, tGATT_DISCONN_REASON reason,
                           tBT_TRANSPORT) {
   tGAP_CLCB* p_clcb = find_clcb_by_bd_addr(bda);
-  if (p_clcb == NULL) {
-    LOG_WARN("Unable to find device after connection");
-    return;
-  }
+  if (p_clcb == NULL) return;
 
   if (connected) {
-    LOG_DEBUG("Connected GAP to remote device");
     p_clcb->conn_id = conn_id;
     p_clcb->connected = true;
     /* start operation is pending */
     send_cl_read_request(*p_clcb);
   } else {
-    LOG_WARN("Disconnected GAP from remote device");
     p_clcb->connected = false;
     cl_op_cmpl(*p_clcb, false, 0, NULL);
     /* clean up clcb */
