@@ -18,7 +18,6 @@
 
 #include <gtest/gtest.h>
 
-#include "stack/test/common/mock_eatt.h"
 #include "crypto_toolbox/crypto_toolbox.h"
 #include "stack/gatt/gatt_int.h"
 
