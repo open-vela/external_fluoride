@@ -29,18 +29,13 @@ void bluetooth::shim::ACL_CreateClassicConnection(
 }
 
 void bluetooth::shim::ACL_CreateLeConnection(const RawAddress& raw_address) {
-  auto address_with_type = ToAddressWithType(raw_address, BLE_ADDR_RANDOM);
+  auto address_with_type = ToAddressWithType(raw_address, BLE_ADDR_PUBLIC);
   Stack::GetInstance()->GetAcl()->CreateLeConnection(address_with_type);
 }
 
-void bluetooth::shim::ACL_CancelLeConnection(const RawAddress& raw_address) {
-  auto address_with_type = ToAddressWithType(raw_address, BLE_ADDR_RANDOM);
-  Stack::GetInstance()->GetAcl()->CancelLeConnection(address_with_type);
-}
-
-void bluetooth::shim::ACL_WriteData(uint16_t handle, const BT_HDR* p_buf) {
+void bluetooth::shim::ACL_WriteData(uint16_t handle, const uint8_t* data,
+                                    size_t len) {
   std::unique_ptr<bluetooth::packet::RawBuilder> packet =
-      MakeUniquePacket(p_buf->data + p_buf->offset + HCI_DATA_PREAMBLE_SIZE,
-                       p_buf->len - HCI_DATA_PREAMBLE_SIZE);
+      MakeUniquePacket(data, len);
   Stack::GetInstance()->GetAcl()->WriteData(handle, std::move(packet));
 }
