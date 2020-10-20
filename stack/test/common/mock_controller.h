@@ -26,7 +26,6 @@ class ControllerInterface {
  public:
   virtual uint8_t GetIsoBufferCount(void) = 0;
   virtual uint16_t GetIsoDataSize(void) = 0;
-  virtual uint16_t GetAclDataSizeBle(void) = 0;
 
   virtual ~ControllerInterface() = default;
 };
@@ -35,7 +34,6 @@ class MockControllerInterface : public ControllerInterface {
  public:
   MOCK_METHOD((uint8_t), GetIsoBufferCount, (), (override));
   MOCK_METHOD((uint16_t), GetIsoDataSize, (), (override));
-  MOCK_METHOD((uint16_t), GetAclDataSizeBle, (), (override));
 };
 
 void SetMockControllerInterface(
