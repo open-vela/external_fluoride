@@ -766,8 +766,7 @@ void SecurityManagerImpl::InternalEnforceSecurityPolicy(
       authentication_requirements = hci::AuthenticationRequirements::GENERAL_BONDING;
       break;
     default:
-      // I could hear the voice of Myles, "This should be an ASSERT!"
-      ASSERT_LOG(false, "Unreachable code path");
+      // This will never happen because of check in IsSecurityRequirementSatisfied
       return;
   }
 
