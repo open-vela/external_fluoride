@@ -182,7 +182,7 @@ class BleAdvertiserInterfaceImpl : public BleAdvertiserInterface {
              timeout_s * 100, jni_thread_wrapper(FROM_HERE, timeout_cb)));
   }
 
-  void StartAdvertisingSet(int reg_id, IdTxPowerStatusCallback cb,
+  void StartAdvertisingSet(IdTxPowerStatusCallback cb,
                            AdvertiseParameters params,
                            std::vector<uint8_t> advertise_data,
                            std::vector<uint8_t> scan_response_data,
@@ -247,10 +247,6 @@ class BleAdvertiserInterfaceImpl : public BleAdvertiserInterface {
                       Bind(&BleAdvertisingManager::SetPeriodicAdvertisingEnable,
                            BleAdvertisingManager::Get(), advertiser_id, enable,
                            jni_thread_wrapper(FROM_HERE, cb)));
-  }
-
-  void RegisterCallbacks(AdvertisingCallbacks* callbacks) {
-    // For GD only
   }
 };
 

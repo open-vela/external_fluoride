@@ -509,7 +509,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
           "OnReadRemoteExtendedFeaturesComplete page_number:%hhu max_page_number:%hhu features:0x%lx",
           page_number,
           max_page_number,
-          static_cast<unsigned long>(features));
+          features);
     }
 
     uint16_t handle_;

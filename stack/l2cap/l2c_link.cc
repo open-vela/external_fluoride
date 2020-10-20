@@ -85,7 +85,7 @@ void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
 
     if (no_links) {
       if (!btm_dev_support_role_switch(bd_addr))
-        p_lcb->SetLinkRoleAsPeripheral();
+        p_lcb->SetLinkRoleAsSlave();
       else
         p_lcb->SetLinkRoleAsCentral();
     }
@@ -106,7 +106,7 @@ void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
   if ((p_lcb->link_state == LST_CONNECTING) ||
       (p_lcb->link_state == LST_CONNECT_HOLDING)) {
     if (!btm_dev_support_role_switch(bd_addr))
-      p_lcb->SetLinkRoleAsPeripheral();
+      p_lcb->SetLinkRoleAsSlave();
     else
       p_lcb->SetLinkRoleAsCentral();
 
@@ -740,8 +740,9 @@ void l2c_link_init() {
  *
  * Function         l2c_link_role_changed
  *
- * Description      This function is called whan a link's central/peripheral
- *role change event is received. It simply updates the link control block.
+ * Description      This function is called whan a link's central/slave role
+ *                  change event is received. It simply updates the link control
+ *                  block.
  *
  * Returns          void
  *
@@ -757,7 +758,7 @@ void l2c_link_role_changed(const RawAddress* bd_addr, uint8_t new_role,
       if (new_role == HCI_ROLE_CENTRAL) {
         p_lcb->SetLinkRoleAsCentral();
       } else {
-        p_lcb->SetLinkRoleAsPeripheral();
+        p_lcb->SetLinkRoleAsSlave();
       }
 
       /* Reset high priority link if needed */

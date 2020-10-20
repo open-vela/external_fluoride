@@ -29,7 +29,6 @@
 #include "bt_common.h"
 #include "bt_target.h"
 #include "bt_utils.h"
-#include "eatt.h"
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "log/log.h"
@@ -49,8 +48,6 @@
 
 using base::StringPrintf;
 using bluetooth::Uuid;
-using bluetooth::eatt::EattExtension;
-using bluetooth::eatt::EattChannel;
 
 /*******************************************************************************
  *                      G L O B A L      G A T T       D A T A                 *
@@ -1056,14 +1053,9 @@ uint8_t gatt_cmd_to_rsp_code(uint8_t cmd_code) {
 bool gatt_cl_send_next_cmd_inq(tGATT_TCB& tcb) {
   std::queue<tGATT_CMD_Q>* cl_cmd_q;
 
-  while (!tcb.cl_cmd_q.empty() ||
-         EattExtension::GetInstance()->IsOutstandingMsgInSendQueue(tcb.peer_bda)) {
+  while (!tcb.cl_cmd_q.empty()) {
     if (!tcb.cl_cmd_q.empty()) {
       cl_cmd_q = &tcb.cl_cmd_q;
-    } else {
-      EattChannel* channel =
-          EattExtension::GetInstance()->GetChannelWithQueuedData(tcb.peer_bda);
-      cl_cmd_q = &channel->cl_cmd_q_;
     }
 
     tGATT_CMD_Q& cmd = cl_cmd_q->front();
