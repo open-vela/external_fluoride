@@ -35,7 +35,7 @@ struct Controller::impl {
   void Start(hci::HciLayer* hci) {
     hci_ = hci;
     Handler* handler = module_.GetHandler();
-    if (common::InitFlags::GdAclEnabled() || common::InitFlags::GdL2capEnabled()) {
+    if (common::InitFlags::GdAclEnabled()) {
       hci_->RegisterEventHandler(
           EventCode::NUMBER_OF_COMPLETED_PACKETS, handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
     }

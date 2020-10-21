@@ -677,7 +677,7 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
     if (p_dev_rec != NULL) {
       if (p_dev_rec->rs_disc_pending == BTM_SEC_DISC_PENDING) {
         LOG_WARN("Issuing delayed HCI_Disconnect!!!");
-        btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
+        btsnd_hcic_disconnect(p_dev_rec->hci_handle, HCI_ERR_PEER_USER);
       }
       LOG_WARN("tBTM_SEC_DEV:0x%x rs_disc_pending=%d", PTR_TO_UINT(p_dev_rec),
                p_dev_rec->rs_disc_pending);
@@ -1287,7 +1287,7 @@ uint16_t btm_get_acl_disc_reason_code(void) {
  ******************************************************************************/
 uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
                               tBT_TRANSPORT transport) {
-  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+  if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::BTM_GetHCIConnHandle(remote_bda, transport);
   }
 
@@ -1299,6 +1299,47 @@ uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
 
   /* If here, no BD Addr found */
   return HCI_INVALID_HANDLE;
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_RequestPeerSCA
+ *
+ * Description      This function is called to request sleep clock accuracy
+ *                  from peer device
+ *
+ ******************************************************************************/
+void BTM_RequestPeerSCA(const RawAddress& remote_bda, tBT_TRANSPORT transport) {
+  tACL_CONN* p;
+  p = internal_.btm_bda_to_acl(remote_bda, transport);
+  if (p == (tACL_CONN*)NULL) {
+    LOG_WARN("Unable to find active acl");
+    return;
+  }
+
+  btsnd_hcic_req_peer_sca(p->hci_handle);
+}
+
+/*******************************************************************************
+ *
+ * Function         BTM_GetPeerSCA
+ *
+ * Description      This function is called to get peer sleep clock accuracy
+ *
+ * Returns          SCA or 0xFF if SCA was never previously requested, request
+ *                  is not supported by peer device or ACL does not exist
+ *
+ ******************************************************************************/
+uint8_t BTM_GetPeerSCA(const RawAddress& remote_bda, tBT_TRANSPORT transport) {
+  tACL_CONN* p;
+  p = internal_.btm_bda_to_acl(remote_bda, transport);
+  if (p != (tACL_CONN*)NULL) {
+    return (p->sca);
+  }
+  LOG_WARN("Unable to find active acl");
+
+  /* If here, no BD Addr found */
+  return (0xFF);
 }
 
 /*******************************************************************************
