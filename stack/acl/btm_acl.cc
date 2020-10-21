@@ -59,7 +59,6 @@
 #include "stack/include/btu.h"
 #include "stack/include/hcimsgs.h"
 #include "stack/include/l2cap_acl_interface.h"
-#include "stack/include/sco_hci_link_interface.h"
 #include "types/raw_address.h"
 
 struct StackAclBtmAcl {
@@ -1262,7 +1261,9 @@ uint16_t BTM_GetNumAclLinks(void) {
  *
  ******************************************************************************/
 uint16_t btm_get_acl_disc_reason_code(void) {
-  return btm_cb.acl_cb_.get_disconnect_reason();
+  uint8_t res = btm_cb.acl_cb_.acl_disc_reason;
+  LOG_WARN("This API should require an address for per ACL basis");
+  return res;
 }
 
 /*******************************************************************************
@@ -2736,12 +2737,10 @@ uint16_t acl_get_link_supervision_timeout() {
   return btm_cb.acl_cb_.btm_def_link_super_tout;
 }
 
-tHCI_STATUS acl_get_disconnect_reason() {
-  return btm_cb.acl_cb_.get_disconnect_reason();
-}
+uint8_t acl_get_disconnect_reason() { return btm_cb.acl_cb_.acl_disc_reason; }
 
-void acl_set_disconnect_reason(tHCI_STATUS acl_disc_reason) {
-  btm_cb.acl_cb_.set_disconnect_reason(acl_disc_reason);
+void acl_set_disconnect_reason(uint8_t acl_disc_reason) {
+  btm_cb.acl_cb_.acl_disc_reason = acl_disc_reason;
 }
 
 bool acl_is_role_switch_allowed() {
@@ -2768,23 +2767,6 @@ void btm_acl_connected(const RawAddress& bda, uint16_t handle,
   btm_sec_connected(bda, handle, status, enc_mode);
   btm_acl_set_paging(false);
   l2c_link_hci_conn_comp(status, handle, bda);
-}
-
-void btm_acl_disconnected(tHCI_STATUS status, uint16_t handle,
-                          tHCI_STATUS reason) {
-  if (status != HCI_SUCCESS) {
-    LOG_WARN("Received disconnect with error:%s",
-             hci_error_code_text(status).c_str());
-  }
-
-  /* If L2CAP or SCO doesn't know about it, send it to ISO */
-  if (!l2c_link_hci_disc_comp(handle, reason) &&
-      !btm_sco_removed(handle, reason)) {
-    bluetooth::hci::IsoManager::GetInstance()->HandleDisconnect(handle, reason);
-  }
-
-  /* Notify security manager */
-  btm_sec_disconnected(handle, reason);
 }
 
 constexpr uint16_t kDefaultPacketTypes =
@@ -2900,22 +2882,11 @@ void acl_write_automatic_flush_timeout(const RawAddress& bd_addr,
   btsnd_hcic_write_auto_flush_tout(p_acl->hci_handle, flush_timeout_in_ticks);
 }
 
-bool acl_create_le_connection_with_id(uint8_t id, const RawAddress& bd_addr) {
-  if (bluetooth::shim::is_gd_acl_enabled()) {
-    bluetooth::shim::ACL_CreateLeConnection(bd_addr);
-    return true;
-  }
-  return connection_manager::direct_connect_add(id, bd_addr);
-}
-
 bool acl_create_le_connection(const RawAddress& bd_addr) {
-  return acl_create_le_connection_with_id(CONN_MGR_ID_L2CAP, bd_addr);
+  return connection_manager::direct_connect_add(CONN_MGR_ID_L2CAP, bd_addr);
 }
 
 void acl_cancel_le_connection(const RawAddress& bd_addr) {
-  if (bluetooth::shim::is_gd_acl_enabled()) {
-    return bluetooth::shim::ACL_CancelLeConnection(bd_addr);
-  }
   connection_manager::direct_connect_remove(CONN_MGR_ID_L2CAP, bd_addr);
 }
 

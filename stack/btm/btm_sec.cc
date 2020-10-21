@@ -86,7 +86,7 @@ static void btm_send_link_key_notif(tBTM_SEC_DEV_REC* p_dev_rec);
 static bool btm_sec_check_prefetch_pin(tBTM_SEC_DEV_REC* p_dev_rec);
 
 static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
-                                               tHCI_STATUS reason,
+                                               uint8_t reason,
                                                uint16_t conn_handle);
 tBTM_SEC_DEV_REC* btm_sec_find_dev_by_sec_state(uint8_t state);
 
@@ -647,7 +647,7 @@ void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len,
     btm_cb.security_mode_changed = true;
     btsnd_hcic_write_auth_enable(true);
 
-    acl_set_disconnect_reason(HCI_ERR_UNDEFINED);
+    acl_set_disconnect_reason(0xff);
 
     /* if we rejected incoming connection request, we have to wait
      * HCI_Connection_Complete event */
@@ -1125,7 +1125,7 @@ bool BTM_SecIsSecurityPending(const RawAddress& bd_addr) {
  * disconnect the ACL link, if it's not done yet.
  ******************************************************************************/
 static tBTM_STATUS btm_sec_send_hci_disconnect(tBTM_SEC_DEV_REC* p_dev_rec,
-                                               tHCI_STATUS reason,
+                                               uint8_t reason,
                                                uint16_t conn_handle) {
   uint8_t old_state = p_dev_rec->sec_state;
   tBTM_STATUS status = BTM_CMD_STARTED;
@@ -3004,7 +3004,17 @@ static bool btm_sec_auth_retry(uint16_t handle, uint8_t status) {
   return false;
 }
 
-void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status) {
+/*******************************************************************************
+ *
+ * Function         btm_sec_auth_complete
+ *
+ * Description      This function is when authentication of the connection is
+ *                  completed by the LM
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_sec_auth_complete(uint16_t handle, uint8_t status) {
   tBTM_PAIRING_STATE old_state = btm_cb.pairing_state;
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
   bool are_bonding = false;
@@ -3151,12 +3161,12 @@ void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status) {
   }
 
   /* Authentication succeeded, execute the next security procedure, if any */
-  uint8_t btm_status = btm_sec_execute_procedure(p_dev_rec);
+  status = btm_sec_execute_procedure(p_dev_rec);
 
   /* If there is no next procedure, or procedure failed to start, notify the
    * caller */
-  if (btm_status != BTM_CMD_STARTED)
-    btm_sec_dev_rec_cback_event(p_dev_rec, btm_status, false);
+  if (status != BTM_CMD_STARTED)
+    btm_sec_dev_rec_cback_event(p_dev_rec, status, false);
 }
 
 /*******************************************************************************
@@ -3630,7 +3640,16 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
   return;
 }
 
-tBTM_STATUS btm_sec_disconnect(uint16_t handle, tHCI_STATUS reason) {
+/*******************************************************************************
+ *
+ * Function         btm_sec_disconnect
+ *
+ * Description      This function is called to disconnect HCI link
+ *
+ * Returns          btm status
+ *
+ ******************************************************************************/
+tBTM_STATUS btm_sec_disconnect(uint16_t handle, uint8_t reason) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
 
   /* In some weird race condition we may not have a record */
