@@ -2196,6 +2196,8 @@ void btm_ble_read_remote_features_complete(uint8_t* p) {
       return;
     }
   }
+
+  btsnd_hcic_rmt_ver_req(handle);
 }
 
 /*******************************************************************************
