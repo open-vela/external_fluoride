@@ -898,7 +898,7 @@ tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
   /* If there is no application registered with this PSM do not allow connection
    */
   if (!p_serv_rec) {
-    LOG_WARN("PSM: %d no application registered", psm);
+    BTM_TRACE_WARNING("%s PSM: %d no application registerd", __func__, psm);
     (*p_callback)(&bd_addr, BT_TRANSPORT_LE, p_ref_data, BTM_MODE_UNSUPPORTED);
     return L2CAP_LE_RESULT_NO_PSM;
   }
@@ -909,17 +909,17 @@ tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
 
   if (!is_originator) {
     if ((p_serv_rec->security_flags & BTM_SEC_IN_ENCRYPT) && !is_encrypted) {
-      LOG_ERROR(
-          "L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP. service "
+      BTM_TRACE_ERROR(
+          "%s: L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP. service "
           "security_flags=0x%x, ",
-          p_serv_rec->security_flags);
+          __func__, p_serv_rec->security_flags);
       return L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP;
     } else if ((p_serv_rec->security_flags & BTM_SEC_IN_AUTHENTICATE) &&
                !(is_link_key_authed || is_authenticated)) {
-      LOG_ERROR(
-          "L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION. service "
+      BTM_TRACE_ERROR(
+          "%s: L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION. service "
           "security_flags=0x%x, ",
-          p_serv_rec->security_flags);
+          __func__, p_serv_rec->security_flags);
       return L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION;
     }
     /* TODO: When security is required, then must check that the key size of our
@@ -934,34 +934,32 @@ tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
 
   switch (sec_act) {
     case BTM_SEC_OK:
-      LOG_DEBUG("Security met");
+      BTM_TRACE_DEBUG("%s Security met", __func__);
       p_callback(&bd_addr, BT_TRANSPORT_LE, p_ref_data, BTM_SUCCESS);
       result = L2CAP_LE_RESULT_CONN_OK;
       break;
 
     case BTM_SEC_ENCRYPT:
-      LOG_DEBUG("Encryption needs to be done");
+      BTM_TRACE_DEBUG("%s Encryption needs to be done", __func__);
       ble_sec_act = BTM_BLE_SEC_ENCRYPT;
       break;
 
     case BTM_SEC_ENCRYPT_MITM:
-      LOG_DEBUG("Pairing with MITM needs to be done");
+      BTM_TRACE_DEBUG("%s Pairing with MITM needs to be done", __func__);
       ble_sec_act = BTM_BLE_SEC_ENCRYPT_MITM;
       break;
 
     case BTM_SEC_ENCRYPT_NO_MITM:
-      LOG_DEBUG("Pairing with No MITM needs to be done");
+      BTM_TRACE_DEBUG("%s Pairing with No MITM needs to be done", __func__);
       ble_sec_act = BTM_BLE_SEC_ENCRYPT_NO_MITM;
       break;
 
     case BTM_SEC_ENC_PENDING:
-      LOG_DEBUG("Ecryption pending");
+      BTM_TRACE_DEBUG("%s Ecryption pending", __func__);
       break;
   }
 
-  if (ble_sec_act == BTM_BLE_SEC_NONE) {
-    return result;
-  }
+  if (ble_sec_act == BTM_BLE_SEC_NONE) return result;
 
   l2cble_update_sec_act(bd_addr, sec_act);
   BTM_SetEncryption(bd_addr, BT_TRANSPORT_LE, p_callback, p_ref_data,
