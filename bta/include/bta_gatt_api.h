@@ -190,6 +190,7 @@ typedef struct {
 } tBTA_GATTC_OPEN;
 
 typedef struct {
+  tGATT_STATUS status;
   uint16_t conn_id;
   tGATT_IF client_if;
   RawAddress remote_bda;
@@ -351,6 +352,7 @@ typedef struct {
   tGATT_IF server_if;
   RawAddress remote_bda;
   uint16_t conn_id;
+  tBTA_GATT_REASON reason; /* report disconnect reason */
   tBT_TRANSPORT transport;
 } tBTA_GATTS_CONN;
 
