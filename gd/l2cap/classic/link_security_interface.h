@@ -81,10 +81,6 @@ class LinkSecurityInterface {
   virtual void EnsureEncrypted() = 0;
 
   virtual uint16_t GetAclHandle() = 0;
-
-  virtual hci::Role GetRole() {
-    return hci::Role::CENTRAL;
-  }
 };
 
 class LinkSecurityInterfaceListener {
