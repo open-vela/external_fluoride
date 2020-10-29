@@ -19,7 +19,6 @@
 #include <cstdint>
 #include "stack/include/bt_types.h"
 #include "stack/include/hci_error_code.h"
-#include "types/ble_address_with_type.h"
 #include "types/raw_address.h"
 
 namespace bluetooth {
