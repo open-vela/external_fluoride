@@ -49,7 +49,6 @@
 #define BT_PROFILE_AV_RC_CTRL_ID "avrcp_ctrl"
 #define BT_PROFILE_HEARING_AID_ID "hearing_aid"
 #define BT_KEYSTORE_ID "bluetooth_keystore"
-#define BT_ACTIVITY_ATTRIBUTION_ID "activity_attribution"
 
 /** Bluetooth Device Name */
 typedef struct { uint8_t name[249]; } __attribute__((packed)) bt_bdname_t;
@@ -474,11 +473,10 @@ typedef struct {
    * The |is_niap_mode| flag inits the adapter in NIAP mode.
    * The |config_compare_result| flag show the config checksum check result if
    * is in NIAP mode.
-   * The |init_flags| are config flags that cannot change during run.
    * The |is_atv| flag indicates whether the local device is an Android TV
    */
   int (*init)(bt_callbacks_t* callbacks, bool guest_mode, bool is_niap_mode,
-              int config_compare_result, const char** init_flags, bool is_atv);
+              int config_compare_result, bool is_atv);
 
   /** Enable Bluetooth. */
   int (*enable)();

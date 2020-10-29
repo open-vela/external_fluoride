@@ -33,16 +33,16 @@
 #include "device/include/controller.h"
 #include "hcidefs.h"
 #include "l2c_api.h"
+#include "l2c_int.h"
 #include "osi/include/osi.h"
 #include "smp_int.h"
-#include "stack/include/acl_api.h"
 
 #define SMP_PAIRING_REQ_SIZE 7
 #define SMP_CONFIRM_CMD_SIZE (OCTET16_LEN + 1)
 #define SMP_RAND_CMD_SIZE (OCTET16_LEN + 1)
 #define SMP_INIT_CMD_SIZE (OCTET16_LEN + 1)
 #define SMP_ENC_INFO_SIZE (OCTET16_LEN + 1)
-#define SMP_CENTRAL_ID_SIZE (BT_OCTET8_LEN + 2 + 1)
+#define SMP_MASTER_ID_SIZE (BT_OCTET8_LEN + 2 + 1)
 #define SMP_ID_INFO_SIZE (OCTET16_LEN + 1)
 #define SMP_ID_ADDR_SIZE (BD_ADDR_LEN + 1 + 1)
 #define SMP_SIGN_INFO_SIZE (OCTET16_LEN + 1)
@@ -64,7 +64,7 @@ static const uint8_t smp_cmd_size_per_spec[] = {
     SMP_RAND_CMD_SIZE,         /* 0x04: pairing random */
     SMP_PAIR_FAIL_SIZE,        /* 0x05: pairing failed */
     SMP_ENC_INFO_SIZE,         /* 0x06: encryption information */
-    SMP_CENTRAL_ID_SIZE,       /* 0x07: central identification */
+    SMP_MASTER_ID_SIZE,        /* 0x07: master identification */
     SMP_ID_INFO_SIZE,          /* 0x08: identity information */
     SMP_ID_ADDR_SIZE,          /* 0x09: identity address information */
     SMP_SIGN_INFO_SIZE,        /* 0x0A: signing information */
@@ -91,7 +91,7 @@ static const tSMP_CMD_LEN_VALID smp_cmd_len_is_valid[] = {
     smp_command_has_valid_fixed_length, /* 0x04: pairing random */
     smp_command_has_valid_fixed_length, /* 0x05: pairing failed */
     smp_command_has_valid_fixed_length, /* 0x06: encryption information */
-    smp_command_has_valid_fixed_length, /* 0x07: central identification */
+    smp_command_has_valid_fixed_length, /* 0x07: master identification */
     smp_command_has_valid_fixed_length, /* 0x08: identity information */
     smp_command_has_valid_fixed_length, /* 0x09: identity address information */
     smp_command_has_valid_fixed_length, /* 0x0A: signing information */
@@ -118,7 +118,7 @@ static const tSMP_CMD_PARAM_RANGES_VALID smp_cmd_param_ranges_are_valid[] = {
     smp_parameter_unconditionally_valid, /* 0x04: pairing random */
     smp_parameter_unconditionally_valid, /* 0x05: pairing failed */
     smp_parameter_unconditionally_valid, /* 0x06: encryption information */
-    smp_parameter_unconditionally_valid, /* 0x07: central identification */
+    smp_parameter_unconditionally_valid, /* 0x07: master identification */
     smp_parameter_unconditionally_valid, /* 0x08: identity information */
     smp_parameter_unconditionally_valid, /* 0x09: identity address
                                             information */
@@ -148,8 +148,8 @@ static BT_HDR* smp_build_security_request(UNUSED_ATTR uint8_t cmd_code,
                                           tSMP_CB* p_cb);
 static BT_HDR* smp_build_signing_info_cmd(UNUSED_ATTR uint8_t cmd_code,
                                           tSMP_CB* p_cb);
-static BT_HDR* smp_build_central_id_cmd(UNUSED_ATTR uint8_t cmd_code,
-                                        tSMP_CB* p_cb);
+static BT_HDR* smp_build_master_id_cmd(UNUSED_ATTR uint8_t cmd_code,
+                                       tSMP_CB* p_cb);
 static BT_HDR* smp_build_id_addr_cmd(UNUSED_ATTR uint8_t cmd_code,
                                      tSMP_CB* p_cb);
 static BT_HDR* smp_build_pair_public_key_cmd(UNUSED_ATTR uint8_t cmd_code,
@@ -162,14 +162,13 @@ static BT_HDR* smp_build_pairing_keypress_notification_cmd(
     UNUSED_ATTR uint8_t cmd_code, tSMP_CB* p_cb);
 
 static const tSMP_CMD_ACT smp_cmd_build_act[] = {
-    NULL,
-    smp_build_pairing_cmd,          /* 0x01: pairing request */
+    NULL, smp_build_pairing_cmd,    /* 0x01: pairing request */
     smp_build_pairing_cmd,          /* 0x02: pairing response */
     smp_build_confirm_cmd,          /* 0x03: pairing confirm */
     smp_build_rand_cmd,             /* 0x04: pairing random */
     smp_build_pairing_fail,         /* 0x05: pairing failure */
     smp_build_encrypt_info_cmd,     /* 0x06: encryption information */
-    smp_build_central_id_cmd,       /* 0x07: central identification */
+    smp_build_master_id_cmd,        /* 0x07: master identification */
     smp_build_identity_info_cmd,    /* 0x08: identity information */
     smp_build_id_addr_cmd,          /* 0x09: identity address information */
     smp_build_signing_info_cmd,     /* 0x0A: signing information */
@@ -341,28 +340,18 @@ bool smp_send_msg_to_L2CAP(const RawAddress& rem_bda, BT_HDR* p_toL2CAP) {
   }
 
   SMP_TRACE_EVENT("%s", __func__);
+  smp_cb.total_tx_unacked += 1;
 
   smp_log_metrics(rem_bda, true /* outgoing */,
                   p_toL2CAP->data + p_toL2CAP->offset, p_toL2CAP->len);
 
   l2cap_ret = L2CA_SendFixedChnlData(fixed_cid, rem_bda, p_toL2CAP);
   if (l2cap_ret == L2CAP_DW_FAILED) {
+    smp_cb.total_tx_unacked -= 1;
     SMP_TRACE_ERROR("SMP failed to pass msg to L2CAP");
     return false;
-  } else {
-    tSMP_CB* p_cb = &smp_cb;
-
-    if (p_cb->wait_for_authorization_complete) {
-      tSMP_INT_DATA smp_int_data;
-      smp_int_data.status = SMP_SUCCESS;
-      if (fixed_cid == L2CAP_SMP_CID) {
-        smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
-      } else {
-        smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
-      }
-    }
+  } else
     return true;
-  }
 }
 
 /*******************************************************************************
@@ -556,26 +545,26 @@ static BT_HDR* smp_build_encrypt_info_cmd(UNUSED_ATTR uint8_t cmd_code,
 
 /*******************************************************************************
  *
- * Function         smp_build_central_id_cmd
+ * Function         smp_build_master_id_cmd
  *
  * Description      Build security information command.
  *
  ******************************************************************************/
-static BT_HDR* smp_build_central_id_cmd(UNUSED_ATTR uint8_t cmd_code,
-                                        tSMP_CB* p_cb) {
+static BT_HDR* smp_build_master_id_cmd(UNUSED_ATTR uint8_t cmd_code,
+                                       tSMP_CB* p_cb) {
   uint8_t* p;
-  BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR) + SMP_CENTRAL_ID_SIZE +
+  BT_HDR* p_buf = (BT_HDR*)osi_malloc(sizeof(BT_HDR) + SMP_MASTER_ID_SIZE +
                                       L2CAP_MIN_OFFSET);
 
   SMP_TRACE_EVENT("%s", __func__);
 
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
-  UINT8_TO_STREAM(p, SMP_OPCODE_CENTRAL_ID);
+  UINT8_TO_STREAM(p, SMP_OPCODE_MASTER_ID);
   UINT16_TO_STREAM(p, p_cb->ediv);
   ARRAY_TO_STREAM(p, p_cb->enc_rand, BT_OCTET8_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
-  p_buf->len = SMP_CENTRAL_ID_SIZE;
+  p_buf->len = SMP_MASTER_ID_SIZE;
 
   return p_buf;
 }
@@ -1125,11 +1114,11 @@ bool smp_pairing_request_response_parameters_are_valid(tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 bool smp_pairing_keypress_notification_is_valid(tSMP_CB* p_cb) {
-  tSMP_SC_KEY_TYPE keypress_notification = p_cb->peer_keypress_notification;
+  tBTM_SP_KEY_TYPE keypress_notification = p_cb->peer_keypress_notification;
 
   SMP_TRACE_DEBUG("%s for cmd code 0x%02x", __func__, p_cb->rcvd_cmd_code);
 
-  if (keypress_notification >= SMP_SC_KEY_OUT_OF_RANGE) {
+  if (keypress_notification >= BTM_SP_KEY_OUT_OF_RANGE) {
     SMP_TRACE_WARNING(
         "Rcvd from the peer cmd 0x%02x with Pairing Keypress "
         "Notification value (0x%02x) out of range).",
@@ -1268,7 +1257,7 @@ tSMP_ASSO_MODEL smp_select_legacy_association_model(tSMP_CB* p_cb) {
   /* otherwise use IO capability to select association model */
   if (p_cb->peer_io_caps < SMP_IO_CAP_MAX &&
       p_cb->local_io_capability < SMP_IO_CAP_MAX) {
-    if (p_cb->role == HCI_ROLE_CENTRAL) {
+    if (p_cb->role == HCI_ROLE_MASTER) {
       model = smp_association_table[p_cb->role][p_cb->peer_io_caps]
                                    [p_cb->local_io_capability];
     } else {
@@ -1306,7 +1295,7 @@ tSMP_ASSO_MODEL smp_select_association_model_secure_connections(tSMP_CB* p_cb) {
   /* otherwise use IO capability to select association model */
   if (p_cb->peer_io_caps < SMP_IO_CAP_MAX &&
       p_cb->local_io_capability < SMP_IO_CAP_MAX) {
-    if (p_cb->role == HCI_ROLE_CENTRAL) {
+    if (p_cb->role == HCI_ROLE_MASTER) {
       model = smp_association_table_sc[p_cb->role][p_cb->peer_io_caps]
                                       [p_cb->local_io_capability];
     } else {
@@ -1316,6 +1305,24 @@ tSMP_ASSO_MODEL smp_select_association_model_secure_connections(tSMP_CB* p_cb) {
   }
 
   return model;
+}
+
+/*******************************************************************************
+ * Function         smp_reverse_array
+ *
+ * Description      This function reverses array bytes
+ *
+ ******************************************************************************/
+void smp_reverse_array(uint8_t* arr, uint8_t len) {
+  uint8_t i = 0, tmp;
+
+  SMP_TRACE_DEBUG("smp_reverse_array");
+
+  for (i = 0; i < len / 2; i++) {
+    tmp = arr[i];
+    arr[i] = arr[len - 1 - i];
+    arr[len - 1 - i] = tmp;
+  }
 }
 
 /*******************************************************************************
@@ -1386,7 +1393,7 @@ void smp_collect_peer_io_capabilities(uint8_t* iocap, tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
-  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
+  tBLE_ADDR_TYPE addr_type = 0;
   RawAddress bda;
   uint8_t* p = le_addr;
 
@@ -1408,7 +1415,7 @@ void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
  *
  ******************************************************************************/
 void smp_collect_peer_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
-  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
+  tBLE_ADDR_TYPE addr_type = 0;
   RawAddress bda;
   uint8_t* p = le_addr;
 
@@ -1493,7 +1500,7 @@ void smp_calculate_f5_mackey_and_long_term_key(tSMP_CB* p_cb) {
 
   SMP_TRACE_DEBUG("%s", __func__);
 
-  if (p_cb->role == HCI_ROLE_CENTRAL) {
+  if (p_cb->role == HCI_ROLE_MASTER) {
     smp_collect_local_ble_address(a, p_cb);
     smp_collect_peer_ble_address(b, p_cb);
     na = p_cb->rand;

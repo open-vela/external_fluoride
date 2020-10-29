@@ -18,15 +18,12 @@
 #pragma once
 
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 #include "hci/address_with_type.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
 #include "hci/security_interface.h"
-#include "l2cap/classic/l2cap_classic_module.h"
-#include "l2cap/classic/link_security_interface.h"
 
 namespace bluetooth {
 namespace security {
@@ -39,42 +36,18 @@ class ISecurityManagerChannelListener {
  public:
   virtual ~ISecurityManagerChannelListener() = default;
   virtual void OnHciEventReceived(hci::EventPacketView packet) = 0;
-  virtual void OnConnectionClosed(hci::Address) = 0;
 };
 
 /**
  * Channel for consolidating traffic and making the transport agnostic.
  */
-class SecurityManagerChannel : public l2cap::classic::LinkSecurityInterfaceListener {
+class SecurityManagerChannel {
  public:
-  SecurityManagerChannel(os::Handler* handler, hci::HciLayer* hci_layer);
-
-  virtual ~SecurityManagerChannel();
-
-  /**
-   * Creates a connection to the device which triggers pairing
-   *
-   * @param address remote address of device to pair with
-   */
-  void Connect(hci::Address address);
-
-  /**
-   * Releases link hold so it can disconnect as normally
-   *
-   * i.e. signals we no longer need this if acl manager wants to clean it up
-   *
-   * @param address remote address to disconnect
-   */
-  void Release(hci::Address address);
-
-  /**
-   * Immediately disconnects currently connected channel
-   *
-   * i.e. force disconnect
-   *
-   * @param address remote address to disconnect
-   */
-  void Disconnect(hci::Address address);
+  explicit SecurityManagerChannel(os::Handler* handler, hci::HciLayer* hci_layer)
+      : listener_(nullptr),
+        hci_security_interface_(hci_layer->GetSecurityInterface(
+            common::Bind(&SecurityManagerChannel::OnHciEventReceived, common::Unretained(this)), handler)),
+        handler_(handler) {}
 
   /**
    * Send a given SMP command over the SecurityManagerChannel
@@ -92,10 +65,6 @@ class SecurityManagerChannel : public l2cap::classic::LinkSecurityInterfaceListe
     listener_ = listener;
   }
 
-  void SetSecurityInterface(l2cap::classic::SecurityInterface* security_interface) {
-    l2cap_security_interface_ = security_interface;
-  }
-
   /**
    * Called when an incoming HCI event happens
    *
@@ -110,19 +79,10 @@ class SecurityManagerChannel : public l2cap::classic::LinkSecurityInterfaceListe
    */
   void OnCommandComplete(hci::CommandCompleteView packet);
 
-  // Interface overrides
-  void OnLinkConnected(std::unique_ptr<l2cap::classic::LinkSecurityInterface> link) override;
-  void OnLinkDisconnected(hci::Address address) override;
-  void OnAuthenticationComplete(hci::Address remote) override;
-  void OnEncryptionChange(hci::Address, bool encrypted) override;
-
  private:
-  ISecurityManagerChannelListener* listener_{nullptr};
-  hci::SecurityInterface* hci_security_interface_{nullptr};
-  os::Handler* handler_{nullptr};
-  l2cap::classic::SecurityInterface* l2cap_security_interface_{nullptr};
-  std::unordered_map<hci::Address, std::unique_ptr<l2cap::classic::LinkSecurityInterface>> link_map_;
-  std::set<hci::Address> outgoing_pairing_remote_devices_;
+  ISecurityManagerChannelListener* listener_;
+  hci::SecurityInterface* hci_security_interface_;
+  os::Handler* handler_;
 };
 
 }  // namespace channel

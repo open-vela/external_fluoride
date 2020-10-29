@@ -24,13 +24,13 @@
 #include <string.h>
 #include "bt_target.h"
 
+#if (BLE_PRIVACY_SPT == TRUE)
 #include "ble_advertiser.h"
 #include "bt_types.h"
 #include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hcimsgs.h"
-#include "stack/btm/btm_dev.h"
 #include "vendor_hcidefs.h"
 
 /* RPA offload VSC specifics */
@@ -63,8 +63,8 @@
  * Returns          void
  *
  ******************************************************************************/
-static void btm_ble_enq_resolving_list_pending(const RawAddress& pseudo_bda,
-                                               uint8_t op_code) {
+void btm_ble_enq_resolving_list_pending(const RawAddress& pseudo_bda,
+                                        uint8_t op_code) {
   tBTM_BLE_RESOLVE_Q* p_q = &btm_cb.ble_ctr_cb.resolving_list_pend_q;
 
   p_q->resolve_q_random_pseudo[p_q->q_next] = pseudo_bda;
@@ -85,8 +85,8 @@ static void btm_ble_enq_resolving_list_pending(const RawAddress& pseudo_bda,
  * Returns          void
  *
  ******************************************************************************/
-static bool btm_ble_brcm_find_resolving_pending_entry(
-    const RawAddress& pseudo_addr, uint8_t action) {
+bool btm_ble_brcm_find_resolving_pending_entry(const RawAddress& pseudo_addr,
+                                               uint8_t action) {
   tBTM_BLE_RESOLVE_Q* p_q = &btm_cb.ble_ctr_cb.resolving_list_pend_q;
 
   for (uint8_t i = p_q->q_pending; i != p_q->q_next;) {
@@ -112,7 +112,7 @@ static bool btm_ble_brcm_find_resolving_pending_entry(
  * Returns          void
  *
  ******************************************************************************/
-static bool btm_ble_deq_resolving_pending(RawAddress& pseudo_addr) {
+bool btm_ble_deq_resolving_pending(RawAddress& pseudo_addr) {
   tBTM_BLE_RESOLVE_Q* p_q = &btm_cb.ble_ctr_cb.resolving_list_pend_q;
 
   if (p_q->q_next != p_q->q_pending) {
@@ -136,7 +136,7 @@ static bool btm_ble_deq_resolving_pending(RawAddress& pseudo_addr) {
  * Returns          none
  *
  ******************************************************************************/
-static void btm_ble_clear_irk_index(uint8_t index) {
+void btm_ble_clear_irk_index(uint8_t index) {
   uint8_t byte;
   uint8_t bit;
 
@@ -156,7 +156,7 @@ static void btm_ble_clear_irk_index(uint8_t index) {
  * Returns          index from 0 ~ max (127 default)
  *
  ******************************************************************************/
-static uint8_t btm_ble_find_irk_index(void) {
+uint8_t btm_ble_find_irk_index(void) {
   uint8_t i = 0;
   uint8_t byte;
   uint8_t bit;
@@ -185,8 +185,7 @@ static uint8_t btm_ble_find_irk_index(void) {
  * Returns          void
  *
  ******************************************************************************/
-static void btm_ble_update_resolving_list(const RawAddress& pseudo_bda,
-                                          bool add) {
+void btm_ble_update_resolving_list(const RawAddress& pseudo_bda, bool add) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(pseudo_bda);
   if (p_dev_rec == NULL) return;
 
@@ -204,7 +203,7 @@ static void btm_ble_update_resolving_list(const RawAddress& pseudo_bda,
   }
 }
 
-static bool clear_resolving_list_bit(void* data, void* context) {
+bool clear_resolving_list_bit(void* data, void* context) {
   tBTM_SEC_DEV_REC* p_dev_rec = static_cast<tBTM_SEC_DEV_REC*>(data);
   p_dev_rec->ble.in_controller_list &= ~BTM_RESOLVING_LIST_BIT;
   return true;
@@ -337,9 +336,7 @@ void btm_ble_remove_resolving_list_entry_complete(uint8_t* p,
  *
  ******************************************************************************/
 void btm_ble_read_resolving_list_entry_complete(uint8_t* p, uint16_t evt_len) {
-  uint8_t status;
-  tBTM_SEC_BLE::tADDRESS_TYPE rra_type =
-      tBTM_SEC_BLE::tADDRESS_TYPE::BTM_BLE_ADDR_PSEUDO;
+  uint8_t status, rra_type = BTM_BLE_ADDR_PSEUDO;
   RawAddress rra, pseudo_bda;
 
   STREAM_TO_UINT8(status, p);
@@ -379,7 +376,7 @@ void btm_ble_read_resolving_list_entry_complete(uint8_t* p, uint16_t evt_len) {
  * Returns          void
  *
  ******************************************************************************/
-static void btm_ble_resolving_list_vsc_op_cmpl(tBTM_VSC_CMPL* p_params) {
+void btm_ble_resolving_list_vsc_op_cmpl(tBTM_VSC_CMPL* p_params) {
   uint8_t *p = p_params->p_param_buf, op_subcode;
   uint16_t evt_len = p_params->param_len;
 
@@ -418,16 +415,15 @@ tBTM_STATUS btm_ble_remove_resolving_list_entry(tBTM_SEC_DEV_REC* p_dev_rec) {
     return BTM_WRONG_MODE;
 
   if (controller_get_interface()->supports_ble_privacy()) {
-    btsnd_hcic_ble_rm_device_resolving_list(
-        p_dev_rec->ble.identity_address_with_type.type,
-        p_dev_rec->ble.identity_address_with_type.bda);
+    btsnd_hcic_ble_rm_device_resolving_list(p_dev_rec->ble.identity_addr_type,
+                                            p_dev_rec->ble.identity_addr);
   } else {
     uint8_t param[20] = {0};
     uint8_t* p = param;
 
     UINT8_TO_STREAM(p, BTM_BLE_META_REMOVE_IRK_ENTRY);
-    UINT8_TO_STREAM(p, p_dev_rec->ble.identity_address_with_type.type);
-    BDADDR_TO_STREAM(p, p_dev_rec->ble.identity_address_with_type.bda);
+    UINT8_TO_STREAM(p, p_dev_rec->ble.identity_addr_type);
+    BDADDR_TO_STREAM(p, p_dev_rec->ble.identity_addr);
 
     BTM_VendorSpecificCommand(HCI_VENDOR_BLE_RPA_VSC,
                               BTM_BLE_META_REMOVE_IRK_LEN, param,
@@ -470,20 +466,16 @@ void btm_ble_clear_resolving_list(void) {
  *
  * Parameters       entry index.
  *
- * Returns          true if command successfully sent, false otherwise
+ * Returns          status
  *
  ******************************************************************************/
-bool btm_ble_read_resolving_list_entry(tBTM_SEC_DEV_REC* p_dev_rec) {
-  if (!(p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT)) {
-    LOG_INFO("%s Unable to read resolving list entry as resolving bit not set",
-             __func__);
-    return false;
-  }
+tBTM_STATUS btm_ble_read_resolving_list_entry(tBTM_SEC_DEV_REC* p_dev_rec) {
+  if (!(p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT))
+    return BTM_WRONG_MODE;
 
   if (controller_get_interface()->supports_ble_privacy()) {
-    btsnd_hcic_ble_read_resolvable_addr_peer(
-        p_dev_rec->ble.identity_address_with_type.type,
-        p_dev_rec->ble.identity_address_with_type.bda);
+    btsnd_hcic_ble_read_resolvable_addr_peer(p_dev_rec->ble.identity_addr_type,
+                                             p_dev_rec->ble.identity_addr);
   } else {
     uint8_t param[20] = {0};
     uint8_t* p = param;
@@ -498,7 +490,7 @@ bool btm_ble_read_resolving_list_entry(tBTM_SEC_DEV_REC* p_dev_rec) {
   btm_ble_enq_resolving_list_pending(p_dev_rec->bd_addr,
                                      BTM_BLE_META_READ_IRK_ENTRY);
 
-  return true;
+  return BTM_CMD_STARTED;
 }
 
 /*******************************************************************************
@@ -514,7 +506,7 @@ bool btm_ble_read_resolving_list_entry(tBTM_SEC_DEV_REC* p_dev_rec) {
  * Returns          true if suspended; false otherwise
  *
  ******************************************************************************/
-static bool btm_ble_suspend_resolving_list_activity(void) {
+bool btm_ble_suspend_resolving_list_activity(void) {
   tBTM_BLE_CB* p_ble_cb = &btm_cb.ble_ctr_cb;
 
   /* if resolving list is not enabled, do not need to terminate any activity */
@@ -536,7 +528,7 @@ static bool btm_ble_suspend_resolving_list_activity(void) {
     BleAdvertisingManager::Get()->Suspend();
   }
 
-  if (p_ble_cb->is_ble_scan_active()) {
+  if (BTM_BLE_IS_SCAN_ACTIVE(p_ble_cb->scan_activity)) {
     btm_ble_stop_scan();
     p_ble_cb->suspended_rl_state |= BTM_BLE_RL_SCAN;
   }
@@ -558,7 +550,7 @@ static bool btm_ble_suspend_resolving_list_activity(void) {
  * Returns          none
  *
  ******************************************************************************/
-static void btm_ble_resume_resolving_list_activity(void) {
+void btm_ble_resume_resolving_list_activity(void) {
   tBTM_BLE_CB* p_ble_cb = &btm_cb.ble_ctr_cb;
 
   if (p_ble_cb->suspended_rl_state & BTM_BLE_RL_ADV) btm_ble_start_adv();
@@ -587,7 +579,7 @@ static void btm_ble_resume_resolving_list_activity(void) {
  * Parameters       enable: enable or disable the RRA offloading feature
  *
  ******************************************************************************/
-static void btm_ble_vendor_enable_irk_feature(bool enable) {
+void btm_ble_vendor_enable_irk_feature(bool enable) {
   uint8_t param[20], *p;
 
   p = param;
@@ -610,7 +602,7 @@ static void btm_ble_vendor_enable_irk_feature(bool enable) {
  * Returns          none
  *
  ******************************************************************************/
-static bool btm_ble_exe_disable_resolving_list(void) {
+bool btm_ble_exe_disable_resolving_list(void) {
   if (!btm_ble_suspend_resolving_list_activity()) return false;
 
   if (!controller_get_interface()->supports_ble_privacy())
@@ -630,7 +622,7 @@ static bool btm_ble_exe_disable_resolving_list(void) {
  * Returns          none
  *
  ******************************************************************************/
-static void btm_ble_exe_enable_resolving_list(void) {
+void btm_ble_exe_enable_resolving_list(void) {
   if (!btm_ble_suspend_resolving_list_activity()) return;
 
   if (!controller_get_interface()->supports_ble_privacy())
@@ -675,7 +667,7 @@ bool btm_ble_disable_resolving_list(uint8_t rl_mask, bool to_resume) {
  * Function         btm_ble_resolving_list_load_dev
  *
  * Description      This function adds a device which is using RPA into the
- *                  acceptlist.
+ *                  white list.
  *
  * Parameters       pointer to device security record
  *
@@ -733,26 +725,23 @@ bool btm_ble_resolving_list_load_dev(tBTM_SEC_DEV_REC* p_dev_rec) {
     const Octet16& peer_irk = p_dev_rec->ble.keys.irk;
     const Octet16& local_irk = btm_cb.devcb.id_keys.irk;
 
-    if (p_dev_rec->ble.identity_address_with_type.bda.IsEmpty()) {
-      p_dev_rec->ble.identity_address_with_type.bda = p_dev_rec->bd_addr;
-      p_dev_rec->ble.identity_address_with_type.type =
-          p_dev_rec->ble.ble_addr_type;
+    if (p_dev_rec->ble.identity_addr.IsEmpty()) {
+      p_dev_rec->ble.identity_addr = p_dev_rec->bd_addr;
+      p_dev_rec->ble.identity_addr_type = p_dev_rec->ble.ble_addr_type;
     }
 
-    BTM_TRACE_DEBUG(
-        "%s: adding device %s to controller resolving list", __func__,
-        p_dev_rec->ble.identity_address_with_type.bda.ToString().c_str());
+    BTM_TRACE_DEBUG("%s: adding device %s to controller resolving list",
+                    __func__, p_dev_rec->ble.identity_addr.ToString().c_str());
 
     // use identical IRK for now
-    btsnd_hcic_ble_add_device_resolving_list(
-        p_dev_rec->ble.identity_address_with_type.type,
-        p_dev_rec->ble.identity_address_with_type.bda, peer_irk, local_irk);
+    btsnd_hcic_ble_add_device_resolving_list(p_dev_rec->ble.identity_addr_type,
+                                             p_dev_rec->ble.identity_addr,
+                                             peer_irk, local_irk);
 
     if (controller_get_interface()->supports_ble_set_privacy_mode()) {
       BTM_TRACE_DEBUG("%s: adding device privacy mode", __func__);
-      btsnd_hcic_ble_set_privacy_mode(
-          p_dev_rec->ble.identity_address_with_type.type,
-          p_dev_rec->ble.identity_address_with_type.bda, 0x01);
+      btsnd_hcic_ble_set_privacy_mode(p_dev_rec->ble.identity_addr_type,
+                                      p_dev_rec->ble.identity_addr, 0x01);
     }
   } else {
     uint8_t param[40] = {0};
@@ -760,8 +749,8 @@ bool btm_ble_resolving_list_load_dev(tBTM_SEC_DEV_REC* p_dev_rec) {
 
     UINT8_TO_STREAM(p, BTM_BLE_META_ADD_IRK_ENTRY);
     ARRAY_TO_STREAM(p, p_dev_rec->ble.keys.irk, OCTET16_LEN);
-    UINT8_TO_STREAM(p, p_dev_rec->ble.identity_address_with_type.type);
-    BDADDR_TO_STREAM(p, p_dev_rec->ble.identity_address_with_type.bda);
+    UINT8_TO_STREAM(p, p_dev_rec->ble.identity_addr_type);
+    BDADDR_TO_STREAM(p, p_dev_rec->ble.identity_addr);
 
     BTM_VendorSpecificCommand(HCI_VENDOR_BLE_RPA_VSC, BTM_BLE_META_ADD_IRK_LEN,
                               param, btm_ble_resolving_list_vsc_op_cmpl);
@@ -832,10 +821,24 @@ void btm_ble_enable_resolving_list(uint8_t rl_mask) {
   }
 }
 
-static bool is_on_resolving_list(void* data, void* context) {
+/*******************************************************************************
+ *
+ * Function         btm_ble_resolving_list_empty
+ *
+ * Description      check to see if resoving list is empty or not
+ *
+ * Returns          true: empty; false non-empty
+ *
+ ******************************************************************************/
+bool btm_ble_resolving_list_empty(void) {
+  return (controller_get_interface()->get_ble_resolving_list_max_size() ==
+          btm_cb.ble_ctr_cb.resolving_list_avail_size);
+}
+
+bool is_on_resolving_list(void* data, void* context) {
   tBTM_SEC_DEV_REC* p_dev = static_cast<tBTM_SEC_DEV_REC*>(data);
   if ((p_dev->ble.in_controller_list & BTM_RESOLVING_LIST_BIT) &&
-      (p_dev->ble.in_controller_list & BTM_ACCEPTLIST_BIT))
+      (p_dev->ble.in_controller_list & BTM_WHITE_LIST_BIT))
     return false;
 
   return true;
@@ -846,7 +849,7 @@ static bool is_on_resolving_list(void* data, void* context) {
  * Function         btm_ble_enable_resolving_list_for_platform
  *
  * Description      enable/disable resolving list feature depending on if any
- *                  resolving list is empty and acceptlist is involoved in the
+ *                  resolving list is empty and whitelist is involoved in the
  *                  operation.
  *
  * Returns          none
@@ -905,3 +908,26 @@ void btm_ble_resolving_list_init(uint8_t max_irk_list_sz) {
   btm_ble_clear_resolving_list();
   btm_cb.ble_ctr_cb.resolving_list_avail_size = max_irk_list_sz;
 }
+
+/*******************************************************************************
+ *
+ * Function         btm_ble_resolving_list_cleanup
+ *
+ * Description      Cleanup resolving list dynamic memory
+ *
+ * Parameters
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_ble_resolving_list_cleanup(void) {
+  tBTM_BLE_RESOLVE_Q* p_q = &btm_cb.ble_ctr_cb.resolving_list_pend_q;
+
+  osi_free_and_reset((void**)&p_q->resolve_q_random_pseudo);
+  osi_free_and_reset((void**)&p_q->resolve_q_action);
+
+  controller_get_interface()->set_ble_resolving_list_max_size(0);
+
+  osi_free_and_reset((void**)&btm_cb.ble_ctr_cb.irk_list_mask);
+}
+#endif

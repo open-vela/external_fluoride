@@ -210,7 +210,8 @@ static void bta_ag_send_result(tBTA_AG_SCB* p_scb, size_t code,
                                const char* p_arg, int16_t int_arg) {
   const tBTA_AG_RESULT* result = bta_ag_result_by_code(code);
   if (result == nullptr) {
-    LOG_ERROR("%s Unable to lookup result for code %zu", __func__, code);
+    LOG_ERROR(LOG_TAG, "%s Unable to lookup result for code %zu", __func__,
+              code);
     return;
   }
 
@@ -839,7 +840,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
   uint32_t i, ind_id;
   uint32_t bia_masked_out;
   if (p_arg == nullptr) {
-    LOG_WARN("p_arg is null for cmd 0x%x, send error and return", cmd);
+    APPL_TRACE_ERROR("%s: p_arg is null, send error and return", __func__);
     bta_ag_send_error(p_scb, BTA_AG_ERR_INV_CHAR_IN_TSTR);
     return;
   }
@@ -854,7 +855,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
   val.bd_addr = p_scb->peer_addr;
 
   if ((p_end - p_arg + 1) >= (long)sizeof(val.str)) {
-    LOG_ERROR("p_arg is too long for cmd 0x%x, send error and return", cmd);
+    APPL_TRACE_ERROR("%s: p_arg is too long, send error and return", __func__);
     bta_ag_send_error(p_scb, BTA_AG_ERR_TEXT_TOO_LONG);
     android_errorWriteLog(0x534e4554, "112860487");
     return;
@@ -961,14 +962,8 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
         /* send OK */
         bta_ag_send_ok(p_scb);
 
-        /* if service level conn. not already open and our features and
-        ** peer features do not have HF Indicators, service level conn. now open
-        */
-        if (!p_scb->svc_conn &&
-            !((p_scb->features & BTA_AG_FEAT_HF_IND) &&
-              (p_scb->peer_features & BTA_AG_PEER_FEAT_HF_IND))) {
-          bta_ag_svc_conn_open(p_scb, tBTA_AG_DATA::kEmpty);
-        }
+        /* if service level conn. not already open, now it's open */
+        bta_ag_svc_conn_open(p_scb, tBTA_AG_DATA::kEmpty);
       } else {
         val.idx = bta_ag_parse_chld(p_scb, val.str);
 
@@ -1059,13 +1054,11 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type,
         bta_ag_send_ok(p_scb);
 
         /* if service level conn. not already open and our features and
-         * peer features do not have 3-way or HF Indicators, service level conn.
-         * now open */
+        ** peer features do not have 3-way, service level conn. now open
+        */
         if (!p_scb->svc_conn &&
             !((p_scb->features & BTA_AG_FEAT_3WAY) &&
-              (p_scb->peer_features & BTA_AG_PEER_FEAT_3WAY)) &&
-            !((p_scb->features & BTA_AG_FEAT_HF_IND) &&
-              (p_scb->peer_features & BTA_AG_PEER_FEAT_HF_IND))) {
+              (p_scb->peer_features & BTA_AG_PEER_FEAT_3WAY))) {
           bta_ag_svc_conn_open(p_scb, tBTA_AG_DATA::kEmpty);
         }
       } else {

@@ -18,19 +18,8 @@
 
 #include "security/pairing_handler_le.h"
 
-#include "os/rand.h"
-
 namespace bluetooth {
 namespace security {
-
-MyOobData PairingHandlerLe::GenerateOobData() {
-  MyOobData data{};
-  std::tie(data.private_key, data.public_key) = GenerateECDHKeyPair();
-
-  data.r = bluetooth::os::GenerateRandom<16>();
-  data.c = crypto_toolbox::f4(data.public_key.x.data(), data.public_key.x.data(), data.r, 0);
-  return data;
-}
 
 void PairingHandlerLe::PairingMain(InitialInformations i) {
   LOG_INFO("Pairing Started");
@@ -46,8 +35,7 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     std::optional<PairingEvent> pairingAccepted = WaitUiPairingAccept();
     if (!pairingAccepted || pairingAccepted->ui_value == 0) {
       LOG_INFO("User either did not accept the remote pairing, or the prompt timed out");
-      // TODO: Uncomment this one once we find a way to attempt to send packet when the link is down
-      // SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::UNSPECIFIED_REASON));
+      SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::UNSPECIFIED_REASON));
       i.OnPairingFinished(PairingFailure("User either did not accept the remote pairing, or the prompt timed out"));
       return;
     }
@@ -68,18 +56,6 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
 
   auto [pairing_request, pairing_response] = std::get<Phase1Result>(phase_1_result);
 
-  uint8_t key_size =
-      std::min(pairing_request.GetMaximumEncryptionKeySize(), pairing_response.GetMaximumEncryptionKeySize());
-  if (key_size < 7 || key_size > 16) {
-    LOG_WARN("Resulting key size is bad %d", key_size);
-    SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::ENCRYPTION_KEY_SIZE));
-    i.OnPairingFinished(PairingFailure("Resulting key size is bad", PairingFailedReason::ENCRYPTION_KEY_SIZE));
-    return;
-  }
-  if (key_size != 16) {
-    LOG_WARN("Resulting key size is less than 16 octets!");
-  }
-
   /************************************************ PHASE 2 *********************************************************/
   bool isSecureConnections = pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskSc;
   if (isSecureConnections) {
@@ -96,7 +72,7 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     */
 
     OobDataFlag remote_have_oob_data =
-        IAmCentral(i) ? pairing_response.GetOobDataFlag() : pairing_request.GetOobDataFlag();
+        IAmMaster(i) ? pairing_response.GetOobDataFlag() : pairing_request.GetOobDataFlag();
 
     auto key_exchange_result = ExchangePublicKeys(i, remote_have_oob_data);
     if (std::holds_alternative<PairingFailure>(key_exchange_result)) {
@@ -122,16 +98,11 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     }
 
     Octet16 ltk = std::get<Octet16>(stage_2_result);
-    // Mask the key
-    std::fill(ltk.begin() + key_size, ltk.end(), 0x00);
-
-    if (IAmCentral(i)) {
+    if (IAmMaster(i)) {
       LOG_INFO("Sending start encryption request");
       SendHciLeStartEncryption(i, i.connection_handle, {0}, {0}, ltk);
-    } else {
-      auto ltk_req = WaitLeLongTermKeyRequest();
-      SendHciLeLongTermKeyReply(i, i.connection_handle, ltk);
     }
+
   } else {
     // 2.3.5.5 LE legacy pairing phase 2
     LOG_INFO("Pairing Phase 2 LE legacy pairing Started");
@@ -152,14 +123,8 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     }
 
     Octet16 stk = std::get<Octet16>(stage2result);
-    // Mask the key
-    std::fill(stk.begin() + key_size, stk.end(), 0x00);
-    if (IAmCentral(i)) {
-      LOG_INFO("Sending start encryption request");
+    if (IAmMaster(i)) {
       SendHciLeStartEncryption(i, i.connection_handle, {0}, {0}, stk);
-    } else {
-      auto ltk_req = WaitLeLongTermKeyRequest();
-      SendHciLeLongTermKeyReply(i, i.connection_handle, stk);
     }
   }
 
@@ -196,20 +161,11 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
     return;
   }
 
-  // If it's secure connections pairing, do cross-transport key derivation
-  DistributedKeys distributed_keys = std::get<DistributedKeys>(keyExchangeStatus);
-  if ((pairing_response.GetAuthReq() & AuthReqMaskSc) && distributed_keys.remote_ltk.has_value()) {
-    bool use_h7 = (pairing_response.GetAuthReq() & AuthReqMaskCt2);
-    Octet16 link_key = crypto_toolbox::ltk_to_link_key(*(distributed_keys.remote_ltk), use_h7);
-    distributed_keys.remote_link_key = link_key;
-  }
-
   // bool bonding = pairing_request.GetAuthReq() & pairing_response.GetAuthReq() & AuthReqMaskBondingFlag;
 
   i.OnPairingFinished(PairingResult{
       .connection_address = i.remote_connection_address,
-      .distributed_keys = distributed_keys,
-      .key_size = key_size,
+      .distributed_keys = std::get<DistributedKeys>(keyExchangeStatus),
   });
 
   LOG_INFO("Pairing finished successfully.");
@@ -218,7 +174,7 @@ void PairingHandlerLe::PairingMain(InitialInformations i) {
 Phase1ResultOrFailure PairingHandlerLe::ExchangePairingFeature(const InitialInformations& i) {
   LOG_INFO("Phase 1 start");
 
-  if (IAmCentral(i)) {
+  if (IAmMaster(i)) {
     // Send Pairing Request
     const auto& x = i.myPairingCapabilities;
     auto pairing_request_builder =
@@ -241,8 +197,8 @@ Phase1ResultOrFailure PairingHandlerLe::ExchangePairingFeature(const InitialInfo
     LOG_INFO("Waiting for Pairing Response");
     auto response = WaitPairingResponse();
 
-    /* There is a potential collision where the peripheral initiates the pairing at the same time we initiate it, by
-     * sending security request. */
+    /* There is a potential collision where the slave initiates the pairing at the same time we initiate it, by sending
+     * security request. */
     if (std::holds_alternative<PairingFailure>(response) &&
         std::get<PairingFailure>(response).received_code_ == Code::SECURITY_REQUEST) {
       LOG_INFO("Received security request, waiting for Pairing Response again...");
@@ -266,7 +222,7 @@ Phase1ResultOrFailure PairingHandlerLe::ExchangePairingFeature(const InitialInfo
 
     if (i.remotely_initiated) {
       if (!i.pairing_request.has_value()) {
-        return PairingFailure("You must pass PairingRequest as a initial information to peripheral!");
+        return PairingFailure("You must pass PairingRequest as a initial information to slave!");
       }
 
       pairing_request = i.pairing_request.value();
@@ -284,13 +240,6 @@ Phase1ResultOrFailure PairingHandlerLe::ExchangePairingFeature(const InitialInfo
       }
 
       pairing_request = std::get<PairingRequestView>(request);
-    }
-
-    uint8_t key_size = pairing_request->GetMaximumEncryptionKeySize();
-    if (key_size < 7 || key_size > 16) {
-      LOG_WARN("Resulting key size is bad %d", key_size);
-      SendL2capPacket(i, PairingFailedBuilder::Create(PairingFailedReason::ENCRYPTION_KEY_SIZE));
-      return PairingFailure("Resulting key size is bad", PairingFailedReason::ENCRYPTION_KEY_SIZE);
     }
 
     // Send Pairing Request
@@ -324,9 +273,9 @@ DistributedKeysOrFailure PairingHandlerLe::DistributeKeys(const InitialInformati
                                                           const PairingResponseView& pairing_response,
                                                           bool isSecureConnections) {
   uint8_t keys_i_receive =
-      IAmCentral(i) ? pairing_response.GetResponderKeyDistribution() : pairing_response.GetInitiatorKeyDistribution();
+      IAmMaster(i) ? pairing_response.GetResponderKeyDistribution() : pairing_response.GetInitiatorKeyDistribution();
   uint8_t keys_i_send =
-      IAmCentral(i) ? pairing_response.GetInitiatorKeyDistribution() : pairing_response.GetResponderKeyDistribution();
+      IAmMaster(i) ? pairing_response.GetInitiatorKeyDistribution() : pairing_response.GetResponderKeyDistribution();
 
   // In Secure Connections on the LE Transport, the EncKey field shall be ignored
   if (isSecureConnections) {
@@ -334,20 +283,19 @@ DistributedKeysOrFailure PairingHandlerLe::DistributeKeys(const InitialInformati
     keys_i_receive = (~KeyMaskEnc) & keys_i_receive;
   }
 
-  LOG_INFO("Key distribution start, keys_i_send=0x%02x, keys_i_receive=0x%02x", keys_i_send, keys_i_receive);
+  LOG_INFO("Key distribution start, keys_i_send=%02x, keys_i_receive=%02x", keys_i_send, keys_i_receive);
 
-  // TODO: obtain actual values, and apply key_size to the LTK
-  Octet16 my_ltk = bluetooth::os::GenerateRandom<16>();
-  uint16_t my_ediv = bluetooth::os::GenerateRandom();
-  std::array<uint8_t, 8> my_rand = bluetooth::os::GenerateRandom<8>();
+  // TODO: obtain actual values!
+  Octet16 my_ltk = {0};
+  uint16_t my_ediv{0};
+  std::array<uint8_t, 8> my_rand = {0};
 
-  Octet16 my_irk = i.my_identity_resolving_key;
-  Address my_identity_address = i.my_identity_address.GetAddress();
-  AddrType my_identity_address_type =
-      static_cast<bluetooth::security::AddrType>(i.my_identity_address.GetAddressType());
+  Octet16 my_irk = {0x01};
+  Address my_identity_address;
+  AddrType my_identity_address_type = AddrType::PUBLIC;
   Octet16 my_signature_key{0};
 
-  if (IAmCentral(i)) {
+  if (IAmMaster(i)) {
     // EncKey is unused for LE Secure Connections
     DistributedKeysOrFailure keys = ReceiveKeys(keys_i_receive);
     if (std::holds_alternative<PairingFailure>(keys)) {
@@ -356,10 +304,6 @@ DistributedKeysOrFailure PairingHandlerLe::DistributeKeys(const InitialInformati
 
     SendKeys(i, keys_i_send, my_ltk, my_ediv, my_rand, my_irk, my_identity_address, my_identity_address_type,
              my_signature_key);
-
-    std::get<DistributedKeys>(keys).local_ltk = my_ltk;
-    std::get<DistributedKeys>(keys).local_ediv = my_ediv;
-    std::get<DistributedKeys>(keys).local_rand = my_rand;
     LOG_INFO("Key distribution finish");
     return keys;
   } else {
@@ -370,10 +314,6 @@ DistributedKeysOrFailure PairingHandlerLe::DistributeKeys(const InitialInformati
     if (std::holds_alternative<PairingFailure>(keys)) {
       return keys;
     }
-
-    std::get<DistributedKeys>(keys).local_ltk = my_ltk;
-    std::get<DistributedKeys>(keys).local_ediv = my_ediv;
-    std::get<DistributedKeys>(keys).local_rand = my_rand;
     LOG_INFO("Key distribution finish");
     return keys;
   }
@@ -383,7 +323,8 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
   std::optional<Octet16> ltk;                 /* Legacy only */
   std::optional<uint16_t> ediv;               /* Legacy only */
   std::optional<std::array<uint8_t, 8>> rand; /* Legacy only */
-  std::optional<hci::AddressWithType> identity_address;
+  std::optional<Address> identity_address;
+  AddrType identity_address_type;
   std::optional<Octet16> irk;
   std::optional<Octet16> signature_key;
 
@@ -398,13 +339,13 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
     }
 
     {
-      auto packet = WaitCentralIdentification();
+      auto packet = WaitMasterIdentification();
       if (std::holds_alternative<PairingFailure>(packet)) {
-        LOG_ERROR(" Was expecting Central Identification but did not receive!");
+        LOG_ERROR(" Was expecting Master Identification but did not receive!");
         return std::get<PairingFailure>(packet);
       }
-      ediv = std::get<CentralIdentificationView>(packet).GetEdiv();
-      rand = std::get<CentralIdentificationView>(packet).GetRand();
+      ediv = std::get<MasterIdentificationView>(packet).GetEdiv();
+      rand = std::get<MasterIdentificationView>(packet).GetRand();
     }
   }
 
@@ -426,10 +367,8 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
       return std::get<PairingFailure>(iapacket);
     }
     LOG_INFO("Received Identity Address Information");
-    auto iapacketview = std::get<IdentityAddressInformationView>(iapacket);
-    identity_address = hci::AddressWithType(iapacketview.GetBdAddr(), iapacketview.GetAddrType() == AddrType::PUBLIC
-                                                                          ? hci::AddressType::PUBLIC_DEVICE_ADDRESS
-                                                                          : hci::AddressType::RANDOM_DEVICE_ADDRESS);
+    identity_address = std::get<IdentityAddressInformationView>(iapacket).GetBdAddr();
+    identity_address_type = std::get<IdentityAddressInformationView>(iapacket).GetAddrType();
   }
 
   if (keys_i_receive & KeyMaskSign) {
@@ -443,12 +382,7 @@ DistributedKeysOrFailure PairingHandlerLe::ReceiveKeys(const uint8_t& keys_i_rec
     signature_key = std::get<SigningInformationView>(packet).GetSignatureKey();
   }
 
-  return DistributedKeys{.remote_ltk = ltk,
-                         .remote_ediv = ediv,
-                         .remote_rand = rand,
-                         .remote_identity_address = identity_address,
-                         .remote_irk = irk,
-                         .remote_signature_key = signature_key};
+  return DistributedKeys{ltk, ediv, rand, identity_address, identity_address_type, irk, signature_key};
 }
 
 void PairingHandlerLe::SendKeys(const InitialInformations& i, const uint8_t& keys_i_send, Octet16 ltk, uint16_t ediv,
@@ -457,8 +391,8 @@ void PairingHandlerLe::SendKeys(const InitialInformations& i, const uint8_t& key
   if (keys_i_send & KeyMaskEnc) {
     LOG_INFO("Sending Encryption Information");
     SendL2capPacket(i, EncryptionInformationBuilder::Create(ltk));
-    LOG_INFO("Sending Central Identification");
-    SendL2capPacket(i, CentralIdentificationBuilder::Create(ediv, rand));
+    LOG_INFO("Sending Master Identification");
+    SendL2capPacket(i, MasterIdentificationBuilder::Create(ediv, rand));
   }
 
   if (keys_i_send & KeyMaskId) {

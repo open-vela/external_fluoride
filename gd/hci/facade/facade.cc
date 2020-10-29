@@ -67,68 +67,59 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     std::vector<uint8_t> bytes_;
   };
 
-  ::grpc::Status SendCommandWithComplete(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hci::Command* command,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status EnqueueCommandWithComplete(::grpc::ServerContext* context, const ::bluetooth::hci::CommandMsg* command,
+                                            ::google::protobuf::Empty* response) override {
     auto packet = std::make_unique<TestCommandBuilder>(
-        std::vector<uint8_t>(command->payload().begin(), command->payload().end()));
+        std::vector<uint8_t>(command->command().begin(), command->command().end()));
     hci_layer_->EnqueueCommand(std::move(packet),
-                               facade_handler_->BindOnceOn(this, &HciLayerFacadeService::on_complete));
+                               common::BindOnce(&HciLayerFacadeService::on_complete, common::Unretained(this)),
+                               facade_handler_);
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SendCommandWithStatus(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hci::Command* command,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status EnqueueCommandWithStatus(::grpc::ServerContext* context, const ::bluetooth::hci::CommandMsg* command,
+                                          ::google::protobuf::Empty* response) override {
     auto packet = std::make_unique<TestCommandBuilder>(
-        std::vector<uint8_t>(command->payload().begin(), command->payload().end()));
-    hci_layer_->EnqueueCommand(std::move(packet), facade_handler_->BindOnceOn(this, &HciLayerFacadeService::on_status));
+        std::vector<uint8_t>(command->command().begin(), command->command().end()));
+    hci_layer_->EnqueueCommand(std::move(packet),
+                               common::BindOnce(&HciLayerFacadeService::on_status, common::Unretained(this)),
+                               facade_handler_);
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status RequestEvent(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hci::EventRequest* event,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status RegisterEventHandler(::grpc::ServerContext* context, const ::bluetooth::hci::EventCodeMsg* event,
+                                      ::google::protobuf::Empty* response) override {
     hci_layer_->RegisterEventHandler(static_cast<EventCode>(event->code()),
-                                     facade_handler_->BindOn(this, &HciLayerFacadeService::on_event));
+                                     common::Bind(&HciLayerFacadeService::on_event, common::Unretained(this)),
+                                     facade_handler_);
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status RequestLeSubevent(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hci::EventRequest* event,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status RegisterLeEventHandler(::grpc::ServerContext* context,
+                                        const ::bluetooth::hci::LeSubeventCodeMsg* event,
+                                        ::google::protobuf::Empty* response) override {
     hci_layer_->RegisterLeEventHandler(static_cast<SubeventCode>(event->code()),
-                                       facade_handler_->BindOn(this, &HciLayerFacadeService::on_le_subevent));
+                                       common::Bind(&HciLayerFacadeService::on_le_subevent, common::Unretained(this)),
+                                       facade_handler_);
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status StreamEvents(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<Event>* writer) override {
+  ::grpc::Status FetchEvents(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+                             ::grpc::ServerWriter<EventMsg>* writer) override {
     return pending_events_.RunLoop(context, writer);
   };
 
-  ::grpc::Status StreamLeSubevents(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<LeSubevent>* writer) override {
+  ::grpc::Status FetchLeSubevents(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+                                  ::grpc::ServerWriter<LeSubeventMsg>* writer) override {
     return pending_le_events_.RunLoop(context, writer);
   };
 
   class TestAclBuilder : public AclPacketBuilder {
    public:
-    explicit TestAclBuilder(
-        uint16_t handle, uint8_t packet_boundary_flag, uint8_t broadcast_flag, std::vector<uint8_t> payload)
-        : AclPacketBuilder(0xbad, PacketBoundaryFlag::CONTINUING_FRAGMENT, BroadcastFlag::ACTIVE_PERIPHERAL_BROADCAST),
-          handle_(handle),
-          pb_flag_(packet_boundary_flag),
-          b_flag_(broadcast_flag),
-          bytes_(std::move(payload)) {}
+    explicit TestAclBuilder(uint16_t handle, uint8_t packet_boundary_flag, uint8_t broadcast_flag,
+                            std::vector<uint8_t> payload)
+        : AclPacketBuilder(0xbad, PacketBoundaryFlag::CONTINUING_FRAGMENT, BroadcastFlag::ACTIVE_SLAVE_BROADCAST),
+          handle_(handle), pb_flag_(packet_boundary_flag), b_flag_(broadcast_flag), bytes_(std::move(payload)) {}
 
     size_t size() const override {
       return bytes_.size();
@@ -153,18 +144,16 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     std::vector<uint8_t> bytes_;
   };
 
-  ::grpc::Status SendAcl(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hci::AclPacket* acl,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status SendAclData(::grpc::ServerContext* context, const ::bluetooth::hci::AclMsg* acl,
+                             ::google::protobuf::Empty* response) override {
     waiting_acl_packet_ =
         std::make_unique<TestAclBuilder>(acl->handle(), acl->packet_boundary_flag(), acl->broadcast_flag(),
                                          std::vector<uint8_t>(acl->data().begin(), acl->data().end()));
     std::promise<void> enqueued;
     auto future = enqueued.get_future();
     if (!completed_packets_callback_registered_) {
-      controller_->RegisterCompletedAclPacketsCallback(
-          facade_handler_->Bind([](uint16_t, uint16_t) { /* do nothing */ }));
+      controller_->RegisterCompletedAclPacketsCallback(common::Bind([](uint16_t, uint16_t) { /* do nothing */ }),
+                                                       facade_handler_);
       completed_packets_callback_registered_ = true;
     }
     hci_layer_->GetAclQueueEnd()->RegisterEnqueue(
@@ -175,10 +164,8 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status StreamAcl(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<AclPacket>* writer) override {
+  ::grpc::Status FetchAclPackets(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+                                 ::grpc::ServerWriter<AclMsg>* writer) override {
     hci_layer_->GetAclQueueEnd()->RegisterDequeue(
         facade_handler_, common::Bind(&HciLayerFacadeService::on_acl_ready, common::Unretained(this)));
     unregister_acl_dequeue_ = true;
@@ -197,7 +184,7 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     ASSERT(acl_ptr != nullptr);
     ASSERT(acl_ptr->IsValid());
     LOG_INFO("Got an Acl message for handle 0x%hx", acl_ptr->GetHandle());
-    AclPacket incoming;
+    AclMsg incoming;
     incoming.set_data(std::string(acl_ptr->begin(), acl_ptr->end()));
     pending_acl_events_.OnIncomingEvent(std::move(incoming));
   }
@@ -205,41 +192,41 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
   void on_event(hci::EventPacketView view) {
     ASSERT(view.IsValid());
     LOG_INFO("Got an Event %s", EventCodeText(view.GetEventCode()).c_str());
-    Event response;
-    response.set_payload(std::string(view.begin(), view.end()));
+    EventMsg response;
+    response.set_event(std::string(view.begin(), view.end()));
     pending_events_.OnIncomingEvent(std::move(response));
   }
 
   void on_le_subevent(hci::LeMetaEventView view) {
     ASSERT(view.IsValid());
     LOG_INFO("Got an LE Event %s", SubeventCodeText(view.GetSubeventCode()).c_str());
-    LeSubevent response;
-    response.set_payload(std::string(view.begin(), view.end()));
+    LeSubeventMsg response;
+    response.set_event(std::string(view.begin(), view.end()));
     pending_le_events_.OnIncomingEvent(std::move(response));
   }
 
   void on_complete(hci::CommandCompleteView view) {
     ASSERT(view.IsValid());
     LOG_INFO("Got a Command complete %s", OpCodeText(view.GetCommandOpCode()).c_str());
-    Event response;
-    response.set_payload(std::string(view.begin(), view.end()));
+    EventMsg response;
+    response.set_event(std::string(view.begin(), view.end()));
     pending_events_.OnIncomingEvent(std::move(response));
   }
 
   void on_status(hci::CommandStatusView view) {
     ASSERT(view.IsValid());
     LOG_INFO("Got a Command status %s", OpCodeText(view.GetCommandOpCode()).c_str());
-    Event response;
-    response.set_payload(std::string(view.begin(), view.end()));
+    EventMsg response;
+    response.set_event(std::string(view.begin(), view.end()));
     pending_events_.OnIncomingEvent(std::move(response));
   }
 
   HciLayer* hci_layer_;
   Controller* controller_;
   ::bluetooth::os::Handler* facade_handler_;
-  ::bluetooth::grpc::GrpcEventQueue<Event> pending_events_{"StreamEvents"};
-  ::bluetooth::grpc::GrpcEventQueue<LeSubevent> pending_le_events_{"StreamLeSubevents"};
-  ::bluetooth::grpc::GrpcEventQueue<AclPacket> pending_acl_events_{"StreamAcl"};
+  ::bluetooth::grpc::GrpcEventQueue<EventMsg> pending_events_{"FetchHciEvent"};
+  ::bluetooth::grpc::GrpcEventQueue<LeSubeventMsg> pending_le_events_{"FetchLeSubevent"};
+  ::bluetooth::grpc::GrpcEventQueue<AclMsg> pending_acl_events_{"FetchAclData"};
   bool unregister_acl_dequeue_{false};
   std::unique_ptr<TestAclBuilder> waiting_acl_packet_;
   bool completed_packets_callback_registered_{false};

@@ -17,12 +17,10 @@
  */
 #pragma once
 
-#include <neighbor/name_db.h>
 #include <utility>
 
 #include "hci/address_with_type.h"
 #include "hci/hci_packets.h"
-#include "neighbor/name_db.h"
 #include "security/channel/security_manager_channel.h"
 #include "security/record/security_record.h"
 #include "security/smp_packets.h"
@@ -39,13 +37,9 @@ namespace pairing {
  */
 class PairingHandler : public UICallbacks {
  public:
-  PairingHandler(
-      channel::SecurityManagerChannel* security_manager_channel,
-      std::shared_ptr<record::SecurityRecord> record,
-      neighbor::NameDbModule* name_db_module)
-      : security_manager_channel_(security_manager_channel),
-        record_(std::move(record)),
-        name_db_module_(name_db_module) {}
+  PairingHandler(channel::SecurityManagerChannel* security_manager_channel,
+                 std::shared_ptr<record::SecurityRecord> record)
+      : security_manager_channel_(security_manager_channel), record_(std::move(record)) {}
   virtual ~PairingHandler() = default;
 
   // Classic
@@ -53,7 +47,7 @@ class PairingHandler : public UICallbacks {
                         hci::AuthenticationRequirements auth_requirements) = 0;  // This is for local initiated only
   virtual void Cancel() = 0;
   virtual void OnReceive(hci::ChangeConnectionLinkKeyCompleteView packet) = 0;
-  virtual void OnReceive(hci::CentralLinkKeyCompleteView packet) = 0;
+  virtual void OnReceive(hci::MasterLinkKeyCompleteView packet) = 0;
   virtual void OnReceive(hci::PinCodeRequestView packet) = 0;
   virtual void OnReceive(hci::LinkKeyRequestView packet) = 0;
   virtual void OnReceive(hci::LinkKeyNotificationView packet) = 0;
@@ -80,14 +74,10 @@ class PairingHandler : public UICallbacks {
   channel::SecurityManagerChannel* GetChannel() {
     return security_manager_channel_;
   }
-  neighbor::NameDbModule* GetNameDbModule() {
-    return name_db_module_;
-  }
 
  private:
   channel::SecurityManagerChannel* security_manager_channel_ __attribute__((unused));
   std::shared_ptr<record::SecurityRecord> record_ __attribute__((unused));
-  neighbor::NameDbModule* name_db_module_;
 };
 
 }  // namespace pairing
