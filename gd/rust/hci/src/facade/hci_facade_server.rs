@@ -22,12 +22,11 @@ pub struct HciLayerFacadeService {
 use super::protos::empty::Empty;
 use super::protos::facade::*;
 use super::protos::hci_layer_facade_grpc::HciLayerFacade;
-use crate::facade::protos::hci_layer_facade_grpc::create_hci_layer_facade;
 
 impl HciLayerFacadeService {
     /// Create a new instance of HCI layer facade service
-    pub fn create(hci_exports: HciExports, rt: Arc<Runtime>) -> grpcio::Service {
-        create_hci_layer_facade(Self { hci_exports, rt })
+    pub fn new(hci_exports: HciExports, rt: Arc<Runtime>) -> Self {
+        Self { hci_exports, rt }
     }
 }
 
