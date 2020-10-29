@@ -17,7 +17,6 @@
 package android.bluetooth;
 
 import android.bluetooth.IBluetoothCallback;
-import android.bluetooth.IBluetoothConnectionCallback;
 import android.bluetooth.IBluetoothMetadataListener;
 import android.bluetooth.IBluetoothSocketManager;
 import android.bluetooth.IBluetoothStateChangeCallback;
@@ -145,9 +144,8 @@ interface IBluetooth
     boolean disconnectAllEnabledProfiles(in BluetoothDevice device);
 
     boolean setActiveDevice(in BluetoothDevice device, in int profiles);
-    List<BluetoothDevice> getMostRecentlyConnectedDevices();
-    boolean removeActiveDevice(in int profiles);
 
-    boolean registerBluetoothConnectionCallback(in IBluetoothConnectionCallback callback);
-    boolean unregisterBluetoothConnectionCallback(in IBluetoothConnectionCallback callback);
+    List<BluetoothDevice> getMostRecentlyConnectedDevices();
+
+    boolean removeActiveDevice(in int profiles);
 }
