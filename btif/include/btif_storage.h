@@ -24,7 +24,6 @@
 
 #include "bt_target.h"
 #include "bt_types.h"
-#include "types/ble_address_with_type.h"
 
 /*******************************************************************************
  *  Constants & Macros

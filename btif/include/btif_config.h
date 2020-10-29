@@ -26,7 +26,6 @@
 #include <list>
 #include <string>
 #include "osi/include/config.h"
-#include "types/ble_address_with_type.h"
 
 static const char BTIF_CONFIG_MODULE[] = "btif_config_module";
 

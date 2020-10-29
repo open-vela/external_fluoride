@@ -31,7 +31,6 @@
 #include "bt_types.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
-#include "types/ble_address_with_type.h"
 #include "types/bt_transport.h"
 
 /*****************************************************************************
