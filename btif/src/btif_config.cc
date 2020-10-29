@@ -150,8 +150,7 @@ bool btif_get_address_type(const RawAddress& bda, tBLE_ADDR_TYPE* p_addr_type) {
   if (!btif_config_get_int(bd_addr_str, "AddrType", &val)) return false;
   *p_addr_type = static_cast<tBLE_ADDR_TYPE>(val);
 
-  LOG_DEBUG("Device [%s] address type %s", bd_addr_str,
-            AddressTypeText(*p_addr_type).c_str());
+  LOG_INFO("Device [%s] address type %d", bd_addr_str, *p_addr_type);
   return true;
 }
 
