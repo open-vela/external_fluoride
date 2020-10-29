@@ -78,16 +78,6 @@
 #define AVDT_TSEP_SRC 0     /* Source SEP */
 #define AVDT_TSEP_SNK 1     /* Sink SEP */
 #define AVDT_TSEP_INVALID 3 /* Invalid SEP */
-inline const std::string peer_stream_endpoint_text(int type) {
-  switch (type) {
-    case AVDT_TSEP_SRC:
-      return std::string("Source");
-    case AVDT_TSEP_SNK:
-      return std::string("Sink");
-    default:
-      return std::string("Invalid");
-  }
-}
 
 /* initiator/acceptor role for adaption */
 #define AVDT_INT 0 /* initiator */
@@ -287,6 +277,7 @@ class AvdtpRcb {
         ret_tout(0),
         sig_tout(0),
         idle_tout(0),
+        sec_mask(0),
         scb_index(0) {}
   AvdtpRcb& operator=(const AvdtpRcb&) = default;
 
@@ -295,6 +286,7 @@ class AvdtpRcb {
     ret_tout = 0;
     sig_tout = 0;
     idle_tout = 0;
+    sec_mask = 0;
     scb_index = 0;
   }
 
@@ -302,6 +294,7 @@ class AvdtpRcb {
   uint8_t ret_tout;  /* AVDTP signaling retransmission timeout */
   uint8_t sig_tout;  /* AVDTP signaling message timeout */
   uint8_t idle_tout; /* AVDTP idle signaling channel timeout */
+  uint8_t sec_mask;  /* Security mask for BTM_SetSecurityLevel() */
   uint8_t scb_index; /* The Stream Control Block index */
 };
 
@@ -477,6 +470,7 @@ class AvdtpStreamConfig {
         p_sink_data_cback(nullptr),
         p_report_cback(nullptr),
         mtu(0),
+        flush_to(0),
         tsep(0),
         media_type(0),
         nsc_mask(0) {}
@@ -488,6 +482,7 @@ class AvdtpStreamConfig {
     p_sink_data_cback = nullptr;
     p_report_cback = nullptr;
     mtu = 0;
+    flush_to = 0;
     tsep = 0;
     media_type = 0;
     nsc_mask = 0;
@@ -499,6 +494,7 @@ class AvdtpStreamConfig {
   tAVDT_SINK_DATA_CBACK* p_sink_data_cback;  // Sink data callback function
   tAVDT_REPORT_CBACK* p_report_cback;        // Report callback function
   uint16_t mtu;        // The L2CAP MTU of the transport channel
+  uint16_t flush_to;   // The L2CAP flush timeout of the transport channel
   uint8_t tsep;        // SEP type
   uint8_t media_type;  // Media type: AVDT_MEDIA_TYPE_*
   uint16_t nsc_mask;   // Nonsupported protocol command messages
@@ -904,7 +900,7 @@ extern uint16_t AVDT_WriteReqOpt(uint8_t handle, BT_HDR* p_pkt,
  *
  ******************************************************************************/
 extern uint16_t AVDT_ConnectReq(const RawAddress& bd_addr,
-                                uint8_t channel_index,
+                                uint8_t channel_index, uint8_t sec_mask,
                                 tAVDT_CTRL_CBACK* p_cback);
 
 /*******************************************************************************
@@ -932,6 +928,19 @@ extern uint16_t AVDT_DisconnectReq(const RawAddress& bd_addr,
  *
  ******************************************************************************/
 extern uint16_t AVDT_GetL2CapChannel(uint8_t handle);
+
+/*******************************************************************************
+ *
+ * Function         AVDT_GetSignalChannel
+ *
+ * Description      Get the L2CAP CID used by the signal channel of the given
+ *                  handle.
+ *
+ * Returns          CID if successful, otherwise 0.
+ *
+ ******************************************************************************/
+extern uint16_t AVDT_GetSignalChannel(uint8_t handle,
+                                      const RawAddress& bd_addr);
 
 /*******************************************************************************
  *

@@ -4,6 +4,7 @@ filegroup {
     name: "LibBluetoothSources",
     srcs: [
         "bte_conf.cc",
+        "bte_init.cc",
         "bte_init_cpp_logging.cc",
         "bte_logmsg.cc",
         "bte_main.cc",
@@ -42,12 +43,7 @@ cc_library_static {
         "system/security/keystore/include",
         "hardware/interfaces/keymaster/4.0/support/include",
     ],
-    shared_libs: [
-            "libflatbuffers-cpp",
-    ],
     generated_headers: [
-        "BluetoothGeneratedBundlerSchema_h_bfbs",
-        "BluetoothGeneratedDumpsysDataSchema_h",
         "BluetoothGeneratedPackets_h",
     ],
     host_supported: true,
@@ -83,25 +79,22 @@ cc_library_shared {
     ],
     logtags: ["../EventLogTags.logtags"],
     shared_libs: [
-        "android.hardware.bluetooth.a2dp@1.0",
-        "android.hardware.bluetooth.audio@2.0",
         "android.hardware.bluetooth@1.0",
         "android.hardware.bluetooth@1.1",
-        "android.system.suspend.control-ndk",
+        "android.hardware.bluetooth.a2dp@1.0",
+        "android.hardware.bluetooth.audio@2.0",
         "libaaudio",
-        "libbinder_ndk",
-        "libcrypto",
         "libcutils",
         "libdl",
-        "libflatbuffers-cpp",
         "libfmq",
         "libhidlbase",
         "liblog",
         "libprocessgroup",
         "libprotobuf-cpp-lite",
-        "libtinyxml2",
         "libutils",
+        "libtinyxml2",
         "libz",
+        "libcrypto",
     ],
     static_libs: [
         "libbte",
@@ -165,15 +158,10 @@ cc_library_static {
         "system/bt/utils/include",
     ],
     generated_headers: [
-        "BluetoothGeneratedBundlerSchema_h_bfbs",
         "BluetoothGeneratedPackets_h",
-        "BluetoothGeneratedDumpsysDataSchema_h",
     ],
     cflags: [
         "-DBUILDCFG",
-    ],
-    shared_libs: [
-        "libflatbuffers-cpp",
     ],
     whole_static_libs: [
         "libbluetooth_gd", // Gabeldorsche

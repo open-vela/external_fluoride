@@ -102,12 +102,7 @@ typedef enum {
   INTEROP_DISABLE_NAME_REQUEST,
 
   // Respond AVRCP profile version only 1.4 for some device.
-  INTEROP_AVRCP_1_4_ONLY,
-
-  // Disable sniff mode for headsets/car-kits
-  // Some car kits supports sniff mode but when DUT initiates sniff req
-  // Remote will go to bad state and its leads to LMP time out.
-  INTEROP_DISABLE_SNIFF
+  INTEROP_AVRCP_1_4_ONLY
 } interop_feature_t;
 
 // Check if a given |addr| matches a known interoperability workaround as

@@ -19,14 +19,13 @@
 #include <memory>
 #include <unordered_map>
 
-#include "hci/acl_manager/classic_acl_connection.h"
+#include "hci/acl_manager.h"
 #include "hci/address.h"
 #include "l2cap/classic/dynamic_channel_manager.h"
 #include "l2cap/classic/fixed_channel_manager.h"
 #include "l2cap/classic/internal/dynamic_channel_service_manager_impl.h"
 #include "l2cap/classic/internal/fixed_channel_service_manager_impl.h"
 #include "l2cap/classic/internal/link.h"
-#include "l2cap/classic/link_security_interface.h"
 #include "l2cap/internal/parameter_provider.h"
 #include "l2cap/internal/scheduler.h"
 #include "os/handler.h"
@@ -36,9 +35,7 @@ namespace l2cap {
 namespace classic {
 namespace internal {
 
-class DumpsysHelper;
-
-class LinkManager : public hci::acl_manager::ConnectionCallbacks {
+class LinkManager : public hci::ConnectionCallbacks {
  public:
   LinkManager(os::Handler* l2cap_handler, hci::AclManager* acl_manager,
               FixedChannelServiceManagerImpl* fixed_channel_service_manager,
@@ -62,15 +59,9 @@ class LinkManager : public hci::acl_manager::ConnectionCallbacks {
   // ACL methods
 
   Link* GetLink(hci::Address device);
-  void OnConnectSuccess(std::unique_ptr<hci::acl_manager::ClassicAclConnection> acl_connection) override;
+  void OnConnectSuccess(std::unique_ptr<hci::AclConnection> acl_connection) override;
   void OnConnectFail(hci::Address device, hci::ErrorCode reason) override;
-  virtual void OnDisconnect(hci::Address device, hci::ErrorCode status);
-  void OnAuthenticationComplete(hci::Address device);
-  void OnEncryptionChange(hci::Address device, hci::EncryptionEnabled enabled);
-  void OnReadRemoteVersionInformation(
-      hci::Address device, uint8_t lmp_version, uint16_t manufacturer_name, uint16_t sub_version);
-  void OnReadRemoteExtendedFeatures(
-      hci::Address device, uint8_t page_number, uint8_t max_page_number, uint64_t features);
+  void OnDisconnect(hci::Address device, hci::ErrorCode status);
 
   // FixedChannelManager methods
 
@@ -78,24 +69,11 @@ class LinkManager : public hci::acl_manager::ConnectionCallbacks {
 
   // DynamicChannelManager methods
 
-  void ConnectDynamicChannelServices(
-      hci::Address device, Link::PendingDynamicChannelConnection pending_connection, Psm psm);
-
-  // For SecurityModule to initiate an ACL link
-  void InitiateConnectionForSecurity(hci::Address remote);
-
-  // LinkManager will handle sending OnLinkConnected() callback and construct a LinkSecurityInterface proxy.
-  void RegisterLinkSecurityInterfaceListener(os::Handler* handler, LinkSecurityInterfaceListener* listener);
+  void ConnectDynamicChannelServices(hci::Address device,
+                                     Link::PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm);
 
  private:
-  // Handles requests from LinkSecurityInterface
-  friend class LinkSecurityInterfaceImpl;
-  friend class DumpsysHelper;
-  void handle_link_security_hold(hci::Address remote);
-  void handle_link_security_release(hci::Address remote);
-  void handle_link_security_disconnect(hci::Address remote);
-  void handle_link_security_ensure_authenticated(hci::Address remote);
-  void handle_link_security_ensure_encrypted(hci::Address remote);
+  void TriggerPairing(Link* link);
 
   // Dependencies
   os::Handler* l2cap_handler_;
@@ -110,8 +88,6 @@ class LinkManager : public hci::acl_manager::ConnectionCallbacks {
   std::unordered_map<hci::Address, std::list<Psm>> pending_dynamic_channels_;
   std::unordered_map<hci::Address, std::list<Link::PendingDynamicChannelConnection>>
       pending_dynamic_channels_callbacks_;
-  os::Handler* link_security_interface_listener_handler_ = nullptr;
-  LinkSecurityInterfaceListener* link_security_interface_listener_ = nullptr;
   DISALLOW_COPY_AND_ASSIGN(LinkManager);
 };
 

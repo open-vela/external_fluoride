@@ -19,6 +19,7 @@
 #include "l2cap/cid.h"
 #include "l2cap/classic/internal/fixed_channel_impl.h"
 #include "l2cap/classic/internal/link.h"
+#include "l2cap/security_policy.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -71,7 +72,7 @@ void FixedChannelImpl::Acquire() {
     return;
   }
   if (acquired_) {
-    LOG_INFO("%s was already acquired", ToString().c_str());
+    LOG_DEBUG("%s was already acquired", ToString().c_str());
     return;
   }
   acquired_ = true;
@@ -86,7 +87,7 @@ void FixedChannelImpl::Release() {
     return;
   }
   if (!acquired_) {
-    LOG_INFO("%s was already released", ToString().c_str());
+    LOG_DEBUG("%s was already released", ToString().c_str());
     return;
   }
   acquired_ = false;

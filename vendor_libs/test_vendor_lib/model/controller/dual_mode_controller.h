@@ -118,9 +118,6 @@ class DualModeController : public Device {
   // 7.1.6
   void Disconnect(CommandPacketView args);
 
-  // 7.1.7
-  void CreateConnectionCancel(CommandPacketView args);
-
   // 7.1.8
   void AcceptConnectionRequest(CommandPacketView args);
 
@@ -132,12 +129,6 @@ class DualModeController : public Device {
 
   // 7.1.11
   void LinkKeyRequestNegativeReply(CommandPacketView args);
-
-  // 7.1.12
-  void PinCodeRequestReply(CommandPacketView args);
-
-  // 7.1.13
-  void PinCodeRequestNegativeReply(CommandPacketView args);
 
   // 7.1.14
   void ChangeConnectionPacketType(CommandPacketView args);
@@ -152,7 +143,7 @@ class DualModeController : public Device {
   void ChangeConnectionLinkKey(CommandPacketView args);
 
   // 7.1.18
-  void CentralLinkKey(CommandPacketView args);
+  void MasterLinkKey(CommandPacketView args);
 
   // 7.1.19
   void RemoteNameRequest(CommandPacketView args);
@@ -196,9 +187,6 @@ class DualModeController : public Device {
   // 7.1.36
   void IoCapabilityRequestNegativeReply(CommandPacketView args);
 
-  // 7.1.53
-  void RemoteOobExtendedDataRequestReply(CommandPacketView args);
-
   // Link Policy Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.2
 
@@ -216,9 +204,6 @@ class DualModeController : public Device {
 
   // 7.2.10
   void WriteLinkPolicySettings(CommandPacketView args);
-
-  // 7.2.11
-  void ReadDefaultLinkPolicySettings(CommandPacketView args);
 
   // 7.2.12
   void WriteDefaultLinkPolicySettings(CommandPacketView args);
@@ -328,9 +313,6 @@ class DualModeController : public Device {
   // 7.3.59
   void WriteSimplePairingMode(CommandPacketView args);
 
-  // 7.3.60
-  void ReadLocalOobData(CommandPacketView args);
-
   // 7.3.61
   void ReadInquiryResponseTransmitPowerLevel(CommandPacketView args);
 
@@ -339,9 +321,6 @@ class DualModeController : public Device {
 
   // 7.3.92
   void WriteSecureConnectionsHostSupport(CommandPacketView args);
-
-  // 7.3.95
-  void ReadLocalOobExtendedData(CommandPacketView args);
 
   // Informational Parameters Commands
   // Bluetooth Core Specification Version 4.2 Volume 2 Part E 7.4
@@ -425,16 +404,16 @@ class DualModeController : public Device {
   void LeConnectionCancel(CommandPacketView args);
 
   // 7.8.14
-  void LeReadConnectListSize(CommandPacketView args);
+  void LeReadWhiteListSize(CommandPacketView args);
 
   // 7.8.15
-  void LeClearConnectList(CommandPacketView args);
+  void LeClearWhiteList(CommandPacketView args);
 
   // 7.8.16
-  void LeAddDeviceToConnectList(CommandPacketView args);
+  void LeAddDeviceToWhiteList(CommandPacketView args);
 
   // 7.8.17
-  void LeRemoveDeviceFromConnectList(CommandPacketView args);
+  void LeRemoveDeviceFromWhiteList(CommandPacketView args);
 
   // 7.8.21
   void LeReadRemoteFeatures(CommandPacketView args);
@@ -445,17 +424,8 @@ class DualModeController : public Device {
   // 7.8.24
   void LeStartEncryption(CommandPacketView args);
 
-  // 7.8.25
-  void LeLongTermKeyRequestReply(CommandPacketView args);
-
-  // 7.8.26
-  void LeLongTermKeyRequestNegativeReply(CommandPacketView args);
-
   // 7.8.27
   void LeReadSupportedStates(CommandPacketView args);
-
-  // 7.8.34
-  void LeReadSuggestedDefaultDataLength(CommandPacketView args);
 
   // 7.8.38
   void LeAddDeviceToResolvingList(CommandPacketView args);
@@ -465,12 +435,6 @@ class DualModeController : public Device {
 
   // 7.8.40
   void LeClearResolvingList(CommandPacketView args);
-
-  // 7.8.41
-  void LeReadResolvingListSize(CommandPacketView args);
-
-  // 7.8.46
-  void LeReadMaximumDataLength(CommandPacketView args);
 
   // 7.8.52
   void LeSetExtendedAdvertisingRandomAddress(CommandPacketView args);
@@ -487,18 +451,6 @@ class DualModeController : public Device {
   // 7.8.56
   void LeSetExtendedAdvertisingEnable(CommandPacketView args);
 
-  // 7.8.57
-  void LeReadMaximumAdvertisingDataLength(CommandPacketView args);
-
-  // 7.8.58
-  void LeReadNumberOfSupportedAdvertisingSets(CommandPacketView args);
-
-  // 7.8.59
-  void LeRemoveAdvertisingSet(CommandPacketView args);
-
-  // 7.8.60
-  void LeClearAdvertisingSets(CommandPacketView args);
-
   // 7.8.64
   void LeSetExtendedScanParameters(CommandPacketView args);
 
@@ -510,21 +462,6 @@ class DualModeController : public Device {
 
   // 7.8.77
   void LeSetPrivacyMode(CommandPacketView args);
-
-  // 7.8.96 - 7.8.110
-  void LeReadIsoTxSync(CommandPacketView packet_view);
-  void LeSetCigParameters(CommandPacketView packet_view);
-  void LeCreateCis(CommandPacketView packet_view);
-  void LeRemoveCig(CommandPacketView packet_view);
-  void LeAcceptCisRequest(CommandPacketView packet_view);
-  void LeRejectCisRequest(CommandPacketView packet_view);
-  void LeCreateBig(CommandPacketView packet_view);
-  void LeTerminateBig(CommandPacketView packet_view);
-  void LeBigCreateSync(CommandPacketView packet_view);
-  void LeBigTerminateSync(CommandPacketView packet_view);
-  void LeRequestPeerSca(CommandPacketView packet_view);
-  void LeSetupIsoDataPath(CommandPacketView packet_view);
-  void LeRemoveIsoDataPath(CommandPacketView packet_view);
 
   // Vendor-specific Commands
 

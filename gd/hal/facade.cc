@@ -40,10 +40,8 @@ class HciHalFacadeService : public HciHalFacade::Service, public ::bluetooth::ha
     hal_->unregisterIncomingPacketCallback();
   }
 
-  ::grpc::Status SendCommand(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hal::Command* request,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status SendHciCommand(::grpc::ServerContext* context, const ::bluetooth::hal::HciCommandPacket* request,
+                                ::google::protobuf::Empty* response) override {
     std::unique_lock<std::mutex> lock(mutex_);
     can_send_hci_command_ = false;
     std::string req_string = request->payload();
@@ -54,55 +52,38 @@ class HciHalFacadeService : public HciHalFacade::Service, public ::bluetooth::ha
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SendAcl(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hal::AclPacket* request,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status SendHciAcl(::grpc::ServerContext* context, const ::bluetooth::hal::HciAclPacket* request,
+                            ::google::protobuf::Empty* response) override {
     std::string req_string = request->payload();
     hal_->sendAclData(std::vector<uint8_t>(req_string.begin(), req_string.end()));
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status SendSco(
-      ::grpc::ServerContext* context,
-      const ::bluetooth::hal::ScoPacket* request,
-      ::google::protobuf::Empty* response) override {
+  ::grpc::Status SendHciSco(::grpc::ServerContext* context, const ::bluetooth::hal::HciScoPacket* request,
+                            ::google::protobuf::Empty* response) override {
     std::string req_string = request->payload();
     hal_->sendScoData(std::vector<uint8_t>(req_string.begin(), req_string.end()));
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status StreamEvents(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<Event>* writer) override {
+  ::grpc::Status FetchHciEvent(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+                               ::grpc::ServerWriter<HciEventPacket>* writer) override {
     return pending_hci_events_.RunLoop(context, writer);
   };
 
-  ::grpc::Status StreamAcl(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<AclPacket>* writer) override {
+  ::grpc::Status FetchHciAcl(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+                             ::grpc::ServerWriter<HciAclPacket>* writer) override {
     return pending_acl_events_.RunLoop(context, writer);
   };
 
-  ::grpc::Status StreamSco(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<ScoPacket>* writer) override {
+  ::grpc::Status FetchHciSco(::grpc::ServerContext* context, const ::google::protobuf::Empty* request,
+                             ::grpc::ServerWriter<HciScoPacket>* writer) override {
     return pending_sco_events_.RunLoop(context, writer);
-  };
-
-  ::grpc::Status StreamIso(
-      ::grpc::ServerContext* context,
-      const ::google::protobuf::Empty* request,
-      ::grpc::ServerWriter<IsoPacket>* writer) override {
-    return pending_iso_events_.RunLoop(context, writer);
   };
 
   void hciEventReceived(bluetooth::hal::HciPacket event) override {
     {
-      Event response;
+      HciEventPacket response;
       response.set_payload(std::string(event.begin(), event.end()));
       pending_hci_events_.OnIncomingEvent(std::move(response));
     }
@@ -111,21 +92,15 @@ class HciHalFacadeService : public HciHalFacade::Service, public ::bluetooth::ha
   }
 
   void aclDataReceived(bluetooth::hal::HciPacket data) override {
-    AclPacket response;
+    HciAclPacket response;
     response.set_payload(std::string(data.begin(), data.end()));
     pending_acl_events_.OnIncomingEvent(std::move(response));
   }
 
   void scoDataReceived(bluetooth::hal::HciPacket data) override {
-    ScoPacket response;
+    HciScoPacket response;
     response.set_payload(std::string(data.begin(), data.end()));
     pending_sco_events_.OnIncomingEvent(std::move(response));
-  }
-
-  void isoDataReceived(bluetooth::hal::HciPacket data) override {
-    IsoPacket response;
-    response.set_payload(std::string(data.begin(), data.end()));
-    pending_iso_events_.OnIncomingEvent(std::move(response));
   }
 
  private:
@@ -133,10 +108,9 @@ class HciHalFacadeService : public HciHalFacade::Service, public ::bluetooth::ha
   bool can_send_hci_command_ = true;
   mutable std::mutex mutex_;
   std::condition_variable cv_;
-  ::bluetooth::grpc::GrpcEventQueue<Event> pending_hci_events_{"StreamEvents"};
-  ::bluetooth::grpc::GrpcEventQueue<AclPacket> pending_acl_events_{"StreamAcl"};
-  ::bluetooth::grpc::GrpcEventQueue<ScoPacket> pending_sco_events_{"StreamSco"};
-  ::bluetooth::grpc::GrpcEventQueue<IsoPacket> pending_iso_events_{"StreamIso"};
+  ::bluetooth::grpc::GrpcEventQueue<HciEventPacket> pending_hci_events_{"FetchHciEvent"};
+  ::bluetooth::grpc::GrpcEventQueue<HciAclPacket> pending_acl_events_{"FetchHciAcl"};
+  ::bluetooth::grpc::GrpcEventQueue<HciScoPacket> pending_sco_events_{"FetchHciSco"};
 };
 
 void HciHalFacadeModule::ListDependencies(ModuleList* list) {

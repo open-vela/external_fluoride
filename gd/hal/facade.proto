@@ -5,35 +5,27 @@ package bluetooth.hal;
 import "google/protobuf/empty.proto";
 
 service HciHalFacade {
-  rpc SendCommand(Command) returns (google.protobuf.Empty) {}
-  rpc StreamEvents(google.protobuf.Empty) returns (stream Event) {}
+  rpc SendHciCommand(HciCommandPacket) returns (google.protobuf.Empty) {}
+  rpc SendHciAcl(HciAclPacket) returns (google.protobuf.Empty) {}
+  rpc SendHciSco(HciScoPacket) returns (google.protobuf.Empty) {}
 
-  rpc SendAcl(AclPacket) returns (google.protobuf.Empty) {}
-  rpc StreamAcl(google.protobuf.Empty) returns (stream AclPacket) {}
-
-  rpc SendSco(ScoPacket) returns (google.protobuf.Empty) {}
-  rpc StreamSco(google.protobuf.Empty) returns (stream ScoPacket) {}
-
-  rpc SendIso(IsoPacket) returns (google.protobuf.Empty) {}
-  rpc StreamIso(google.protobuf.Empty) returns (stream IsoPacket) {}
+  rpc FetchHciEvent(google.protobuf.Empty) returns (stream HciEventPacket) {}
+  rpc FetchHciAcl(google.protobuf.Empty) returns (stream HciAclPacket) {}
+  rpc FetchHciSco(google.protobuf.Empty) returns (stream HciScoPacket) {}
 }
 
-message Event {
+message HciEventPacket {
   bytes payload = 1;
 }
 
-message Command {
+message HciCommandPacket {
   bytes payload = 1;
 }
 
-message AclPacket {
+message HciAclPacket {
   bytes payload = 1;
 }
 
-message ScoPacket {
-  bytes payload = 1;
-}
-
-message IsoPacket {
+message HciScoPacket {
   bytes payload = 1;
 }
