@@ -417,8 +417,6 @@ void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
       // TODO We do not need to store the pages read here
       p_acl->num_read_pages = p_dev_rec->num_read_pages;
 
-      const uint8_t req_pend = (p_dev_rec->sm4 & BTM_SM4_REQ_PEND);
-
       /* Store the Peer Security Capabilites (in SM4 and rmt_sec_caps) */
       bool ssp_supported =
           HCI_SSP_HOST_SUPPORTED(p_acl->peer_lmp_feature_pages[1]);
@@ -427,10 +425,6 @@ void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
       btm_sec_set_peer_sec_caps(ssp_supported, secure_connections_supported,
                                 p_dev_rec);
 
-      if (req_pend) {
-        /* Request for remaining Security Features (if any) */
-        l2cu_resubmit_pending_sec_req(&p_dev_rec->bd_addr);
-      }
       internal_.btm_establish_continue(p_acl);
       return;
     }
