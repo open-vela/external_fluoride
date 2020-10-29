@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include <array>
 #include <cstring>
 #include <string>
 
@@ -30,7 +29,7 @@ class RawAddress final {
   uint8_t address[kLength];
 
   RawAddress() = default;
-  RawAddress(const uint8_t (&addr)[kLength]);
+  RawAddress(const uint8_t (&addr)[6]);
 
   bool operator<(const RawAddress& rhs) const {
     return (std::memcmp(address, rhs.address, sizeof(address)) < 0);

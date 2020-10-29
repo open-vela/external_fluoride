@@ -18,10 +18,10 @@
 
 #include "l2cap/cid.h"
 #include "l2cap/classic/internal/link.h"
-#include "l2cap/classic/security_policy.h"
 #include "l2cap/internal/dynamic_channel_impl.h"
 #include "l2cap/internal/sender.h"
 #include "l2cap/psm.h"
+#include "l2cap/security_policy.h"
 #include "os/handler.h"
 #include "os/log.h"
 
@@ -40,25 +40,23 @@ DynamicChannelImpl::DynamicChannelImpl(Psm psm, Cid cid, Cid remote_cid, l2cap::
   ASSERT(l2cap_handler_ != nullptr);
 }
 
-hci::AddressWithType DynamicChannelImpl::GetDevice() const {
-  return device_;
+hci::Address DynamicChannelImpl::GetDevice() const {
+  return device_.GetAddress();
 }
 
-void DynamicChannelImpl::RegisterOnCloseCallback(DynamicChannel::OnCloseCallback on_close_callback) {
-  ASSERT_LOG(on_close_callback_.IsEmpty(), "OnCloseCallback can only be registered once");
+void DynamicChannelImpl::RegisterOnCloseCallback(os::Handler* user_handler,
+                                                 DynamicChannel::OnCloseCallback on_close_callback) {
+  ASSERT_LOG(user_handler_ == nullptr, "OnCloseCallback can only be registered once");
   // If channel is already closed, call the callback immediately without saving it
   if (closed_) {
-    on_close_callback.Invoke(close_reason_);
+    user_handler->Post(common::BindOnce(std::move(on_close_callback), close_reason_));
     return;
   }
+  user_handler_ = user_handler;
   on_close_callback_ = std::move(on_close_callback);
 }
 
 void DynamicChannelImpl::Close() {
-  if (link_ == nullptr) {
-    LOG_ERROR("Channel is already closed");
-    return;
-  }
   link_->SendDisconnectionRequest(cid_, remote_cid_);
 }
 
@@ -69,8 +67,13 @@ void DynamicChannelImpl::OnClosed(hci::ErrorCode status) {
   close_reason_ = status;
   link_ = nullptr;
   l2cap_handler_ = nullptr;
-  on_close_callback_.InvokeIfNotEmpty(close_reason_);
-  on_close_callback_ = {};
+  if (user_handler_ == nullptr) {
+    return;
+  }
+  // On close callback can only be called once
+  user_handler_->Post(common::BindOnce(std::move(on_close_callback_), status));
+  user_handler_ = nullptr;
+  on_close_callback_.Reset();
 }
 
 std::string DynamicChannelImpl::ToString() {

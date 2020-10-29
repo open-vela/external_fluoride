@@ -32,6 +32,8 @@
 
 #include "smp_int.h"
 
+static void smp_tx_complete_callback(uint16_t cid, uint16_t num_pkt);
+
 static void smp_connect_callback(uint16_t channel, const RawAddress& bd_addr,
                                  bool connected, uint16_t reason,
                                  tBT_TRANSPORT transport);
@@ -55,9 +57,16 @@ static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
 void smp_l2cap_if_init(void) {
   tL2CAP_FIXED_CHNL_REG fixed_reg;
   SMP_TRACE_EVENT("SMDBG l2c %s", __func__);
+  fixed_reg.fixed_chnl_opts.mode = L2CAP_FCR_BASIC_MODE;
+  fixed_reg.fixed_chnl_opts.max_transmit = 0;
+  fixed_reg.fixed_chnl_opts.rtrans_tout = 0;
+  fixed_reg.fixed_chnl_opts.mon_tout = 0;
+  fixed_reg.fixed_chnl_opts.mps = 0;
+  fixed_reg.fixed_chnl_opts.tx_win_sz = 0;
 
   fixed_reg.pL2CA_FixedConn_Cb = smp_connect_callback;
   fixed_reg.pL2CA_FixedData_Cb = smp_data_received;
+  fixed_reg.pL2CA_FixedTxComplete_Cb = smp_tx_complete_callback;
 
   fixed_reg.pL2CA_FixedCong_Cb =
       NULL; /* do not handle congestion on this channel */
@@ -110,6 +119,7 @@ static void smp_connect_callback(uint16_t channel, const RawAddress& bd_addr,
         smp_sm_event(p_cb, SMP_L2CAP_CONN_EVT, NULL);
       }
     } else {
+      int_data.reason = reason;
       /* Disconnected while doing security */
       smp_sm_event(p_cb, SMP_L2CAP_DISCONN_EVT, &int_data);
     }
@@ -199,6 +209,32 @@ static void smp_data_received(uint16_t channel, const RawAddress& bd_addr,
 
 /*******************************************************************************
  *
+ * Function         smp_tx_complete_callback
+ *
+ * Description      SMP channel tx complete callback
+ *
+ ******************************************************************************/
+static void smp_tx_complete_callback(uint16_t cid, uint16_t num_pkt) {
+  tSMP_CB* p_cb = &smp_cb;
+
+  if (p_cb->total_tx_unacked >= num_pkt)
+    p_cb->total_tx_unacked -= num_pkt;
+  else
+    SMP_TRACE_ERROR("Unexpected %s: num_pkt = %d", __func__, num_pkt);
+
+  if (p_cb->total_tx_unacked == 0 && p_cb->wait_for_authorization_complete) {
+    tSMP_INT_DATA smp_int_data;
+    smp_int_data.status = SMP_SUCCESS;
+    if (cid == L2CAP_SMP_CID) {
+      smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, &smp_int_data);
+    } else {
+      smp_br_state_machine_event(p_cb, SMP_BR_AUTH_CMPL_EVT, &smp_int_data);
+    }
+  }
+}
+
+/*******************************************************************************
+ *
  * Function         smp_br_connect_callback
  *
  * Description      This callback function is called by L2CAP to indicate that
@@ -236,6 +272,7 @@ static void smp_br_connect_callback(uint16_t channel, const RawAddress& bd_addr,
       smp_br_state_machine_event(p_cb, SMP_BR_L2CAP_CONN_EVT, NULL);
     }
   } else {
+    int_data.reason = reason;
     /* Disconnected while doing security */
     smp_br_state_machine_event(p_cb, SMP_BR_L2CAP_DISCONN_EVT, &int_data);
   }
@@ -279,7 +316,7 @@ static void smp_br_data_received(uint16_t channel, const RawAddress& bd_addr,
   if (SMP_OPCODE_PAIRING_REQ == cmd) {
     if ((p_cb->state == SMP_STATE_IDLE) &&
         (p_cb->br_state == SMP_BR_STATE_IDLE)) {
-      p_cb->role = HCI_ROLE_PERIPHERAL;
+      p_cb->role = HCI_ROLE_SLAVE;
       p_cb->smp_over_br = true;
       p_cb->pairing_bda = bd_addr;
     } else if (bd_addr != p_cb->pairing_bda) {

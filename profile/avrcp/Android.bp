@@ -24,10 +24,6 @@ cc_library_static {
     shared_libs: [
         "libchrome",
     ],
-    apex_available: [
-        "//apex_available:platform",
-        "com.android.bluetooth.updatable",
-    ],
 }
 
 cc_test {
@@ -54,7 +50,6 @@ cc_test {
         "libosi",
         "liblog",
         "libcutils",
-        "libbase",
         "libbtdevice",
         "avrcp-target-service",
     ],
@@ -98,9 +93,4 @@ cc_fuzz {
     corpus: [
         "tests/avrcp_device_fuzz/corpus/*",
     ],
-    target: {
-        darwin: {
-            enabled: false,
-        },
-    },
 }

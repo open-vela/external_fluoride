@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
+#include "hal/hci_hal.h"
 
 #include <chrono>
 #include <future>
 
-#include "hal/hci_hal.h"
+#include <gtest/gtest.h>
+
 #include "os/thread.h"
 
 using ::bluetooth::os::Thread;

@@ -51,7 +51,6 @@
 #include "stack/include/rfcdefs.h"
 #include "stack/l2cap/l2c_int.h"
 #include "stack_config.h"
-#include "main/shim/shim.h"
 
 // The number of of packets per btsnoop file before we rotate to the next
 // file. As of right now there are two snoop files that are rotated through.
@@ -75,11 +74,10 @@ typedef enum {
   kCommandPacket = 1,
   kAclPacket = 2,
   kScoPacket = 3,
-  kEventPacket = 4,
-  kIsoPacket = 5,
+  kEventPacket = 4
 } packet_type_t;
 
-// Epoch in microseconds since 01/01/0000
+// Epoch in microseconds since 01/01/0000.
 static const uint64_t BTSNOOP_EPOCH_DELTA = 0x00dcddb30f2f8000ULL;
 
 // Number of bytes into a packet where you can find the value for a channel.
@@ -111,7 +109,7 @@ class FilterTracker {
   uint16_t rfc_remote_cid = 0;
   std::unordered_set<uint16_t> rfc_channels = {0};
 
-  // Adds L2C channel to allowlist.
+  // Adds L2C channel to whitelist.
   void addL2cCid(uint16_t local_cid, uint16_t remote_cid) {
     l2c_local_cid.insert(local_cid);
     l2c_remote_cid.insert(remote_cid);
@@ -123,7 +121,7 @@ class FilterTracker {
     rfc_remote_cid = remote_cid;
   }
 
-  // Remove L2C channel from allowlist.
+  // Remove L2C channel from whitelist.
   void removeL2cCid(uint16_t local_cid, uint16_t remote_cid) {
     if (rfc_local_cid == local_cid) {
       rfc_channels.clear();
@@ -138,7 +136,7 @@ class FilterTracker {
 
   void addRfcDlci(uint8_t channel) { rfc_channels.insert(channel); }
 
-  bool isAllowlistedL2c(bool local, uint16_t cid) {
+  bool isWhitelistedL2c(bool local, uint16_t cid) {
     const auto& set = local ? l2c_local_cid : l2c_remote_cid;
     return (set.find(cid) != set.end());
   }
@@ -148,7 +146,7 @@ class FilterTracker {
     return cid == channel;
   }
 
-  bool isAllowlistedDlci(uint8_t dlci) {
+  bool isWhitelistedDlci(uint8_t dlci) {
     return rfc_channels.find(dlci) != rfc_channels.end();
   }
 };
@@ -283,21 +281,14 @@ static void capture(const BT_HDR* buffer, bool is_received) {
     case MSG_STACK_TO_HC_HCI_CMD:
       btsnoop_write_packet(kCommandPacket, p, true, timestamp_us);
       break;
-    case MSG_HC_TO_STACK_HCI_ISO:
-    case MSG_STACK_TO_HC_HCI_ISO:
-      btsnoop_write_packet(kIsoPacket, p, is_received, timestamp_us);
-      break;
   }
 }
 
-static void allowlist_l2c_channel(uint16_t conn_handle, uint16_t local_cid,
+static void whitelist_l2c_channel(uint16_t conn_handle, uint16_t local_cid,
                                   uint16_t remote_cid) {
   LOG(INFO) << __func__
-            << ": Allowlisting l2cap channel. conn_handle=" << conn_handle
+            << ": Whitelisting l2cap channel. conn_handle=" << conn_handle
             << " cid=" << loghex(local_cid) << ":" << loghex(remote_cid);
-  if (bluetooth::shim::is_any_gd_enabled()) {
-    return;
-  }
   std::lock_guard lock(filter_list_mutex);
 
   // This will create the entry if there is no associated filter with the
@@ -305,17 +296,14 @@ static void allowlist_l2c_channel(uint16_t conn_handle, uint16_t local_cid,
   filter_list[conn_handle].addL2cCid(local_cid, remote_cid);
 }
 
-static void allowlist_rfc_dlci(uint16_t local_cid, uint8_t dlci) {
+static void whitelist_rfc_dlci(uint16_t local_cid, uint8_t dlci) {
   LOG(INFO) << __func__
-            << ": Allowlisting rfcomm channel. L2CAP CID=" << loghex(local_cid)
+            << ": Whitelisting rfcomm channel. L2CAP CID=" << loghex(local_cid)
             << " DLCI=" << loghex(dlci);
-  if (bluetooth::shim::is_any_gd_enabled()) {
-    return;
-  }
   std::lock_guard lock(filter_list_mutex);
 
   tL2C_CCB* p_ccb = l2cu_find_ccb_by_cid(nullptr, local_cid);
-  filter_list[p_ccb->p_lcb->Handle()].addRfcDlci(dlci);
+  filter_list[p_ccb->p_lcb->handle].addRfcDlci(dlci);
 }
 
 static void add_rfc_l2c_channel(uint16_t conn_handle, uint16_t local_cid,
@@ -324,31 +312,25 @@ static void add_rfc_l2c_channel(uint16_t conn_handle, uint16_t local_cid,
             << ": rfcomm data going over l2cap channel. conn_handle="
             << conn_handle << " cid=" << loghex(local_cid) << ":"
             << loghex(remote_cid);
-  if (bluetooth::shim::is_any_gd_enabled()) {
-    return;
-  }
   std::lock_guard lock(filter_list_mutex);
 
   filter_list[conn_handle].setRfcCid(local_cid, remote_cid);
   local_cid_to_acl.insert({local_cid, conn_handle});
 }
 
-static void clear_l2cap_allowlist(uint16_t conn_handle, uint16_t local_cid,
+static void clear_l2cap_whitelist(uint16_t conn_handle, uint16_t local_cid,
                                   uint16_t remote_cid) {
   LOG(INFO) << __func__
-            << ": Clearing acceptlist from l2cap channel. conn_handle="
+            << ": Clearing whitelist from l2cap channel. conn_handle="
             << conn_handle << " cid=" << local_cid << ":" << remote_cid;
 
-  if (bluetooth::shim::is_any_gd_enabled()) {
-    return;
-  }
   std::lock_guard lock(filter_list_mutex);
   filter_list[conn_handle].removeL2cCid(local_cid, remote_cid);
 }
 
-static const btsnoop_t interface = {capture, allowlist_l2c_channel,
-                                    allowlist_rfc_dlci, add_rfc_l2c_channel,
-                                    clear_l2cap_allowlist};
+static const btsnoop_t interface = {capture, whitelist_l2c_channel,
+                                    whitelist_rfc_dlci, add_rfc_l2c_channel,
+                                    clear_l2cap_whitelist};
 
 const btsnoop_t* btsnoop_get_interface() { return &interface; }
 
@@ -435,10 +417,10 @@ static bool should_filter_log(bool is_received, uint8_t* packet) {
     }
 
     uint8_t rfc_dlci = packet[RFC_CHANNEL_OFFSET] >> 2;
-    if (!filters.isAllowlistedDlci(rfc_dlci)) {
+    if (!filters.isWhitelistedDlci(rfc_dlci)) {
       return true;
     }
-  } else if (!filters.isAllowlistedL2c(is_received, l2c_channel)) {
+  } else if (!filters.isWhitelistedL2c(is_received, l2c_channel)) {
     return true;
   }
 
@@ -466,10 +448,6 @@ static void btsnoop_write_packet(packet_type_t type, uint8_t* packet,
     case kEventPacket:
       length_he = packet[1] + 3;
       flags = 3;
-      break;
-    case kIsoPacket:
-      length_he = ((packet[3] & 0x3f) << 8) + packet[2] + 5;
-      flags = is_received;
       break;
   }
 

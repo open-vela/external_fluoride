@@ -27,7 +27,8 @@ namespace bqr {
 // Bluetooth Quality Report (BQR)
 //
 // It is a feature to start the mechanism in the Bluetooth controller to report
-// Bluetooth Quality event to the host and the following options can be enabled:
+// Bluetooth Quality event to the host and there are four options could be
+// enabled:
 //   [Quality Monitoring Mode]
 //     The controller shall periodically send Bluetooth Quality Report sub-event
 //     to the host.
@@ -203,7 +204,7 @@ typedef struct {
   uint8_t connection_role;
   // Current Transmit Power Level for the connection. This value is the same as
   // the controller's response to the HCI_Read_Transmit_Power_Level HCI command.
-  int8_t tx_power_level;
+  uint8_t tx_power_level;
   // Received Signal Strength Indication (RSSI) value for the connection. This
   // value is an absolute receiver signal strength value.
   int8_t rssi;

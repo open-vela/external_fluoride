@@ -165,12 +165,16 @@ void ScriptedBeacon::TimerTick() {
       }
     } break;
     case PlaybackEvent::PLAYBACK_STARTED: {
+      std::shared_ptr<model::packets::LinkLayerPacketBuilder> to_send;
       while (has_time_elapsed(next_ad_.ad_time)) {
         auto ad = model::packets::LeAdvertisementBuilder::Create(
             next_ad_.address, Address::kEmpty /* Destination */,
             model::packets::AddressType::RANDOM,
             model::packets::AdvertisementType::ADV_NONCONN_IND, next_ad_.ad);
-        SendLinkLayerPacket(std::move(ad), Phy::Type::LOW_ENERGY);
+        to_send = std::move(ad);
+        for (const auto& phy : phy_layers_[Phy::Type::LOW_ENERGY]) {
+          phy->Send(to_send);
+        }
         if (packet_num_ < ble_ad_list_.advertisements().size()) {
           get_next_advertisement();
         } else {
@@ -204,8 +208,12 @@ void ScriptedBeacon::IncomingPacket(
               properties_.GetLeAddressType()),
           model::packets::AdvertisementType::SCAN_RESPONSE,
           properties_.GetLeScanResponse());
+      std::shared_ptr<model::packets::LinkLayerPacketBuilder> to_send =
+          std::move(scan_response);
       set_state(PlaybackEvent::SCANNED_ONCE);
-      SendLinkLayerPacket(std::move(scan_response), Phy::Type::LOW_ENERGY);
+      for (const auto& phy : phy_layers_[Phy::Type::LOW_ENERGY]) {
+        phy->Send(to_send);
+      }
     }
   }
 }

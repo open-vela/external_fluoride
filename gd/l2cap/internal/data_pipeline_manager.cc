@@ -39,9 +39,7 @@ void DataPipelineManager::DetachChannel(Cid cid) {
 }
 
 DataController* DataPipelineManager::GetDataController(Cid cid) {
-  if (sender_map_.find(cid) == sender_map_.end()) {
-    return nullptr;
-  };
+  ASSERT(sender_map_.find(cid) != sender_map_.end());
   return sender_map_.find(cid)->second.GetDataController();
 }
 

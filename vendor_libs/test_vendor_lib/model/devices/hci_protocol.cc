@@ -16,6 +16,7 @@
 
 #include "hci_protocol.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -23,6 +24,7 @@
 #include "os/log.h"
 
 namespace test_vendor_lib {
+namespace hci {
 
 size_t HciProtocol::WriteSafely(int fd, const uint8_t* data, size_t length) {
   size_t transmitted_length = 0;
@@ -47,4 +49,5 @@ size_t HciProtocol::WriteSafely(int fd, const uint8_t* data, size_t length) {
   return transmitted_length;
 }
 
+}  // namespace hci
 }  // namespace test_vendor_lib

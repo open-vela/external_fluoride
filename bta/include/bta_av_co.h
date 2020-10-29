@@ -226,16 +226,13 @@ void bta_av_co_audio_update_mtu(tBTA_AV_HNDL bta_av_handle,
 
 /*******************************************************************************
  **
- ** Function        bta_av_co_get_scmst_info
+ ** Function         bta_av_co_content_protect_is_active
  **
- ** Description     Get the SCMS-T information for the specific peer
+ ** Description     Get the current configuration of content protection
  **
- ** Returns         btav_a2dp_scmst_info_t.
- **                 It contains the information of SCMS-T which are the SCMS-T
- **                 enable status for the specific peer and the SCMS-T header
- **                 if SCMS-T is enabled.
+ ** Returns          TRUE if the current streaming has CP, FALSE otherwise
  **
  ******************************************************************************/
-btav_a2dp_scmst_info_t bta_av_co_get_scmst_info(const RawAddress& peer_address);
+bool bta_av_co_content_protect_is_active(const RawAddress& peer_address);
 
 #endif /* BTA_AV_CO_H */

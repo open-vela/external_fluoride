@@ -19,12 +19,13 @@
 /**
  * Gabeldorsche related legacy-only-stack-side expansion and support code.
  */
+#include "base/bind.h"
 #include "btcore/include/module.h"
 #include "main/shim/entry.h"
 #include "osi/include/future.h"
 
-static const char GD_IDLE_MODULE[] = "gd_idle_module";
 static const char GD_SHIM_MODULE[] = "gd_shim_module";
+static const char GD_SHIM_BTM_MODULE[] = "gd_shim_btm_module";
 
 constexpr future_t* kReturnImmediate = nullptr;
 constexpr module_lifecycle_fn kUnusedModuleApi = nullptr;
@@ -45,14 +46,7 @@ namespace shim {
  *
  * @return true if using gd shim core, false if using legacy.
  */
-bool is_gd_advertising_enabled();
-bool is_gd_security_enabled();
-bool is_gd_acl_enabled();
-bool is_gd_hci_enabled();
-bool is_gd_controller_enabled();
-bool is_gd_l2cap_enabled();
 bool is_gd_shim_enabled();
-bool is_any_gd_enabled();
 
 /**
  * Checks if the bluetooth gd stack has been started up.
@@ -60,6 +54,13 @@ bool is_any_gd_enabled();
  * @return true if bluetooth gd stack is started, false otherwise.
  */
 bool is_gd_stack_started_up();
+
+/**
+ * Posts a task on the shim message queue.
+ *
+ * @param task Task to be posted onto the message queue.
+ */
+void Post(base::OnceClosure task);
 
 }  // namespace shim
 }  // namespace bluetooth

@@ -44,7 +44,8 @@ semaphore_t* semaphore_new(unsigned int value) {
   semaphore_t* ret = static_cast<semaphore_t*>(osi_malloc(sizeof(semaphore_t)));
   ret->fd = eventfd(value, EFD_SEMAPHORE);
   if (ret->fd == INVALID_FD) {
-    LOG_ERROR("%s unable to allocate semaphore: %s", __func__, strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to allocate semaphore: %s", __func__,
+              strerror(errno));
     osi_free(ret);
     ret = NULL;
   }
@@ -64,7 +65,8 @@ void semaphore_wait(semaphore_t* semaphore) {
 
   eventfd_t value;
   if (eventfd_read(semaphore->fd, &value) == -1)
-    LOG_ERROR("%s unable to wait on semaphore: %s", __func__, strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to wait on semaphore: %s", __func__,
+              strerror(errno));
 }
 
 bool semaphore_try_wait(semaphore_t* semaphore) {
@@ -73,13 +75,13 @@ bool semaphore_try_wait(semaphore_t* semaphore) {
 
   int flags = fcntl(semaphore->fd, F_GETFL);
   if (flags == -1) {
-    LOG_ERROR("%s unable to get flags for semaphore fd: %s", __func__,
+    LOG_ERROR(LOG_TAG, "%s unable to get flags for semaphore fd: %s", __func__,
               strerror(errno));
     return false;
   }
   if (fcntl(semaphore->fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    LOG_ERROR("%s unable to set O_NONBLOCK for semaphore fd: %s", __func__,
-              strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to set O_NONBLOCK for semaphore fd: %s",
+              __func__, strerror(errno));
     return false;
   }
 
@@ -88,8 +90,8 @@ bool semaphore_try_wait(semaphore_t* semaphore) {
   if (eventfd_read(semaphore->fd, &value) == -1) rc = false;
 
   if (fcntl(semaphore->fd, F_SETFL, flags) == -1)
-    LOG_ERROR("%s unable to restore flags for semaphore fd: %s", __func__,
-              strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to restore flags for semaphore fd: %s",
+              __func__, strerror(errno));
   return rc;
 }
 
@@ -98,7 +100,8 @@ void semaphore_post(semaphore_t* semaphore) {
   CHECK(semaphore->fd != INVALID_FD);
 
   if (eventfd_write(semaphore->fd, 1ULL) == -1)
-    LOG_ERROR("%s unable to post to semaphore: %s", __func__, strerror(errno));
+    LOG_ERROR(LOG_TAG, "%s unable to post to semaphore: %s", __func__,
+              strerror(errno));
 }
 
 int semaphore_get_fd(const semaphore_t* semaphore) {
