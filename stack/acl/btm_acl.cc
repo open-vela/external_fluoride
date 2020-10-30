@@ -407,6 +407,35 @@ void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
     return;
   }
 
+  if (transport != BT_TRANSPORT_LE) {
+    /* If remote features already known, copy them and continue connection
+     * setup */
+    if ((p_dev_rec->num_read_pages) &&
+        (p_dev_rec->num_read_pages <= (HCI_EXT_FEATURES_PAGE_MAX + 1))) {
+      memcpy(p_acl->peer_lmp_feature_pages, p_dev_rec->feature_pages,
+             (HCI_FEATURE_BYTES_PER_PAGE * p_dev_rec->num_read_pages));
+      // TODO We do not need to store the pages read here
+      p_acl->num_read_pages = p_dev_rec->num_read_pages;
+
+      const uint8_t req_pend = (p_dev_rec->sm4 & BTM_SM4_REQ_PEND);
+
+      /* Store the Peer Security Capabilites (in SM4 and rmt_sec_caps) */
+      bool ssp_supported =
+          HCI_SSP_HOST_SUPPORTED(p_acl->peer_lmp_feature_pages[1]);
+      bool secure_connections_supported =
+          HCI_SC_HOST_SUPPORTED(p_acl->peer_lmp_feature_pages[1]);
+      btm_sec_set_peer_sec_caps(ssp_supported, secure_connections_supported,
+                                p_dev_rec);
+
+      if (req_pend) {
+        /* Request for remaining Security Features (if any) */
+        l2cu_resubmit_pending_sec_req(&p_dev_rec->bd_addr);
+      }
+      internal_.btm_establish_continue(p_acl);
+      return;
+    }
+  }
+
   if (transport == BT_TRANSPORT_LE) {
     btm_ble_get_acl_remote_addr(*p_dev_rec, p_acl->active_remote_addr,
                                 &p_acl->active_remote_addr_type);
@@ -458,6 +487,18 @@ void btm_acl_removed(uint16_t handle) {
     BTA_dm_acl_down(bda, transport);
   }
 
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bda);
+  if (p_dev_rec == nullptr) {
+    LOG_WARN("Device security record not found");
+  } else {
+    if (p_acl->transport == BT_TRANSPORT_LE) {
+      p_dev_rec->sec_flags &= ~(BTM_SEC_LE_ENCRYPTED | BTM_SEC_ROLE_SWITCHED);
+      if ((p_dev_rec->sec_flags & BTM_SEC_LE_LINK_KEY_KNOWN) == 0) {
+        p_dev_rec->sec_flags &=
+            ~(BTM_SEC_LE_LINK_KEY_AUTHED | BTM_SEC_LE_AUTHENTICATED);
+      }
+    }
+  }
   memset(p_acl, 0, sizeof(tACL_CONN));
 }
 
@@ -845,10 +886,13 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
   uint8_t page_idx;
 
-  if (p_dev_rec == nullptr) {
-    return;
+  /* Make sure we have the record to save remote features information */
+  if (p_dev_rec == NULL) {
+    /* Get a new device; might be doing dedicated bonding */
+    p_dev_rec = btm_find_or_alloc_dev(p_acl_cb->remote_addr);
   }
 
+  p_acl_cb->num_read_pages = num_read_pages;
   p_dev_rec->num_read_pages = num_read_pages;
 
   /* Move the pages to placeholder */
@@ -909,6 +953,7 @@ void StackAclBtmAcl::btm_read_remote_features(uint16_t handle) {
   }
 
   p_acl_cb = &btm_cb.acl_cb_.acl_db[acl_idx];
+  p_acl_cb->num_read_pages = 0;
   memset(p_acl_cb->peer_lmp_feature_pages, 0,
          sizeof(p_acl_cb->peer_lmp_feature_pages));
 
