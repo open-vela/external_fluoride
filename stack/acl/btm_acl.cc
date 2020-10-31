@@ -62,6 +62,9 @@
 #include "stack/include/sco_hci_link_interface.h"
 #include "types/raw_address.h"
 
+void gatt_find_in_device_record(const RawAddress& bd_addr,
+                                tBLE_BD_ADDR* address_with_type);
+
 struct StackAclBtmAcl {
   tACL_CONN* acl_allocate_connection();
   tACL_CONN* acl_get_connection_from_handle(uint16_t handle);
@@ -837,6 +840,8 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
   if (p_dev_rec == nullptr) {
     return;
   }
+
+  p_dev_rec->num_read_pages = num_read_pages;
 
   p_dev_rec->remote_supports_hci_role_switch =
       HCI_SWITCH_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[0]);
@@ -2881,6 +2886,9 @@ bool acl_create_le_connection_with_id(uint8_t id, const RawAddress& bd_addr) {
         .bda = bd_addr,
         .type = BLE_ADDR_RANDOM,
     };
+    gatt_find_in_device_record(bd_addr, &address_with_type);
+    LOG_DEBUG("Creating le connection to:%s",
+              address_with_type.ToString().c_str());
     bluetooth::shim::ACL_CreateLeConnection(address_with_type);
     return true;
   }
