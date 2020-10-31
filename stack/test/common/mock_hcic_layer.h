@@ -38,8 +38,7 @@ class HcicInterface {
                          base::OnceCallback<void(uint8_t*, uint16_t)> cb) = 0;
 
   virtual void CreateCis(uint8_t num_cis,
-                         const EXT_CIS_CREATE_CFG* cis_create_cfg,
-                         base::OnceCallback<void(uint8_t*, uint16_t)> cb) = 0;
+                         const EXT_CIS_CREATE_CFG* cis_create_cfg) = 0;
 
   virtual void Disconnect(uint16_t handle, uint8_t reason) = 0;
 
@@ -70,8 +69,7 @@ class MockHcicInterface : public HcicInterface {
               (override));
 
   MOCK_METHOD((void), CreateCis,
-              (uint8_t num_cis, const EXT_CIS_CREATE_CFG* cis_create_cfg,
-               base::OnceCallback<void(uint8_t*, uint16_t)> cb),
+              (uint8_t num_cis, const EXT_CIS_CREATE_CFG* cis_create_cfg),
               (override));
 
   MOCK_METHOD((void), Disconnect, (uint16_t handle, uint8_t reason),
