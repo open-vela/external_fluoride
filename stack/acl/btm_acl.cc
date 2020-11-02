@@ -115,6 +115,7 @@ extern tBTM_CB btm_cb;
 
 static void btm_acl_chk_peer_pkt_type_support(tACL_CONN* p,
                                               uint16_t* p_pkt_type);
+static void btm_cont_rswitch(tACL_CONN* p);
 static void btm_read_automatic_flush_timeout_timeout(void* data);
 static void btm_read_failed_contact_counter_timeout(void* data);
 static void btm_read_remote_ext_features(uint16_t handle, uint8_t page_number);
@@ -833,6 +834,7 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
                                      uint8_t num_read_pages) {
   uint16_t handle = p_acl_cb->hci_handle;
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
+  uint8_t page_idx;
 
   if (p_dev_rec == nullptr) {
     return;
@@ -840,8 +842,17 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
 
   p_dev_rec->num_read_pages = num_read_pages;
 
-  p_dev_rec->remote_supports_hci_role_switch =
-      HCI_SWITCH_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[0]);
+  /* Move the pages to placeholder */
+  for (page_idx = 0; page_idx < num_read_pages; page_idx++) {
+    if (page_idx > HCI_EXT_FEATURES_PAGE_MAX) {
+      LOG_WARN("Received more extended page features than allowed page=%d",
+               page_idx);
+      break;
+    }
+    memcpy(p_dev_rec->feature_pages[page_idx],
+           p_acl_cb->peer_lmp_feature_pages[page_idx],
+           HCI_FEATURE_BYTES_PER_PAGE);
+  }
 
   if (!(p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) ||
       p_dev_rec->is_originator) {
@@ -864,7 +875,7 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
 
   if (req_pend) {
     /* Request for remaining Security Features (if any) */
-    l2cu_resubmit_pending_sec_req(&p_acl_cb->remote_addr);
+    l2cu_resubmit_pending_sec_req(&p_dev_rec->bd_addr);
   }
 }
 
@@ -2157,15 +2168,20 @@ uint8_t BTM_SetTraceLevel(uint8_t new_level) {
   return (btm_cb.trace_level);
 }
 
-void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
-  tACL_CONN* p = internal_.acl_get_connection_from_handle(hci_handle);
-  if (p == nullptr) {
-    LOG_WARN("Role switch received but with no active ACL");
-    return;
-  }
-
+/*******************************************************************************
+ *
+ * Function         btm_cont_rswitch
+ *
+ * Description      This function is called to continue processing an active
+ *                  role switch. It first disables encryption if enabled and
+ *                  EPR is not supported
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_cont_rswitch(tACL_CONN* p) {
   /* Check to see if encryption needs to be turned off if pending
-   change of link key or role switch */
+     change of link key or role switch */
   if (p->is_switch_role_mode_change()) {
     /* Must turn off Encryption first if necessary */
     /* Some devices do not support switch or change of link key while encryption
@@ -2185,6 +2201,15 @@ void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
       }
     }
   }
+}
+
+void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
+  tACL_CONN* p_acl = internal_.acl_get_connection_from_handle(hci_handle);
+  if (p_acl == nullptr) {
+    LOG_WARN("Role switch received but with no active ACL");
+    return;
+  }
+  btm_cont_rswitch(p_acl);
 }
 
 /*******************************************************************************
@@ -2547,7 +2572,6 @@ void btm_ble_refresh_local_resolvable_private_addr(
  ******************************************************************************/
 void btm_sec_set_peer_sec_caps(bool ssp_supported, bool sc_supported,
                                tBTM_SEC_DEV_REC* p_dev_rec) {
-  p_dev_rec->remote_feature_received = true;
   if ((btm_cb.security_mode == BTM_SEC_MODE_SP ||
        btm_cb.security_mode == BTM_SEC_MODE_SC) &&
       ssp_supported) {
