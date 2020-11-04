@@ -259,6 +259,7 @@ typedef struct {
 
   tBTM_BD_NAME sec_bd_name; /* User friendly name of the device. (may be
                                truncated to save space in dev_rec table) */
+  uint8_t num_read_pages;
 
   uint8_t sec_state;          /* Operating state                    */
   bool is_security_state_idle() const {
