@@ -61,11 +61,15 @@ void LeAddressManager::SetPrivacyPolicyForInitiatorAddress(
     } break;
     case AddressPolicy::USE_NON_RESOLVABLE_ADDRESS:
     case AddressPolicy::USE_RESOLVABLE_ADDRESS:
-      le_address_ = fixed_address;
       rotation_irk_ = rotation_irk;
       minimum_rotation_time_ = minimum_rotation_time;
       maximum_rotation_time_ = maximum_rotation_time;
       address_rotation_alarm_ = std::make_unique<os::Alarm>(handler_);
+      if (!registered_clients_.empty()) {
+        // clients registered and paused before the policy set, rotate random address and resume
+        // clients after set random address complete
+        handler_->BindOnceOn(this, &LeAddressManager::rotate_random_address).Invoke();
+      }
       break;
     case AddressPolicy::POLICY_NOT_SET:
       LOG_ALWAYS_FATAL("invalid parameters");
@@ -141,7 +145,6 @@ void LeAddressManager::unregister_client(LeAddressManagerCallback* callback) {
   registered_clients_.erase(callback);
   if (registered_clients_.empty() && address_rotation_alarm_ != nullptr) {
     address_rotation_alarm_->Cancel();
-    address_rotation_alarm_.reset();
   }
 }
 
