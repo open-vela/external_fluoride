@@ -397,8 +397,10 @@ uint8_t BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len, uint8_t uuid_size,
  *                  dev_type         - Remote device's device type.
  *                  addr_type        - LE device address type.
  *
+ * Returns          true if added OK, else false
+ *
  ******************************************************************************/
-void BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
+bool BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
                          tBLE_ADDR_TYPE addr_type);
 
 /*******************************************************************************
@@ -413,8 +415,10 @@ void BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
  *                  p_le_key         - LE key values.
  *                  key_type         - LE SMP key type.
  *
+ * Returns          true if added OK, else false
+ *
  ******************************************************************************/
-void BTM_SecAddBleKey(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
+bool BTM_SecAddBleKey(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
                       tBTM_LE_KEY_TYPE key_type);
 
 /*******************************************************************************
@@ -1031,11 +1035,12 @@ tBTM_STATUS BTM_EnableTestMode(void);
  *
  * Description      This function is called to read a remote device's version
  *
- * Returns          true if valid, false otherwise
+ * Returns          BTM_SUCCESS if successful, otherwise an error
  *
  ******************************************************************************/
-bool BTM_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
-                           uint16_t* manufacturer, uint16_t* lmp_sub_version);
+tBTM_STATUS BTM_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
+                                  uint16_t* manufacturer,
+                                  uint16_t* lmp_sub_version);
 
 /*******************************************************************************
  *
