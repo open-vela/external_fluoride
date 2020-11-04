@@ -62,9 +62,6 @@
 #include "stack/include/sco_hci_link_interface.h"
 #include "types/raw_address.h"
 
-void gatt_find_in_device_record(const RawAddress& bd_addr,
-                                tBLE_BD_ADDR* address_with_type);
-
 struct StackAclBtmAcl {
   tACL_CONN* acl_allocate_connection();
   tACL_CONN* acl_get_connection_from_handle(uint16_t handle);
@@ -125,8 +122,9 @@ static void btm_read_rssi_timeout(void* data);
 static void btm_read_tx_power_timeout(void* data);
 static void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
                                             uint8_t num_read_pages);
-static void btm_sec_set_peer_sec_caps(bool ssp_supported, bool sc_supported,
-                                      tBTM_SEC_DEV_REC* p_dev_rec);
+static void btm_sec_set_peer_sec_caps(tBTM_SEC_DEV_REC* p_dev_rec,
+                                      bool ssp_supported, bool sc_supported,
+                                      bool hci_role_switch_supported);
 static bool acl_is_role_central(const RawAddress& bda, tBT_TRANSPORT transport);
 static void btm_set_link_policy(tACL_CONN* conn, uint16_t policy);
 static bool btm_ble_get_acl_remote_addr(const tBTM_SEC_DEV_REC& p_dev_rec,
@@ -841,11 +839,6 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
     return;
   }
 
-  p_dev_rec->num_read_pages = num_read_pages;
-
-  p_dev_rec->remote_supports_hci_role_switch =
-      HCI_SWITCH_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[0]);
-
   if (!(p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) ||
       p_dev_rec->is_originator) {
     uint8_t status = btm_sec_execute_procedure(p_dev_rec);
@@ -862,8 +855,11 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
       HCI_SSP_HOST_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[1]);
   bool secure_connections_supported =
       HCI_SC_HOST_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[1]);
-  btm_sec_set_peer_sec_caps(ssp_supported, secure_connections_supported,
-                            p_dev_rec);
+  bool role_switch_supported =
+      HCI_SWITCH_SUPPORTED(p_acl_cb->peer_lmp_feature_pages[0]);
+  btm_sec_set_peer_sec_caps(p_dev_rec, ssp_supported,
+                            secure_connections_supported,
+                            role_switch_supported);
 
   if (req_pend) {
     /* Request for remaining Security Features (if any) */
@@ -2548,9 +2544,12 @@ void btm_ble_refresh_local_resolvable_private_addr(
  * Returns          void
  *
  ******************************************************************************/
-void btm_sec_set_peer_sec_caps(bool ssp_supported, bool sc_supported,
-                               tBTM_SEC_DEV_REC* p_dev_rec) {
+void btm_sec_set_peer_sec_caps(tBTM_SEC_DEV_REC* p_dev_rec, bool ssp_supported,
+                               bool sc_supported,
+                               bool hci_role_switch_supported) {
   p_dev_rec->remote_feature_received = true;
+  p_dev_rec->remote_supports_hci_role_switch = hci_role_switch_supported;
+
   if ((btm_cb.security_mode == BTM_SEC_MODE_SP ||
        btm_cb.security_mode == BTM_SEC_MODE_SC) &&
       ssp_supported) {
@@ -2886,9 +2885,6 @@ bool acl_create_le_connection_with_id(uint8_t id, const RawAddress& bd_addr) {
         .bda = bd_addr,
         .type = BLE_ADDR_RANDOM,
     };
-    gatt_find_in_device_record(bd_addr, &address_with_type);
-    LOG_DEBUG("Creating le connection to:%s",
-              address_with_type.ToString().c_str());
     bluetooth::shim::ACL_CreateLeConnection(address_with_type);
     return true;
   }
