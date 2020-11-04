@@ -214,6 +214,8 @@ void btm_set_packet_types_from_address(const RawAddress& bda,
                                        tBT_TRANSPORT transport,
                                        uint16_t pkt_types);
 
+bool lmp_version_below(const RawAddress& bda, uint8_t version);
+
 bool acl_br_edr_is_role_central(const RawAddress& bda);
 bool acl_ble_is_role_central(const RawAddress& bda);
 
@@ -222,8 +224,7 @@ bool acl_ble_is_role_central(const RawAddress& bda);
 
 bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x);
 
-bool acl_refresh_remote_address(const RawAddress& identity_address,
-                                tBLE_ADDR_TYPE identity_address_type,
+bool acl_refresh_remote_address(const tBTM_SEC_DEV_REC* p_dev_rec,
                                 const RawAddress& remote_bda, uint8_t rra_type,
                                 const RawAddress& rpa);
 
