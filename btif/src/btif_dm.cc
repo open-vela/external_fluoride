@@ -478,17 +478,16 @@ static void btif_update_remote_version_property(RawAddress* p_bd) {
   uint8_t lmp_ver = 0;
   uint16_t lmp_subver = 0;
   uint16_t mfct_set = 0;
-  bool version_info_valid = false;
+  tBTM_STATUS btm_status;
   bt_remote_version_t info;
   bt_status_t status;
 
-  version_info_valid =
-      BTM_ReadRemoteVersion(*p_bd, &lmp_ver, &mfct_set, &lmp_subver);
+  btm_status = BTM_ReadRemoteVersion(*p_bd, &lmp_ver, &mfct_set, &lmp_subver);
 
   LOG_INFO("remote version info [%s]: %x, %x, %x", p_bd->ToString().c_str(),
            lmp_ver, mfct_set, lmp_subver);
 
-  if (version_info_valid) {
+  if (btm_status == BTM_SUCCESS) {
     // Always update cache to ensure we have availability whenever BTM API is
     // not populated
     info.manufacturer = mfct_set;
