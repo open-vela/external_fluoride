@@ -127,6 +127,9 @@ static void btm_process_remote_ext_features(tACL_CONN* p_acl_cb,
                                             uint8_t num_read_pages);
 static bool acl_is_role_central(const RawAddress& bda, tBT_TRANSPORT transport);
 static void btm_set_link_policy(tACL_CONN* conn, uint16_t policy);
+static bool btm_ble_get_acl_remote_addr(uint16_t hci_handle,
+                                        RawAddress& conn_addr,
+                                        tBLE_ADDR_TYPE* p_addr_type);
 
 /* 3 seconds timeout waiting for responses */
 #define BTM_DEV_REPLY_TIMEOUT_MS (3 * 1000)
@@ -249,6 +252,54 @@ tACL_CONN* StackAclBtmAcl::acl_get_connection_from_handle(uint16_t hci_handle) {
   uint8_t index = btm_handle_to_acl_index(hci_handle);
   if (index >= MAX_L2CAP_LINKS) return nullptr;
   return &btm_cb.acl_cb_.acl_db[index];
+}
+
+/*******************************************************************************
+ *
+ * Function         btm_ble_get_acl_remote_addr
+ *
+ * Description      This function reads the active remote address used for the
+ *                  connection.
+ *
+ * Returns          success return true, otherwise false.
+ *
+ ******************************************************************************/
+static bool btm_ble_get_acl_remote_addr(uint16_t hci_handle,
+                                        RawAddress& conn_addr,
+                                        tBLE_ADDR_TYPE* p_addr_type) {
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(hci_handle);
+  if (p_dev_rec == nullptr) {
+    LOG_WARN("Unable to find security device record hci_handle:%hu",
+             hci_handle);
+    // TODO Release acl resource
+    return false;
+  }
+
+  bool st = true;
+
+  switch (p_dev_rec->ble.active_addr_type) {
+    case tBTM_SEC_BLE::BTM_BLE_ADDR_PSEUDO:
+      conn_addr = p_dev_rec->bd_addr;
+      *p_addr_type = p_dev_rec->ble.ble_addr_type;
+      break;
+
+    case tBTM_SEC_BLE::BTM_BLE_ADDR_RRA:
+      conn_addr = p_dev_rec->ble.cur_rand_addr;
+      *p_addr_type = BLE_ADDR_RANDOM;
+      break;
+
+    case tBTM_SEC_BLE::BTM_BLE_ADDR_STATIC:
+      conn_addr = p_dev_rec->ble.identity_address_with_type.bda;
+      *p_addr_type = p_dev_rec->ble.identity_address_with_type.type;
+      break;
+
+    default:
+      LOG_WARN("Unable to find record with active address type: %d",
+               p_dev_rec->ble.active_addr_type);
+      st = false;
+      break;
+  }
+  return st;
 }
 
 void btm_acl_process_sca_cmpl_pkt(uint8_t len, uint8_t* data) {
@@ -455,7 +506,7 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role) {
 
 /*******************************************************************************
  *
- * Function         BTM_SwitchRoleToCentral
+ * Function         BTM_SwitchRole
  *
  * Description      This function is called to switch role between central and
  *                  peripheral.  If role is already set it will do nothing.
@@ -470,7 +521,7 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role) {
  *                  BTM_BUSY if the previous command is not completed
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr) {
+tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role) {
   if (!controller_get_interface()->supports_central_peripheral_role_switch()) {
     LOG_INFO("Local controller does not support role switching");
     return BTM_MODE_UNSUPPORTED;
@@ -483,7 +534,7 @@ tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr) {
     return BTM_UNKNOWN_ADDR;
   }
 
-  if (p_acl->link_role == HCI_ROLE_CENTRAL) {
+  if (p_acl->link_role == new_role) {
     LOG_INFO("Requested role is already in effect");
     return BTM_SUCCESS;
   }
@@ -530,7 +581,7 @@ tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr) {
       p_acl->set_encryption_off();
       p_acl->set_switch_role_encryption_off();
     } else {
-      btsnd_hcic_switch_role(remote_bd_addr, HCI_ROLE_CENTRAL);
+      btsnd_hcic_switch_role(remote_bd_addr, new_role);
       p_acl->set_switch_role_in_progress();
       p_acl->rs_disc_pending = BTM_SEC_RS_PENDING;
     }
@@ -576,7 +627,7 @@ void btm_acl_encrypt_change(uint16_t handle, uint8_t status,
       p->set_switch_role_switching();
     }
 
-    btsnd_hcic_switch_role(p->remote_addr, HCI_ROLE_CENTRAL);
+    btsnd_hcic_switch_role(p->remote_addr, (uint8_t)!p->link_role);
     p->rs_disc_pending = BTM_SEC_RS_PENDING;
   }
   /* Finished enabling Encryption after role switch */
@@ -1270,8 +1321,9 @@ void btm_process_clk_off_comp_evt(uint16_t hci_handle, uint16_t clock_offset) {
 void btm_blacklist_role_change_device(const RawAddress& bd_addr,
                                       uint8_t hci_status) {
   tACL_CONN* p = internal_.btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
 
-  if (!p) {
+  if (!p || !p_dev_rec) {
     LOG_WARN("Unable to find active acl");
     return;
   }
@@ -1283,10 +1335,10 @@ void btm_blacklist_role_change_device(const RawAddress& bd_addr,
   /* check for carkits */
   const uint32_t cod_audio_device =
       (BTM_COD_SERVICE_AUDIO | BTM_COD_MAJOR_AUDIO) << 8;
-  const uint8_t* dev_class = btm_get_dev_class(bd_addr);
-  if (dev_class == nullptr) return;
   const uint32_t cod =
-      ((dev_class[0] << 16) | (dev_class[1] << 8) | dev_class[2]) & 0xffffff;
+      ((p_dev_rec->dev_class[0] << 16) | (p_dev_rec->dev_class[1] << 8) |
+       p_dev_rec->dev_class[2]) &
+      0xffffff;
   if ((hci_status != HCI_SUCCESS) &&
       (p->is_switch_role_switching_or_in_progress()) &&
       ((cod & cod_audio_device) == cod_audio_device) &&
@@ -2101,7 +2153,7 @@ void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
       if (p->is_switch_role_mode_change()) {
         p->set_switch_role_in_progress();
         p->rs_disc_pending = BTM_SEC_RS_PENDING;
-        btsnd_hcic_switch_role(p->remote_addr, HCI_ROLE_CENTRAL);
+        btsnd_hcic_switch_role(p->remote_addr, (uint8_t)!p->link_role);
       }
     }
   }
@@ -2115,6 +2167,7 @@ void btm_cont_rswitch_from_handle(uint16_t hci_handle) {
  *
  ******************************************************************************/
 void btm_acl_resubmit_page(void) {
+  tBTM_SEC_DEV_REC* p_dev_rec;
   BT_HDR* p_buf;
   uint8_t* pp;
   /* If there were other page request schedule can start the next one */
@@ -2127,8 +2180,10 @@ void btm_acl_resubmit_page(void) {
     RawAddress bda;
     STREAM_TO_BDADDR(bda, pp);
 
-    btm_cb.connecting_bda = bda;
-    memcpy(btm_cb.connecting_dc, btm_get_dev_class(bda), DEV_CLASS_LEN);
+    p_dev_rec = btm_find_or_alloc_dev(bda);
+
+    btm_cb.connecting_bda = p_dev_rec->bd_addr;
+    memcpy(btm_cb.connecting_dc, p_dev_rec->dev_class, DEV_CLASS_LEN);
 
     btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p_buf);
   } else {
@@ -2161,13 +2216,16 @@ void btm_acl_reset_paging(void) {
  *
  ******************************************************************************/
 void btm_acl_paging(BT_HDR* p, const RawAddress& bda) {
+  tBTM_SEC_DEV_REC* p_dev_rec;
+
   if (!BTM_IsAclConnectionUp(bda, BT_TRANSPORT_BR_EDR)) {
     VLOG(1) << "connecting_bda: " << btm_cb.connecting_bda;
     if (btm_cb.paging && bda == btm_cb.connecting_bda) {
       fixed_queue_enqueue(btm_cb.page_queue, p);
     } else {
-      btm_cb.connecting_bda = bda;
-      memcpy(btm_cb.connecting_dc, btm_get_dev_class(bda), DEV_CLASS_LEN);
+      p_dev_rec = btm_find_or_alloc_dev(bda);
+      btm_cb.connecting_bda = p_dev_rec->bd_addr;
+      memcpy(btm_cb.connecting_dc, p_dev_rec->dev_class, DEV_CLASS_LEN);
 
       btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
     }
