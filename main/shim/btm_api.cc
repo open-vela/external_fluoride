@@ -908,17 +908,19 @@ uint8_t bluetooth::shim::BTM_GetEirUuidList(uint8_t* p_eir, size_t eir_len,
   return 0;
 }
 
-void bluetooth::shim::BTM_SecAddBleDevice(const RawAddress& bd_addr,
+bool bluetooth::shim::BTM_SecAddBleDevice(const RawAddress& bd_addr,
                                           tBT_DEVICE_TYPE dev_type,
                                           tBLE_ADDR_TYPE addr_type) {
   LOG_INFO("UNIMPLEMENTED %s", __func__);
+  return false;
 }
 
-void bluetooth::shim::BTM_SecAddBleKey(const RawAddress& bd_addr,
+bool bluetooth::shim::BTM_SecAddBleKey(const RawAddress& bd_addr,
                                        tBTM_LE_KEY_VALUE* p_le_key,
                                        tBTM_LE_KEY_TYPE key_type) {
   LOG_INFO("UNIMPLEMENTED %s", __func__);
   CHECK(p_le_key != nullptr);
+  return false;
 }
 
 void bluetooth::shim::BTM_BleLoadLocalKeys(uint8_t key_type,
