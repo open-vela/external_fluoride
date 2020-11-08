@@ -2203,7 +2203,10 @@ void btm_ble_read_remote_features_complete(uint8_t* p) {
     }
   }
 
-  btsnd_hcic_rmt_ver_req(handle);
+  // TODO gd can only handle classic ReadRemoteVersionRequest not le
+  if (!bluetooth::shim::is_gd_acl_enabled()) {
+    btsnd_hcic_rmt_ver_req(handle);
+  }
 }
 
 /*******************************************************************************
