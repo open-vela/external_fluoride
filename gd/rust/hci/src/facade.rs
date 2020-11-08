@@ -1,8 +1,17 @@
 //! HCI layer facade
 
-use bt_hci_proto::empty::Empty;
-use bt_hci_proto::facade::*;
-use bt_hci_proto::facade_grpc::{create_hci_layer_facade, HciLayerFacade};
+mod facade_grpc;
+
+/// Refer to the following on why we are doing this and for possible solutions:
+/// https://github.com/tikv/grpc-rs/issues/276
+pub mod empty {
+    pub use protobuf::well_known_types::Empty;
+}
+use empty::Empty;
+
+use hci_layer_facade_proto::facade;
+use facade_grpc::{HciLayerFacade, create_hci_layer_facade};
+use facade::*;
 
 use futures::sink::SinkExt;
 use tokio::runtime::Runtime;
@@ -35,18 +44,12 @@ impl HciLayerFacade for HciLayerFacadeService {
         mut cmd: CommandMsg,
         sink: UnarySink<Empty>,
     ) {
-        self.rt.block_on(
-            self.hci_exports
-                .enqueue_command_with_complete(cmd.take_command().into()),
-        );
+        self.rt.block_on(self.hci_exports.enqueue_command_with_complete(cmd.take_command().into()));
 
         let f = sink
             .success(Empty::default())
             .map_err(|e: grpcio::Error| {
-                println!(
-                    "failed to handle enqueue_command_with_complete request: {:?}",
-                    e
-                )
+                println!("failed to handle enqueue_command_with_complete request: {:?}", e)
             })
             .map(|_| ());
 
@@ -59,18 +62,12 @@ impl HciLayerFacade for HciLayerFacadeService {
         mut cmd: CommandMsg,
         sink: UnarySink<Empty>,
     ) {
-        self.rt.block_on(
-            self.hci_exports
-                .enqueue_command_with_complete(cmd.take_command().into()),
-        );
+        self.rt.block_on(self.hci_exports.enqueue_command_with_complete(cmd.take_command().into()));
 
         let f = sink
             .success(Empty::default())
             .map_err(|e: grpcio::Error| {
-                println!(
-                    "failed to handle enqueue_command_with_status request: {:?}",
-                    e
-                )
+                println!("failed to handle enqueue_command_with_status request: {:?}", e)
             })
             .map(|_| ());
 
@@ -83,18 +80,12 @@ impl HciLayerFacade for HciLayerFacadeService {
         code: EventCodeMsg,
         sink: UnarySink<Empty>,
     ) {
-        self.rt.block_on(
-            self.hci_exports
-                .register_event_handler(code.get_code() as u8),
-        );
+        self.rt.block_on(self.hci_exports.register_event_handler(code.get_code() as u8));
 
         let f = sink
             .success(Empty::default())
             .map_err(|e: grpcio::Error| {
-                println!(
-                    "failed to handle enqueue_command_with_status request: {:?}",
-                    e
-                )
+                println!("failed to handle enqueue_command_with_status request: {:?}", e)
             })
             .map(|_| ());
 
