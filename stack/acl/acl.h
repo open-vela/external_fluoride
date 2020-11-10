@@ -70,8 +70,6 @@ typedef struct {
   uint16_t hci_handle;
   uint16_t link_policy;
   uint16_t link_super_tout;
-  uint16_t lmp_subversion;
-  uint16_t manufacturer;
   uint16_t pkt_types_mask;
   tBLE_ADDR_TYPE active_remote_addr_type;
   tBLE_ADDR_TYPE conn_addr_type;
@@ -102,8 +100,14 @@ typedef struct {
  public:
   bool is_encrypted = false;
   uint8_t link_role;
-  uint8_t lmp_version;
   uint8_t switch_role_failed_attempts;
+
+  struct {
+    uint8_t lmp_version{0};
+    uint16_t lmp_subversion{0};
+    uint16_t manufacturer{0};
+    bool valid{false};
+  } remote_version_info;
 
 #define BTM_SEC_RS_NOT_PENDING 0 /* Role Switch not in progress */
 #define BTM_SEC_RS_PENDING 1     /* Role Switch in progress */
@@ -212,8 +216,6 @@ typedef struct {
   friend void btm_acl_process_sca_cmpl_pkt(uint8_t evt_len, uint8_t* p);
   friend void btm_acl_role_changed(tHCI_STATUS hci_status,
                                    const RawAddress& bd_addr, uint8_t new_role);
-  friend void btm_acl_update_conn_addr(uint16_t conn_handle,
-                                       const RawAddress& address);
   friend void btm_pm_proc_cmd_status(uint8_t status);
   friend void btm_pm_proc_mode_change(uint8_t hci_status, uint16_t hci_handle,
                                       uint8_t mode, uint16_t interval);
