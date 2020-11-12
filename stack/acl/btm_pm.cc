@@ -39,7 +39,6 @@
 #include "btm_int.h"
 #include "btm_int_types.h"
 #include "device/include/controller.h"
-#include "device/include/interop.h"
 #include "hcidefs.h"
 #include "hcimsgs.h"
 #include "osi/include/log.h"
@@ -161,8 +160,7 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
     const controller_t* controller = controller_get_interface();
     if ((mode == BTM_PM_MD_HOLD && !controller->supports_hold_mode()) ||
         (mode == BTM_PM_MD_SNIFF && !controller->supports_sniff_mode()) ||
-        (mode == BTM_PM_MD_PARK && !controller->supports_park_mode()) ||
-        interop_match_addr(INTEROP_DISABLE_SNIFF, &remote_bda)) {
+        (mode == BTM_PM_MD_PARK && !controller->supports_park_mode())) {
       LOG_ERROR("pm_id %u mode %u is not supported for %s", pm_id, mode,
                 remote_bda.ToString().c_str());
       return BTM_MODE_UNSUPPORTED;
