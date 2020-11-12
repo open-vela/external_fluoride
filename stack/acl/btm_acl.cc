@@ -624,10 +624,6 @@ static void check_link_policy(uint16_t* settings) {
 static void btm_set_link_policy(tACL_CONN* conn, uint16_t policy) {
   conn->link_policy = policy;
   check_link_policy(&conn->link_policy);
-  if ((conn->link_policy & HCI_ENABLE_CENTRAL_PERIPHERAL_SWITCH) &&
-      interop_match_addr(INTEROP_DISABLE_SNIFF, &(conn->remote_addr))) {
-    conn->link_policy &= (~HCI_ENABLE_SNIFF_MODE);
-  }
   btsnd_hcic_write_policy_set(conn->hci_handle, conn->link_policy);
 }
 
@@ -2690,14 +2686,13 @@ void acl_disconnect_after_role_switch(uint16_t conn_handle, uint16_t reason) {
   /* If a role switch is in progress, delay the HCI Disconnect to avoid
    * controller problem */
   if (p_acl->rs_disc_pending == BTM_SEC_RS_PENDING) {
-    LOG_DEBUG(
-        "Role switch in progress - Set DISC Pending flag in "
-        "btm_sec_send_hci_disconnect "
+    BTM_TRACE_DEBUG(
+        "RS in progress - Set DISC Pending flag in btm_sec_send_hci_disconnect "
         "to delay disconnect");
     p_acl->rs_disc_pending = BTM_SEC_DISC_PENDING;
-  } else {
-    LOG_DEBUG("Sending acl disconnect reason:%s [%hu]",
-              hci_error_code_text(reason).c_str(), reason);
+  }
+  /* Tear down the HCI link */
+  else {
     btsnd_hcic_disconnect(conn_handle, reason);
   }
 }
