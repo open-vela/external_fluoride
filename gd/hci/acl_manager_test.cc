@@ -156,12 +156,11 @@ class TestHciLayer : public HciLayer {
       EXPECT_NE(std::future_status::timeout, result);
     }
     if (command_queue_.empty()) {
-      return ConnectionManagementCommandView::Create(AclCommandView::Create(
-          CommandPacketView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>()))));
+      return ConnectionManagementCommandView::Create(
+          CommandPacketView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>())));
     }
     CommandPacketView command_packet_view = GetLastCommand();
-    ConnectionManagementCommandView command =
-        ConnectionManagementCommandView::Create(AclCommandView::Create(command_packet_view));
+    ConnectionManagementCommandView command = ConnectionManagementCommandView::Create(command_packet_view);
     EXPECT_TRUE(command.IsValid());
     EXPECT_EQ(command.GetOpCode(), op_code);
 
@@ -177,12 +176,11 @@ class TestHciLayer : public HciLayer {
       EXPECT_NE(std::future_status::timeout, result);
     }
     if (command_queue_.empty()) {
-      return ConnectionManagementCommandView::Create(AclCommandView::Create(
-          CommandPacketView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>()))));
+      return ConnectionManagementCommandView::Create(
+          CommandPacketView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>())));
     }
     CommandPacketView command_packet_view = GetLastCommand();
-    ConnectionManagementCommandView command =
-        ConnectionManagementCommandView::Create(AclCommandView::Create(command_packet_view));
+    ConnectionManagementCommandView command = ConnectionManagementCommandView::Create(command_packet_view);
     EXPECT_TRUE(command.IsValid());
     EXPECT_EQ(command.GetOpCode(), op_code);
 
@@ -584,8 +582,7 @@ class AclManagerWithLeConnectionTest : public AclManagerTest {
     test_hci_layer_->IncomingEvent(LeAddDeviceToConnectListCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
     test_hci_layer_->SetCommandFuture();
     auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_CREATE_CONNECTION);
-    auto le_connection_management_command_view =
-        LeConnectionManagementCommandView::Create(AclCommandView::Create(packet));
+    auto le_connection_management_command_view = LeConnectionManagementCommandView::Create(packet);
     auto command_view = LeCreateConnectionView::Create(le_connection_management_command_view);
     ASSERT_TRUE(command_view.IsValid());
     if (use_connect_list_) {
@@ -667,8 +664,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_complete_fail) {
   test_hci_layer_->IncomingEvent(LeAddDeviceToConnectListCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
   test_hci_layer_->SetCommandFuture();
   auto packet = test_hci_layer_->GetLastCommandPacket(OpCode::LE_CREATE_CONNECTION);
-  auto le_connection_management_command_view =
-      LeConnectionManagementCommandView::Create(AclCommandView::Create(packet));
+  auto le_connection_management_command_view = LeConnectionManagementCommandView::Create(packet);
   auto command_view = LeCreateConnectionView::Create(le_connection_management_command_view);
   ASSERT_TRUE(command_view.IsValid());
   if (use_connect_list_) {
@@ -695,7 +691,7 @@ TEST_F(AclManagerTest, invoke_registered_callback_le_connection_complete_fail) {
 
   test_hci_layer_->SetCommandFuture();
   packet = test_hci_layer_->GetLastCommandPacket(OpCode::LE_REMOVE_DEVICE_FROM_CONNECT_LIST);
-  le_connection_management_command_view = LeConnectionManagementCommandView::Create(AclCommandView::Create(packet));
+  le_connection_management_command_view = LeConnectionManagementCommandView::Create(packet);
   auto remove_command_view = LeRemoveDeviceFromConnectListView::Create(le_connection_management_command_view);
   ASSERT_TRUE(remove_command_view.IsValid());
   test_hci_layer_->IncomingEvent(LeRemoveDeviceFromConnectListCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
@@ -713,8 +709,7 @@ TEST_F(AclManagerTest, cancel_le_connection) {
   test_hci_layer_->SetCommandFuture();
   acl_manager_->CancelLeConnect(remote_with_type);
   auto packet = test_hci_layer_->GetLastCommandPacket(OpCode::LE_CREATE_CONNECTION_CANCEL);
-  auto le_connection_management_command_view =
-      LeConnectionManagementCommandView::Create(AclCommandView::Create(packet));
+  auto le_connection_management_command_view = LeConnectionManagementCommandView::Create(packet);
   auto command_view = LeCreateConnectionCancelView::Create(le_connection_management_command_view);
   ASSERT_TRUE(command_view.IsValid());
 
@@ -732,7 +727,7 @@ TEST_F(AclManagerTest, cancel_le_connection) {
 
   test_hci_layer_->SetCommandFuture();
   packet = test_hci_layer_->GetLastCommandPacket(OpCode::LE_REMOVE_DEVICE_FROM_CONNECT_LIST);
-  le_connection_management_command_view = LeConnectionManagementCommandView::Create(AclCommandView::Create(packet));
+  le_connection_management_command_view = LeConnectionManagementCommandView::Create(packet);
   auto remove_command_view = LeRemoveDeviceFromConnectListView::Create(le_connection_management_command_view);
   ASSERT_TRUE(remove_command_view.IsValid());
 
@@ -781,8 +776,7 @@ TEST_F(AclManagerWithLeConnectionTest, invoke_registered_callback_le_connection_
   connection_->LeConnectionUpdate(connection_interval_min, connection_interval_max, connection_latency,
                                   supervision_timeout, 0x10, 0x20);
   auto update_packet = test_hci_layer_->GetCommandPacket(OpCode::LE_CONNECTION_UPDATE);
-  auto update_view =
-      LeConnectionUpdateView::Create(LeConnectionManagementCommandView::Create(AclCommandView::Create(update_packet)));
+  auto update_view = LeConnectionUpdateView::Create(LeConnectionManagementCommandView::Create(update_packet));
   ASSERT_TRUE(update_view.IsValid());
   EXPECT_EQ(update_view.GetConnectionHandle(), handle_);
   EXPECT_CALL(mock_le_connection_management_callbacks_,

@@ -16,22 +16,19 @@
 
 #pragma once
 
-#include "hci/command_interface.h"
 #include "hci/hci_packets.h"
 
 namespace bluetooth {
 namespace hci {
+namespace acl_manager {
 
-constexpr SubeventCode LeConnectionManagementEvents[] = {
-    SubeventCode::CONNECTION_COMPLETE,
-    SubeventCode::ENHANCED_CONNECTION_COMPLETE,
-    SubeventCode::CONNECTION_UPDATE_COMPLETE,
-    SubeventCode::PHY_UPDATE_COMPLETE,
-    SubeventCode::DATA_LENGTH_CHANGE,
-    SubeventCode::REMOTE_CONNECTION_PARAMETER_REQUEST,
+class DisconnectorForLe {
+ public:
+  DisconnectorForLe() = default;
+  virtual ~DisconnectorForLe() = default;
+  virtual void handle_disconnect(uint16_t handle, DisconnectReason reason) = 0;
 };
 
-typedef CommandInterface<LeConnectionManagementCommandBuilder> LeAclConnectionInterface;
-
+}  // namespace acl_manager
 }  // namespace hci
 }  // namespace bluetooth
