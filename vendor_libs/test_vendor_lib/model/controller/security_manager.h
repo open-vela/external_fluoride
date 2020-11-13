@@ -34,7 +34,6 @@ enum class PairingType : uint8_t {
   DISPLAY_AND_CONFIRM,
   INPUT_PIN,
   OUT_OF_BAND,
-  PEER_HAS_OUT_OF_BAND,
   INVALID = 0xff,
 };
 
