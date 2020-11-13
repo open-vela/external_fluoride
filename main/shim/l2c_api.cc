@@ -17,7 +17,6 @@
 #define LOG_TAG "bt_shim_l2cap"
 
 #include "main/shim/l2c_api.h"
-#include "bta/include/bta_dm_acl.h"
 #include "gd/l2cap/classic/l2cap_classic_module.h"
 #include "gd/l2cap/le/l2cap_le_module.h"
 #include "gd/os/log.h"
@@ -91,18 +90,6 @@ class SecurityEnforcementShim
   intptr_t security_enforce_callback_counter_ = 100;
 } security_enforcement_shim_;
 
-struct RemoteFeature {
-  uint8_t lmp_version = 0;
-  uint16_t manufacturer_name = 0;
-  uint16_t sub_version = 0;
-  bool version_info_received = false;
-  bool role_switch_supported = false;
-  bool ssp_supported = false;
-  bool sc_supported = false;
-};
-
-std::unordered_map<RawAddress, RemoteFeature> remote_feature_map_;
-
 class SecurityListenerShim
     : public bluetooth::l2cap::classic::LinkSecurityInterfaceListener {
  public:
@@ -113,8 +100,7 @@ class SecurityListenerShim
 
     uint16_t handle = interface->GetAclHandle();
     address_to_handle_[bda] = handle;
-    btm_sec_connected(bda, handle, HCI_SUCCESS, 0);
-    BTA_dm_acl_up(bda, BT_TRANSPORT_BR_EDR);
+    btm_acl_connected(bda, handle, HCI_SUCCESS, 0);
     address_to_interface_[bda] = std::move(interface);
   }
 
@@ -127,8 +113,7 @@ class SecurityListenerShim
   void OnLinkDisconnected(bluetooth::hci::Address remote) override {
     auto bda = bluetooth::ToRawAddress(remote);
     uint16_t handle = address_to_handle_[bda];
-    btm_sec_disconnected(handle, HCI_ERR_PEER_USER);
-    BTA_dm_acl_down(bda, BT_TRANSPORT_BR_EDR);
+    btm_acl_disconnected(HCI_SUCCESS, handle, HCI_ERR_PEER_USER);
     address_to_handle_.erase(bda);
     address_to_interface_.erase(bda);
   }
@@ -145,11 +130,10 @@ class SecurityListenerShim
                                       uint16_t manufacturer_name,
                                       uint16_t sub_version) override {
     auto bda = bluetooth::ToRawAddress(remote);
-    auto& entry = remote_feature_map_[bda];
-    entry.lmp_version = lmp_version;
-    entry.manufacturer_name = manufacturer_name;
-    entry.sub_version = sub_version;
-    entry.version_info_received = true;
+    uint16_t handle = address_to_handle_[bda];
+
+    btm_read_remote_version_complete(HCI_SUCCESS, handle, lmp_version,
+                                     manufacturer_name, sub_version);
   }
 
   void OnReadRemoteExtendedFeatures(bluetooth::hci::Address remote,
@@ -186,20 +170,6 @@ class SecurityListenerShim
 } security_listener_shim_;
 
 bluetooth::l2cap::classic::SecurityInterface* security_interface_ = nullptr;
-
-bool bluetooth::shim::L2CA_ReadRemoteVersion(const RawAddress& addr,
-                                             uint8_t* lmp_version,
-                                             uint16_t* manufacturer,
-                                             uint16_t* lmp_sub_version) {
-  auto& entry = remote_feature_map_[addr];
-  if (!entry.version_info_received) {
-    return false;
-  }
-  *lmp_version = entry.lmp_version;
-  *manufacturer = entry.manufacturer_name;
-  *lmp_sub_version = entry.sub_version;
-  return true;
-}
 
 void bluetooth::shim::L2CA_UseLegacySecurityModule() {
   LOG_INFO("GD L2cap is using legacy security module");
@@ -866,9 +836,4 @@ uint8_t bluetooth::shim::L2CA_LECocDataWrite(uint16_t cid, BT_HDR* p_data) {
              ToAddressWithType(remote, Btm::GetAddressType(remote)),
              MakeUniquePacket(data, len)) *
          len;
-}
-
-void bluetooth::shim::L2CA_SwitchRoleToCentral(const RawAddress& addr) {
-  bluetooth::shim::GetAclManager()->SwitchRole(ToGdAddress(addr),
-                                               bluetooth::hci::Role::CENTRAL);
 }
