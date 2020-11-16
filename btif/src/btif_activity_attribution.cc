@@ -22,7 +22,6 @@
 
 #include "btaa/include/activity_attribution.h"
 #include "btif/include/btif_common.h"
-#include "gd/common/init_flags.h"
 #include "stack/include/btu.h"
 
 using base::Bind;
@@ -38,11 +37,6 @@ class ActivityAttributionInterfaceImpl : public ActivityAttributionCallbacks,
   ~ActivityAttributionInterfaceImpl() override = default;
 
   void Init(ActivityAttributionCallbacks* callbacks) override {
-    if (!bluetooth::common::InitFlags::BtaaHciLogEnabled()) {
-      LOG(INFO) << __func__ << " BTAA not enabled!";
-      return;
-    }
-
     this->callbacks = callbacks;
     ActivityAttribution::Initialize(this);
   }
