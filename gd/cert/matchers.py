@@ -15,8 +15,6 @@
 #   limitations under the License.
 
 import bluetooth_packets_python3 as bt_packets
-import logging
-
 from bluetooth_packets_python3 import hci_packets
 from bluetooth_packets_python3.hci_packets import EventCode
 from bluetooth_packets_python3 import l2cap_packets
@@ -112,10 +110,6 @@ class HciMatchers(object):
             HciMatchers._extract_matching_le_event(packet_bytes, hci_packets.SubeventCode.ENHANCED_CONNECTION_COMPLETE))
 
     @staticmethod
-    def LogEventCode():
-        return lambda event: logging.info("Received event: %x" % hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(event.event))).GetEventCode())
-
-    @staticmethod
     def LinkKeyRequest():
         return lambda event: HciMatchers.EventWithCode(EventCode.LINK_KEY_REQUEST)
 
@@ -158,10 +152,6 @@ class HciMatchers(object):
     @staticmethod
     def DisconnectionComplete():
         return lambda event: HciMatchers.EventWithCode(EventCode.DISCONNECTION_COMPLETE)
-
-    @staticmethod
-    def RemoteOobDataRequest():
-        return lambda event: HciMatchers.EventWithCode(EventCode.REMOTE_OOB_DATA_REQUEST)
 
 
 class NeighborMatchers(object):
