@@ -69,24 +69,18 @@ void ActivityAttributionImpl::onWakeup(
     bool success, const std::vector<std::string>& wakeupReasons) {}
 
 Status WakelockCallback::notifyAcquired(void) {
-  if (instance) {
-    instance->onWakelockAcquired();
-  }
+  instance->onWakelockAcquired();
   return Status::ok();
 }
 
 Status WakelockCallback::notifyReleased(void) {
-  if (instance) {
-    instance->onWakelockReleased();
-  }
+  instance->onWakelockReleased();
   return Status::ok();
 }
 
 Status WakeupCallback::notifyWakeup(
     bool success, const std::vector<std::string>& wakeupReasons) {
-  if (instance) {
-    instance->onWakeup(success, wakeupReasons);
-  }
+  instance->onWakeup(success, wakeupReasons);
   return Status::ok();
 }
 
