@@ -35,6 +35,7 @@
 #include "bta_sys.h"
 #include "device/include/controller.h"
 #include "stack/include/btu.h"
+#include "types/bt_transport.h"
 
 using bluetooth::Uuid;
 
@@ -72,13 +73,13 @@ void BTA_GATTC_Disable(void) {
  * |cb| one time callback when registration is finished
  */
 void BTA_GATTC_AppRegister(tBTA_GATTC_CBACK* p_client_cb,
-                           BtaAppRegisterCallback cb) {
+                           BtaAppRegisterCallback cb, bool eatt_support) {
   if (!bta_sys_is_register(BTA_ID_GATTC))
     bta_sys_register(BTA_ID_GATTC, &bta_gattc_reg);
 
   do_in_main_thread(
       FROM_HERE, base::Bind(&bta_gattc_register, Uuid::GetRandom(), p_client_cb,
-                            std::move(cb)));
+                            std::move(cb), eatt_support));
 }
 
 static void app_deregister_impl(tGATT_IF client_if) {
@@ -118,7 +119,7 @@ void BTA_GATTC_AppDeregister(tGATT_IF client_if) {
  *
  ******************************************************************************/
 void BTA_GATTC_Open(tGATT_IF client_if, const RawAddress& remote_bda,
-                    bool is_direct, tGATT_TRANSPORT transport,
+                    bool is_direct, tBT_TRANSPORT transport,
                     bool opportunistic) {
   uint8_t phy = controller_get_interface()->get_le_all_initiating_phys();
   BTA_GATTC_Open(client_if, remote_bda, is_direct, transport, opportunistic,
@@ -126,8 +127,8 @@ void BTA_GATTC_Open(tGATT_IF client_if, const RawAddress& remote_bda,
 }
 
 void BTA_GATTC_Open(tGATT_IF client_if, const RawAddress& remote_bda,
-                    bool is_direct, tGATT_TRANSPORT transport,
-                    bool opportunistic, uint8_t initiating_phys) {
+                    bool is_direct, tBT_TRANSPORT transport, bool opportunistic,
+                    uint8_t initiating_phys) {
   tBTA_GATTC_API_OPEN* p_buf =
       (tBTA_GATTC_API_OPEN*)osi_malloc(sizeof(tBTA_GATTC_API_OPEN));
 
@@ -231,7 +232,7 @@ void BTA_GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu) {
  * Returns          None
  *
  ******************************************************************************/
-void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, Uuid* p_srvc_uuid) {
+void BTA_GATTC_ServiceSearchRequest(uint16_t conn_id, const Uuid* p_srvc_uuid) {
   const size_t len = sizeof(tBTA_GATTC_API_SEARCH) + sizeof(Uuid);
   tBTA_GATTC_API_SEARCH* p_buf = (tBTA_GATTC_API_SEARCH*)osi_calloc(len);
 
@@ -598,21 +599,21 @@ void BTA_GATTC_ExecuteWrite(uint16_t conn_id, bool is_execute) {
  * Description      This function is called to send handle value confirmation.
  *
  * Parameters       conn_id - connection ID.
- *                    p_char_id - characteristic ID to confirm.
+ *                  cid
  *
  * Returns          None
  *
  ******************************************************************************/
-void BTA_GATTC_SendIndConfirm(uint16_t conn_id, uint16_t handle) {
+void BTA_GATTC_SendIndConfirm(uint16_t conn_id, uint16_t cid) {
   tBTA_GATTC_API_CONFIRM* p_buf =
       (tBTA_GATTC_API_CONFIRM*)osi_calloc(sizeof(tBTA_GATTC_API_CONFIRM));
 
-  VLOG(1) << __func__ << ": conn_id=" << +conn_id << " handle=0x" << std::hex
-          << +handle;
+  VLOG(1) << __func__ << ": conn_id=" << +conn_id << " cid=0x" << std::hex
+          << +cid;
 
   p_buf->hdr.event = BTA_GATTC_API_CONFIRM_EVT;
   p_buf->hdr.layer_specific = conn_id;
-  p_buf->handle = handle;
+  p_buf->cid = cid;
 
   bta_sys_sendmsg(p_buf);
 }

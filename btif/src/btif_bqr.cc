@@ -22,10 +22,9 @@
 #include <sys/stat.h>
 
 #include "btif_bqr.h"
-#include "btif_dm.h"
+#include "btm_api.h"
 #include "common/leaky_bonded_queue.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_int.h"
 
 namespace bluetooth {
 namespace bqr {
@@ -51,7 +50,7 @@ void BqrVseSubEvt::ParseBqrLinkQualityEvt(uint8_t length,
   STREAM_TO_UINT8(bqr_link_quality_event_.packet_types, p_param_buf);
   STREAM_TO_UINT16(bqr_link_quality_event_.connection_handle, p_param_buf);
   STREAM_TO_UINT8(bqr_link_quality_event_.connection_role, p_param_buf);
-  STREAM_TO_UINT8(bqr_link_quality_event_.tx_power_level, p_param_buf);
+  STREAM_TO_INT8(bqr_link_quality_event_.tx_power_level, p_param_buf);
   STREAM_TO_INT8(bqr_link_quality_event_.rssi, p_param_buf);
   STREAM_TO_UINT8(bqr_link_quality_event_.snr, p_param_buf);
   STREAM_TO_UINT8(bqr_link_quality_event_.unused_afh_channel_count,
@@ -123,8 +122,9 @@ std::string BqrVseSubEvt::ToString() const {
   ss << QualityReportIdToString(bqr_link_quality_event_.quality_report_id)
      << ", Handle: " << loghex(bqr_link_quality_event_.connection_handle)
      << ", " << PacketTypeToString(bqr_link_quality_event_.packet_types) << ", "
-     << ((bqr_link_quality_event_.connection_role == 0) ? "Master" : "Slave ")
-     << ", PwLv: " << loghex(bqr_link_quality_event_.tx_power_level)
+     << ((bqr_link_quality_event_.connection_role == 0) ? "Central"
+                                                        : "Peripheral ")
+     << ", PwLv: " << std::to_string(bqr_link_quality_event_.tx_power_level)
      << ", RSSI: " << std::to_string(bqr_link_quality_event_.rssi)
      << ", SNR: " << std::to_string(bqr_link_quality_event_.snr)
      << ", UnusedCh: "
@@ -267,7 +267,8 @@ void ConfigureBqr(const BqrConfiguration& bqr_config) {
     return;
   }
 
-  LOG(INFO) << __func__ << ": Action: " << bqr_config.report_action
+  LOG(INFO) << __func__ << ": Action: "
+            << loghex(static_cast<uint8_t>(bqr_config.report_action))
             << ", Mask: " << loghex(bqr_config.quality_event_mask)
             << ", Interval: " << bqr_config.minimum_report_interval_ms;
 

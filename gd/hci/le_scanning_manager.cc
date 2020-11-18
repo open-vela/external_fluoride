@@ -17,6 +17,7 @@
 #include <mutex>
 #include <set>
 
+#include "hci/acl_manager.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
@@ -35,26 +36,34 @@ constexpr uint16_t kDefaultLeScanInterval = 4800;
 const ModuleFactory LeScanningManager::Factory = ModuleFactory([]() { return new LeScanningManager(); });
 
 enum class ScanApiType {
-  LE_4_0 = 1,
+  LEGACY = 1,
   ANDROID_HCI = 2,
-  LE_5_0 = 3,
+  EXTENDED = 3,
 };
 
-struct LeScanningManager::impl {
+struct LeScanningManager::impl : public bluetooth::hci::LeAddressManagerCallback {
   impl(Module* module) : module_(module), le_scanning_interface_(nullptr) {}
 
-  void start(os::Handler* handler, hci::HciLayer* hci_layer, hci::Controller* controller) {
+  ~impl() {
+    if (address_manager_registered) {
+      le_address_manager_->Unregister(this);
+    }
+  }
+
+  void start(os::Handler* handler, hci::HciLayer* hci_layer, hci::Controller* controller,
+             hci::AclManager* acl_manager) {
     module_handler_ = handler;
     hci_layer_ = hci_layer;
     controller_ = controller;
+    le_address_manager_ = acl_manager->GetLeAddressManager();
     le_scanning_interface_ = hci_layer_->GetLeScanningInterface(
-        common::Bind(&LeScanningManager::impl::handle_scan_results, common::Unretained(this)), module_handler_);
+        module_handler_->BindOn(this, &LeScanningManager::impl::handle_scan_results));
     if (controller_->IsSupported(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS)) {
-      api_type_ = ScanApiType::LE_5_0;
+      api_type_ = ScanApiType::EXTENDED;
     } else if (controller_->IsSupported(OpCode::LE_EXTENDED_SCAN_PARAMS)) {
       api_type_ = ScanApiType::ANDROID_HCI;
     } else {
-      api_type_ = ScanApiType::LE_4_0;
+      api_type_ = ScanApiType::LEGACY;
     }
     configure_scan();
   }
@@ -119,81 +128,119 @@ struct LeScanningManager::impl {
     uint8_t phys_in_use = 1;
 
     switch (api_type_) {
-      case ScanApiType::LE_5_0:
+      case ScanApiType::EXTENDED:
         le_scanning_interface_->EnqueueCommand(hci::LeSetExtendedScanParametersBuilder::Create(
                                                    own_address_type_, filter_policy_, phys_in_use, parameter_vector),
-                                               common::BindOnce(impl::check_status), module_handler_);
+                                               module_handler_->BindOnce(impl::check_status));
         break;
       case ScanApiType::ANDROID_HCI:
         le_scanning_interface_->EnqueueCommand(
             hci::LeExtendedScanParamsBuilder::Create(LeScanType::ACTIVE, interval_ms_, window_ms_, own_address_type_,
                                                      filter_policy_),
-            common::BindOnce(impl::check_status), module_handler_);
+            module_handler_->BindOnce(impl::check_status));
 
         break;
-      case ScanApiType::LE_4_0:
+      case ScanApiType::LEGACY:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetScanParametersBuilder::Create(LeScanType::ACTIVE, interval_ms_, window_ms_, own_address_type_,
                                                     filter_policy_),
-            common::BindOnce(impl::check_status), module_handler_);
+            module_handler_->BindOnce(impl::check_status));
         break;
     }
   }
 
   void start_scan(LeScanningManagerCallbacks* le_scanning_manager_callbacks) {
     registered_callback_ = le_scanning_manager_callbacks;
+
+    if (!address_manager_registered) {
+      le_address_manager_->Register(this);
+      address_manager_registered = true;
+    }
+
+    // If we receive start_scan during paused, replace the cached_registered_callback_ for OnResume
+    if (cached_registered_callback_ != nullptr) {
+      cached_registered_callback_ = registered_callback_;
+      return;
+    }
+
     switch (api_type_) {
-      case ScanApiType::LE_5_0:
+      case ScanApiType::EXTENDED:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetExtendedScanEnableBuilder::Create(Enable::ENABLED,
                                                         FilterDuplicates::DISABLED /* filter duplicates */, 0, 0),
-            common::BindOnce(impl::check_status), module_handler_);
+            module_handler_->BindOnce(impl::check_status));
         break;
       case ScanApiType::ANDROID_HCI:
-      case ScanApiType::LE_4_0:
+      case ScanApiType::LEGACY:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetScanEnableBuilder::Create(Enable::ENABLED, Enable::DISABLED /* filter duplicates */),
-            common::BindOnce(impl::check_status), module_handler_);
+            module_handler_->BindOnce(impl::check_status));
         break;
     }
   }
 
-  void stop_scan(common::Callback<void()> on_stopped) {
+  void stop_scan(common::Callback<void()> on_stopped, bool from_on_pause) {
+    if (address_manager_registered && !from_on_pause) {
+      cached_registered_callback_ = nullptr;
+      le_address_manager_->Unregister(this);
+      address_manager_registered = false;
+    }
     if (registered_callback_ == nullptr) {
       return;
     }
     registered_callback_->Handler()->Post(std::move(on_stopped));
     switch (api_type_) {
-      case ScanApiType::LE_5_0:
+      case ScanApiType::EXTENDED:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetExtendedScanEnableBuilder::Create(Enable::DISABLED,
                                                         FilterDuplicates::DISABLED /* filter duplicates */, 0, 0),
-            common::BindOnce(impl::check_status), module_handler_);
+            module_handler_->BindOnce(impl::check_status));
         registered_callback_ = nullptr;
         break;
       case ScanApiType::ANDROID_HCI:
-      case ScanApiType::LE_4_0:
+      case ScanApiType::LEGACY:
         le_scanning_interface_->EnqueueCommand(
             hci::LeSetScanEnableBuilder::Create(Enable::DISABLED, Enable::DISABLED /* filter duplicates */),
-            common::BindOnce(impl::check_status), module_handler_);
+            module_handler_->BindOnce(impl::check_status));
         registered_callback_ = nullptr;
         break;
     }
   }
 
+  void OnPause() override {
+    cached_registered_callback_ = registered_callback_;
+    stop_scan(common::Bind(&impl::ack_pause, common::Unretained(this)), true);
+  }
+
+  void ack_pause() {
+    le_address_manager_->AckPause(this);
+  }
+
+  void OnResume() override {
+    if (cached_registered_callback_ != nullptr) {
+      auto cached_registered_callback = cached_registered_callback_;
+      cached_registered_callback_ = nullptr;
+      start_scan(cached_registered_callback);
+    }
+    le_address_manager_->AckResume(this);
+  }
+
   ScanApiType api_type_;
 
-  LeScanningManagerCallbacks* registered_callback_;
+  LeScanningManagerCallbacks* registered_callback_ = nullptr;
+  LeScanningManagerCallbacks* cached_registered_callback_ = nullptr;
   Module* module_;
   os::Handler* module_handler_;
   hci::HciLayer* hci_layer_;
   hci::Controller* controller_;
   hci::LeScanningInterface* le_scanning_interface_;
+  hci::LeAddressManager* le_address_manager_;
+  bool address_manager_registered = false;
 
   uint32_t interval_ms_{1000};
   uint16_t window_ms_{1000};
-  AddressType own_address_type_{AddressType::PUBLIC_DEVICE_ADDRESS};
-  LeSetScanningFilterPolicy filter_policy_{LeSetScanningFilterPolicy::ACCEPT_ALL};
+  OwnAddressType own_address_type_{OwnAddressType::PUBLIC_DEVICE_ADDRESS};
+  LeScanningFilterPolicy filter_policy_{LeScanningFilterPolicy::ACCEPT_ALL};
 
   static void check_status(CommandCompleteView view) {
     switch (view.GetCommandOpCode()) {
@@ -235,10 +282,12 @@ LeScanningManager::LeScanningManager() {
 void LeScanningManager::ListDependencies(ModuleList* list) {
   list->add<hci::HciLayer>();
   list->add<hci::Controller>();
+  list->add<hci::AclManager>();
 }
 
 void LeScanningManager::Start() {
-  pimpl_->start(GetHandler(), GetDependency<hci::HciLayer>(), GetDependency<hci::Controller>());
+  pimpl_->start(GetHandler(), GetDependency<hci::HciLayer>(), GetDependency<hci::Controller>(),
+                GetDependency<AclManager>());
 }
 
 void LeScanningManager::Stop() {
@@ -254,7 +303,7 @@ void LeScanningManager::StartScan(LeScanningManagerCallbacks* callbacks) {
 }
 
 void LeScanningManager::StopScan(common::Callback<void()> on_stopped) {
-  GetHandler()->Post(common::Bind(&impl::stop_scan, common::Unretained(pimpl_.get()), on_stopped));
+  GetHandler()->Post(common::Bind(&impl::stop_scan, common::Unretained(pimpl_.get()), on_stopped, false));
 }
 
 }  // namespace hci

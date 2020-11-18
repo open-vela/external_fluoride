@@ -191,7 +191,7 @@ typedef void (*tBTA_AV_CO_UPDATE_MTU)(tBTA_AV_HNDL bta_av_handle,
                                       const RawAddress& peer_addr,
                                       uint16_t mtu);
 
-typedef bool (*tBTA_AV_CO_CONTENT_PROTECT_IS_ACTIVE)(
+typedef btav_a2dp_scmst_info_t (*tBTA_AV_CO_GET_SCMST_INFO)(
     const RawAddress& peer_addr);
 
 /* the call-out functions for one stream */
@@ -207,7 +207,7 @@ typedef struct {
   tBTA_AV_CO_DATAPATH data;
   tBTA_AV_CO_DELAY delay;
   tBTA_AV_CO_UPDATE_MTU update_mtu;
-  tBTA_AV_CO_CONTENT_PROTECT_IS_ACTIVE cp_is_active;
+  tBTA_AV_CO_GET_SCMST_INFO get_scmst_info;
 } tBTA_AV_CO_FUNCTS;
 
 /* data type for BTA_AV_API_ENABLE_EVT */
@@ -215,7 +215,6 @@ typedef struct {
   BT_HDR hdr;
   tBTA_AV_CBACK* p_cback;
   tBTA_AV_FEAT features;
-  tBTA_SEC sec_mask;
 } tBTA_AV_API_ENABLE;
 
 /* data type for BTA_AV_API_REGISTER_EVT */
@@ -239,7 +238,6 @@ typedef struct {
   BT_HDR hdr;
   RawAddress bd_addr;
   bool use_rc;
-  tBTA_SEC sec_mask;
   tBTA_AV_RS_RES switch_res;
   uint16_t uuid; /* uuid of initiator */
 } tBTA_AV_API_OPEN;
@@ -458,7 +456,6 @@ typedef union {
 // TODO: This should be renamed and changed to a proper class
 struct tBTA_AV_SCB final {
  public:
-  const tBTA_AV_ACT* p_act_tbl; /* the action table for stream state machine */
   const tBTA_AV_CO_FUNCTS* p_cos; /* the associated callout functions */
   bool sdp_discovery_started; /* variable to determine whether SDP is started */
   tBTA_AV_SEP seps[BTAV_A2DP_CODEC_INDEX_MAX];
@@ -470,7 +467,6 @@ struct tBTA_AV_SCB final {
   alarm_t* avrc_ct_timer;                   /* delay timer for AVRC CT */
   uint16_t l2c_cid;                         /* L2CAP channel ID */
   uint16_t stream_mtu;                      /* MTU of stream */
-  tBTA_SEC sec_mask;          /* security mask */
   uint8_t media_type;         /* Media type: AVDT_MEDIA_TYPE_* */
   bool cong;                  /* true if AVDTP congested */
   tBTA_AV_STATUS open_status; /* open failure status */
@@ -615,7 +611,6 @@ typedef struct {
   uint8_t rc_acp_idx; /* (index + 1) to RCB */
   uint8_t rs_idx;    /* (index + 1) to SCB for the one waiting for RS on open */
   bool sco_occupied; /* true if SCO is being used or call is in progress */
-  uint8_t audio_streams; /* handle mask of streaming audio channels */
 } tBTA_AV_CB;
 
 // total attempts are half seconds
@@ -627,7 +622,7 @@ class tBT_A2DP_OFFLOAD {
  public:
   uint32_t codec_type;            /* codec types ex: SBC/AAC/LDAC/APTx */
   uint16_t max_latency;           /* maximum latency */
-  uint16_t scms_t_enable;         /* content protection enable */
+  std::array<uint8_t, 2> scms_t_enable; /* SCMS-T enable */
   uint32_t sample_rate;           /* Sample rates ex: 44.1/48/88.2/96 Khz */
   uint8_t bits_per_sample;        /* bits per sample ex: 16/24/32 */
   uint8_t ch_mode;                /* None:0 Left:1 Right:2 */
@@ -660,7 +655,6 @@ extern const tBTA_AV_CFG bta_av_cfg_compatibility;
 extern uint16_t* p_bta_av_rc_id;
 extern uint16_t* p_bta_av_rc_id_ac;
 
-extern const tBTA_AV_SACT bta_av_a2dp_action[];
 extern const tBTA_AV_CO_FUNCTS bta_av_a2dp_cos;
 extern void bta_av_sink_data_cback(uint8_t handle, BT_HDR* p_pkt,
                                    uint32_t time_stamp, uint8_t m_pt);
@@ -784,5 +778,6 @@ extern void bta_av_open_at_inc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 extern void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 extern void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 extern void bta_av_vendor_offload_stop(void);
+extern void bta_av_st_rc_timer(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data);
 
 #endif /* BTA_AV_INT_H */
