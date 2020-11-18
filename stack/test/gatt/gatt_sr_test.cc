@@ -20,6 +20,7 @@
 #include <cstdint>
 
 #include "osi/test/AllocationTestHarness.h"
+#include "stack/test/common/mock_eatt.h"
 #include "stack/gatt/gatt_int.h"
 #undef LOG_TAG
 #include "stack/gatt/gatt_sr.cc"
@@ -64,11 +65,16 @@ BT_HDR* attp_build_sr_msg(tGATT_TCB& tcb, uint8_t op_code,
   test_state_.attp_build_sr_msg.op_code_ = op_code;
   return nullptr;
 }
+tGATT_STATUS attp_send_cl_confirmation_msg(tGATT_TCB& tcb, uint16_t cid) {
+  return GATT_SUCCESS;
+}
 tGATT_STATUS attp_send_cl_msg(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                               uint8_t op_code, tGATT_CL_MSG* p_msg) {
-  return 0;
+  return GATT_SUCCESS;
 }
-tGATT_STATUS attp_send_sr_msg(tGATT_TCB& tcb, BT_HDR* p_msg) { return 0; }
+tGATT_STATUS attp_send_sr_msg(tGATT_TCB& tcb, uint16_t cid, BT_HDR* p_msg) {
+  return GATT_SUCCESS;
+}
 uint8_t btm_ble_read_sec_key_size(const RawAddress& bd_addr) { return 0; }
 bool BTM_GetSecurityFlagsByTransport(const RawAddress& bd_addr,
                                      uint8_t* p_sec_flags,
@@ -79,11 +85,11 @@ void gatt_act_discovery(tGATT_CLCB* p_clcb) {}
 bool gatt_disconnect(tGATT_TCB* p_tcb) { return false; }
 tGATT_CH_STATE gatt_get_ch_state(tGATT_TCB* p_tcb) { return 0; }
 tGATT_STATUS gatts_db_read_attr_value_by_type(
-    tGATT_TCB& tcb, tGATT_SVC_DB* p_db, uint8_t op_code, BT_HDR* p_rsp,
-    uint16_t s_handle, uint16_t e_handle, const Uuid& type, uint16_t* p_len,
-    tGATT_SEC_FLAG sec_flag, uint8_t key_size, uint32_t trans_id,
-    uint16_t* p_cur_handle) {
-  return 0;
+    tGATT_TCB& tcb, uint16_t cid, tGATT_SVC_DB* p_db, uint8_t op_code,
+    BT_HDR* p_rsp, uint16_t s_handle, uint16_t e_handle, const Uuid& type,
+    uint16_t* p_len, tGATT_SEC_FLAG sec_flag, uint8_t key_size,
+    uint32_t trans_id, uint16_t* p_cur_handle) {
+  return GATT_SUCCESS;
 }
 void gatt_set_ch_state(tGATT_TCB* p_tcb, tGATT_CH_STATE ch_state) {}
 Uuid* gatts_get_service_uuid(tGATT_SVC_DB* p_db) { return nullptr; }
@@ -98,9 +104,10 @@ tGATT_STATUS gatts_read_attr_perm_check(tGATT_SVC_DB* p_db, bool is_long,
   return GATT_SUCCESS;
 }
 tGATT_STATUS gatts_read_attr_value_by_handle(
-    tGATT_TCB& tcb, tGATT_SVC_DB* p_db, uint8_t op_code, uint16_t handle,
-    uint16_t offset, uint8_t* p_value, uint16_t* p_len, uint16_t mtu,
-    tGATT_SEC_FLAG sec_flag, uint8_t key_size, uint32_t trans_id) {
+    tGATT_TCB& tcb, uint16_t cid, tGATT_SVC_DB* p_db, uint8_t op_code,
+    uint16_t handle, uint16_t offset, uint8_t* p_value, uint16_t* p_len,
+    uint16_t mtu, tGATT_SEC_FLAG sec_flag, uint8_t key_size,
+    uint32_t trans_id) {
   return GATT_SUCCESS;
 }
 tGATT_STATUS gatts_write_attr_perm_check(tGATT_SVC_DB* p_db, uint8_t op_code,
@@ -161,6 +168,7 @@ class GattSrTest : public AllocationTestHarness {
     memset(&el_, 0, sizeof(el_));
 
     tcb_.trans_id = 0x12345677;
+    tcb_.att_lcid = L2CAP_ATT_CID;
     el_.gatt_if = 1;
     gatt_cb.cl_rcb[el_.gatt_if - 1].in_use = true;
     gatt_cb.cl_rcb[el_.gatt_if - 1].app_cb.p_req_cb =
@@ -176,28 +184,32 @@ class GattSrTest : public AllocationTestHarness {
 };
 
 TEST_F(GattSrTest, gatts_process_write_req_request_prepare_write_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_PREPARE_WRITE, 0,
-                          nullptr, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_REQ_PREPARE_WRITE, 0, nullptr,
+                          kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest,
        gatts_process_write_req_request_prepare_write_max_len_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_PREPARE_WRITE,
-                          MAX_UINT16, nullptr, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_REQ_PREPARE_WRITE, MAX_UINT16, nullptr,
+                          kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest,
        gatts_process_write_req_request_prepare_write_zero_len_max_data) {
   uint8_t max_mem[MAX_UINT16];
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_PREPARE_WRITE, 0,
-                          max_mem, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_REQ_PREPARE_WRITE, 0, max_mem,
+                          kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_request_prepare_write_typical) {
   uint8_t p_data[2] = {0x34, 0x12};
   uint16_t length = static_cast<uint16_t>(sizeof(p_data) / sizeof(p_data[0]));
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_PREPARE_WRITE, length,
-                          p_data, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_REQ_PREPARE_WRITE, length, p_data,
+                          kGattCharacteristicType);
 
   CHECK(test_state_.gatts_write_attr_perm_check.access_count_ == 1);
   CHECK(test_state_.application_request_callback.conn_id_ == el_.gatt_if);
@@ -212,20 +224,23 @@ TEST_F(GattSrTest, gatts_process_write_req_request_prepare_write_typical) {
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_signed_command_write_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_SIGN_CMD_WRITE, 0, nullptr,
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_SIGN_CMD_WRITE, 0, nullptr,
                           kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest,
        gatts_process_write_req_signed_command_write_max_len_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_SIGN_CMD_WRITE, MAX_UINT16,
-                          nullptr, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_SIGN_CMD_WRITE, MAX_UINT16, nullptr,
+                          kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest,
        gatts_process_write_req_signed_command_write_zero_len_max_data) {
   uint8_t max_mem[MAX_UINT16];
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_SIGN_CMD_WRITE, 0, max_mem,
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_SIGN_CMD_WRITE, 0, max_mem,
                           kGattCharacteristicType);
 }
 
@@ -235,8 +250,9 @@ TEST_F(GattSrTest, gatts_process_write_req_signed_command_write_typical) {
       0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
       0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x01};
   uint16_t length = static_cast<uint16_t>(sizeof(p_data) / sizeof(p_data[0]));
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_SIGN_CMD_WRITE, length,
-                          p_data, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle,
+                          GATT_SIGN_CMD_WRITE, length, p_data,
+                          kGattCharacteristicType);
 
   CHECK(test_state_.gatts_write_attr_perm_check.access_count_ == 1);
   CHECK(test_state_.application_request_callback.conn_id_ == el_.gatt_if);
@@ -251,27 +267,27 @@ TEST_F(GattSrTest, gatts_process_write_req_signed_command_write_typical) {
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_command_write_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_CMD_WRITE, 0, nullptr,
-                          kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_CMD_WRITE, 0,
+                          nullptr, kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_command_write_max_len_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_CMD_WRITE, MAX_UINT16,
-                          nullptr, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_CMD_WRITE,
+                          MAX_UINT16, nullptr, kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_command_write_zero_len_max_data) {
   uint8_t max_mem[MAX_UINT16];
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_CMD_WRITE, 0, max_mem,
-                          kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_CMD_WRITE, 0,
+                          max_mem, kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_command_write_typical) {
   uint8_t p_data[16] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
                         0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x01};
   uint16_t length = static_cast<uint16_t>(sizeof(p_data) / sizeof(p_data[0]));
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_CMD_WRITE, length, p_data,
-                          kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_CMD_WRITE,
+                          length, p_data, kGattCharacteristicType);
 
   CHECK(test_state_.gatts_write_attr_perm_check.access_count_ == 1);
   CHECK(test_state_.application_request_callback.conn_id_ == el_.gatt_if);
@@ -285,19 +301,19 @@ TEST_F(GattSrTest, gatts_process_write_req_command_write_typical) {
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_request_write_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_WRITE, 0, nullptr,
-                          kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_REQ_WRITE, 0,
+                          nullptr, kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_request_write_max_len_no_data) {
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_WRITE, MAX_UINT16,
-                          nullptr, kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_REQ_WRITE,
+                          MAX_UINT16, nullptr, kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_request_write_zero_len_max_data) {
   uint8_t max_mem[MAX_UINT16];
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_WRITE, 0, max_mem,
-                          kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_REQ_WRITE, 0,
+                          max_mem, kGattCharacteristicType);
 }
 
 TEST_F(GattSrTest, gatts_process_write_req_request_write_typical) {
@@ -305,8 +321,8 @@ TEST_F(GattSrTest, gatts_process_write_req_request_write_typical) {
                         0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x01};
   uint16_t length = static_cast<uint16_t>(sizeof(p_data) / sizeof(p_data[0]));
 
-  gatts_process_write_req(tcb_, el_, kHandle, GATT_REQ_WRITE, length, p_data,
-                          kGattCharacteristicType);
+  gatts_process_write_req(tcb_, L2CAP_ATT_CID, el_, kHandle, GATT_REQ_WRITE,
+                          length, p_data, kGattCharacteristicType);
 
   CHECK(test_state_.gatts_write_attr_perm_check.access_count_ == 1);
   CHECK(test_state_.application_request_callback.conn_id_ == el_.gatt_if);

@@ -72,8 +72,7 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     auto packet = std::make_unique<TestCommandBuilder>(
         std::vector<uint8_t>(command->command().begin(), command->command().end()));
     hci_layer_->EnqueueCommand(std::move(packet),
-                               common::BindOnce(&HciLayerFacadeService::on_complete, common::Unretained(this)),
-                               facade_handler_);
+                               facade_handler_->BindOnceOn(this, &HciLayerFacadeService::on_complete));
     return ::grpc::Status::OK;
   }
 
@@ -81,17 +80,14 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
                                           ::google::protobuf::Empty* response) override {
     auto packet = std::make_unique<TestCommandBuilder>(
         std::vector<uint8_t>(command->command().begin(), command->command().end()));
-    hci_layer_->EnqueueCommand(std::move(packet),
-                               common::BindOnce(&HciLayerFacadeService::on_status, common::Unretained(this)),
-                               facade_handler_);
+    hci_layer_->EnqueueCommand(std::move(packet), facade_handler_->BindOnceOn(this, &HciLayerFacadeService::on_status));
     return ::grpc::Status::OK;
   }
 
   ::grpc::Status RegisterEventHandler(::grpc::ServerContext* context, const ::bluetooth::hci::EventCodeMsg* event,
                                       ::google::protobuf::Empty* response) override {
     hci_layer_->RegisterEventHandler(static_cast<EventCode>(event->code()),
-                                     common::Bind(&HciLayerFacadeService::on_event, common::Unretained(this)),
-                                     facade_handler_);
+                                     facade_handler_->BindOn(this, &HciLayerFacadeService::on_event));
     return ::grpc::Status::OK;
   }
 
@@ -99,8 +95,7 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
                                         const ::bluetooth::hci::LeSubeventCodeMsg* event,
                                         ::google::protobuf::Empty* response) override {
     hci_layer_->RegisterLeEventHandler(static_cast<SubeventCode>(event->code()),
-                                       common::Bind(&HciLayerFacadeService::on_le_subevent, common::Unretained(this)),
-                                       facade_handler_);
+                                       facade_handler_->BindOn(this, &HciLayerFacadeService::on_le_subevent));
     return ::grpc::Status::OK;
   }
 
@@ -116,10 +111,13 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
 
   class TestAclBuilder : public AclPacketBuilder {
    public:
-    explicit TestAclBuilder(uint16_t handle, uint8_t packet_boundary_flag, uint8_t broadcast_flag,
-                            std::vector<uint8_t> payload)
-        : AclPacketBuilder(0xbad, PacketBoundaryFlag::CONTINUING_FRAGMENT, BroadcastFlag::ACTIVE_SLAVE_BROADCAST),
-          handle_(handle), pb_flag_(packet_boundary_flag), b_flag_(broadcast_flag), bytes_(std::move(payload)) {}
+    explicit TestAclBuilder(
+        uint16_t handle, uint8_t packet_boundary_flag, uint8_t broadcast_flag, std::vector<uint8_t> payload)
+        : AclPacketBuilder(0xbad, PacketBoundaryFlag::CONTINUING_FRAGMENT, BroadcastFlag::ACTIVE_PERIPHERAL_BROADCAST),
+          handle_(handle),
+          pb_flag_(packet_boundary_flag),
+          b_flag_(broadcast_flag),
+          bytes_(std::move(payload)) {}
 
     size_t size() const override {
       return bytes_.size();
@@ -152,8 +150,8 @@ class HciLayerFacadeService : public HciLayerFacade::Service {
     std::promise<void> enqueued;
     auto future = enqueued.get_future();
     if (!completed_packets_callback_registered_) {
-      controller_->RegisterCompletedAclPacketsCallback(common::Bind([](uint16_t, uint16_t) { /* do nothing */ }),
-                                                       facade_handler_);
+      controller_->RegisterCompletedAclPacketsCallback(
+          facade_handler_->Bind([](uint16_t, uint16_t) { /* do nothing */ }));
       completed_packets_callback_registered_ = true;
     }
     hci_layer_->GetAclQueueEnd()->RegisterEnqueue(

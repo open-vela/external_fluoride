@@ -1,0 +1,22 @@
+rust_library {
+    name: "libbt_hci",
+    crate_name: "bt_hci",
+    srcs: ["src/lib.rs"],
+    edition: "2018",
+    rustlibs: [
+        "libbt_hal",
+        "libbt_hci_proto",
+        "libbt_packet",
+        "libbytes",
+        "libfutures",
+        "libgrpcio",
+        "libnum_traits",
+        "libthiserror",
+        "libtokio",
+        "libprotobuf",
+    ],
+    proc_macros: [
+        "libnum_derive",
+    ],
+    host_supported: true,
+}

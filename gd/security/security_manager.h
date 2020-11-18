@@ -22,7 +22,9 @@
 #include <vector>
 
 #include "hci/address_with_type.h"
+#include "hci/le_address_manager.h"
 #include "security/internal/security_manager_impl.h"
+#include "security/pairing/oob_data.h"
 #include "security/security_manager_listener.h"
 
 namespace bluetooth {
@@ -44,9 +46,23 @@ class SecurityManager : public UICallbacks {
   /**
    * Initiates bond over Classic transport with device, if not bonded yet.
    *
+   * This will initiate the Numeric Comparison bonding method
+   *
    * @param address device address we want to bond with
    */
   void CreateBond(hci::AddressWithType address);
+
+  /**
+   * Initiates bond over Classic transport with device, if not bonded yet.
+   *
+   * This will initiate the Out of Band bonding method
+   *
+   * @param address device address we want to bond with
+   * @param remote_p192_oob_data comparison and random for p192
+   * @param remote_p256_oob_data comparison and random for p256
+   */
+  void CreateBondOutOfBand(
+      hci::AddressWithType address, pairing::OobData remote_p192_oob_data, pairing::OobData remote_p256_oob_data);
 
   /**
    * Initiates bond over Low Energy transport with device, if not bonded yet.
@@ -73,6 +89,16 @@ class SecurityManager : public UICallbacks {
    * Register Security UI handler, for handling prompts around the Pairing process.
    */
   void SetUserInterfaceHandler(UI* user_interface, os::Handler* handler);
+
+  /**
+   * Specify the initiator address policy used for LE transport. Can only be called once.
+   */
+  void SetLeInitiatorAddressPolicyForTest(
+      hci::LeAddressManager::AddressPolicy address_policy,
+      hci::AddressWithType fixed_address,
+      crypto_toolbox::Octet16 rotation_irk,
+      std::chrono::milliseconds minimum_rotation_time,
+      std::chrono::milliseconds maximum_rotation_time);
 
   /**
    * Register to listen for callback events from SecurityManager

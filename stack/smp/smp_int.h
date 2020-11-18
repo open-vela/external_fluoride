@@ -62,7 +62,7 @@ typedef uint8_t tSMP_ASSO_MODEL;
 #define SMP_RAND_EVT SMP_OPCODE_RAND
 #define SMP_PAIRING_FAILED_EVT SMP_OPCODE_PAIRING_FAILED
 #define SMP_ENCRPTION_INFO_EVT SMP_OPCODE_ENCRYPT_INFO
-#define SMP_MASTER_ID_EVT SMP_OPCODE_MASTER_ID
+#define SMP_CENTRAL_ID_EVT SMP_OPCODE_CENTRAL_ID
 #define SMP_ID_INFO_EVT SMP_OPCODE_IDENTITY_INFO
 #define SMP_ID_ADDR_EVT SMP_OPCODE_ID_ADDR
 #define SMP_SIGN_INFO_EVT SMP_OPCODE_SIGN_INFO
@@ -117,8 +117,8 @@ typedef uint8_t tSMP_ASSO_MODEL;
 /* user confirms 'OK' numeric comparison request */
 #define SMP_SC_NC_OK_EVT (SMP_SELF_DEF_EVT + 19)
 
-/* both local and peer DHKey Checks are already present - it is used on slave to
- * prevent a race condition */
+/* both local and peer DHKey Checks are already present - it is used on
+ * peripheral to prevent a race condition */
 #define SMP_SC_2_DHCK_CHKS_PRES_EVT (SMP_SELF_DEF_EVT + 20)
 
 /* same meaning as SMP_KEY_READY_EVT to separate between SC and legacy actions
@@ -170,7 +170,7 @@ typedef uint8_t tSMP_STATE;
 #define SMP_BR_ENCRPTION_INFO_EVT                                    \
   SMP_OPCODE_ENCRYPT_INFO                         /* not over BR/EDR \
                                                      */
-#define SMP_BR_MASTER_ID_EVT SMP_OPCODE_MASTER_ID /* not over BR/EDR */
+#define SMP_BR_CENTRAL_ID_EVT SMP_OPCODE_CENTRAL_ID /* not over BR/EDR */
 #define SMP_BR_ID_INFO_EVT SMP_OPCODE_IDENTITY_INFO
 #define SMP_BR_ID_ADDR_EVT SMP_OPCODE_ID_ADDR
 #define SMP_BR_SIGN_INFO_EVT SMP_OPCODE_SIGN_INFO
@@ -223,7 +223,6 @@ typedef union {
   uint8_t* p_data; /* uint8_t type data pointer */
   tSMP_KEY key;
   uint8_t status;
-  uint16_t reason;
   uint32_t passkey;
   tSMP_OOB_DATA_TYPE req_oob_type;
 } tSMP_INT_DATA;
@@ -234,13 +233,13 @@ typedef union {
 #define SMP_PAIR_FLAGS_CMD_CONFIRM (1 << SMP_OPCODE_CONFIRM) /* 1 << 3 */
 #define SMP_PAIR_FLAG_ENC_AFTER_PAIR (1 << 4)
 #define SMP_PAIR_FLAG_HAVE_PEER_DHK_CHK \
-  (1 << 5) /* used on slave to resolve race condition */
+  (1 << 5) /* used on peripheral to resolve race condition */
 #define SMP_PAIR_FLAG_HAVE_PEER_PUBL_KEY \
-  (1 << 6) /* used on slave to resolve race condition */
+  (1 << 6) /* used on peripheral to resolve race condition */
 #define SMP_PAIR_FLAG_HAVE_PEER_COMM \
   (1 << 7) /* used to resolve race condition */
 #define SMP_PAIR_FLAG_HAVE_LOCAL_PUBL_KEY \
-  (1 << 8) /* used on slave to resolve race condition */
+  (1 << 8) /* used on peripheral to resolve race condition */
 
 /* check if authentication requirement need MITM protection */
 #define SMP_NO_MITM_REQUIRED(x) (((x)&SMP_AUTH_YN_BIT) == 0)
@@ -318,7 +317,7 @@ typedef struct {
   Octet16 csrk; /* storage for local CSRK */
   uint16_t ediv;
   BT_OCTET8 enc_rand;
-  uint8_t addr_type;
+  tBLE_ADDR_TYPE addr_type;
   RawAddress local_bda;
   bool is_pair_cancel;
   bool discard_sec_req;
@@ -367,7 +366,7 @@ extern void smp_proc_rand(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_process_pairing_public_key(tSMP_CB* p_cb,
                                            tSMP_INT_DATA* p_data);
 extern void smp_proc_enc_info(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
-extern void smp_proc_master_id(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
+extern void smp_proc_central_id(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_proc_id_info(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_proc_id_addr(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_proc_sec_grant(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
@@ -424,8 +423,8 @@ extern void smp_derive_link_key_from_long_term_key(tSMP_CB* p_cb,
 extern void smp_br_process_pairing_command(tSMP_CB* p_cb,
                                            tSMP_INT_DATA* p_data);
 extern void smp_br_process_security_grant(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
-extern void smp_br_process_slave_keys_response(tSMP_CB* p_cb,
-                                               tSMP_INT_DATA* p_data);
+extern void smp_br_process_peripheral_keys_response(tSMP_CB* p_cb,
+                                                    tSMP_INT_DATA* p_data);
 extern void smp_br_send_pair_response(tSMP_CB* p_cb, tSMP_INT_DATA* p_data);
 extern void smp_br_check_authorization_request(tSMP_CB* p_cb,
                                                tSMP_INT_DATA* p_data);
@@ -454,7 +453,6 @@ extern bool smp_command_has_invalid_length(tSMP_CB* p_cb);
 extern bool smp_command_has_invalid_parameters(tSMP_CB* p_cb);
 extern void smp_reject_unexpected_pairing_command(const RawAddress& bd_addr);
 extern tSMP_ASSO_MODEL smp_select_association_model(tSMP_CB* p_cb);
-extern void smp_reverse_array(uint8_t* arr, uint8_t len);
 extern uint8_t smp_calculate_random_input(uint8_t* random, uint8_t round);
 extern void smp_collect_local_io_capabilities(uint8_t* iocap, tSMP_CB* p_cb);
 extern void smp_collect_peer_io_capabilities(uint8_t* iocap, tSMP_CB* p_cb);
@@ -488,19 +486,6 @@ extern void smp_calculate_peer_dhkey_check(tSMP_CB* p_cb,
 extern void smp_start_nonce_generation(tSMP_CB* p_cb);
 extern bool smp_calculate_link_key_from_long_term_key(tSMP_CB* p_cb);
 extern bool smp_calculate_long_term_key_from_link_key(tSMP_CB* p_cb);
-
-#if (SMP_DEBUG == TRUE)
-extern void smp_debug_print_nbyte_little_endian(uint8_t* p,
-                                                const char* key_name,
-                                                uint8_t len);
-
-inline void smp_debug_print_nbyte_little_endian(const Octet16& p,
-                                                const char* key_name,
-                                                uint8_t len) {
-  smp_debug_print_nbyte_little_endian(const_cast<uint8_t*>(p.data()), key_name,
-                                      len);
-}
-#endif
 
 extern void print128(const Octet16& x, const uint8_t* key_name);
 extern void smp_xor_128(Octet16* a, const Octet16& b);

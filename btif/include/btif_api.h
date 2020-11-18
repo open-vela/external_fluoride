@@ -63,19 +63,6 @@ bt_status_t btif_enable_bluetooth(void);
 
 /*******************************************************************************
  *
- * Function         btif_disable_bluetooth
- *
- * Description      Inititates shutdown of Bluetooth system.
- *                  Any active links will be dropped and device entering
- *                  non connectable/discoverable mode
- *
- * Returns          void
- *
- ******************************************************************************/
-bt_status_t btif_disable_bluetooth(void);
-
-/*******************************************************************************
- *
  * Function         btif_cleanup_bluetooth
  *
  * Description      Cleanup BTIF state.
@@ -150,10 +137,10 @@ bool is_atv_device(void);
  *
  * Description      Fetches all local adapter properties
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_get_adapter_properties(void);
+void btif_get_adapter_properties(void);
+
+bt_property_t* property_deep_copy(const bt_property_t* prop);
 
 /*******************************************************************************
  *
@@ -161,10 +148,8 @@ bt_status_t btif_get_adapter_properties(void);
  *
  * Description      Fetches property value from local cache
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_get_adapter_property(bt_property_type_t type);
+void btif_get_adapter_property(bt_property_type_t type);
 
 /*******************************************************************************
  *
@@ -173,10 +158,8 @@ bt_status_t btif_get_adapter_property(bt_property_type_t type);
  * Description      Updates core stack with property value and stores it in
  *                  local cache
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_set_adapter_property(const bt_property_t* property);
+void btif_set_adapter_property(bt_property_t* property);
 
 /*******************************************************************************
  *
@@ -184,11 +167,9 @@ bt_status_t btif_set_adapter_property(const bt_property_t* property);
  *
  * Description      Fetches the remote device property from the NVRAM
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
-                                            bt_property_type_t type);
+void btif_get_remote_device_property(RawAddress remote_addr,
+                                     bt_property_type_t type);
 
 /*******************************************************************************
  *
@@ -196,10 +177,8 @@ bt_status_t btif_get_remote_device_property(RawAddress* remote_addr,
  *
  * Description      Fetches all the remote device properties from NVRAM
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr);
+void btif_get_remote_device_properties(RawAddress remote_addr);
 
 /*******************************************************************************
  *
@@ -209,24 +188,9 @@ bt_status_t btif_get_remote_device_properties(RawAddress* remote_addr);
  *                  Currently, BT_PROPERTY_REMOTE_FRIENDLY_NAME is the only
  *                  remote device property that can be set
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_set_remote_device_property(RawAddress* remote_addr,
-                                            const bt_property_t* property);
-
-/*******************************************************************************
- *
- * Function         btif_get_remote_service_record
- *
- * Description      Looks up the service matching uuid on the remote device
- *                  and fetches the SCN and service_name if the UUID is found
- *
- * Returns          bt_status_t
- *
- ******************************************************************************/
-bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
-                                           const bluetooth::Uuid& uuid);
+void btif_set_remote_device_property(RawAddress* remote_addr,
+                                     bt_property_t* property);
 
 /*******************************************************************************
  *  BTIF DM API
@@ -238,11 +202,8 @@ bt_status_t btif_get_remote_service_record(const RawAddress& remote_addr,
  *
  * Description      Start device discovery/inquiry
  *
- *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_start_discovery(void);
+void btif_dm_start_discovery(void);
 
 /*******************************************************************************
  *
@@ -250,21 +211,18 @@ bt_status_t btif_dm_start_discovery(void);
  *
  * Description      Cancels search
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_cancel_discovery(void);
+void btif_dm_cancel_discovery(void);
 
+bool btif_dm_pairing_is_busy();
 /*******************************************************************************
  *
  * Function         btif_dm_create_bond
  *
  * Description      Initiate bonding with the specified device
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_create_bond(const RawAddress* bd_addr, int transport);
+void btif_dm_create_bond(const RawAddress bd_addr, int transport);
 
 /*******************************************************************************
  *
@@ -272,12 +230,9 @@ bt_status_t btif_dm_create_bond(const RawAddress* bd_addr, int transport);
  *
  * Description      Initiate bonding with the specified device using OOB data.
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_create_bond_out_of_band(
-    const RawAddress* bd_addr, int transport,
-    const bt_out_of_band_data_t* oob_data);
+void btif_dm_create_bond_out_of_band(const RawAddress bd_addr, int transport,
+                                     const bt_out_of_band_data_t oob_data);
 
 /*******************************************************************************
  *
@@ -285,10 +240,8 @@ bt_status_t btif_dm_create_bond_out_of_band(
  *
  * Description      Initiate bonding with the specified device
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_cancel_bond(const RawAddress* bd_addr);
+void btif_dm_cancel_bond(const RawAddress bd_addr);
 
 /*******************************************************************************
  *
@@ -296,10 +249,8 @@ bt_status_t btif_dm_cancel_bond(const RawAddress* bd_addr);
  *
  * Description      Removes bonding with the specified device
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_remove_bond(const RawAddress* bd_addr);
+void btif_dm_remove_bond(const RawAddress bd_addr);
 
 /*******************************************************************************
  *
@@ -318,11 +269,9 @@ uint16_t btif_dm_get_connection_state(const RawAddress* bd_addr);
  *
  * Description      BT legacy pairing - PIN code reply
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_pin_reply(const RawAddress* bd_addr, uint8_t accept,
-                              uint8_t pin_len, bt_pin_code_t* pin_code);
+void btif_dm_pin_reply(const RawAddress bd_addr, uint8_t accept,
+                       uint8_t pin_len, bt_pin_code_t pin_code);
 
 /*******************************************************************************
  *
@@ -343,12 +292,9 @@ bt_status_t btif_dm_passkey_reply(const RawAddress* bd_addr, uint8_t accept,
  * Description      BT SSP Reply - Just Works, Numeric Comparison & Passkey
  *                  Entry
  *
- * Returns          bt_status_t
- *
  ******************************************************************************/
-bt_status_t btif_dm_ssp_reply(const RawAddress* bd_addr,
-                              bt_ssp_variant_t variant, uint8_t accept,
-                              uint32_t passkey);
+void btif_dm_ssp_reply(const RawAddress bd_addr, bt_ssp_variant_t variant,
+                       uint8_t accept);
 
 /*******************************************************************************
  *
@@ -370,31 +316,7 @@ bt_status_t btif_dm_get_adapter_property(bt_property_t* prop);
  * Returns          bt_status_t
  *
  ******************************************************************************/
-bt_status_t btif_dm_get_remote_service_record(const RawAddress& remote_addr,
-                                              const bluetooth::Uuid& uuid);
-
-/*******************************************************************************
- *
- * Function         btif_dm_get_remote_services
- *
- * Description      Start SDP to get remote services
- *
- * Returns          bt_status_t
- *
- ******************************************************************************/
-bt_status_t btif_dm_get_remote_services(const RawAddress& remote_addr);
-
-/*******************************************************************************
- *
- * Function         btif_dm_get_remote_services_by_transport
- *
- * Description      Start SDP to get remote services by transport
- *
- * Returns          bt_status_t
- *
- ******************************************************************************/
-bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
-                                                     int transport);
+void btif_dm_get_remote_services(const RawAddress remote_addr, int transport);
 
 /*******************************************************************************
  *
@@ -403,10 +325,10 @@ bt_status_t btif_dm_get_remote_services_by_transport(RawAddress* remote_addr,
  * Description      Configure Test Mode - 'enable' to 1 puts the device in test
  *                  mode and 0 exits test mode
  *
- * Returns          BT_STATUS_SUCCESS on success
- *
  ******************************************************************************/
-bt_status_t btif_dut_mode_configure(uint8_t enable);
+void btif_dut_mode_configure(uint8_t enable);
+
+bool btif_is_dut_mode();
 
 /*******************************************************************************
  *
@@ -414,21 +336,14 @@ bt_status_t btif_dut_mode_configure(uint8_t enable);
  *
  * Description     Sends a HCI Vendor specific command to the controller
  *
- * Returns          BT_STATUS_SUCCESS on success
- *
  ******************************************************************************/
-bt_status_t btif_dut_mode_send(uint16_t opcode, uint8_t* buf, uint8_t len);
+void btif_dut_mode_send(uint16_t opcode, uint8_t* buf, uint8_t len);
 
-/*******************************************************************************
- *
- * Function         btif_le_test_mode
- *
- * Description     Sends a HCI BLE Test command to the Controller
- *
- * Returns          BT_STATUS_SUCCESS on success
- *
- ******************************************************************************/
-bt_status_t btif_le_test_mode(uint16_t opcode, uint8_t* buf, uint8_t len);
+void btif_ble_transmitter_test(uint8_t tx_freq, uint8_t test_data_len,
+                               uint8_t packet_payload);
+
+void btif_ble_receiver_test(uint8_t rx_freq);
+void btif_ble_test_end();
 
 /*******************************************************************************
  *
