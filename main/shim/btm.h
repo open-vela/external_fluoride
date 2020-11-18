@@ -23,14 +23,17 @@
 #include <unordered_map>
 #include <vector>
 
-#include "main/shim/timer.h"
-#include "osi/include/alarm.h"
-#include "osi/include/future.h"
-#include "osi/include/log.h"
-#include "stack/include/btm_api_types.h"
-
 #include "hci/hci_packets.h"
-#include "hci/le_advertising_manager.h"
+
+#include "stack/btm/neighbor_inquiry.h"
+#include "stack/include/btm_api_types.h"
+#include "types/raw_address.h"
+
+#include "gd/common/callback.h"
+#include "gd/hci/le_advertising_manager.h"
+#include "gd/hci/le_scanning_manager.h"
+#include "gd/neighbor/inquiry.h"
+#include "gd/os/alarm.h"
 
 //
 // NOTE: limited and general constants for inquiry and discoverable are swapped
@@ -58,11 +61,6 @@ static constexpr int kInterlacedScanType = 1;
 static constexpr int kStandardInquiryResult = 0;
 static constexpr int kInquiryResultWithRssi = 1;
 static constexpr int kExtendedInquiryResult = 2;
-
-/* Inquiry filter types */
-static constexpr int kClearInquiryFilter = 0;
-static constexpr int kFilterOnDeviceClass = 1;
-static constexpr int kFilterOnAddress = 2;
 
 static constexpr uint8_t kPhyConnectionNone = 0x00;
 static constexpr uint8_t kPhyConnectionLe1M = 0x01;
@@ -108,39 +106,10 @@ using BtmStatus = enum : uint16_t {
   BTM_DEV_BLACKLISTED = 21,            /* The device is Blacklisted */
 };
 
-class ReadRemoteName {
- public:
-  bool Start(RawAddress raw_address) {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (in_progress_) {
-      return false;
-    }
-    raw_address_ = raw_address;
-    in_progress_ = true;
-    return true;
-  }
-
-  void Stop() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    raw_address_ = RawAddress::kEmpty;
-    in_progress_ = false;
-  }
-
-  bool IsInProgress() const { return in_progress_; }
-
-  std::string AddressString() const { return raw_address_.ToString(); }
-
-  ReadRemoteName() : in_progress_{false}, raw_address_(RawAddress::kEmpty) {}
-
- private:
-  bool in_progress_;
-  RawAddress raw_address_;
-  std::mutex mutex_;
-};
-
 class Btm {
  public:
-  Btm() = default;
+  // |handler| is used to run timer tasks and scan callbacks
+  Btm(os::Handler* handler, neighbor::InquiryModule* inquiry);
   ~Btm() = default;
 
   // Inquiry result callbacks
@@ -148,12 +117,6 @@ class Btm {
   void OnInquiryResultWithRssi(bluetooth::hci::InquiryResultWithRssiView view);
   void OnExtendedInquiryResult(bluetooth::hci::ExtendedInquiryResultView view);
   void OnInquiryComplete(bluetooth::hci::ErrorCode status);
-
-  // Inquiry API
-  bool SetInquiryFilter(uint8_t mode, uint8_t type, tBTM_INQ_FILT_COND data);
-  void SetFilterInquiryOnAddress();
-  void SetFilterInquiryOnDevice();
-  void ClearInquiryFilter();
 
   void SetStandardInquiryResultMode();
   void SetInquiryWithRssiResultMode();
@@ -183,7 +146,6 @@ class Btm {
   bool limited_inquiry_active_{false};
   bool general_periodic_inquiry_active_{false};
   bool limited_periodic_inquiry_active_{false};
-  void RegisterInquiryCallbacks();
   void SetClassicGeneralDiscoverability(uint16_t window, uint16_t interval);
   void SetClassicLimitedDiscoverability(uint16_t window, uint16_t interval);
   void SetClassicDiscoverabilityOff();
@@ -204,7 +166,7 @@ class Btm {
   void SetLeConnectibleOff();
   ConnectabilityState GetLeConnectabilityState() const;
 
-  bool IsLeAclConnected(const RawAddress& raw_address) const;
+  bool UseLeLink(const RawAddress& raw_address) const;
 
   // Remote device name API
   BtmStatus ReadClassicRemoteDeviceName(const RawAddress& raw_address,
@@ -229,37 +191,57 @@ class Btm {
 
   size_t GetNumberOfAdvertisingInstances() const;
 
-  void SetObservingTimer(uint64_t duration_ms, std::function<void()>);
+  void SetObservingTimer(uint64_t duration_ms,
+                         common::OnceCallback<void()> callback);
   void CancelObservingTimer();
-  void SetScanningTimer(uint64_t duration_ms, std::function<void()>);
+  void SetScanningTimer(uint64_t duration_ms,
+                        common::OnceCallback<void()> callback);
   void CancelScanningTimer();
 
-  // Lifecycle
-  static void StartUp(Btm* btm);
-  static void ShutDown(Btm* btm);
-
   tBTM_STATUS CreateBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                         tBT_TRANSPORT transport, uint8_t pin_len,
-                         uint8_t* p_pin, uint32_t trusted_mask[]);
+                         tBT_TRANSPORT transport, int device_type);
   bool CancelBond(const RawAddress& bd_addr);
   bool RemoveBond(const RawAddress& bd_addr);
 
-  void SetSimplePairingCallback(tBTM_SP_CALLBACK* callback);
+  uint16_t GetAclHandle(const RawAddress& remote_bda, tBT_TRANSPORT transport);
+
+  static tBLE_ADDR_TYPE GetAddressType(const RawAddress& bd_addr);
+
+  // Store the address type from advertising report or connection complete
+  // packet.
+  // TODO(b/161319293): Obtain from storage
+  static void StoreAddressType(const RawAddress& bd_addr, tBLE_ADDR_TYPE type);
 
  private:
+  os::Alarm scanning_timer_;
+  os::Alarm observing_timer_;
+
+  LegacyInquiryCompleteCallback legacy_inquiry_complete_callback_{};
+  uint8_t active_inquiry_mode_ = 0;
+
+  class ReadRemoteName {
+   public:
+    ReadRemoteName() = default;
+    bool Start(RawAddress raw_address);
+    void Stop();
+    bool IsInProgress() const;
+    std::string AddressString() const;
+
+   private:
+    std::mutex mutex_;
+    bool in_progress_ = false;
+    RawAddress raw_address_ = RawAddress::kEmpty;
+  };
   ReadRemoteName le_read_remote_name_;
   ReadRemoteName classic_read_remote_name_;
 
-  Timer* observing_timer_{nullptr};
-  Timer* scanning_timer_{nullptr};
-
-  std::mutex sync_mutex_;
-
-  LegacyInquiryCompleteCallback legacy_inquiry_complete_callback_{};
-
-  tBTM_SP_CALLBACK* simple_pairing_callback_{nullptr};
-
-  uint8_t active_inquiry_mode_ = 0;
+  class ScanningCallbacks : public hci::LeScanningManagerCallbacks {
+    void on_advertisements(
+        std::vector<std::shared_ptr<hci::LeReport>> reports) override;
+    void on_timeout() override;
+    os::Handler* Handler() override;
+  };
+  ScanningCallbacks scanning_callbacks_;
 
   // TODO(cmanton) abort if there is no classic acl link up
   bool CheckClassicAclLink(const RawAddress& raw_address) { return true; }

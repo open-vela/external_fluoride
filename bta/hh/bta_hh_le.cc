@@ -22,23 +22,21 @@
 #include "bta_hh_int.h"
 #include "osi/include/osi.h"
 
-#if (BTA_HH_LE_INCLUDED == TRUE)
-
 #include <string.h>
 
 #include <base/bind.h>
-#include <base/callback.h>
 
 #include "bta_gatt_api.h"
 #include "bta_gatt_queue.h"
 #include "bta_hh_co.h"
 #include "btm_api.h"
 #include "btm_ble_api.h"
-#include "btm_int.h"
 #include "device/include/interop.h"
 #include "osi/include/log.h"
 #include "srvc_api.h"
+#include "stack/btm/btm_sec.h"
 #include "stack/include/l2c_api.h"
+#include "types/bt_transport.h"
 #include "utl.h"
 
 using bluetooth::Uuid;
@@ -49,9 +47,6 @@ using std::vector;
 #endif
 
 #define BTA_HH_APP_ID_LE 0xff
-
-#define BTA_HH_LE_RPT_TYPE_VALID(x) \
-  ((x) <= BTA_LE_HID_RPT_FEATURE && (x) >= BTA_LE_HID_RPT_INPUT)
 
 #define BTA_HH_LE_PROTO_BOOT_MODE 0x00
 #define BTA_HH_LE_PROTO_REPORT_MODE 0x01
@@ -187,7 +182,7 @@ void bta_hh_le_enable(void) {
                             /* signal BTA call back event */
                             (*bta_hh_cb.p_cback)(BTA_HH_ENABLE_EVT, &bta_hh);
                           }
-                        }));
+                        }), false);
 }
 
 /*******************************************************************************
@@ -276,7 +271,7 @@ void bta_hh_le_open_conn(tBTA_HH_DEV_CB* p_cb, const RawAddress& remote_bda) {
   bta_hh_cb.le_cb_index[BTA_HH_GET_LE_CB_IDX(p_cb->hid_handle)] = p_cb->index;
   p_cb->in_use = true;
 
-  BTA_GATTC_Open(bta_hh_cb.gatt_if, remote_bda, true, GATT_TRANSPORT_LE, false);
+  BTA_GATTC_Open(bta_hh_cb.gatt_if, remote_bda, true, BT_TRANSPORT_LE, false);
 }
 
 /*******************************************************************************
@@ -339,7 +334,7 @@ uint8_t bta_hh_le_find_service_inst_by_battery_inst_id(tBTA_HH_DEV_CB* p_cb,
  ******************************************************************************/
 tBTA_HH_LE_RPT* bta_hh_le_find_report_entry(
     tBTA_HH_DEV_CB* p_cb, uint8_t srvc_inst_id, /* service instance ID */
-    uint16_t rpt_uuid, uint8_t char_inst_id) {
+    uint16_t rpt_uuid, uint16_t char_inst_id) {
   uint8_t i;
   uint8_t hid_inst_id = srvc_inst_id;
   tBTA_HH_LE_RPT* p_rpt;
@@ -411,7 +406,7 @@ tBTA_HH_LE_RPT* bta_hh_le_find_rpt_by_idtype(tBTA_HH_LE_RPT* p_head,
 tBTA_HH_LE_RPT* bta_hh_le_find_alloc_report_entry(tBTA_HH_DEV_CB* p_cb,
                                                   uint8_t srvc_inst_id,
                                                   uint16_t rpt_uuid,
-                                                  uint8_t inst_id) {
+                                                  uint16_t inst_id) {
   uint8_t i, hid_inst_id = srvc_inst_id;
   tBTA_HH_LE_RPT* p_rpt;
 
@@ -462,7 +457,7 @@ static const gatt::Descriptor* find_descriptor_by_short_uuid(
       BTA_GATTC_GetCharacteristic(conn_id, char_handle);
 
   if (!p_char) {
-    LOG_WARN(LOG_TAG, "%s No such characteristic: %d", __func__, char_handle);
+    LOG_WARN("%s No such characteristic: %d", __func__, char_handle);
     return NULL;
   }
 
@@ -667,7 +662,7 @@ void bta_hh_le_open_cmpl(tBTA_HH_DEV_CB* p_cb) {
  *                  a characteristic
  *
  ******************************************************************************/
-bool bta_hh_le_write_ccc(tBTA_HH_DEV_CB* p_cb, uint8_t char_handle,
+bool bta_hh_le_write_ccc(tBTA_HH_DEV_CB* p_cb, uint16_t char_handle,
                          uint16_t clt_cfg_value, GATT_WRITE_OP_CB cb,
                          void* cb_data) {
   const gatt::Descriptor* p_desc = find_descriptor_by_short_uuid(
@@ -964,7 +959,7 @@ void bta_hh_le_pri_service_discovery(tBTA_HH_DEV_CB* p_cb) {
  *
  ******************************************************************************/
 void bta_hh_le_encrypt_cback(const RawAddress* bd_addr,
-                             UNUSED_ATTR tGATT_TRANSPORT transport,
+                             UNUSED_ATTR tBT_TRANSPORT transport,
                              UNUSED_ATTR void* p_ref_data, tBTM_STATUS result) {
   uint8_t idx = bta_hh_find_cb(*bd_addr);
   tBTA_HH_DEV_CB* p_dev_cb;
@@ -1077,45 +1072,29 @@ void bta_hh_clear_service_cache(tBTA_HH_DEV_CB* p_cb) {
  ******************************************************************************/
 void bta_hh_start_security(tBTA_HH_DEV_CB* p_cb,
                            UNUSED_ATTR tBTA_HH_DATA* p_buf) {
-  uint8_t sec_flag = 0;
-  tBTM_SEC_DEV_REC* p_dev_rec;
-
-  p_dev_rec = btm_find_dev(p_cb->addr);
-  if (p_dev_rec) {
-    if (p_dev_rec->sec_state == BTM_SEC_STATE_ENCRYPTING ||
-        p_dev_rec->sec_state == BTM_SEC_STATE_AUTHENTICATING) {
-      /* if security collision happened, wait for encryption done */
-      p_cb->security_pending = true;
-      return;
-    }
+  if (BTM_SecIsSecurityPending(p_cb->addr)) {
+    /* if security collision happened, wait for encryption done */
+    p_cb->security_pending = true;
+    return;
   }
 
-  /* verify bond */
-  BTM_GetSecurityFlagsByTransport(p_cb->addr, &sec_flag, BT_TRANSPORT_LE);
-
   /* if link has been encrypted */
-  if (sec_flag & BTM_SEC_FLAG_ENCRYPTED) {
+  if (BTM_IsEncrypted(p_cb->addr, BT_TRANSPORT_LE)) {
     p_cb->status = BTA_HH_OK;
     bta_hh_sm_execute(p_cb, BTA_HH_ENC_CMPL_EVT, NULL);
   }
   /* if bonded and link not encrypted */
-  else if (sec_flag & BTM_SEC_FLAG_LKEY_KNOWN) {
-    sec_flag = BTM_BLE_SEC_ENCRYPT;
+  else if (BTM_IsLinkKeyKnown(p_cb->addr, BT_TRANSPORT_LE)) {
     p_cb->status = BTA_HH_ERR_AUTH_FAILED;
-    BTM_SetEncryption(p_cb->addr, BTA_TRANSPORT_LE, bta_hh_le_encrypt_cback,
-                      NULL, sec_flag);
+    BTM_SetEncryption(p_cb->addr, BT_TRANSPORT_LE, bta_hh_le_encrypt_cback,
+                      NULL, BTM_BLE_SEC_ENCRYPT);
   }
   /* unbonded device, report security error here */
-  else if (p_cb->sec_mask != BTA_SEC_NONE) {
-    sec_flag = BTM_BLE_SEC_ENCRYPT_NO_MITM;
+  else {
     p_cb->status = BTA_HH_ERR_AUTH_FAILED;
     bta_hh_clear_service_cache(p_cb);
-    BTM_SetEncryption(p_cb->addr, BTA_TRANSPORT_LE, bta_hh_le_encrypt_cback,
-                      NULL, sec_flag);
-  }
-  /* otherwise let it go through */
-  else {
-    bta_hh_sm_execute(p_cb, BTA_HH_ENC_CMPL_EVT, NULL);
+    BTM_SetEncryption(p_cb->addr, BT_TRANSPORT_LE, bta_hh_le_encrypt_cback,
+                      NULL, BTM_BLE_SEC_ENCRYPT_NO_MITM);
   }
 }
 
@@ -1401,8 +1380,8 @@ static void bta_hh_le_search_hid_chars(tBTA_HH_DEV_CB* p_dev_cb,
     if (!charac.uuid.Is16Bit()) continue;
 
     uint16_t uuid16 = charac.uuid.As16Bit();
-    LOG_DEBUG(LOG_TAG, "%s: %s %s", __func__, bta_hh_uuid_to_str(uuid16),
-              charac.uuid.ToString().c_str());
+    LOG_INFO("%s: %s %s", __func__, bta_hh_uuid_to_str(uuid16),
+             charac.uuid.ToString().c_str());
 
     switch (uuid16) {
       case GATT_UUID_HID_CONTROL_POINT:
@@ -1650,7 +1629,7 @@ void bta_hh_le_open_fail(tBTA_HH_DEV_CB* p_cb, tBTA_HH_DATA* p_data) {
  *
  * Function         bta_hh_gatt_close
  *
- * Description      action function to process the GATT close int he state
+ * Description      action function to process the GATT close in the state
  *                  machine.
  *
  * Returns          void
@@ -1977,21 +1956,16 @@ void bta_hh_le_get_dscp_act(tBTA_HH_DEV_CB* p_cb) {
  *
  ******************************************************************************/
 static void bta_hh_le_add_dev_bg_conn(tBTA_HH_DEV_CB* p_cb, bool check_bond) {
-  uint8_t sec_flag = 0;
   bool to_add = true;
 
   if (check_bond) {
     /* start reconnection if remote is a bonded device */
-    /* verify bond */
-    BTM_GetSecurityFlagsByTransport(p_cb->addr, &sec_flag, BT_TRANSPORT_LE);
-
-    if ((sec_flag & BTM_SEC_FLAG_LKEY_KNOWN) == 0) to_add = false;
+    if (!BTM_IsLinkKeyKnown(p_cb->addr, BT_TRANSPORT_LE)) to_add = false;
   }
 
-  if (/*p_cb->dscp_info.flag & BTA_HH_LE_NORMAL_CONN &&*/
-      !p_cb->in_bg_conn && to_add) {
+  if (!p_cb->in_bg_conn && to_add) {
     /* add device into BG connection to accept remote initiated connection */
-    BTA_GATTC_Open(bta_hh_cb.gatt_if, p_cb->addr, false, GATT_TRANSPORT_LE,
+    BTA_GATTC_Open(bta_hh_cb.gatt_if, p_cb->addr, false, BT_TRANSPORT_LE,
                    false);
     p_cb->in_bg_conn = true;
   }
@@ -2107,54 +2081,6 @@ static void bta_hh_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
   }
 }
 
-static void read_report_descriptor_ccc_cb(uint16_t conn_id, tGATT_STATUS status,
-                                          uint16_t handle, uint16_t len,
-                                          uint8_t* value, void* data) {
-  tBTA_HH_LE_RPT* p_rpt = (tBTA_HH_LE_RPT*)data;
-  uint8_t* pp = value;
-  STREAM_TO_UINT16(p_rpt->client_cfg_value, pp);
-
-  APPL_TRACE_DEBUG("Read Client Configuration: 0x%04x",
-                   p_rpt->client_cfg_value);
-}
-
-/*******************************************************************************
- *
- * Function         bta_hh_le_hid_read_rpt_clt_cfg
- *
- * Description      a test command to read report descriptor client
- *                  configuration
- *
- * Returns          void
- *
- ******************************************************************************/
-void bta_hh_le_hid_read_rpt_clt_cfg(const RawAddress& bd_addr, uint8_t rpt_id) {
-  tBTA_HH_DEV_CB* p_cb = NULL;
-  tBTA_HH_LE_RPT* p_rpt;
-  uint8_t index = BTA_HH_IDX_INVALID;
-
-  index = bta_hh_find_cb(bd_addr);
-  if (index == BTA_HH_IDX_INVALID) {
-    APPL_TRACE_ERROR("%s: unknown device", __func__);
-    return;
-  }
-
-  p_cb = &bta_hh_cb.kdev[index];
-
-  p_rpt = bta_hh_le_find_rpt_by_idtype(p_cb->hid_srvc.report, p_cb->mode,
-                                       BTA_HH_RPTT_INPUT, rpt_id);
-
-  if (p_rpt == NULL) {
-    APPL_TRACE_ERROR("%s: no matching report", __func__);
-    return;
-  }
-
-  bta_hh_le_read_char_descriptor(p_cb, p_rpt->char_inst_id,
-                                 GATT_UUID_CHAR_CLIENT_CONFIG,
-                                 read_report_descriptor_ccc_cb, p_rpt);
-  return;
-}
-
 /*******************************************************************************
  *
  * Function         bta_hh_process_cache_rpt
@@ -2199,5 +2125,3 @@ static void bta_hh_process_cache_rpt(tBTA_HH_DEV_CB* p_cb,
     }
   }
 }
-
-#endif

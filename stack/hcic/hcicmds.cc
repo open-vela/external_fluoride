@@ -33,6 +33,7 @@
 #include <string.h>
 
 #include "btm_int.h" /* Included for UIPC_* macro definitions */
+#include "stack/include/acl_hci_link_interface.h"
 
 void btsnd_hcic_inquiry(const LAP inq_lap, uint8_t duration,
                         uint8_t response_cnt) {
@@ -103,27 +104,17 @@ void btsnd_hcic_create_conn(const RawAddress& dest, uint16_t packet_types,
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
-#ifndef BT_10A
   p->len = HCIC_PREAMBLE_SIZE + HCIC_PARAM_SIZE_CREATE_CONN;
-#else
-  p->len = HCIC_PREAMBLE_SIZE + HCIC_PARAM_SIZE_CREATE_CONN - 1;
-#endif
   p->offset = 0;
 
   UINT16_TO_STREAM(pp, HCI_CREATE_CONNECTION);
-#ifndef BT_10A
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_CREATE_CONN);
-#else
-  UINT8_TO_STREAM(pp, (HCIC_PARAM_SIZE_CREATE_CONN - 1));
-#endif
   BDADDR_TO_STREAM(pp, dest);
   UINT16_TO_STREAM(pp, packet_types);
   UINT8_TO_STREAM(pp, page_scan_rep_mode);
   UINT8_TO_STREAM(pp, page_scan_mode);
   UINT16_TO_STREAM(pp, clock_offset);
-#if !defined(BT_10A)
   UINT8_TO_STREAM(pp, allow_switch);
-#endif
   btm_acl_paging(p, dest);
 }
 
@@ -1258,7 +1249,6 @@ void btsnd_hcic_send_keypress_notif(const RawAddress& bd_addr, uint8_t notif) {
 
 /**** end of Simple Pairing Commands ****/
 
-#if (L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE)
 void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
@@ -1273,7 +1263,6 @@ void btsnd_hcic_enhanced_flush(uint16_t handle, uint8_t packet_type) {
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
-#endif
 
 /*************************
  * End of Lisbon Commands

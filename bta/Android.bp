@@ -91,10 +91,6 @@ cc_library_static {
         "jv/bta_jv_act.cc",
         "jv/bta_jv_api.cc",
         "jv/bta_jv_cfg.cc",
-        "mce/bta_mce_act.cc",
-        "mce/bta_mce_api.cc",
-        "mce/bta_mce_cfg.cc",
-        "mce/bta_mce_main.cc",
         "pan/bta_pan_act.cc",
         "pan/bta_pan_api.cc",
         "pan/bta_pan_ci.cc",
@@ -121,8 +117,10 @@ cc_library_static {
 cc_test {
     name: "net_test_bta",
     defaults: ["fluoride_bta_defaults"],
+    test_suites: ["device-tests"],
     srcs: [
         "test/bta_hf_client_test.cc",
+        "test/bta_dm_cust_uuid_test.cc",
         "test/gatt/database_builder_test.cc",
         "test/gatt/database_builder_sample_device_test.cc",
         "test/gatt/database_test.cc",
@@ -133,6 +131,7 @@ cc_test {
         "libprotobuf-cpp-lite",
     ],
     static_libs: [
+        "crypto_toolbox_for_tests",
         "libbtcore",
         "libbt-bta",
         "libbt-audio-hal-interface",

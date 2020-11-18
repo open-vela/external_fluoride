@@ -32,6 +32,12 @@
 */
 tBTM_CB btm_cb;
 
+extern void btm_acl_init(void);
+extern void btm_dev_init(void);
+extern void btm_inq_db_init(void);
+extern void btm_sco_init(void);
+extern void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec);
+
 /*******************************************************************************
  *
  * Function         btm_init
@@ -63,9 +69,11 @@ void btm_init(void) {
   btm_acl_init();    /* ACL Database and Structures */
   /* Security Manager Database and Structures */
   if (stack_config_get_interface()->get_pts_secure_only_mode())
-    btm_sec_init(BTM_SEC_MODE_SC);
+    btm_cb.security_mode = BTM_SEC_MODE_SC;
   else
-    btm_sec_init(BTM_SEC_MODE_SP);
+    btm_cb.security_mode = BTM_SEC_MODE_SP;
+  btm_cb.pairing_bda = RawAddress::kAny;
+
   btm_sco_init(); /* SCO Database and Structures (If included) */
 
   btm_cb.sec_dev_rec = list_new(osi_free);

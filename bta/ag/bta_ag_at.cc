@@ -21,12 +21,14 @@
  *  BTA AG AT command interpreter.
  *
  ******************************************************************************/
+#define LOG_TAG "bta_ag_at"
+
+#include "bta_ag_at.h"
 
 #include <cstring>
 
 #include "bt_common.h"
-#include "bta_ag_at.h"
-#include "log/log.h"
+#include "osi/include/log.h"
 #include "utl.h"
 
 /*****************************************************************************
@@ -135,6 +137,7 @@ void bta_ag_process_at(tBTA_AG_AT_CB* p_cb, char* p_end) {
         if (int_arg < (int16_t)p_cb->p_at_tbl[idx].min ||
             int_arg > (int16_t)p_cb->p_at_tbl[idx].max) {
           /* arg out of range; error */
+          LOG_WARN("arg out of range");
           (*p_cb->p_err_cback)((tBTA_AG_SCB*)p_cb->p_user, false, nullptr);
         } else {
           (*p_cb->p_cmd_cback)((tBTA_AG_SCB*)p_cb->p_user,
@@ -146,14 +149,15 @@ void bta_ag_process_at(tBTA_AG_AT_CB* p_cb, char* p_end) {
                              p_cb->p_at_tbl[idx].command_id, arg_type, p_arg,
                              p_end, int_arg);
       }
-    }
-    /* else error */
-    else {
+    } else {
+      /* else error */
+      LOG_WARN("Incoming arg type 0x%x does not match cmd arg type 0x%x",
+               arg_type, p_cb->p_at_tbl[idx].arg_type);
       (*p_cb->p_err_cback)((tBTA_AG_SCB*)p_cb->p_user, false, nullptr);
     }
-  }
-  /* else no match call error callback */
-  else {
+  } else {
+    /* else no match call error callback */
+    LOG_WARN("Unmatched command index %d", idx);
     (*p_cb->p_err_cback)((tBTA_AG_SCB*)p_cb->p_user, true, p_cb->p_cmd_buf);
   }
 }

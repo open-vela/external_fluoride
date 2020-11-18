@@ -86,8 +86,6 @@ typedef struct {
   uint16_t peer_l2cap_mtu; /* Max frame that can be sent to peer L2CAP */
   uint8_t state;           /* Current multiplexer channel state */
   uint8_t is_initiator;    /* true if this side sends SABME (dlci=0) */
-  bool local_cfg_sent;
-  bool peer_cfg_rcvd;
   bool restart_required;  /* true if has to restart channel after disc */
   bool peer_ready;        /* True if other side can accept frames */
   uint8_t flow;           /* flow control mechanism for this mux */
@@ -95,8 +93,6 @@ typedef struct {
   bool is_disc_initiator; /* true if initiated disc of port */
   uint16_t
       pending_lcid; /* store LCID for incoming connection while connecting */
-  uint8_t
-      pending_id; /* store l2cap ID for incoming connection while connecting */
 } tRFC_MCB;
 
 /*
