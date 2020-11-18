@@ -41,19 +41,28 @@ status_t ScanFilter::writeToParcel(Parcel* parcel) const {
 
   // TODO(jpawlowski) make type casting nicer
   // uuid won't really keep ownership, it's just for type casting
-  std::optional<UUID> uuid;
+  std::unique_ptr<UUID> uuid;
+  UUID tmp;
 
   if (service_uuid_) {
-    uuid = *service_uuid_;
+    tmp = *service_uuid_;
+    uuid.reset(&tmp);
+  } else {
+    uuid.reset(nullptr);
   }
   status = parcel->writeNullableParcelable(uuid);
+  uuid.release();
   if (status != OK) return status;
 
-  uuid.reset();
   if (service_uuid_mask_) {
-    uuid = *service_uuid_mask_;
+    tmp = *service_uuid_mask_;
+    uuid.reset(&tmp);
+  } else {
+    uuid.reset(nullptr);
   }
   status = parcel->writeNullableParcelable(uuid);
+  uuid.release();
+
   return status;
 }
 
