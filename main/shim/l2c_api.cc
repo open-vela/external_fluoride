@@ -40,7 +40,7 @@ std::unordered_map<intptr_t,
                    bluetooth::common::ContextualOnceCallback<void(bool)>>
     security_enforce_callback_map = {};
 
-class ClassicSecurityEnforcementShim
+class SecurityEnforcementShim
     : public bluetooth::l2cap::classic::SecurityEnforcementInterface {
  public:
   static void security_enforce_result_callback(const RawAddress* bd_addr,
@@ -178,14 +178,6 @@ class SecurityListenerShim
     }
   }
 
-  bool IsRoleCentral(RawAddress remote) {
-    if (address_to_interface_.count(remote) == 0) {
-      return false;
-    }
-    return address_to_interface_[remote]->GetRole() ==
-           bluetooth::hci::Role::CENTRAL;
-  }
-
   std::unordered_map<RawAddress, uint16_t> address_to_handle_;
   std::unordered_map<
       RawAddress,
@@ -194,60 +186,6 @@ class SecurityListenerShim
 } security_listener_shim_;
 
 bluetooth::l2cap::classic::SecurityInterface* security_interface_ = nullptr;
-
-std::unordered_map<intptr_t,
-                   bluetooth::common::ContextualOnceCallback<void(bool)>>
-    le_security_enforce_callback_map = {};
-
-class LeSecurityEnforcementShim
-    : public bluetooth::l2cap::le::SecurityEnforcementInterface {
- public:
-  static void le_security_enforce_result_callback(const RawAddress* bd_addr,
-                                                  tBT_TRANSPORT trasnport,
-                                                  void* p_ref_data,
-                                                  tBTM_STATUS result) {
-    intptr_t counter = (intptr_t)p_ref_data;
-    if (le_security_enforce_callback_map.count(counter) == 0) {
-      LOG_ERROR("Received unexpected callback");
-      return;
-    }
-
-    auto& callback = le_security_enforce_callback_map[counter];
-    std::move(callback).Invoke(result == BTM_SUCCESS);
-    le_security_enforce_callback_map.erase(counter);
-  }
-
-  void Enforce(bluetooth::hci::AddressWithType remote,
-               bluetooth::l2cap::le::SecurityPolicy policy,
-               ResultCallback result_callback) override {
-    tBTM_BLE_SEC_ACT sec_act = 0;
-    switch (policy) {
-      case bluetooth::l2cap::le::SecurityPolicy::
-          NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK:
-        result_callback.Invoke(true);
-        return;
-      case bluetooth::l2cap::le::SecurityPolicy::ENCRYPTED_TRANSPORT:
-        sec_act = BTM_BLE_SEC_ENCRYPT;
-        break;
-      case bluetooth::l2cap::le::SecurityPolicy::BEST:
-      case bluetooth::l2cap::le::SecurityPolicy::
-          AUTHENTICATED_ENCRYPTED_TRANSPORT:
-        sec_act = BTM_BLE_SEC_ENCRYPT_MITM;
-        break;
-      default:
-        result_callback.Invoke(false);
-    }
-    auto bd_addr = bluetooth::ToRawAddress(remote.GetAddress());
-    le_security_enforce_callback_map[security_enforce_callback_counter_] =
-        std::move(result_callback);
-    BTM_SetEncryption(bd_addr, BT_TRANSPORT_LE,
-                      le_security_enforce_result_callback,
-                      (void*)security_enforce_callback_counter_, sec_act);
-    security_enforce_callback_counter_++;
-  }
-
-  intptr_t security_enforce_callback_counter_ = 100;
-} le_security_enforcement_shim_;
 
 bool bluetooth::shim::L2CA_ReadRemoteVersion(const RawAddress& addr,
                                              uint8_t* lmp_version,
@@ -270,9 +208,6 @@ void bluetooth::shim::L2CA_UseLegacySecurityModule() {
   security_interface_ =
       bluetooth::shim::GetL2capClassicModule()->GetSecurityInterface(
           bluetooth::shim::GetGdShimHandler(), &security_listener_shim_);
-
-  bluetooth::shim::GetL2capLeModule()->InjectSecurityEnforcementInterface(
-      &le_security_enforcement_shim_);
 }
 
 /**
@@ -416,7 +351,6 @@ using bluetooth::l2cap::le::FixedChannelManager;
 using bluetooth::l2cap::le::FixedChannelService;
 
 static constexpr uint16_t kAttCid = 4;
-static constexpr uint16_t kSmpCid = 6;
 
 struct LeFixedChannelHelper {
   LeFixedChannelHelper(uint16_t cid) : cid_(cid) {}
@@ -510,11 +444,9 @@ struct LeFixedChannelHelper {
 };
 
 static LeFixedChannelHelper att_helper{4};
-static LeFixedChannelHelper smp_helper{6};
 static std::unordered_map<uint16_t, LeFixedChannelHelper&>
     le_fixed_channel_helper_{
         {4, att_helper},
-        {6, smp_helper},
     };
 
 /**
@@ -523,7 +455,7 @@ static std::unordered_map<uint16_t, LeFixedChannelHelper&>
  */
 bool bluetooth::shim::L2CA_RegisterFixedChannel(uint16_t cid,
                                                 tL2CAP_FIXED_CHNL_REG* p_freg) {
-  if (cid != kAttCid && cid != kSmpCid) {
+  if (cid != kAttCid) {
     LOG(ERROR) << "Invalid cid: " << cid;
     return false;
   }
@@ -547,7 +479,7 @@ bool bluetooth::shim::L2CA_RegisterFixedChannel(uint16_t cid,
 
 bool bluetooth::shim::L2CA_ConnectFixedChnl(uint16_t cid,
                                             const RawAddress& rem_bda) {
-  if (cid != kAttCid && cid != kSmpCid) {
+  if (cid != kAttCid) {
     LOG(ERROR) << "Invalid cid " << cid;
     return false;
   }
@@ -572,7 +504,7 @@ bool bluetooth::shim::L2CA_ConnectFixedChnl(uint16_t cid,
 uint16_t bluetooth::shim::L2CA_SendFixedChnlData(uint16_t cid,
                                                  const RawAddress& rem_bda,
                                                  BT_HDR* p_buf) {
-  if (cid != kAttCid && cid != kSmpCid) {
+  if (cid != kAttCid) {
     LOG(ERROR) << "Invalid cid " << cid;
     return false;
   }
@@ -586,7 +518,7 @@ uint16_t bluetooth::shim::L2CA_SendFixedChnlData(uint16_t cid,
 
 bool bluetooth::shim::L2CA_RemoveFixedChnl(uint16_t cid,
                                            const RawAddress& rem_bda) {
-  if (cid != kAttCid && cid != kSmpCid) {
+  if (cid != kAttCid) {
     LOG(ERROR) << "Invalid cid " << cid;
     return false;
   }
@@ -738,7 +670,6 @@ struct LeDynamicChannelHelper {
       return;
     }
     channels_[device]->Close();
-    disconnected_by_us_[device] = true;
   }
 
   void Unregister() {
@@ -751,27 +682,18 @@ struct LeDynamicChannelHelper {
     }
   }
 
-  void on_unregistered() {
-    for (const auto& device : channels_) {
-      device.second->Close();
-    }
-  }
+  void on_unregistered() {}
 
   void on_channel_close(bluetooth::hci::AddressWithType device,
                         bluetooth::hci::ErrorCode error_code) {
     channel_enqueue_buffer_[device] = nullptr;
     channels_[device]->GetQueueUpEnd()->UnregisterDequeue();
-    channels_.erase(device);
+    channels_[device] = nullptr;
     auto address = bluetooth::ToRawAddress(device.GetAddress());
     auto cid_token = find_cid_token_by_psm_address(psm_, address);
     (appl_info_.pL2CA_DisconnectInd_Cb)(cid_token, false);
     remove_cid_token_entry(cid_token);
     initiated_by_us_.erase(device);
-
-    if (channel_service_ == nullptr && channels_.empty()) {
-      // Try again
-      bluetooth::shim::L2CA_DeregisterLECoc(psm_);
-    }
   }
 
   void on_channel_open(std::unique_ptr<DynamicChannel> channel) {
@@ -851,7 +773,6 @@ struct LeDynamicChannelHelper {
       channel_enqueue_buffer_;
   std::unordered_map<AddressWithType, uint16_t> cid_map_;
   std::unordered_map<AddressWithType, bool> initiated_by_us_;
-  std::unordered_map<AddressWithType, bool> disconnected_by_us_;
 };
 
 std::unordered_map<uint16_t, std::unique_ptr<LeDynamicChannelHelper>>
@@ -879,9 +800,7 @@ void bluetooth::shim::L2CA_DeregisterLECoc(uint16_t psm) {
     return;
   }
   le_dynamic_channel_helper_map_[psm]->Unregister();
-  if (le_dynamic_channel_helper_map_[psm]->channels_.empty()) {
-    le_dynamic_channel_helper_map_.erase(psm);
-  }
+  le_dynamic_channel_helper_map_.erase(psm);
 }
 
 uint16_t bluetooth::shim::L2CA_ConnectLECocReq(uint16_t psm,
