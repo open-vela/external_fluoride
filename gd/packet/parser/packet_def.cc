@@ -739,7 +739,3 @@ void PacketDef::GenBuilderConstructor(std::ostream& s) const {
 
   s << "}\n";
 }
-
-void PacketDef::GenRustDef(std::ostream& s) const {
-  s << "pub struct " << name_ << " {}";
-}
