@@ -224,11 +224,10 @@ static bool event_already_registered_in_hci_layer(
     case bluetooth::hci::EventCode::MAX_SLOTS_CHANGE:
     case bluetooth::hci::EventCode::VENDOR_SPECIFIC:
       return bluetooth::shim::is_gd_hci_enabled();
+    case bluetooth::hci::EventCode::LE_META_EVENT:
     case bluetooth::hci::EventCode::DISCONNECTION_COMPLETE:
     case bluetooth::hci::EventCode::READ_REMOTE_VERSION_INFORMATION_COMPLETE:
-    case bluetooth::hci::EventCode::LE_META_EVENT:
-      return bluetooth::shim::is_gd_acl_enabled() ||
-             bluetooth::shim::is_gd_l2cap_enabled();
+      return bluetooth::shim::is_gd_acl_enabled();
     default:
       return false;
   }
@@ -238,8 +237,7 @@ static bool event_already_registered_in_controller_layer(
     bluetooth::hci::EventCode event_code) {
   switch (event_code) {
     case bluetooth::hci::EventCode::NUMBER_OF_COMPLETED_PACKETS:
-      return bluetooth::shim::is_gd_acl_enabled() ||
-             bluetooth::shim::is_gd_l2cap_enabled();
+      return bluetooth::shim::is_gd_acl_enabled();
     default:
       return false;
   }
@@ -249,8 +247,7 @@ static bool event_already_registered_in_acl_layer(
     bluetooth::hci::EventCode event_code) {
   for (auto event : bluetooth::hci::AclConnectionEvents) {
     if (event == event_code) {
-      return bluetooth::shim::is_gd_acl_enabled() ||
-             bluetooth::shim::is_gd_l2cap_enabled();
+      return bluetooth::shim::is_gd_acl_enabled();
     }
   }
   return false;
@@ -266,11 +263,11 @@ static bool subevent_already_registered_in_le_hci_layer(
     case bluetooth::hci::SubeventCode::PHY_UPDATE_COMPLETE:
     case bluetooth::hci::SubeventCode::REMOTE_CONNECTION_PARAMETER_REQUEST:
       return bluetooth::shim::is_gd_acl_enabled() ||
-             bluetooth::shim::is_gd_l2cap_enabled();
+             bluetooth::shim::is_gd_advertising_enabled();
     case bluetooth::hci::SubeventCode::ADVERTISING_SET_TERMINATED:
     case bluetooth::hci::SubeventCode::SCAN_REQUEST_RECEIVED:
-      return bluetooth::shim::is_gd_acl_enabled() ||
-             bluetooth::shim::is_gd_l2cap_enabled();
+      return bluetooth::shim::is_gd_advertising_enabled();
+    case bluetooth::hci::SubeventCode::SCAN_TIMEOUT:
     case bluetooth::hci::SubeventCode::ADVERTISING_REPORT:
     case bluetooth::hci::SubeventCode::DIRECTED_ADVERTISING_REPORT:
     case bluetooth::hci::SubeventCode::EXTENDED_ADVERTISING_REPORT:
@@ -281,7 +278,6 @@ static bool subevent_already_registered_in_le_hci_layer(
     case bluetooth::hci::SubeventCode::READ_REMOTE_FEATURES_COMPLETE:
     case bluetooth::hci::SubeventCode::READ_LOCAL_P256_PUBLIC_KEY_COMPLETE:
     case bluetooth::hci::SubeventCode::GENERATE_DHKEY_COMPLETE:
-    case bluetooth::hci::SubeventCode::SCAN_TIMEOUT:
     case bluetooth::hci::SubeventCode::CHANNEL_SELECTION_ALGORITHM:
     case bluetooth::hci::SubeventCode::CONNECTIONLESS_IQ_REPORT:
     case bluetooth::hci::SubeventCode::CONNECTION_IQ_REPORT:
@@ -586,8 +582,7 @@ void bluetooth::shim::hci_on_reset_complete() {
 
   // if gd advertising enabled, hci_queue_end will be register in
   // AclManager::impl::Start
-  if (!bluetooth::shim::is_gd_advertising_enabled() &&
-      !bluetooth::shim::is_gd_l2cap_enabled()) {
+  if (!bluetooth::shim::is_gd_advertising_enabled()) {
     hci_queue_end->RegisterDequeue(bluetooth::shim::GetGdShimHandler(),
                                    bluetooth::common::Bind(acl_data_callback));
   }
@@ -604,8 +599,7 @@ void bluetooth::shim::hci_on_shutting_down() {
     pending_data = nullptr;
   }
   if (hci_queue_end != nullptr) {
-    if (!bluetooth::shim::is_gd_advertising_enabled() &&
-        !bluetooth::shim::is_gd_l2cap_enabled()) {
+    if (!bluetooth::shim::is_gd_advertising_enabled()) {
       hci_queue_end->UnregisterDequeue();
     }
     for (uint8_t event_code_raw = 0; event_code_raw < 0xFF; event_code_raw++) {
