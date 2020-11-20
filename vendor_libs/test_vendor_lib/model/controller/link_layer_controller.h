@@ -75,9 +75,6 @@ class LinkLayerController {
       const std::array<uint8_t, 16>& r_192,
       const std::array<uint8_t, 16>& c_256,
       const std::array<uint8_t, 16>& r_256);
-  ErrorCode SendKeypressNotification(
-      const Address& peer,
-      bluetooth::hci::KeypressNotificationType notification_type);
   void HandleSetConnectionEncryption(const Address& address, uint16_t handle, uint8_t encryption_enable);
   ErrorCode SetConnectionEncryption(uint16_t handle, uint8_t encryption_enable);
   void HandleAuthenticationRequest(const Address& address, uint16_t handle);
@@ -353,8 +350,6 @@ class LinkLayerController {
       model::packets::LinkLayerPacketView packet);
   void IncomingIsoConnectionResponsePacket(
       model::packets::LinkLayerPacketView packet);
-  void IncomingKeypressNotificationPacket(
-      model::packets::LinkLayerPacketView packet);
   void IncomingLeAdvertisementPacket(
       model::packets::LinkLayerPacketView packet);
   void IncomingLeConnectPacket(model::packets::LinkLayerPacketView packet);
@@ -368,8 +363,6 @@ class LinkLayerController {
   void IncomingPagePacket(model::packets::LinkLayerPacketView packet);
   void IncomingPageRejectPacket(model::packets::LinkLayerPacketView packet);
   void IncomingPageResponsePacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPasskeyPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPasskeyFailedPacket(model::packets::LinkLayerPacketView packet);
   void IncomingReadRemoteLmpFeatures(
       model::packets::LinkLayerPacketView packet);
   void IncomingReadRemoteLmpFeaturesResponse(

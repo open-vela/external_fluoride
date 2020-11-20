@@ -38,9 +38,8 @@ void SecurityManagerImpl::DispatchPairingHandler(
     std::shared_ptr<record::SecurityRecord> record,
     bool locally_initiated,
     hci::IoCapability io_capability,
-    hci::AuthenticationRequirements auth_requirements,
-    pairing::OobData remote_p192_oob_data,
-    pairing::OobData remote_p256_oob_data) {
+    hci::OobDataPresent oob_present,
+    hci::AuthenticationRequirements auth_requirements) {
   common::OnceCallback<void(hci::Address, PairingResultOrFailure)> callback =
       common::BindOnce(&SecurityManagerImpl::OnPairingHandlerComplete, common::Unretained(this));
   auto entry = pairing_handler_map_.find(record->GetPseudoAddress()->GetAddress());
@@ -68,8 +67,7 @@ void SecurityManagerImpl::DispatchPairingHandler(
   auto new_entry = std::pair<hci::Address, std::shared_ptr<pairing::PairingHandler>>(
       record->GetPseudoAddress()->GetAddress(), pairing_handler);
   pairing_handler_map_.insert(std::move(new_entry));
-  pairing_handler->Initiate(
-      locally_initiated, io_capability, auth_requirements, remote_p192_oob_data, remote_p256_oob_data);
+  pairing_handler->Initiate(locally_initiated, io_capability, oob_present, auth_requirements);
 }
 
 void SecurityManagerImpl::Init() {
@@ -110,11 +108,6 @@ void SecurityManagerImpl::Init() {
 }
 
 void SecurityManagerImpl::CreateBond(hci::AddressWithType device) {
-  this->CreateBondOutOfBand(device, pairing::OobData(), pairing::OobData());
-}
-
-void SecurityManagerImpl::CreateBondOutOfBand(
-    hci::AddressWithType device, pairing::OobData remote_p192_oob_data, pairing::OobData remote_p256_oob_data) {
   auto record = security_database_.FindOrCreate(device);
   if (record->IsPaired()) {
     // Bonded means we saved it, but the caller doesn't care
@@ -128,11 +121,15 @@ void SecurityManagerImpl::CreateBondOutOfBand(
           record,
           true,
           this->local_io_capability_,
-          this->local_authentication_requirements_,
-          remote_p192_oob_data,
-          remote_p256_oob_data);
+          this->local_oob_data_present_,
+          this->local_authentication_requirements_);
     }
   }
+}
+
+void SecurityManagerImpl::CreateBondOutOfBand(
+    hci::AddressWithType device, pairing::OobData remote_p192_oob_data, pairing::OobData remote_p256_oob_data) {
+  // TODO(optedoblivion): Implement when ClassicPairingHandler is ready.
 }
 
 void SecurityManagerImpl::CreateBondLe(hci::AddressWithType address) {
@@ -256,7 +253,7 @@ void SecurityManagerImpl::HandleEvent(T packet) {
     auto bd_addr = packet.GetBdAddr();
     auto event_code = packet.GetEventCode();
 
-    if (event_code != hci::EventCode::LINK_KEY_REQUEST) {
+    if (event_code != hci::EventCode::LINK_KEY_REQUEST && event_code != hci::EventCode::IO_CAPABILITY_RESPONSE) {
       LOG_ERROR("No classic pairing handler for device '%s' ready for command %s ", bd_addr.ToString().c_str(),
                 hci::EventCodeText(event_code).c_str());
       return;
@@ -271,9 +268,8 @@ void SecurityManagerImpl::HandleEvent(T packet) {
         record,
         false,
         this->local_io_capability_,
-        this->local_authentication_requirements_,
-        pairing::OobData(),
-        pairing::OobData());
+        this->local_oob_data_present_,
+        this->local_authentication_requirements_);
     entry = pairing_handler_map_.find(bd_addr);
   }
   entry->second->OnReceive(packet);
@@ -749,24 +745,28 @@ void SecurityManagerImpl::SetLeOobDataPresent(OobDataFlag data_present) {
   this->local_le_oob_data_present_ = data_present;
 }
 
-void SecurityManagerImpl::GetLeOutOfBandData(
-    std::array<uint8_t, 16>* confirmation_value, std::array<uint8_t, 16>* random_value) {
+void SecurityManagerImpl::GetOutOfBandData(
+    std::array<uint8_t, 16>* le_sc_confirmation_value, std::array<uint8_t, 16>* le_sc_random_value) {
   local_le_oob_data_ = std::make_optional<MyOobData>(PairingHandlerLe::GenerateOobData());
-  *confirmation_value = local_le_oob_data_.value().c;
-  *random_value = local_le_oob_data_.value().r;
+  *le_sc_confirmation_value = local_le_oob_data_.value().c;
+  *le_sc_random_value = local_le_oob_data_.value().r;
 }
 
 void SecurityManagerImpl::SetOutOfBandData(
     hci::AddressWithType remote_address,
-    std::array<uint8_t, 16> confirmation_value,
-    std::array<uint8_t, 16> random_value) {
+    std::array<uint8_t, 16> le_sc_confirmation_value,
+    std::array<uint8_t, 16> le_sc_random_value) {
   remote_oob_data_address_ = remote_address;
-  remote_oob_data_le_sc_c_ = confirmation_value;
-  remote_oob_data_le_sc_r_ = random_value;
+  remote_oob_data_le_sc_c_ = le_sc_confirmation_value;
+  remote_oob_data_le_sc_r_ = le_sc_random_value;
 }
 
 void SecurityManagerImpl::SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements) {
   this->local_authentication_requirements_ = authentication_requirements;
+}
+
+void SecurityManagerImpl::SetOobDataPresent(hci::OobDataPresent data_present) {
+  this->local_oob_data_present_ = data_present;
 }
 
 void SecurityManagerImpl::InternalEnforceSecurityPolicy(
@@ -804,9 +804,8 @@ void SecurityManagerImpl::InternalEnforceSecurityPolicy(
       record,
       true,
       this->local_io_capability_,
-      std::as_const(authentication_requirements),
-      pairing::OobData(),
-      pairing::OobData());
+      this->local_oob_data_present_,
+      std::as_const(authentication_requirements));
 }
 
 void SecurityManagerImpl::UpdateLinkSecurityCondition(hci::AddressWithType remote) {

@@ -79,28 +79,28 @@ TEST_F(L2capLeDynamicServiceManagerTest, register_and_unregister_le_dynamic_chan
       .security_policy_ = SecurityPolicy::NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK,
       .on_registration_complete_callback_ =
           common::BindOnce(&L2capLeDynamicServiceManagerTest::OnServiceRegistered, common::Unretained(this), true)};
-  Psm psm = 0x41;
-  EXPECT_FALSE(manager_->IsServiceRegistered(psm));
-  manager_->Register(psm, std::move(pending_registration));
-  EXPECT_TRUE(manager_->IsServiceRegistered(psm));
+  Cid cid = kSmpBrCid;
+  EXPECT_FALSE(manager_->IsServiceRegistered(cid));
+  manager_->Register(cid, std::move(pending_registration));
+  EXPECT_TRUE(manager_->IsServiceRegistered(cid));
   sync_user_handler();
   EXPECT_TRUE(service_registered_);
-  manager_->Unregister(psm, common::BindOnce([] {}), user_handler_);
-  EXPECT_FALSE(manager_->IsServiceRegistered(psm));
+  manager_->Unregister(cid, common::BindOnce([] {}), user_handler_);
+  EXPECT_FALSE(manager_->IsServiceRegistered(cid));
 }
 
-TEST_F(L2capLeDynamicServiceManagerTest, register_le_dynamic_channel_even_number_psm) {
+TEST_F(L2capLeDynamicServiceManagerTest, register_le_dynamic_channel_bad_cid) {
   DynamicChannelServiceImpl::PendingRegistration pending_registration{
       .user_handler_ = user_handler_,
       .security_policy_ = SecurityPolicy::NO_SECURITY_WHATSOEVER_PLAINTEXT_TRANSPORT_OK,
       .on_registration_complete_callback_ =
-          common::BindOnce(&L2capLeDynamicServiceManagerTest::OnServiceRegistered, common::Unretained(this), true)};
-  Psm psm = 0x0100;
-  EXPECT_FALSE(manager_->IsServiceRegistered(psm));
-  manager_->Register(psm, std::move(pending_registration));
-  EXPECT_TRUE(manager_->IsServiceRegistered(psm));
+          common::BindOnce(&L2capLeDynamicServiceManagerTest::OnServiceRegistered, common::Unretained(this), false)};
+  Cid cid = 0x1000;
+  EXPECT_FALSE(manager_->IsServiceRegistered(cid));
+  manager_->Register(cid, std::move(pending_registration));
+  EXPECT_FALSE(manager_->IsServiceRegistered(cid));
   sync_user_handler();
-  EXPECT_TRUE(service_registered_);
+  EXPECT_FALSE(service_registered_);
 }
 
 }  // namespace internal
