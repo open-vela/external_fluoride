@@ -153,7 +153,7 @@ PairingType SecurityManager::GetSimplePairingType() {
           return PairingType::INPUT_PIN;
         case IoCapabilityType::NO_INPUT_NO_OUTPUT:
           return PairingType::AUTO_CONFIRMATION;
-        case IoCapabilityType::INVALID:
+        default:
           return PairingType::INVALID;
       }
     case IoCapabilityType::DISPLAY_YES_NO:
@@ -163,27 +163,28 @@ PairingType SecurityManager::GetSimplePairingType() {
         case IoCapabilityType::DISPLAY_YES_NO:
           return PairingType::DISPLAY_AND_CONFIRM;
         case IoCapabilityType::KEYBOARD_ONLY:
-          return PairingType::INPUT_PIN;
+          return PairingType::DISPLAY_PIN;
         case IoCapabilityType::NO_INPUT_NO_OUTPUT:
           return PairingType::AUTO_CONFIRMATION;
-        case IoCapabilityType::INVALID:
+        default:
           return PairingType::INVALID;
       }
     case IoCapabilityType::KEYBOARD_ONLY:
       switch (host_io_capability_) {
         case IoCapabilityType::DISPLAY_ONLY:
+          return PairingType::DISPLAY_PIN;
         case IoCapabilityType::DISPLAY_YES_NO:
           return PairingType::DISPLAY_PIN;
         case IoCapabilityType::KEYBOARD_ONLY:
           return PairingType::INPUT_PIN;
         case IoCapabilityType::NO_INPUT_NO_OUTPUT:
           return PairingType::AUTO_CONFIRMATION;
-        case IoCapabilityType::INVALID:
+        default:
           return PairingType::INVALID;
       }
     case IoCapabilityType::NO_INPUT_NO_OUTPUT:
       return PairingType::AUTO_CONFIRMATION;
-    case IoCapabilityType::INVALID:
+    default:
       return PairingType::INVALID;
   }
 }
