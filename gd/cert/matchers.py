@@ -31,7 +31,7 @@ from bluetooth_packets_python3.l2cap_packets import LeCreditBasedConnectionRespo
 class HciMatchers(object):
 
     @staticmethod
-    def CommandComplete(opcode):
+    def CommandComplete(opcode=None):
         return lambda msg: HciMatchers._is_matching_command_complete(msg.payload, opcode)
 
     @staticmethod
