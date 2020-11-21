@@ -32,7 +32,7 @@
 
 namespace bluetooth {
 namespace security {
-namespace pairing {
+namespace channel {
 namespace {
 
 using bluetooth::security::channel::SecurityManagerChannel;
@@ -81,7 +81,7 @@ class TestUI : public UI {
   void DisplayPasskey(ConfirmationData data) override {}
 };
 
-class SecurityManagerChannelCallback : public channel::ISecurityManagerChannelListener {
+class SecurityManagerChannelCallback : public ISecurityManagerChannelListener {
  public:
   explicit SecurityManagerChannelCallback(pairing::ClassicPairingHandler* pairing_handler)
       : pairing_handler_(pairing_handler) {}
@@ -140,20 +140,13 @@ class SecurityManagerChannelCallback : public channel::ISecurityManagerChannelLi
   pairing::ClassicPairingHandler* pairing_handler_ = nullptr;
 };
 
-bool expect_success_ = true;
-
 static void pairing_complete_callback(bluetooth::hci::Address address, PairingResultOrFailure status) {
-  if (expect_success_) {
-    ASSERT_TRUE(std::holds_alternative<PairingResult>(status));
-  } else {
-    ASSERT_FALSE(std::holds_alternative<PairingResult>(status));
-  }
+  ASSERT_TRUE(std::holds_alternative<PairingResult>(status));
 }
 
 class ClassicPairingHandlerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    expect_success_ = true;
     hci_layer_ = new FakeHciLayer();
     name_db_module_ = new FakeNameDbModule();
     fake_registry_.InjectTestModule(&FakeHciLayer::Factory, hci_layer_);
@@ -208,11 +201,6 @@ class ClassicPairingHandlerTest : public ::testing::Test {
                                    hci::OobDataPresent oob_present, hci::AuthenticationRequirements auth_reqs) {
     hci_layer_->IncomingEvent(
         hci::IoCapabilityResponseBuilder::Create(device.GetAddress(), io_cap, oob_present, auth_reqs));
-    synchronize();
-  }
-
-  void ReceiveOobDataRequest(hci::AddressWithType device) {
-    hci_layer_->IncomingEvent(hci::RemoteOobDataRequestBuilder::Create(device.GetAddress()));
     synchronize();
   }
 
@@ -289,8 +277,8 @@ TEST_F(ClassicPairingHandlerTest, setup_teardown) {}
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_display_only_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::DISPLAY_ONLY;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -327,8 +315,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_display_only_t
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_display_yes_no_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::DISPLAY_ONLY;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -365,8 +353,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_display_yes_no
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_no_input_no_output_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::DISPLAY_ONLY;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -403,8 +391,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_display_only_no_input_no_ou
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_keyboard_only_no_input_no_output_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::KEYBOARD_ONLY;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -441,8 +429,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_keyboard_only_no_input_no_o
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_display_only_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -479,8 +467,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_display_
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_display_yes_no_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -517,8 +505,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_display_
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_keyboard_only_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -555,8 +543,8 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_keyboard
 TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input_no_output_temp) {
   hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
   hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
+  pairing_handler_->Initiate(true, injected_io_capability, hci::OobDataPresent::NOT_PRESENT,
+                             injected_authentication_requirements);
   ReceiveLinkKeyRequest(device_);
   auto security_command_view = GetLastCommand(hci_layer_);
   auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
@@ -588,171 +576,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input
   ASSERT_FALSE(security_record_->RequiresMitmProtection());
 }
 
-TEST_F(ClassicPairingHandlerTest, remote_initiatied_no_input_no_output_no_input_no_output_with_missing_oob_data) {}
-
-// CreateBondOutOfBand no_input_no_output + no_input_no_output OOB Data missing when asked
-TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input_no_output_with_missing_oob_data) {
-  expect_success_ = false;
-  hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
-  hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), pairing::OobData());
-
-  ReceiveLinkKeyRequest(device_);
-  auto security_command_view = GetLastCommand(hci_layer_);
-  auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
-  ASSERT_TRUE(link_key_neg_reply.IsValid());
-  ASSERT_EQ(OpCode::LINK_KEY_REQUEST_NEGATIVE_REPLY, link_key_neg_reply.GetOpCode());
-  ReceiveIoCapabilityRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  ASSERT_EQ(OpCode::IO_CAPABILITY_REQUEST_REPLY, security_command_view.GetOpCode());
-  auto io_cap_request_reply = hci::IoCapabilityRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(io_cap_request_reply.IsValid());
-  ASSERT_EQ(injected_io_capability, io_cap_request_reply.GetIoCapability());
-  ASSERT_EQ(hci::OobDataPresent::NOT_PRESENT, io_cap_request_reply.GetOobPresent());
-  ASSERT_EQ(injected_authentication_requirements, io_cap_request_reply.GetAuthenticationRequirements());
-  ReceiveIoCapabilityResponse(
-      device_,
-      hci::IoCapability::NO_INPUT_NO_OUTPUT,
-      hci::OobDataPresent::NOT_PRESENT,
-      hci::AuthenticationRequirements::NO_BONDING);
-  // At this point the pairing handler thinks it has NOT_PRESENT
-  ReceiveOobDataRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  auto oob_data_req_neg_reply = hci::RemoteOobDataRequestNegativeReplyView::Create(security_command_view);
-  ASSERT_TRUE(oob_data_req_neg_reply.IsValid());
-  ASSERT_EQ(OpCode::REMOTE_OOB_DATA_REQUEST_NEGATIVE_REPLY, oob_data_req_neg_reply.GetOpCode());
-  ReceiveSimplePairingComplete(hci::ErrorCode::AUTHENTICATION_FAILURE, device_);
-}
-
-// CreateBondOutOfBand no_input_no_output + no_input_no_output OOB Data P192
-TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input_no_output_p192_oob_data) {
-  hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
-  hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing::OobData oob_data(
-      {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, oob_data, pairing::OobData());
-
-  ReceiveLinkKeyRequest(device_);
-  auto security_command_view = GetLastCommand(hci_layer_);
-  auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
-  ASSERT_TRUE(link_key_neg_reply.IsValid());
-  ASSERT_EQ(OpCode::LINK_KEY_REQUEST_NEGATIVE_REPLY, link_key_neg_reply.GetOpCode());
-  ReceiveIoCapabilityRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  ASSERT_EQ(OpCode::IO_CAPABILITY_REQUEST_REPLY, security_command_view.GetOpCode());
-  auto io_cap_request_reply = hci::IoCapabilityRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(io_cap_request_reply.IsValid());
-  ASSERT_EQ(injected_io_capability, io_cap_request_reply.GetIoCapability());
-  ASSERT_EQ(hci::OobDataPresent::P_192_PRESENT, io_cap_request_reply.GetOobPresent());
-  ASSERT_EQ(injected_authentication_requirements, io_cap_request_reply.GetAuthenticationRequirements());
-  ReceiveIoCapabilityResponse(
-      device_,
-      hci::IoCapability::NO_INPUT_NO_OUTPUT,
-      hci::OobDataPresent::NOT_PRESENT,
-      hci::AuthenticationRequirements::NO_BONDING);
-  // At this point the pairing handler thinks it has NOT_PRESENT
-  ReceiveOobDataRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  // NOTE(optedoblivion): Extended data is manually disabled in the pairing handler
-  // since the controller doesn't seem to currently have support.
-  auto oob_data_req_reply = hci::RemoteOobDataRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(oob_data_req_reply.IsValid());
-  ASSERT_EQ(OpCode::REMOTE_OOB_DATA_REQUEST_REPLY, oob_data_req_reply.GetOpCode());
-  ReceiveSimplePairingComplete(hci::ErrorCode::SUCCESS, device_);
-  std::array<uint8_t, 16> link_key = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
-  hci::KeyType key_type = hci::KeyType::DEBUG_COMBINATION;
-  ReceiveLinkKeyNotification(device_, link_key, key_type);
-  ASSERT_EQ(link_key, security_record_->GetLinkKey());
-  ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
-}
-
-// CreateBondOutOfBand no_input_no_output + no_input_no_output OOB Data P256
-TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input_no_output_p256_oob_data) {
-  hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
-  hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing::OobData oob_data(
-      {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
-  pairing_handler_->Initiate(
-      true, injected_io_capability, injected_authentication_requirements, pairing::OobData(), oob_data);
-  ReceiveLinkKeyRequest(device_);
-  auto security_command_view = GetLastCommand(hci_layer_);
-  auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
-  ASSERT_TRUE(link_key_neg_reply.IsValid());
-  ASSERT_EQ(OpCode::LINK_KEY_REQUEST_NEGATIVE_REPLY, link_key_neg_reply.GetOpCode());
-  ReceiveIoCapabilityRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  ASSERT_EQ(OpCode::IO_CAPABILITY_REQUEST_REPLY, security_command_view.GetOpCode());
-  auto io_cap_request_reply = hci::IoCapabilityRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(io_cap_request_reply.IsValid());
-  ASSERT_EQ(injected_io_capability, io_cap_request_reply.GetIoCapability());
-  ASSERT_EQ(hci::OobDataPresent::P_256_PRESENT, io_cap_request_reply.GetOobPresent());
-  ASSERT_EQ(injected_authentication_requirements, io_cap_request_reply.GetAuthenticationRequirements());
-  ReceiveIoCapabilityResponse(
-      device_,
-      hci::IoCapability::NO_INPUT_NO_OUTPUT,
-      hci::OobDataPresent::NOT_PRESENT,
-      hci::AuthenticationRequirements::NO_BONDING);
-  // At this point the pairing handler thinks it has NOT_PRESENT
-  ReceiveOobDataRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  auto oob_data_req_reply = hci::RemoteOobExtendedDataRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(oob_data_req_reply.IsValid());
-  ASSERT_EQ(OpCode::REMOTE_OOB_EXTENDED_DATA_REQUEST_REPLY, oob_data_req_reply.GetOpCode());
-  ReceiveSimplePairingComplete(hci::ErrorCode::SUCCESS, device_);
-  std::array<uint8_t, 16> link_key = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
-  hci::KeyType key_type = hci::KeyType::DEBUG_COMBINATION;
-  ReceiveLinkKeyNotification(device_, link_key, key_type);
-  ASSERT_EQ(link_key, security_record_->GetLinkKey());
-  ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
-}
-
-// CreateBondOutOfBand no_input_no_output + no_input_no_output OOB Data P192 and 256
-TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input_no_output_p192_and_256_oob_data) {
-  hci::IoCapability injected_io_capability = hci::IoCapability::NO_INPUT_NO_OUTPUT;
-  hci::AuthenticationRequirements injected_authentication_requirements = hci::AuthenticationRequirements::NO_BONDING;
-  pairing::OobData oob_data(
-      {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
-  pairing_handler_->Initiate(true, injected_io_capability, injected_authentication_requirements, oob_data, oob_data);
-  ReceiveLinkKeyRequest(device_);
-  auto security_command_view = GetLastCommand(hci_layer_);
-  auto link_key_neg_reply = hci::LinkKeyRequestNegativeReplyView::Create(security_command_view);
-  ASSERT_TRUE(link_key_neg_reply.IsValid());
-  ASSERT_EQ(OpCode::LINK_KEY_REQUEST_NEGATIVE_REPLY, link_key_neg_reply.GetOpCode());
-  ReceiveIoCapabilityRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  ASSERT_EQ(OpCode::IO_CAPABILITY_REQUEST_REPLY, security_command_view.GetOpCode());
-  auto io_cap_request_reply = hci::IoCapabilityRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(io_cap_request_reply.IsValid());
-  ASSERT_EQ(injected_io_capability, io_cap_request_reply.GetIoCapability());
-  ASSERT_EQ(hci::OobDataPresent::P_192_AND_256_PRESENT, io_cap_request_reply.GetOobPresent());
-  ASSERT_EQ(injected_authentication_requirements, io_cap_request_reply.GetAuthenticationRequirements());
-  ReceiveIoCapabilityResponse(
-      device_,
-      hci::IoCapability::NO_INPUT_NO_OUTPUT,
-      hci::OobDataPresent::NOT_PRESENT,
-      hci::AuthenticationRequirements::NO_BONDING);
-  // At this point the pairing handler thinks it has NOT_PRESENT
-  ReceiveOobDataRequest(device_);
-  security_command_view = GetLastCommand(hci_layer_);
-  auto oob_data_req_reply = hci::RemoteOobExtendedDataRequestReplyView::Create(security_command_view);
-  ASSERT_TRUE(oob_data_req_reply.IsValid());
-  ASSERT_EQ(OpCode::REMOTE_OOB_EXTENDED_DATA_REQUEST_REPLY, oob_data_req_reply.GetOpCode());
-  ReceiveSimplePairingComplete(hci::ErrorCode::SUCCESS, device_);
-  std::array<uint8_t, 16> link_key = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
-  hci::KeyType key_type = hci::KeyType::DEBUG_COMBINATION;
-  ReceiveLinkKeyNotification(device_, link_key, key_type);
-  ASSERT_EQ(link_key, security_record_->GetLinkKey());
-  ASSERT_EQ(key_type, security_record_->GetKeyType());
-  ASSERT_FALSE(security_record_->IsAuthenticated());
-  ASSERT_FALSE(security_record_->RequiresMitmProtection());
-}
-
 /*** Numeric Comparison ***/
 // display_yes_no + display_only
 
@@ -770,6 +593,6 @@ TEST_F(ClassicPairingHandlerTest, locally_initiatied_no_input_no_output_no_input
 // Collisions
 
 }  // namespace
-}  // namespace pairing
+}  // namespace channel
 }  // namespace security
 }  // namespace bluetooth
