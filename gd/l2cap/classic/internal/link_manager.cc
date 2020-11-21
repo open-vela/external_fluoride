@@ -83,9 +83,6 @@ void LinkManager::ConnectFixedChannelServices(hci::Address device,
 
 void LinkManager::ConnectDynamicChannelServices(
     hci::Address device, Link::PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm) {
-  if (!IsPsmValid(psm)) {
-    return;
-  }
   auto* link = GetLink(device);
   if (link == nullptr) {
     acl_manager_->CreateConnection(device);
