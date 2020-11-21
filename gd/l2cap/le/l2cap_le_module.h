@@ -24,10 +24,6 @@
 
 namespace bluetooth {
 
-namespace shim {
-void L2CA_UseLegacySecurityModule();
-}
-
 namespace security {
 class SecurityModule;
 }
@@ -66,8 +62,6 @@ class L2capLeModule : public bluetooth::Module {
   std::unique_ptr<impl> pimpl_;
 
   friend security::SecurityModule;
-  friend void bluetooth::shim::L2CA_UseLegacySecurityModule();
-
   /**
    * Only for the LE security module to inject functionality to enforce security level for a connection. When LE
    * security module is stopping, inject nullptr. Note: We expect this only to be called during stack startup. This is
