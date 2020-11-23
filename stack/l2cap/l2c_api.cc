@@ -88,6 +88,8 @@ uint16_t L2CA_Register(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
   tL2C_RCB* p_rcb;
   uint16_t vpsm = psm;
 
+  L2CAP_TRACE_API("L2CAP - L2CA_Register() called for PSM: 0x%04x", psm);
+
   /* Verify that the required callback info has been filled in
   **      Note:  Connection callbacks are required but not checked
   **             for here because it is possible to be only a client
@@ -103,7 +105,7 @@ uint16_t L2CA_Register(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
 
   /* Verify PSM is valid */
   if (L2C_INVALID_PSM(psm)) {
-    LOG_ERROR("L2CAP - invalid PSM value, PSM: 0x%04x", psm);
+    L2CAP_TRACE_ERROR("L2CAP - invalid PSM value, PSM: 0x%04x", psm);
     return (0);
   }
 
@@ -115,7 +117,8 @@ uint16_t L2CA_Register(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
       if (p_rcb == NULL) break;
     }
 
-    LOG_DEBUG("L2CAP - Real PSM: 0x%04x  Virtual PSM: 0x%04x", psm, vpsm);
+    L2CAP_TRACE_API("L2CA_Register - Real PSM: 0x%04x  Virtual PSM: 0x%04x",
+                    psm, vpsm);
   }
 
   /* If registration block already there, just overwrite it */
@@ -123,13 +126,12 @@ uint16_t L2CA_Register(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
   if (p_rcb == NULL) {
     p_rcb = l2cu_allocate_rcb(vpsm);
     if (p_rcb == NULL) {
-      LOG_WARN("L2CAP - no RCB available, PSM: 0x%04x  vPSM: 0x%04x", psm,
-               vpsm);
+      L2CAP_TRACE_WARNING("L2CAP - no RCB available, PSM: 0x%04x  vPSM: 0x%04x",
+                          psm, vpsm);
       return (0);
     }
   }
 
-  LOG_INFO("L2CAP Registered service classic PSM: 0x%04x", psm);
   p_rcb->log_packets = enable_snoop;
   p_rcb->api = p_cb_info;
   p_rcb->real_psm = psm;
@@ -381,6 +383,7 @@ uint16_t L2CA_RegisterLECoc(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
   }
 
   BTM_SetSecurityLevel(false, "", 0, sec_level, psm, 0, 0);
+  L2CAP_TRACE_API("%s called for LE PSM: 0x%04x", __func__, psm);
 
   /* Verify that the required callback info has been filled in
   **      Note:  Connection callbacks are required but not checked
@@ -388,13 +391,13 @@ uint16_t L2CA_RegisterLECoc(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
   **             or only a server.
   */
   if ((!p_cb_info.pL2CA_DataInd_Cb) || (!p_cb_info.pL2CA_DisconnectInd_Cb)) {
-    LOG_ERROR("No cb registering BLE PSM: 0x%04x", psm);
+    L2CAP_TRACE_ERROR("%s No cb registering BLE PSM: 0x%04x", __func__, psm);
     return 0;
   }
 
   /* Verify PSM is valid */
   if (!L2C_IS_VALID_LE_PSM(psm)) {
-    LOG_ERROR("Invalid BLE PSM value, PSM: 0x%04x", psm);
+    L2CAP_TRACE_ERROR("%s Invalid BLE PSM value, PSM: 0x%04x", __func__, psm);
     return 0;
   }
 
@@ -407,25 +410,26 @@ uint16_t L2CA_RegisterLECoc(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
       (p_cb_info.pL2CA_ConnectInd_Cb == NULL)) {
     vpsm = L2CA_AllocateLePSM();
     if (vpsm == 0) {
-      LOG_ERROR("Out of free BLE PSM");
+      L2CAP_TRACE_ERROR("%s: Out of free BLE PSM", __func__);
       return 0;
     }
 
-    LOG_DEBUG("Real PSM: 0x%04x  Virtual PSM: 0x%04x", psm, vpsm);
+    L2CAP_TRACE_API("%s Real PSM: 0x%04x  Virtual PSM: 0x%04x", __func__, psm,
+                    vpsm);
   }
 
   /* If registration block already there, just overwrite it */
   p_rcb = l2cu_find_ble_rcb_by_psm(vpsm);
   if (p_rcb == NULL) {
-    LOG_DEBUG("Allocate rcp for Virtual PSM: 0x%04x", vpsm);
+    L2CAP_TRACE_API("%s Allocate rcp for Virtual PSM: 0x%04x", __func__, vpsm);
     p_rcb = l2cu_allocate_ble_rcb(vpsm);
     if (p_rcb == NULL) {
-      LOG_WARN("No BLE RCB available, PSM: 0x%04x  vPSM: 0x%04x", psm, vpsm);
+      L2CAP_TRACE_WARNING("%s No BLE RCB available, PSM: 0x%04x  vPSM: 0x%04x",
+                          __func__, psm, vpsm);
       return 0;
     }
   }
 
-  LOG_INFO("Registered service LE COC PSM: 0x%04x", psm);
   p_rcb->api = p_cb_info;
   p_rcb->real_psm = psm;
   p_rcb->coc_cfg = cfg;
