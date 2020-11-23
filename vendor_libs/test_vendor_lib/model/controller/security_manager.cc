@@ -130,15 +130,15 @@ PairingType SecurityManager::GetSimplePairingType() {
   bool peer_requires_mitm = (peer_authentication_requirements_ == AuthenticationType::NO_BONDING_MITM) ||
                             (peer_authentication_requirements_ == AuthenticationType::DEDICATED_BONDING_MITM) ||
                             (peer_authentication_requirements_ == AuthenticationType::GENERAL_BONDING_MITM);
-  if (!(peer_requires_mitm || host_requires_mitm)) {
-    return PairingType::AUTO_CONFIRMATION;
-  }
   if (peer_oob_present_flag_ != 0 || host_oob_present_flag_ != 0) {
-    if (peer_oob_present_flag_ != 0) {
+    if (host_oob_present_flag_ == 0) {
       return PairingType::PEER_HAS_OUT_OF_BAND;
     } else {
       return PairingType::OUT_OF_BAND;
     }
+  }
+  if (!(peer_requires_mitm || host_requires_mitm)) {
+    return PairingType::AUTO_CONFIRMATION;
   }
   LOG_INFO("%s: host does%s require peer does%s require MITM",
            peer_address_.ToString().c_str(), host_requires_mitm ? "" : "n't",
@@ -153,7 +153,7 @@ PairingType SecurityManager::GetSimplePairingType() {
           return PairingType::INPUT_PIN;
         case IoCapabilityType::NO_INPUT_NO_OUTPUT:
           return PairingType::AUTO_CONFIRMATION;
-        default:
+        case IoCapabilityType::INVALID:
           return PairingType::INVALID;
       }
     case IoCapabilityType::DISPLAY_YES_NO:
@@ -163,28 +163,27 @@ PairingType SecurityManager::GetSimplePairingType() {
         case IoCapabilityType::DISPLAY_YES_NO:
           return PairingType::DISPLAY_AND_CONFIRM;
         case IoCapabilityType::KEYBOARD_ONLY:
-          return PairingType::DISPLAY_PIN;
+          return PairingType::INPUT_PIN;
         case IoCapabilityType::NO_INPUT_NO_OUTPUT:
           return PairingType::AUTO_CONFIRMATION;
-        default:
+        case IoCapabilityType::INVALID:
           return PairingType::INVALID;
       }
     case IoCapabilityType::KEYBOARD_ONLY:
       switch (host_io_capability_) {
         case IoCapabilityType::DISPLAY_ONLY:
-          return PairingType::DISPLAY_PIN;
         case IoCapabilityType::DISPLAY_YES_NO:
           return PairingType::DISPLAY_PIN;
         case IoCapabilityType::KEYBOARD_ONLY:
           return PairingType::INPUT_PIN;
         case IoCapabilityType::NO_INPUT_NO_OUTPUT:
           return PairingType::AUTO_CONFIRMATION;
-        default:
+        case IoCapabilityType::INVALID:
           return PairingType::INVALID;
       }
     case IoCapabilityType::NO_INPUT_NO_OUTPUT:
       return PairingType::AUTO_CONFIRMATION;
-    default:
+    case IoCapabilityType::INVALID:
       return PairingType::INVALID;
   }
 }
