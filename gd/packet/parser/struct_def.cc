@@ -310,7 +310,3 @@ Size StructDef::GetStructOffsetForField(std::string field_name) const {
 
   return size;
 }
-
-void StructDef::GenRustDef(std::ostream& s) const {
-  s << "pub struct " << name_ << " {}";
-}
