@@ -12,7 +12,6 @@ rust_library {
       "libgrpcio",
       "libprotobuf",
       "libtokio",
-      "libgddi",
     ],
     host_supported: true,
 }

@@ -5,7 +5,6 @@ use bt_hci_proto::facade::*;
 use bt_hci_proto::facade_grpc::{create_hci_layer_facade, HciLayerFacade};
 
 use futures::sink::SinkExt;
-use gddi::{module, provides};
 use tokio::runtime::Runtime;
 
 use crate::HciExports;
@@ -15,18 +14,6 @@ use grpcio::*;
 
 use std::sync::Arc;
 
-module! {
-    facade_module,
-    providers {
-        HciLayerFacadeService => provide_facade,
-    }
-}
-
-#[provides]
-async fn provide_facade(hci_exports: HciExports, rt: Arc<Runtime>) -> HciLayerFacadeService {
-    HciLayerFacadeService { hci_exports, rt }
-}
-
 /// HCI layer facade service
 #[derive(Clone)]
 pub struct HciLayerFacadeService {
@@ -35,9 +22,9 @@ pub struct HciLayerFacadeService {
 }
 
 impl HciLayerFacadeService {
-    /// Convert to a grpc service
-    pub fn create_grpc(self) -> grpcio::Service {
-        create_hci_layer_facade(self)
+    /// Create a new instance of HCI layer facade service
+    pub fn create(hci_exports: HciExports, rt: Arc<Runtime>) -> grpcio::Service {
+        create_hci_layer_facade(Self { hci_exports, rt })
     }
 }
 
@@ -90,7 +77,12 @@ impl HciLayerFacade for HciLayerFacadeService {
         ctx.spawn(f);
     }
 
-    fn request_event(&mut self, ctx: RpcContext<'_>, code: EventRequest, sink: UnarySink<Empty>) {
+    fn request_event(
+        &mut self,
+        ctx: RpcContext<'_>,
+        code: EventRequest,
+        sink: UnarySink<Empty>,
+    ) {
         self.rt.block_on(
             self.hci_exports
                 .register_event_handler(code.get_code() as u8),
