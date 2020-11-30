@@ -1,16 +1,22 @@
 //! BT HCI HAL facade
 
-use crate::HalExports;
 use bt_hal_proto::empty::Empty;
 use bt_hal_proto::facade::*;
 use bt_hal_proto::facade_grpc::{create_hci_hal_facade, HciHalFacade};
-use bt_packet::{HciCommand, HciEvent, RawPacket};
-use futures::sink::SinkExt;
+
 use gddi::{module, provides};
-use grpcio::*;
-use std::sync::Arc;
 use tokio::runtime::Runtime;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
+
+use futures::sink::SinkExt;
+use grpcio::*;
+
+use std::sync::Arc;
+
+use crate::HalExports;
+
+use bt_packet::{HciCommand, HciEvent, RawPacket};
 
 module! {
     hal_facade_module,
@@ -21,6 +27,7 @@ module! {
 
 #[provides]
 async fn provide_facade(hal_exports: HalExports, rt: Arc<Runtime>) -> HciHalFacadeService {
+    println!("starting hal facade");
     HciHalFacadeService {
         rt,
         cmd_tx: hal_exports.cmd_tx,
