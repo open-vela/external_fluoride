@@ -87,7 +87,3 @@ void StructField::GenValidator(std::ostream&) const {
 void StructField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
   s << accessor << ".ToString()";
 }
-
-std::string StructField::GetRustDataType() const {
-  return GetDataType();
-}
