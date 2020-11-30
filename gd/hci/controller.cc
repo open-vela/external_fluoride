@@ -43,7 +43,8 @@ struct Controller::impl {
     le_set_event_mask(kDefaultLeEventMask);
     set_event_mask(kDefaultEventMask);
     write_simple_pairing_mode(Enable::ENABLED);
-    write_le_host_support(Enable::ENABLED);
+    // TODO(b/159927452): Legacy stack set SimultaneousLeHost = 1. Revisit if this causes problem.
+    write_le_host_support(Enable::ENABLED, SimultaneousLeHost::DISABLED);
     hci_->EnqueueCommand(ReadLocalNameBuilder::Create(),
                          handler->BindOnceOn(this, &Controller::impl::read_local_name_complete_handler));
     hci_->EnqueueCommand(ReadLocalVersionInformationBuilder::Create(),
@@ -449,8 +450,8 @@ struct Controller::impl {
         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteSimplePairingModeCompleteView>));
   }
 
-  void write_le_host_support(Enable enable) {
-    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable);
+  void write_le_host_support(Enable enable, SimultaneousLeHost simultaneous_le_host) {
+    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable, simultaneous_le_host);
     hci_->EnqueueCommand(
         std::move(packet),
         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteLeHostSupportCompleteView>));
