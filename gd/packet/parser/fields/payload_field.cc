@@ -112,7 +112,3 @@ void PayloadField::GenStringRepresentation(std::ostream& s, std::string) const {
   // TODO: we should parse the child packets
   s << "\"PAYLOAD[]\"";
 }
-
-std::string PayloadField::GetRustDataType() const {
-  return "&[u8]";
-}

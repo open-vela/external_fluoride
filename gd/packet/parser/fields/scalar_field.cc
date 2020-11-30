@@ -133,7 +133,3 @@ void ScalarField::GenValidator(std::ostream&) const {
 void ScalarField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
   s << "+" << accessor;
 }
-
-std::string ScalarField::GetRustDataType() const {
-  return util::GetRustTypeForSize(size_);
-}

@@ -51,8 +51,6 @@ class PaddingField : public PacketField {
 
   virtual void GenValidator(std::ostream&) const override;
 
-  virtual std::string GetRustDataType() const override;
-
  private:
   Size size_;
 };
