@@ -43,12 +43,15 @@ using namespace bluetooth::l2cap;
 
 uint16_t classic_cid_token_counter_ = 0x41;
 
-std::unordered_map<uint16_t /* token */, uint16_t /* cid */>
+struct ClassicDynamicChannelInfo {
+  uint16_t psm;
+};
+std::unordered_map<uint16_t, ClassicDynamicChannelInfo>
     classic_cid_token_to_channel_map_;
 
 uint16_t add_classic_cid_token_entry(uint16_t psm) {
   uint16_t new_token = classic_cid_token_counter_;
-  classic_cid_token_to_channel_map_[new_token] = psm;
+  classic_cid_token_to_channel_map_[new_token] = {psm};
   classic_cid_token_counter_++;
   if (classic_cid_token_counter_ == 0) classic_cid_token_counter_ = 0x41;
   return new_token;
@@ -590,7 +593,7 @@ uint16_t bluetooth::shim::L2CA_ConnectReq(uint16_t psm,
 }
 
 bool bluetooth::shim::L2CA_DisconnectReq(uint16_t cid) {
-  auto psm = classic_cid_token_to_channel_map_[cid];
+  auto psm = classic_cid_token_to_channel_map_[cid].psm;
   if (classic_dynamic_channel_helper_map_.count(psm) == 0) {
     LOG(ERROR) << __func__ << "Not registered psm: " << psm;
     return false;
@@ -604,7 +607,7 @@ uint8_t bluetooth::shim::L2CA_DataWrite(uint16_t cid, BT_HDR* p_data) {
     LOG(ERROR) << __func__ << "Invalid cid: " << cid;
     return 0;
   }
-  auto psm = classic_cid_token_to_channel_map_[cid];
+  auto psm = classic_cid_token_to_channel_map_[cid].psm;
   if (classic_dynamic_channel_helper_map_.count(psm) == 0) {
     LOG(ERROR) << __func__ << "Not registered psm: " << psm;
     return 0;
@@ -853,7 +856,7 @@ bool bluetooth::shim::L2CA_RemoveFixedChnl(uint16_t cid,
  * Channel hygiene APIs
  */
 bool bluetooth::shim::L2CA_GetRemoteCid(uint16_t lcid, uint16_t* rcid) {
-  auto psm = classic_cid_token_to_channel_map_[lcid];
+  auto psm = classic_cid_token_to_channel_map_[lcid].psm;
   if (classic_dynamic_channel_helper_map_.count(psm) == 0) {
     LOG(ERROR) << __func__ << "Not registered psm: " << psm;
     return false;
