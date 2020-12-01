@@ -34,9 +34,7 @@ tBTM_CB btm_cb;
 
 extern void btm_acl_init(void);
 extern void btm_dev_init(void);
-extern void btm_dev_free(void);
 extern void btm_inq_db_init(void);
-extern void btm_inq_db_free(void);
 extern void btm_sco_init(void);
 extern void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec);
 
@@ -91,8 +89,6 @@ void btm_free(void) {
   fixed_queue_free(btm_cb.sec_pending_q, NULL);
   btm_cb.sec_pending_q = NULL;
 
-  btm_dev_free();
-
   list_node_t* end = list_end(btm_cb.sec_dev_rec);
   list_node_t* node = list_begin(btm_cb.sec_dev_rec);
   while (node != end) {
@@ -103,7 +99,6 @@ void btm_free(void) {
     wipe_secrets_and_remove(p_dev_rec);
   }
 
-  btm_inq_db_free();
   list_free(btm_cb.sec_dev_rec);
   btm_cb.sec_dev_rec = NULL;
 
