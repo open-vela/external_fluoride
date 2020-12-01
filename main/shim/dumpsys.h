@@ -30,6 +30,8 @@
     dprintf(fd, " ----- %s -----\n", title); \
   } while (false)
 
+#define BOOL_TEXT(b) ((b) ? "true" : "false")
+
 constexpr char kPrivateAddressPrefix[] = "xx:xx:xx:xx";
 #define PRIVATE_ADDRESS(addr)                                            \
   (addr.ToString()                                                       \
