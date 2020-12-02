@@ -81,7 +81,7 @@ void ClassicPairingHandler::OnConfirmYesNo(const bluetooth::hci::AddressWithType
 }
 
 void ClassicPairingHandler::OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) {
-  GetChannel()->SendCommand(hci::UserPasskeyRequestReplyBuilder::Create(address.GetAddress(), passkey));
+  LOG_WARN("TODO Not Implemented!");
 }
 
 void ClassicPairingHandler::OnPinEntry(const bluetooth::hci::AddressWithType& address, std::vector<uint8_t> pin) {
