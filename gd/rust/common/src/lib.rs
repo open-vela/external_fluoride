@@ -1,6 +1,4 @@
 //! Bluetooth common library
-#[macro_use]
-extern crate lazy_static;
 
 /// Provides waking timer abstractions
 pub mod time;
@@ -11,8 +9,6 @@ mod ready;
 #[cfg(test)]
 #[macro_use]
 mod asserts;
-
-mod init_flags;
 
 /// Inits logging for Android
 #[cfg(target_os = "android")]
