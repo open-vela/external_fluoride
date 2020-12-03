@@ -53,8 +53,6 @@ class CustomField : public PacketField {
 
   virtual void GenBuilderParameterFromView(std::ostream& s) const override;
 
-  virtual std::string GetRustDataType() const override;
-
  private:
   std::string type_name_;
 };
