@@ -523,12 +523,9 @@ bluetooth::shim::legacy::Acl::Acl(os::Handler* handler,
   GetAclManager()->RegisterLeCallbacks(this, handler_);
   GetController()->RegisterCompletedMonitorAclPacketsCallback(
       handler->BindOn(this, &Acl::on_incoming_acl_credits));
-  bluetooth::shim::RegisterDumpsysFunction(static_cast<void*>(this),
-                                           [this](int fd) { Dump(fd); });
 }
 
 bluetooth::shim::legacy::Acl::~Acl() {
-  bluetooth::shim::UnregisterDumpsysFunction(static_cast<void*>(this));
   GetController()->UnregisterCompletedMonitorAclPacketsCallback();
 }
 
