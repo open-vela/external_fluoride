@@ -26,13 +26,12 @@
 
 #include "stack/btm/btm_sec.h"
 
-#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
-#include <frameworks/base/core/proto/android/bluetooth/hci/enums.pb.h>
-#include <log/log.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/hci/enums.pb.h>
 #include <string.h>
 
 #include "bt_types.h"
-#include "btif_storage.h"
+#include "btif/include/btif_storage.h"
 #include "btm_int.h"
 #include "common/metrics.h"
 #include "common/time_util.h"
