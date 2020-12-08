@@ -26,12 +26,13 @@
 
 #include "stack/btm/btm_sec.h"
 
-#include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
-#include <frameworks/proto_logging/stats/enums/bluetooth/hci/enums.pb.h>
+#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
+#include <frameworks/base/core/proto/android/bluetooth/hci/enums.pb.h>
+#include <log/log.h>
 #include <string.h>
 
 #include "bt_types.h"
-#include "btif/include/btif_storage.h"
+#include "btif_storage.h"
 #include "btm_int.h"
 #include "common/metrics.h"
 #include "common/time_util.h"
@@ -2394,13 +2395,6 @@ void btm_sec_rmt_host_support_feat_evt(uint8_t* p) {
  *
  ******************************************************************************/
 void btm_io_capabilities_req(const RawAddress& p) {
-  if (btm_sec_is_a_bonded_dev(p)) {
-    BTM_TRACE_WARNING(
-        "%s: Incoming bond request, but %s is already bonded (removing)",
-        __func__, p.ToString().c_str());
-    bta_dm_process_remove_device(p);
-  }
-
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(p);
 
   if ((btm_cb.security_mode == BTM_SEC_MODE_SC) &&
