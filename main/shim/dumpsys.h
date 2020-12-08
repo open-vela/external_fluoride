@@ -18,7 +18,6 @@
 
 #include <functional>
 #include <list>
-#include <string>
 
 #define LOG_DUMPSYS(fd, fmt, args...)                 \
   do {                                                \
@@ -30,11 +29,7 @@
     dprintf(fd, " ----- %s -----\n", title); \
   } while (false)
 
-constexpr char kPrivateAddressPrefix[] = "xx:xx:xx:xx";
-#define PRIVATE_ADDRESS(addr)                                            \
-  (addr.ToString()                                                       \
-       .replace(0, strlen(kPrivateAddressPrefix), kPrivateAddressPrefix) \
-       .c_str())
+#define BOOL_TEXT(b) ((b) ? "true" : "false")
 
 namespace bluetooth {
 namespace shim {

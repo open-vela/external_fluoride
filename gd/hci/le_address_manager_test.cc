@@ -18,7 +18,6 @@
 
 #include <gtest/gtest.h>
 
-#include "common/init_flags.h"
 #include "os/log.h"
 #include "packet/raw_builder.h"
 
@@ -46,7 +45,6 @@ class TestHciLayer : public HciLayer {
   void EnqueueCommand(
       std::unique_ptr<CommandPacketBuilder> command,
       common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
-    std::lock_guard<std::mutex> lock(mutex_);
     command_queue_.push(std::move(command));
     command_complete_callbacks.push_front(std::move(on_complete));
     if (command_promise_ != nullptr) {
@@ -71,17 +69,13 @@ class TestHciLayer : public HciLayer {
   }
 
   CommandPacketView GetCommandPacket(OpCode op_code) {
-    if (!command_queue_.empty()) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (command_future_ != nullptr) {
-        command_future_.reset();
-        command_promise_.reset();
-      }
+    if (!command_queue_.empty() && command_future_ != nullptr) {
+      command_promise_.reset();
+      command_future_.reset();
     } else if (command_future_ != nullptr) {
       auto result = command_future_->wait_for(std::chrono::milliseconds(1000));
       EXPECT_NE(std::future_status::timeout, result);
     }
-    std::lock_guard<std::mutex> lock(mutex_);
     ASSERT_LOG(
         !command_queue_.empty(), "Expecting command %s but command queue was empty", OpCodeText(op_code).c_str());
     CommandPacketView command_packet_view = GetLastCommand();
@@ -113,7 +107,6 @@ class TestHciLayer : public HciLayer {
   std::queue<std::unique_ptr<CommandPacketBuilder>> command_queue_;
   std::unique_ptr<std::promise<void>> command_promise_;
   std::unique_ptr<std::future<void>> command_future_;
-  mutable std::mutex mutex_;
 };
 
 class RotatorClient : public LeAddressManagerCallback {
@@ -278,7 +271,6 @@ TEST_F(LeAddressManagerTest, DISABLED_rotator_address_for_multiple_clients) {
 class LeAddressManagerWithSingleClientTest : public LeAddressManagerTest {
  public:
   void SetUp() override {
-    bluetooth::common::InitFlags::SetAllForTesting();
     thread_ = new Thread("thread", Thread::Priority::NORMAL);
     handler_ = new Handler(thread_);
     test_hci_layer_ = new TestHciLayer;

@@ -910,6 +910,18 @@ TEST_F(AclManagerWithConnectionTest, send_write_default_link_policy_settings) {
   ASSERT_EQ(link_policy_settings, acl_manager_->ReadDefaultLinkPolicySettings());
 }
 
+TEST_F(AclManagerWithConnectionTest, send_change_connection_packet_type) {
+  test_hci_layer_->SetCommandFuture();
+  connection_->ChangeConnectionPacketType(0xEE1C);
+  auto packet = test_hci_layer_->GetCommandPacket(OpCode::CHANGE_CONNECTION_PACKET_TYPE);
+  auto command_view = ChangeConnectionPacketTypeView::Create(packet);
+  ASSERT_TRUE(command_view.IsValid());
+  ASSERT_EQ(command_view.GetPacketType(), 0xEE1C);
+
+  EXPECT_CALL(mock_connection_management_callbacks_, OnConnectionPacketTypeChanged(0xEE1C));
+  test_hci_layer_->IncomingEvent(ConnectionPacketTypeChangedBuilder::Create(ErrorCode::SUCCESS, handle_, 0xEE1C));
+}
+
 TEST_F(AclManagerWithConnectionTest, send_authentication_requested) {
   test_hci_layer_->SetCommandFuture();
   connection_->AuthenticationRequested();
@@ -1107,7 +1119,7 @@ TEST_F(AclManagerWithConnectionTest, send_read_transmit_power_level) {
   auto packet = test_hci_layer_->GetCommandPacket(OpCode::READ_TRANSMIT_POWER_LEVEL);
   auto command_view = ReadTransmitPowerLevelView::Create(packet);
   ASSERT_TRUE(command_view.IsValid());
-  ASSERT_EQ(command_view.GetType(), TransmitPowerLevelType::CURRENT);
+  ASSERT_EQ(command_view.GetTransmitPowerLevelType(), TransmitPowerLevelType::CURRENT);
 
   EXPECT_CALL(mock_connection_management_callbacks_, OnReadTransmitPowerLevelComplete(0x07));
   uint8_t num_packets = 1;
@@ -1259,15 +1271,15 @@ TEST_F(AclManagerWithResolvableAddressTest, create_connection_cancel_fail) {
   test_hci_layer_->SetCommandFuture();
   acl_manager_->CreateLeConnection(remote_with_type_);
 
-  // Set random address
-  test_hci_layer_->GetLastCommandPacket(OpCode::LE_SET_RANDOM_ADDRESS);
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->IncomingEvent(LeSetRandomAddressCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
-
   // Add device to connect list
   test_hci_layer_->GetLastCommandPacket(OpCode::LE_ADD_DEVICE_TO_CONNECT_LIST);
   test_hci_layer_->SetCommandFuture();
   test_hci_layer_->IncomingEvent(LeAddDeviceToConnectListCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
+
+  // Set random address
+  test_hci_layer_->GetLastCommandPacket(OpCode::LE_SET_RANDOM_ADDRESS);
+  test_hci_layer_->SetCommandFuture();
+  test_hci_layer_->IncomingEvent(LeSetRandomAddressCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
 
   // send create connection command
   test_hci_layer_->GetLastCommandPacket(OpCode::LE_CREATE_CONNECTION);

@@ -102,9 +102,6 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
       advertising_api_type_ = AdvertisingApiType::ANDROID_HCI;
     } else {
       advertising_api_type_ = AdvertisingApiType::LEGACY;
-      hci_layer_->EnqueueCommand(
-          LeReadAdvertisingPhysicalChannelTxPowerBuilder::Create(),
-          handler->BindOnceOn(this, &impl::on_read_advertising_physical_channel_tx_power));
     }
   }
 
@@ -270,16 +267,14 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
         le_advertising_interface_->EnqueueCommand(
             hci::LeMultiAdvtSetRandomAddrBuilder::Create(advertising_sets_[id].current_address.GetAddress(), id),
             module_handler_->BindOnce(impl::check_status<LeMultiAdvtCompleteView>));
+        if (!paused) {
+          le_advertising_interface_->EnqueueCommand(
+              hci::LeMultiAdvtSetEnableBuilder::Create(Enable::ENABLED, id),
+              module_handler_->BindOnce(impl::check_status<LeMultiAdvtCompleteView>));
+        }
         EnabledSet curr_set;
         curr_set.advertising_handle_ = id;
         enabled_sets_[id] = curr_set;
-        if (!paused) {
-          std::vector<EnabledSet> enabled_sets = {curr_set};
-          le_advertising_interface_->EnqueueCommand(
-              hci::LeMultiAdvtSetEnableBuilder::Create(Enable::ENABLED, id),
-              module_handler_->BindOnceOn(
-                  this, &impl::on_set_advertising_enable_complete<LeMultiAdvtCompleteView>, true, enabled_sets));
-        }
       } break;
       case (AdvertisingApiType::EXTENDED): {
         LOG_WARN("Unexpected AdvertisingApiType EXTENDED");
@@ -470,19 +465,7 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
                 this, &impl::check_status_with_id<LeSetAdvertisingParametersCompleteView>, advertiser_id));
       } break;
       case (AdvertisingApiType::ANDROID_HCI): {
-        le_advertising_interface_->EnqueueCommand(
-            hci::LeMultiAdvtParamBuilder::Create(
-                config.interval_min,
-                config.interval_max,
-                config.advertising_type,
-                config.own_address_type,
-                config.peer_address_type,
-                config.peer_address,
-                config.channel_map,
-                config.filter_policy,
-                advertiser_id,
-                config.tx_power),
-            module_handler_->BindOnceOn(this, &impl::check_status_with_id<LeMultiAdvtCompleteView>, advertiser_id));
+        // TODO
       } break;
       case (AdvertisingApiType::EXTENDED): {
         // sid must be in range 0x00 to 0x0F. Since no controller supports more than
@@ -575,15 +558,7 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
         }
       } break;
       case (AdvertisingApiType::ANDROID_HCI): {
-        if (set_scan_rsp) {
-          le_advertising_interface_->EnqueueCommand(
-              hci::LeMultiAdvtSetScanRespBuilder::Create(data, advertiser_id),
-              module_handler_->BindOnceOn(this, &impl::check_status_with_id<LeMultiAdvtCompleteView>, advertiser_id));
-        } else {
-          le_advertising_interface_->EnqueueCommand(
-              hci::LeMultiAdvtSetDataBuilder::Create(data, advertiser_id),
-              module_handler_->BindOnceOn(this, &impl::check_status_with_id<LeMultiAdvtCompleteView>, advertiser_id));
-        }
+        // TODO
       } break;
       case (AdvertisingApiType::EXTENDED): {
         uint16_t data_len = 0;
@@ -683,7 +658,7 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
     switch (advertising_api_type_) {
       case (AdvertisingApiType::LEGACY): {
         le_advertising_interface_->EnqueueCommand(
-            hci::LeSetAdvertisingEnableBuilder::Create(enable_value),
+            hci::LeSetAdvertisingEnableBuilder::Create(Enable::DISABLED),
             module_handler_->BindOnceOn(
                 this,
                 &impl::on_set_advertising_enable_complete<LeSetAdvertisingEnableCompleteView>,
@@ -691,10 +666,7 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
                 enabled_sets));
       } break;
       case (AdvertisingApiType::ANDROID_HCI): {
-        le_advertising_interface_->EnqueueCommand(
-            hci::LeMultiAdvtSetEnableBuilder::Create(enable_value, advertiser_id),
-            module_handler_->BindOnceOn(
-                this, &impl::on_set_advertising_enable_complete<LeMultiAdvtCompleteView>, enable, enabled_sets));
+        // TODO
       } break;
       case (AdvertisingApiType::EXTENDED): {
         le_advertising_interface_->EnqueueCommand(
@@ -854,7 +826,6 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
   hci::HciLayer* hci_layer_;
   hci::Controller* controller_;
   uint16_t le_maximum_advertising_data_length_;
-  int8_t le_physical_channel_tx_power_ = 0;
   hci::LeAdvertisingInterface* le_advertising_interface_;
   std::map<AdvertiserId, Advertiser> advertising_sets_;
   hci::LeAddressManager* le_address_manager_;
@@ -867,16 +838,6 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
   std::map<uint8_t, int> id_map_;
 
   AdvertisingApiType advertising_api_type_{0};
-
-  void on_read_advertising_physical_channel_tx_power(CommandCompleteView view) {
-    auto complete_view = LeReadAdvertisingPhysicalChannelTxPowerCompleteView::Create(view);
-    ASSERT(complete_view.IsValid());
-    if (complete_view.GetStatus() != ErrorCode::SUCCESS) {
-      LOG_INFO("Got a command complete with status %s", ErrorCodeText(complete_view.GetStatus()).c_str());
-      return;
-    }
-    le_physical_channel_tx_power_ = complete_view.GetTransmitPowerLevel();
-  }
 
   template <class View>
   void on_set_advertising_enable_complete(bool enable, std::vector<EnabledSet> enabled_sets, CommandCompleteView view) {
@@ -903,7 +864,8 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
       } else {
         int reg_id = id_map_[id];
         advertising_sets_[enabled_set.advertising_handle_].started = true;
-        advertising_callbacks_->OnAdvertisingSetStarted(reg_id, id, le_physical_channel_tx_power_, advertising_status);
+        // TODO read tx power
+        advertising_callbacks_->OnAdvertisingSetStarted(reg_id, id, 0x00, advertising_status);
       }
     }
   }
@@ -1003,7 +965,8 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
 
     switch (opcode) {
       case OpCode::LE_SET_ADVERTISING_PARAMETERS:
-        advertising_callbacks_->OnAdvertisingParametersUpdated(id, le_physical_channel_tx_power_, advertising_status);
+        // TODO read tx power
+        advertising_callbacks_->OnAdvertisingParametersUpdated(id, 0x00, advertising_status);
         break;
       case OpCode::LE_SET_ADVERTISING_DATA:
       case OpCode::LE_SET_EXTENDED_ADVERTISING_DATA:
@@ -1019,25 +982,6 @@ struct LeAdvertisingManager::impl : public bluetooth::hci::LeAddressManagerCallb
       case OpCode::LE_SET_PERIODIC_ADVERTISING_DATA:
         advertising_callbacks_->OnPeriodicAdvertisingDataSet(id, advertising_status);
         break;
-      case OpCode::LE_MULTI_ADVT: {
-        auto command_view = LeMultiAdvtCompleteView::Create(view);
-        ASSERT(command_view.IsValid());
-        auto sub_opcode = command_view.GetSubCmd();
-        switch (sub_opcode) {
-          case SubOcf::SET_PARAM:
-            advertising_callbacks_->OnAdvertisingParametersUpdated(
-                id, le_physical_channel_tx_power_, advertising_status);
-            break;
-          case SubOcf::SET_DATA:
-            advertising_callbacks_->OnAdvertisingDataSet(id, advertising_status);
-            break;
-          case SubOcf::SET_SCAN_RESP:
-            advertising_callbacks_->OnScanResponseDataSet(id, advertising_status);
-            break;
-          default:
-            LOG_WARN("Unexpected sub event type %s", SubOcfText(command_view.GetSubCmd()).c_str());
-        }
-      } break;
       default:
         LOG_WARN("Unexpected event type %s", OpCodeText(view.GetCommandOpCode()).c_str());
     }

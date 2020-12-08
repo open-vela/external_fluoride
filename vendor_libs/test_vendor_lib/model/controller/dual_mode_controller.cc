@@ -204,8 +204,6 @@ DualModeController::DualModeController(const std::string& properties_filename, u
   SET_HANDLER(OpCode::LE_SET_RANDOM_ADDRESS, LeSetRandomAddress);
   SET_HANDLER(OpCode::LE_SET_ADVERTISING_PARAMETERS,
               LeSetAdvertisingParameters);
-  SET_HANDLER(OpCode::LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER,
-              LeReadAdvertisingPhysicalChannelTxPower);
   SET_HANDLER(OpCode::LE_SET_ADVERTISING_DATA, LeSetAdvertisingData);
   SET_HANDLER(OpCode::LE_SET_SCAN_RESPONSE_DATA, LeSetScanResponseData);
   SET_HANDLER(OpCode::LE_SET_ADVERTISING_ENABLE, LeSetAdvertisingEnable);
@@ -685,7 +683,6 @@ void DualModeController::PinCodeRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::PinCodeRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
-  LOG_INFO("%s", properties_.GetAddress().ToString().c_str());
 
   Address peer = command_view.GetBdAddr();
   uint8_t pin_length = command_view.GetPinCodeLength();
@@ -705,7 +702,6 @@ void DualModeController::PinCodeRequestNegativeReply(
   auto command_view = gd_hci::PinCodeRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
-  LOG_INFO("%s", properties_.GetAddress().ToString().c_str());
 
   Address peer = command_view.GetBdAddr();
 
@@ -857,8 +853,8 @@ void DualModeController::WriteSimplePairingMode(CommandPacketView command) {
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
 
-  auto enabled = command_view.GetSimplePairingMode() == gd_hci::Enable::ENABLED;
-  properties_.SetSecureSimplePairingSupport(enabled);
+  link_layer_controller_.WriteSimplePairingMode(
+      command_view.GetSimplePairingMode() == gd_hci::Enable::ENABLED);
   auto packet = bluetooth::hci::WriteSimplePairingModeCompleteBuilder::Create(
       kNumCommandPackets, ErrorCode::SUCCESS);
   send_event_(std::move(packet));
@@ -884,9 +880,6 @@ void DualModeController::ChangeConnectionPacketType(CommandPacketView command) {
 void DualModeController::WriteLeHostSupport(CommandPacketView command) {
   auto command_view = gd_hci::WriteLeHostSupportView::Create(command);
   ASSERT(command_view.IsValid());
-  auto le_support =
-      command_view.GetLeSupportedHost() == gd_hci::Enable::ENABLED;
-  properties_.SetLeHostSupport(le_support);
   auto packet = bluetooth::hci::WriteLeHostSupportCompleteBuilder::Create(
       kNumCommandPackets, ErrorCode::SUCCESS);
   send_event_(std::move(packet));
@@ -896,10 +889,7 @@ void DualModeController::WriteSecureConnectionsHostSupport(
     CommandPacketView command) {
   auto command_view = gd_hci::WriteSecureConnectionsHostSupportView::Create(
       gd_hci::SecurityCommandView::Create(command));
-  ASSERT(command_view.IsValid());
-  properties_.SetSecureConnections(
-      command_view.GetSecureConnectionsHostSupport() ==
-      bluetooth::hci::Enable::ENABLED);
+  properties_.SetExtendedFeatures(properties_.GetExtendedFeatures(1) | 0x8, 1);
   auto packet =
       bluetooth::hci::WriteSecureConnectionsHostSupportCompleteBuilder::Create(
           kNumCommandPackets, ErrorCode::SUCCESS);
@@ -1575,7 +1565,7 @@ void DualModeController::LeSetAdvertisingParameters(CommandPacketView command) {
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
   auto peer_address = command_view.GetPeerAddress();
-  auto type = command_view.GetType();
+  auto type = command_view.GetAdvtType();
   if (type != bluetooth::hci::AdvertisingType::ADV_DIRECT_IND &&
       type != bluetooth::hci::AdvertisingType::ADV_DIRECT_IND_LOW) {
     peer_address = Address::kEmpty;
@@ -1591,19 +1581,6 @@ void DualModeController::LeSetAdvertisingParameters(CommandPacketView command) {
   auto packet =
       bluetooth::hci::LeSetAdvertisingParametersCompleteBuilder::Create(
           kNumCommandPackets, ErrorCode::SUCCESS);
-  send_event_(std::move(packet));
-}
-
-void DualModeController::LeReadAdvertisingPhysicalChannelTxPower(
-    CommandPacketView command) {
-  auto command_view =
-      gd_hci::LeReadAdvertisingPhysicalChannelTxPowerView::Create(
-          gd_hci::LeAdvertisingCommandView::Create(command));
-  ASSERT(command_view.IsValid());
-  auto packet =
-      bluetooth::hci::LeReadAdvertisingPhysicalChannelTxPowerCompleteBuilder::
-          Create(kNumCommandPackets, ErrorCode::SUCCESS,
-                 properties_.GetLeAdvertisingPhysicalChannelTxPower());
   send_event_(std::move(packet));
 }
 

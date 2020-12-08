@@ -157,8 +157,6 @@ typedef struct {
     return is_switch_role_switching() || is_switch_role_in_progress();
   }
 
-  friend void DumpsysL2cap(int fd);
-
  public:
   uint8_t sca; /* Sleep clock accuracy */
 } tACL_CONN;
@@ -240,8 +238,6 @@ typedef struct {
   friend void btm_read_remote_version_complete_raw(uint8_t* p);
   friend void btm_read_rssi_complete(uint8_t* p);
   friend void btm_read_tx_power_complete(uint8_t* p, bool is_ble);
-  friend void DumpsysL2cap(int fd);
-  friend void DumpsysAcl(int fd);
 
   friend struct StackAclBtmAcl;
   friend struct StackAclBtmPm;

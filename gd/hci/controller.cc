@@ -35,7 +35,7 @@ struct Controller::impl {
   void Start(hci::HciLayer* hci) {
     hci_ = hci;
     Handler* handler = module_.GetHandler();
-    if (common::init_flags::gd_acl_is_enabled() || common::init_flags::gd_l2cap_is_enabled()) {
+    if (common::InitFlags::GdAclEnabled() || common::InitFlags::GdL2capEnabled()) {
       hci_->RegisterEventHandler(
           EventCode::NUMBER_OF_COMPLETED_PACKETS, handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
     }
@@ -43,7 +43,8 @@ struct Controller::impl {
     le_set_event_mask(kDefaultLeEventMask);
     set_event_mask(kDefaultEventMask);
     write_simple_pairing_mode(Enable::ENABLED);
-    write_le_host_support(Enable::ENABLED);
+    // TODO(b/159927452): Legacy stack set SimultaneousLeHost = 1. Revisit if this causes problem.
+    write_le_host_support(Enable::ENABLED, SimultaneousLeHost::DISABLED);
     hci_->EnqueueCommand(ReadLocalNameBuilder::Create(),
                          handler->BindOnceOn(this, &Controller::impl::read_local_name_complete_handler));
     hci_->EnqueueCommand(ReadLocalVersionInformationBuilder::Create(),
@@ -133,7 +134,7 @@ struct Controller::impl {
   }
 
   void Stop() {
-    if (bluetooth::common::init_flags::gd_core_is_enabled()) {
+    if (bluetooth::common::InitFlags::GdCoreEnabled()) {
       hci_->UnregisterEventHandler(EventCode::NUMBER_OF_COMPLETED_PACKETS);
     }
     hci_ = nullptr;
@@ -449,8 +450,8 @@ struct Controller::impl {
         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteSimplePairingModeCompleteView>));
   }
 
-  void write_le_host_support(Enable enable) {
-    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable);
+  void write_le_host_support(Enable enable, SimultaneousLeHost simultaneous_le_host) {
+    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable, simultaneous_le_host);
     hci_->EnqueueCommand(
         std::move(packet),
         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteLeHostSupportCompleteView>));
@@ -651,7 +652,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_READ_LOCAL_SUPPORTED_FEATURES)
       OP_CODE_MAPPING(LE_SET_RANDOM_ADDRESS)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_PARAMETERS)
-      OP_CODE_MAPPING(LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER)
+      OP_CODE_MAPPING(LE_READ_ADVERTISING_CHANNEL_TX_POWER)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_DATA)
       OP_CODE_MAPPING(LE_SET_SCAN_RESPONSE_DATA)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_ENABLE)

@@ -83,7 +83,6 @@ class TestHciLayer : public HciLayer {
                       common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
     auto packet_view = CommandPacketView::Create(GetPacketView(std::move(command)));
     ASSERT_TRUE(packet_view.IsValid());
-    std::lock_guard<std::mutex> lock(mutex_);
     command_queue_.push_back(packet_view);
     command_status_callbacks.push_back(std::move(on_status));
     if (command_promise_ != nullptr &&
@@ -100,7 +99,6 @@ class TestHciLayer : public HciLayer {
                       common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
     auto packet_view = CommandPacketView::Create(GetPacketView(std::move(command)));
     ASSERT_TRUE(packet_view.IsValid());
-    std::lock_guard<std::mutex> lock(mutex_);
     command_queue_.push_back(packet_view);
     command_complete_callbacks.push_back(std::move(on_complete));
     if (command_promise_ != nullptr &&
@@ -117,42 +115,26 @@ class TestHciLayer : public HciLayer {
     }
   }
 
-  void SetCommandFuture(OpCode op_code = OpCode::NONE) {
-    ASSERT_LOG(command_promise_ == nullptr, "Promises, Promises, ... Only one at a time.");
+  std::future<size_t> GetCommandFuture(OpCode op_code = OpCode::NONE) {
+    ASSERT_LOG(command_promise_ == nullptr, "Promises promises ... Only one at a time");
     command_op_code_ = op_code;
     command_promise_ = std::make_unique<std::promise<size_t>>();
-    command_future_ = std::make_unique<std::future<size_t>>(command_promise_->get_future());
+    return command_promise_->get_future();
   }
 
-  void ResetCommandFuture() {
-    if (command_future_ != nullptr) {
-      command_future_.reset();
-      command_promise_.reset();
-    }
-  }
-
-  void SetSubCommandFuture(SubOcf sub_ocf) {
+  std::future<size_t> GetSubCommandFuture(SubOcf sub_ocf) {
     ASSERT_LOG(command_promise_ == nullptr, "Promises promises ... Only one at a time");
     command_op_code_ = OpCode::LE_MULTI_ADVT;
     command_sub_ocf_ = sub_ocf;
     command_promise_ = std::make_unique<std::promise<size_t>>();
-    command_future_ = std::make_unique<std::future<size_t>>(command_promise_->get_future());
+    return command_promise_->get_future();
   }
 
   ConnectionManagementCommandView GetCommandPacket(OpCode op_code) {
-    if (!command_queue_.empty()) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (command_future_ != nullptr) {
-        command_future_.reset();
-        command_promise_.reset();
-      }
-    } else if (command_future_ != nullptr) {
-      auto result = command_future_->wait_for(std::chrono::milliseconds(1000));
-      EXPECT_NE(std::future_status::timeout, result);
+    if (command_queue_.empty()) {
+      return ConnectionManagementCommandView::Create(AclCommandView::Create(
+          CommandPacketView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>()))));
     }
-    ASSERT_LOG(
-        !command_queue_.empty(), "Expecting command %s but command queue was empty", OpCodeText(op_code).c_str());
-    std::lock_guard<std::mutex> lock(mutex_);
     CommandPacketView command_packet_view = CommandPacketView::Create(command_queue_.front());
     command_queue_.pop_front();
     auto command = ConnectionManagementCommandView::Create(AclCommandView::Create(command_packet_view));
@@ -223,7 +205,6 @@ class TestHciLayer : public HciLayer {
   std::list<CommandPacketView> command_queue_;
   mutable std::mutex mutex_;
   std::unique_ptr<std::promise<size_t>> command_promise_{};
-  std::unique_ptr<std::future<size_t>> command_future_{};
   OpCode command_op_code_;
   SubOcf command_sub_ocf_;
 };
@@ -393,7 +374,7 @@ class LeAdvertisingAPITest : public LeAdvertisingManagerTest {
     advertising_config.advertisement = gap_data;
     advertising_config.scan_response = gap_data;
 
-    test_hci_layer_->SetCommandFuture();
+    auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_ENABLE);
     advertiser_id_ = le_advertising_manager_->ExtendedCreateAdvertiser(
         0x00, advertising_config, scan_callback, set_terminated_callback, client_handler_);
     ASSERT_NE(LeAdvertisingManager::kInvalidId, advertiser_id_);
@@ -401,27 +382,22 @@ class LeAdvertisingAPITest : public LeAdvertisingManagerTest {
         mock_advertising_callback_,
         OnAdvertisingSetStarted(0x00, advertiser_id_, 0x00, AdvertisingCallback::AdvertisingStatus::SUCCESS));
     std::vector<OpCode> adv_opcodes = {
-        OpCode::LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER,
         OpCode::LE_SET_ADVERTISING_PARAMETERS,
         OpCode::LE_SET_SCAN_RESPONSE_DATA,
         OpCode::LE_SET_ADVERTISING_DATA,
         OpCode::LE_SET_ADVERTISING_ENABLE,
     };
+    auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
     std::vector<uint8_t> success_vector{static_cast<uint8_t>(ErrorCode::SUCCESS)};
+    ASSERT_EQ(std::future_status::ready, result);
     for (size_t i = 0; i < adv_opcodes.size(); i++) {
       auto packet_view = test_hci_layer_->GetCommandPacket(adv_opcodes[i]);
       CommandPacketView command_packet_view = CommandPacketView::Create(packet_view);
-      if (adv_opcodes[i] == OpCode::LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER) {
-        test_hci_layer_->IncomingEvent(
-            LeReadAdvertisingPhysicalChannelTxPowerCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, 0x00));
-      } else {
-        test_hci_layer_->IncomingEvent(
-            CommandCompleteBuilder::Create(uint8_t{1}, adv_opcodes[i], std::make_unique<RawBuilder>(success_vector)));
-      }
-      test_hci_layer_->SetCommandFuture();
+      auto command = ConnectionManagementCommandView::Create(AclCommandView::Create(command_packet_view));
+      test_hci_layer_->IncomingEvent(
+          CommandCompleteBuilder::Create(uint8_t{1}, adv_opcodes[i], std::make_unique<RawBuilder>(success_vector)));
     }
     sync_client_handler();
-    test_hci_layer_->ResetCommandFuture();
   }
 
   AdvertiserId advertiser_id_;
@@ -434,54 +410,6 @@ class LeAndroidHciAdvertisingManagerTest : public LeAdvertisingManagerTest {
     LeAdvertisingManagerTest::SetUp();
     test_controller_->num_advertisers = 3;
   }
-};
-
-class LeAndroidHciAdvertisingAPITest : public LeAndroidHciAdvertisingManagerTest {
- protected:
-  void SetUp() override {
-    LeAndroidHciAdvertisingManagerTest::SetUp();
-
-    ExtendedAdvertisingConfig advertising_config{};
-    advertising_config.advertising_type = AdvertisingType::ADV_IND;
-    advertising_config.own_address_type = OwnAddressType::PUBLIC_DEVICE_ADDRESS;
-    std::vector<GapData> gap_data{};
-    GapData data_item{};
-    data_item.data_type_ = GapDataType::FLAGS;
-    data_item.data_ = {0x34};
-    gap_data.push_back(data_item);
-    data_item.data_type_ = GapDataType::COMPLETE_LOCAL_NAME;
-    data_item.data_ = {'r', 'a', 'n', 'd', 'o', 'm', ' ', 'd', 'e', 'v', 'i', 'c', 'e'};
-    gap_data.push_back(data_item);
-    advertising_config.advertisement = gap_data;
-    advertising_config.scan_response = gap_data;
-
-    test_hci_layer_->SetSubCommandFuture(SubOcf::SET_PARAM);
-    advertiser_id_ = le_advertising_manager_->ExtendedCreateAdvertiser(
-        0x00, advertising_config, scan_callback, set_terminated_callback, client_handler_);
-    ASSERT_NE(LeAdvertisingManager::kInvalidId, advertiser_id_);
-    std::vector<SubOcf> sub_ocf = {
-        SubOcf::SET_PARAM,
-        SubOcf::SET_DATA,
-        SubOcf::SET_SCAN_RESP,
-        SubOcf::SET_RANDOM_ADDR,
-        SubOcf::SET_ENABLE,
-    };
-    EXPECT_CALL(
-        mock_advertising_callback_,
-        OnAdvertisingSetStarted(0, advertiser_id_, 0, AdvertisingCallback::AdvertisingStatus::SUCCESS));
-    for (size_t i = 0; i < sub_ocf.size(); i++) {
-      auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
-      auto sub_packet = LeMultiAdvtView::Create(LeAdvertisingCommandView::Create(packet));
-      ASSERT_TRUE(sub_packet.IsValid());
-      test_hci_layer_->IncomingEvent(LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, sub_ocf[i]));
-      if ((i + 1) < sub_ocf.size()) {
-        test_hci_layer_->SetSubCommandFuture(sub_ocf[i + 1]);
-      }
-    }
-    sync_client_handler();
-  }
-
-  AdvertiserId advertiser_id_;
 };
 
 class LeExtendedAdvertisingManagerTest : public LeAdvertisingManagerTest {
@@ -515,7 +443,7 @@ class LeExtendedAdvertisingAPITest : public LeExtendedAdvertisingManagerTest {
     advertising_config.channel_map = 1;
     advertising_config.sid = 0x01;
 
-    test_hci_layer_->SetCommandFuture();
+    auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
     advertiser_id_ = le_advertising_manager_->ExtendedCreateAdvertiser(
         0x00, advertising_config, scan_callback, set_terminated_callback, client_handler_);
     ASSERT_NE(LeAdvertisingManager::kInvalidId, advertiser_id_);
@@ -528,7 +456,9 @@ class LeExtendedAdvertisingAPITest : public LeExtendedAdvertisingManagerTest {
         OpCode::LE_SET_EXTENDED_ADVERTISING_DATA,
         OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE,
     };
+    auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
     std::vector<uint8_t> success_vector{static_cast<uint8_t>(ErrorCode::SUCCESS)};
+    ASSERT_EQ(std::future_status::ready, result);
     for (size_t i = 0; i < adv_opcodes.size(); i++) {
       auto packet_view = test_hci_layer_->GetCommandPacket(adv_opcodes[i]);
       CommandPacketView command_packet_view = CommandPacketView::Create(packet_view);
@@ -540,10 +470,8 @@ class LeExtendedAdvertisingAPITest : public LeExtendedAdvertisingManagerTest {
         test_hci_layer_->IncomingEvent(
             CommandCompleteBuilder::Create(uint8_t{1}, adv_opcodes[i], std::make_unique<RawBuilder>(success_vector)));
       }
-      test_hci_layer_->SetCommandFuture();
     }
     sync_client_handler();
-    test_hci_layer_->ResetCommandFuture();
   }
 
   AdvertiserId advertiser_id_;
@@ -570,12 +498,11 @@ TEST_F(LeAdvertisingManagerTest, create_advertiser_test) {
   advertising_config.advertisement = gap_data;
   advertising_config.scan_response = gap_data;
 
-  test_hci_layer_->SetCommandFuture();
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_ENABLE);
   auto id = le_advertising_manager_->ExtendedCreateAdvertiser(
       0x00, advertising_config, scan_callback, set_terminated_callback, client_handler_);
   ASSERT_NE(LeAdvertisingManager::kInvalidId, id);
   std::vector<OpCode> adv_opcodes = {
-      OpCode::LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER,
       OpCode::LE_SET_ADVERTISING_PARAMETERS,
       OpCode::LE_SET_SCAN_RESPONSE_DATA,
       OpCode::LE_SET_ADVERTISING_DATA,
@@ -584,25 +511,24 @@ TEST_F(LeAdvertisingManagerTest, create_advertiser_test) {
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingSetStarted(0x00, id, 0x00, AdvertisingCallback::AdvertisingStatus::SUCCESS));
+
   std::vector<uint8_t> success_vector{static_cast<uint8_t>(ErrorCode::SUCCESS)};
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   for (size_t i = 0; i < adv_opcodes.size(); i++) {
     auto packet_view = test_hci_layer_->GetCommandPacket(adv_opcodes[i]);
     CommandPacketView command_packet_view = CommandPacketView::Create(packet_view);
     auto command = ConnectionManagementCommandView::Create(AclCommandView::Create(command_packet_view));
-    if (adv_opcodes[i] == OpCode::LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER) {
-      test_hci_layer_->IncomingEvent(
-          LeReadAdvertisingPhysicalChannelTxPowerCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, 0x00));
-    } else {
-      test_hci_layer_->IncomingEvent(
-          CommandCompleteBuilder::Create(uint8_t{1}, adv_opcodes[i], std::make_unique<RawBuilder>(success_vector)));
-    }
-    test_hci_layer_->SetCommandFuture();
+    test_hci_layer_->IncomingEvent(
+        CommandCompleteBuilder::Create(uint8_t{1}, adv_opcodes[i], std::make_unique<RawBuilder>(success_vector)));
   }
   sync_client_handler();
 
   // Disable the advertiser
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_ENABLE);
   le_advertising_manager_->RemoveAdvertiser(id);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_ADVERTISING_ENABLE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   sync_client_handler();
 }
 
@@ -621,32 +547,30 @@ TEST_F(LeAndroidHciAdvertisingManagerTest, create_advertiser_test) {
   advertising_config.advertisement = gap_data;
   advertising_config.scan_response = gap_data;
 
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_PARAM);
+  auto next_command_future = test_hci_layer_->GetSubCommandFuture(SubOcf::SET_ENABLE);
   auto id = le_advertising_manager_->ExtendedCreateAdvertiser(
       0x00, advertising_config, scan_callback, set_terminated_callback, client_handler_);
   ASSERT_NE(LeAdvertisingManager::kInvalidId, id);
   std::vector<SubOcf> sub_ocf = {
       SubOcf::SET_PARAM, SubOcf::SET_DATA, SubOcf::SET_SCAN_RESP, SubOcf::SET_RANDOM_ADDR, SubOcf::SET_ENABLE,
   };
-  EXPECT_CALL(
-      mock_advertising_callback_, OnAdvertisingSetStarted(0, id, 0, AdvertisingCallback::AdvertisingStatus::SUCCESS));
+  auto result = next_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
+  size_t num_commands = next_command_future.get();
   for (size_t i = 0; i < sub_ocf.size(); i++) {
     auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
     auto sub_packet = LeMultiAdvtView::Create(LeAdvertisingCommandView::Create(packet));
     ASSERT_TRUE(sub_packet.IsValid());
     test_hci_layer_->IncomingEvent(LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, sub_ocf[i]));
-    if ((i + 1) < sub_ocf.size()) {
-      test_hci_layer_->SetSubCommandFuture(sub_ocf[i + 1]);
-    }
+    num_commands -= 1;
   }
-  sync_client_handler();
-
+  ASSERT_EQ(0, num_commands);
   // Disable the advertiser
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_ENABLE);
+  next_command_future = test_hci_layer_->GetSubCommandFuture(SubOcf::SET_ENABLE);
   le_advertising_manager_->RemoveAdvertiser(id);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
+  result = next_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   test_hci_layer_->IncomingEvent(LeMultiAdvtSetEnableCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
-  sync_client_handler();
 }
 
 TEST_F(LeExtendedAdvertisingManagerTest, create_advertiser_test) {
@@ -666,7 +590,7 @@ TEST_F(LeExtendedAdvertisingManagerTest, create_advertiser_test) {
   advertising_config.channel_map = 1;
   advertising_config.sid = 0x01;
 
-  test_hci_layer_->SetCommandFuture();
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
   auto id = le_advertising_manager_->ExtendedCreateAdvertiser(
       0x00, advertising_config, scan_callback, set_terminated_callback, client_handler_);
   ASSERT_NE(LeAdvertisingManager::kInvalidId, id);
@@ -679,7 +603,9 @@ TEST_F(LeExtendedAdvertisingManagerTest, create_advertiser_test) {
       OpCode::LE_SET_EXTENDED_ADVERTISING_DATA,
       OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE,
   };
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
   std::vector<uint8_t> success_vector{static_cast<uint8_t>(ErrorCode::SUCCESS)};
+  ASSERT_EQ(std::future_status::ready, result);
   for (size_t i = 0; i < adv_opcodes.size(); i++) {
     auto packet_view = test_hci_layer_->GetCommandPacket(adv_opcodes[i]);
     CommandPacketView command_packet_view = CommandPacketView::Create(packet_view);
@@ -691,23 +617,18 @@ TEST_F(LeExtendedAdvertisingManagerTest, create_advertiser_test) {
       test_hci_layer_->IncomingEvent(
           CommandCompleteBuilder::Create(uint8_t{1}, adv_opcodes[i], std::make_unique<RawBuilder>(success_vector)));
     }
-    test_hci_layer_->SetCommandFuture();
   }
   sync_client_handler();
 
   // Remove the advertiser
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_REMOVE_ADVERTISING_SET);
   le_advertising_manager_->RemoveAdvertiser(id);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_PERIODIC_ADVERTISING_ENABLE);
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_REMOVE_ADVERTISING_SET);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   sync_client_handler();
 }
 
 TEST_F(LeAdvertisingAPITest, startup_teardown) {}
-
-TEST_F(LeAndroidHciAdvertisingAPITest, startup_teardown) {}
 
 TEST_F(LeExtendedAdvertisingAPITest, startup_teardown) {}
 
@@ -722,34 +643,14 @@ TEST_F(LeAdvertisingAPITest, set_parameter) {
   gap_data.push_back(data_item);
   advertising_config.advertisement = gap_data;
   advertising_config.channel_map = 1;
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetParameters(advertiser_id_, advertising_config);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_ADVERTISING_PARAMETERS);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_PARAMETERS);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingParametersUpdated(advertiser_id_, 0x00, AdvertisingCallback::AdvertisingStatus::SUCCESS));
   test_hci_layer_->IncomingEvent(LeSetAdvertisingParametersCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
-  sync_client_handler();
-}
-
-TEST_F(LeAndroidHciAdvertisingAPITest, set_parameter) {
-  ExtendedAdvertisingConfig advertising_config{};
-  advertising_config.advertising_type = AdvertisingType::ADV_IND;
-  advertising_config.own_address_type = OwnAddressType::PUBLIC_DEVICE_ADDRESS;
-  std::vector<GapData> gap_data{};
-  GapData data_item{};
-  data_item.data_type_ = GapDataType::COMPLETE_LOCAL_NAME;
-  data_item.data_ = {'r', 'a', 'n', 'd', 'o', 'm', ' ', 'd', 'e', 'v', 'i', 'c', 'e'};
-  gap_data.push_back(data_item);
-  advertising_config.advertisement = gap_data;
-  advertising_config.channel_map = 1;
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_PARAM);
-  le_advertising_manager_->SetParameters(advertiser_id_, advertising_config);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
-  EXPECT_CALL(
-      mock_advertising_callback_,
-      OnAdvertisingParametersUpdated(advertiser_id_, 0x00, AdvertisingCallback::AdvertisingStatus::SUCCESS));
-  test_hci_layer_->IncomingEvent(LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, SubOcf::SET_PARAM));
   sync_client_handler();
 }
 
@@ -766,9 +667,10 @@ TEST_F(LeExtendedAdvertisingAPITest, set_parameter) {
   advertising_config.channel_map = 1;
   advertising_config.sid = 0x01;
   advertising_config.tx_power = 0x08;
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetParameters(advertiser_id_, advertising_config);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_PARAMETERS);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_PARAMETERS);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingParametersUpdated(advertiser_id_, 0x08, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -784,9 +686,10 @@ TEST_F(LeAdvertisingAPITest, set_data_test) {
   data_item.data_type_ = GapDataType::TX_POWER_LEVEL;
   data_item.data_ = {0x00};
   advertising_data.push_back(data_item);
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetData(advertiser_id_, false, advertising_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_ADVERTISING_DATA);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_DATA);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -799,9 +702,10 @@ TEST_F(LeAdvertisingAPITest, set_data_test) {
   data_item2.data_type_ = GapDataType::COMPLETE_LOCAL_NAME;
   data_item2.data_ = {'t', 'e', 's', 't', ' ', 'd', 'e', 'v', 'i', 'c', 'e'};
   response_data.push_back(data_item2);
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetData(advertiser_id_, true, response_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_SCAN_RESPONSE_DATA);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_SCAN_RESPONSE_DATA);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnScanResponseDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -816,9 +720,10 @@ TEST_F(LeExtendedAdvertisingAPITest, set_data_test) {
   data_item.data_type_ = GapDataType::TX_POWER_LEVEL;
   data_item.data_ = {0x00};
   advertising_data.push_back(data_item);
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetData(advertiser_id_, false, advertising_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -831,47 +736,15 @@ TEST_F(LeExtendedAdvertisingAPITest, set_data_test) {
   data_item2.data_type_ = GapDataType::COMPLETE_LOCAL_NAME;
   data_item2.data_ = {'t', 'e', 's', 't', ' ', 'd', 'e', 'v', 'i', 'c', 'e'};
   response_data.push_back(data_item2);
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetData(advertiser_id_, true, response_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnScanResponseDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
   test_hci_layer_->IncomingEvent(
       LeSetExtendedAdvertisingScanResponseCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
-  sync_client_handler();
-}
-
-TEST_F(LeAndroidHciAdvertisingAPITest, set_data_test) {
-  // Set advertising data
-  std::vector<GapData> advertising_data{};
-  GapData data_item{};
-  data_item.data_type_ = GapDataType::TX_POWER_LEVEL;
-  data_item.data_ = {0x00};
-  advertising_data.push_back(data_item);
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_DATA);
-  le_advertising_manager_->SetData(advertiser_id_, false, advertising_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
-  EXPECT_CALL(
-      mock_advertising_callback_,
-      OnAdvertisingDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
-  test_hci_layer_->IncomingEvent(LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, SubOcf::SET_DATA));
-  sync_client_handler();
-
-  // Set scan response data
-  std::vector<GapData> response_data{};
-  GapData data_item2{};
-  data_item2.data_type_ = GapDataType::COMPLETE_LOCAL_NAME;
-  data_item2.data_ = {'t', 'e', 's', 't', ' ', 'd', 'e', 'v', 'i', 'c', 'e'};
-  response_data.push_back(data_item2);
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_SCAN_RESP);
-  le_advertising_manager_->SetData(advertiser_id_, true, response_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
-  EXPECT_CALL(
-      mock_advertising_callback_,
-      OnScanResponseDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
-  test_hci_layer_->IncomingEvent(
-      LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, SubOcf::SET_SCAN_RESP));
   sync_client_handler();
 }
 
@@ -891,16 +764,19 @@ TEST_F(LeExtendedAdvertisingAPITest, set_data_fragments_test) {
   le_advertising_manager_->SetData(advertiser_id_, false, advertising_data);
 
   // First fragment
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
 
   // Intermediate fragment
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
 
   // Last fragment
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_DATA);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
 
   EXPECT_CALL(
       mock_advertising_callback_,
@@ -928,16 +804,19 @@ TEST_F(LeExtendedAdvertisingAPITest, set_scan_response_fragments_test) {
   le_advertising_manager_->SetData(advertiser_id_, true, advertising_data);
 
   // First fragment
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
 
   // Intermediate fragment
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
 
   // Last fragment
-  test_hci_layer_->SetCommandFuture();
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_SCAN_RESPONSE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
 
   EXPECT_CALL(
       mock_advertising_callback_,
@@ -1007,9 +886,10 @@ TEST_F(LeExtendedAdvertisingAPITest, set_data_with_invalid_length) {
 
 TEST_F(LeAdvertisingAPITest, disable_enable_advertiser_test) {
   // disable advertiser
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->EnableAdvertiser(advertiser_id_, false, 0x00, 0x00);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_ADVERTISING_ENABLE);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_ENABLE);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingEnabled(advertiser_id_, false, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -1017,45 +897,23 @@ TEST_F(LeAdvertisingAPITest, disable_enable_advertiser_test) {
   sync_client_handler();
 
   // enable advertiser
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->EnableAdvertiser(advertiser_id_, true, 0x00, 0x00);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_ADVERTISING_ENABLE);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_ADVERTISING_ENABLE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingEnabled(advertiser_id_, true, AdvertisingCallback::AdvertisingStatus::SUCCESS));
   test_hci_layer_->IncomingEvent(LeSetAdvertisingEnableCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
-  sync_client_handler();
-}
-
-TEST_F(LeAndroidHciAdvertisingAPITest, disable_enable_advertiser_test) {
-  // disable advertiser
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_ENABLE);
-  le_advertising_manager_->EnableAdvertiser(advertiser_id_, false, 0x00, 0x00);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
-  EXPECT_CALL(
-      mock_advertising_callback_,
-      OnAdvertisingEnabled(advertiser_id_, false, AdvertisingCallback::AdvertisingStatus::SUCCESS));
-  test_hci_layer_->IncomingEvent(
-      LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, SubOcf::SET_ENABLE));
-  sync_client_handler();
-
-  // enable advertiser
-  test_hci_layer_->SetSubCommandFuture(SubOcf::SET_ENABLE);
-  le_advertising_manager_->EnableAdvertiser(advertiser_id_, true, 0x00, 0x00);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_MULTI_ADVT);
-  EXPECT_CALL(
-      mock_advertising_callback_,
-      OnAdvertisingEnabled(advertiser_id_, true, AdvertisingCallback::AdvertisingStatus::SUCCESS));
-  test_hci_layer_->IncomingEvent(
-      LeMultiAdvtCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS, SubOcf::SET_ENABLE));
   sync_client_handler();
 }
 
 TEST_F(LeExtendedAdvertisingAPITest, disable_enable_advertiser_test) {
   // disable advertiser
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->EnableAdvertiser(advertiser_id_, false, 0x00, 0x00);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingEnabled(advertiser_id_, false, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -1063,9 +921,10 @@ TEST_F(LeExtendedAdvertisingAPITest, disable_enable_advertiser_test) {
   sync_client_handler();
 
   // enable advertiser
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->EnableAdvertiser(advertiser_id_, true, 0x00, 0x00);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_EXTENDED_ADVERTISING_ENABLE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnAdvertisingEnabled(advertiser_id_, true, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -1077,9 +936,11 @@ TEST_F(LeExtendedAdvertisingAPITest, set_periodic_parameter) {
   PeriodicAdvertisingParameters advertising_config{};
   advertising_config.max_interval = 0x1000;
   advertising_config.min_interval = 0x0006;
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetPeriodicParameters(advertiser_id_, advertising_config);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_PERIODIC_ADVERTISING_PARAM);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_PERIODIC_ADVERTISING_PARAM);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
+
   EXPECT_CALL(
       mock_advertising_callback_,
       OnPeriodicAdvertisingParametersUpdated(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -1094,9 +955,10 @@ TEST_F(LeExtendedAdvertisingAPITest, set_periodic_data_test) {
   data_item.data_type_ = GapDataType::TX_POWER_LEVEL;
   data_item.data_ = {0x00};
   advertising_data.push_back(data_item);
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->SetPeriodicData(advertiser_id_, advertising_data);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_PERIODIC_ADVERTISING_DATA);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_PERIODIC_ADVERTISING_DATA);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnPeriodicAdvertisingDataSet(advertiser_id_, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -1106,9 +968,10 @@ TEST_F(LeExtendedAdvertisingAPITest, set_periodic_data_test) {
 
 TEST_F(LeExtendedAdvertisingAPITest, disable_enable_periodic_advertiser_test) {
   // disable advertiser
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->EnablePeriodicAdvertising(advertiser_id_, false);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_PERIODIC_ADVERTISING_ENABLE);
+  auto last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_PERIODIC_ADVERTISING_ENABLE);
+  auto result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnPeriodicAdvertisingEnabled(advertiser_id_, false, AdvertisingCallback::AdvertisingStatus::SUCCESS));
@@ -1116,9 +979,10 @@ TEST_F(LeExtendedAdvertisingAPITest, disable_enable_periodic_advertiser_test) {
   sync_client_handler();
 
   // enable advertiser
-  test_hci_layer_->SetCommandFuture();
   le_advertising_manager_->EnablePeriodicAdvertising(advertiser_id_, true);
-  test_hci_layer_->GetCommandPacket(OpCode::LE_SET_PERIODIC_ADVERTISING_ENABLE);
+  last_command_future = test_hci_layer_->GetCommandFuture(OpCode::LE_SET_PERIODIC_ADVERTISING_ENABLE);
+  result = last_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
+  ASSERT_EQ(std::future_status::ready, result);
   EXPECT_CALL(
       mock_advertising_callback_,
       OnPeriodicAdvertisingEnabled(advertiser_id_, true, AdvertisingCallback::AdvertisingStatus::SUCCESS));
