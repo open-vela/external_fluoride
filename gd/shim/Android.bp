@@ -3,6 +3,7 @@ filegroup {
     srcs: [
             "dumpsys.cc",
             "dumpsys_args.cc",
+            "l2cap.cc",
     ]
 }
 
@@ -11,6 +12,7 @@ filegroup {
     srcs: [
             "dumpsys_test.cc",
             "dumpsys_args_test.cc",
+            "l2cap_test.cc",
     ],
 }
 

@@ -243,7 +243,7 @@ enum OpCode : 16 {
   LE_READ_LOCAL_SUPPORTED_FEATURES = 0x2003,
   LE_SET_RANDOM_ADDRESS = 0x2005,
   LE_SET_ADVERTISING_PARAMETERS = 0x2006,
-  LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER = 0x2007,
+  LE_READ_ADVERTISING_CHANNEL_TX_POWER = 0x2007,
   LE_SET_ADVERTISING_DATA = 0x2008,
   LE_SET_SCAN_RESPONSE_DATA = 0x2009,
   LE_SET_ADVERTISING_ENABLE = 0x200A,
@@ -496,7 +496,7 @@ enum OpCodeIndex : 16 {
   LE_READ_LOCAL_SUPPORTED_FEATURES = 252,
   LE_SET_RANDOM_ADDRESS = 254,
   LE_SET_ADVERTISING_PARAMETERS = 255,
-  LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER = 256,
+  LE_READ_ADVERTISING_CHANNEL_TX_POWER = 256,
   LE_SET_ADVERTISING_DATA = 257,
   LE_SET_SCAN_RESPONSE_DATA = 260,
   LE_SET_ADVERTISING_ENABLE = 261,
@@ -1753,7 +1753,7 @@ enum TransmitPowerLevelType : 8 {
 packet ReadTransmitPowerLevel : ConnectionManagementCommand (op_code = READ_TRANSMIT_POWER_LEVEL) {
   connection_handle : 12,
   _reserved_ : 4,
-  type : TransmitPowerLevelType,
+  transmit_power_level_type : TransmitPowerLevelType,
 
 }
 
@@ -2023,18 +2023,22 @@ packet SendKeypressNotificationComplete : CommandComplete (command_op_code = SEN
   bd_addr : Address,
 }
 
+enum SimultaneousLeHost : 8 {
+  DISABLED = 0x00,
+}
+
 packet ReadLeHostSupport : CommandPacket (op_code = READ_LE_HOST_SUPPORT) {
 }
 
 packet ReadLeHostSupportComplete : CommandComplete (command_op_code = READ_LE_HOST_SUPPORT) {
   status : ErrorCode,
   le_supported_host : Enable,
-  _reserved_ : 8, // simultaneous_le_host (ignored and always 0)
+  simultaneous_le_host : SimultaneousLeHost,
 }
 
 packet WriteLeHostSupport : CommandPacket (op_code = WRITE_LE_HOST_SUPPORT) {
   le_supported_host : Enable,
-  _reserved_ : 8, // simultaneous_le_host (ignored and always 0)
+  simultaneous_le_host : SimultaneousLeHost,
 }
 
 packet WriteLeHostSupportComplete : CommandComplete (command_op_code = WRITE_LE_HOST_SUPPORT) {
@@ -2487,7 +2491,7 @@ enum OwnAddressType : 8 {
 packet LeSetAdvertisingParameters : LeAdvertisingCommand (op_code = LE_SET_ADVERTISING_PARAMETERS) {
   interval_min : 16,
   interval_max : 16,
-  type : AdvertisingType,
+  advt_type : AdvertisingType,
   own_address_type : OwnAddressType,
   peer_address_type : PeerAddressType,
   peer_address : Address,
@@ -2500,12 +2504,12 @@ packet LeSetAdvertisingParametersComplete : CommandComplete (command_op_code = L
   status : ErrorCode,
 }
 
-packet LeReadAdvertisingPhysicalChannelTxPower : LeAdvertisingCommand (op_code = LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER) {
+packet LeReadAdvertisingChannelTxPower : LeAdvertisingCommand (op_code = LE_READ_ADVERTISING_CHANNEL_TX_POWER) {
 }
 
-packet LeReadAdvertisingPhysicalChannelTxPowerComplete : CommandComplete (command_op_code = LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER) {
+packet LeReadAdvertisingChannelTxPowerComplete : CommandComplete (command_op_code = LE_READ_ADVERTISING_CHANNEL_TX_POWER) {
   status : ErrorCode,
-  transmit_power_level : 8, // (-127dBm to 20dBm) Accuracy: +/-4dB
+  transmit_power_level : 8, // (-20dBm to 10dBm) Accuracy: +/-4dB
 }
 
 packet LeSetAdvertisingData : LeAdvertisingCommand (op_code = LE_SET_ADVERTISING_DATA) {
@@ -3751,7 +3755,7 @@ packet LeMultiAdvtComplete : CommandComplete (command_op_code = LE_MULTI_ADVT) {
 packet LeMultiAdvtParam : LeMultiAdvt (sub_cmd = SET_PARAM) {
   interval_min : 16,
   interval_max : 16,
-  type : AdvertisingType,
+  advt_type : AdvertisingType,
   own_address_type : OwnAddressType,
   peer_address_type : PeerAddressType,
   peer_address : Address,

@@ -76,6 +76,7 @@ cc_defaults {
     name: "gd_clang_tidy",
     tidy: true,
     tidy_checks: [
+        "cppcoreguidelines-pro-type-member-init",
         "clang-analyzer-core.CallAndMessage",
         "clang-analyzer-optin.cplusplus.UninitializedObject",
         "-google*",
@@ -161,11 +162,7 @@ cc_defaults {
     ],
     static_libs: [
         "libbluetooth-protos",
-        "libbluetooth_rust_interop",
-        "libbt_shim_ffi",
-        "libcxxbridge05",
-    ],
-    export_static_lib_headers: [ "libbluetooth_rust_interop" ],
+    ]
 }
 
 cc_library {
@@ -224,9 +221,6 @@ cc_binary {
         "libbluetooth-protos",
         "libbluetooth_gd",
         "libflatbuffers-cpp",
-        "libbluetooth_rust_interop",
-        "libbt_shim_ffi",
-        "libcxxbridge05",
     ],
     shared_libs: [
         "libbacktrace",
@@ -315,9 +309,6 @@ cc_test {
         "libc++fs",
         "libflatbuffers-cpp",
         "libgmock",
-        "libbluetooth_rust_interop",
-        "libbt_shim_ffi",
-        "libcxxbridge05",
     ],
     shared_libs: [
         "libchrome",
@@ -348,11 +339,6 @@ cc_test {
         address: true,
         cfi: true,
     },
-    static_libs: [
-        "libbluetooth_rust_interop",
-        "libbt_shim_ffi",
-        "libcxxbridge05",
-    ],
 }
 
 cc_defaults {
@@ -368,9 +354,6 @@ cc_defaults {
         "libchrome",
         "libgmock",
         "libgtest",
-        "libbluetooth_rust_interop",
-        "libbt_shim_ffi",
-        "libcxxbridge05",
     ],
     host_supported: true,
     generated_headers: [
@@ -485,6 +468,12 @@ rust_library {
     srcs: ["rust/packets/lib.rs", ":BluetoothGeneratedPackets_rust"],
     edition: "2018",
     host_supported: true,
+    proc_macros: ["libnum_derive"],
+    rustlibs: [
+        "libbytes",
+        "libnum_traits",
+        "libthiserror",
+    ],
 }
 
 // Generates binary schema data to be bundled and source file generated
@@ -809,7 +798,7 @@ cc_library_host_shared {
 rust_grpcio {
     name: "libbt_hci_proto",
     crate_name: "bt_hci_proto",
-    protos: ["hci/facade/facade.proto"],
+    proto: "hci/facade/facade.proto",
     source_stem: "facade",
     host_supported: true,
 }
@@ -817,7 +806,7 @@ rust_grpcio {
 rust_grpcio {
     name: "libbt_hal_proto",
     crate_name: "bt_hal_proto",
-    protos: ["hal/facade.proto"],
+    proto: "hal/facade.proto",
     source_stem: "facade",
     host_supported: true,
 }
@@ -825,16 +814,16 @@ rust_grpcio {
 rust_protobuf {
     name: "libbt_facade_rootservice_proto",
     crate_name: "bt_facade_rootservice_proto",
-    protos: ["facade/rootservice.proto"],
+    proto: "facade/rootservice.proto",
+    proto_flags: ["-Iexternal/protobuf/src/"],
     source_stem: "rootservice",
-    header_libs: ["libprotobuf-cpp-full"],
     host_supported: true,
 }
 
 rust_protobuf {
     name: "libbt_facade_common_proto",
     crate_name: "bt_facade_common_proto",
-    protos: ["facade/common.proto"],
+    proto: "facade/common.proto",
     source_stem: "common",
     host_supported: true,
 }

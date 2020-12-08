@@ -6,23 +6,6 @@ rust_library {
     rustlibs: [
         "libtokio",
         "libnix",
-        "liblog_rust",
-        "libcxx",
-    ],
-    target: {
-        android: {
-            rustlibs: [
-                "libandroid_logger",
-            ],
-        },
-        host: {
-            rustlibs: [
-                "libenv_logger",
-            ],
-        },
-    },
-    proc_macros: [
-        "libpaste",
     ],
     host_supported: true,
 }
@@ -35,11 +18,5 @@ rust_test_host {
     rustlibs: [
         "libtokio",
         "libnix",
-        "liblog_rust",
-        "libenv_logger",
-        "libcxx",
-    ],
-    proc_macros: [
-        "libpaste",
     ],
 }

@@ -195,7 +195,6 @@ void alarm_free(alarm_t* alarm) {
 
   osi_free((void*)alarm->stats.name);
   alarm->closure.~CancelableClosureInStruct();
-  alarm->callback_mutex.reset();
   osi_free(alarm);
 }
 
