@@ -1126,11 +1126,19 @@ tBTM_STATUS BTM_SetLinkSuperTout(const RawAddress& remote_bda,
 
 bool BTM_IsAclConnectionUp(const RawAddress& remote_bda,
                            tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    return bluetooth::shim::L2CA_IsLinkEstablished(remote_bda, transport);
+  }
+
   return internal_.btm_bda_to_acl(remote_bda, transport) != nullptr;
 }
 
 bool BTM_IsAclConnectionUpAndHandleValid(const RawAddress& remote_bda,
                                          tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    return bluetooth::shim::L2CA_IsLinkEstablished(remote_bda, transport);
+  }
+
   tACL_CONN* p_acl = internal_.btm_bda_to_acl(remote_bda, transport);
   if (p_acl == nullptr) {
     LOG_WARN("Unable to find active acl");
@@ -1154,6 +1162,9 @@ bool BTM_IsAclConnectionUpFromHandle(uint16_t hci_handle) {
  *
  ******************************************************************************/
 uint16_t BTM_GetNumAclLinks(void) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    return bluetooth::shim::L2CA_GetNumLinks();
+  }
   uint16_t num_acl = 0;
 
   for (uint16_t i = 0; i < MAX_L2CAP_LINKS; ++i) {
@@ -2081,6 +2092,13 @@ void btm_read_link_quality_complete(uint8_t* p) {
  *
  ******************************************************************************/
 tBTM_STATUS btm_remove_acl(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    if (transport == BT_TRANSPORT_LE) {
+      LOG(ERROR) << __func__ << ": Unsupported";
+    }
+    bluetooth::shim::L2CA_DisconnectLink(bd_addr);
+    return BTM_SUCCESS;
+  }
   uint16_t hci_handle = BTM_GetHCIConnHandle(bd_addr, transport);
   tBTM_STATUS status = BTM_SUCCESS;
   tACL_CONN* p_acl = internal_.btm_bda_to_acl(bd_addr, transport);
@@ -2637,6 +2655,22 @@ void btm_acl_connected(const RawAddress& bda, uint16_t handle,
   btm_sec_connected(bda, handle, status, enc_mode);
   btm_acl_set_paging(false);
   l2c_link_hci_conn_comp(status, handle, bda);
+
+  /*
+   * The legacy code path informs the upper layer via the BTA
+   * layer after all relevant read_remote_ commands are complete.
+   * The GD code path has ownership of the read_remote_ commands
+   * and thus may inform the upper layers about the connection.
+   */
+  if (bluetooth::shim::is_gd_acl_enabled()) {
+    tACL_CONN* p_acl = internal_.acl_get_connection_from_handle(handle);
+    if (p_acl != nullptr) {
+      p_acl->link_up_issued = true;
+      BTA_dm_acl_up(p_acl->remote_addr, p_acl->transport);
+    } else {
+      LOG_WARN("Unable to find active acl");
+    }
+  }
 }
 
 void btm_acl_disconnected(tHCI_STATUS status, uint16_t handle,
