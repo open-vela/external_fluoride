@@ -43,8 +43,7 @@ struct Controller::impl {
     le_set_event_mask(kDefaultLeEventMask);
     set_event_mask(kDefaultEventMask);
     write_simple_pairing_mode(Enable::ENABLED);
-    // TODO(b/159927452): Legacy stack set SimultaneousLeHost = 1. Revisit if this causes problem.
-    write_le_host_support(Enable::ENABLED, SimultaneousLeHost::DISABLED);
+    write_le_host_support(Enable::ENABLED);
     hci_->EnqueueCommand(ReadLocalNameBuilder::Create(),
                          handler->BindOnceOn(this, &Controller::impl::read_local_name_complete_handler));
     hci_->EnqueueCommand(ReadLocalVersionInformationBuilder::Create(),
@@ -450,8 +449,8 @@ struct Controller::impl {
         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteSimplePairingModeCompleteView>));
   }
 
-  void write_le_host_support(Enable enable, SimultaneousLeHost simultaneous_le_host) {
-    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable, simultaneous_le_host);
+  void write_le_host_support(Enable enable) {
+    std::unique_ptr<WriteLeHostSupportBuilder> packet = WriteLeHostSupportBuilder::Create(enable);
     hci_->EnqueueCommand(
         std::move(packet),
         module_.GetHandler()->BindOnceOn(this, &Controller::impl::check_status<WriteLeHostSupportCompleteView>));
@@ -652,7 +651,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(LE_READ_LOCAL_SUPPORTED_FEATURES)
       OP_CODE_MAPPING(LE_SET_RANDOM_ADDRESS)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_PARAMETERS)
-      OP_CODE_MAPPING(LE_READ_ADVERTISING_CHANNEL_TX_POWER)
+      OP_CODE_MAPPING(LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_DATA)
       OP_CODE_MAPPING(LE_SET_SCAN_RESPONSE_DATA)
       OP_CODE_MAPPING(LE_SET_ADVERTISING_ENABLE)
