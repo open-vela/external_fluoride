@@ -352,7 +352,6 @@ cc_test {
         "libbluetooth_rust_interop",
         "libbt_shim_ffi",
         "libcxxbridge05",
-        "libchrome",
     ],
 }
 
