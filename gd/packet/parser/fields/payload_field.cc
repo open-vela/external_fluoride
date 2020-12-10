@@ -126,5 +126,3 @@ void PayloadField::GenRustGetter(std::ostream& s, Size start_offset, Size) const
     s << start_offset.bytes() << " + " << size_field_->GetName() << " as usize)].into();";
   }
 }
-
-void PayloadField::GenRustWriter(std::ostream&, Size, Size) const {}

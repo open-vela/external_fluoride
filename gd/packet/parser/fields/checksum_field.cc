@@ -66,5 +66,3 @@ void ChecksumField::GenStringRepresentation(std::ostream& s, std::string) const 
 
 void ChecksumField::GenRustGetter(std::ostream&, Size, Size) const {
 }
-
-void ChecksumField::GenRustWriter(std::ostream&, Size, Size) const {}

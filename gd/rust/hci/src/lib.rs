@@ -9,7 +9,8 @@ pub mod facade;
 use bt_hal::HalExports;
 use bt_packet::{HciCommand, HciEvent, RawPacket};
 use error::Result;
-use gddi::{module, provides, Stoppable};
+use facade::facade_module;
+use gddi::{module, provides};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -20,7 +21,7 @@ use tokio::sync::{oneshot, Mutex};
 module! {
     hci_module,
     submodules {
-        facade::facade_module,
+        facade_module,
     },
     providers {
         HciExports => provide_hci,
@@ -63,7 +64,7 @@ struct PendingCommand {
 }
 
 /// HCI interface
-#[derive(Clone, Stoppable)]
+#[derive(Clone)]
 pub struct HciExports {
     cmd_tx: Sender<Command>,
     evt_handlers: Arc<Mutex<HashMap<u8, Sender<HciEvent>>>>,
