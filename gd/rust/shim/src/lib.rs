@@ -2,4 +2,3 @@
 
 mod stack;
 mod init_flags;
-mod hci;
