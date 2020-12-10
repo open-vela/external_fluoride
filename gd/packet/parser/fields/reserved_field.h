@@ -51,8 +51,6 @@ class ReservedField : public PacketField {
 
   void GenRustGetter(std::ostream& s, Size start_offset, Size end_offset) const override;
 
-  void GenRustWriter(std::ostream& s, Size start_offset, Size end_offset) const override;
-
  private:
   std::string name_;
   int size_;

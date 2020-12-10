@@ -42,7 +42,6 @@ bool ParseBoolFlag(const std::vector<std::string>& flag_pair, const std::string&
 }
 
 void InitFlags::Load(const char** flags) {
-  const char** flags_copy = flags;
   SetAll(false);
   while (flags != nullptr && *flags != nullptr) {
     std::string flag_element = *flags;
@@ -81,7 +80,6 @@ void InitFlags::Load(const char** flags) {
     }
   }
 
-  flags = flags_copy;
   rust::Vec<rust::String> rusted_flags = rust::Vec<rust::String>();
   while (flags != nullptr && *flags != nullptr) {
     rusted_flags.push_back(rust::String(*flags));

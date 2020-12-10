@@ -5,7 +5,7 @@
 use crate::{Hal, HalExports, Result, H4_HEADER_SIZE};
 use bt_packet::{HciCommand, HciEvent, HciPacketHeaderSize, HciPacketType, RawPacket};
 use bytes::{BufMut, Bytes, BytesMut};
-use gddi::{module, provides, Stoppable};
+use gddi::{module, provides};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,7 +37,7 @@ async fn provide_rootcanal_hal(config: RootcanalConfig, rt: Arc<Runtime>) -> Hal
 }
 
 /// Rootcanal configuration
-#[derive(Clone, Debug, Default, Stoppable)]
+#[derive(Clone, Debug, Default)]
 pub struct RootcanalConfig {
     address: String,
     port: u16,
