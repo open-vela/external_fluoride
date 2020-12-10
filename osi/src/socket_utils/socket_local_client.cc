@@ -30,8 +30,10 @@
 
 #define LISTEN_BACKLOG 4
 
+extern "C" {
+
 /* Documented in header file. */
-int osi_socket_make_sockaddr_un(const char* name, int namespaceId,
+static int osi_socket_make_sockaddr_un(const char* name, int namespaceId,
                                 struct sockaddr_un* p_addr, socklen_t* alen) {
   memset(p_addr, 0, sizeof(*p_addr));
   size_t namelen;
@@ -148,4 +150,5 @@ int osi_socket_local_client(const char* name, int namespaceId, int type) {
   }
 
   return s;
+}
 }
