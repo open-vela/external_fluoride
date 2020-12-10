@@ -41,6 +41,7 @@ bool A2DP_LoadDecoderSbc(void) {
 void A2DP_UnloadDecoderSbc(void) { a2dp_sbc_decoder_cleanup(); }
 
 bool a2dp_sbc_decoder_init(decoded_data_callback_t decode_callback) {
+#ifdef CONFIG_CODEC_SBC
   OI_STATUS status = OI_CODEC_SBC_DecoderReset(
       &a2dp_sbc_decoder_cb.decoder_context, a2dp_sbc_decoder_cb.context_data,
       sizeof(a2dp_sbc_decoder_cb.context_data), 2, 2, false);
@@ -51,6 +52,7 @@ bool a2dp_sbc_decoder_init(decoded_data_callback_t decode_callback) {
   }
 
   a2dp_sbc_decoder_cb.decode_callback = decode_callback;
+#endif
   return true;
 }
 
@@ -59,6 +61,7 @@ void a2dp_sbc_decoder_cleanup(void) {
 }
 
 bool a2dp_sbc_decoder_decode_packet(BT_HDR* p_buf) {
+#ifdef CONFIG_CODEC_SBC
   uint8_t* data = p_buf->data + p_buf->offset;
   size_t data_size = p_buf->len;
 
@@ -92,5 +95,6 @@ bool a2dp_sbc_decoder_decode_packet(BT_HDR* p_buf) {
       (out_ptr - a2dp_sbc_decoder_cb.decode_buf) * sizeof(*out_ptr);
   a2dp_sbc_decoder_cb.decode_callback(
       reinterpret_cast<uint8_t*>(a2dp_sbc_decoder_cb.decode_buf), out_used);
+#endif
   return true;
 }

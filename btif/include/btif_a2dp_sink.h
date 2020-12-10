@@ -82,11 +82,18 @@ void btif_a2dp_sink_shutdown(void);
 // cleanup.
 void btif_a2dp_sink_cleanup(void);
 
+// Check whether the A2DP Sink media task is running.
+// Returns true if the A2DP Sink media task is running, otherwise false.
+bool btif_a2dp_sink_media_task_is_running(void);
+
 // Get the audio sample rate for the A2DP Sink module.
 tA2DP_SAMPLE_RATE btif_a2dp_sink_get_sample_rate(void);
 
 // Get the audio channel count for the A2DP Sink module.
 tA2DP_CHANNEL_COUNT btif_a2dp_sink_get_channel_count(void);
+
+// Get the audio type for the A2DP Sink module.
+tA2DP_CODEC_TYPE btif_a2dp_sink_get_codec_type();
 
 // Get the audio bits per sample for the A2DP Sink module.
 tA2DP_BITS_PER_SAMPLE btif_a2dp_sink_get_bits_per_sample(void);
@@ -136,5 +143,10 @@ void btif_a2dp_sink_set_focus_state_req(btif_a2dp_sink_focus_state_t state);
 // Set the audio track gain for the audio track.
 // |gain| is the audio track gain value to use.
 void btif_a2dp_sink_set_audio_track_gain(float gain);
+
+void btif_a2dp_sink_enable_audio_send(void);
+
+void btif_a2dp_sink_disable_audio_send(void);
+
 
 #endif /* BTIF_A2DP_SINK_H */

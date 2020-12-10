@@ -299,9 +299,27 @@ endif
 
 if AUDIO
 
+config FLUORIDE_A2DP_SINK_NUTTX
+  bool "Enable Fluoride A2DP Sink Nuttx output"
+  default n
+  select BTA_AV_SINK_INCLUDED
+  help
+    Enable Fluoride A2DP Sink Example
+
+if FLUORIDE_A2DP_SINK_NUTTX
+
 config FLUORIDE_A2DP_SINK_DEVNAME
   string "Fluoride Avrcp A2DP Sink Device Name"
   default "/dev/audio/pcm0p"
+
+endif
+
+config FLUORIDE_A2DP_SINK_FFMPEG
+  bool "Enable Fluoride A2DP Sink FFMPEG output"
+  default n
+  select BTA_AV_SINK_INCLUDED
+  help
+    Enable Fluoride A2DP Sink FFMPEG output
 
 endif
 

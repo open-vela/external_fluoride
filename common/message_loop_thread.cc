@@ -26,7 +26,8 @@ namespace bluetooth {
 
 namespace common {
 
-static constexpr int kRealTimeFifoSchedulingPriority = PTHREAD_DEFAULT_PRIORITY;
+static const int kRealTimeFifoSchedulingPriority = sched_get_priority_max(SCHED_FIFO) - 9;
+
 
 MessageLoopThread::MessageLoopThread(const std::string& thread_name, int stack_size)
     : thread_name_(thread_name),

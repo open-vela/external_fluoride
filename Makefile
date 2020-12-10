@@ -59,6 +59,8 @@ CXXSRCS += osi/src/osi.cc
 CXXSRCS += osi/src/properties.cc
 CXXSRCS += osi/src/reactor.cc
 CXXSRCS += osi/src/ringbuffer.cc
+CXXSRCS += osi/src/socket_utils/socket_local_client.cc
+CXXSRCS += osi/src/socket_utils/socket_local_server.cc
 CXXSRCS += osi/src/semaphore.cc
 CXXSRCS += osi/src/thread.cc
 CXXSRCS += osi/src/wakelock.cc
@@ -124,8 +126,12 @@ ifeq ($(CONFIG_FLUORIDE_HCI_USB),y)
   PORTCXXSRCS += port/hci/src/hci_layer_libusb.cc
 endif
 
-ifeq ($(CONFIG_AUDIO),y)
-  PORTCXXSRCS += port/btif/src/btif_avrcp_audio_track_nuttx.cc
+ifeq ($(CONFIG_FLUORIDE_A2DP_SINK_NUTTX),y)
+   PORTCXXSRCS += port/btif/src/btif_avrcp_audio_track_nuttx.cc
+endif
+
+ifeq ($(CONFIG_FLUORIDE_A2DP_SINK_FFMPEG),y)
+   PORTCXXSRCS += port/btif/src/btif_avrcp_audio_track_ffmpeg.cc
 endif
 
 CXXSRCS += $(PORTCXXSRCS)
@@ -208,11 +214,10 @@ ifeq ($(CONFIG_ARCH_SIM),)
   FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port/deprecated}
 endif
 
-# CONFIG_CODEC_SBC
-
+ifneq ($(CONFIG_CODEC_SBC),)
 CSRCS += $(wildcard embdrv/sbc/*/srce/*.c)
+endif
 
-ifneq ($(CONFIG_CODEC_FDKAAC),)
   CXXSRCS += stack/a2dp/a2dp_aac.cc
   CXXSRCS += stack/a2dp/a2dp_aac_decoder.cc
   CXXSRCS += stack/a2dp/a2dp_aac_encoder.cc
@@ -226,7 +231,6 @@ ifneq ($(CONFIG_CODEC_FDKAAC),)
   FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libArithCoding/include}
   FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libDRCdec/include}
   FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libSACdec/include}
-endif
 
 ifneq ($(CONFIG_CODEC_LDAC),)
   CXXSRCS += stack/a2dp/a2dp_vendor_ldac.cc
