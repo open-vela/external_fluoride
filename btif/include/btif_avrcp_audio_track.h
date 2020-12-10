@@ -44,6 +44,11 @@ void* BtifAvrcpAudioTrackCreate(int trackFreq, int bitsPerSample,
 void BtifAvrcpAudioTrackStart(void* handle);
 
 /**
+ * Enables the audio sending.
+ */
+void BtifAvrcpEnableAudioSend(void* handle);
+
+/**
  * Pauses the audio track.
  */
 void BtifAvrcpAudioTrackPause(void* handle);
@@ -60,6 +65,7 @@ void BtifAvrcpSetAudioTrackGain(void* handle, float gain);
 void BtifAvrcpAudioTrackStop(void* handle);
 void BtifAvrcpAudioTrackDelete(void* handle);
 
+void BtifAvrcpDisableAudioSend(void* handle);
 /**
  * Writes the audio track data to file.
  *
