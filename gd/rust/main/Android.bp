@@ -1,6 +1,5 @@
 rust_library {
     name: "libbt_main",
-    defaults: ["gd_rust_defaults"],
     crate_name: "bt_main",
     srcs: ["src/lib.rs"],
     edition: "2018",
@@ -12,4 +11,5 @@ rust_library {
       "libbt_common",
       "libgrpcio",
     ],
+    host_supported: true,
 }

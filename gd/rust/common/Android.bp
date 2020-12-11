@@ -1,6 +1,5 @@
 rust_library {
     name: "libbt_common",
-    defaults: ["gd_rust_defaults"],
     crate_name: "bt_common",
     srcs: ["src/lib.rs"],
     edition: "2018",
@@ -26,6 +25,7 @@ rust_library {
     proc_macros: [
         "libpaste",
     ],
+    host_supported: true,
 }
 
 rust_test_host {

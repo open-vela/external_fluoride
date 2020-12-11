@@ -1,6 +1,5 @@
 rust_library {
     name: "libbt_packet",
-    defaults: ["gd_rust_defaults"],
     // has rustc warnings
     crate_name: "bt_packet",
     srcs: ["src/lib.rs"],
@@ -12,4 +11,5 @@ rust_library {
     proc_macros: [
         "libnum_derive",
     ],
+    host_supported: true,
 }
