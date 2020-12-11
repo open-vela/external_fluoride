@@ -92,10 +92,10 @@ impl HciLayerFacade for HciLayerFacadeService {
     }
 
     fn send_acl(&mut self, _ctx: RpcContext<'_>, mut packet: AclPacket, sink: UnarySink<Empty>) {
-        let acl_tx = self.hci_exports.acl_tx.clone();
-        self.rt.block_on(async move {
-            acl_tx.send(packet.take_data().into()).await.unwrap();
-        });
+        self.hci_exports
+            .acl_tx
+            .send(packet.take_data().into())
+            .unwrap();
         sink.success(Empty::default());
     }
 
