@@ -8,14 +8,13 @@ pub mod facade;
 
 use bt_common::time::Alarm;
 use bt_hal::HalExports;
-use bt_packets::hci::CommandCompleteChild::ResetComplete;
 use bt_packets::hci::EventChild::{
     CommandComplete, CommandStatus, LeMetaEvent, MaxSlotsChange, PageScanRepetitionModeChange,
     VendorSpecificEvent,
 };
 use bt_packets::hci::{
-    AclPacket, CommandCompletePacket, CommandPacket, CommandStatusPacket, ErrorCode, EventCode,
-    EventPacket, LeMetaEventPacket, OpCode, ResetBuilder, SubeventCode,
+    AclPacket, CommandExpectations, CommandPacket, ErrorCode, EventCode, EventPacket,
+    LeMetaEventPacket, OpCode, ResetBuilder, SubeventCode,
 };
 use error::Result;
 use gddi::{module, provides, Stoppable};
@@ -59,14 +58,10 @@ async fn provide_hci(hal_exports: HalExports, rt: Arc<Runtime>) -> HciExports {
         acl_rx: hal_exports.acl_rx,
     };
 
-    match exports
-        .enqueue_command_with_complete(ResetBuilder {}.build().into())
-        .await
-        .specialize()
-    {
-        ResetComplete(evt) if *evt.get_status() == ErrorCode::Success => {}
-        _ => panic!("reset did not complete successfully"),
-    }
+    assert!(
+        *exports.send(ResetBuilder {}.build()).await.get_status() == ErrorCode::Success,
+        "reset did not complete successfully"
+    );
 
     exports
 }
@@ -99,45 +94,42 @@ pub struct HciExports {
 }
 
 impl HciExports {
-    async fn send(&mut self, cmd: CommandPacket) -> Result<EventPacket> {
+    async fn send_raw(&mut self, cmd: CommandPacket) -> Result<EventPacket> {
         let (tx, rx) = oneshot::channel::<EventPacket>();
         self.cmd_tx.send(Command { cmd, fut: tx }).await?;
         let event = rx.await?;
         Ok(event)
     }
 
-    /// Enqueue an HCI command expecting a command complete
-    /// response from the controller
-    pub async fn enqueue_command_with_complete(
+    /// Send a command to the controller, getting an expected response back
+    pub async fn send<T: Into<CommandPacket> + CommandExpectations>(
         &mut self,
-        cmd: CommandPacket,
-    ) -> CommandCompletePacket {
-        match self.send(cmd).await.unwrap().specialize() {
-            CommandComplete(evt) => evt,
-            _ => panic!("Expected command complete, got status instead"),
-        }
-    }
-
-    /// Enqueue an HCI command expecting a status response
-    /// from the controller
-    pub async fn enqueue_command_with_status(&mut self, cmd: CommandPacket) -> CommandStatusPacket {
-        match self.send(cmd).await.unwrap().specialize() {
-            CommandStatus(evt) => evt,
-            _ => panic!("Expected command status, got complete instead"),
-        }
+        cmd: T,
+    ) -> T::ResponseType {
+        T::_to_response_type(self.send_raw(cmd.into()).await.unwrap())
     }
 
     /// Indicate interest in specific HCI events
     pub async fn register_event_handler(&mut self, code: EventCode, sender: Sender<EventPacket>) {
-        assert!(
-            self.evt_handlers
-                .lock()
-                .await
-                .insert(code, sender)
-                .is_none(),
-            "A handler for {:?} is already registered",
-            code
-        );
+        match code {
+            EventCode::CommandStatus
+            | EventCode::CommandComplete
+            | EventCode::LeMetaEvent
+            | EventCode::PageScanRepetitionModeChange
+            | EventCode::MaxSlotsChange
+            | EventCode::VendorSpecific => panic!("{:?} is a protected event", code),
+            _ => {
+                assert!(
+                    self.evt_handlers
+                        .lock()
+                        .await
+                        .insert(code, sender)
+                        .is_none(),
+                    "A handler for {:?} is already registered",
+                    code
+                );
+            }
+        }
     }
 
     /// Remove interest in specific HCI events
@@ -176,11 +168,13 @@ async fn dispatch(
     mut cmd_rx: Receiver<Command>,
 ) {
     let mut pending_cmd: Option<PendingCommand> = None;
+    let mut hci_timeout = Alarm::new();
     loop {
         select! {
             Some(evt) = consume(&evt_rx) => {
                 match evt.specialize() {
                     CommandStatus(evt) => {
+                        hci_timeout.cancel();
                         let this_opcode = *evt.get_command_op_code();
                         match pending_cmd.take() {
                             Some(PendingCommand{opcode, fut}) if opcode == this_opcode  => fut.send(evt.into()).unwrap(),
@@ -189,6 +183,7 @@ async fn dispatch(
                         }
                     },
                     CommandComplete(evt) => {
+                        hci_timeout.cancel();
                         let this_opcode = *evt.get_command_op_code();
                         match pending_cmd.take() {
                             Some(PendingCommand{opcode, fut}) if opcode == this_opcode  => fut.send(evt.into()).unwrap(),
@@ -221,7 +216,9 @@ async fn dispatch(
                     fut: cmd.fut,
                 });
                 cmd_tx.send(cmd.cmd).await.unwrap();
+                hci_timeout.reset(Duration::from_secs(2));
             },
+            _ = hci_timeout.expired() => panic!("Timed out waiting for {:?}", pending_cmd.unwrap().opcode),
             else => break,
         }
     }
