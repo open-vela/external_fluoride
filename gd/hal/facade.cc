@@ -36,7 +36,7 @@ class HciHalFacadeService : public HciHalFacade::Service, public ::bluetooth::ha
     hal->registerIncomingPacketCallback(this);
   }
 
-  ~HciHalFacadeService() {
+  ~HciHalFacadeService() override {
     hal_->unregisterIncomingPacketCallback();
   }
 
