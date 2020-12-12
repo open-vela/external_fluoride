@@ -7,13 +7,8 @@ pub mod error;
 pub mod facade;
 
 use bt_hal::HalExports;
-use bt_packets::hci::EventChild::{
-    CommandComplete, CommandStatus, LeMetaEvent, MaxSlotsChange, PageScanRepetitionModeChange,
-    VendorSpecificEvent,
-};
-use bt_packets::hci::{
-    AclPacket, CommandPacket, EventCode, EventPacket, LeMetaEventPacket, OpCode, SubeventCode,
-};
+use bt_packets::hci::EventChild::{CommandComplete, CommandStatus};
+use bt_packets::hci::{AclPacket, CommandPacket, EventCode, EventPacket, OpCode};
 use error::Result;
 use gddi::{module, provides, Stoppable};
 use std::collections::HashMap;
@@ -37,11 +32,9 @@ module! {
 async fn provide_hci(hal_exports: HalExports, rt: Arc<Runtime>) -> HciExports {
     let (cmd_tx, cmd_rx) = channel::<Command>(10);
     let evt_handlers = Arc::new(Mutex::new(HashMap::new()));
-    let le_evt_handlers = Arc::new(Mutex::new(HashMap::new()));
 
     rt.spawn(dispatch(
         evt_handlers.clone(),
-        le_evt_handlers.clone(),
         hal_exports.evt_rx,
         hal_exports.cmd_tx,
         cmd_rx,
@@ -50,7 +43,6 @@ async fn provide_hci(hal_exports: HalExports, rt: Arc<Runtime>) -> HciExports {
     HciExports {
         cmd_tx,
         evt_handlers,
-        le_evt_handlers,
         acl_tx: hal_exports.acl_tx,
         acl_rx: hal_exports.acl_rx,
     }
@@ -76,7 +68,6 @@ struct PendingCommand {
 pub struct HciExports {
     cmd_tx: Sender<Command>,
     evt_handlers: Arc<Mutex<HashMap<EventCode, Sender<EventPacket>>>>,
-    le_evt_handlers: Arc<Mutex<HashMap<SubeventCode, Sender<LeMetaEventPacket>>>>,
     /// Transmit end of a channel used to send ACL data
     pub acl_tx: Sender<AclPacket>,
     /// Receive end of a channel used to receive ACL data
@@ -104,105 +95,47 @@ impl HciExports {
     }
 
     /// Indicate interest in specific HCI events
-    pub async fn register_event_handler(&mut self, code: EventCode, sender: Sender<EventPacket>) {
-        match code {
-            EventCode::CommandStatus
-            | EventCode::CommandComplete
-            | EventCode::LeMetaEvent
-            | EventCode::PageScanRepetitionModeChange
-            | EventCode::MaxSlotsChange
-            | EventCode::VendorSpecific => panic!("{:?} is a protected event", code),
-            _ => {
-                assert!(
-                    self.evt_handlers
-                        .lock()
-                        .await
-                        .insert(code, sender)
-                        .is_none(),
-                    "A handler for {:?} is already registered",
-                    code
-                );
-            }
-        }
-    }
-
-    /// Remove interest in specific HCI events
-    pub async fn unregister_event_handler(&mut self, code: EventCode) {
-        self.evt_handlers.lock().await.remove(&code);
-    }
-
-    /// Indicate interest in specific LE events
-    pub async fn register_le_event_handler(
+    pub async fn register_event_handler(
         &mut self,
-        code: SubeventCode,
-        sender: Sender<LeMetaEventPacket>,
+        evt_code: EventCode,
+        sender: Sender<EventPacket>,
     ) {
-        assert!(
-            self.le_evt_handlers
-                .lock()
-                .await
-                .insert(code, sender)
-                .is_none(),
-            "A handler for {:?} is already registered",
-            code
-        );
-    }
-
-    /// Remove interest in specific LE events
-    pub async fn unregister_le_event_handler(&mut self, code: SubeventCode) {
-        self.le_evt_handlers.lock().await.remove(&code);
+        self.evt_handlers.lock().await.insert(evt_code, sender);
     }
 }
 
 async fn dispatch(
     evt_handlers: Arc<Mutex<HashMap<EventCode, Sender<EventPacket>>>>,
-    le_evt_handlers: Arc<Mutex<HashMap<SubeventCode, Sender<LeMetaEventPacket>>>>,
     evt_rx: Arc<Mutex<Receiver<EventPacket>>>,
     cmd_tx: Sender<CommandPacket>,
     mut cmd_rx: Receiver<Command>,
 ) {
-    let mut pending_cmd: Option<PendingCommand> = None;
+    let mut pending_cmds: Vec<PendingCommand> = Vec::new();
     loop {
         select! {
             Some(evt) = consume(&evt_rx) => {
                 match evt.specialize() {
                     CommandStatus(evt) => {
-                        let this_opcode = *evt.get_command_op_code();
-                        match pending_cmd.take() {
-                            Some(PendingCommand{opcode, fut}) if opcode == this_opcode  => fut.send(evt.into()).unwrap(),
-                            Some(PendingCommand{opcode, ..}) => panic!("Waiting for {:?}, got {:?}", opcode, this_opcode),
-                            None => panic!("Unexpected status event with opcode {:?}", this_opcode),
+                        let opcode = *evt.get_command_op_code();
+                        if let Some(pending_cmd) = remove_first(&mut pending_cmds, |entry| entry.opcode == opcode) {
+                            pending_cmd.fut.send(evt.into()).unwrap();
                         }
                     },
                     CommandComplete(evt) => {
-                        let this_opcode = *evt.get_command_op_code();
-                        match pending_cmd.take() {
-                            Some(PendingCommand{opcode, fut}) if opcode == this_opcode  => fut.send(evt.into()).unwrap(),
-                            Some(PendingCommand{opcode, ..}) => panic!("Waiting for {:?}, got {:?}", opcode, this_opcode),
-                            None => panic!("Unexpected complete event with opcode {:?}", this_opcode),
+                        let opcode = *evt.get_command_op_code();
+                        if let Some(pending_cmd) = remove_first(&mut pending_cmds, |entry| entry.opcode == opcode) {
+                            pending_cmd.fut.send(evt.into()).unwrap();
                         }
                     },
-                    LeMetaEvent(evt) => {
-                        let code = evt.get_subevent_code();
-                        match le_evt_handlers.lock().await.get(code) {
-                            Some(sender) => sender.send(evt).await.unwrap(),
-                            None => panic!("Unhandled le subevent {:?}", code),
-                        }
-                    },
-                    PageScanRepetitionModeChange(_) => {},
-                    MaxSlotsChange(_) => {},
-                    VendorSpecificEvent(_) => {},
                     _ => {
-                        let code = evt.get_event_code();
-                        match evt_handlers.lock().await.get(code) {
-                            Some(sender) => sender.send(evt).await.unwrap(),
-                            None => panic!("Unhandled le subevent {:?}", code),
+                        if let Some(sender) = evt_handlers.lock().await.get(evt.get_event_code()) {
+                            sender.send(evt).await.unwrap();
                         }
                     },
                 }
             },
-            Some(cmd) = cmd_rx.recv(), if pending_cmd.is_none() => {
-                pending_cmd = Some(PendingCommand {
+            Some(cmd) = cmd_rx.recv() => {
+                pending_cmds.push(PendingCommand {
                     opcode: *cmd.cmd.get_op_code(),
                     fut: cmd.fut,
                 });
@@ -215,4 +148,15 @@ async fn dispatch(
 
 async fn consume(evt_rx: &Arc<Mutex<Receiver<EventPacket>>>) -> Option<EventPacket> {
     evt_rx.lock().await.recv().await
+}
+
+fn remove_first<T, P>(vec: &mut Vec<T>, predicate: P) -> Option<T>
+where
+    P: FnMut(&T) -> bool,
+{
+    if let Some(i) = vec.iter().position(predicate) {
+        Some(vec.remove(i))
+    } else {
+        None
+    }
 }
