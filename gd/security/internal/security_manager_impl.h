@@ -188,7 +188,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void SetDisconnectCallback(FacadeDisconnectCallback callback);
   void SetIoCapability(hci::IoCapability io_capability);
   void SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements);
-  void GetOutOfBandData(channel::SecurityCommandStatusCallback callback);
   void SetLeIoCapability(security::IoCapability io_capability);
   void SetLeAuthRequirements(uint8_t auth_req);
   void SetLeMaximumEncryptionKeySize(uint8_t maximum_encryption_key_size);

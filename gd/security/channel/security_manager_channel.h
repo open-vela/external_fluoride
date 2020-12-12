@@ -21,7 +21,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "common/contextual_callback.h"
 #include "hci/address_with_type.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
@@ -32,8 +31,6 @@
 namespace bluetooth {
 namespace security {
 namespace channel {
-
-using SecurityCommandStatusCallback = common::ContextualOnceCallback<void(hci::CommandCompleteView)>;
 
 /**
  * Interface for listening to the channel for SMP commands.
@@ -85,14 +82,6 @@ class SecurityManagerChannel : public l2cap::classic::LinkSecurityInterfaceListe
    * @param command smp command to send
    */
   void SendCommand(std::unique_ptr<hci::SecurityCommandBuilder> command);
-
-  /**
-   * Send a given SMP command over the SecurityManagerChannel
-   *
-   * @param command smp command to send
-   * @param callback listener to call when command status complete
-   */
-  void SendCommand(std::unique_ptr<hci::SecurityCommandBuilder> command, SecurityCommandStatusCallback callback);
 
   /**
    * Sets the listener to listen for channel events
