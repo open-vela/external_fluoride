@@ -3611,7 +3611,7 @@ tBTM_STATUS btm_sec_disconnect(uint16_t handle, tHCI_STATUS reason) {
 
   /* In some weird race condition we may not have a record */
   if (!p_dev_rec) {
-    acl_disconnect_from_handle(handle, reason);
+    btsnd_hcic_disconnect(handle, reason);
     return (BTM_SUCCESS);
   }
 

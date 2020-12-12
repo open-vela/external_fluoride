@@ -222,8 +222,7 @@ struct iso_impl {
     auto cis = GetCisIfKnown(cis_handle);
     LOG_ASSERT(cis) << "No such cis";
     LOG_ASSERT(cis->state_flags & kStateFlagIsConnected) << "Not connected";
-    bluetooth::legacy::hci::GetInterface().Disconnect(
-        cis_handle, static_cast<tHCI_STATUS>(reason));
+    btsnd_hcic_disconnect(cis_handle, reason);
   }
 
   void on_setup_iso_data_path(uint8_t* stream, uint16_t len) {

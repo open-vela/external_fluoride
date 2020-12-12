@@ -57,8 +57,6 @@ bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason);  // TODO remove
 bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x);              // TODO remove
 void BTA_sys_signal_hw_error();                                // TODO remove
 void smp_cancel_start_encryption_attempt();                    // TODO remove
-void acl_disconnect_from_handle(uint16_t handle,
-                                tHCI_STATUS reason);  // TODO remove
 
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
@@ -1079,7 +1077,7 @@ static void read_encryption_key_size_complete_after_encryption_change(uint8_t st
 
   if (status != HCI_SUCCESS) {
     LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
-    acl_disconnect_from_handle(handle, HCI_ERR_PEER_USER);
+    btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
     return;
   }
 
@@ -1088,7 +1086,7 @@ static void read_encryption_key_size_complete_after_encryption_change(uint8_t st
     LOG(ERROR) << __func__ << " encryption key too short, disconnecting. handle: " << loghex(handle)
                << " key_size: " << +key_size;
 
-    acl_disconnect_from_handle(handle, HCI_ERR_HOST_REJECT_SECURITY);
+    btsnd_hcic_disconnect(handle, HCI_ERR_HOST_REJECT_SECURITY);
     return;
   }
 
@@ -1673,7 +1671,7 @@ static void read_encryption_key_size_complete_after_key_refresh(uint8_t status, 
 
   if (status != HCI_SUCCESS) {
     LOG(INFO) << __func__ << ": disconnecting, status: " << loghex(status);
-    acl_disconnect_from_handle(handle, HCI_ERR_PEER_USER);
+    btsnd_hcic_disconnect(handle, HCI_ERR_PEER_USER);
     return;
   }
 
@@ -1682,7 +1680,7 @@ static void read_encryption_key_size_complete_after_key_refresh(uint8_t status, 
     LOG(ERROR) << __func__ << " encryption key too short, disconnecting. handle: " << loghex(handle)
                << " key_size: " << +key_size;
 
-    acl_disconnect_from_handle(handle, HCI_ERR_HOST_REJECT_SECURITY);
+    btsnd_hcic_disconnect(handle, HCI_ERR_HOST_REJECT_SECURITY);
     return;
   }
 
