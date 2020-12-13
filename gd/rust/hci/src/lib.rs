@@ -7,7 +7,10 @@ pub mod error;
 pub mod facade;
 
 use bt_hal::HalExports;
-use bt_packets::hci::EventChild::{CommandComplete, CommandStatus, LeMetaEvent};
+use bt_packets::hci::EventChild::{
+    CommandComplete, CommandStatus, LeMetaEvent, MaxSlotsChange, PageScanRepetitionModeChange,
+    VendorSpecificEvent,
+};
 use bt_packets::hci::{
     AclPacket, CommandPacket, EventCode, EventPacket, LeMetaEventPacket, OpCode, SubeventCode,
 };
@@ -101,21 +104,53 @@ impl HciExports {
     }
 
     /// Indicate interest in specific HCI events
-    pub async fn register_event_handler(
-        &mut self,
-        evt_code: EventCode,
-        sender: Sender<EventPacket>,
-    ) {
-        self.evt_handlers.lock().await.insert(evt_code, sender);
+    pub async fn register_event_handler(&mut self, code: EventCode, sender: Sender<EventPacket>) {
+        match code {
+            EventCode::CommandStatus
+            | EventCode::CommandComplete
+            | EventCode::LeMetaEvent
+            | EventCode::PageScanRepetitionModeChange
+            | EventCode::MaxSlotsChange
+            | EventCode::VendorSpecific => panic!("{:?} is a protected event", code),
+            _ => {
+                assert!(
+                    self.evt_handlers
+                        .lock()
+                        .await
+                        .insert(code, sender)
+                        .is_none(),
+                    "A handler for {:?} is already registered",
+                    code
+                );
+            }
+        }
+    }
+
+    /// Remove interest in specific HCI events
+    pub async fn unregister_event_handler(&mut self, code: EventCode) {
+        self.evt_handlers.lock().await.remove(&code);
     }
 
     /// Indicate interest in specific LE events
     pub async fn register_le_event_handler(
         &mut self,
-        evt_code: SubeventCode,
+        code: SubeventCode,
         sender: Sender<LeMetaEventPacket>,
     ) {
-        self.le_evt_handlers.lock().await.insert(evt_code, sender);
+        assert!(
+            self.le_evt_handlers
+                .lock()
+                .await
+                .insert(code, sender)
+                .is_none(),
+            "A handler for {:?} is already registered",
+            code
+        );
+    }
+
+    /// Remove interest in specific LE events
+    pub async fn unregister_le_event_handler(&mut self, code: SubeventCode) {
+        self.le_evt_handlers.lock().await.remove(&code);
     }
 }
 
@@ -154,6 +189,9 @@ async fn dispatch(
                             None => panic!("Unhandled le subevent {:?}", code),
                         }
                     },
+                    PageScanRepetitionModeChange(_) => {},
+                    MaxSlotsChange(_) => {},
+                    VendorSpecificEvent(_) => {},
                     _ => {
                         let code = evt.get_event_code();
                         match evt_handlers.lock().await.get(code) {
