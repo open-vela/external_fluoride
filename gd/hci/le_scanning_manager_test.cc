@@ -68,9 +68,8 @@ class TestController : public Controller {
 
 class TestHciLayer : public HciLayer {
  public:
-  void EnqueueCommand(
-      std::unique_ptr<CommandBuilder> command,
-      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
+  void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
+                      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
     command_queue_.push(std::move(command));
     command_status_callbacks.push_front(std::move(on_status));
     if (command_promise_ != nullptr) {
@@ -79,9 +78,8 @@ class TestHciLayer : public HciLayer {
     }
   }
 
-  void EnqueueCommand(
-      std::unique_ptr<CommandBuilder> command,
-      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
+  void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
+                      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
     command_queue_.push(std::move(command));
     command_complete_callbacks.push_front(std::move(on_complete));
     if (command_promise_ != nullptr) {
@@ -96,18 +94,18 @@ class TestHciLayer : public HciLayer {
     return command_promise_->get_future();
   }
 
-  CommandView GetLastCommand() {
+  CommandPacketView GetLastCommand() {
     if (command_queue_.empty()) {
-      return CommandView::Create(GetPacketView(nullptr));
+      return CommandPacketView::Create(GetPacketView(nullptr));
     } else {
       auto last = std::move(command_queue_.front());
       command_queue_.pop();
-      return CommandView::Create(GetPacketView(std::move(last)));
+      return CommandPacketView::Create(GetPacketView(std::move(last)));
     }
   }
 
-  ConnectionManagementCommandView GetCommand(OpCode op_code) {
-    CommandView command_packet_view = GetLastCommand();
+  ConnectionManagementCommandView GetCommandPacket(OpCode op_code) {
+    CommandPacketView command_packet_view = GetLastCommand();
     auto command = ConnectionManagementCommandView::Create(AclCommandView::Create(command_packet_view));
     EXPECT_TRUE(command.IsValid());
     EXPECT_EQ(command.GetOpCode(), op_code);
@@ -172,7 +170,7 @@ class TestHciLayer : public HciLayer {
   std::list<common::ContextualOnceCallback<void(CommandCompleteView)>> command_complete_callbacks;
   std::list<common::ContextualOnceCallback<void(CommandStatusView)>> command_status_callbacks;
 
-  std::queue<std::unique_ptr<CommandBuilder>> command_queue_;
+  std::queue<std::unique_ptr<CommandPacketBuilder>> command_queue_;
   mutable std::mutex mutex_;
   std::unique_ptr<std::promise<void>> command_promise_{};
 };
@@ -180,7 +178,7 @@ class TestHciLayer : public HciLayer {
 class TestLeAddressManager : public LeAddressManager {
  public:
   TestLeAddressManager(
-      common::Callback<void(std::unique_ptr<CommandBuilder>)> enqueue_command,
+      common::Callback<void(std::unique_ptr<CommandPacketBuilder>)> enqueue_command,
       os::Handler* handler,
       Address public_address,
       uint8_t connect_list_size,
@@ -220,7 +218,7 @@ class TestAclManager : public AclManager {
 
   void SetRandomAddress(Address address) {}
 
-  void enqueue_command(std::unique_ptr<CommandBuilder> command_packet){};
+  void enqueue_command(std::unique_ptr<CommandPacketBuilder> command_packet){};
 
   os::Thread* thread_;
   os::Handler* handler_;
@@ -255,7 +253,7 @@ class LeScanningManagerTest : public ::testing::Test {
   }
 
   virtual void HandleConfiguration() {
-    auto packet = test_hci_layer_->GetCommand(OpCode::LE_SET_SCAN_PARAMETERS);
+    auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_SET_SCAN_PARAMETERS);
     test_hci_layer_->IncomingEvent(LeSetScanParametersCompleteBuilder::Create(1, ErrorCode::SUCCESS));
   }
 
@@ -288,7 +286,7 @@ class LeAndroidHciScanningManagerTest : public LeScanningManagerTest {
   }
 
   void HandleConfiguration() override {
-    auto packet = test_hci_layer_->GetCommand(OpCode::LE_EXTENDED_SCAN_PARAMS);
+    auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_EXTENDED_SCAN_PARAMS);
     test_hci_layer_->IncomingEvent(LeExtendedScanParamsCompleteBuilder::Create(1, ErrorCode::SUCCESS));
   }
 };
@@ -301,7 +299,7 @@ class LeExtendedScanningManagerTest : public LeScanningManagerTest {
   }
 
   void HandleConfiguration() override {
-    auto packet = test_hci_layer_->GetCommand(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS);
+    auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS);
     test_hci_layer_->IncomingEvent(LeSetExtendedScanParametersCompleteBuilder::Create(1, ErrorCode::SUCCESS));
   }
 };
@@ -368,7 +366,7 @@ TEST_F(LeExtendedScanningManagerTest, start_scan_test) {
 
   auto result = next_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
   ASSERT_EQ(std::future_status::ready, result);
-  auto packet = test_hci_layer_->GetCommand(OpCode::LE_SET_EXTENDED_SCAN_ENABLE);
+  auto packet = test_hci_layer_->GetCommandPacket(OpCode::LE_SET_EXTENDED_SCAN_ENABLE);
 
   test_hci_layer_->IncomingEvent(LeSetScanEnableCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
 

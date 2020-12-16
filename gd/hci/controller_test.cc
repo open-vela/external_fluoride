@@ -57,24 +57,21 @@ PacketView<kLittleEndian> GetPacketView(std::unique_ptr<packet::BasePacketBuilde
 
 class TestHciLayer : public HciLayer {
  public:
-  void EnqueueCommand(
-      std::unique_ptr<CommandBuilder> command,
-      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
+  void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
+                      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
     GetHandler()->Post(common::BindOnce(&TestHciLayer::HandleCommand, common::Unretained(this), std::move(command),
                                         std::move(on_complete)));
   }
 
-  void EnqueueCommand(
-      std::unique_ptr<CommandBuilder> command,
-      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
+  void EnqueueCommand(std::unique_ptr<CommandPacketBuilder> command,
+                      common::ContextualOnceCallback<void(CommandStatusView)> on_status) override {
     EXPECT_TRUE(false) << "Controller properties should not generate Command Status";
   }
 
-  void HandleCommand(
-      std::unique_ptr<CommandBuilder> command_builder,
-      common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) {
+  void HandleCommand(std::unique_ptr<CommandPacketBuilder> command_builder,
+                     common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) {
     auto packet_view = GetPacketView(std::move(command_builder));
-    CommandView command = CommandView::Create(packet_view);
+    CommandPacketView command = CommandPacketView::Create(packet_view);
     ASSERT_TRUE(command.IsValid());
 
     uint8_t num_packets = 1;
@@ -230,7 +227,7 @@ class TestHciLayer : public HciLayer {
     number_of_completed_packets_callback_.Invoke(event);
   }
 
-  CommandView GetCommand(OpCode op_code) {
+  CommandPacketView GetCommand(OpCode op_code) {
     std::unique_lock<std::mutex> lock(mutex_);
     std::chrono::milliseconds time = std::chrono::milliseconds(3000);
 
@@ -242,9 +239,9 @@ class TestHciLayer : public HciLayer {
     }
     EXPECT_TRUE(command_queue_.size() > 0);
     if (command_queue_.empty()) {
-      return CommandView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>()));
+      return CommandPacketView::Create(PacketView<kLittleEndian>(std::make_shared<std::vector<uint8_t>>()));
     }
-    CommandView command = command_queue_.front();
+    CommandPacketView command = command_queue_.front();
     EXPECT_EQ(command.GetOpCode(), op_code);
     command_queue_.pop();
     return command;
@@ -263,7 +260,7 @@ class TestHciLayer : public HciLayer {
 
  private:
   common::ContextualCallback<void(EventPacketView)> number_of_completed_packets_callback_;
-  std::queue<CommandView> command_queue_;
+  std::queue<CommandPacketView> command_queue_;
   mutable std::mutex mutex_;
   std::condition_variable not_empty_;
 };
