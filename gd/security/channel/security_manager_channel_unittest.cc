@@ -150,8 +150,8 @@ class SecurityManagerChannelCallback : public ISecurityManagerChannelListener {
     receivedUserPasskeyRequest = true;
   }
 
-  void OnHciEventReceived(EventView packet) override {
-    auto event = EventView::Create(packet);
+  void OnHciEventReceived(EventPacketView packet) override {
+    auto event = EventPacketView::Create(packet);
     ASSERT_LOG(event.IsValid(), "Received invalid packet");
     const hci::EventCode code = event.GetEventCode();
     switch (code) {

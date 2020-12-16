@@ -63,10 +63,10 @@ std::unique_ptr<BasePacketBuilder> NextPayload(uint16_t handle) {
   return std::move(payload);
 }
 
-std::unique_ptr<AclBuilder> NextAclPacket(uint16_t handle) {
+std::unique_ptr<AclPacketBuilder> NextAclPacket(uint16_t handle) {
   PacketBoundaryFlag packet_boundary_flag = PacketBoundaryFlag::FIRST_AUTOMATICALLY_FLUSHABLE;
   BroadcastFlag broadcast_flag = BroadcastFlag::ACTIVE_PERIPHERAL_BROADCAST;
-  return AclBuilder::Create(handle, packet_boundary_flag, broadcast_flag, NextPayload(handle));
+  return AclPacketBuilder::Create(handle, packet_boundary_flag, broadcast_flag, NextPayload(handle));
 }
 
 class TestController : public Controller {
@@ -191,7 +191,8 @@ class TestHciLayer : public HciLayer {
     return command;
   }
 
-  void RegisterEventHandler(EventCode event_code, common::ContextualCallback<void(EventView)> event_handler) override {
+  void RegisterEventHandler(EventCode event_code,
+                            common::ContextualCallback<void(EventPacketView)> event_handler) override {
     registered_events_[event_code] = event_handler;
   }
 
@@ -208,9 +209,9 @@ class TestHciLayer : public HciLayer {
     registered_le_events_.erase(subevent_code);
   }
 
-  void IncomingEvent(std::unique_ptr<EventBuilder> event_builder) {
+  void IncomingEvent(std::unique_ptr<EventPacketBuilder> event_builder) {
     auto packet = GetPacketView(std::move(event_builder));
-    EventView event = EventView::Create(packet);
+    EventPacketView event = EventPacketView::Create(packet);
     ASSERT_TRUE(event.IsValid());
     EventCode event_code = event.GetEventCode();
     ASSERT_NE(registered_events_.find(event_code), registered_events_.end()) << EventCodeText(event_code);
@@ -219,7 +220,7 @@ class TestHciLayer : public HciLayer {
 
   void IncomingLeMetaEvent(std::unique_ptr<LeMetaEventBuilder> event_builder) {
     auto packet = GetPacketView(std::move(event_builder));
-    EventView event = EventView::Create(packet);
+    EventPacketView event = EventPacketView::Create(packet);
     LeMetaEventView meta_event_view = LeMetaEventView::Create(event);
     EXPECT_TRUE(meta_event_view.IsValid());
     SubeventCode subevent_code = meta_event_view.GetSubeventCode();
@@ -236,10 +237,10 @@ class TestHciLayer : public HciLayer {
                                common::Bind(
                                    [](decltype(queue_end) queue_end, uint16_t handle, std::promise<void> promise) {
                                      auto packet = GetPacketView(NextAclPacket(handle));
-                                     AclView acl2 = AclView::Create(packet);
+                                     AclPacketView acl2 = AclPacketView::Create(packet);
                                      queue_end->UnregisterEnqueue();
                                      promise.set_value();
-                                     return std::make_unique<AclView>(acl2);
+                                     return std::make_unique<AclPacketView>(acl2);
                                    },
                                    queue_end, handle, common::Passed(std::move(promise))));
     auto status = future.wait_for(kTimeout);
@@ -251,14 +252,14 @@ class TestHciLayer : public HciLayer {
     EXPECT_EQ(queue_end->TryDequeue(), nullptr);
   }
 
-  void CommandCompleteCallback(EventView event) {
+  void CommandCompleteCallback(EventPacketView event) {
     CommandCompleteView complete_view = CommandCompleteView::Create(event);
     ASSERT_TRUE(complete_view.IsValid());
     std::move(command_complete_callbacks.front()).Invoke(complete_view);
     command_complete_callbacks.pop_front();
   }
 
-  void CommandStatusCallback(EventView event) {
+  void CommandStatusCallback(EventPacketView event) {
     CommandStatusView status_view = CommandStatusView::Create(event);
     ASSERT_TRUE(status_view.IsValid());
     std::move(command_status_callbacks.front()).Invoke(status_view);
@@ -267,7 +268,7 @@ class TestHciLayer : public HciLayer {
 
   PacketView<kLittleEndian> OutgoingAclData() {
     auto queue_end = acl_queue_.GetDownEnd();
-    std::unique_ptr<AclBuilder> received;
+    std::unique_ptr<AclPacketBuilder> received;
     do {
       received = queue_end->TryDequeue();
     } while (received == nullptr);
@@ -275,7 +276,7 @@ class TestHciLayer : public HciLayer {
     return GetPacketView(std::move(received));
   }
 
-  BidiQueueEnd<AclBuilder, AclView>* GetAclQueueEnd() override {
+  BidiQueueEnd<AclPacketBuilder, AclPacketView>* GetAclQueueEnd() override {
     return acl_queue_.GetUpEnd();
   }
 
@@ -292,11 +293,11 @@ class TestHciLayer : public HciLayer {
   }
 
  private:
-  std::map<EventCode, common::ContextualCallback<void(EventView)>> registered_events_;
+  std::map<EventCode, common::ContextualCallback<void(EventPacketView)>> registered_events_;
   std::map<SubeventCode, common::ContextualCallback<void(LeMetaEventView)>> registered_le_events_;
   std::list<common::ContextualOnceCallback<void(CommandCompleteView)>> command_complete_callbacks;
   std::list<common::ContextualOnceCallback<void(CommandStatusView)>> command_status_callbacks;
-  BidiQueue<AclView, AclBuilder> acl_queue_{3 /* TODO: Set queue depth */};
+  BidiQueue<AclPacketView, AclPacketBuilder> acl_queue_{3 /* TODO: Set queue depth */};
 
   std::queue<std::unique_ptr<CommandBuilder>> command_queue_;
   std::unique_ptr<std::promise<void>> command_promise_;
