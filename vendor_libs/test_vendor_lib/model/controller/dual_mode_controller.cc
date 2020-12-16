@@ -91,9 +91,9 @@ DualModeController::DualModeController(const std::string& properties_filename, u
         DualModeController::SendLinkLayerPacket(packet, phy_type);
       });
 
-#define SET_HANDLER(opcode, method)                          \
-  active_hci_commands_[opcode] = [this](CommandView param) { \
-    method(std::move(param));                                \
+#define SET_HANDLER(opcode, method)                                \
+  active_hci_commands_[opcode] = [this](CommandPacketView param) { \
+    method(std::move(param));                                      \
   };
   SET_HANDLER(OpCode::RESET, Reset);
   SET_HANDLER(OpCode::READ_BUFFER_SIZE, ReadBufferSize);
@@ -286,7 +286,7 @@ DualModeController::DualModeController(const std::string& properties_filename, u
 #undef SET_HANDLER
 }
 
-void DualModeController::SniffSubrating(CommandView command) {
+void DualModeController::SniffSubrating(CommandPacketView command) {
   auto command_view = gd_hci::SniffSubratingView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -358,7 +358,7 @@ void DualModeController::HandleIso(
 
 void DualModeController::HandleCommand(std::shared_ptr<std::vector<uint8_t>> packet) {
   bluetooth::hci::PacketView<bluetooth::hci::kLittleEndian> raw_packet(packet);
-  auto command_packet = bluetooth::hci::CommandView::Create(raw_packet);
+  auto command_packet = bluetooth::hci::CommandPacketView::Create(raw_packet);
   ASSERT(command_packet.IsValid());
   auto op = command_packet.GetOpCode();
 
@@ -424,7 +424,7 @@ void DualModeController::RegisterIsoChannel(
   send_iso_ = callback;
 }
 
-void DualModeController::Reset(CommandView command) {
+void DualModeController::Reset(CommandPacketView command) {
   auto command_view = gd_hci::ResetView::Create(command);
   ASSERT(command_view.IsValid());
   link_layer_controller_.Reset();
@@ -436,7 +436,7 @@ void DualModeController::Reset(CommandView command) {
                                                            ErrorCode::SUCCESS));
 }
 
-void DualModeController::ReadBufferSize(CommandView command) {
+void DualModeController::ReadBufferSize(CommandPacketView command) {
   auto command_view = gd_hci::ReadBufferSizeView::Create(command);
   ASSERT(command_view.IsValid());
 
@@ -449,7 +449,7 @@ void DualModeController::ReadBufferSize(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadEncryptionKeySize(CommandView command) {
+void DualModeController::ReadEncryptionKeySize(CommandPacketView command) {
   auto command_view = gd_hci::ReadEncryptionKeySizeView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -460,7 +460,7 @@ void DualModeController::ReadEncryptionKeySize(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::HostBufferSize(CommandView command) {
+void DualModeController::HostBufferSize(CommandPacketView command) {
   auto command_view = gd_hci::HostBufferSizeView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::HostBufferSizeCompleteBuilder::Create(
@@ -468,7 +468,8 @@ void DualModeController::HostBufferSize(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadLocalVersionInformation(CommandView command) {
+void DualModeController::ReadLocalVersionInformation(
+    CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalVersionInformationView::Create(command);
   ASSERT(command_view.IsValid());
 
@@ -487,7 +488,8 @@ void DualModeController::ReadLocalVersionInformation(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadRemoteVersionInformation(CommandView command) {
+void DualModeController::ReadRemoteVersionInformation(
+    CommandPacketView command) {
   auto command_view = gd_hci::ReadRemoteVersionInformationView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -503,7 +505,7 @@ void DualModeController::ReadRemoteVersionInformation(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadBdAddr(CommandView command) {
+void DualModeController::ReadBdAddr(CommandPacketView command) {
   auto command_view = gd_hci::ReadBdAddrView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::ReadBdAddrCompleteBuilder::Create(
@@ -511,7 +513,7 @@ void DualModeController::ReadBdAddr(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadLocalSupportedCommands(CommandView command) {
+void DualModeController::ReadLocalSupportedCommands(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalSupportedCommandsView::Create(command);
   ASSERT(command_view.IsValid());
 
@@ -530,7 +532,7 @@ void DualModeController::ReadLocalSupportedCommands(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadLocalSupportedFeatures(CommandView command) {
+void DualModeController::ReadLocalSupportedFeatures(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalSupportedFeaturesView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet =
@@ -540,7 +542,7 @@ void DualModeController::ReadLocalSupportedFeatures(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadLocalSupportedCodecs(CommandView command) {
+void DualModeController::ReadLocalSupportedCodecs(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalSupportedCodecsV1View::Create(command);
   ASSERT(command_view.IsValid());
   auto packet =
@@ -551,7 +553,7 @@ void DualModeController::ReadLocalSupportedCodecs(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadLocalExtendedFeatures(CommandView command) {
+void DualModeController::ReadLocalExtendedFeatures(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalExtendedFeaturesView::Create(command);
   ASSERT(command_view.IsValid());
   uint8_t page_number = command_view.GetPageNumber();
@@ -564,7 +566,7 @@ void DualModeController::ReadLocalExtendedFeatures(CommandView command) {
   send_event_(std::move(pakcet));
 }
 
-void DualModeController::ReadRemoteExtendedFeatures(CommandView command) {
+void DualModeController::ReadRemoteExtendedFeatures(CommandPacketView command) {
   auto command_view = gd_hci::ReadRemoteExtendedFeaturesView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -579,7 +581,7 @@ void DualModeController::ReadRemoteExtendedFeatures(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::SwitchRole(CommandView command) {
+void DualModeController::SwitchRole(CommandPacketView command) {
   auto command_view = gd_hci::SwitchRoleView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -593,7 +595,8 @@ void DualModeController::SwitchRole(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadRemoteSupportedFeatures(CommandView command) {
+void DualModeController::ReadRemoteSupportedFeatures(
+    CommandPacketView command) {
   auto command_view = gd_hci::ReadRemoteSupportedFeaturesView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -609,7 +612,7 @@ void DualModeController::ReadRemoteSupportedFeatures(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadClockOffset(CommandView command) {
+void DualModeController::ReadClockOffset(CommandPacketView command) {
   auto command_view = gd_hci::ReadClockOffsetView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -625,7 +628,7 @@ void DualModeController::ReadClockOffset(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::IoCapabilityRequestReply(CommandView command) {
+void DualModeController::IoCapabilityRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::IoCapabilityRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -645,7 +648,8 @@ void DualModeController::IoCapabilityRequestReply(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::UserConfirmationRequestReply(CommandView command) {
+void DualModeController::UserConfirmationRequestReply(
+    CommandPacketView command) {
   auto command_view = gd_hci::UserConfirmationRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -661,7 +665,7 @@ void DualModeController::UserConfirmationRequestReply(CommandView command) {
 }
 
 void DualModeController::UserConfirmationRequestNegativeReply(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::UserConfirmationRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -677,7 +681,7 @@ void DualModeController::UserConfirmationRequestNegativeReply(
   send_event_(std::move(packet));
 }
 
-void DualModeController::PinCodeRequestReply(CommandView command) {
+void DualModeController::PinCodeRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::PinCodeRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -696,7 +700,8 @@ void DualModeController::PinCodeRequestReply(CommandView command) {
       kNumCommandPackets, status, peer));
 }
 
-void DualModeController::PinCodeRequestNegativeReply(CommandView command) {
+void DualModeController::PinCodeRequestNegativeReply(
+    CommandPacketView command) {
   auto command_view = gd_hci::PinCodeRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -712,7 +717,7 @@ void DualModeController::PinCodeRequestNegativeReply(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::UserPasskeyRequestReply(CommandView command) {
+void DualModeController::UserPasskeyRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::UserPasskeyRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -728,7 +733,8 @@ void DualModeController::UserPasskeyRequestReply(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::UserPasskeyRequestNegativeReply(CommandView command) {
+void DualModeController::UserPasskeyRequestNegativeReply(
+    CommandPacketView command) {
   auto command_view = gd_hci::UserPasskeyRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -743,7 +749,7 @@ void DualModeController::UserPasskeyRequestNegativeReply(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::RemoteOobDataRequestReply(CommandView command) {
+void DualModeController::RemoteOobDataRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::RemoteOobDataRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -758,7 +764,7 @@ void DualModeController::RemoteOobDataRequestReply(CommandView command) {
 }
 
 void DualModeController::RemoteOobDataRequestNegativeReply(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::RemoteOobDataRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -773,7 +779,8 @@ void DualModeController::RemoteOobDataRequestNegativeReply(
   send_event_(std::move(packet));
 }
 
-void DualModeController::IoCapabilityRequestNegativeReply(CommandView command) {
+void DualModeController::IoCapabilityRequestNegativeReply(
+    CommandPacketView command) {
   auto command_view = gd_hci::IoCapabilityRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -791,7 +798,7 @@ void DualModeController::IoCapabilityRequestNegativeReply(CommandView command) {
 }
 
 void DualModeController::RemoteOobExtendedDataRequestReply(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::RemoteOobExtendedDataRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -808,7 +815,7 @@ void DualModeController::RemoteOobExtendedDataRequestReply(
 }
 
 void DualModeController::ReadInquiryResponseTransmitPowerLevel(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::ReadInquiryResponseTransmitPowerLevelView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -820,7 +827,7 @@ void DualModeController::ReadInquiryResponseTransmitPowerLevel(
   send_event_(std::move(packet));
 }
 
-void DualModeController::SendKeypressNotification(CommandView command) {
+void DualModeController::SendKeypressNotification(CommandPacketView command) {
   auto command_view = gd_hci::SendKeypressNotificationView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -833,19 +840,19 @@ void DualModeController::SendKeypressNotification(CommandView command) {
       kNumCommandPackets, status, peer));
 }
 
-void DualModeController::ReadLocalOobData(CommandView command) {
+void DualModeController::ReadLocalOobData(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalOobDataView::Create(
       gd_hci::SecurityCommandView::Create(command));
   link_layer_controller_.ReadLocalOobData();
 }
 
-void DualModeController::ReadLocalOobExtendedData(CommandView command) {
+void DualModeController::ReadLocalOobExtendedData(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalOobExtendedDataView::Create(
       gd_hci::SecurityCommandView::Create(command));
   link_layer_controller_.ReadLocalOobExtendedData();
 }
 
-void DualModeController::WriteSimplePairingMode(CommandView command) {
+void DualModeController::WriteSimplePairingMode(CommandPacketView command) {
   auto command_view = gd_hci::WriteSimplePairingModeView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -857,7 +864,7 @@ void DualModeController::WriteSimplePairingMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ChangeConnectionPacketType(CommandView command) {
+void DualModeController::ChangeConnectionPacketType(CommandPacketView command) {
   auto command_view = gd_hci::ChangeConnectionPacketTypeView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -874,7 +881,7 @@ void DualModeController::ChangeConnectionPacketType(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteLeHostSupport(CommandView command) {
+void DualModeController::WriteLeHostSupport(CommandPacketView command) {
   auto command_view = gd_hci::WriteLeHostSupportView::Create(command);
   ASSERT(command_view.IsValid());
   auto le_support =
@@ -886,7 +893,7 @@ void DualModeController::WriteLeHostSupport(CommandView command) {
 }
 
 void DualModeController::WriteSecureConnectionsHostSupport(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::WriteSecureConnectionsHostSupportView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -899,7 +906,7 @@ void DualModeController::WriteSecureConnectionsHostSupport(
   send_event_(std::move(packet));
 }
 
-void DualModeController::SetEventMask(CommandView command) {
+void DualModeController::SetEventMask(CommandPacketView command) {
   auto command_view = gd_hci::SetEventMaskView::Create(command);
   ASSERT(command_view.IsValid());
   properties_.SetEventMask(command_view.GetEventMask());
@@ -908,7 +915,7 @@ void DualModeController::SetEventMask(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadInquiryMode(CommandView command) {
+void DualModeController::ReadInquiryMode(CommandPacketView command) {
   auto command_view = gd_hci::ReadInquiryModeView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -918,7 +925,7 @@ void DualModeController::ReadInquiryMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteInquiryMode(CommandView command) {
+void DualModeController::WriteInquiryMode(CommandPacketView command) {
   auto command_view = gd_hci::WriteInquiryModeView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -929,7 +936,7 @@ void DualModeController::WriteInquiryMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadPageScanType(CommandView command) {
+void DualModeController::ReadPageScanType(CommandPacketView command) {
   auto command_view = gd_hci::ReadPageScanTypeView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -939,7 +946,7 @@ void DualModeController::ReadPageScanType(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WritePageScanType(CommandView command) {
+void DualModeController::WritePageScanType(CommandPacketView command) {
   auto command_view = gd_hci::WritePageScanTypeView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -948,7 +955,7 @@ void DualModeController::WritePageScanType(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadInquiryScanType(CommandView command) {
+void DualModeController::ReadInquiryScanType(CommandPacketView command) {
   auto command_view = gd_hci::ReadInquiryScanTypeView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -958,7 +965,7 @@ void DualModeController::ReadInquiryScanType(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteInquiryScanType(CommandView command) {
+void DualModeController::WriteInquiryScanType(CommandPacketView command) {
   auto command_view = gd_hci::WriteInquiryScanTypeView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -967,7 +974,7 @@ void DualModeController::WriteInquiryScanType(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::AuthenticationRequested(CommandView command) {
+void DualModeController::AuthenticationRequested(CommandPacketView command) {
   auto command_view = gd_hci::AuthenticationRequestedView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -980,7 +987,7 @@ void DualModeController::AuthenticationRequested(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::SetConnectionEncryption(CommandView command) {
+void DualModeController::SetConnectionEncryption(CommandPacketView command) {
   auto command_view = gd_hci::SetConnectionEncryptionView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -996,7 +1003,7 @@ void DualModeController::SetConnectionEncryption(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ChangeConnectionLinkKey(CommandView command) {
+void DualModeController::ChangeConnectionLinkKey(CommandPacketView command) {
   auto command_view = gd_hci::ChangeConnectionLinkKeyView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1010,7 +1017,7 @@ void DualModeController::ChangeConnectionLinkKey(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::CentralLinkKey(CommandView command) {
+void DualModeController::CentralLinkKey(CommandPacketView command) {
   auto command_view = gd_hci::CentralLinkKeyView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1024,7 +1031,7 @@ void DualModeController::CentralLinkKey(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteAuthenticationEnable(CommandView command) {
+void DualModeController::WriteAuthenticationEnable(CommandPacketView command) {
   auto command_view = gd_hci::WriteAuthenticationEnableView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1036,7 +1043,7 @@ void DualModeController::WriteAuthenticationEnable(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadAuthenticationEnable(CommandView command) {
+void DualModeController::ReadAuthenticationEnable(CommandPacketView command) {
   auto command_view = gd_hci::ReadAuthenticationEnableView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::ReadAuthenticationEnableCompleteBuilder::Create(
@@ -1046,7 +1053,7 @@ void DualModeController::ReadAuthenticationEnable(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteClassOfDevice(CommandView command) {
+void DualModeController::WriteClassOfDevice(CommandPacketView command) {
   auto command_view = gd_hci::WriteClassOfDeviceView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1058,7 +1065,7 @@ void DualModeController::WriteClassOfDevice(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadPageTimeout(CommandView command) {
+void DualModeController::ReadPageTimeout(CommandPacketView command) {
   auto command_view = gd_hci::ReadPageTimeoutView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1068,7 +1075,7 @@ void DualModeController::ReadPageTimeout(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WritePageTimeout(CommandView command) {
+void DualModeController::WritePageTimeout(CommandPacketView command) {
   auto command_view = gd_hci::WritePageTimeoutView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1077,7 +1084,7 @@ void DualModeController::WritePageTimeout(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::HoldMode(CommandView command) {
+void DualModeController::HoldMode(CommandPacketView command) {
   auto command_view = gd_hci::HoldModeView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1094,7 +1101,7 @@ void DualModeController::HoldMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::SniffMode(CommandView command) {
+void DualModeController::SniffMode(CommandPacketView command) {
   auto command_view = gd_hci::SniffModeView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1114,7 +1121,7 @@ void DualModeController::SniffMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ExitSniffMode(CommandView command) {
+void DualModeController::ExitSniffMode(CommandPacketView command) {
   auto command_view = gd_hci::ExitSniffModeView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1128,7 +1135,7 @@ void DualModeController::ExitSniffMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::QosSetup(CommandView command) {
+void DualModeController::QosSetup(CommandPacketView command) {
   auto command_view = gd_hci::QosSetupView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1149,7 +1156,8 @@ void DualModeController::QosSetup(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadDefaultLinkPolicySettings(CommandView command) {
+void DualModeController::ReadDefaultLinkPolicySettings(
+    CommandPacketView command) {
   auto command_view = gd_hci::ReadDefaultLinkPolicySettingsView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1161,7 +1169,8 @@ void DualModeController::ReadDefaultLinkPolicySettings(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteDefaultLinkPolicySettings(CommandView command) {
+void DualModeController::WriteDefaultLinkPolicySettings(
+    CommandPacketView command) {
   auto command_view = gd_hci::WriteDefaultLinkPolicySettingsView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1174,7 +1183,7 @@ void DualModeController::WriteDefaultLinkPolicySettings(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::FlowSpecification(CommandView command) {
+void DualModeController::FlowSpecification(CommandPacketView command) {
   auto command_view = gd_hci::FlowSpecificationView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1197,7 +1206,7 @@ void DualModeController::FlowSpecification(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteLinkPolicySettings(CommandView command) {
+void DualModeController::WriteLinkPolicySettings(CommandPacketView command) {
   auto command_view = gd_hci::WriteLinkPolicySettingsView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1214,7 +1223,8 @@ void DualModeController::WriteLinkPolicySettings(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteLinkSupervisionTimeout(CommandView command) {
+void DualModeController::WriteLinkSupervisionTimeout(
+    CommandPacketView command) {
   auto command_view = gd_hci::WriteLinkSupervisionTimeoutView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1231,7 +1241,7 @@ void DualModeController::WriteLinkSupervisionTimeout(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadLocalName(CommandView command) {
+void DualModeController::ReadLocalName(CommandPacketView command) {
   auto command_view = gd_hci::ReadLocalNameView::Create(command);
   ASSERT(command_view.IsValid());
 
@@ -1248,7 +1258,7 @@ void DualModeController::ReadLocalName(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteLocalName(CommandView command) {
+void DualModeController::WriteLocalName(CommandPacketView command) {
   auto command_view = gd_hci::WriteLocalNameView::Create(command);
   ASSERT(command_view.IsValid());
   const auto local_name = command_view.GetLocalName();
@@ -1262,7 +1272,8 @@ void DualModeController::WriteLocalName(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteExtendedInquiryResponse(CommandView command) {
+void DualModeController::WriteExtendedInquiryResponse(
+    CommandPacketView command) {
   auto command_view = gd_hci::WriteExtendedInquiryResponseView::Create(command);
   ASSERT(command_view.IsValid());
   properties_.SetExtendedInquiryData(std::vector<uint8_t>(
@@ -1273,7 +1284,7 @@ void DualModeController::WriteExtendedInquiryResponse(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::RefreshEncryptionKey(CommandView command) {
+void DualModeController::RefreshEncryptionKey(CommandPacketView command) {
   auto command_view = gd_hci::RefreshEncryptionKeyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1289,7 +1300,7 @@ void DualModeController::RefreshEncryptionKey(CommandView command) {
   send_event_(std::move(complete_packet));
 }
 
-void DualModeController::WriteVoiceSetting(CommandView command) {
+void DualModeController::WriteVoiceSetting(CommandPacketView command) {
   auto command_view = gd_hci::WriteVoiceSettingView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::WriteVoiceSettingCompleteBuilder::Create(
@@ -1297,7 +1308,7 @@ void DualModeController::WriteVoiceSetting(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadNumberOfSupportedIac(CommandView command) {
+void DualModeController::ReadNumberOfSupportedIac(CommandPacketView command) {
   auto command_view = gd_hci::ReadNumberOfSupportedIacView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1307,7 +1318,7 @@ void DualModeController::ReadNumberOfSupportedIac(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadCurrentIacLap(CommandView command) {
+void DualModeController::ReadCurrentIacLap(CommandPacketView command) {
   auto command_view = gd_hci::ReadCurrentIacLapView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1318,7 +1329,7 @@ void DualModeController::ReadCurrentIacLap(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteCurrentIacLap(CommandView command) {
+void DualModeController::WriteCurrentIacLap(CommandPacketView command) {
   auto command_view = gd_hci::WriteCurrentIacLapView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1327,7 +1338,7 @@ void DualModeController::WriteCurrentIacLap(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadPageScanActivity(CommandView command) {
+void DualModeController::ReadPageScanActivity(CommandPacketView command) {
   auto command_view = gd_hci::ReadPageScanActivityView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1338,7 +1349,7 @@ void DualModeController::ReadPageScanActivity(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WritePageScanActivity(CommandView command) {
+void DualModeController::WritePageScanActivity(CommandPacketView command) {
   auto command_view = gd_hci::WritePageScanActivityView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1347,7 +1358,7 @@ void DualModeController::WritePageScanActivity(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadInquiryScanActivity(CommandView command) {
+void DualModeController::ReadInquiryScanActivity(CommandPacketView command) {
   auto command_view = gd_hci::ReadInquiryScanActivityView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1358,7 +1369,7 @@ void DualModeController::ReadInquiryScanActivity(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteInquiryScanActivity(CommandView command) {
+void DualModeController::WriteInquiryScanActivity(CommandPacketView command) {
   auto command_view = gd_hci::WriteInquiryScanActivityView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1367,7 +1378,7 @@ void DualModeController::WriteInquiryScanActivity(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::ReadScanEnable(CommandView command) {
+void DualModeController::ReadScanEnable(CommandPacketView command) {
   auto command_view = gd_hci::ReadScanEnableView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1376,7 +1387,7 @@ void DualModeController::ReadScanEnable(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteScanEnable(CommandView command) {
+void DualModeController::WriteScanEnable(CommandPacketView command) {
   auto command_view = gd_hci::WriteScanEnableView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1393,7 +1404,7 @@ void DualModeController::WriteScanEnable(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::SetEventFilter(CommandView command) {
+void DualModeController::SetEventFilter(CommandPacketView command) {
   auto command_view = gd_hci::SetEventFilterView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::SetEventFilterCompleteBuilder::Create(
@@ -1401,7 +1412,7 @@ void DualModeController::SetEventFilter(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::Inquiry(CommandView command) {
+void DualModeController::Inquiry(CommandPacketView command) {
   auto command_view = gd_hci::InquiryView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1415,7 +1426,7 @@ void DualModeController::Inquiry(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::InquiryCancel(CommandView command) {
+void DualModeController::InquiryCancel(CommandPacketView command) {
   auto command_view = gd_hci::InquiryCancelView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1425,7 +1436,7 @@ void DualModeController::InquiryCancel(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::AcceptConnectionRequest(CommandView command) {
+void DualModeController::AcceptConnectionRequest(CommandPacketView command) {
   auto command_view = gd_hci::AcceptConnectionRequestView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1440,7 +1451,7 @@ void DualModeController::AcceptConnectionRequest(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::RejectConnectionRequest(CommandView command) {
+void DualModeController::RejectConnectionRequest(CommandPacketView command) {
   auto command_view = gd_hci::RejectConnectionRequestView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1453,7 +1464,7 @@ void DualModeController::RejectConnectionRequest(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LinkKeyRequestReply(CommandView command) {
+void DualModeController::LinkKeyRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::LinkKeyRequestReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1465,7 +1476,8 @@ void DualModeController::LinkKeyRequestReply(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LinkKeyRequestNegativeReply(CommandView command) {
+void DualModeController::LinkKeyRequestNegativeReply(
+    CommandPacketView command) {
   auto command_view = gd_hci::LinkKeyRequestNegativeReplyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1477,7 +1489,7 @@ void DualModeController::LinkKeyRequestNegativeReply(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::DeleteStoredLinkKey(CommandView command) {
+void DualModeController::DeleteStoredLinkKey(CommandPacketView command) {
   auto command_view = gd_hci::DeleteStoredLinkKeyView::Create(
       gd_hci::SecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1500,7 +1512,7 @@ void DualModeController::DeleteStoredLinkKey(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::RemoteNameRequest(CommandView command) {
+void DualModeController::RemoteNameRequest(CommandPacketView command) {
   auto command_view = gd_hci::RemoteNameRequestView::Create(
       gd_hci::DiscoveryCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1515,7 +1527,7 @@ void DualModeController::RemoteNameRequest(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetEventMask(CommandView command) {
+void DualModeController::LeSetEventMask(CommandPacketView command) {
   auto command_view = gd_hci::LeSetEventMaskView::Create(command);
   ASSERT(command_view.IsValid());
   properties_.SetLeEventMask(command_view.GetLeEventMask());
@@ -1524,7 +1536,7 @@ void DualModeController::LeSetEventMask(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeReadBufferSize(CommandView command) {
+void DualModeController::LeReadBufferSize(CommandPacketView command) {
   auto command_view = gd_hci::LeReadBufferSizeV1View::Create(command);
   ASSERT(command_view.IsValid());
 
@@ -1537,7 +1549,8 @@ void DualModeController::LeReadBufferSize(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeReadLocalSupportedFeatures(CommandView command) {
+void DualModeController::LeReadLocalSupportedFeatures(
+    CommandPacketView command) {
   auto command_view = gd_hci::LeReadLocalSupportedFeaturesView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet =
@@ -1547,7 +1560,7 @@ void DualModeController::LeReadLocalSupportedFeatures(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetRandomAddress(CommandView command) {
+void DualModeController::LeSetRandomAddress(CommandPacketView command) {
   auto command_view = gd_hci::LeSetRandomAddressView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1557,7 +1570,7 @@ void DualModeController::LeSetRandomAddress(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetAdvertisingParameters(CommandView command) {
+void DualModeController::LeSetAdvertisingParameters(CommandPacketView command) {
   auto command_view = gd_hci::LeSetAdvertisingParametersView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1582,7 +1595,7 @@ void DualModeController::LeSetAdvertisingParameters(CommandView command) {
 }
 
 void DualModeController::LeReadAdvertisingPhysicalChannelTxPower(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view =
       gd_hci::LeReadAdvertisingPhysicalChannelTxPowerView::Create(
           gd_hci::LeAdvertisingCommandView::Create(command));
@@ -1594,7 +1607,7 @@ void DualModeController::LeReadAdvertisingPhysicalChannelTxPower(
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetAdvertisingData(CommandView command) {
+void DualModeController::LeSetAdvertisingData(CommandPacketView command) {
   auto command_view = gd_hci::LeSetAdvertisingDataView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   auto payload = command.GetPayload();
@@ -1610,7 +1623,7 @@ void DualModeController::LeSetAdvertisingData(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetScanResponseData(CommandView command) {
+void DualModeController::LeSetScanResponseData(CommandPacketView command) {
   auto command_view = gd_hci::LeSetScanResponseDataView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1622,7 +1635,7 @@ void DualModeController::LeSetScanResponseData(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetAdvertisingEnable(CommandView command) {
+void DualModeController::LeSetAdvertisingEnable(CommandPacketView command) {
   auto command_view = gd_hci::LeSetAdvertisingEnableView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1632,7 +1645,7 @@ void DualModeController::LeSetAdvertisingEnable(CommandView command) {
       kNumCommandPackets, status));
 }
 
-void DualModeController::LeSetScanParameters(CommandView command) {
+void DualModeController::LeSetScanParameters(CommandPacketView command) {
   auto command_view = gd_hci::LeSetScanParametersView::Create(
       gd_hci::LeScanningCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1648,7 +1661,7 @@ void DualModeController::LeSetScanParameters(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetScanEnable(CommandView command) {
+void DualModeController::LeSetScanEnable(CommandPacketView command) {
   auto command_view = gd_hci::LeSetScanEnableView::Create(
       gd_hci::LeScanningCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1664,7 +1677,7 @@ void DualModeController::LeSetScanEnable(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeCreateConnection(CommandView command) {
+void DualModeController::LeCreateConnection(CommandPacketView command) {
   auto command_view = gd_hci::LeCreateConnectionView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1702,7 +1715,7 @@ void DualModeController::LeCreateConnection(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeConnectionUpdate(CommandView command) {
+void DualModeController::LeConnectionUpdate(CommandPacketView command) {
   auto command_view = gd_hci::LeConnectionUpdateView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1714,7 +1727,7 @@ void DualModeController::LeConnectionUpdate(CommandView command) {
   send_event_(std::move(status_packet));
 }
 
-void DualModeController::CreateConnection(CommandView command) {
+void DualModeController::CreateConnection(CommandPacketView command) {
   auto command_view = gd_hci::CreateConnectionView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1739,7 +1752,7 @@ void DualModeController::CreateConnection(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::CreateConnectionCancel(CommandView command) {
+void DualModeController::CreateConnectionCancel(CommandPacketView command) {
   auto command_view = gd_hci::CreateConnectionCancelView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1754,7 +1767,7 @@ void DualModeController::CreateConnectionCancel(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::Disconnect(CommandView command) {
+void DualModeController::Disconnect(CommandPacketView command) {
   auto command_view = gd_hci::DisconnectView::Create(
       gd_hci::ConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1770,7 +1783,7 @@ void DualModeController::Disconnect(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeConnectionCancel(CommandView command) {
+void DualModeController::LeConnectionCancel(CommandPacketView command) {
   auto command_view = gd_hci::LeCreateConnectionCancelView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1780,7 +1793,7 @@ void DualModeController::LeConnectionCancel(CommandView command) {
       kNumCommandPackets, status));
 }
 
-void DualModeController::LeReadConnectListSize(CommandView command) {
+void DualModeController::LeReadConnectListSize(CommandPacketView command) {
   auto command_view = gd_hci::LeReadConnectListSizeView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1791,7 +1804,7 @@ void DualModeController::LeReadConnectListSize(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeClearConnectList(CommandView command) {
+void DualModeController::LeClearConnectList(CommandPacketView command) {
   auto command_view = gd_hci::LeClearConnectListView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1802,7 +1815,7 @@ void DualModeController::LeClearConnectList(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeAddDeviceToConnectList(CommandView command) {
+void DualModeController::LeAddDeviceToConnectList(CommandPacketView command) {
   auto command_view = gd_hci::LeAddDeviceToConnectListView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1823,7 +1836,8 @@ void DualModeController::LeAddDeviceToConnectList(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeRemoveDeviceFromConnectList(CommandView command) {
+void DualModeController::LeRemoveDeviceFromConnectList(
+    CommandPacketView command) {
   auto command_view = gd_hci::LeRemoveDeviceFromConnectListView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1838,7 +1852,7 @@ void DualModeController::LeRemoveDeviceFromConnectList(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeClearResolvingList(CommandView command) {
+void DualModeController::LeClearResolvingList(CommandPacketView command) {
   auto command_view = gd_hci::LeClearResolvingListView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1848,7 +1862,7 @@ void DualModeController::LeClearResolvingList(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeReadResolvingListSize(CommandView command) {
+void DualModeController::LeReadResolvingListSize(CommandPacketView command) {
   auto command_view = gd_hci::LeReadResolvingListSizeView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1858,7 +1872,7 @@ void DualModeController::LeReadResolvingListSize(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeReadMaximumDataLength(CommandView command) {
+void DualModeController::LeReadMaximumDataLength(CommandPacketView command) {
   auto command_view = gd_hci::LeReadMaximumDataLengthView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1871,7 +1885,7 @@ void DualModeController::LeReadMaximumDataLength(CommandView command) {
       kNumCommandPackets, ErrorCode::SUCCESS, data_length));
 }
 
-void DualModeController::LeReadSuggestedDefaultDataLength(CommandView command) {
+void DualModeController::LeReadSuggestedDefaultDataLength(CommandPacketView command) {
   auto command_view = gd_hci::LeReadSuggestedDefaultDataLengthView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1880,7 +1894,8 @@ void DualModeController::LeReadSuggestedDefaultDataLength(CommandView command) {
       kNumCommandPackets, ErrorCode::SUCCESS, kLeMaximumDataLength, kLeMaximumDataTime));
 }
 
-void DualModeController::LeAddDeviceToResolvingList(CommandView command) {
+
+void DualModeController::LeAddDeviceToResolvingList(CommandPacketView command) {
   auto command_view = gd_hci::LeAddDeviceToResolvingListView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1908,7 +1923,8 @@ void DualModeController::LeAddDeviceToResolvingList(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeRemoveDeviceFromResolvingList(CommandView command) {
+void DualModeController::LeRemoveDeviceFromResolvingList(
+    CommandPacketView command) {
   auto command_view = gd_hci::LeRemoveDeviceFromResolvingListView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1923,7 +1939,8 @@ void DualModeController::LeRemoveDeviceFromResolvingList(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetExtendedScanParameters(CommandView command) {
+void DualModeController::LeSetExtendedScanParameters(
+    CommandPacketView command) {
   auto command_view = gd_hci::LeSetExtendedScanParametersView::Create(
       gd_hci::LeScanningCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1945,7 +1962,7 @@ void DualModeController::LeSetExtendedScanParameters(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeSetExtendedScanEnable(CommandView command) {
+void DualModeController::LeSetExtendedScanEnable(CommandPacketView command) {
   auto command_view = gd_hci::LeSetExtendedScanEnableView::Create(
       gd_hci::LeScanningCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -1962,7 +1979,7 @@ void DualModeController::LeSetExtendedScanEnable(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeExtendedCreateConnection(CommandView command) {
+void DualModeController::LeExtendedCreateConnection(CommandPacketView command) {
   auto command_view = gd_hci::LeExtendedCreateConnectionView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -1998,7 +2015,7 @@ void DualModeController::LeExtendedCreateConnection(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeSetPrivacyMode(CommandView command) {
+void DualModeController::LeSetPrivacyMode(CommandPacketView command) {
   auto command_view = gd_hci::LeSetPrivacyModeView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2019,7 +2036,7 @@ void DualModeController::LeSetPrivacyMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeReadIsoTxSync(CommandView command) {
+void DualModeController::LeReadIsoTxSync(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2028,7 +2045,7 @@ void DualModeController::LeReadIsoTxSync(CommandView command) {
   link_layer_controller_.LeReadIsoTxSync(command_view.GetConnectionHandle());
 }
 
-void DualModeController::LeSetCigParameters(CommandView command) {
+void DualModeController::LeSetCigParameters(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2042,7 +2059,7 @@ void DualModeController::LeSetCigParameters(CommandView command) {
       command_view.GetMaxTransportLatencySToM(), command_view.GetCisConfig());
 }
 
-void DualModeController::LeCreateCis(CommandView command) {
+void DualModeController::LeCreateCis(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2054,7 +2071,7 @@ void DualModeController::LeCreateCis(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeRemoveCig(CommandView command) {
+void DualModeController::LeRemoveCig(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2066,7 +2083,7 @@ void DualModeController::LeRemoveCig(CommandView command) {
       kNumCommandPackets, status, cig));
 }
 
-void DualModeController::LeAcceptCisRequest(CommandView command) {
+void DualModeController::LeAcceptCisRequest(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2078,7 +2095,7 @@ void DualModeController::LeAcceptCisRequest(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeRejectCisRequest(CommandView command) {
+void DualModeController::LeRejectCisRequest(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2088,7 +2105,7 @@ void DualModeController::LeRejectCisRequest(CommandView command) {
                                             command_view.GetReason());
 }
 
-void DualModeController::LeCreateBig(CommandView command) {
+void DualModeController::LeCreateBig(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2105,7 +2122,7 @@ void DualModeController::LeCreateBig(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeTerminateBig(CommandView command) {
+void DualModeController::LeTerminateBig(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2117,7 +2134,7 @@ void DualModeController::LeTerminateBig(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeBigCreateSync(CommandView command) {
+void DualModeController::LeBigCreateSync(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2132,7 +2149,7 @@ void DualModeController::LeBigCreateSync(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeBigTerminateSync(CommandView command) {
+void DualModeController::LeBigTerminateSync(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2141,7 +2158,7 @@ void DualModeController::LeBigTerminateSync(CommandView command) {
   link_layer_controller_.LeBigTerminateSync(command_view.GetBigHandle());
 }
 
-void DualModeController::LeRequestPeerSca(CommandView command) {
+void DualModeController::LeRequestPeerSca(CommandPacketView command) {
   auto command_view = gd_hci::LeRequestPeerScaView::Create(std::move(command));
   ASSERT(command_view.IsValid());
   ErrorCode status = link_layer_controller_.LeRequestPeerSca(
@@ -2150,7 +2167,7 @@ void DualModeController::LeRequestPeerSca(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeSetupIsoDataPath(CommandView command) {
+void DualModeController::LeSetupIsoDataPath(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2162,7 +2179,7 @@ void DualModeController::LeSetupIsoDataPath(CommandView command) {
       command_view.GetControllerDelay(), command_view.GetCodecConfiguration());
 }
 
-void DualModeController::LeRemoveIsoDataPath(CommandView command) {
+void DualModeController::LeRemoveIsoDataPath(CommandPacketView command) {
   auto iso_command_view = gd_hci::LeIsoCommandView::Create(command);
   ASSERT(iso_command_view.IsValid());
   auto command_view =
@@ -2172,7 +2189,7 @@ void DualModeController::LeRemoveIsoDataPath(CommandView command) {
       command_view.GetConnectionHandle(), command_view.GetDataPathDirection());
 }
 
-void DualModeController::LeReadRemoteFeatures(CommandView command) {
+void DualModeController::LeReadRemoteFeatures(CommandPacketView command) {
   auto command_view = gd_hci::LeReadRemoteFeaturesView::Create(
       gd_hci::LeConnectionManagementCommandView::Create(
           gd_hci::AclCommandView::Create(command)));
@@ -2188,7 +2205,7 @@ void DualModeController::LeReadRemoteFeatures(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeRand(CommandView command) {
+void DualModeController::LeRand(CommandPacketView command) {
   auto command_view = gd_hci::LeRandView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2202,7 +2219,7 @@ void DualModeController::LeRand(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeReadSupportedStates(CommandView command) {
+void DualModeController::LeReadSupportedStates(CommandPacketView command) {
   auto command_view = gd_hci::LeReadSupportedStatesView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::LeReadSupportedStatesCompleteBuilder::Create(
@@ -2211,7 +2228,7 @@ void DualModeController::LeReadSupportedStates(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeVendorCap(CommandView command) {
+void DualModeController::LeVendorCap(CommandPacketView command) {
   auto command_view = gd_hci::LeGetVendorCapabilitiesView::Create(
       gd_hci::VendorCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2233,7 +2250,7 @@ void DualModeController::LeVendorCap(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::LeVendorMultiAdv(CommandView command) {
+void DualModeController::LeVendorMultiAdv(CommandPacketView command) {
   auto command_view = gd_hci::LeMultiAdvtView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2241,7 +2258,7 @@ void DualModeController::LeVendorMultiAdv(CommandView command) {
       static_cast<uint16_t>(OpCode::LE_MULTI_ADVT));
 }
 
-void DualModeController::LeAdvertisingFilter(CommandView command) {
+void DualModeController::LeAdvertisingFilter(CommandPacketView command) {
   auto command_view = gd_hci::LeAdvFilterView::Create(
       gd_hci::LeScanningCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2249,7 +2266,7 @@ void DualModeController::LeAdvertisingFilter(CommandView command) {
       static_cast<uint16_t>(OpCode::LE_ADV_FILTER));
 }
 
-void DualModeController::LeEnergyInfo(CommandView command) {
+void DualModeController::LeEnergyInfo(CommandPacketView command) {
   auto command_view = gd_hci::LeEnergyInfoView::Create(
       gd_hci::VendorCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2258,7 +2275,7 @@ void DualModeController::LeEnergyInfo(CommandView command) {
 }
 
 void DualModeController::LeSetExtendedAdvertisingRandomAddress(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::LeSetExtendedAdvertisingRandomAddressView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2271,7 +2288,7 @@ void DualModeController::LeSetExtendedAdvertisingRandomAddress(
 }
 
 void DualModeController::LeSetExtendedAdvertisingParameters(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view =
       gd_hci::LeSetExtendedAdvertisingLegacyParametersView::Create(
           gd_hci::LeAdvertisingCommandView::Create(command));
@@ -2290,7 +2307,8 @@ void DualModeController::LeSetExtendedAdvertisingParameters(
           kNumCommandPackets, ErrorCode::SUCCESS, 0xa5));
 }
 
-void DualModeController::LeSetExtendedAdvertisingData(CommandView command) {
+void DualModeController::LeSetExtendedAdvertisingData(
+    CommandPacketView command) {
   auto command_view = gd_hci::LeSetExtendedAdvertisingDataView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2307,7 +2325,7 @@ void DualModeController::LeSetExtendedAdvertisingData(CommandView command) {
 }
 
 void DualModeController::LeSetExtendedAdvertisingScanResponse(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::LeSetExtendedAdvertisingScanResponseView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2318,7 +2336,8 @@ void DualModeController::LeSetExtendedAdvertisingScanResponse(
           Create(kNumCommandPackets, ErrorCode::SUCCESS));
 }
 
-void DualModeController::LeSetExtendedAdvertisingEnable(CommandView command) {
+void DualModeController::LeSetExtendedAdvertisingEnable(
+    CommandPacketView command) {
   auto command_view = gd_hci::LeSetExtendedAdvertisingEnableView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2336,7 +2355,7 @@ void DualModeController::LeSetExtendedAdvertisingEnable(CommandView command) {
 }
 
 void DualModeController::LeReadMaximumAdvertisingDataLength(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::LeReadMaximumAdvertisingDataLengthView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2347,7 +2366,7 @@ void DualModeController::LeReadMaximumAdvertisingDataLength(
 }
 
 void DualModeController::LeReadNumberOfSupportedAdvertisingSets(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view =
       gd_hci::LeReadNumberOfSupportedAdvertisingSetsView::Create(
           gd_hci::LeAdvertisingCommandView::Create(command));
@@ -2359,7 +2378,7 @@ void DualModeController::LeReadNumberOfSupportedAdvertisingSets(
               link_layer_controller_.LeReadNumberOfSupportedAdvertisingSets()));
 }
 
-void DualModeController::LeRemoveAdvertisingSet(CommandView command) {
+void DualModeController::LeRemoveAdvertisingSet(CommandPacketView command) {
   auto command_view = gd_hci::LeRemoveAdvertisingSetView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2369,7 +2388,7 @@ void DualModeController::LeRemoveAdvertisingSet(CommandView command) {
       kNumCommandPackets, status));
 }
 
-void DualModeController::LeClearAdvertisingSets(CommandView command) {
+void DualModeController::LeClearAdvertisingSets(CommandPacketView command) {
   auto command_view = gd_hci::LeClearAdvertisingSetsView::Create(
       gd_hci::LeAdvertisingCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2378,7 +2397,7 @@ void DualModeController::LeClearAdvertisingSets(CommandView command) {
       kNumCommandPackets, status));
 }
 
-void DualModeController::LeExtendedScanParams(CommandView command) {
+void DualModeController::LeExtendedScanParams(CommandPacketView command) {
   auto command_view = gd_hci::LeExtendedScanParamsView::Create(
       gd_hci::LeScanningCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2386,7 +2405,7 @@ void DualModeController::LeExtendedScanParams(CommandView command) {
       static_cast<uint16_t>(OpCode::LE_EXTENDED_SCAN_PARAMS));
 }
 
-void DualModeController::LeStartEncryption(CommandView command) {
+void DualModeController::LeStartEncryption(CommandPacketView command) {
   auto command_view = gd_hci::LeStartEncryptionView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2399,7 +2418,7 @@ void DualModeController::LeStartEncryption(CommandView command) {
       status, kNumCommandPackets));
 }
 
-void DualModeController::LeLongTermKeyRequestReply(CommandView command) {
+void DualModeController::LeLongTermKeyRequestReply(CommandPacketView command) {
   auto command_view = gd_hci::LeLongTermKeyRequestReplyView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2413,7 +2432,7 @@ void DualModeController::LeLongTermKeyRequestReply(CommandView command) {
 }
 
 void DualModeController::LeLongTermKeyRequestNegativeReply(
-    CommandView command) {
+    CommandPacketView command) {
   auto command_view = gd_hci::LeLongTermKeyRequestNegativeReplyView::Create(
       gd_hci::LeSecurityCommandView::Create(command));
   ASSERT(command_view.IsValid());
@@ -2427,7 +2446,7 @@ void DualModeController::LeLongTermKeyRequestNegativeReply(
           kNumCommandPackets, status, handle));
 }
 
-void DualModeController::ReadLoopbackMode(CommandView command) {
+void DualModeController::ReadLoopbackMode(CommandPacketView command) {
   auto command_view = gd_hci::ReadLoopbackModeView::Create(command);
   ASSERT(command_view.IsValid());
   auto packet = bluetooth::hci::ReadLoopbackModeCompleteBuilder::Create(
@@ -2436,7 +2455,7 @@ void DualModeController::ReadLoopbackMode(CommandView command) {
   send_event_(std::move(packet));
 }
 
-void DualModeController::WriteLoopbackMode(CommandView command) {
+void DualModeController::WriteLoopbackMode(CommandPacketView command) {
   auto command_view = gd_hci::WriteLoopbackModeView::Create(command);
   ASSERT(command_view.IsValid());
   loopback_mode_ = command_view.GetLoopbackMode();

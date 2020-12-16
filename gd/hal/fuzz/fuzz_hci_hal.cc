@@ -48,7 +48,7 @@ void FuzzHciHal::injectArbitrary(FuzzedDataProvider& fdp) {
 }
 
 void FuzzHciHal::sendHciCommand(HciPacket packet) {
-  hci::CommandView command = hci::CommandView::FromBytes(packet);
+  hci::CommandPacketView command = hci::CommandPacketView::FromBytes(packet);
   if (!command.IsValid()) {
     return;
   }
