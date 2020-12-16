@@ -72,7 +72,7 @@ void DualModeController::SendCommandCompleteUnknownOpCodeEvent(uint16_t command_
   raw_builder_ptr->AddOctets1(
       static_cast<uint8_t>(ErrorCode::UNKNOWN_HCI_COMMAND));
 
-  auto packet = gd_hci::EventBuilder::Create(
+  auto packet = gd_hci::EventPacketBuilder::Create(
       gd_hci::EventCode::COMMAND_COMPLETE, std::move(raw_builder_ptr));
   send_event_(std::move(packet));
 }
@@ -314,7 +314,7 @@ void DualModeController::RegisterTaskCancel(std::function<void(AsyncTaskId)> tas
 
 void DualModeController::HandleAcl(std::shared_ptr<std::vector<uint8_t>> packet) {
   bluetooth::hci::PacketView<bluetooth::hci::kLittleEndian> raw_packet(packet);
-  auto acl_packet = bluetooth::hci::AclView::Create(raw_packet);
+  auto acl_packet = bluetooth::hci::AclPacketView::Create(raw_packet);
   ASSERT(acl_packet.IsValid());
   if (loopback_mode_ == LoopbackMode::ENABLE_LOCAL) {
     uint16_t handle = acl_packet.GetHandle();
@@ -334,7 +334,7 @@ void DualModeController::HandleAcl(std::shared_ptr<std::vector<uint8_t>> packet)
 
 void DualModeController::HandleSco(std::shared_ptr<std::vector<uint8_t>> packet) {
   bluetooth::hci::PacketView<bluetooth::hci::kLittleEndian> raw_packet(packet);
-  auto sco_packet = bluetooth::hci::ScoView::Create(raw_packet);
+  auto sco_packet = bluetooth::hci::ScoPacketView::Create(raw_packet);
   if (loopback_mode_ == LoopbackMode::ENABLE_LOCAL) {
     uint16_t handle = sco_packet.GetHandle();
     send_sco_(packet);
@@ -352,7 +352,7 @@ void DualModeController::HandleSco(std::shared_ptr<std::vector<uint8_t>> packet)
 void DualModeController::HandleIso(
     std::shared_ptr<std::vector<uint8_t>> packet) {
   bluetooth::hci::PacketView<bluetooth::hci::kLittleEndian> raw_packet(packet);
-  auto iso = bluetooth::hci::IsoView::Create(raw_packet);
+  auto iso = bluetooth::hci::IsoPacketView::Create(raw_packet);
   link_layer_controller_.HandleIso(iso);
 }
 
@@ -388,7 +388,7 @@ void DualModeController::HandleCommand(std::shared_ptr<std::vector<uint8_t>> pac
 void DualModeController::RegisterEventChannel(
     const std::function<void(std::shared_ptr<std::vector<uint8_t>>)>& callback) {
   send_event_ =
-      [callback](std::shared_ptr<bluetooth::hci::EventBuilder> event) {
+      [callback](std::shared_ptr<bluetooth::hci::EventPacketBuilder> event) {
         auto bytes = std::make_shared<std::vector<uint8_t>>();
         bluetooth::packet::BitInserter bit_inserter(*bytes);
         bytes->reserve(event->size());
@@ -400,13 +400,14 @@ void DualModeController::RegisterEventChannel(
 
 void DualModeController::RegisterAclChannel(
     const std::function<void(std::shared_ptr<std::vector<uint8_t>>)>& callback) {
-  send_acl_ = [callback](std::shared_ptr<bluetooth::hci::AclBuilder> acl_data) {
-    auto bytes = std::make_shared<std::vector<uint8_t>>();
-    bluetooth::packet::BitInserter bit_inserter(*bytes);
-    bytes->reserve(acl_data->size());
-    acl_data->Serialize(bit_inserter);
-    callback(std::move(bytes));
-  };
+  send_acl_ =
+      [callback](std::shared_ptr<bluetooth::hci::AclPacketBuilder> acl_data) {
+        auto bytes = std::make_shared<std::vector<uint8_t>>();
+        bluetooth::packet::BitInserter bit_inserter(*bytes);
+        bytes->reserve(acl_data->size());
+        acl_data->Serialize(bit_inserter);
+        callback(std::move(bytes));
+      };
   link_layer_controller_.RegisterAclChannel(send_acl_);
 }
 

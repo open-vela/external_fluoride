@@ -67,11 +67,12 @@ class FuzzHciLayer : public HciLayer {
     }
   }
 
-  common::BidiQueueEnd<hci::AclBuilder, hci::AclView>* GetAclQueueEnd() override {
+  common::BidiQueueEnd<hci::AclPacketBuilder, hci::AclPacketView>* GetAclQueueEnd() override {
     return acl_queue_.GetUpEnd();
   }
 
-  void RegisterEventHandler(hci::EventCode event, common::ContextualCallback<void(hci::EventView)> handler) override {
+  void RegisterEventHandler(hci::EventCode event,
+                            common::ContextualCallback<void(hci::EventPacketView)> handler) override {
     event_handlers_[event] = handler;
   }
 
@@ -94,13 +95,14 @@ class FuzzHciLayer : public HciLayer {
     }
   }
 
-  hci::SecurityInterface* GetSecurityInterface(common::ContextualCallback<void(hci::EventView)> event_handler) override;
+  hci::SecurityInterface* GetSecurityInterface(
+      common::ContextualCallback<void(hci::EventPacketView)> event_handler) override;
 
   hci::LeSecurityInterface* GetLeSecurityInterface(
       common::ContextualCallback<void(hci::LeMetaEventView)> event_handler) override;
 
   hci::AclConnectionInterface* GetAclConnectionInterface(
-      common::ContextualCallback<void(hci::EventView)> event_handler,
+      common::ContextualCallback<void(hci::EventPacketView)> event_handler,
       common::ContextualCallback<void(uint16_t, hci::ErrorCode)> on_disconnect,
       common::ContextualCallback<void(uint16_t, uint8_t, uint16_t, uint16_t)> on_read_remote_version) override;
 
@@ -154,9 +156,9 @@ class FuzzHciLayer : public HciLayer {
 
   FuzzedDataProvider* auto_reply_fdp;
 
-  common::BidiQueue<hci::AclView, hci::AclBuilder> acl_queue_{3};
-  os::fuzz::DevNullQueue<AclBuilder>* acl_dev_null_;
-  os::fuzz::FuzzInjectQueue<AclView>* acl_inject_;
+  common::BidiQueue<hci::AclPacketView, hci::AclPacketBuilder> acl_queue_{3};
+  os::fuzz::DevNullQueue<AclPacketBuilder>* acl_dev_null_;
+  os::fuzz::FuzzInjectQueue<AclPacketView>* acl_inject_;
 
   FuzzCommandInterface<AclCommandBuilder> acl_connection_interface_{};
   FuzzCommandInterface<AclCommandBuilder> le_acl_connection_interface_{};
@@ -169,12 +171,12 @@ class FuzzHciLayer : public HciLayer {
   common::ContextualOnceCallback<void(hci::CommandCompleteView)> on_command_complete_;
   common::ContextualOnceCallback<void(hci::CommandStatusView)> on_command_status_;
 
-  std::map<hci::EventCode, common::ContextualCallback<void(hci::EventView)>> event_handlers_;
+  std::map<hci::EventCode, common::ContextualCallback<void(hci::EventPacketView)>> event_handlers_;
   std::map<hci::SubeventCode, common::ContextualCallback<void(hci::LeMetaEventView)>> le_event_handlers_;
 
-  common::ContextualCallback<void(hci::EventView)> security_event_handler_;
+  common::ContextualCallback<void(hci::EventPacketView)> security_event_handler_;
   common::ContextualCallback<void(hci::LeMetaEventView)> le_security_event_handler_;
-  common::ContextualCallback<void(hci::EventView)> acl_event_handler_;
+  common::ContextualCallback<void(hci::EventPacketView)> acl_event_handler_;
   common::ContextualCallback<void(uint16_t, hci::ErrorCode)> acl_on_disconnect_;
   common::ContextualCallback<void(hci::LeMetaEventView)> le_acl_event_handler_;
   common::ContextualCallback<void(uint16_t, hci::ErrorCode)> le_acl_on_disconnect_;
