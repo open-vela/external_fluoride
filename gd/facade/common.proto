@@ -2,10 +2,6 @@ syntax = "proto3";
 
 package bluetooth.facade;
 
-message Data {
-  bytes payload = 1;
-}
-
 message BluetoothAddress {
   bytes address = 1;
 }
