@@ -27,7 +27,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::TryInto;
 use thiserror::Error;
-use std::sync::Arc;
+use std::rc::Rc;
 
 type Result<T> = std::result::Result<T, Error>;
 

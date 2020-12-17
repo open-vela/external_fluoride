@@ -7,8 +7,7 @@ pub mod error;
 pub mod facade;
 
 use bt_hal::HalExports;
-use bt_packets::hci;
-use bt_packets::hci::EventChild::{CommandStatus,CommandComplete};
+use bt_packet::{HciCommand, HciEvent, RawPacket};
 use error::Result;
 use gddi::{module, provides, Stoppable};
 use std::collections::HashMap;
@@ -53,30 +52,30 @@ async fn provide_hci(hal_exports: HalExports, rt: Arc<Runtime>) -> HciExports {
 /// to the command is received
 #[derive(Debug)]
 struct Command {
-    cmd: hci::CommandPacket,
-    fut: oneshot::Sender<hci::EventPacket>,
+    cmd: HciCommand,
+    fut: oneshot::Sender<HciCommand>,
 }
 
 #[derive(Debug)]
 struct PendingCommand {
-    opcode: hci::OpCode,
-    fut: oneshot::Sender<hci::EventPacket>,
+    opcode: u16,
+    fut: oneshot::Sender<HciCommand>,
 }
 
 /// HCI interface
 #[derive(Clone, Stoppable)]
 pub struct HciExports {
     cmd_tx: Sender<Command>,
-    evt_handlers: Arc<Mutex<HashMap<hci::EventCode, Sender<hci::EventPacket>>>>,
+    evt_handlers: Arc<Mutex<HashMap<u8, Sender<HciEvent>>>>,
     /// Transmit end of a channel used to send ACL data
-    pub acl_tx: Sender<hci::AclPacket>,
+    pub acl_tx: Sender<RawPacket>,
     /// Receive end of a channel used to receive ACL data
-    pub acl_rx: Arc<Mutex<Receiver<hci::AclPacket>>>,
+    pub acl_rx: Arc<Mutex<Receiver<RawPacket>>>,
 }
 
 impl HciExports {
-    async fn send(&mut self, cmd: hci::CommandPacket) -> Result<hci::EventPacket> {
-        let (tx, rx) = oneshot::channel::<hci::EventPacket>();
+    async fn send(&mut self, cmd: HciCommand) -> Result<HciEvent> {
+        let (tx, rx) = oneshot::channel::<HciEvent>();
         self.cmd_tx.send(Command { cmd, fut: tx }).await?;
         let event = rx.await?;
         Ok(event)
@@ -84,55 +83,43 @@ impl HciExports {
 
     /// Enqueue an HCI command expecting a command complete
     /// response from the controller
-    pub async fn enqueue_command_with_complete(&mut self, cmd: hci::CommandPacket) -> hci::EventPacket {
+    pub async fn enqueue_command_with_complete(&mut self, cmd: HciCommand) -> HciEvent {
         self.send(cmd).await.unwrap()
     }
 
     /// Enqueue an HCI command expecting a status response
     /// from the controller
-    pub async fn enqueue_command_with_status(&mut self, cmd: hci::CommandPacket) -> hci::EventPacket {
+    pub async fn enqueue_command_with_status(&mut self, cmd: HciCommand) -> HciEvent {
         self.send(cmd).await.unwrap()
     }
 
     /// Indicate interest in specific HCI events
-    pub async fn register_event_handler(&mut self, evt_code: hci::EventCode, sender: Sender<hci::EventPacket>) {
+    pub async fn register_event_handler(&mut self, evt_code: u8, sender: Sender<HciEvent>) {
         self.evt_handlers.lock().await.insert(evt_code, sender);
     }
 }
 
 async fn dispatch(
-    evt_handlers: Arc<Mutex<HashMap<hci::EventCode, Sender<hci::EventPacket>>>>,
-    evt_rx: Arc<Mutex<Receiver<hci::EventPacket>>>,
-    cmd_tx: Sender<hci::CommandPacket>,
+    evt_handlers: Arc<Mutex<HashMap<u8, Sender<HciEvent>>>>,
+    evt_rx: Arc<Mutex<Receiver<HciEvent>>>,
+    cmd_tx: Sender<HciCommand>,
     mut cmd_rx: Receiver<Command>,
 ) {
     let mut pending_cmds: Vec<PendingCommand> = Vec::new();
     loop {
         select! {
             Some(evt) = consume(&evt_rx) => {
-                match evt.specialize() {
-                    CommandStatus(evt) => {
-                        let opcode = *evt.get_command_op_code();
-                        if let Some(pending_cmd) = remove_first(&mut pending_cmds, |entry| entry.opcode == opcode) {
-                            pending_cmd.fut.send(evt.into()).unwrap();
-                        }
-                    },
-                    CommandComplete(evt) => {
-                        let opcode = *evt.get_command_op_code();
-                        if let Some(pending_cmd) = remove_first(&mut pending_cmds, |entry| entry.opcode == opcode) {
-                            pending_cmd.fut.send(evt.into()).unwrap();
-                        }
-                    },
-                    _ => {
-                        if let Some(sender) = evt_handlers.lock().await.get(evt.get_event_code()) {
-                            sender.send(evt).await.unwrap();
-                        }
-                    },
+                let opcode = bt_packet::get_evt_opcode(&evt).unwrap();
+                let evt_code = bt_packet::get_evt_code(&evt).unwrap();
+                if let Some(pending_cmd) = remove_first(&mut pending_cmds, |entry| entry.opcode == opcode) {
+                    pending_cmd.fut.send(evt).unwrap();
+                } else if let Some(sender) = evt_handlers.lock().await.get(&evt_code) {
+                    sender.send(evt).await.unwrap();
                 }
             },
             Some(cmd) = cmd_rx.recv() => {
                 pending_cmds.push(PendingCommand {
-                    opcode: *cmd.cmd.get_op_code(),
+                    opcode: bt_packet::get_cmd_opcode(&cmd.cmd).unwrap(),
                     fut: cmd.fut,
                 });
                 cmd_tx.send(cmd.cmd).await.unwrap();
@@ -142,7 +129,7 @@ async fn dispatch(
     }
 }
 
-async fn consume(evt_rx: &Arc<Mutex<Receiver<hci::EventPacket>>>) -> Option<hci::EventPacket> {
+async fn consume(evt_rx: &Arc<Mutex<Receiver<HciEvent>>>) -> Option<HciEvent> {
     evt_rx.lock().await.recv().await
 }
 
