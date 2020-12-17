@@ -358,7 +358,6 @@ void StructDef::GenRustSizeField(std::ostream& s) const {
 }
 
 void StructDef::GenRustDeclarations(std::ostream& s) const {
-  s << "#[derive(Debug)] ";
   s << "pub struct " << name_ << "{";
 
   // Generate struct fields
