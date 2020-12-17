@@ -52,7 +52,3 @@ void bluetooth::shim::ACL_CreateLeConnection(
 void bluetooth::shim::ACL_WriteData(uint16_t handle, const BT_HDR* p_buf) {
   mock_function_count_map[__func__]++;
 }
-void bluetooth::shim::ACL_Disconnect(uint16_t handle, bool is_classic,
-                                     tHCI_STATUS reason) {
-  mock_function_count_map[__func__]++;
-}
