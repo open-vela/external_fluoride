@@ -777,7 +777,7 @@ tBTM_STATUS BTM_RemoveSco(uint16_t sco_inx) {
   tempstate = p->state;
   p->state = SCO_ST_DISCONNECTING;
 
-  acl_disconnect_from_handle(p->hci_handle, HCI_ERR_PEER_USER);
+  btsnd_hcic_disconnect(p->hci_handle, HCI_ERR_PEER_USER);
 
   return (BTM_CMD_STARTED);
 }

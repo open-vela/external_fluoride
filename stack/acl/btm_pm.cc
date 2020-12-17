@@ -52,7 +52,6 @@ struct StackAclBtmPm {
   tBTM_STATUS btm_pm_snd_md_req(uint8_t pm_id, int link_ind,
                                 const tBTM_PM_PWR_MD* p_mode);
   tBTM_PM_MCB* btm_pm_get_power_manager_from_address(const RawAddress& bda);
-  tBTM_PM_MCB* btm_pm_get_power_manager_from_handle(uint16_t handle);
 };
 
 namespace {
@@ -161,7 +160,6 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
   int acl_ind = btm_pm_find_acl_ind(remote_bda);
   if (acl_ind == MAX_L2CAP_LINKS) {
     if (btm_pm_is_le_link(remote_bda)) {
-      LOG_ERROR("Setting power mode on le link is unsupported");
       return BTM_MODE_UNSUPPORTED;
     }
     LOG_ERROR("br_edr acl addr %s is unknown", remote_bda.ToString().c_str());
@@ -191,10 +189,8 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
          (p_mode->min <= p_cb->interval)) ||
         ((p_mode->mode & BTM_PM_MD_FORCE) == 0 &&
          (p_mode->max >= p_cb->interval))) {
-      LOG_INFO(
-          "Device is already in requested mode %d, interval: %d, max: %d, min: "
-          "%d",
-          p_mode->mode, p_cb->interval, p_mode->max, p_mode->min);
+      LOG_INFO("already in requested mode %d, interval: %d, max: %d, min: %d",
+               p_mode->mode, p_cb->interval, p_mode->max, p_mode->min);
       return BTM_SUCCESS;
     }
   }
@@ -494,10 +490,9 @@ tBTM_STATUS StackAclBtmPm::btm_pm_snd_md_req(uint8_t pm_id, int link_ind,
   mode = btm_pm_get_set_mode(pm_id, p_cb, p_mode, &md_res);
   md_res.mode = mode;
 
-  if (p_cb->state == mode) {
-    LOG_INFO("Link already in requested mode pm_id:%hhu link_ind:%d mode:%d",
-             pm_id, link_ind, mode);
+  LOG_INFO("link_ind: %d, mode: %d", link_ind, mode);
 
+  if (p_cb->state == mode) {
     /* already in the resulting mode */
     if ((mode == BTM_PM_MD_ACTIVE) ||
         ((md_res.max >= p_cb->interval) && (md_res.min <= p_cb->interval)))
@@ -590,13 +585,6 @@ tBTM_PM_MCB* StackAclBtmPm::btm_pm_get_power_manager_from_address(
   return &(btm_cb.acl_cb_.pm_mode_db[acl_index]);
 }
 
-tBTM_PM_MCB* StackAclBtmPm::btm_pm_get_power_manager_from_handle(
-    uint16_t handle) {
-  int xx = btm_handle_to_acl_index(handle);
-  if (xx >= MAX_L2CAP_LINKS) return nullptr;
-  return &(btm_cb.acl_cb_.pm_mode_db[xx]);
-}
-
 /*******************************************************************************
  *
  * Function         btm_pm_proc_cmd_status
@@ -680,6 +668,8 @@ void btm_pm_proc_cmd_status(uint8_t status) {
 void btm_pm_proc_mode_change(uint8_t hci_status, uint16_t hci_handle,
                              tHCI_MODE hci_mode, uint16_t interval) {
   tBTM_PM_STATUS mode = static_cast<tBTM_PM_STATUS>(hci_mode);
+
+  tBTM_PM_MCB* p_cb = NULL;
   int xx, yy, zz;
   tBTM_PM_STATE old_state;
 
@@ -690,13 +680,7 @@ void btm_pm_proc_mode_change(uint8_t hci_status, uint16_t hci_handle,
   const RawAddress bd_addr = acl_address_from_handle(hci_handle);
 
   /* update control block */
-  tBTM_PM_MCB* p_cb =
-      internal_.btm_pm_get_power_manager_from_handle(hci_handle);
-  if (p_cb == nullptr) {
-    LOG_WARN("Unable to find active acl");
-    return;
-  }
-
+  p_cb = &(btm_cb.acl_cb_.pm_mode_db[xx]);
   old_state = p_cb->state;
   p_cb->state = mode;
   p_cb->interval = interval;
