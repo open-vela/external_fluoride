@@ -353,33 +353,33 @@ void StructDef::GenRustSizeField(std::ostream& s) const {
     size += field->GetSize().bytes();
   }
   if (fields.size() > 0) {
-    s << size;
+    s << " size: " << size;
   }
 }
 
 void StructDef::GenRustDeclarations(std::ostream& s) const {
-  s << "#[derive(Debug, Clone)] ";
+  s << "#[derive(Debug)] ";
   s << "pub struct " << name_ << "{";
 
   // Generate struct fields
+  GenRustFieldNameAndType(s, true);
+
+  // Generate size field
   auto fields = fields_.GetFieldsWithoutTypes({
       BodyField::kFieldType,
       CountField::kFieldType,
       PaddingField::kFieldType,
-      ReservedField::kFieldType,
       SizeField::kFieldType,
   });
-  for (const auto& field : fields) {
-    s << "pub ";
-    field->GenRustNameAndType(s);
-    s << ", ";
+  if (fields.size() > 0) {
+    s << " size: usize";
   }
   s << "}\n";
 }
 
 void StructDef::GenRustImpls(std::ostream& s) const {
   s << "impl " << name_ << "{";
-  /*s << "pub fn new(";
+  s << "pub fn new(";
   GenRustFieldNameAndType(s, false);
   s << ") -> Self { Self {";
   auto fields = fields_.GetFieldsWithoutTypes({
@@ -398,10 +398,11 @@ void StructDef::GenRustImpls(std::ostream& s) const {
     }
     s << ", ";
   }
-  s << "}}";*/
+  GenRustSizeField(s);
+  s << "}}";
 
   s << "pub fn parse(bytes: &[u8]) -> Result<Self> {";
-  auto fields = fields_.GetFieldsWithoutTypes({
+  fields = fields_.GetFieldsWithoutTypes({
       BodyField::kFieldType,
   });
 
@@ -435,6 +436,7 @@ void StructDef::GenRustImpls(std::ostream& s) const {
     }
     s << ", ";
   }
+  GenRustSizeField(s);
   s << "})}\n";
 
   // write_to function
@@ -462,9 +464,7 @@ void StructDef::GenRustImpls(std::ostream& s) const {
   s << "}\n";
 
   if (fields.size() > 0) {
-    s << "pub fn get_size(&self) -> usize {";
-    GenRustSizeField(s);
-    s << "}";
+    s << "pub fn get_size(&self) -> usize { self.size }";
   }
   s << "}\n";
 }

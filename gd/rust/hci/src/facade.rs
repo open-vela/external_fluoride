@@ -58,8 +58,8 @@ impl HciLayerFacade for HciLayerFacadeService {
     ) {
         self.rt.block_on(
             self.hci_exports
-                .send_raw(hci::CommandPacket::parse(&data.take_payload()).unwrap()),
-        ).unwrap();
+                .enqueue_command_with_complete(hci::CommandPacket::parse(&data.take_payload()).unwrap()),
+        );
         sink.success(Empty::default());
     }
 
@@ -71,8 +71,8 @@ impl HciLayerFacade for HciLayerFacadeService {
     ) {
         self.rt.block_on(
             self.hci_exports
-                .send_raw(hci::CommandPacket::parse(&data.take_payload()).unwrap()),
-        ).unwrap();
+                .enqueue_command_with_complete(hci::CommandPacket::parse(&data.take_payload()).unwrap()),
+        );
         sink.success(Empty::default());
     }
 
