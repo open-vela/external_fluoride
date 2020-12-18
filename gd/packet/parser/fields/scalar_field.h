@@ -62,10 +62,6 @@ class ScalarField : public PacketField {
 
   void GenRustWriter(std::ostream& s, Size start_offset, Size end_offset) const override;
 
-  virtual bool GetterIsByRef() const override {
-    return false;
-  }
-
  private:
   const int size_;
 };
