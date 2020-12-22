@@ -79,11 +79,7 @@ extern void btm_free(void);
 
 using bluetooth::common::MessageLoopThread;
 
-#if !defined(CONFIG_FLUORIDE_MANAGER_STACKSIZE)
 static MessageLoopThread management_thread("bt_stack_manager_thread");
-#else
-static MessageLoopThread management_thread("bt_stack_manager_thread", CONFIG_FLUORIDE_MANAGER_STACKSIZE);
-#endif
 
 // If initialized, any of the bluetooth API functions can be called.
 // (e.g. turning logging on and off, enabling/disabling the stack, etc)
@@ -295,6 +291,16 @@ static void event_shut_down_stack(UNUSED_ATTR void* context) {
 
   future_await(local_hack_future);
 
+  main_thread_shut_down();
+
+  module_clean_up(get_module(BTE_LOGMSG_MODULE));
+
+  gatt_free();
+  l2c_free();
+  sdp_free();
+  btm_ble_free();
+  btm_free();
+
   if (bluetooth::shim::is_any_gd_enabled()) {
     LOG_INFO("%s Gd shim module disabled", __func__);
     module_shut_down(get_module(GD_SHIM_MODULE));
@@ -303,15 +309,6 @@ static void event_shut_down_stack(UNUSED_ATTR void* context) {
     module_shut_down(get_module(HCI_MODULE));
     module_shut_down(get_module(BTSNOOP_MODULE));
   }
-
-  main_thread_shut_down();
-
-  module_clean_up(get_module(BTE_LOGMSG_MODULE));
-
-  gatt_free();
-  l2c_free();
-  sdp_free();
-  btm_free();
 
   module_shut_down(get_module(CONTROLLER_MODULE));  // Doesn't do any work, just
                                                     // puts it in a restartable

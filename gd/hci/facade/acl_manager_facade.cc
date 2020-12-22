@@ -49,7 +49,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     acl_manager_->RegisterCallbacks(this, facade_handler_);
   }
 
-  ~AclManagerFacadeService() override {
+  ~AclManagerFacadeService() {
     std::unique_lock<std::mutex> lock(acl_connections_mutex_);
     for (auto& connection : acl_connections_) {
       connection.second.connection_->GetAclQueueEnd()->UnregisterDequeue();
@@ -114,8 +114,9 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
       ::grpc::ServerContext* context,
       const ConnectionCommandMsg* request,
       ::google::protobuf::Empty* response) override {
-    auto command_view = ConnectionManagementCommandView::Create(CommandPacketView::Create(PacketView<kLittleEndian>(
-        std::make_shared<std::vector<uint8_t>>(request->packet().begin(), request->packet().end()))));
+    auto command_view =
+        ConnectionManagementCommandView::Create(AclCommandView::Create(CommandView::Create(PacketView<kLittleEndian>(
+            std::make_shared<std::vector<uint8_t>>(request->packet().begin(), request->packet().end())))));
     if (!command_view.IsValid()) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid command packet");
     }
@@ -190,7 +191,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
       case OpCode::READ_TRANSMIT_POWER_LEVEL: {
         auto view = ReadTransmitPowerLevelView::Create(command_view);
         GET_CONNECTION(view);
-        connection->second.connection_->ReadTransmitPowerLevel(view.GetType());
+        connection->second.connection_->ReadTransmitPowerLevel(view.GetTransmitPowerLevelType());
         return ::grpc::Status::OK;
       }
       case OpCode::READ_LINK_SUPERVISION_TIMEOUT: {
@@ -352,7 +353,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     std::unique_ptr<BasePacketBuilder> builder =
         ConnectionCompleteBuilder::Create(ErrorCode::SUCCESS, handle, addr, LinkType::ACL, Enable::DISABLED);
     ConnectionEvent success;
-    success.set_event(builder_to_string(std::move(builder)));
+    success.set_payload(builder_to_string(std::move(builder)));
     per_connection_events_[current_connection_request_]->OnIncomingEvent(success);
     current_connection_request_++;
   }
@@ -361,7 +362,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     std::unique_ptr<BasePacketBuilder> builder =
         ConnectionCompleteBuilder::Create(reason, 0, address, LinkType::ACL, Enable::DISABLED);
     ConnectionEvent fail;
-    fail.set_event(builder_to_string(std::move(builder)));
+    fail.set_payload(builder_to_string(std::move(builder)));
     per_connection_events_[current_connection_request_]->OnIncomingEvent(fail);
     current_connection_request_++;
   }
@@ -413,6 +414,20 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
     void OnModeChange(Mode current_mode, uint16_t interval) override {
       LOG_INFO("OnModeChange Mode:%d, interval:%d", (uint8_t)current_mode, interval);
     };
+
+    void OnSniffSubrating(
+        uint16_t maximum_transmit_latency,
+        uint16_t maximum_receive_latency,
+        uint16_t minimum_remote_timeout,
+        uint16_t minimum_local_timeout) override {
+      LOG_INFO(
+          "OnSniffSubrating maximum_transmit_latency:%d, maximum_receive_latency:%d"
+          " minimum_remote_timeout:%d minimum_local_timeout:%d",
+          maximum_transmit_latency,
+          maximum_receive_latency,
+          minimum_remote_timeout,
+          minimum_local_timeout);
+    }
 
     void OnQosSetupComplete(
         ServiceType service_type,
@@ -492,7 +507,7 @@ class AclManagerFacadeService : public AclManagerFacade::Service, public Connect
       std::unique_ptr<BasePacketBuilder> builder =
           DisconnectionCompleteBuilder::Create(ErrorCode::SUCCESS, handle_, reason);
       ConnectionEvent disconnection;
-      disconnection.set_event(builder_to_string(std::move(builder)));
+      disconnection.set_payload(builder_to_string(std::move(builder)));
       event_stream_->OnIncomingEvent(disconnection);
     }
     void OnReadRemoteVersionInformationComplete(

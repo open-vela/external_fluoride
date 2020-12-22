@@ -34,6 +34,7 @@ from acts import utils
 from acts.context import get_current_context
 from acts.controllers.adb import AdbProxy
 from acts.controllers.adb import AdbError
+from acts.controllers.adb_lib.error import AdbCommandError
 
 from google.protobuf import empty_pb2 as empty_proto
 
@@ -45,8 +46,8 @@ from cert.os_utils import is_subprocess_alive
 from cert.os_utils import make_ports_available
 from cert.os_utils import TerminalColor
 from facade import rootservice_pb2_grpc as facade_rootservice_pb2_grpc
-from hal import facade_pb2_grpc as hal_facade_pb2_grpc
-from hci.facade import facade_pb2_grpc as hci_facade_pb2_grpc
+from hal import hal_facade_pb2_grpc
+from hci.facade import hci_facade_pb2_grpc
 from hci.facade import acl_manager_facade_pb2_grpc
 from hci.facade import controller_facade_pb2_grpc
 from hci.facade import le_acl_manager_facade_pb2_grpc
@@ -300,6 +301,12 @@ class GdHostOnlyDevice(GdDeviceBase):
         self.backing_process_profraw_path = pathlib.Path(self.log_path_base).joinpath(
             "%s_%s_backing_coverage.profraw" % (self.type_identifier, self.label))
         self.environment["LLVM_PROFILE_FILE"] = str(self.backing_process_profraw_path)
+        llvm_binutils = pathlib.Path(get_gd_root()).joinpath("llvm_binutils").joinpath("bin")
+        llvm_symbolizer = llvm_binutils.joinpath("llvm-symbolizer")
+        if llvm_symbolizer.is_file():
+            self.environment["ASAN_SYMBOLIZER_PATH"] = llvm_symbolizer
+        else:
+            logging.warning("[%s] Cannot find LLVM symbolizer at %s" % (self.label, str(llvm_symbolizer)))
 
     def teardown(self):
         super().teardown()
@@ -411,9 +418,22 @@ class GdAndroidDevice(GdDeviceBase):
         self.push_or_die(os.path.join(get_gd_root(), "target", "bluetooth_stack_with_facade"), "system/bin")
         self.push_or_die(os.path.join(get_gd_root(), "target", "libbluetooth_gd.so"), "system/lib64")
         self.push_or_die(os.path.join(get_gd_root(), "target", "libgrpc++_unsecure.so"), "system/lib64")
-        self.adb.shell("rm /data/misc/bluetooth/logs/btsnoop_hci.log")
-        self.adb.shell("rm /data/misc/bluedroid/bt_config.conf")
-        self.adb.shell("rm /data/misc/bluedroid/bt_config.bak")
+
+        try:
+            self.adb.shell("rm /data/misc/bluetooth/logs/btsnoop_hci.log")
+        except AdbCommandError as error:
+            logging.error("Error during setup: " + str(error))
+
+        try:
+            self.adb.shell("rm /data/misc/bluedroid/bt_config.conf")
+        except AdbCommandError as error:
+            logging.error("Error during cleanup: " + str(error))
+
+        try:
+            self.adb.shell("rm /data/misc/bluedroid/bt_config.bak")
+        except AdbCommandError as error:
+            logging.error("Error during cleanup: " + str(error))
+
         self.ensure_no_output(self.adb.shell("svc bluetooth disable"))
 
         # Start logcat logging
@@ -465,9 +485,20 @@ class GdAndroidDevice(GdDeviceBase):
             "/data/misc/bluedroid/bt_config.bak %s" % os.path.join(self.log_path_base, "%s_bt_config.bak" % self.label))
 
     def cleanup_port_forwarding(self):
-        self.adb.remove_tcp_forward(self.grpc_port)
-        self.adb.remove_tcp_forward(self.grpc_root_server_port)
-        self.adb.reverse("--remove tcp:%d" % self.signal_port)
+        try:
+            self.adb.remove_tcp_forward(self.grpc_port)
+        except AdbError as error:
+            logging.error("Error during port forwarding cleanup: " + str(error))
+
+        try:
+            self.adb.remove_tcp_forward(self.grpc_root_server_port)
+        except AdbError as error:
+            logging.error("Error during port forwarding cleanup: " + str(error))
+
+        try:
+            self.adb.reverse("--remove tcp:%d" % self.signal_port)
+        except AdbError as error:
+            logging.error("Error during port forwarding cleanup: " + str(error))
 
     @staticmethod
     def ensure_no_output(result):

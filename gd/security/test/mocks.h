@@ -29,8 +29,8 @@ namespace security {
 
 class UIMock : public UI {
  public:
-  UIMock() {}
-  ~UIMock() override = default;
+  UIMock() = default;
+  ~UIMock() = default;
 
   // Convert these to accept ConfirmationData
   MOCK_METHOD2(DisplayPairingPrompt, void(const bluetooth::hci::AddressWithType& address, std::string name));
@@ -39,6 +39,7 @@ class UIMock : public UI {
   MOCK_METHOD1(DisplayYesNoDialog, void(ConfirmationData));
   MOCK_METHOD1(DisplayEnterPasskeyDialog, void(ConfirmationData));
   MOCK_METHOD1(DisplayPasskey, void(ConfirmationData));
+  MOCK_METHOD1(DisplayEnterPinDialog, void(ConfirmationData));
 
  private:
   DISALLOW_COPY_AND_ASSIGN(UIMock);

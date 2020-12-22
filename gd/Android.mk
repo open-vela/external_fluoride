@@ -10,6 +10,7 @@ LOCAL_cert_test_sources := \
 
 LOCAL_host_executables := \
 	$(HOST_OUT_EXECUTABLES)/bluetooth_stack_with_facade \
+	$(HOST_OUT_EXECUTABLES)/bluetooth_with_facades \
 	$(HOST_OUT_EXECUTABLES)/root-canal
 
 LOCAL_host_python_extension_libraries := \
@@ -23,7 +24,10 @@ LOCAL_host_libraries := \
 	$(HOST_OUT_SHARED_LIBRARIES)/libcrypto-host.so \
 	$(HOST_OUT_SHARED_LIBRARIES)/libevent-host.so \
 	$(HOST_OUT_SHARED_LIBRARIES)/libgrpc++_unsecure.so \
+	$(HOST_OUT_SHARED_LIBRARIES)/libgrpc++.so \
+	$(HOST_OUT_SHARED_LIBRARIES)/libgrpc_wrap.so \
 	$(HOST_OUT_SHARED_LIBRARIES)/liblog.so \
+	$(HOST_OUT_SHARED_LIBRARIES)/libssl-host.so \
 	$(HOST_OUT_SHARED_LIBRARIES)/libz-host.so \
 	$(HOST_OUT_SHARED_LIBRARIES)/libprotobuf-cpp-full.so \
 	$(HOST_OUT_SHARED_LIBRARIES)/libunwindstack.so \
@@ -95,6 +99,7 @@ $(bluetooth_cert_tests_py_package_zip): $(SOONG_ZIP) $(LOCAL_acts_zip) \
 		-P llvm_binutils -C $(LLVM_PREBUILTS_BASE)/linux-x86/$(LLVM_PREBUILTS_VERSION) \
 		-f $(LLVM_PREBUILTS_BASE)/linux-x86/$(LLVM_PREBUILTS_VERSION)/bin/llvm-cov \
 		-f $(LLVM_PREBUILTS_BASE)/linux-x86/$(LLVM_PREBUILTS_VERSION)/bin/llvm-profdata \
+		-f $(LLVM_PREBUILTS_BASE)/linux-x86/$(LLVM_PREBUILTS_VERSION)/bin/llvm-symbolizer \
 		-f $(LLVM_PREBUILTS_BASE)/linux-x86/$(LLVM_PREBUILTS_VERSION)/lib64/libc++.so.1
 
 $(call dist-for-goals,bluetooth_stack_with_facade,$(bluetooth_cert_tests_py_package_zip):bluetooth_cert_tests.zip)

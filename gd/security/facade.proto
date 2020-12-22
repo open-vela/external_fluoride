@@ -9,16 +9,18 @@ import "hci/facade/le_initiator_address_facade.proto";
 
 service SecurityModuleFacade {
   rpc CreateBond(facade.BluetoothAddressWithType) returns (google.protobuf.Empty) {}
+  rpc CreateBondOutOfBand(OobDataBondMessage) returns (google.protobuf.Empty) {}
+  rpc GetOutOfBandData(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc FetchGetOutOfBandDataEvents(google.protobuf.Empty) returns (stream OobDataBondMessage) {}
   rpc CreateBondLe(facade.BluetoothAddressWithType) returns (google.protobuf.Empty) {}
   rpc CancelBond(facade.BluetoothAddressWithType) returns (google.protobuf.Empty) {}
   rpc RemoveBond(facade.BluetoothAddressWithType) returns (google.protobuf.Empty) {}
   rpc SetIoCapability(IoCapabilityMessage) returns (google.protobuf.Empty) {}
   rpc SetAuthenticationRequirements(AuthenticationRequirementsMessage) returns (google.protobuf.Empty) {}
-  rpc SetOobDataPresent(OobDataPresentMessage) returns (google.protobuf.Empty) {}
   rpc SetLeIoCapability(LeIoCapabilityMessage) returns (google.protobuf.Empty) {}
   rpc SetLeAuthRequirements(LeAuthRequirementsMessage) returns (google.protobuf.Empty) {}
   rpc SetLeMaximumEncryptionKeySize(LeMaximumEncryptionKeySizeMessage) returns (google.protobuf.Empty) {}
-  rpc GetOutOfBandData(google.protobuf.Empty) returns (OobDataMessage) {}
+  rpc GetLeOutOfBandData(google.protobuf.Empty) returns (OobDataMessage) {}
   rpc SetOutOfBandData(OobDataMessage) returns (google.protobuf.Empty) {}
   rpc SetLeOobDataPresent(LeOobDataPresentMessage) returns (google.protobuf.Empty) {}
   rpc SetLeInitiatorAddressPolicy(hci.PrivacyPolicy) returns (google.protobuf.Empty) {}
@@ -33,8 +35,14 @@ service SecurityModuleFacade {
 
 message OobDataMessage {
   facade.BluetoothAddressWithType address = 1;
-  bytes le_sc_confirmation_value = 2;
-  bytes le_sc_random_value = 3;
+  bytes confirmation_value = 2;
+  bytes random_value = 3;
+}
+
+message OobDataBondMessage {
+  facade.BluetoothAddressWithType address = 1;
+  OobDataMessage p192_data = 2;
+  OobDataMessage p256_data = 3;
 }
 
 enum UiMsgType {
@@ -44,6 +52,7 @@ enum UiMsgType {
   DISPLAY_PASSKEY_ENTRY = 3;
   DISPLAY_CANCEL = 4;
   DISPLAY_PAIRING_PROMPT = 5;
+  DISPLAY_PIN_ENTRY = 6;
 }
 
 message UiMsg {
@@ -57,14 +66,16 @@ enum UiCallbackType {
   YES_NO = 0;
   PASSKEY = 1;
   PAIRING_PROMPT = 2;
+  PIN = 3;
 }
 
 message UiCallbackMsg {
   UiCallbackType message_type = 1;
-  bool boolean = 2;
-  uint32 numeric_value = 3;
-  uint32 unique_id = 4;
-  facade.BluetoothAddressWithType address = 5;
+  facade.BluetoothAddressWithType address = 2;
+  bool boolean = 3;
+  uint32 numeric_value = 4;
+  uint32 unique_id = 5;
+  bytes pin = 6;
 }
 
 enum BondMsgType {

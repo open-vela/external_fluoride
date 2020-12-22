@@ -27,6 +27,7 @@
 
 #include "device/include/controller.h"
 #include "device/include/esco_parameters.h"
+#include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/security_device_record.h"
@@ -39,16 +40,6 @@ extern tBTM_CB btm_cb;
 /******************************************************************************/
 /*               L O C A L    D A T A    D E F I N I T I O N S                */
 /******************************************************************************/
-
-#define SCO_ST_UNUSED 0
-#define SCO_ST_LISTENING 1
-#define SCO_ST_W4_CONN_RSP 2
-#define SCO_ST_CONNECTING 3
-#define SCO_ST_CONNECTED 4
-#define SCO_ST_DISCONNECTING 5
-#define SCO_ST_PEND_UNPARK 6
-#define SCO_ST_PEND_ROLECHANGE 7
-#define SCO_ST_PEND_MODECHANGE 8
 
 #define BTM_SCO_PKT_TYPE_MASK \
   (HCI_PKT_TYPES_MASK_HV1 | HCI_PKT_TYPES_MASK_HV2 | HCI_PKT_TYPES_MASK_HV3)
@@ -392,9 +383,9 @@ tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
               LOG(INFO) << __func__ << ": " << *remote_bda
                         << " in sniff, park or pending mode "
                         << unsigned(state);
-              tBTM_PM_PWR_MD pm = {};
-              pm.mode = BTM_PM_MD_ACTIVE;
-              BTM_SetPowerMode(BTM_PM_SET_ONLY_ID, *remote_bda, &pm);
+              if (!BTM_SetLinkPolicyActiveMode(*remote_bda)) {
+                LOG_WARN("Unable to set link policy active");
+              }
               p->state = SCO_ST_PEND_UNPARK;
             }
           } else {
@@ -481,7 +472,7 @@ tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
  * Returns          void
  *
  ******************************************************************************/
-void btm_sco_chk_pend_unpark(uint8_t hci_status, uint16_t hci_handle) {
+void btm_sco_chk_pend_unpark(tHCI_STATUS hci_status, uint16_t hci_handle) {
   tSCO_CONN* p = &btm_cb.sco_cb.sco_db[0];
   for (uint16_t xx = 0; xx < BTM_MAX_SCO_LINKS; xx++, p++) {
     uint16_t acl_handle =
@@ -777,7 +768,7 @@ tBTM_STATUS BTM_RemoveSco(uint16_t sco_inx) {
   tempstate = p->state;
   p->state = SCO_ST_DISCONNECTING;
 
-  btsnd_hcic_disconnect(p->hci_handle, HCI_ERR_PEER_USER);
+  acl_disconnect_from_handle(p->hci_handle, HCI_ERR_PEER_USER);
 
   return (BTM_CMD_STARTED);
 }
@@ -1163,6 +1154,9 @@ uint8_t BTM_GetNumScoLinks(void) {
       case SCO_ST_DISCONNECTING:
       case SCO_ST_PEND_UNPARK:
         num_scos++;
+        break;
+      default:
+        break;
     }
   }
   return (num_scos);

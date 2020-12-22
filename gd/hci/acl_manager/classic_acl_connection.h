@@ -30,7 +30,7 @@ class ClassicAclConnection : public AclConnection {
   ClassicAclConnection();
   ClassicAclConnection(std::shared_ptr<Queue> queue, AclConnectionInterface* acl_connection_interface, uint16_t handle,
                        Address address);
-  ~ClassicAclConnection() override;
+  ~ClassicAclConnection();
 
   virtual Address GetAddress() const {
     return address_;
@@ -67,7 +67,7 @@ class ClassicAclConnection : public AclConnection {
   virtual bool ReadAfhChannelMap();
   virtual bool ReadRssi();
   virtual bool ReadClock(WhichClock which_clock);
-  virtual bool ReadRemoteVersionInformation();
+  virtual bool ReadRemoteVersionInformation() override;
   virtual bool ReadRemoteSupportedFeatures();
   virtual bool ReadRemoteExtendedFeatures(uint8_t page_number);
 
