@@ -1,4 +1,21 @@
+/*
+ * Copyright 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "hci/le_address_manager.h"
+#include "common/init_flags.h"
 #include "os/log.h"
 #include "os/rand.h"
 
@@ -8,7 +25,7 @@ namespace hci {
 static constexpr uint8_t BLE_ADDR_MASK = 0xc0u;
 
 LeAddressManager::LeAddressManager(
-    common::Callback<void(std::unique_ptr<CommandPacketBuilder>)> enqueue_command,
+    common::Callback<void(std::unique_ptr<CommandBuilder>)> enqueue_command,
     os::Handler* handler,
     Address public_address,
     uint8_t connect_list_size,
@@ -61,15 +78,12 @@ void LeAddressManager::SetPrivacyPolicyForInitiatorAddress(
     } break;
     case AddressPolicy::USE_NON_RESOLVABLE_ADDRESS:
     case AddressPolicy::USE_RESOLVABLE_ADDRESS:
+      le_address_ = fixed_address;
       rotation_irk_ = rotation_irk;
       minimum_rotation_time_ = minimum_rotation_time;
       maximum_rotation_time_ = maximum_rotation_time;
       address_rotation_alarm_ = std::make_unique<os::Alarm>(handler_);
-      if (!registered_clients_.empty()) {
-        // clients registered and paused before the policy set, rotate random address and resume
-        // clients after set random address complete
-        handler_->BindOnceOn(this, &LeAddressManager::rotate_random_address).Invoke();
-      }
+      set_random_address();
       break;
     case AddressPolicy::POLICY_NOT_SET:
       LOG_ALWAYS_FATAL("invalid parameters");
@@ -133,7 +147,13 @@ void LeAddressManager::register_client(LeAddressManagerCallback* callback) {
   } else if (
       address_policy_ == AddressPolicy::USE_RESOLVABLE_ADDRESS ||
       address_policy_ == AddressPolicy::USE_NON_RESOLVABLE_ADDRESS) {
-    prepare_to_rotate();
+    if (bluetooth::common::init_flags::gd_acl_is_enabled()) {
+      if (registered_clients_.size() == 1) {
+        schedule_rotate_random_address();
+      }
+    } else {
+      prepare_to_rotate();
+    }
   }
 }
 
@@ -179,6 +199,11 @@ void LeAddressManager::pause_registered_clients() {
   }
 }
 
+void LeAddressManager::push_command(Command command) {
+  pause_registered_clients();
+  cached_commands_.push(std::move(command));
+}
+
 void LeAddressManager::ack_pause(LeAddressManagerCallback* callback) {
   ASSERT(registered_clients_.find(callback) != registered_clients_.end());
   registered_clients_.find(callback)->second = ClientState::PAUSED;
@@ -218,16 +243,18 @@ void LeAddressManager::prepare_to_rotate() {
   pause_registered_clients();
 }
 
-void LeAddressManager::rotate_random_address() {
+void LeAddressManager::schedule_rotate_random_address() {
+  address_rotation_alarm_->Schedule(
+      common::BindOnce(&LeAddressManager::prepare_to_rotate, common::Unretained(this)),
+      get_next_private_address_interval_ms());
+}
+
+void LeAddressManager::set_random_address() {
   if (address_policy_ != AddressPolicy::USE_RESOLVABLE_ADDRESS &&
       address_policy_ != AddressPolicy::USE_NON_RESOLVABLE_ADDRESS) {
     LOG_ALWAYS_FATAL("Invalid address policy!");
     return;
   }
-
-  address_rotation_alarm_->Schedule(
-      common::BindOnce(&LeAddressManager::prepare_to_rotate, common::Unretained(this)),
-      get_next_private_address_interval_ms());
 
   hci::Address address;
   if (address_policy_ == AddressPolicy::USE_RESOLVABLE_ADDRESS) {
@@ -238,6 +265,17 @@ void LeAddressManager::rotate_random_address() {
   auto packet = hci::LeSetRandomAddressBuilder::Create(address);
   enqueue_command_.Run(std::move(packet));
   le_address_ = AddressWithType(address, AddressType::RANDOM_DEVICE_ADDRESS);
+}
+
+void LeAddressManager::rotate_random_address() {
+  if (address_policy_ != AddressPolicy::USE_RESOLVABLE_ADDRESS &&
+      address_policy_ != AddressPolicy::USE_NON_RESOLVABLE_ADDRESS) {
+    LOG_ALWAYS_FATAL("Invalid address policy!");
+    return;
+  }
+
+  schedule_rotate_random_address();
+  set_random_address();
 }
 
 /* This function generates Resolvable Private Address (RPA) from Identity
@@ -331,8 +369,7 @@ void LeAddressManager::AddDeviceToConnectList(
     ConnectListAddressType connect_list_address_type, bluetooth::hci::Address address) {
   auto packet_builder = hci::LeAddDeviceToConnectListBuilder::Create(connect_list_address_type, address);
   Command command = {CommandType::ADD_DEVICE_TO_CONNECT_LIST, std::move(packet_builder)};
-  handler_->BindOnceOn(this, &LeAddressManager::pause_registered_clients).Invoke();
-  cached_commands_.push(std::move(command));
+  handler_->BindOnceOn(this, &LeAddressManager::push_command, std::move(command)).Invoke();
 }
 
 void LeAddressManager::AddDeviceToResolvingList(
@@ -343,16 +380,14 @@ void LeAddressManager::AddDeviceToResolvingList(
   auto packet_builder = hci::LeAddDeviceToResolvingListBuilder::Create(
       peer_identity_address_type, peer_identity_address, peer_irk, local_irk);
   Command command = {CommandType::ADD_DEVICE_TO_RESOLVING_LIST, std::move(packet_builder)};
-  handler_->BindOnceOn(this, &LeAddressManager::pause_registered_clients).Invoke();
-  cached_commands_.push(std::move(command));
+  handler_->BindOnceOn(this, &LeAddressManager::push_command, std::move(command)).Invoke();
 }
 
 void LeAddressManager::RemoveDeviceFromConnectList(
     ConnectListAddressType connect_list_address_type, bluetooth::hci::Address address) {
   auto packet_builder = hci::LeRemoveDeviceFromConnectListBuilder::Create(connect_list_address_type, address);
   Command command = {CommandType::REMOVE_DEVICE_FROM_CONNECT_LIST, std::move(packet_builder)};
-  handler_->BindOnceOn(this, &LeAddressManager::pause_registered_clients).Invoke();
-  cached_commands_.push(std::move(command));
+  handler_->BindOnceOn(this, &LeAddressManager::push_command, std::move(command)).Invoke();
 }
 
 void LeAddressManager::RemoveDeviceFromResolvingList(
@@ -360,22 +395,19 @@ void LeAddressManager::RemoveDeviceFromResolvingList(
   auto packet_builder =
       hci::LeRemoveDeviceFromResolvingListBuilder::Create(peer_identity_address_type, peer_identity_address);
   Command command = {CommandType::REMOVE_DEVICE_FROM_RESOLVING_LIST, std::move(packet_builder)};
-  handler_->BindOnceOn(this, &LeAddressManager::pause_registered_clients).Invoke();
-  cached_commands_.push(std::move(command));
+  handler_->BindOnceOn(this, &LeAddressManager::push_command, std::move(command)).Invoke();
 }
 
 void LeAddressManager::ClearConnectList() {
   auto packet_builder = hci::LeClearConnectListBuilder::Create();
   Command command = {CommandType::CLEAR_CONNECT_LIST, std::move(packet_builder)};
-  handler_->BindOnceOn(this, &LeAddressManager::pause_registered_clients).Invoke();
-  cached_commands_.push(std::move(command));
+  handler_->BindOnceOn(this, &LeAddressManager::push_command, std::move(command)).Invoke();
 }
 
 void LeAddressManager::ClearResolvingList() {
   auto packet_builder = hci::LeClearResolvingListBuilder::Create();
   Command command = {CommandType::CLEAR_RESOLVING_LIST, std::move(packet_builder)};
-  handler_->BindOnceOn(this, &LeAddressManager::pause_registered_clients).Invoke();
-  cached_commands_.push(std::move(command));
+  handler_->BindOnceOn(this, &LeAddressManager::push_command, std::move(command)).Invoke();
 }
 
 void LeAddressManager::OnCommandComplete(bluetooth::hci::CommandCompleteView view) {

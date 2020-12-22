@@ -34,10 +34,14 @@ class AclConnection {
     return handle_;
   }
 
+  virtual bool ReadRemoteVersionInformation() = 0;
+
   using Queue = common::BidiQueue<PacketView<kLittleEndian>, BasePacketBuilder>;
   using QueueUpEnd = common::BidiQueueEnd<BasePacketBuilder, PacketView<kLittleEndian>>;
   using QueueDownEnd = common::BidiQueueEnd<PacketView<kLittleEndian>, BasePacketBuilder>;
   virtual QueueUpEnd* GetAclQueueEnd() const;
+
+  bool locally_initiated_{false};
 
  protected:
   AclConnection(QueueUpEnd* queue_up_end, uint16_t handle) : queue_up_end_(queue_up_end), handle_(handle) {}

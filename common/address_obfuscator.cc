@@ -21,9 +21,7 @@
 #include <algorithm>
 
 #include <base/logging.h>
-#if !defined(__NuttX__)
 #include <openssl/hmac.h>
-#endif
 
 #include "bt_trace.h"
 
@@ -47,7 +45,6 @@ bool AddressObfuscator::IsInitialized() {
 
 std::string AddressObfuscator::Obfuscate(const RawAddress& address) {
   std::lock_guard<std::recursive_mutex> lock(instance_mutex_);
-#if !defined(__NuttX__)
   CHECK(IsInitialized());
   std::array<uint8_t, EVP_MAX_MD_SIZE> result = {};
   unsigned int out_len = 0;
@@ -56,9 +53,6 @@ std::string AddressObfuscator::Obfuscate(const RawAddress& address) {
                &out_len) != nullptr);
   CHECK_EQ(out_len, static_cast<unsigned int>(kOctet32Length));
   return std::string(reinterpret_cast<const char*>(result.data()), out_len);
-#else
-  return std::string(NULL);
-#endif
 }
 
 }  // namespace common
