@@ -90,25 +90,61 @@ typedef uint8_t tBTA_SYS_ID;
 
 inline std::string BtaIdSysText(tBTA_SYS_ID sys_id) {
   switch (sys_id) {
+    case BTA_ID_DM_SEARCH:
+      return std::string("Scanner");
+    case BTA_ID_AG:
+      return std::string("Audio gateway");
+    case BTA_ID_PAN:
+      return std::string("PAN Personal area network");
+    case BTA_ID_AV:
+      return std::string("Advanced audio/video");
     case BTA_ID_HD:
-      return std::string("Hid Device");
+      return std::string("HID Human interface device");
+    case BTA_ID_GATTC:
+      return std::string("GATT client");
+    case BTA_ID_GATTS:
+      return std::string("GATT server");
     default:
       return std::string("Unknown");
   }
 }
 
-#define BTA_SYS_CONN_OPEN 0x00
-#define BTA_SYS_CONN_CLOSE 0x01
-#define BTA_SYS_APP_OPEN 0x02
-#define BTA_SYS_APP_CLOSE 0x03
-#define BTA_SYS_SCO_OPEN 0x04
-#define BTA_SYS_SCO_CLOSE 0x05
-#define BTA_SYS_CONN_IDLE 0x06
-#define BTA_SYS_CONN_BUSY 0x07
+typedef enum : uint8_t {
+  BTA_SYS_CONN_OPEN = 0x00,
+  BTA_SYS_CONN_CLOSE = 0x01,
+  BTA_SYS_APP_OPEN = 0x02,
+  BTA_SYS_APP_CLOSE = 0x03,
+  BTA_SYS_SCO_OPEN = 0x04,
+  BTA_SYS_SCO_CLOSE = 0x05,
+  BTA_SYS_CONN_IDLE = 0x06,
+  BTA_SYS_CONN_BUSY = 0x07,
+  BTA_SYS_ROLE_CHANGE = 0x14, /* role change */
+} tBTA_SYS_CONN_STATUS;
 
-#define BTA_SYS_ROLE_CHANGE 0x14  /* role change */
-
-typedef uint8_t tBTA_SYS_CONN_STATUS;
+inline std::string bta_sys_conn_status_text(tBTA_SYS_CONN_STATUS status) {
+  switch (status) {
+    case BTA_SYS_CONN_OPEN:
+      return std::string("BTA_SYS_CONN_OPEN");
+    case BTA_SYS_CONN_CLOSE:
+      return std::string("BTA_SYS_CONN_CLOSE");
+    case BTA_SYS_APP_OPEN:
+      return std::string("BTA_SYS_APP_OPEN");
+    case BTA_SYS_APP_CLOSE:
+      return std::string("BTA_SYS_APP_CLOSE");
+    case BTA_SYS_SCO_OPEN:
+      return std::string("BTA_SYS_SCO_OPEN");
+    case BTA_SYS_SCO_CLOSE:
+      return std::string("BTA_SYS_SCO_CLOSE");
+    case BTA_SYS_CONN_IDLE:
+      return std::string("BTA_SYS_CONN_IDLE");
+    case BTA_SYS_CONN_BUSY:
+      return std::string("BTA_SYS_CONN_BUSY");
+    case BTA_SYS_ROLE_CHANGE:
+      return std::string("BTA_SYS_ROLE_CHANGE");
+    default:
+      return std::string("UNKNOWN");
+  }
+}
 
 /* conn callback for role / low power manager*/
 typedef void(tBTA_SYS_CONN_CBACK)(tBTA_SYS_CONN_STATUS status, uint8_t id,
@@ -155,7 +191,6 @@ void bta_set_forward_hw_failures(bool value);
 void BTA_sys_signal_hw_error();
 
 extern void bta_sys_init(void);
-extern void bta_sys_event(BT_HDR* p_msg);
 extern void bta_sys_register(uint8_t id, const tBTA_SYS_REG* p_reg);
 extern void bta_sys_deregister(uint8_t id);
 extern bool bta_sys_is_register(uint8_t id);

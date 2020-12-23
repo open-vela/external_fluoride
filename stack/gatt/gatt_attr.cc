@@ -42,6 +42,10 @@ using bluetooth::Uuid;
 
 #define BLE_GATT_CL_SUP_FEAT_CACHING_BITMASK 0x01
 #define BLE_GATT_CL_SUP_FEAT_EATT_BITMASK 0x02
+#define BLE_GATT_CL_SUP_FEAT_MULTI_NOTIF_BITMASK 0x04
+
+#define BLE_GATT_CL_ANDROID_SUP_FEAT \
+  (BLE_GATT_CL_SUP_FEAT_EATT_BITMASK | BLE_GATT_CL_SUP_FEAT_MULTI_NOTIF_BITMASK)
 
 using gatt_eatt_support_cb = base::OnceCallback<void(const RawAddress&, bool)>;
 
@@ -331,7 +335,7 @@ static void gatt_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
                                bool connected, tGATT_DISCONN_REASON reason,
                                tBT_TRANSPORT transport) {
   VLOG(1) << __func__ << ": from " << bda << " connected: " << connected
-          << ", conn_id: " << loghex(conn_id) << "reason: " << loghex(reason);
+          << ", conn_id: " << loghex(conn_id);
 
   tGATT_PROFILE_CLCB* p_clcb =
       gatt_profile_find_clcb_by_bd_addr(bda, transport);
@@ -387,14 +391,14 @@ void gatt_profile_db_init(void) {
           .permissions = 0,
       },
       {
-          .uuid = svr_sup_feat_uuid,
           .type = BTGATT_DB_CHARACTERISTIC,
+          .uuid = svr_sup_feat_uuid,
           .properties = GATT_CHAR_PROP_BIT_READ,
           .permissions = GATT_PERM_READ,
       },
       {
-          .uuid = cl_sup_feat_uuid,
           .type = BTGATT_DB_CHARACTERISTIC,
+          .uuid = cl_sup_feat_uuid,
           .properties = GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_WRITE,
           .permissions = GATT_PERM_READ | GATT_PERM_WRITE,
       }};
@@ -408,7 +412,7 @@ void gatt_profile_db_init(void) {
   gatt_cb.handle_cl_supported_feat = service[3].attribute_handle;
 
   gatt_cb.gatt_svr_supported_feat_mask |= BLE_GATT_SVR_SUP_FEAT_EATT_BITMASK;
-  gatt_cb.gatt_cl_supported_feat_mask |= BLE_GATT_CL_SUP_FEAT_EATT_BITMASK;
+  gatt_cb.gatt_cl_supported_feat_mask |= BLE_GATT_CL_ANDROID_SUP_FEAT;
 
   VLOG(1) << __func__ << ": gatt_if=" << gatt_cb.gatt_if << " EATT supported";
 }

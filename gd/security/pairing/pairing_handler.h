@@ -24,6 +24,7 @@
 #include "hci/hci_packets.h"
 #include "neighbor/name_db.h"
 #include "security/channel/security_manager_channel.h"
+#include "security/pairing/oob_data.h"
 #include "security/record/security_record.h"
 #include "security/smp_packets.h"
 #include "security/ui.h"
@@ -46,11 +47,15 @@ class PairingHandler : public UICallbacks {
       : security_manager_channel_(security_manager_channel),
         record_(std::move(record)),
         name_db_module_(name_db_module) {}
-  virtual ~PairingHandler() = default;
+  ~PairingHandler() = default;
 
   // Classic
-  virtual void Initiate(bool locally_initiated, hci::IoCapability io_capability, hci::OobDataPresent oob_present,
-                        hci::AuthenticationRequirements auth_requirements) = 0;  // This is for local initiated only
+  virtual void Initiate(
+      bool locally_initiated,
+      hci::IoCapability io_capability,
+      hci::AuthenticationRequirements auth_requirements,
+      OobData local_p192_oob_data,
+      OobData local_p256_oob_data) = 0;
   virtual void Cancel() = 0;
   virtual void OnReceive(hci::ChangeConnectionLinkKeyCompleteView packet) = 0;
   virtual void OnReceive(hci::CentralLinkKeyCompleteView packet) = 0;
@@ -72,6 +77,7 @@ class PairingHandler : public UICallbacks {
   virtual void OnPairingPromptAccepted(const bluetooth::hci::AddressWithType& address, bool confirmed) = 0;
   virtual void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) = 0;
   virtual void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) = 0;
+  virtual void OnPinEntry(const bluetooth::hci::AddressWithType& address, std::vector<uint8_t> pin) override = 0;
 
  protected:
   std::shared_ptr<record::SecurityRecord> GetRecord() {

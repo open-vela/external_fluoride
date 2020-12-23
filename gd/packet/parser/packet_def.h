@@ -64,4 +64,22 @@ class PacketDef : public ParentDef {
   void GenBuilderConstructor(std::ostream& s) const;
 
   void GenTestingFromView(std::ostream& s) const;
+
+  void GenRustChildEnums(std::ostream& s) const;
+
+  void GenRustStructDeclarations(std::ostream& s) const;
+
+  bool GenRustStructFieldNameAndType(std::ostream& s) const;
+
+  void GenRustStructFieldNames(std::ostream& s) const;
+
+  void GenRustStructSizeField(std::ostream& s) const;
+
+  void GenRustStructImpls(std::ostream& s) const;
+
+  void GenRustAccessStructImpls(std::ostream& s) const;
+
+  void GenRustBuilderStructImpls(std::ostream& s) const;
+
+  void GenRustDef(std::ostream& s) const;
 };
