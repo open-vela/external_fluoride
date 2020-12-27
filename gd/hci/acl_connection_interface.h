@@ -37,11 +37,10 @@ constexpr EventCode AclConnectionEvents[] = {
     EventCode::FLUSH_OCCURRED,
     EventCode::READ_REMOTE_SUPPORTED_FEATURES_COMPLETE,
     EventCode::READ_REMOTE_EXTENDED_FEATURES_COMPLETE,
-    EventCode::READ_REMOTE_VERSION_INFORMATION_COMPLETE,
     EventCode::LINK_SUPERVISION_TIMEOUT_CHANGED,
 };
 
-typedef CommandInterface<ConnectionManagementCommandBuilder> AclConnectionInterface;
+typedef CommandInterface<AclCommandBuilder> AclConnectionInterface;
 
 }  // namespace hci
 }  // namespace bluetooth

@@ -29,6 +29,8 @@ void btm_ble_advertiser_notify_terminated_legacy(uint8_t status,
                                                  uint16_t connection_handle);
 void btm_ble_increment_link_topology_mask(uint8_t link_role);
 
+bool maybe_resolve_address(RawAddress* bda, tBLE_ADDR_TYPE* bda_type);
+
 static bool acl_ble_common_connection(const tBLE_BD_ADDR& address_with_type,
                                       uint16_t handle, uint8_t role,
                                       bool is_in_security_db,
@@ -106,15 +108,29 @@ void acl_ble_enhanced_connection_complete(
     btm_ble_advertiser_notify_terminated_legacy(HCI_SUCCESS, handle);
 }
 
+static bool maybe_resolve_received_address(
+    const tBLE_BD_ADDR& address_with_type,
+    tBLE_BD_ADDR* resolved_address_with_type) {
+  ASSERT(resolved_address_with_type != nullptr);
+
+  *resolved_address_with_type = address_with_type;
+  return maybe_resolve_address(&resolved_address_with_type->bda,
+                               &resolved_address_with_type->type);
+}
+
 void acl_ble_enhanced_connection_complete_from_shim(
     const tBLE_BD_ADDR& address_with_type, uint16_t handle, uint8_t role,
     uint16_t conn_interval, uint16_t conn_latency, uint16_t conn_timeout,
     const RawAddress& local_rpa, const RawAddress& peer_rpa,
     uint8_t peer_addr_type) {
-  bool match = false;  // TODO look up in database
-  acl_ble_enhanced_connection_complete(
-      address_with_type, handle, role, match, conn_interval, conn_latency,
-      conn_timeout, local_rpa, peer_rpa, peer_addr_type);
+  tBLE_BD_ADDR resolved_address_with_type;
+  const bool is_in_security_db = maybe_resolve_received_address(
+      address_with_type, &resolved_address_with_type);
+
+  acl_ble_enhanced_connection_complete(resolved_address_with_type, handle, role,
+                                       is_in_security_db, conn_interval,
+                                       conn_latency, conn_timeout, local_rpa,
+                                       peer_rpa, peer_addr_type);
 
   // The legacy stack continues the LE connection after the read remote version
   // complete has been received.
@@ -135,4 +151,15 @@ void acl_ble_connection_fail(const tBLE_BD_ADDR& address_with_type,
   }
   btm_ble_update_mode_operation(HCI_ROLE_UNKNOWN, &address_with_type.bda,
                                 status);
+}
+
+void gatt_notify_conn_update(uint16_t handle, uint16_t interval,
+                             uint16_t latency, uint16_t timeout,
+                             tHCI_STATUS status);
+void acl_ble_update_event_received(tHCI_STATUS status, uint16_t handle,
+                                   uint16_t interval, uint16_t latency,
+                                   uint16_t timeout) {
+  l2cble_process_conn_update_evt(handle, status, interval, latency, timeout);
+
+  gatt_notify_conn_update(handle & 0x0FFF, interval, latency, timeout, status);
 }

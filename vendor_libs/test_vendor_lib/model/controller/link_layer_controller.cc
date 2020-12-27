@@ -116,7 +116,7 @@ ErrorCode LinkLayerController::SendCommandToRemoteByHandle(
 }
 
 ErrorCode LinkLayerController::SendAclToRemote(
-    bluetooth::hci::AclPacketView acl_packet) {
+    bluetooth::hci::AclView acl_packet) {
   uint16_t handle = acl_packet.GetHandle();
   if (!connections_.HasHandle(handle)) {
     return ErrorCode::UNKNOWN_CONNECTION;
@@ -151,9 +151,9 @@ ErrorCode LinkLayerController::SendAclToRemote(
   raw_builder_ptr->AddOctets2(static_cast<uint16_t>(payload_bytes.size()));
   raw_builder_ptr->AddOctets(payload_bytes);
 
-  auto acl = model::packets::AclPacketBuilder::Create(
-      my_address.GetAddress(), destination.GetAddress(),
-      std::move(raw_builder_ptr));
+  auto acl = model::packets::AclBuilder::Create(my_address.GetAddress(),
+                                                destination.GetAddress(),
+                                                std::move(raw_builder_ptr));
 
   switch (phy) {
     case Phy::Type::BR_EDR:
@@ -238,6 +238,9 @@ void LinkLayerController::IncomingPacket(
     case PacketType::ISO_CONNECTION_RESPONSE:
       IncomingIsoConnectionResponsePacket(incoming);
       break;
+    case PacketType::KEYPRESS_NOTIFICATION:
+      IncomingKeypressNotificationPacket(incoming);
+      break;
     case model::packets::PacketType::LE_ADVERTISEMENT:
       if (le_scan_enable_ != bluetooth::hci::OpCode::NONE || le_connect_) {
         IncomingLeAdvertisementPacket(incoming);
@@ -275,6 +278,12 @@ void LinkLayerController::IncomingPacket(
       break;
     case model::packets::PacketType::PAGE_REJECT:
       IncomingPageRejectPacket(incoming);
+      break;
+    case (model::packets::PacketType::PASSKEY):
+      IncomingPasskeyPacket(incoming);
+      break;
+    case (model::packets::PacketType::PASSKEY_FAILED):
+      IncomingPasskeyFailedPacket(incoming);
       break;
     case (model::packets::PacketType::REMOTE_NAME_REQUEST):
       IncomingRemoteNameRequest(incoming);
@@ -324,7 +333,7 @@ void LinkLayerController::IncomingAclPacket(
            incoming.GetSourceAddress().ToString().c_str(),
            incoming.GetDestinationAddress().ToString().c_str());
 
-  auto acl = model::packets::AclPacketView::Create(incoming);
+  auto acl = model::packets::AclView::Create(incoming);
   ASSERT(acl.IsValid());
   auto payload = acl.GetPayload();
   std::shared_ptr<std::vector<uint8_t>> payload_bytes =
@@ -332,7 +341,7 @@ void LinkLayerController::IncomingAclPacket(
 
   bluetooth::hci::PacketView<bluetooth::hci::kLittleEndian> raw_packet(
       payload_bytes);
-  auto acl_view = bluetooth::hci::AclPacketView::Create(raw_packet);
+  auto acl_view = bluetooth::hci::AclView::Create(raw_packet);
   ASSERT(acl_view.IsValid());
 
   LOG_INFO("Remote handle 0x%x size %d", acl_view.GetHandle(),
@@ -361,7 +370,7 @@ void LinkLayerController::IncomingAclPacket(
                                   &payload_data[end_index]);
     std::unique_ptr<bluetooth::packet::RawBuilder> raw_builder_ptr =
         std::make_unique<bluetooth::packet::RawBuilder>(fragment);
-    auto acl_packet = bluetooth::hci::AclPacketBuilder::Create(
+    auto acl_packet = bluetooth::hci::AclBuilder::Create(
         local_handle, pb_flag_controller_to_host, acl_view.GetBroadcastFlag(),
         std::move(raw_builder_ptr));
     pb_flag_controller_to_host =
@@ -688,7 +697,7 @@ void LinkLayerController::IncomingInquiryResponsePacket(
       raw_builder_ptr->AddOctets1(inquiry_response.GetRssi());
       raw_builder_ptr->AddOctets(inquiry_response.GetExtendedData());
 
-      auto packet = bluetooth::hci::EventPacketBuilder::Create(
+      auto packet = bluetooth::hci::EventBuilder::Create(
           bluetooth::hci::EventCode::EXTENDED_INQUIRY_RESULT,
           std::move(raw_builder_ptr));
       send_event_(std::move(packet));
@@ -701,19 +710,7 @@ void LinkLayerController::IncomingInquiryResponsePacket(
 
 void LinkLayerController::IncomingIoCapabilityRequestPacket(
     model::packets::LinkLayerPacketView incoming) {
-  if (!simple_pairing_mode_enabled_) {
-    LOG_WARN("Only simple pairing mode is implemented");
-    return;
-  }
-
-  auto request = model::packets::IoCapabilityRequestView::Create(incoming);
-  ASSERT(request.IsValid());
-
   Address peer = incoming.GetSourceAddress();
-  uint8_t io_capability = request.GetIoCapability();
-  uint8_t oob_data_present = request.GetOobDataPresent();
-  uint8_t authentication_requirements = request.GetAuthenticationRequirements();
-
   uint16_t handle = connections_.GetHandle(AddressWithType(
       peer, bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS));
   if (handle == kReservedHandle) {
@@ -721,10 +718,27 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
     return;
   }
 
-  security_manager_.AuthenticationRequest(peer, handle);
+  if (!properties_.GetSecureSimplePairingSupported()) {
+    LOG_WARN("Trying PIN pairing for %s",
+             incoming.GetDestinationAddress().ToString().c_str());
+    SendLinkLayerPacket(
+        model::packets::IoCapabilityNegativeResponseBuilder::Create(
+            incoming.GetDestinationAddress(), incoming.GetSourceAddress(),
+            static_cast<uint8_t>(
+                ErrorCode::UNSUPPORTED_REMOTE_OR_LMP_FEATURE)));
+    security_manager_.AuthenticationRequest(incoming.GetSourceAddress(),
+                                            handle);
+    send_event_(bluetooth::hci::PinCodeRequestBuilder::Create(
+        incoming.GetSourceAddress()));
+    return;
+  }
 
-  security_manager_.SetPeerIoCapability(peer, io_capability, oob_data_present,
-                                        authentication_requirements);
+  auto request = model::packets::IoCapabilityRequestView::Create(incoming);
+  ASSERT(request.IsValid());
+
+  uint8_t io_capability = request.GetIoCapability();
+  uint8_t oob_data_present = request.GetOobDataPresent();
+  uint8_t authentication_requirements = request.GetAuthenticationRequirements();
 
   auto packet = bluetooth::hci::IoCapabilityResponseBuilder::Create(
       peer, static_cast<bluetooth::hci::IoCapability>(io_capability),
@@ -733,13 +747,39 @@ void LinkLayerController::IncomingIoCapabilityRequestPacket(
           authentication_requirements));
   send_event_(std::move(packet));
 
-  StartSimplePairing(peer);
+  bool pairing_started = security_manager_.AuthenticationInProgress();
+  if (!pairing_started) {
+    security_manager_.AuthenticationRequest(peer, handle);
+    StartSimplePairing(peer);
+  }
+
+  security_manager_.SetPeerIoCapability(peer, io_capability, oob_data_present,
+                                        authentication_requirements);
+  if (pairing_started) {
+    PairingType pairing_type = security_manager_.GetSimplePairingType();
+    if (pairing_type != PairingType::INVALID) {
+      ScheduleTask(milliseconds(5), [this, peer, pairing_type]() {
+        AuthenticateRemoteStage1(peer, pairing_type);
+      });
+    } else {
+      LOG_INFO("Security Manager returned INVALID");
+    }
+  }
 }
 
 void LinkLayerController::IncomingIoCapabilityResponsePacket(
     model::packets::LinkLayerPacketView incoming) {
   auto response = model::packets::IoCapabilityResponseView::Create(incoming);
   ASSERT(response.IsValid());
+  if (!properties_.GetSecureSimplePairingSupported()) {
+    LOG_WARN("Only simple pairing mode is implemented");
+    SendLinkLayerPacket(
+        model::packets::IoCapabilityNegativeResponseBuilder::Create(
+            incoming.GetDestinationAddress(), incoming.GetSourceAddress(),
+            static_cast<uint8_t>(
+                ErrorCode::UNSUPPORTED_REMOTE_OR_LMP_FEATURE)));
+    return;
+  }
 
   Address peer = incoming.GetSourceAddress();
   uint8_t io_capability = response.GetIoCapability();
@@ -774,6 +814,10 @@ void LinkLayerController::IncomingIoCapabilityNegativeResponsePacket(
   ASSERT(security_manager_.GetAuthenticationAddress() == peer);
 
   security_manager_.InvalidateIoCapabilities();
+  LOG_INFO("%s doesn't support SSP, try PIN",
+           incoming.GetSourceAddress().ToString().c_str());
+  send_event_(bluetooth::hci::PinCodeRequestBuilder::Create(
+      incoming.GetSourceAddress()));
 }
 
 void LinkLayerController::IncomingIsoPacket(LinkLayerPacketView incoming) {
@@ -790,10 +834,10 @@ void LinkLayerController::IncomingIsoPacket(LinkLayerPacketView incoming) {
     return;
   }
   LOG_INFO("ISO packet scheduling is not implemented");
-  // send_iso_(bluetooth::hci::IsoPacketWithTimestampBuilder::Create())
+  // send_iso_(bluetooth::hci::IsoWithTimestampBuilder::Create())
 }
 
-void LinkLayerController::HandleIso(bluetooth::hci::IsoPacketView iso) {
+void LinkLayerController::HandleIso(bluetooth::hci::IsoView iso) {
   auto cis_handle = iso.GetConnectionHandle();
   if (!connections_.HasCisHandle(cis_handle)) {
     LOG_INFO("Dropping ISO packet to unknown handle 0x%hx", cis_handle);
@@ -834,7 +878,7 @@ void LinkLayerController::HandleIso(bluetooth::hci::IsoPacketView iso) {
     payload->AddOctets1(it);
   }
   if (start_flag == model::packets::StartContinuation::START) {
-    auto timestamped = bluetooth::hci::IsoPacketWithTimestampView::Create(iso);
+    auto timestamped = bluetooth::hci::IsoWithTimestampView::Create(iso);
     ASSERT(timestamped.IsValid());
     uint32_t timestamp = timestamped.GetTimeStamp();
     SendLeLinkLayerPacket(model::packets::IsoStartBuilder::Create(
@@ -931,6 +975,23 @@ void LinkLayerController::IncomingIsoConnectionResponsePacket(
       ft_m_to_s, ft_s_to_m, max_pdu_m_to_s, max_pdu_s_to_m, iso_interval));
 }
 
+void LinkLayerController::IncomingKeypressNotificationPacket(
+    model::packets::LinkLayerPacketView incoming) {
+  auto keypress = model::packets::KeypressNotificationView::Create(incoming);
+  ASSERT(keypress.IsValid());
+  auto notification_type = keypress.GetNotificationType();
+  if (notification_type >
+      model::packets::PasskeyNotificationType::ENTRY_COMPLETED) {
+    LOG_WARN("Dropping unknown notification type %d",
+             static_cast<int>(notification_type));
+    return;
+  }
+  send_event_(bluetooth::hci::KeypressNotificationBuilder::Create(
+      incoming.GetSourceAddress(),
+      static_cast<bluetooth::hci::KeypressNotificationType>(
+          notification_type)));
+}
+
 void LinkLayerController::IncomingLeAdvertisementPacket(
     model::packets::LinkLayerPacketView incoming) {
   // TODO: Handle multiple advertisements per packet.
@@ -955,7 +1016,7 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
     raw_builder_ptr->AddOctets1(ad.size());
     raw_builder_ptr->AddOctets(ad);
     raw_builder_ptr->AddOctets1(GetRssi());
-    auto packet = bluetooth::hci::EventPacketBuilder::Create(
+    auto packet = bluetooth::hci::EventBuilder::Create(
         bluetooth::hci::EventCode::LE_META_EVENT, std::move(raw_builder_ptr));
     send_event_(std::move(packet));
   }
@@ -998,7 +1059,7 @@ void LinkLayerController::IncomingLeAdvertisementPacket(
     raw_builder_ptr->AddAddress(Address::kEmpty);  // Direct_Address
     raw_builder_ptr->AddOctets1(ad.size());
     raw_builder_ptr->AddOctets(ad);
-    send_event_(bluetooth::hci::EventPacketBuilder::Create(
+    send_event_(bluetooth::hci::EventBuilder::Create(
         bluetooth::hci::EventCode::LE_META_EVENT, std::move(raw_builder_ptr)));
   }
 
@@ -1227,7 +1288,7 @@ void LinkLayerController::IncomingLeScanResponsePacket(
     raw_builder_ptr->AddOctets1(ad.size());
     raw_builder_ptr->AddOctets(ad);
     raw_builder_ptr->AddOctets1(GetRssi());
-    auto packet = bluetooth::hci::EventPacketBuilder::Create(
+    auto packet = bluetooth::hci::EventBuilder::Create(
         bluetooth::hci::EventCode::LE_META_EVENT, std::move(raw_builder_ptr));
     send_event_(std::move(packet));
   }
@@ -1251,10 +1312,29 @@ void LinkLayerController::IncomingLeScanResponsePacket(
     raw_builder_ptr->AddAddress(Address::kEmpty);  // Direct_Address
     raw_builder_ptr->AddOctets1(ad.size());
     raw_builder_ptr->AddOctets(ad);
-    auto packet = bluetooth::hci::EventPacketBuilder::Create(
+    auto packet = bluetooth::hci::EventBuilder::Create(
         bluetooth::hci::EventCode::LE_META_EVENT, std::move(raw_builder_ptr));
     send_event_(std::move(packet));
   }
+}
+
+void LinkLayerController::IncomingPasskeyPacket(
+    model::packets::LinkLayerPacketView incoming) {
+  auto passkey = model::packets::PasskeyView::Create(incoming);
+  ASSERT(passkey.IsValid());
+  SaveKeyAndAuthenticate('P', incoming.GetSourceAddress());
+}
+
+void LinkLayerController::IncomingPasskeyFailedPacket(
+    model::packets::LinkLayerPacketView incoming) {
+  auto failed = model::packets::PasskeyFailedView::Create(incoming);
+  ASSERT(failed.IsValid());
+  auto current_peer = incoming.GetSourceAddress();
+  security_manager_.AuthenticationRequestFinished();
+  ScheduleTask(milliseconds(5), [this, current_peer]() {
+    send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+        ErrorCode::AUTHENTICATION_FAILURE, current_peer));
+  });
 }
 
 void LinkLayerController::IncomingPagePacket(
@@ -1334,14 +1414,14 @@ void LinkLayerController::LeAdvertising() {
 }
 
 void LinkLayerController::RegisterEventChannel(
-    const std::function<
-        void(std::shared_ptr<bluetooth::hci::EventPacketBuilder>)>& callback) {
+    const std::function<void(std::shared_ptr<bluetooth::hci::EventBuilder>)>&
+        callback) {
   send_event_ = callback;
 }
 
 void LinkLayerController::RegisterAclChannel(
-    const std::function<
-        void(std::shared_ptr<bluetooth::hci::AclPacketBuilder>)>& callback) {
+    const std::function<void(std::shared_ptr<bluetooth::hci::AclBuilder>)>&
+        callback) {
   send_acl_ = callback;
 }
 
@@ -1397,11 +1477,6 @@ void LinkLayerController::RegisterTaskCancel(
   cancel_task_ = task_cancel;
 }
 
-void LinkLayerController::WriteSimplePairingMode(bool enabled) {
-  ASSERT_LOG(enabled, "The spec says don't disable this!");
-  simple_pairing_mode_enabled_ = enabled;
-}
-
 void LinkLayerController::StartSimplePairing(const Address& address) {
   // IO Capability Exchange (See the Diagram in the Spec)
   auto packet = bluetooth::hci::IoCapabilityRequestBuilder::Create(address);
@@ -1428,7 +1503,7 @@ void LinkLayerController::AuthenticateRemoteStage1(const Address& peer,
       break;
     case PairingType::DISPLAY_PIN:
       send_event_(
-          bluetooth::hci::UserConfirmationRequestBuilder::Create(peer, 123456));
+          bluetooth::hci::UserPasskeyNotificationBuilder::Create(peer, 123456));
       break;
     case PairingType::DISPLAY_AND_CONFIRM:
       send_event_(
@@ -1436,6 +1511,14 @@ void LinkLayerController::AuthenticateRemoteStage1(const Address& peer,
       break;
     case PairingType::INPUT_PIN:
       send_event_(bluetooth::hci::UserPasskeyRequestBuilder::Create(peer));
+      break;
+    case PairingType::OUT_OF_BAND:
+      LOG_INFO("Oob data request for %s", peer.ToString().c_str());
+      send_event_(bluetooth::hci::RemoteOobDataRequestBuilder::Create(peer));
+      break;
+    case PairingType::PEER_HAS_OUT_OF_BAND:
+      LOG_INFO("Trusting that %s has OOB data", peer.ToString().c_str());
+      SaveKeyAndAuthenticate('P', peer);
       break;
     default:
       LOG_ALWAYS_FATAL("Invalid PairingType %d",
@@ -1473,10 +1556,17 @@ ErrorCode LinkLayerController::LinkKeyRequestNegativeReply(
     return ErrorCode::UNKNOWN_CONNECTION;
   }
 
-  security_manager_.AuthenticationRequest(address, handle);
+  if (properties_.GetSecureSimplePairingSupported()) {
+    security_manager_.AuthenticationRequest(address, handle);
 
-  ScheduleTask(milliseconds(5),
-               [this, address]() { StartSimplePairing(address); });
+    ScheduleTask(milliseconds(5),
+                 [this, address]() { StartSimplePairing(address); });
+  } else {
+    LOG_INFO("PIN pairing %s", properties_.GetAddress().ToString().c_str());
+    ScheduleTask(milliseconds(5), [this, address]() {
+      send_event_(bluetooth::hci::PinCodeRequestBuilder::Create(address));
+    });
+  }
   return ErrorCode::SUCCESS;
 }
 
@@ -1521,44 +1611,104 @@ ErrorCode LinkLayerController::IoCapabilityRequestNegativeReply(
   return ErrorCode::SUCCESS;
 }
 
+void LinkLayerController::SaveKeyAndAuthenticate(uint8_t key_type,
+                                                 const Address& peer) {
+  std::array<uint8_t, 16> key_vec{'k',
+                                  'e',
+                                  'y',
+                                  ' ',
+                                  key_type,
+                                  5,
+                                  6,
+                                  7,
+                                  8,
+                                  9,
+                                  10,
+                                  11,
+                                  12,
+                                  13,
+                                  static_cast<uint8_t>(key_id_ >> 8u),
+                                  static_cast<uint8_t>(key_id_)};
+  key_id_ += 1;
+  security_manager_.WriteKey(peer, key_vec);
+
+  security_manager_.AuthenticationRequestFinished();
+
+  if (key_type == 'L') {
+    // Legacy
+    ScheduleTask(milliseconds(5), [this, peer, key_vec]() {
+      send_event_(bluetooth::hci::LinkKeyNotificationBuilder::Create(
+          peer, key_vec, bluetooth::hci::KeyType::AUTHENTICATED_P192));
+    });
+  } else {
+    ScheduleTask(milliseconds(5), [this, peer]() {
+      send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+          ErrorCode::SUCCESS, peer));
+    });
+
+    ScheduleTask(milliseconds(5), [this, peer, key_vec]() {
+      send_event_(bluetooth::hci::LinkKeyNotificationBuilder::Create(
+          peer, key_vec, bluetooth::hci::KeyType::AUTHENTICATED_P256));
+    });
+  }
+
+  ScheduleTask(milliseconds(15),
+               [this, peer]() { AuthenticateRemoteStage2(peer); });
+}
+
+ErrorCode LinkLayerController::PinCodeRequestReply(const Address& peer,
+                                                   std::vector<uint8_t> pin) {
+  LOG_INFO("%s", properties_.GetAddress().ToString().c_str());
+  auto current_peer = security_manager_.GetAuthenticationAddress();
+  if (peer != current_peer) {
+    LOG_INFO("%s: %s != %s", properties_.GetAddress().ToString().c_str(),
+             peer.ToString().c_str(), current_peer.ToString().c_str());
+    security_manager_.AuthenticationRequestFinished();
+    ScheduleTask(milliseconds(5), [this, current_peer]() {
+      send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+          ErrorCode::AUTHENTICATION_FAILURE, current_peer));
+    });
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
+  LOG_INFO("Authenticating %s", peer.ToString().c_str());
+  SaveKeyAndAuthenticate('L', peer);  // Legacy
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::PinCodeRequestNegativeReply(
+    const Address& peer) {
+  auto current_peer = security_manager_.GetAuthenticationAddress();
+  security_manager_.AuthenticationRequestFinished();
+  ScheduleTask(milliseconds(5), [this, current_peer]() {
+    send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+        ErrorCode::AUTHENTICATION_FAILURE, current_peer));
+  });
+  if (peer != current_peer) {
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
+  return ErrorCode::SUCCESS;
+}
+
 ErrorCode LinkLayerController::UserConfirmationRequestReply(
     const Address& peer) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
     return ErrorCode::AUTHENTICATION_FAILURE;
   }
-  // TODO: Key could be calculated here.
-  std::array<uint8_t, 16> key_vec{1, 2,  3,  4,  5,  6,  7,  8,
-                                  9, 10, 11, 12, 13, 14, 15, 16};
-  security_manager_.WriteKey(peer, key_vec);
-
-  security_manager_.AuthenticationRequestFinished();
-
-  ScheduleTask(milliseconds(5), [this, peer]() {
-    send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
-        ErrorCode::SUCCESS, peer));
-  });
-
-  ScheduleTask(milliseconds(5), [this, peer, key_vec]() {
-    send_event_(bluetooth::hci::LinkKeyNotificationBuilder::Create(
-        peer, key_vec, bluetooth::hci::KeyType::AUTHENTICATED_P256));
-  });
-
-  ScheduleTask(milliseconds(15),
-               [this, peer]() { AuthenticateRemoteStage2(peer); });
+  SaveKeyAndAuthenticate('U', peer);
   return ErrorCode::SUCCESS;
 }
 
 ErrorCode LinkLayerController::UserConfirmationRequestNegativeReply(
     const Address& peer) {
-  if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
-  }
-
-  ScheduleTask(milliseconds(5), [this, peer]() {
+  auto current_peer = security_manager_.GetAuthenticationAddress();
+  security_manager_.AuthenticationRequestFinished();
+  ScheduleTask(milliseconds(5), [this, current_peer]() {
     send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
-        ErrorCode::AUTHENTICATION_FAILURE, peer));
+        ErrorCode::AUTHENTICATION_FAILURE, current_peer));
   });
-
+  if (peer != current_peer) {
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
   return ErrorCode::SUCCESS;
 }
 
@@ -1567,48 +1717,87 @@ ErrorCode LinkLayerController::UserPasskeyRequestReply(const Address& peer,
   if (security_manager_.GetAuthenticationAddress() != peer) {
     return ErrorCode::AUTHENTICATION_FAILURE;
   }
-  LOG_INFO("TODO:Do something with the passkey %06d", numeric_value);
+  SendLinkLayerPacket(model::packets::PasskeyBuilder::Create(
+      properties_.GetAddress(), peer, numeric_value));
+  SaveKeyAndAuthenticate('P', peer);
+
   return ErrorCode::SUCCESS;
 }
 
 ErrorCode LinkLayerController::UserPasskeyRequestNegativeReply(
     const Address& peer) {
-  if (security_manager_.GetAuthenticationAddress() != peer) {
-    return ErrorCode::AUTHENTICATION_FAILURE;
+  auto current_peer = security_manager_.GetAuthenticationAddress();
+  security_manager_.AuthenticationRequestFinished();
+  ScheduleTask(milliseconds(5), [this, current_peer]() {
+    send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+        ErrorCode::AUTHENTICATION_FAILURE, current_peer));
+  });
+  if (peer != current_peer) {
+    return ErrorCode::UNKNOWN_CONNECTION;
   }
   return ErrorCode::SUCCESS;
 }
 
 ErrorCode LinkLayerController::RemoteOobDataRequestReply(
-    const Address& peer, const std::vector<uint8_t>& c,
-    const std::vector<uint8_t>& r) {
+    const Address& peer, const std::array<uint8_t, 16>& c,
+    const std::array<uint8_t, 16>& r) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
     return ErrorCode::AUTHENTICATION_FAILURE;
   }
   LOG_INFO("TODO:Do something with the OOB data c=%d r=%d", c[0], r[0]);
+  SaveKeyAndAuthenticate('o', peer);
+
   return ErrorCode::SUCCESS;
 }
 
 ErrorCode LinkLayerController::RemoteOobDataRequestNegativeReply(
     const Address& peer) {
+  auto current_peer = security_manager_.GetAuthenticationAddress();
+  security_manager_.AuthenticationRequestFinished();
+  ScheduleTask(milliseconds(5), [this, current_peer]() {
+    send_event_(bluetooth::hci::SimplePairingCompleteBuilder::Create(
+        ErrorCode::AUTHENTICATION_FAILURE, current_peer));
+  });
+  if (peer != current_peer) {
+    return ErrorCode::UNKNOWN_CONNECTION;
+  }
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::RemoteOobExtendedDataRequestReply(
+    const Address& peer, const std::array<uint8_t, 16>& c192,
+    const std::array<uint8_t, 16>& r192, const std::array<uint8_t, 16>& c256,
+    const std::array<uint8_t, 16>& r256) {
   if (security_manager_.GetAuthenticationAddress() != peer) {
     return ErrorCode::AUTHENTICATION_FAILURE;
   }
+  LOG_INFO(
+      "TODO:Do something with the OOB data c192=%d r192=%d c256=%d r256=%d",
+      c192[0], r192[0], c256[0], r256[0]);
+  SaveKeyAndAuthenticate('O', peer);
+
+  return ErrorCode::SUCCESS;
+}
+
+ErrorCode LinkLayerController::SendKeypressNotification(
+    const Address& peer,
+    bluetooth::hci::KeypressNotificationType notification_type) {
+  if (notification_type >
+      bluetooth::hci::KeypressNotificationType::ENTRY_COMPLETED) {
+    return ErrorCode::INVALID_HCI_COMMAND_PARAMETERS;
+  }
+
+  SendLinkLayerPacket(model::packets::KeypressNotificationBuilder::Create(
+      properties_.GetAddress(), peer,
+      static_cast<model::packets::PasskeyNotificationType>(notification_type)));
   return ErrorCode::SUCCESS;
 }
 
 void LinkLayerController::HandleAuthenticationRequest(const Address& address,
                                                       uint16_t handle) {
-  if (simple_pairing_mode_enabled_ == true) {
     security_manager_.AuthenticationRequest(address, handle);
     auto packet = bluetooth::hci::LinkKeyRequestBuilder::Create(address);
     send_event_(std::move(packet));
-  } else {  // Should never happen for our phones
-    // Check for a key, try to authenticate, ask for a PIN.
-    auto packet = bluetooth::hci::AuthenticationCompleteBuilder::Create(
-        ErrorCode::AUTHENTICATION_FAILURE, handle);
-    send_event_(std::move(packet));
-  }
 }
 
 ErrorCode LinkLayerController::AuthenticationRequested(uint16_t handle) {
@@ -1900,6 +2089,49 @@ ErrorCode LinkLayerController::WriteDefaultLinkPolicySettings(
 
 uint16_t LinkLayerController::ReadDefaultLinkPolicySettings() {
   return default_link_policy_settings_;
+}
+
+void LinkLayerController::ReadLocalOobData() {
+  std::array<uint8_t, 16> c_array(
+      {'c', ' ', 'a', 'r', 'r', 'a', 'y', ' ', '0', '0', '0', '0', '0', '0',
+       static_cast<uint8_t>((oob_id_ % 0x10000) >> 8u),
+       static_cast<uint8_t>(oob_id_ % 0x100)});
+
+  std::array<uint8_t, 16> r_array(
+      {'r', ' ', 'a', 'r', 'r', 'a', 'y', ' ', '0', '0', '0', '0', '0', '0',
+       static_cast<uint8_t>((oob_id_ % 0x10000) >> 8u),
+       static_cast<uint8_t>(oob_id_ % 0x100)});
+
+  send_event_(bluetooth::hci::ReadLocalOobDataCompleteBuilder::Create(
+      1, ErrorCode::SUCCESS, c_array, r_array));
+  oob_id_ += 1;
+}
+
+void LinkLayerController::ReadLocalOobExtendedData() {
+  std::array<uint8_t, 16> c_192_array(
+      {'c', ' ', 'a', 'r', 'r', 'a', 'y', ' ', '1', '9', '2', '0', '0', '0',
+       static_cast<uint8_t>((oob_id_ % 0x10000) >> 8u),
+       static_cast<uint8_t>(oob_id_ % 0x100)});
+
+  std::array<uint8_t, 16> r_192_array(
+      {'r', ' ', 'a', 'r', 'r', 'a', 'y', ' ', '1', '9', '2', '0', '0', '0',
+       static_cast<uint8_t>((oob_id_ % 0x10000) >> 8u),
+       static_cast<uint8_t>(oob_id_ % 0x100)});
+
+  std::array<uint8_t, 16> c_256_array(
+      {'c', ' ', 'a', 'r', 'r', 'a', 'y', ' ', '2', '5', '6', '0', '0', '0',
+       static_cast<uint8_t>((oob_id_ % 0x10000) >> 8u),
+       static_cast<uint8_t>(oob_id_ % 0x100)});
+
+  std::array<uint8_t, 16> r_256_array(
+      {'r', ' ', 'a', 'r', 'r', 'a', 'y', ' ', '2', '5', '6', '0', '0', '0',
+       static_cast<uint8_t>((oob_id_ % 0x10000) >> 8u),
+       static_cast<uint8_t>(oob_id_ % 0x100)});
+
+  send_event_(bluetooth::hci::ReadLocalOobExtendedDataCompleteBuilder::Create(
+      1, ErrorCode::SUCCESS, c_192_array, r_192_array, c_256_array,
+      r_256_array));
+  oob_id_ += 1;
 }
 
 ErrorCode LinkLayerController::FlowSpecification(

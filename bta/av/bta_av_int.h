@@ -191,7 +191,7 @@ typedef void (*tBTA_AV_CO_UPDATE_MTU)(tBTA_AV_HNDL bta_av_handle,
                                       const RawAddress& peer_addr,
                                       uint16_t mtu);
 
-typedef bool (*tBTA_AV_CO_CONTENT_PROTECT_IS_ACTIVE)(
+typedef btav_a2dp_scmst_info_t (*tBTA_AV_CO_GET_SCMST_INFO)(
     const RawAddress& peer_addr);
 
 /* the call-out functions for one stream */
@@ -207,7 +207,7 @@ typedef struct {
   tBTA_AV_CO_DATAPATH data;
   tBTA_AV_CO_DELAY delay;
   tBTA_AV_CO_UPDATE_MTU update_mtu;
-  tBTA_AV_CO_CONTENT_PROTECT_IS_ACTIVE cp_is_active;
+  tBTA_AV_CO_GET_SCMST_INFO get_scmst_info;
 } tBTA_AV_CO_FUNCTS;
 
 /* data type for BTA_AV_API_ENABLE_EVT */
@@ -384,16 +384,19 @@ typedef struct {
       p_app_sink_data_cback; /* Sink application callback for media packets */
 } tBTA_AV_SEP;
 
-/* initiator/acceptor role for adaption */
-#define BTA_AV_ROLE_AD_INT 0x00 /* initiator */
-#define BTA_AV_ROLE_AD_ACP 0x01 /* acceptor */
+enum : uint8_t {
+  /* initiator/acceptor role for adaption */
+  BTA_AV_ROLE_AD_INT = 0x00, /* initiator */
+  BTA_AV_ROLE_AD_ACP = 0x01, /* acceptor */
 
-/* initiator/acceptor signaling roles */
-#define BTA_AV_ROLE_START_ACP 0x00
-#define BTA_AV_ROLE_START_INT 0x10 /* do not change this value */
+  /* initiator/acceptor signaling roles */
+  BTA_AV_ROLE_START_ACP = 0x00,
+  BTA_AV_ROLE_START_INT = 0x10, /* do not change this value */
 
-#define BTA_AV_ROLE_SUSPEND 0x20     /* suspending on start */
-#define BTA_AV_ROLE_SUSPEND_OPT 0x40 /* Suspend on Start option is set */
+  BTA_AV_ROLE_SUSPEND = 0x20,     /* suspending on start */
+  BTA_AV_ROLE_SUSPEND_OPT = 0x40, /* Suspend on Start option is set */
+};
+typedef uint8_t tBTA_AV_ROLE;
 
 /* union of all event datatypes */
 union tBTA_AV_DATA {
@@ -622,7 +625,7 @@ class tBT_A2DP_OFFLOAD {
  public:
   uint32_t codec_type;            /* codec types ex: SBC/AAC/LDAC/APTx */
   uint16_t max_latency;           /* maximum latency */
-  uint16_t scms_t_enable;         /* content protection enable */
+  std::array<uint8_t, 2> scms_t_enable; /* SCMS-T enable */
   uint32_t sample_rate;           /* Sample rates ex: 44.1/48/88.2/96 Khz */
   uint8_t bits_per_sample;        /* bits per sample ex: 16/24/32 */
   uint8_t ch_mode;                /* None:0 Left:1 Right:2 */

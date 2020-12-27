@@ -401,12 +401,11 @@ tBTM_STATUS BTM_CancelRemoteDeviceName(void);
  *
  * Description      This function is called to read a remote device's version
  *
- * Returns          BTM_SUCCESS if successful, otherwise an error
+ * Returns          true if data valid, false otherwise
  *
  ******************************************************************************/
-tBTM_STATUS BTM_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
-                                  uint16_t* manufacturer,
-                                  uint16_t* lmp_sub_version);
+bool BTM_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
+                           uint16_t* manufacturer, uint16_t* lmp_sub_version);
 
 /*******************************************************************************
  *
@@ -744,6 +743,17 @@ uint16_t BTM_GetHCIConnHandle(const RawAddress& remote_bda,
 
 /*******************************************************************************
  *
+ * Function         BTM_IsPhy2mSupported
+ *
+ * Description      This function is called to check PHY 2M support
+ *                  from peer device
+ * Returns          True when PHY 2M supported false otherwise
+ *
+ ******************************************************************************/
+bool BTM_IsPhy2mSupported(const RawAddress& remote_bda, tBT_TRANSPORT transport);
+
+/*******************************************************************************
+ *
  * Function         BTM_RequestPeerSCA
  *
  * Description      This function is called to request sleep clock accuracy
@@ -932,5 +942,10 @@ uint16_t BTM_GetMaxPacketSize(const RawAddress& addr);
 
 extern tBTM_STATUS BTM_BT_Quality_Report_VSE_Register(
     bool is_register, tBTM_BT_QUALITY_REPORT_RECEIVER* p_bqr_report_receiver);
+
+void BTM_LogHistory(const std::string& tag, const RawAddress& addr,
+                    const std::string& msg);
+void BTM_LogHistory(const std::string& tag, const RawAddress& addr,
+                    const std::string& msg, const std::string& extra);
 
 #endif /* BTM_API_H */

@@ -18,6 +18,27 @@
 
 #include <functional>
 #include <list>
+#include <string>
+
+#define LOG_DUMPSYS(fd, fmt, args...)                 \
+  do {                                                \
+    dprintf(fd, "%s " fmt "\n", DUMPSYS_TAG, ##args); \
+  } while (false)
+
+#define LOG_DUMPSYS_TITLE(fd, title)         \
+  do {                                       \
+    dprintf(fd, " ----- %s -----\n", title); \
+  } while (false)
+
+constexpr char kPrivateAddressPrefix[] = "xx:xx:xx:xx";
+#define PRIVATE_ADDRESS(addr)                                            \
+  (addr.ToString()                                                       \
+       .replace(0, strlen(kPrivateAddressPrefix), kPrivateAddressPrefix) \
+       .c_str())
+
+inline double ticks_to_seconds(uint16_t ticks) {
+  return (static_cast<double>(ticks) * 0.625 * 0.001);
+}
 
 namespace bluetooth {
 namespace shim {
