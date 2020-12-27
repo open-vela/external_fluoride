@@ -63,3 +63,8 @@ void ChecksumField::GenStringRepresentation(std::ostream& s, std::string) const 
   // TODO: there is currently no way to get checksum value
   s << "\"CHECKSUM\"";
 }
+
+void ChecksumField::GenRustGetter(std::ostream&, Size, Size) const {
+}
+
+void ChecksumField::GenRustWriter(std::ostream&, Size, Size) const {}

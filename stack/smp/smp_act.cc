@@ -24,6 +24,7 @@
 #include "btif_storage.h"
 #include "device/include/interop.h"
 #include "internal_include/bt_target.h"
+#include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int.h"
@@ -97,6 +98,7 @@ static void smp_update_key_mask(tSMP_CB* p_cb, uint8_t key_type, bool recv) {
 void smp_send_app_cback(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   tSMP_EVT_DATA cb_data;
   tSMP_STATUS callback_rc;
+  uint8_t remote_lmp_version = 0;
   if (p_cb->p_callback && p_cb->cb_evt != 0) {
     switch (p_cb->cb_evt) {
       case SMP_IO_CAP_REQ_EVT:
@@ -165,19 +167,29 @@ void smp_send_app_cback(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
             p_cb->loc_auth_req |= SMP_SC_SUPPORT_BIT;
           }
 
-          if (!p_cb->secure_connections_only_mode_required &&
-              (!(p_cb->loc_auth_req & SMP_SC_SUPPORT_BIT) ||
-               lmp_version_below(p_cb->pairing_bda, HCI_PROTO_VERSION_4_2) ||
-               interop_match_addr(INTEROP_DISABLE_LE_SECURE_CONNECTIONS,
-                                  (const RawAddress*)&p_cb->pairing_bda))) {
-            p_cb->loc_auth_req &= ~SMP_SC_SUPPORT_BIT;
-            p_cb->loc_auth_req &= ~SMP_KP_SUPPORT_BIT;
-            p_cb->local_i_key &= ~SMP_SEC_KEY_TYPE_LK;
-            p_cb->local_r_key &= ~SMP_SEC_KEY_TYPE_LK;
+          if (!BTM_ReadRemoteVersion(p_cb->pairing_bda, &remote_lmp_version,
+                                     nullptr, nullptr)) {
+            LOG_WARN(
+                "SMP Unable to determine remote security authentication "
+                "remote_lmp_version:%hu",
+                remote_lmp_version);
           }
 
-          if (lmp_version_below(p_cb->pairing_bda, HCI_PROTO_VERSION_5_0)) {
-            p_cb->loc_auth_req &= ~SMP_H7_SUPPORT_BIT;
+          if (!bluetooth::shim::is_gd_acl_enabled()) {
+            if (!p_cb->secure_connections_only_mode_required &&
+                (!(p_cb->loc_auth_req & SMP_SC_SUPPORT_BIT) ||
+                 remote_lmp_version < HCI_PROTO_VERSION_4_2 ||
+                 interop_match_addr(INTEROP_DISABLE_LE_SECURE_CONNECTIONS,
+                                    (const RawAddress*)&p_cb->pairing_bda))) {
+              p_cb->loc_auth_req &= ~SMP_SC_SUPPORT_BIT;
+              p_cb->loc_auth_req &= ~SMP_KP_SUPPORT_BIT;
+              p_cb->local_i_key &= ~SMP_SEC_KEY_TYPE_LK;
+              p_cb->local_r_key &= ~SMP_SEC_KEY_TYPE_LK;
+            }
+
+            if (remote_lmp_version < HCI_PROTO_VERSION_5_0) {
+              p_cb->loc_auth_req &= ~SMP_H7_SUPPORT_BIT;
+            }
           }
 
           LOG_DEBUG(
@@ -1246,7 +1258,17 @@ void smp_key_distribution(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
     /* state check to prevent re-entrant */
     if (smp_get_state() == SMP_STATE_BOND_PENDING) {
       if (p_cb->derive_lk) {
-        smp_derive_link_key_from_long_term_key(p_cb, NULL);
+        tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(p_cb->pairing_bda);
+        if (!(p_dev_rec->sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED) &&
+            (p_dev_rec->sec_flags & BTM_SEC_LINK_KEY_AUTHED)) {
+          SMP_TRACE_DEBUG(
+              "%s BR key is higher security than existing LE keys, don't "
+              "derive LK from LTK",
+              __func__);
+          android_errorWriteLog(0x534e4554, "158854097");
+        } else {
+          smp_derive_link_key_from_long_term_key(p_cb, NULL);
+        }
         p_cb->derive_lk = false;
       }
 

@@ -23,7 +23,7 @@ from cert.closable import Closable
 from cert.closable import safeClose
 from cert.truth import assertThat
 from google.protobuf import empty_pb2 as empty_proto
-from hci.facade import facade_pb2 as hci_facade
+from hci.facade import hci_facade_pb2 as hci_facade
 from neighbor.facade import facade_pb2 as neighbor_facade
 
 
@@ -69,8 +69,8 @@ class PyNeighbor(object):
         """
         if self.remote_host_supported_features_notification_registered:
             return
-        msg = hci_facade.EventCodeMsg(code=int(hci_packets.EventCode.REMOTE_HOST_SUPPORTED_FEATURES_NOTIFICATION))
-        self.device.hci.RegisterEventHandler(msg)
+        msg = hci_facade.EventRequest(code=int(hci_packets.EventCode.REMOTE_HOST_SUPPORTED_FEATURES_NOTIFICATION))
+        self.device.hci.RequestEvent(msg)
         self.remote_host_supported_features_notification_registered = True
 
     def get_remote_name(self, remote_address):

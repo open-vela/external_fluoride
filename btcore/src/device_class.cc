@@ -19,7 +19,6 @@
 #include <arpa/inet.h>
 #include <base/logging.h>
 #include <string.h>
-#include <endian.h>
 
 #include "btcore/include/device_class.h"
 

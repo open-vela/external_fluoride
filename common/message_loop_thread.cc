@@ -26,7 +26,7 @@ namespace bluetooth {
 
 namespace common {
 
-static constexpr int kRealTimeFifoSchedulingPriority = PTHREAD_DEFAULT_PRIORITY;
+static constexpr int kRealTimeFifoSchedulingPriority = 1;
 
 MessageLoopThread::MessageLoopThread(const std::string& thread_name)
     : thread_name_(thread_name),
@@ -178,7 +178,7 @@ void MessageLoopThread::Run(std::promise<void> start_up_promise) {
     message_loop_ = new base::MessageLoop();
     run_loop_ = new base::RunLoop();
     thread_id_ = base::PlatformThread::CurrentId();
-    linux_tid_ = static_cast<pid_t>(gettid());
+    linux_tid_ = static_cast<pid_t>(syscall(SYS_gettid));
     start_up_promise.set_value();
   }
 
