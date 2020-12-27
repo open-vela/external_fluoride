@@ -16,8 +16,8 @@
  *
  ******************************************************************************/
 
-#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
-#include <frameworks/base/core/proto/android/bluetooth/hci/enums.pb.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/hci/enums.pb.h>
 
 #include "bt_types.h"
 #include "btm_int.h"
@@ -94,7 +94,7 @@ void btm_ble_create_ll_conn_complete(uint8_t status) {
   }
 }
 
-static bool maybe_resolve_address(RawAddress* bda, tBLE_ADDR_TYPE* bda_type) {
+bool maybe_resolve_address(RawAddress* bda, tBLE_ADDR_TYPE* bda_type) {
   bool is_in_security_db = false;
   tBLE_ADDR_TYPE peer_addr_type = *bda_type;
   bool addr_is_rpa =
@@ -171,7 +171,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         android::bluetooth::hci::EVT_BLE_META, hci_ble_event, status,
         android::bluetooth::hci::STATUS_UNKNOWN);
 
-    tBLE_BD_ADDR address_with_type{.type = bda_type, .bda = bda};
+    tBLE_BD_ADDR address_with_type{.bda = bda, .type = bda_type};
     if (enhanced) {
       acl_ble_enhanced_connection_complete(
           address_with_type, handle, role, is_in_security_db, conn_interval,
@@ -189,7 +189,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         android::bluetooth::hci::EVT_BLE_META, hci_ble_event, status,
         android::bluetooth::hci::STATUS_UNKNOWN);
 
-    tBLE_BD_ADDR address_with_type{.type = bda_type, .bda = bda};
+    tBLE_BD_ADDR address_with_type{.bda = bda, .type = bda_type};
     acl_ble_connection_fail(address_with_type, handle, enhanced,
                             static_cast<tHCI_STATUS>(status));
   }

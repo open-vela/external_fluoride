@@ -57,10 +57,14 @@ class ClassicPairingHandler : public PairingHandler {
         user_interface_handler_(user_interface_handler),
         device_name_(std::move(device_name)) {}
 
-  ~ClassicPairingHandler() override = default;
+  ~ClassicPairingHandler() = default;
 
-  void Initiate(bool locally_initiated, hci::IoCapability io_capability, hci::OobDataPresent oob_present,
-                hci::AuthenticationRequirements auth_requirements) override;
+  void Initiate(
+      bool locally_initiated,
+      hci::IoCapability io_capability,
+      hci::AuthenticationRequirements auth_requirements,
+      OobData remote_p192_oob_data,
+      OobData remote_p256_oob_data) override;
   void Cancel() override;
 
   void OnReceive(hci::ChangeConnectionLinkKeyCompleteView packet) override;
@@ -83,6 +87,7 @@ class ClassicPairingHandler : public PairingHandler {
   void OnPairingPromptAccepted(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
   void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
   void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
+  void OnPinEntry(const bluetooth::hci::AddressWithType& address, std::vector<uint8_t> pin) override;
 
   void OnNameRequestComplete(hci::Address address, bool success);
 
@@ -93,6 +98,7 @@ class ClassicPairingHandler : public PairingHandler {
   void NotifyUiDisplayYesNo();
   void NotifyUiDisplayPasskey(uint32_t passkey);
   void NotifyUiDisplayPasskeyInput();
+  void NotifyUiDisplayPinCodeInput();
   void NotifyUiDisplayCancel();
   void UserClickedYes();
   void UserClickedNo();
@@ -104,6 +110,8 @@ class ClassicPairingHandler : public PairingHandler {
   hci::IoCapability local_io_capability_;
   hci::OobDataPresent local_oob_present_ __attribute__((unused));
   hci::AuthenticationRequirements local_authentication_requirements_ __attribute__((unused));
+  OobData remote_p192_oob_data_;
+  OobData remote_p256_oob_data_;
   common::OnceCallback<void(hci::Address, PairingResultOrFailure)> complete_callback_;
   UI* user_interface_;
   os::Handler* user_interface_handler_;
@@ -113,11 +121,14 @@ class ClassicPairingHandler : public PairingHandler {
   bool has_gotten_io_cap_response_ = false;
   bool has_gotten_name_response_ = false;
   std::optional<hci::UserConfirmationRequestView> user_confirmation_request_ = std::nullopt;
+  std::optional<hci::LinkKeyNotificationView> link_key_notification_ = std::nullopt;
 
   hci::ErrorCode last_status_ = hci::ErrorCode::UNKNOWN_HCI_COMMAND;
   bool locally_initiated_ = false;
   uint32_t passkey_ = 0;
   bool already_link_key_replied_ = false;
+  bool secure_connections_enabled_ = true;
+  bool is_legacy_pin_code_ = false;
 };
 
 }  // namespace pairing
