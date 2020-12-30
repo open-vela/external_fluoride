@@ -46,7 +46,6 @@ extern void btm_ble_stop_scan(void);
 extern void btm_clear_all_pending_le_entry(void);
 
 extern void btm_ble_init(void);
-extern void btm_ble_free();
 extern void btm_ble_connected(const RawAddress& bda, uint16_t handle,
                               uint8_t enc_mode, uint8_t role,
                               tBLE_ADDR_TYPE addr_type, bool addr_matched);
@@ -56,7 +55,7 @@ extern void btm_ble_connected_from_address_with_type(
 
 extern tBTM_STATUS btm_ble_start_adv(void);
 extern tBTM_STATUS btm_ble_stop_adv(void);
-extern void btm_ble_start_scan(void);
+extern tBTM_STATUS btm_ble_start_scan(void);
 
 /* LE security function from btm_sec.cc */
 extern void btm_ble_link_sec_check(const RawAddress& bd_addr,

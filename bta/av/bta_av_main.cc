@@ -1010,15 +1010,19 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
         __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->hndl, role,
         bta_av_cb.conn_audio, bits, bta_av_cb.features);
     if (HCI_ROLE_CENTRAL != role &&
-        (A2DP_BitsSet(bta_av_cb.conn_audio) > bits)) {
-      tBTM_STATUS status = BTM_SwitchRoleToCentral(p_scb->PeerAddress());
+        (A2DP_BitsSet(bta_av_cb.conn_audio) > bits ||
+         (bta_av_cb.features & BTA_AV_FEAT_CENTRAL))) {
+      if (bta_av_cb.features & BTA_AV_FEAT_CENTRAL)
+        BTM_block_role_switch_for(p_scb->PeerAddress());
+
+      tBTM_STATUS status =
+          BTM_SwitchRole(p_scb->PeerAddress(), HCI_ROLE_CENTRAL);
       if (status != BTM_CMD_STARTED) {
         /* can not switch role on SCB - start the timer on SCB */
-        LOG_ERROR(
-            "%s: peer %s BTM_SwitchRoleToCentral(HCI_ROLE_CENTRAL) error: %d",
-            __func__, p_scb->PeerAddress().ToString().c_str(), status);
+        LOG_ERROR("%s: peer %s BTM_SwitchRole(HCI_ROLE_CENTRAL) error: %d",
+                  __func__, p_scb->PeerAddress().ToString().c_str(), status);
       }
-      if (status != BTM_MODE_UNSUPPORTED && status != BTM_DEV_RESTRICT_LISTED) {
+      if (status != BTM_MODE_UNSUPPORTED && status != BTM_DEV_BLACKLISTED) {
         is_ok = false;
         p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
       }

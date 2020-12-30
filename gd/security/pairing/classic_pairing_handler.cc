@@ -60,15 +60,6 @@ void ClassicPairingHandler::NotifyUiDisplayPasskeyInput() {
   user_interface_handler_->CallOn(user_interface_, &UI::DisplayEnterPasskeyDialog, data);
 }
 
-void ClassicPairingHandler::NotifyUiDisplayPinCodeInput() {
-  ASSERT(user_interface_handler_ != nullptr);
-  ConfirmationData data(*GetRecord()->GetPseudoAddress(), device_name_);
-  data.SetRemoteIoCaps(remote_io_capability_);
-  data.SetRemoteAuthReqs(remote_authentication_requirements_);
-  data.SetRemoteOobDataPresent(remote_oob_present_);
-  user_interface_handler_->CallOn(user_interface_, &UI::DisplayEnterPinDialog, data);
-}
-
 void ClassicPairingHandler::NotifyUiDisplayCancel() {
   ASSERT(user_interface_handler_ != nullptr);
   user_interface_handler_->CallOn(user_interface_, &UI::Cancel, *GetRecord()->GetPseudoAddress());
@@ -90,44 +81,20 @@ void ClassicPairingHandler::OnConfirmYesNo(const bluetooth::hci::AddressWithType
 }
 
 void ClassicPairingHandler::OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) {
-  GetChannel()->SendCommand(hci::UserPasskeyRequestReplyBuilder::Create(address.GetAddress(), passkey));
+  LOG_WARN("TODO Not Implemented!");
 }
 
-void ClassicPairingHandler::OnPinEntry(const bluetooth::hci::AddressWithType& address, std::vector<uint8_t> pin) {
-  std::array<uint8_t, 16> padded_pin;
-  for (size_t i = 0; i < 16 && i < pin.size(); i++) {
-    padded_pin[i] = pin[i];
-  }
-  LOG_INFO("%s", address.GetAddress().ToString().c_str());
-  GetChannel()->SendCommand(hci::PinCodeRequestReplyBuilder::Create(address.GetAddress(), pin.size(), padded_pin));
-}
-
-void ClassicPairingHandler::Initiate(
-    bool locally_initiated,
-    hci::IoCapability io_capability,
-    hci::AuthenticationRequirements auth_requirements,
-    OobData remote_p192_oob_data,
-    OobData remote_p256_oob_data) {
+void ClassicPairingHandler::Initiate(bool locally_initiated, hci::IoCapability io_capability,
+                                     hci::OobDataPresent oob_present,
+                                     hci::AuthenticationRequirements auth_requirements) {
   LOG_INFO("Initiate");
   locally_initiated_ = locally_initiated;
   local_io_capability_ = io_capability;
+  local_oob_present_ = oob_present;
   local_authentication_requirements_ = auth_requirements;
-  remote_p192_oob_data_ = remote_p192_oob_data;
-  remote_p256_oob_data_ = remote_p256_oob_data;
-  bool has192 = remote_p192_oob_data.IsValid();
-  bool has256 = remote_p256_oob_data.IsValid();
-  bool has_both = has192 && has256;
 
-  if (has_both) {
-    remote_oob_present_ = hci::OobDataPresent::P_192_AND_256_PRESENT;
-  } else {
-    if (has192) {
-      remote_oob_present_ = hci::OobDataPresent::P_192_PRESENT;
-    } else if (has256) {
-      remote_oob_present_ = hci::OobDataPresent::P_256_PRESENT;
-    }
-  }
-
+  // TODO(optedoblivion): Read OOB data
+  // if host and controller support secure connections used HCIREADLOCALOOBEXTENDEDDATA vs HCIREADLOCALOOBDATA
   GetChannel()->Connect(GetRecord()->GetPseudoAddress()->GetAddress());
 }
 
@@ -141,13 +108,9 @@ void ClassicPairingHandler::OnNameRequestComplete(hci::Address address, bool suc
     device_name_ = tmp_name;
   }
   has_gotten_name_response_ = true;
-  // For SSP/Numeric comparison flow
   if (user_confirmation_request_) {
     this->OnReceive(*user_confirmation_request_);
-  }
-  // For OOB Flow; we go to link key notification and must wait for name
-  if (link_key_notification_) {
-    this->OnReceive(*link_key_notification_);
+    user_confirmation_request_ = std::nullopt;
   }
 }
 
@@ -175,8 +138,6 @@ void ClassicPairingHandler::OnReceive(hci::PinCodeRequestView packet) {
   ASSERT(packet.IsValid());
   LOG_INFO("Received: %s", hci::EventCodeText(packet.GetEventCode()).c_str());
   ASSERT_LOG(GetRecord()->GetPseudoAddress()->GetAddress() == packet.GetBdAddr(), "Address mismatch");
-  is_legacy_pin_code_ = true;
-  NotifyUiDisplayPinCodeInput();
 }
 
 void ClassicPairingHandler::OnReceive(hci::LinkKeyRequestView packet) {
@@ -189,15 +150,16 @@ void ClassicPairingHandler::OnReceive(hci::LinkKeyRequestView packet) {
   LOG_INFO("Received: %s", hci::EventCodeText(packet.GetEventCode()).c_str());
   ASSERT_LOG(GetRecord()->GetPseudoAddress()->GetAddress() == packet.GetBdAddr(), "Address mismatch");
   if (GetRecord()->IsPaired()) {
+    auto packet = hci::LinkKeyRequestReplyBuilder::Create(
+        GetRecord()->GetPseudoAddress()->GetAddress(), GetRecord()->GetLinkKey());
     LOG_INFO("Sending: LINK_KEY_REQUEST_REPLY");
-    this->GetChannel()->SendCommand(hci::LinkKeyRequestReplyBuilder::Create(
-        GetRecord()->GetPseudoAddress()->GetAddress(), GetRecord()->GetLinkKey()));
+    this->GetChannel()->SendCommand(std::move(packet));
     last_status_ = hci::ErrorCode::SUCCESS;
     Cancel();
   } else {
+    auto packet = hci::LinkKeyRequestNegativeReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress());
     LOG_INFO("Sending: LINK_KEY_REQUEST_NEGATIVE_REPLY");
-    this->GetChannel()->SendCommand(
-        hci::LinkKeyRequestNegativeReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
+    this->GetChannel()->SendCommand(std::move(packet));
   }
 }
 
@@ -206,13 +168,6 @@ void ClassicPairingHandler::OnReceive(hci::LinkKeyNotificationView packet) {
   LOG_INFO("Received: %s", hci::EventCodeText(packet.GetEventCode()).c_str());
   ASSERT_LOG(GetRecord()->GetPseudoAddress()->GetAddress() == packet.GetBdAddr(), "Address mismatch");
   GetRecord()->SetLinkKey(packet.GetLinkKey(), packet.GetKeyType());
-  if (!has_gotten_name_response_) {
-    link_key_notification_ = std::make_optional<hci::LinkKeyNotificationView>(packet);
-    return;
-  }
-  if (is_legacy_pin_code_) {
-    last_status_ = hci::ErrorCode::SUCCESS;
-  }
   Cancel();
 }
 
@@ -221,7 +176,7 @@ void ClassicPairingHandler::OnReceive(hci::IoCapabilityRequestView packet) {
   LOG_INFO("Received: %s", hci::EventCodeText(packet.GetEventCode()).c_str());
   ASSERT_LOG(GetRecord()->GetPseudoAddress()->GetAddress() == packet.GetBdAddr(), "Address mismatch");
   hci::IoCapability io_capability = local_io_capability_;
-  hci::OobDataPresent oob_present = remote_oob_present_;
+  hci::OobDataPresent oob_present = hci::OobDataPresent::NOT_PRESENT;
   hci::AuthenticationRequirements authentication_requirements = local_authentication_requirements_;
   auto reply_packet = hci::IoCapabilityRequestReplyBuilder::Create(
       GetRecord()->GetPseudoAddress()->GetAddress(), io_capability, oob_present, authentication_requirements);
@@ -239,7 +194,7 @@ void ClassicPairingHandler::OnReceive(hci::IoCapabilityResponseView packet) {
 
   remote_io_capability_ = packet.GetIoCapability();
   remote_authentication_requirements_ = packet.GetAuthenticationRequirements();
-
+  remote_oob_present_ = packet.GetOobDataPresent();
   switch (remote_authentication_requirements_) {
     case hci::AuthenticationRequirements::NO_BONDING:
       GetRecord()->SetIsEncryptionRequired(
@@ -290,10 +245,10 @@ void ClassicPairingHandler::OnReceive(hci::IoCapabilityResponseView packet) {
       GetRecord()->SetRequiresMitmProtection(true);
       break;
   }
-
   has_gotten_io_cap_response_ = true;
   if (user_confirmation_request_) {
     this->OnReceive(*user_confirmation_request_);
+    user_confirmation_request_ = std::nullopt;
   }
 }
 
@@ -328,58 +283,12 @@ void ClassicPairingHandler::OnReceive(hci::RemoteOobDataRequestView packet) {
   ASSERT(packet.IsValid());
   LOG_INFO("Received: %s", hci::EventCodeText(packet.GetEventCode()).c_str());
   ASSERT_LOG(GetRecord()->GetPseudoAddress()->GetAddress() == packet.GetBdAddr(), "Address mismatch");
-
-  // Corev5.2 V2PF
-  switch (remote_oob_present_) {
-    case hci::OobDataPresent::NOT_PRESENT:
-      LOG_WARN("Missing remote OOB data");
-      GetChannel()->SendCommand(
-          hci::RemoteOobDataRequestNegativeReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-      break;
-    case hci::OobDataPresent::P_192_PRESENT:
-      LOG_INFO("P192 Present");
-      // TODO(optedoblivion): Figure this out and remove
-      secure_connections_enabled_ = false;
-      if (secure_connections_enabled_) {
-        GetChannel()->SendCommand(hci::RemoteOobExtendedDataRequestReplyBuilder::Create(
-            GetRecord()->GetPseudoAddress()->GetAddress(),
-            this->remote_p192_oob_data_.GetC(),
-            this->remote_p192_oob_data_.GetR(),
-            this->remote_p256_oob_data_.GetC(),
-            this->remote_p256_oob_data_.GetR()));
-      } else {
-        GetChannel()->SendCommand(hci::RemoteOobDataRequestReplyBuilder::Create(
-            GetRecord()->GetPseudoAddress()->GetAddress(),
-            this->remote_p192_oob_data_.GetC(),
-            this->remote_p192_oob_data_.GetR()));
-      }
-      break;
-    case hci::OobDataPresent::P_256_PRESENT:
-      LOG_INFO("P256 Present");
-      GetChannel()->SendCommand(hci::RemoteOobExtendedDataRequestReplyBuilder::Create(
-          GetRecord()->GetPseudoAddress()->GetAddress(),
-          this->remote_p192_oob_data_.GetC(),
-          this->remote_p192_oob_data_.GetR(),
-          this->remote_p256_oob_data_.GetC(),
-          this->remote_p256_oob_data_.GetR()));
-      break;
-    case hci::OobDataPresent::P_192_AND_256_PRESENT:
-      LOG_INFO("P192 and P256 Present");
-      GetChannel()->SendCommand(hci::RemoteOobExtendedDataRequestReplyBuilder::Create(
-          GetRecord()->GetPseudoAddress()->GetAddress(),
-          this->remote_p192_oob_data_.GetC(),
-          this->remote_p192_oob_data_.GetR(),
-          this->remote_p256_oob_data_.GetC(),
-          this->remote_p256_oob_data_.GetR()));
-      break;
-  }
 }
 
 void ClassicPairingHandler::OnReceive(hci::UserPasskeyNotificationView packet) {
   ASSERT(packet.IsValid());
   LOG_INFO("Received: %s", hci::EventCodeText(packet.GetEventCode()).c_str());
   ASSERT_LOG(GetRecord()->GetPseudoAddress()->GetAddress() == packet.GetBdAddr(), "Address mismatch");
-  NotifyUiDisplayPasskey(packet.GetPasskey());
 }
 
 void ClassicPairingHandler::OnReceive(hci::KeypressNotificationView packet) {
@@ -388,19 +297,19 @@ void ClassicPairingHandler::OnReceive(hci::KeypressNotificationView packet) {
   LOG_INFO("Notification Type: %s", hci::KeypressNotificationTypeText(packet.GetNotificationType()).c_str());
   switch (packet.GetNotificationType()) {
     case hci::KeypressNotificationType::ENTRY_STARTED:
-      // Tell the UI to highlight the first digit
+      // Get ready to keep track of key input
       break;
     case hci::KeypressNotificationType::DIGIT_ENTERED:
-      // Tell the UI to move one digit to the right
+      // Append digit to key
       break;
     case hci::KeypressNotificationType::DIGIT_ERASED:
-      // Tell the UI to move back one digit
+      // erase last digit from key
       break;
     case hci::KeypressNotificationType::CLEARED:
-      // Tell the UI to highlight the first digit again
+      // erase all digits from key
       break;
     case hci::KeypressNotificationType::ENTRY_COMPLETED:
-      // Tell the UI to hide the dialog
+      // set full key to security record
       break;
   }
 }
@@ -413,7 +322,6 @@ void ClassicPairingHandler::OnReceive(hci::KeypressNotificationView packet) {
 
 void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
   // Ensure we have io cap response otherwise checks will be wrong if it comes late
-  // Ensure we have the name response otherwise we cannot show a name for the device to the user
   if (!has_gotten_io_cap_response_ || !has_gotten_name_response_) {
     user_confirmation_request_ = std::make_optional<hci::UserConfirmationRequestView>(packet);
     return;
@@ -433,12 +341,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // NOTE(optedoblivion) BTA needs a callback for when auto accepting JustWorks
-            // If we auto accept from the ClassicPairingHandler in GD then we won't
-            // get a callback to this shim function.
-            // We will have to call it anyway until we eliminate the need
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -451,8 +353,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -474,8 +374,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -546,8 +444,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -565,8 +461,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -580,8 +474,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -595,8 +487,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
@@ -610,8 +500,6 @@ void ClassicPairingHandler::OnReceive(hci::UserConfirmationRequestView packet) {
           if (!GetRecord()->RequiresMitmProtection()) {
             GetChannel()->SendCommand(
                 hci::UserConfirmationRequestReplyBuilder::Create(GetRecord()->GetPseudoAddress()->GetAddress()));
-            // TODO(optedoblivion): REMOVE WHEN SHIM LEAVES
-            NotifyUiDisplayYesNo();
           } else {
             GetChannel()->SendCommand(hci::UserConfirmationRequestNegativeReplyBuilder::Create(
                 GetRecord()->GetPseudoAddress()->GetAddress()));
