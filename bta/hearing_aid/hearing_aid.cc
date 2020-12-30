@@ -1467,8 +1467,9 @@ class HearingAidImpl : public HearingAid {
     DoDisconnectAudioStop();
   }
 
-  void OnGattDisconnected(uint16_t conn_id, tGATT_IF client_if,
-                          RawAddress remote_bda) {
+  void OnGattDisconnected(tGATT_STATUS status, uint16_t conn_id,
+                          tGATT_IF client_if, RawAddress remote_bda,
+                          tBTA_GATT_REASON reason) {
     HearingDevice* hearingDevice = hearingDevices.FindByConnId(conn_id);
     if (!hearingDevice) {
       VLOG(2) << "Skipping unknown device disconnect, conn_id="
@@ -1476,7 +1477,7 @@ class HearingAidImpl : public HearingAid {
       return;
     }
     VLOG(2) << __func__ << ": conn_id=" << loghex(conn_id)
-            << ", remote_bda=" << remote_bda;
+            << ", reason=" << loghex(reason) << ", remote_bda=" << remote_bda;
 
     // Inform the other side (if any) of this disconnection
     std::vector<uint8_t> inform_disconn_state(
@@ -1687,7 +1688,8 @@ void hearingaid_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
     case BTA_GATTC_CLOSE_EVT: {
       if (!instance) return;
       tBTA_GATTC_CLOSE& c = p_data->close;
-      instance->OnGattDisconnected(c.conn_id, c.client_if, c.remote_bda);
+      instance->OnGattDisconnected(c.status, c.conn_id, c.client_if,
+                                   c.remote_bda, c.reason);
     } break;
 
     case BTA_GATTC_SEARCH_CMPL_EVT:

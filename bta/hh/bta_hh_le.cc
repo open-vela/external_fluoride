@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include <base/bind.h>
+#include <base/callback.h>
 
 #include "bta_gatt_api.h"
 #include "bta_gatt_queue.h"

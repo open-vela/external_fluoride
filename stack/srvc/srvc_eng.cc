@@ -329,7 +329,8 @@ static void srvc_eng_connect_cback(UNUSED_ATTR tGATT_IF gatt_if,
                                    bool connected, tGATT_DISCONN_REASON reason,
                                    UNUSED_ATTR tBT_TRANSPORT transport) {
   VLOG(1) << __func__ << ": from " << bda
-          << StringPrintf(" connected:%d conn_id=%d", connected, conn_id);
+          << StringPrintf(" connected:%d conn_id=%d reason = 0x%04x", connected,
+                          conn_id, reason);
 
   if (connected) {
     if (srvc_eng_clcb_alloc(conn_id, bda) == NULL) {

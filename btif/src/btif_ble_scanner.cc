@@ -30,8 +30,6 @@
 
 #include "btif_common.h"
 #include "btif_util.h"
-#include "main/shim/le_scanning_manager.h"
-#include "main/shim/shim.h"
 
 #include <hardware/bt_gatt.h>
 
@@ -340,11 +338,8 @@ BleScannerInterface* btLeScannerInstance = nullptr;
 }  // namespace
 
 BleScannerInterface* get_ble_scanner_instance() {
-  if (bluetooth::shim::is_gd_scanning_enabled()) {
-    LOG_INFO("Use gd le scanner");
-    return bluetooth::shim::get_ble_scanner_instance();
-  } else if (btLeScannerInstance == nullptr) {
+  if (btLeScannerInstance == nullptr)
     btLeScannerInstance = new BleScannerInterfaceImpl();
-  }
+
   return btLeScannerInstance;
 }

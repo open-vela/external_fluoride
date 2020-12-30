@@ -34,7 +34,6 @@
 #include "hcidefs.h"
 #include "l2c_int.h"
 #include "l2cdefs.h"
-#include "main/shim/l2c_api.h"
 #include "main/shim/shim.h"
 #include "osi/include/allocator.h"
 #include "osi/include/log.h"
@@ -117,11 +116,6 @@ void l2cu_set_lcb_handle(struct t_l2c_linkcb& p_lcb, uint16_t handle) {
  *
  ******************************************************************************/
 void l2cu_update_lcb_4_bonding(const RawAddress& p_bd_addr, bool is_bonding) {
-  if (bluetooth::shim::is_gd_l2cap_enabled()) {
-    bluetooth::shim::L2CA_SetBondingState(p_bd_addr, is_bonding);
-    return;
-  }
-
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(p_bd_addr, BT_TRANSPORT_BR_EDR);
 
   if (p_lcb) {
@@ -1458,7 +1452,6 @@ tL2C_CCB* l2cu_allocate_ccb(tL2C_LCB* p_lcb, uint16_t cid) {
   p_ccb->rx_data_rate = L2CAP_CHNL_DATA_RATE_LOW;
 
   p_ccb->is_flushable = false;
-  p_ccb->ecoc = false;
 
   alarm_free(p_ccb->l2c_ccb_timer);
   p_ccb->l2c_ccb_timer = alarm_new("l2c.l2c_ccb_timer");
@@ -1482,10 +1475,6 @@ tL2C_CCB* l2cu_allocate_ccb(tL2C_LCB* p_lcb, uint16_t cid) {
  *
  ******************************************************************************/
 bool l2cu_start_post_bond_timer(uint16_t handle) {
-  if (bluetooth::shim::is_gd_l2cap_enabled()) {
-    return true;
-  }
-
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_handle(handle);
 
   if (!p_lcb) return (true);
@@ -1836,7 +1825,7 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     }
   }
   /* Reload mtu from a previously accepted config request */
-  else if (p_ccb->peer_cfg.mtu_present && !(p_ccb->config_done & IB_CFG_DONE)) {
+  else if (p_ccb->peer_cfg.mtu_present) {
     p_cfg->mtu_present = true;
     p_cfg->mtu = p_ccb->peer_cfg.mtu;
   }
@@ -1853,8 +1842,7 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     }
   }
   /* Reload flush_to from a previously accepted config request */
-  else if (p_ccb->peer_cfg.flush_to_present &&
-           !(p_ccb->config_done & IB_CFG_DONE)) {
+  else if (p_ccb->peer_cfg.flush_to_present) {
     p_cfg->flush_to_present = true;
     p_cfg->flush_to = p_ccb->peer_cfg.flush_to;
   }
@@ -1874,7 +1862,7 @@ uint8_t l2cu_process_peer_cfg_req(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
     }
   }
   /* Reload QOS from a previously accepted config request */
-  else if (p_ccb->peer_cfg.qos_present && !(p_ccb->config_done & IB_CFG_DONE)) {
+  else if (p_ccb->peer_cfg.qos_present) {
     p_cfg->qos_present = true;
     p_cfg->qos = p_ccb->peer_cfg.qos;
   }
@@ -2024,10 +2012,6 @@ void l2cu_process_our_cfg_rsp(tL2C_CCB* p_ccb, tL2CAP_CFG_INFO* p_cfg) {
  *
  ******************************************************************************/
 void l2cu_device_reset(void) {
-  if (bluetooth::shim::is_gd_l2cap_enabled()) {
-    return;
-  }
-
   int xx;
   tL2C_LCB* p_lcb = &l2cb.lcb_pool[0];
 
@@ -2084,7 +2068,7 @@ void l2cu_create_conn_br_edr(tL2C_LCB* p_lcb) {
       p_lcb->link_state = LST_CONNECTING_WAIT_SWITCH;
       p_lcb->SetLinkRoleAsCentral();
 
-      if (BTM_SwitchRoleToCentral(p_lcb_cur->remote_bd_addr) ==
+      if (BTM_SwitchRole(p_lcb_cur->remote_bd_addr, HCI_ROLE_CENTRAL) ==
           BTM_CMD_STARTED) {
         alarm_set_on_mloop(p_lcb->l2c_lcb_timer,
                            L2CAP_LINK_ROLE_SWITCH_TIMEOUT_MS,
@@ -2274,10 +2258,6 @@ bool l2cu_set_acl_priority(const RawAddress& bd_addr, tL2CAP_PRIORITY priority,
  *
  ******************************************************************************/
 void l2cu_set_non_flushable_pbf(bool is_supported) {
-  if (bluetooth::shim::is_gd_l2cap_enabled()) {
-    return;
-  }
-
   if (is_supported)
     l2cb.non_flushable_pbf =
         (L2CAP_PKT_START_NON_FLUSHABLE << L2CAP_PKT_TYPE_SHIFT);
