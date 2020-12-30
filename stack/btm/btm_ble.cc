@@ -53,7 +53,7 @@ extern void gatt_notify_phy_updated(tGATT_STATUS status, uint16_t handle,
 /******************************************************************************/
 /* External Function to be called by other modules                            */
 /******************************************************************************/
-void BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
+bool BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
                          tBLE_ADDR_TYPE addr_type) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::BTM_SecAddBleDevice(bd_addr, dev_type, addr_type);
@@ -94,6 +94,8 @@ void BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
     BTM_TRACE_DEBUG("InqDb  device_type =0x%x  addr_type=0x%x",
                     p_info->results.device_type, p_info->results.ble_addr_type);
   }
+
+  return true;
 }
 
 /*******************************************************************************
@@ -111,7 +113,7 @@ void BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
  * Returns          true if added OK, else false
  *
  ******************************************************************************/
-void BTM_SecAddBleKey(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
+bool BTM_SecAddBleKey(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
                       tBTM_LE_KEY_TYPE key_type) {
   if (bluetooth::shim::is_gd_shim_enabled()) {
     return bluetooth::shim::BTM_SecAddBleKey(bd_addr, p_le_key, key_type);
@@ -127,16 +129,17 @@ void BTM_SecAddBleKey(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
     LOG(WARNING) << __func__
                  << " Wrong Type, or No Device record for bdaddr: " << bd_addr
                  << ", Type: " << key_type;
-    return;
+    return (false);
   }
 
   VLOG(1) << __func__ << " BDA: " << bd_addr << ", Type: " << key_type;
 
   btm_sec_save_le_key(bd_addr, key_type, p_le_key, false);
 
-  if (key_type == BTM_LE_KEY_PID || key_type == BTM_LE_KEY_LID) {
+  if (key_type == BTM_LE_KEY_PID || key_type == BTM_LE_KEY_LID)
     btm_ble_resolving_list_load_dev(p_dev_rec);
-  }
+
+  return (true);
 }
 
 /*******************************************************************************
@@ -895,7 +898,7 @@ tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
   /* If there is no application registered with this PSM do not allow connection
    */
   if (!p_serv_rec) {
-    LOG_WARN("PSM: %d no application registered", psm);
+    BTM_TRACE_WARNING("%s PSM: %d no application registerd", __func__, psm);
     (*p_callback)(&bd_addr, BT_TRANSPORT_LE, p_ref_data, BTM_MODE_UNSUPPORTED);
     return L2CAP_LE_RESULT_NO_PSM;
   }
@@ -906,17 +909,17 @@ tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
 
   if (!is_originator) {
     if ((p_serv_rec->security_flags & BTM_SEC_IN_ENCRYPT) && !is_encrypted) {
-      LOG_ERROR(
-          "L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP. service "
+      BTM_TRACE_ERROR(
+          "%s: L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP. service "
           "security_flags=0x%x, ",
-          p_serv_rec->security_flags);
+          __func__, p_serv_rec->security_flags);
       return L2CAP_LE_RESULT_INSUFFICIENT_ENCRYP;
     } else if ((p_serv_rec->security_flags & BTM_SEC_IN_AUTHENTICATE) &&
                !(is_link_key_authed || is_authenticated)) {
-      LOG_ERROR(
-          "L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION. service "
+      BTM_TRACE_ERROR(
+          "%s: L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION. service "
           "security_flags=0x%x, ",
-          p_serv_rec->security_flags);
+          __func__, p_serv_rec->security_flags);
       return L2CAP_LE_RESULT_INSUFFICIENT_AUTHENTICATION;
     }
     /* TODO: When security is required, then must check that the key size of our
@@ -931,34 +934,32 @@ tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
 
   switch (sec_act) {
     case BTM_SEC_OK:
-      LOG_DEBUG("Security met");
+      BTM_TRACE_DEBUG("%s Security met", __func__);
       p_callback(&bd_addr, BT_TRANSPORT_LE, p_ref_data, BTM_SUCCESS);
       result = L2CAP_LE_RESULT_CONN_OK;
       break;
 
     case BTM_SEC_ENCRYPT:
-      LOG_DEBUG("Encryption needs to be done");
+      BTM_TRACE_DEBUG("%s Encryption needs to be done", __func__);
       ble_sec_act = BTM_BLE_SEC_ENCRYPT;
       break;
 
     case BTM_SEC_ENCRYPT_MITM:
-      LOG_DEBUG("Pairing with MITM needs to be done");
+      BTM_TRACE_DEBUG("%s Pairing with MITM needs to be done", __func__);
       ble_sec_act = BTM_BLE_SEC_ENCRYPT_MITM;
       break;
 
     case BTM_SEC_ENCRYPT_NO_MITM:
-      LOG_DEBUG("Pairing with No MITM needs to be done");
+      BTM_TRACE_DEBUG("%s Pairing with No MITM needs to be done", __func__);
       ble_sec_act = BTM_BLE_SEC_ENCRYPT_NO_MITM;
       break;
 
     case BTM_SEC_ENC_PENDING:
-      LOG_DEBUG("Ecryption pending");
+      BTM_TRACE_DEBUG("%s Ecryption pending", __func__);
       break;
   }
 
-  if (ble_sec_act == BTM_BLE_SEC_NONE) {
-    return result;
-  }
+  if (ble_sec_act == BTM_BLE_SEC_NONE) return result;
 
   l2cble_update_sec_act(bd_addr, sec_act);
   BTM_SetEncryption(bd_addr, BT_TRANSPORT_LE, p_callback, p_ref_data,
@@ -2068,53 +2069,6 @@ void btm_ble_set_random_address(const RawAddress& random_bda) {
     btm_ble_start_scan();
   }
   btm_ble_resume_bg_conn();
-}
-
-/*******************************************************************************
- *
- * Function         btm_ble_get_acl_remote_addr
- *
- * Description      This function reads the active remote address used for the
- *                  connection.
- *
- * Returns          success return true, otherwise false.
- *
- ******************************************************************************/
-bool btm_ble_get_acl_remote_addr(uint16_t hci_handle, RawAddress& conn_addr,
-                                 tBLE_ADDR_TYPE* p_addr_type) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(hci_handle);
-  if (p_dev_rec == nullptr) {
-    LOG_WARN("Unable to find security device record hci_handle:%hu",
-             hci_handle);
-    // TODO Release acl resource
-    return false;
-  }
-
-  bool st = true;
-
-  switch (p_dev_rec->ble.active_addr_type) {
-    case tBTM_SEC_BLE::BTM_BLE_ADDR_PSEUDO:
-      conn_addr = p_dev_rec->bd_addr;
-      *p_addr_type = p_dev_rec->ble.ble_addr_type;
-      break;
-
-    case tBTM_SEC_BLE::BTM_BLE_ADDR_RRA:
-      conn_addr = p_dev_rec->ble.cur_rand_addr;
-      *p_addr_type = BLE_ADDR_RANDOM;
-      break;
-
-    case tBTM_SEC_BLE::BTM_BLE_ADDR_STATIC:
-      conn_addr = p_dev_rec->ble.identity_address_with_type.bda;
-      *p_addr_type = p_dev_rec->ble.identity_address_with_type.type;
-      break;
-
-    default:
-      LOG_WARN("Unable to find record with active address type: %d",
-               p_dev_rec->ble.active_addr_type);
-      st = false;
-      break;
-  }
-  return st;
 }
 
 #if BTM_BLE_CONFORMANCE_TESTING == TRUE

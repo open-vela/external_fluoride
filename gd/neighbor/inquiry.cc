@@ -77,15 +77,15 @@ struct InquiryModule::impl {
 
   bool IsInquiryActive() const;
 
-  void EnqueueCommandComplete(std::unique_ptr<hci::CommandBuilder> command);
-  void EnqueueCommandStatus(std::unique_ptr<hci::CommandBuilder> command);
+  void EnqueueCommandComplete(std::unique_ptr<hci::CommandPacketBuilder> command);
+  void EnqueueCommandStatus(std::unique_ptr<hci::CommandPacketBuilder> command);
   void OnCommandComplete(hci::CommandCompleteView view);
   void OnCommandStatus(hci::CommandStatusView status);
 
-  void EnqueueCommandCompleteSync(std::unique_ptr<hci::CommandBuilder> command);
+  void EnqueueCommandCompleteSync(std::unique_ptr<hci::CommandPacketBuilder> command);
   void OnCommandCompleteSync(hci::CommandCompleteView view);
 
-  void OnEvent(hci::EventView view);
+  void OnEvent(hci::EventPacketView view);
 
   std::promise<void>* command_sync_{nullptr};
 
@@ -194,7 +194,7 @@ void neighbor::InquiryModule::impl::OnCommandStatus(hci::CommandStatusView statu
   }
 }
 
-void neighbor::InquiryModule::impl::OnEvent(hci::EventView view) {
+void neighbor::InquiryModule::impl::OnEvent(hci::EventPacketView view) {
   switch (view.GetEventCode()) {
     case hci::EventCode::INQUIRY_COMPLETE: {
       auto packet = hci::InquiryCompleteView::Create(view);
@@ -263,15 +263,15 @@ void neighbor::InquiryModule::impl::UnregisterCallbacks() {
   inquiry_callbacks_ = {nullptr, nullptr, nullptr, nullptr};
 }
 
-void neighbor::InquiryModule::impl::EnqueueCommandComplete(std::unique_ptr<hci::CommandBuilder> command) {
+void neighbor::InquiryModule::impl::EnqueueCommandComplete(std::unique_ptr<hci::CommandPacketBuilder> command) {
   hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandComplete));
 }
 
-void neighbor::InquiryModule::impl::EnqueueCommandStatus(std::unique_ptr<hci::CommandBuilder> command) {
+void neighbor::InquiryModule::impl::EnqueueCommandStatus(std::unique_ptr<hci::CommandPacketBuilder> command) {
   hci_layer_->EnqueueCommand(std::move(command), handler_->BindOnceOn(this, &impl::OnCommandStatus));
 }
 
-void neighbor::InquiryModule::impl::EnqueueCommandCompleteSync(std::unique_ptr<hci::CommandBuilder> command) {
+void neighbor::InquiryModule::impl::EnqueueCommandCompleteSync(std::unique_ptr<hci::CommandPacketBuilder> command) {
   ASSERT(command_sync_ == nullptr);
   command_sync_ = new std::promise<void>();
   auto command_received = command_sync_->get_future();

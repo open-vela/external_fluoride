@@ -26,11 +26,11 @@
 #endif  // __cplusplus
 
 #ifndef FALSE
-#define FALSE false
+#define FALSE 0
 #endif
 
 #ifndef TRUE
-#define TRUE true
+#define TRUE 1
 #endif
 
 #ifdef __arm
@@ -229,34 +229,26 @@ typedef struct {
   uint16_t len;
   uint16_t offset;
   uint16_t layer_specific;
-  uint8_t data[];
+  uint8_t data[0];
 } BT_HDR;
 
 #define BT_HDR_SIZE (sizeof(BT_HDR))
 
-enum : uint16_t {
-  BT_PSM_SDP = 0x0001,
-  BT_PSM_RFCOMM = 0x0003,
-  BT_PSM_TCS = 0x0005,
-  BT_PSM_CTP = 0x0007,
-  BT_PSM_BNEP = 0x000F,
-  BT_PSM_HIDC = 0x0011,
-  HID_PSM_CONTROL = 0x0011,
-  BT_PSM_HIDI = 0x0013,
-  HID_PSM_INTERRUPT = 0x0013,
-  BT_PSM_UPNP = 0x0015,
-  BT_PSM_AVCTP = 0x0017,
-  BT_PSM_AVDTP = 0x0019,
-  BT_PSM_AVCTP_13 = 0x001B, /* Advanced Control - Browsing */
-  BT_PSM_UDI_CP =
-      0x001D,          /* Unrestricted Digital Information Profile C-Plane  */
-  BT_PSM_ATT = 0x001F, /* Attribute Protocol  */
-  BT_PSM_EATT = 0x0027,
-  /* We will not allocate a PSM in the reserved range to 3rd party apps
-   */
-  BRCM_RESERVED_PSM_START = 0x5AE1,
-  BRCM_RESERVED_PSM_END = 0x5AFF,
-};
+#define BT_PSM_SDP 0x0001
+#define BT_PSM_RFCOMM 0x0003
+#define BT_PSM_TCS 0x0005
+#define BT_PSM_CTP 0x0007
+#define BT_PSM_BNEP 0x000F
+#define BT_PSM_HIDC 0x0011
+#define BT_PSM_HIDI 0x0013
+#define BT_PSM_UPNP 0x0015
+#define BT_PSM_AVCTP 0x0017
+#define BT_PSM_AVDTP 0x0019
+#define BT_PSM_AVCTP_13 0x001B /* Advanced Control - Browsing */
+#define BT_PSM_UDI_CP \
+  0x001D /* Unrestricted Digital Information Profile C-Plane  */
+#define BT_PSM_ATT 0x001F /* Attribute Protocol  */
+#define BT_PSM_EATT 0x0027
 
 /* These macros extract the HCI opcodes from a buffer
  */
@@ -621,11 +613,11 @@ typedef uint8_t
 
 #ifdef __cplusplus
 // Bit order [0]:0-7 [1]:8-15 ... [7]:56-63
-inline std::string bd_features_text(const BD_FEATURES& features) {
+inline std::string bd_features_text(BD_FEATURES features) {
   uint8_t len = BD_FEATURES_LEN;
   char buf[255];
   char* pbuf = buf;
-  const uint8_t* b = features;
+  uint8_t* b = features;
   while (len--) {
     pbuf += sprintf(pbuf, "0x%02x ", *b++);
   }
@@ -679,6 +671,86 @@ typedef struct {
 #define BT_EIR_SERVICE_DATA_128BITS_UUID_TYPE 0x21
 #define BT_EIR_MANUFACTURER_SPECIFIC_TYPE 0xFF
 
+/* We will not allocate a PSM in the reserved range to 3rd party apps
+ */
+#define BRCM_RESERVED_PSM_START 0x5AE1
+#define BRCM_RESERVED_PSM_END 0x5AFF
+
+/*****************************************************************************
+ *                          Low Energy definitions
+ *
+ * Address types
+ */
+#define BLE_ADDR_PUBLIC 0x00
+#define BLE_ADDR_RANDOM 0x01
+#define BLE_ADDR_PUBLIC_ID 0x02
+#define BLE_ADDR_RANDOM_ID 0x03
+#define BLE_ADDR_ANONYMOUS 0xFF
+typedef uint8_t tBLE_ADDR_TYPE;
+#ifdef __cplusplus
+inline std::string AddressTypeText(tBLE_ADDR_TYPE type) {
+  switch (type) {
+    case BLE_ADDR_PUBLIC:
+      return std::string("public");
+    case BLE_ADDR_RANDOM:
+      return std::string("random");
+    case BLE_ADDR_PUBLIC_ID:
+      return std::string("public identity");
+    case BLE_ADDR_RANDOM_ID:
+      return std::string("random identity");
+    case BLE_ADDR_ANONYMOUS:
+      return std::string("anonymous");
+    default:
+      return std::string("unknown");
+  }
+}
+#endif  // __cplusplus
+
+/* BLE ADDR type ID bit */
+#define BLE_ADDR_TYPE_ID_BIT 0x02
+
+#ifdef __cplusplus
+constexpr uint8_t kBleAddressPublicDevice = BLE_ADDR_PUBLIC;
+constexpr uint8_t kBleAddressRandomDevice = BLE_ADDR_RANDOM;
+constexpr uint8_t kBleAddressIdentityBit = BLE_ADDR_TYPE_ID_BIT;
+constexpr uint8_t kBleAddressPublicIdentity =
+    kBleAddressIdentityBit | kBleAddressPublicDevice;
+constexpr uint8_t kBleAddressRandomIdentity =
+    kBleAddressIdentityBit | kBleAddressRandomDevice;
+
+constexpr uint8_t kResolvableAddressMask = 0xc0;
+constexpr uint8_t kResolvableAddressMsb = 0x40;
+
+struct tBLE_BD_ADDR {
+  tBLE_ADDR_TYPE type;
+  RawAddress bda;
+  bool AddressEquals(const RawAddress& other) const { return other == bda; }
+  bool IsPublicDeviceType() const { return type == kBleAddressPublicDevice; }
+  bool IsRandomDeviceType() const { return type == kBleAddressRandomDevice; }
+  bool IsPublicIdentityType() const {
+    return type == kBleAddressPublicIdentity;
+  }
+  bool lsRandomIdentityType() const {
+    return type == kBleAddressRandomIdentity;
+  }
+  bool IsAddressResolvable() const {
+    return ((bda.address)[0] & kResolvableAddressMask) == kResolvableAddressMsb;
+  }
+  bool IsPublic() const { return type & 0x01; }
+  bool IsResolvablePrivateAddress() const {
+    return IsAddressResolvable() && IsRandomDeviceType();
+  }
+  bool IsIdentityType() const {
+    return IsPublicIdentityType() || lsRandomIdentityType();
+  }
+  bool TypeWithoutIdentityEquals(const tBLE_ADDR_TYPE other) const {
+    return (other & ~kBleAddressIdentityBit) ==
+           (type & ~kBleAddressIdentityBit);
+  }
+};
+#endif
+
+#ifdef __cplusplus
 /* Device Types
  */
 enum : uint8_t {
@@ -686,6 +758,7 @@ enum : uint8_t {
   BT_DEVICE_TYPE_BLE = (1 << 1),
   BT_DEVICE_TYPE_DUMO = BT_DEVICE_TYPE_BREDR | BT_DEVICE_TYPE_BLE,
 };
+#endif  // __cplusplus
 typedef uint8_t tBT_DEVICE_TYPE;
 #ifdef __cplusplus
 inline std::string DeviceTypeText(tBT_DEVICE_TYPE type) {
@@ -748,5 +821,12 @@ inline std::string DeviceTypeText(tBT_DEVICE_TYPE type) {
 #define TRACE_TYPE_API 0x00000002
 #define TRACE_TYPE_EVENT 0x00000003
 #define TRACE_TYPE_DEBUG 0x00000004
+
+#define TCS_PSM_INTERCOM 5
+#define TCS_PSM_CORDLESS 7
+#define BT_PSM_BNEP 0x000F
+/* Define PSMs HID uses */
+#define HID_PSM_CONTROL 0x0011
+#define HID_PSM_INTERRUPT 0x0013
 
 #endif

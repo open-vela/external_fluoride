@@ -43,13 +43,13 @@ class LinkLayerController {
       const Address& remote);
   ErrorCode SendCommandToRemoteByHandle(
       OpCode opcode, bluetooth::packet::PacketView<true> args, uint16_t handle);
-  ErrorCode SendScoToRemote(bluetooth::hci::ScoView sco_packet);
-  ErrorCode SendAclToRemote(bluetooth::hci::AclView acl_packet);
+  ErrorCode SendScoToRemote(bluetooth::hci::ScoPacketView sco_packet);
+  ErrorCode SendAclToRemote(bluetooth::hci::AclPacketView acl_packet);
 
+  void WriteSimplePairingMode(bool enabled);
   void StartSimplePairing(const Address& address);
   void AuthenticateRemoteStage1(const Address& address, PairingType pairing_type);
   void AuthenticateRemoteStage2(const Address& address);
-  void SaveKeyAndAuthenticate(uint8_t key_type, const Address& peer);
   ErrorCode LinkKeyRequestReply(const Address& address,
                                 const std::array<uint8_t, 16>& key);
   ErrorCode LinkKeyRequestNegativeReply(const Address& address);
@@ -58,25 +58,15 @@ class LinkLayerController {
                                      uint8_t authentication_requirements);
   ErrorCode IoCapabilityRequestNegativeReply(const Address& peer,
                                              ErrorCode reason);
-  ErrorCode PinCodeRequestReply(const Address& peer, std::vector<uint8_t> pin);
-  ErrorCode PinCodeRequestNegativeReply(const Address& peer);
   ErrorCode UserConfirmationRequestReply(const Address& peer);
   ErrorCode UserConfirmationRequestNegativeReply(const Address& peer);
   ErrorCode UserPasskeyRequestReply(const Address& peer,
                                     uint32_t numeric_value);
   ErrorCode UserPasskeyRequestNegativeReply(const Address& peer);
   ErrorCode RemoteOobDataRequestReply(const Address& peer,
-                                      const std::array<uint8_t, 16>& c,
-                                      const std::array<uint8_t, 16>& r);
+                                      const std::vector<uint8_t>& c,
+                                      const std::vector<uint8_t>& r);
   ErrorCode RemoteOobDataRequestNegativeReply(const Address& peer);
-  ErrorCode RemoteOobExtendedDataRequestReply(
-      const Address& peer, const std::array<uint8_t, 16>& c_192,
-      const std::array<uint8_t, 16>& r_192,
-      const std::array<uint8_t, 16>& c_256,
-      const std::array<uint8_t, 16>& r_256);
-  ErrorCode SendKeypressNotification(
-      const Address& peer,
-      bluetooth::hci::KeypressNotificationType notification_type);
   void HandleSetConnectionEncryption(const Address& address, uint16_t handle, uint8_t encryption_enable);
   ErrorCode SetConnectionEncryption(uint16_t handle, uint8_t encryption_enable);
   void HandleAuthenticationRequest(const Address& address, uint16_t handle);
@@ -106,12 +96,12 @@ class LinkLayerController {
 
   // Set the callbacks for sending packets to the HCI.
   void RegisterEventChannel(
-      const std::function<void(std::shared_ptr<bluetooth::hci::EventBuilder>)>&
-          send_event);
+      const std::function<void(
+          std::shared_ptr<bluetooth::hci::EventPacketBuilder>)>& send_event);
 
   void RegisterAclChannel(
-      const std::function<void(std::shared_ptr<bluetooth::hci::AclBuilder>)>&
-          send_acl);
+      const std::function<
+          void(std::shared_ptr<bluetooth::hci::AclPacketBuilder>)>& send_acl);
 
   void RegisterScoChannel(const std::function<void(std::shared_ptr<std::vector<uint8_t>>)>& send_sco);
 
@@ -323,10 +313,7 @@ class LinkLayerController {
   ErrorCode WriteDefaultLinkPolicySettings(uint16_t settings);
   uint16_t ReadDefaultLinkPolicySettings();
 
-  void ReadLocalOobData();
-  void ReadLocalOobExtendedData();
-
-  void HandleIso(bluetooth::hci::IsoView iso);
+  void HandleIso(bluetooth::hci::IsoPacketView iso);
 
  protected:
   void SendLeLinkLayerPacket(
@@ -352,8 +339,6 @@ class LinkLayerController {
       model::packets::LinkLayerPacketView packet);
   void IncomingIsoConnectionResponsePacket(
       model::packets::LinkLayerPacketView packet);
-  void IncomingKeypressNotificationPacket(
-      model::packets::LinkLayerPacketView packet);
   void IncomingLeAdvertisementPacket(
       model::packets::LinkLayerPacketView packet);
   void IncomingLeConnectPacket(model::packets::LinkLayerPacketView packet);
@@ -367,8 +352,6 @@ class LinkLayerController {
   void IncomingPagePacket(model::packets::LinkLayerPacketView packet);
   void IncomingPageRejectPacket(model::packets::LinkLayerPacketView packet);
   void IncomingPageResponsePacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPasskeyPacket(model::packets::LinkLayerPacketView packet);
-  void IncomingPasskeyFailedPacket(model::packets::LinkLayerPacketView packet);
   void IncomingReadRemoteLmpFeatures(
       model::packets::LinkLayerPacketView packet);
   void IncomingReadRemoteLmpFeaturesResponse(
@@ -410,8 +393,9 @@ class LinkLayerController {
   std::function<void(AsyncTaskId)> cancel_task_;
 
   // Callbacks to send packets back to the HCI.
-  std::function<void(std::shared_ptr<bluetooth::hci::AclBuilder>)> send_acl_;
-  std::function<void(std::shared_ptr<bluetooth::hci::EventBuilder>)>
+  std::function<void(std::shared_ptr<bluetooth::hci::AclPacketBuilder>)>
+      send_acl_;
+  std::function<void(std::shared_ptr<bluetooth::hci::EventPacketBuilder>)>
       send_event_;
   std::function<void(std::shared_ptr<std::vector<uint8_t>>)> send_sco_;
   std::function<void(std::shared_ptr<std::vector<uint8_t>>)> send_iso_;
@@ -420,9 +404,6 @@ class LinkLayerController {
   std::function<void(std::shared_ptr<model::packets::LinkLayerPacketBuilder>,
                      Phy::Type phy_type)>
       send_to_remote_;
-
-  uint32_t oob_id_ = 1;
-  uint32_t key_id_ = 1;
 
   // LE state
   std::vector<uint8_t> le_event_mask_;
@@ -467,6 +448,8 @@ class LinkLayerController {
 
   bool page_scans_enabled_{false};
   bool inquiry_scans_enabled_{false};
+
+  bool simple_pairing_mode_enabled_{false};
 };
 
 }  // namespace test_vendor_lib

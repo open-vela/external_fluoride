@@ -110,7 +110,7 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role);
 
 /*******************************************************************************
  *
- * Function         BTM_SwitchRoleToCentral
+ * Function         BTM_SwitchRole
  *
  * Description      This function is called to switch role between central and
  *                  peripheral.  If role is already set it will do nothing.
@@ -124,7 +124,7 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role);
  *                                       role switching
  *
  ******************************************************************************/
-tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr);
+tBTM_STATUS BTM_SwitchRole(const RawAddress& remote_bd_addr, uint8_t new_role);
 
 /*******************************************************************************
  *
@@ -214,6 +214,8 @@ void btm_set_packet_types_from_address(const RawAddress& bda,
                                        tBT_TRANSPORT transport,
                                        uint16_t pkt_types);
 
+bool lmp_version_below(const RawAddress& bda, uint8_t version);
+
 bool acl_br_edr_is_role_central(const RawAddress& bda);
 bool acl_ble_is_role_central(const RawAddress& bda);
 
@@ -222,8 +224,7 @@ bool acl_ble_is_role_central(const RawAddress& bda);
 
 bool BTM_BLE_IS_RESOLVE_BDA(const RawAddress& x);
 
-bool acl_refresh_remote_address(const RawAddress& identity_address,
-                                tBLE_ADDR_TYPE identity_address_type,
+bool acl_refresh_remote_address(const tBTM_SEC_DEV_REC* p_dev_rec,
                                 const RawAddress& remote_bda, uint8_t rra_type,
                                 const RawAddress& rpa);
 
@@ -335,9 +336,7 @@ void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
 void btm_acl_removed(uint16_t handle);
 
 void acl_disconnect(const RawAddress& bd_addr, tBT_TRANSPORT transport,
-                    tHCI_STATUS reason);
-void acl_disconnect_from_handle(uint16_t handle, tHCI_STATUS reason);
-void acl_disconnect_after_role_switch(uint16_t conn_handle, tHCI_STATUS reason);
+                    uint8_t reason);
 
 bool acl_peer_supports_sniff_subrating(const RawAddress& remote_bda);
 

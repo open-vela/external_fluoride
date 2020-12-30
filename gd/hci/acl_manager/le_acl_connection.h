@@ -29,14 +29,10 @@ namespace acl_manager {
 class LeAclConnection : public AclConnection {
  public:
   LeAclConnection();
-  LeAclConnection(
-      std::shared_ptr<Queue> queue,
-      LeAclConnectionInterface* le_acl_connection_interface,
-      uint16_t handle,
-      AddressWithType local_address,
-      AddressWithType remote_address,
-      Role role);
-  ~LeAclConnection();
+  LeAclConnection(std::shared_ptr<Queue> queue, LeAclConnectionInterface* le_acl_connection_interface,
+                  common::OnceCallback<void(DisconnectReason)> disconnect, uint16_t handle,
+                  AddressWithType local_address, AddressWithType remote_address, Role role);
+  ~LeAclConnection() override;
 
   virtual AddressWithType GetLocalAddress() const {
     return local_address_;
@@ -59,9 +55,6 @@ class LeAclConnection : public AclConnection {
 
   virtual bool LeConnectionUpdate(uint16_t conn_interval_min, uint16_t conn_interval_max, uint16_t conn_latency,
                                   uint16_t supervision_timeout, uint16_t min_ce_length, uint16_t max_ce_length);
-
-  virtual bool ReadRemoteVersionInformation() override;
-
   // TODO implement LeRemoteConnectionParameterRequestReply, LeRemoteConnectionParameterRequestNegativeReply
 
   // Called once before passing the connection to the client

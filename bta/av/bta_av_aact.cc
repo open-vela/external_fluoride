@@ -35,7 +35,6 @@
 #include "a2dp_sbc.h"
 #include "avdt_api.h"
 #include "avrcp_service.h"
-#include "bta_ar_api.h"
 #include "bta_av_int.h"
 #include "btif/include/btif_av_co.h"
 #include "btif/include/btif_config.h"
@@ -43,12 +42,12 @@
 #include "device/include/interop.h"
 #include "l2c_api.h"
 #include "l2cdefs.h"
-#include "main/shim/dumpsys.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
 #include "stack/include/acl_api.h"
 #include "utl.h"
+#include "bta_ar_api.h"
 
 /*****************************************************************************
  *  Constants
@@ -101,7 +100,7 @@ const tBTA_AV_CO_FUNCTS bta_av_a2dp_cos = {bta_av_co_audio_init,
                                            bta_av_co_audio_source_data_path,
                                            bta_av_co_audio_delay,
                                            bta_av_co_audio_update_mtu,
-                                           bta_av_co_get_scmst_info};
+                                           bta_av_co_content_protect_is_active};
 
 /* these tables translate AVDT events to SSM events */
 static const uint16_t bta_av_stream_evt_ok[] = {
@@ -781,6 +780,9 @@ void bta_av_do_disc_a2dp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
                         BTA_AV_AVRC_TIMER_EVT, p_scb->hndl);
   }
 
+  if (bta_av_cb.features & BTA_AV_FEAT_CENTRAL) {
+    BTM_default_block_role_switch();
+  }
   /* store peer addr other parameters */
   bta_av_save_addr(p_scb, p_data->api_open.bd_addr);
   p_scb->use_rc = p_data->api_open.use_rc;
@@ -1782,13 +1784,11 @@ void bta_av_conn_failed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 void bta_av_do_start(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   uint8_t cur_role;
 
-  LOG_INFO(
-      "A2dp stream start peer:%s sco_occupied:%s role:%s started:%s wait:0x%x",
-      PRIVATE_ADDRESS(p_scb->PeerAddress()),
-      logbool(bta_av_cb.sco_occupied).c_str(), RoleText(p_scb->role).c_str(),
-      logbool(p_scb->started).c_str(), p_scb->wait);
+  LOG_INFO("%s: peer %s sco_occupied:%s role:0x%x started:%s wait:0x%x",
+           __func__, p_scb->PeerAddress().ToString().c_str(),
+           logbool(bta_av_cb.sco_occupied).c_str(), p_scb->role,
+           logbool(p_scb->started).c_str(), p_scb->wait);
   if (bta_av_cb.sco_occupied) {
-    LOG_WARN("A2dp stream start failed");
     bta_av_start_failed(p_scb, p_data);
     return;
   }
@@ -1867,7 +1867,10 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       bta_av_cb.audio_open_cnt, p_data, start);
 
   bta_sys_idle(BTA_ID_AV, bta_av_cb.audio_open_cnt, p_scb->PeerAddress());
-  BTM_unblock_role_switch_for(p_scb->PeerAddress());
+  if ((bta_av_cb.features & BTA_AV_FEAT_CENTRAL) == 0 ||
+      bta_av_cb.audio_open_cnt == 1) {
+    BTM_unblock_role_switch_for(p_scb->PeerAddress());
+  }
 
   if (p_scb->co_started) {
     if (p_scb->offload_started) {
@@ -2379,7 +2382,10 @@ void bta_av_str_closed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->hndl,
       p_scb->open_status, p_scb->chnl, p_scb->co_started);
 
-  BTM_unblock_role_switch_for(p_scb->PeerAddress());
+  if ((bta_av_cb.features & BTA_AV_FEAT_CENTRAL) == 0 ||
+      bta_av_cb.audio_open_cnt == 1) {
+    BTM_unblock_role_switch_for(p_scb->PeerAddress());
+  }
   if (bta_av_cb.audio_open_cnt <= 1) {
     BTM_default_unblock_role_switch();
   }
@@ -2487,7 +2493,10 @@ void bta_av_suspend_cfm(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   }
 
   bta_sys_idle(BTA_ID_AV, bta_av_cb.audio_open_cnt, p_scb->PeerAddress());
-  BTM_unblock_role_switch_for(p_scb->PeerAddress());
+  if ((bta_av_cb.features & BTA_AV_FEAT_CENTRAL) == 0 ||
+      bta_av_cb.audio_open_cnt == 1) {
+    BTM_unblock_role_switch_for(p_scb->PeerAddress());
+  }
 
   /* in case that we received suspend_ind, we may need to call co_stop here */
   if (p_scb->co_started) {
@@ -3012,8 +3021,7 @@ void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb,
 
   UINT32_TO_STREAM(p_param, offload_start->codec_type);
   UINT16_TO_STREAM(p_param, offload_start->max_latency);
-  ARRAY_TO_STREAM(p_param, offload_start->scms_t_enable,
-                  static_cast<int>(offload_start->scms_t_enable.size()));
+  UINT16_TO_STREAM(p_param, offload_start->scms_t_enable);
   UINT32_TO_STREAM(p_param, offload_start->sample_rate);
   UINT8_TO_STREAM(p_param, offload_start->bits_per_sample);
   UINT8_TO_STREAM(p_param, offload_start->ch_mode);
@@ -3171,14 +3179,10 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb,
   p_a2dp_offload->mtu = mtu;
   p_a2dp_offload->acl_hdl =
       BTM_GetHCIConnHandle(p_scb->PeerAddress(), BT_TRANSPORT_BR_EDR);
-  btav_a2dp_scmst_info_t scmst_info =
-      p_scb->p_cos->get_scmst_info(p_scb->PeerAddress());
-  p_a2dp_offload->scms_t_enable[0] = scmst_info.enable_status;
-  p_a2dp_offload->scms_t_enable[1] = scmst_info.cp_header;
-  APPL_TRACE_DEBUG(
-      "%s: SCMS-T_enable status: %d, "
-      "SCMS-T header (if it's enabled): 0x%02x",
-      __func__, scmst_info.enable_status, scmst_info.cp_header);
+  p_a2dp_offload->scms_t_enable =
+      p_scb->p_cos->cp_is_active(p_scb->PeerAddress());
+  APPL_TRACE_DEBUG("%s: scms_t_enable =%d", __func__,
+                   p_a2dp_offload->scms_t_enable);
 
   switch (A2DP_GetTrackSampleRate(p_scb->cfg.codec_info)) {
     case 44100:

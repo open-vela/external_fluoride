@@ -24,13 +24,11 @@
 #ifndef BTA_DM_INT_H
 #define BTA_DM_INT_H
 
-#include <base/strings/stringprintf.h>
 #include <memory>
-#include <string>
 #include "bt_target.h"
-#include "bta/include/bta_gatt_api.h"
-#include "bta/sys/bta_sys.h"
-#include "main/shim/dumpsys.h"
+#include "bta_sys.h"
+
+#include "bta_gatt_api.h"
 
 /*****************************************************************************
  *  Constants and data types
@@ -129,6 +127,8 @@ typedef struct {
   bool link_key_known;
   bool dc_known;
   BD_NAME bd_name;
+  uint8_t
+      features[HCI_FEATURE_BYTES_PER_PAGE * (HCI_EXT_FEATURES_PAGE_MAX + 1)];
   uint8_t pin_length;
 } tBTA_DM_API_ADD_DEVICE;
 
@@ -163,32 +163,17 @@ typedef union {
 #define BTA_DM_UNPAIRING 2
 typedef uint8_t tBTA_DM_CONN_STATE;
 
-typedef enum : uint8_t {
-  BTA_DM_DI_NONE = 0x00,      /* nothing special */
-  BTA_DM_DI_SET_SNIFF = 0x01, /* set this bit if call BTM_SetPowerMode(sniff) */
-  BTA_DM_DI_INT_SNIFF = 0x02, /* set this bit if call BTM_SetPowerMode(sniff) &
-                                 enter sniff mode */
-  BTA_DM_DI_ACP_SNIFF = 0x04, /* set this bit if peer init sniff */
-  BTA_DM_DI_UNUSED = 0x08,
-  BTA_DM_DI_USE_SSR = 0x10, /* set this bit if ssr is supported for this link */
-  BTA_DM_DI_AV_ACTIVE = 0x20, /* set this bit if AV is active for this link */
-} tBTA_DM_DEV_INFO_BITMASK;
+#define BTA_DM_DI_NONE 0x00 /* nothing special */
+#define BTA_DM_DI_USE_SSR \
+  0x10 /* set this bit if ssr is supported for this link */
+#define BTA_DM_DI_AV_ACTIVE \
+  0x20 /* set this bit if AV is active for this link */
+#define BTA_DM_DI_SET_SNIFF \
+  0x01 /* set this bit if call BTM_SetPowerMode(sniff) */
+#define BTA_DM_DI_INT_SNIFF \
+  0x02 /* set this bit if call BTM_SetPowerMode(sniff) & enter sniff mode */
+#define BTA_DM_DI_ACP_SNIFF 0x04 /* set this bit if peer init sniff */
 typedef uint8_t tBTA_DM_DEV_INFO;
-
-inline std::string device_info_text(tBTA_DM_DEV_INFO info) {
-  const char* const device_info_text[] = {
-      ":set_sniff", ":int_sniff", ":acp_sniff",
-      ":unused",    ":use_ssr",   ":av_active",
-  };
-
-  std::string s = base::StringPrintf("0x%02x", info);
-  if (info == BTA_DM_DI_NONE) return s + std::string(":none");
-  for (size_t i = 0; i < sizeof(device_info_text) / sizeof(device_info_text[0]);
-       i++) {
-    if (info & (1u << i)) s += std::string(device_info_text[i]);
-  }
-  return s;
-}
 
 /* set power mode request type */
 #define BTA_DM_PM_RESTART 1
@@ -196,35 +181,19 @@ inline std::string device_info_text(tBTA_DM_DEV_INFO info) {
 #define BTA_DM_PM_EXECUTE 3
 typedef uint8_t tBTA_DM_PM_REQ;
 
-struct sBTA_DM_PEER_DEVICE {
+typedef struct {
   RawAddress peer_bdaddr;
   tBTA_DM_CONN_STATE conn_state;
   tBTA_PREF_ROLES pref_role;
   bool in_use;
-
- private:
-  friend void bta_dm_acl_up(const RawAddress& bd_addr, tBT_TRANSPORT transport);
-  friend void bta_dm_pm_btm_status(const RawAddress& bd_addr,
-                                   tBTM_PM_STATUS status, uint16_t value,
-                                   tHCI_STATUS hci_status);
-  friend void bta_dm_pm_sniff(struct sBTA_DM_PEER_DEVICE* p_peer_dev,
-                              uint8_t index);
-  friend void bta_dm_rm_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
-                              uint8_t app_id, const RawAddress& peer_addr);
-  friend void handle_remote_features_complete(const RawAddress& bd_addr);
   tBTA_DM_DEV_INFO info;
-
- public:
-  tBTA_DM_DEV_INFO Info() const { return info; }
-
   tBTA_DM_ENCRYPT_CBACK* p_encrypt_cback;
   tBTM_PM_STATUS prev_low; /* previous low power mode used */
   tBTA_DM_PM_ACTION pm_mode_attempted;
   tBTA_DM_PM_ACTION pm_mode_failed;
   bool remove_dev_pending;
   tBT_TRANSPORT transport;
-};
-typedef struct sBTA_DM_PEER_DEVICE tBTA_DM_PEER_DEVICE;
+} tBTA_DM_PEER_DEVICE;
 
 /* structure to store list of
   active connections */
@@ -240,13 +209,6 @@ typedef struct {
   uint8_t app_id;
   tBTA_SYS_CONN_STATUS state;
   bool new_request;
-
-  std::string ToString() const {
-    return base::StringPrintf(
-        "peer:%s sys_name:%s app_id:%hhu state:%s new:request:%s",
-        PRIVATE_ADDRESS(peer_bdaddr), BtaIdSysText(id).c_str(), app_id,
-        bta_sys_conn_status_text(state).c_str(), logbool(new_request).c_str());
-  }
 
 } tBTA_DM_SRVCS;
 
@@ -420,7 +382,6 @@ typedef struct {
   uint16_t max_lat;
   uint16_t min_rmt_to;
   uint16_t min_loc_to;
-  const char* name{nullptr};
 } tBTA_DM_SSR_SPEC;
 
 typedef struct {
@@ -467,7 +428,7 @@ extern void bta_dm_remove_device(const RawAddress& bd_addr);
 extern void bta_dm_close_acl(const RawAddress&, bool, tBT_TRANSPORT);
 
 extern void bta_dm_pm_btm_status(const RawAddress&, tBTM_PM_STATUS, uint16_t,
-                                 tHCI_STATUS);
+                                 uint8_t);
 extern void bta_dm_pm_timer(const RawAddress&, tBTA_DM_PM_ACTION);
 extern void bta_dm_add_ampkey(tBTA_DM_MSG* p_data);
 

@@ -1,9 +1,0 @@
-rust_library {
-    name: "libgddi",
-    defaults: ["gd_rust_defaults"],
-    crate_name: "gddi",
-    srcs: ["src/lib.rs"],
-    edition: "2018",
-    proc_macros: ["libgddi_macros"],
-    rustlibs: ["libtokio"],
-}

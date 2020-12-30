@@ -90,28 +90,7 @@ fluoride_defaults {
     },
     static_libs: [
         "libbluetooth_gd",
-        "libbluetooth_rust_interop",
-        "libbt_shim_ffi",
-        "libcxxbridge05",
     ],
-    target: {
-        darwin: {
-            // libstatslog -> libbinder doesn't build on mac
-            enabled: false,
-        },
-        android: {
-            shared_libs: [
-                "android.hardware.bluetooth@1.0",
-                "libhidlbase",
-                "libutils",
-                "libcutils",
-            ],
-            static_libs: [
-                "libbt_common_sys_prop_cxx",
-                "libbt_hidl_hal_cxx",
-            ],
-        },
-    },
 }
 
 // Enables code coverage for a set of source files. Must be combined with

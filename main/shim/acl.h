@@ -37,33 +37,25 @@ class Acl : public hci::acl_manager::ConnectionCallbacks,
   Acl(os::Handler* handler, const acl_interface_t& acl_interface);
   ~Acl();
 
-  // hci::acl_manager::ConnectionCallbacks
-  void OnConnectSuccess(
-      std::unique_ptr<hci::acl_manager::ClassicAclConnection>) override;
-  void OnConnectFail(hci::Address, hci::ErrorCode reason) override;
-  void OnClassicLinkDisconnected(uint16_t handle, hci::ErrorCode reason);
+  void CreateClassicConnection(const bluetooth::hci::Address& address);
+  void CreateLeConnection(
+      const bluetooth::hci::AddressWithType& address_with_type);
+  void CancelLeConnection(
+      const bluetooth::hci::AddressWithType& address_with_type);
 
-  // hci::acl_manager::LeConnectionCallbacks
   void OnLeConnectSuccess(
       hci::AddressWithType,
       std::unique_ptr<hci::acl_manager::LeAclConnection>) override;
   void OnLeConnectFail(hci::AddressWithType, hci::ErrorCode reason) override;
   void OnLeLinkDisconnected(uint16_t handle, hci::ErrorCode reason);
 
-  void CreateClassicConnection(const bluetooth::hci::Address& address);
-  void CreateLeConnection(
-      const bluetooth::hci::AddressWithType& address_with_type);
-  void CancelLeConnection(
-      const bluetooth::hci::AddressWithType& address_with_type);
-  void DisconnectClassic(uint16_t handle, tHCI_STATUS reason);
-  void DisconnectLe(uint16_t handle, tHCI_STATUS reason);
+  void OnConnectSuccess(
+      std::unique_ptr<hci::acl_manager::ClassicAclConnection>) override;
+  void OnConnectFail(hci::Address, hci::ErrorCode reason) override;
+  void OnClassicLinkDisconnected(uint16_t handle, hci::ErrorCode reason);
 
   void WriteData(uint16_t hci_handle,
                  std::unique_ptr<bluetooth::packet::RawBuilder> packet);
-
-  void ConfigureLePrivacy(bool is_le_privacy_enabled);
-
-  void Dump(int fd) const;
 
  protected:
   void on_incoming_acl_credits(uint16_t handle, uint16_t credits);
