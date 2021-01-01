@@ -24,10 +24,9 @@ from facade import common_pb2 as common
 from hci.facade import le_acl_manager_facade_pb2 as le_acl_manager_facade
 from hci.facade import le_advertising_manager_facade_pb2 as le_advertising_facade
 from hci.facade import le_initiator_address_facade_pb2 as le_initiator_address_facade
-from hci.facade import hci_facade_pb2 as hci_facade
+from hci.facade import facade_pb2 as hci_facade
 import bluetooth_packets_python3 as bt_packets
 from bluetooth_packets_python3 import hci_packets
-from bluetooth_packets_python3 import RawBuilder
 
 
 class LeAclManagerTest(GdBaseTestClass):
@@ -38,8 +37,8 @@ class LeAclManagerTest(GdBaseTestClass):
     def setup_test(self):
         super().setup_test()
         self.dut_le_acl_manager = PyLeAclManager(self.dut)
-        self.cert_hci_le_event_stream = EventStream(self.cert.hci.StreamLeSubevents(empty_proto.Empty()))
-        self.cert_acl_data_stream = EventStream(self.cert.hci.StreamAcl(empty_proto.Empty()))
+        self.cert_hci_le_event_stream = EventStream(self.cert.hci.FetchLeSubevents(empty_proto.Empty()))
+        self.cert_acl_data_stream = EventStream(self.cert.hci.FetchAclPackets(empty_proto.Empty()))
 
     def teardown_test(self):
         safeClose(self.cert_hci_le_event_stream)
@@ -56,24 +55,25 @@ class LeAclManagerTest(GdBaseTestClass):
         self.dut.hci_le_initiator_address.SetPrivacyPolicyForInitiatorAddress(private_policy)
 
     def register_for_event(self, event_code):
-        msg = hci_facade.EventRequest(code=int(event_code))
-        self.cert.hci.RequestEvent(msg)
+        msg = hci_facade.EventCodeMsg(code=int(event_code))
+        self.cert.hci.RegisterEventHandler(msg)
 
     def register_for_le_event(self, event_code):
-        msg = hci_facade.EventRequest(code=int(event_code))
-        self.cert.hci.RequestLeSubevent(msg)
+        msg = hci_facade.LeSubeventCodeMsg(code=int(event_code))
+        self.cert.hci.RegisterLeEventHandler(msg)
 
     def enqueue_hci_command(self, command, expect_complete):
         cmd_bytes = bytes(command.Serialize())
-        cmd = common.Data(payload=cmd_bytes)
+        cmd = hci_facade.CommandMsg(command=cmd_bytes)
         if (expect_complete):
-            self.cert.hci.SendCommandWithComplete(cmd)
+            self.cert.hci.EnqueueCommandWithComplete(cmd)
         else:
-            self.cert.hci.SendCommandWithStatus(cmd)
+            self.cert.hci.EnqueueCommandWithStatus(cmd)
 
-    def enqueue_acl_data(self, handle, pb_flag, b_flag, data):
-        acl = hci_packets.AclBuilder(handle, pb_flag, b_flag, RawBuilder(data))
-        self.cert.hci.SendAcl(common.Data(payload=bytes(acl.Serialize())))
+    def enqueue_acl_data(self, handle, pb_flag, b_flag, acl):
+        acl_msg = hci_facade.AclMsg(
+            handle=int(handle), packet_boundary_flag=int(pb_flag), broadcast_flag=int(b_flag), data=acl)
+        self.cert.hci.SendAclData(acl_msg)
 
     def dut_connects(self, check_address):
         self.register_for_le_event(hci_packets.SubeventCode.CONNECTION_COMPLETE)
@@ -136,20 +136,20 @@ class LeAclManagerTest(GdBaseTestClass):
         address = hci_packets.Address()
 
         def get_handle(packet):
-            packet_bytes = packet.payload
+            packet_bytes = packet.event
             nonlocal handle
             nonlocal address
             if b'\x3e\x13\x01\x00' in packet_bytes:
                 cc_view = hci_packets.LeConnectionCompleteView(
                     hci_packets.LeMetaEventView(
-                        hci_packets.EventView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
+                        hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
                 handle = cc_view.GetConnectionHandle()
                 address = cc_view.GetPeerAddress()
                 return True
             if b'\x3e\x13\x0A\x00' in packet_bytes:
                 cc_view = hci_packets.LeEnhancedConnectionCompleteView(
                     hci_packets.LeMetaEventView(
-                        hci_packets.EventView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
+                        hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
                 handle = cc_view.GetConnectionHandle()
                 address = cc_view.GetPeerResolvablePrivateAddress()
                 return True
@@ -167,7 +167,7 @@ class LeAclManagerTest(GdBaseTestClass):
                               bytes(b'\x19\x00\x07\x00SomeAclData from the Cert'))
 
         self.dut_le_acl.send(b'\x1C\x00\x07\x00SomeMoreAclData from the DUT')
-        self.cert_acl_data_stream.assert_event_occurs(lambda packet: b'SomeMoreAclData' in packet.payload)
+        self.cert_acl_data_stream.assert_event_occurs(lambda packet: b'SomeMoreAclData' in packet.data)
         assertThat(self.dut_le_acl).emits(lambda packet: b'SomeAclData' in packet.payload)
 
     def test_dut_connects(self):
@@ -224,8 +224,8 @@ class LeAclManagerTest(GdBaseTestClass):
             advertisement=[gap_data],
             interval_min=512,
             interval_max=768,
-            advertising_type=le_advertising_facade.AdvertisingEventType.ADV_IND,
-            own_address_type=common.USE_RANDOM_DEVICE_ADDRESS,
+            event_type=le_advertising_facade.AdvertisingEventType.ADV_IND,
+            address_type=common.RANDOM_DEVICE_ADDRESS,
             peer_address_type=common.PUBLIC_DEVICE_OR_IDENTITY_ADDRESS,
             peer_address=common.BluetoothAddress(address=bytes(b'A6:A5:A4:A3:A2:A1')),
             channel_map=7,
@@ -255,18 +255,18 @@ class LeAclManagerTest(GdBaseTestClass):
         handle = 0xfff
 
         def get_handle(packet):
-            packet_bytes = packet.payload
+            packet_bytes = packet.event
             nonlocal handle
             if b'\x3e\x13\x01\x00' in packet_bytes:
                 cc_view = hci_packets.LeConnectionCompleteView(
                     hci_packets.LeMetaEventView(
-                        hci_packets.EventView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
+                        hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
                 handle = cc_view.GetConnectionHandle()
                 return True
             if b'\x3e\x13\x0A\x00' in packet_bytes:
                 cc_view = hci_packets.LeEnhancedConnectionCompleteView(
                     hci_packets.LeMetaEventView(
-                        hci_packets.EventView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
+                        hci_packets.EventPacketView(bt_packets.PacketViewLittleEndian(list(packet_bytes)))))
                 handle = cc_view.GetConnectionHandle()
                 return True
             return False

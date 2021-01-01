@@ -42,6 +42,7 @@
 #include "osi/include/thread.h"
 #include "osi/include/wakelock.h"
 
+#if defined(OS_ANDROID)
 using bluetooth::common::BluetoothMetricsLogger;
 
 static bt_os_callouts_t* wakelock_os_callouts = NULL;
@@ -371,3 +372,11 @@ void wakelock_debug_dump(int fd) {
           (unsigned long long)(just_now_ms -
                                wakelock_stats.last_reset_timestamp_ms));
 }
+#else
+void wakelock_set_os_callouts(bt_os_callouts_t* callouts) { }
+bool wakelock_acquire(void) { return true; }
+bool wakelock_release(void) { return true; }
+void wakelock_cleanup(void) { }
+void wakelock_set_paths(const char* lock_path, const char* unlock_path) { }
+void wakelock_debug_dump(int fd) { }
+#endif

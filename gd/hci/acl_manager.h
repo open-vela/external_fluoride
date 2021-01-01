@@ -49,7 +49,7 @@ class AclManager : public Module {
   // "struct impl" is forwarded declared in .cc and compiler needs a concrete definition of "struct impl" when
   // compiling AclManager's destructor. Hence we need to forward declare the destructor for AclManager to delay
   // compiling AclManager's destructor until it starts linking the .cc file.
-  ~AclManager();
+  ~AclManager() override;
 
   // Should register only once when user module starts.
   // Generates OnConnectSuccess when an incoming connection is established.
@@ -115,8 +115,6 @@ class AclManager : public Module {
   void Stop() override;
 
   std::string ToString() const override;
-
-  DumpsysDataFinisher GetDumpsysData(flatbuffers::FlatBufferBuilder* builder) const override;  // Module
 
  private:
   virtual uint16_t HACK_GetHandle(const Address address);

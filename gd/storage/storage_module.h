@@ -47,7 +47,7 @@ class StorageModule : public bluetooth::Module {
 
   static const std::string kAdapterSection;
 
-  ~StorageModule();
+  ~StorageModule() override;
   static const ModuleFactory Factory;
 
   // Methods to access the storage layer via Device abstraction

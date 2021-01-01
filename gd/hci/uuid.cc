@@ -18,8 +18,6 @@
 
 #include "hci/uuid.h"
 
-#include <openssl/rand.h>
-
 #include <algorithm>
 
 namespace bluetooth {
@@ -177,7 +175,7 @@ const UUID128Bit& Uuid::To128BitBE() const {
 
 Uuid Uuid::GetRandom() {
   Uuid uuid;
-  RAND_bytes(uuid.uu.data(), uuid.uu.size());
+  arc4random(uuid.uu.data(), uuid.uu.size());
   return uuid;
 }
 

@@ -117,8 +117,8 @@
 #define SBC_DEQUANT_SCALING_FACTOR 1.38019122262781f
 #endif
 
-const uint32_t dequant_long_scaled[17];
-const uint32_t dequant_long_unscaled[17];
+extern const uint32_t dequant_long_scaled[17];
+extern const uint32_t dequant_long_unscaled[17];
 
 /** Scales x by y bits to the right, adding a rounding factor.
  */

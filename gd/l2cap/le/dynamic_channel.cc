@@ -24,10 +24,6 @@ LinkOptions* DynamicChannel::GetLinkOptions() {
   return link_->GetLinkOptions();
 }
 
-Mtu DynamicChannel::GetMtu() const {
-  return mtu_;
-}
-
 }  // namespace le
 }  // namespace l2cap
 }  // namespace bluetooth

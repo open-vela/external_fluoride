@@ -81,16 +81,7 @@ extern void btsnd_hcic_create_conn(const RawAddress& dest,
 /* Create Connection */
 
 /* Disconnect */
-namespace bluetooth {
-namespace legacy {
-namespace hci {
-struct Interface {
-  void (*Disconnect)(uint16_t handle, uint8_t reason);
-};
-const Interface& GetInterface();
-}  // namespace hci
-}  // namespace legacy
-}  // namespace bluetooth
+extern void btsnd_hcic_disconnect(uint16_t handle, uint8_t reason);
 
 #define HCIC_PARAM_SIZE_DISCONNECT 3
 
@@ -934,9 +925,8 @@ struct EXT_CIS_CREATE_CFG {
   uint16_t acl_conn_handle;
 };
 
-extern void btsnd_hcic_create_cis(
-    uint8_t num_cis, const EXT_CIS_CREATE_CFG* cis_create_cfg,
-    base::OnceCallback<void(uint8_t*, uint16_t)> cb);
+extern void btsnd_hcic_create_cis(uint8_t num_cis,
+                                  const EXT_CIS_CREATE_CFG* cis_create_cfg);
 
 extern void btsnd_hcic_remove_cig(
     uint8_t cig_id, base::OnceCallback<void(uint8_t*, uint16_t)> cb);
@@ -977,9 +967,6 @@ extern void btsnd_hcic_setup_iso_data_path(
 extern void btsnd_hcic_remove_iso_data_path(
     uint16_t iso_handle, uint8_t data_path_dir,
     base::OnceCallback<void(uint8_t*, uint16_t)> cb);
-
-extern void btsnd_hcic_read_iso_link_quality(
-    uint16_t iso_handle, base::OnceCallback<void(uint8_t*, uint16_t)> cb);
 
 #define HCIC_PARAM_SIZE_PERIODIC_ADVERTISING_CREATE_SYNC 14
 #define HCIC_PARAM_SIZE_PERIODIC_ADVERTISING_CREATE_SYNC_CANCEL 0
