@@ -21,7 +21,6 @@
 #include <utility>
 
 #include "hci/acl_manager.h"
-#include "hci/controller.h"
 #include "l2cap/classic/security_enforcement_interface.h"
 #include "l2cap/le/l2cap_le_module.h"
 #include "l2cap/le/security_enforcement_interface.h"
@@ -30,7 +29,6 @@
 #include "security/channel/security_manager_channel.h"
 #include "security/initial_informations.h"
 #include "security/pairing/classic_pairing_handler.h"
-#include "security/pairing/oob_data.h"
 #include "security/pairing_handler_le.h"
 #include "security/record/security_record.h"
 #include "security/record/security_record_database.h"
@@ -41,6 +39,7 @@ namespace security {
 class ISecurityManagerListener;
 
 static constexpr hci::IoCapability kDefaultIoCapability = hci::IoCapability::DISPLAY_YES_NO;
+static constexpr hci::OobDataPresent kDefaultOobDataPresent = hci::OobDataPresent::NOT_PRESENT;
 static constexpr hci::AuthenticationRequirements kDefaultAuthenticationRequirements =
     hci::AuthenticationRequirements::GENERAL_BONDING;
 
@@ -59,7 +58,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
       channel::SecurityManagerChannel* security_manager_channel,
       hci::HciLayer* hci_layer,
       hci::AclManager* acl_manager,
-      hci::Controller* controller,
       storage::StorageModule* storage_module,
       neighbor::NameDbModule* name_db_module);
 
@@ -85,18 +83,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
    * @param address device address we want to bond with
    */
   void CreateBond(hci::AddressWithType address);
-
-  /**
-   * Initiates bond over Classic transport with device, if not bonded yet.
-   *
-   * Allows for OobData to be passed in for use while pairing
-   *
-   * @param address device address we want to bond with
-   * @param remote_p192_oob_data P192 data given to the stack
-   * @param remote_p256_oob_data P256 data given to the stack
-   */
-  void CreateBondOutOfBand(
-      hci::AddressWithType address, pairing::OobData remote_p192_oob_data, pairing::OobData remote_p256_oob_data);
 
   /**
    * Initiates bond over Low Energy transport with device, if not bonded yet.
@@ -160,7 +146,7 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
    *
    * @param packet data received from HCI
    */
-  void OnHciEventReceived(hci::EventView packet) override;
+  void OnHciEventReceived(hci::EventPacketView packet) override;
 
   /**
    * When a conncetion closes we should clean up the pairing handler
@@ -181,23 +167,22 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void OnPairingPromptAccepted(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
   void OnConfirmYesNo(const bluetooth::hci::AddressWithType& address, bool confirmed) override;
   void OnPasskeyEntry(const bluetooth::hci::AddressWithType& address, uint32_t passkey) override;
-  void OnPinEntry(const bluetooth::hci::AddressWithType& address, std::vector<uint8_t> pin) override;
 
   // Facade Configuration API functions
   using FacadeDisconnectCallback = common::Callback<void(bluetooth::hci::AddressWithType)>;
   void SetDisconnectCallback(FacadeDisconnectCallback callback);
   void SetIoCapability(hci::IoCapability io_capability);
   void SetAuthenticationRequirements(hci::AuthenticationRequirements authentication_requirements);
-  void GetOutOfBandData(channel::SecurityCommandStatusCallback callback);
+  void SetOobDataPresent(hci::OobDataPresent data_present);
   void SetLeIoCapability(security::IoCapability io_capability);
   void SetLeAuthRequirements(uint8_t auth_req);
   void SetLeMaximumEncryptionKeySize(uint8_t maximum_encryption_key_size);
   void SetLeOobDataPresent(OobDataFlag data_present);
-  void GetLeOutOfBandData(std::array<uint8_t, 16>* confirmation_value, std::array<uint8_t, 16>* random_value);
+  void GetOutOfBandData(std::array<uint8_t, 16>* le_sc_confirmation_value, std::array<uint8_t, 16>* le_sc_random_value);
   void SetOutOfBandData(
       hci::AddressWithType remote_address,
-      std::array<uint8_t, 16> confirmation_value,
-      std::array<uint8_t, 16> random_value);
+      std::array<uint8_t, 16> le_sc_confirmation_value,
+      std::array<uint8_t, 16> le_sc_random_value);
 
   void EnforceSecurityPolicy(hci::AddressWithType remote, l2cap::classic::SecurityPolicy policy,
                              l2cap::classic::SecurityEnforcementInterface::ResultCallback result_callback);
@@ -221,9 +206,8 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
       std::shared_ptr<record::SecurityRecord> record,
       bool locally_initiated,
       hci::IoCapability io_capability,
-      hci::AuthenticationRequirements auth_requirements,
-      pairing::OobData remote_p192_oob_data_,
-      pairing::OobData remote_p256_oob_data_);
+      hci::OobDataPresent oob_present,
+      hci::AuthenticationRequirements auth_requirements);
   void OnL2capRegistrationCompleteLe(l2cap::le::FixedChannelManager::RegistrationResult result,
                                      std::unique_ptr<l2cap::le::FixedChannelService> le_smp_service);
   void OnSmpCommandLe(hci::AddressWithType device);
@@ -233,7 +217,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   void OnPairingFinished(bluetooth::security::PairingResultOrFailure pairing_result);
   void OnHciLeEvent(hci::LeMetaEventView event);
   LeFixedChannelEntry* FindStoredLeChannel(const hci::AddressWithType& device);
-  LeFixedChannelEntry* FindStoredLeChannel(uint8_t connection_handle);
   bool EraseStoredLeChannel(const hci::AddressWithType& device);
   void InternalEnforceSecurityPolicy(
       hci::AddressWithType remote,
@@ -250,7 +233,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   hci::LeSecurityInterface* hci_security_interface_le_ __attribute__((unused));
   channel::SecurityManagerChannel* security_manager_channel_;
   hci::AclManager* acl_manager_;
-  hci::Controller* controller_;
   storage::StorageModule* storage_module_ __attribute__((unused));
   record::SecurityRecordStorage security_record_storage_;
   record::SecurityRecordDatabase security_database_;
@@ -258,6 +240,7 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   std::unordered_map<hci::Address, std::shared_ptr<pairing::PairingHandler>> pairing_handler_map_;
   hci::IoCapability local_io_capability_ = kDefaultIoCapability;
   hci::AuthenticationRequirements local_authentication_requirements_ = kDefaultAuthenticationRequirements;
+  hci::OobDataPresent local_oob_data_present_ = kDefaultOobDataPresent;
   security::IoCapability local_le_io_capability_ = security::IoCapability::KEYBOARD_DISPLAY;
   uint8_t local_le_auth_req_ = AuthReqMaskBondingFlag | AuthReqMaskMitm | AuthReqMaskSc;
   uint8_t local_maximum_encryption_key_size_ = 0x10;
@@ -267,8 +250,6 @@ class SecurityManagerImpl : public channel::ISecurityManagerChannelListener, pub
   std::optional<crypto_toolbox::Octet16> remote_oob_data_le_sc_c_;
   std::optional<crypto_toolbox::Octet16> remote_oob_data_le_sc_r_;
   std::optional<FacadeDisconnectCallback> facade_disconnect_callback_;
-  hci::AddressWithType local_identity_address_;
-  crypto_toolbox::Octet16 local_identity_resolving_key_;
 
   struct PendingSecurityEnforcementEntry {
     l2cap::classic::SecurityPolicy policy_;

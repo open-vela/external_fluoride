@@ -27,7 +27,6 @@
 #include "hci/acl_manager/round_robin_scheduler.h"
 #include "hci/controller.h"
 #include "hci/hci_layer.h"
-#include "hci_acl_manager_generated.h"
 #include "security/security_module.h"
 
 namespace bluetooth {
@@ -61,10 +60,8 @@ struct AclManager::impl {
     hci_queue_end_ = hci_layer_->GetAclQueueEnd();
     hci_queue_end_->RegisterDequeue(
         handler_, common::Bind(&impl::dequeue_and_route_acl_packet_to_connection, common::Unretained(this)));
-    bool crash_on_unknown_handle = false;
-    classic_impl_ =
-        new classic_impl(hci_layer_, controller_, handler_, round_robin_scheduler_, crash_on_unknown_handle);
-    le_impl_ = new le_impl(hci_layer_, controller_, handler_, round_robin_scheduler_, crash_on_unknown_handle);
+    classic_impl_ = new classic_impl(hci_layer_, controller_, handler_, round_robin_scheduler_);
+    le_impl_ = new le_impl(hci_layer_, controller_, handler_, round_robin_scheduler_, classic_impl_);
   }
 
   void Stop() {
@@ -105,9 +102,6 @@ struct AclManager::impl {
     }
   }
 
-  void Dump(
-      std::promise<flatbuffers::Offset<AclManagerData>> promise, flatbuffers::FlatBufferBuilder* fb_builder) const;
-
   const AclManager& acl_manager_;
 
   classic_impl* classic_impl_ = nullptr;
@@ -116,7 +110,7 @@ struct AclManager::impl {
   Controller* controller_ = nullptr;
   HciLayer* hci_layer_ = nullptr;
   RoundRobinScheduler* round_robin_scheduler_ = nullptr;
-  common::BidiQueueEnd<AclBuilder, AclView>* hci_queue_end_ = nullptr;
+  common::BidiQueueEnd<AclPacketBuilder, AclPacketView>* hci_queue_end_ = nullptr;
   std::atomic_bool enqueue_registered_ = false;
   uint16_t default_link_policy_settings_ = 0xffff;
 };
@@ -265,29 +259,6 @@ std::string AclManager::ToString() const {
 const ModuleFactory AclManager::Factory = ModuleFactory([]() { return new AclManager(); });
 
 AclManager::~AclManager() = default;
-
-void AclManager::impl::Dump(
-    std::promise<flatbuffers::Offset<AclManagerData>> promise, flatbuffers::FlatBufferBuilder* fb_builder) const {
-  auto title = fb_builder->CreateString("----- Acl Manager Dumpsys -----");
-  AclManagerDataBuilder builder(*fb_builder);
-  builder.add_title(title);
-  flatbuffers::Offset<AclManagerData> dumpsys_data = builder.Finish();
-  promise.set_value(dumpsys_data);
-}
-
-DumpsysDataFinisher AclManager::GetDumpsysData(flatbuffers::FlatBufferBuilder* fb_builder) const {
-  ASSERT(fb_builder != nullptr);
-
-  std::promise<flatbuffers::Offset<AclManagerData>> promise;
-  auto future = promise.get_future();
-  pimpl_->Dump(std::move(promise), fb_builder);
-
-  auto dumpsys_data = future.get();
-
-  return [dumpsys_data](DumpsysDataBuilder* dumpsys_builder) {
-    dumpsys_builder->add_hci_acl_manager_dumpsys_data(dumpsys_data);
-  };
-}
 
 }  // namespace hci
 }  // namespace bluetooth

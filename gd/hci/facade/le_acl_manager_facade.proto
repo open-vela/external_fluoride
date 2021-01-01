@@ -20,7 +20,7 @@ message LeHandleMsg {
 }
 
 message LeConnectionEvent {
-  bytes payload = 1;
+  bytes event = 1;
 }
 
 message LeConnectionCommandMsg {

@@ -61,21 +61,9 @@ class ParentDef : public TypeDef {
 
   void GenInstanceOf(std::ostream& s) const;
 
-  const ParentDef* GetRootDef() const;
-
-  bool HasAncestorNamed(std::string name) const;
-
-  std::map<std::string, std::variant<int64_t, std::string>> GetAllConstraints() const;
-
-  std::vector<const ParentDef*> GetAncestors() const;
-
   FieldList fields_;
 
   ParentDef* parent_{nullptr};
-
-  ParentDef* complement_{nullptr};
-
-  std::vector<ParentDef*> children_;
 
   std::map<std::string, std::variant<int64_t, std::string>> parent_constraints_;
   bool is_little_endian_;

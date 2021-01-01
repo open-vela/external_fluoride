@@ -31,7 +31,7 @@ constexpr SubeventCode LeConnectionManagementEvents[] = {
     SubeventCode::REMOTE_CONNECTION_PARAMETER_REQUEST,
 };
 
-typedef CommandInterface<AclCommandBuilder> LeAclConnectionInterface;
+typedef CommandInterface<LeConnectionManagementCommandBuilder> LeAclConnectionInterface;
 
 }  // namespace hci
 }  // namespace bluetooth

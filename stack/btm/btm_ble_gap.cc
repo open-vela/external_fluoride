@@ -33,7 +33,6 @@
 
 #include "common/time_util.h"
 #include "device/include/controller.h"
-#include "main/shim/acl_api.h"
 #include "main/shim/btm_api.h"
 #include "main/shim/shim.h"
 #include "osi/include/log.h"
@@ -430,7 +429,7 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration,
           p_inq->scan_type, (uint16_t)scan_interval, (uint16_t)scan_window,
           btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, BTM_BLE_DEFAULT_SFP);
 
-      btm_ble_start_scan();
+      status = btm_ble_start_scan();
     }
 
     if (status == BTM_CMD_STARTED) {
@@ -619,9 +618,6 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
 
   GAP_BleAttrDBUpdate(GATT_UUID_GAP_CENTRAL_ADDR_RESOL, &gap_ble_attr_value);
 
-  if (bluetooth::shim::is_gd_acl_enabled()) {
-    bluetooth::shim::ACL_ConfigureLePrivacy(privacy_mode);
-  }
   return true;
 }
 
@@ -1172,7 +1168,7 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t duration) {
     /* enable IRK list */
     btm_ble_enable_resolving_list_for_platform(BTM_BLE_RL_SCAN);
     p_ble_cb->inq_var.scan_type = BTM_BLE_SCAN_MODE_ACTI;
-    btm_ble_start_scan();
+    status = btm_ble_start_scan();
   } else if ((p_ble_cb->inq_var.scan_interval !=
               BTM_BLE_LOW_LATENCY_SCAN_INT) ||
              (p_ble_cb->inq_var.scan_window != BTM_BLE_LOW_LATENCY_SCAN_WIN)) {
@@ -1215,7 +1211,7 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t duration) {
  ******************************************************************************/
 void btm_ble_read_remote_name_cmpl(bool status, const RawAddress& bda,
                                    uint16_t length, char* p_name) {
-  tHCI_STATUS hci_status = HCI_SUCCESS;
+  uint8_t hci_status = HCI_SUCCESS;
   BD_NAME bd_name;
 
   memset(bd_name, 0, (BD_NAME_LEN + 1));
@@ -1923,7 +1919,7 @@ void btm_ble_process_phy_update_pkt(uint8_t len, uint8_t* data) {
  * Returns          void
  *
  ******************************************************************************/
-void btm_ble_start_scan() {
+tBTM_STATUS btm_ble_start_scan(void) {
   tBTM_BLE_INQ_CB* p_inq = &btm_cb.ble_ctr_cb.inq_var;
   /* start scan, disable duplicate filtering */
   btm_send_hci_scan_enable(BTM_BLE_SCAN_ENABLE, BTM_BLE_DUPLICATE_DISABLE);
@@ -1932,6 +1928,8 @@ void btm_ble_start_scan() {
     btm_ble_set_topology_mask(BTM_BLE_STATE_ACTIVE_SCAN_BIT);
   else
     btm_ble_set_topology_mask(BTM_BLE_STATE_PASSIVE_SCAN_BIT);
+
+  return BTM_CMD_STARTED;
 }
 
 /*******************************************************************************
@@ -2202,8 +2200,6 @@ void btm_ble_read_remote_features_complete(uint8_t* p) {
       return;
     }
   }
-
-  btsnd_hcic_rmt_ver_req(handle);
 }
 
 /*******************************************************************************
@@ -2397,12 +2393,6 @@ void btm_ble_init(void) {
 #if (BLE_VND_INCLUDED == FALSE)
   btm_ble_adv_filter_init();
 #endif
-}
-
-// Clean up btm ble control block
-void btm_ble_free() {
-  tBTM_BLE_CB* p_cb = &btm_cb.ble_ctr_cb;
-  alarm_free(p_cb->addr_mgnt_cb.refresh_raddr_timer);
 }
 
 /*******************************************************************************

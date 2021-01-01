@@ -38,25 +38,23 @@ const acl_interface_t GetAclInterface() {
       .connection.le.on_disconnected = btm_acl_disconnected,
 
       .link.classic.on_authentication_complete = btm_sec_auth_complete,
-      .link.classic.on_central_link_key_complete = nullptr,
       .link.classic.on_change_connection_link_key_complete = nullptr,
       .link.classic.on_encryption_change = nullptr,
       .link.classic.on_flow_specification_complete = nullptr,
       .link.classic.on_flush_occurred = nullptr,
-      .link.classic.on_mode_change = btm_pm_on_mode_change,
+      .link.classic.on_central_link_key_complete = nullptr,
+      .link.classic.on_mode_change = nullptr,
       .link.classic.on_packet_type_changed = nullptr,
       .link.classic.on_qos_setup_complete = nullptr,
       .link.classic.on_read_afh_channel_map_complete = nullptr,
       .link.classic.on_read_automatic_flush_timeout_complete = nullptr,
-      .link.classic.on_sniff_subrating = btm_pm_on_sniff_subrating,
       .link.classic.on_read_clock_complete = nullptr,
       .link.classic.on_read_clock_offset_complete = nullptr,
       .link.classic.on_read_failed_contact_counter_complete = nullptr,
       .link.classic.on_read_link_policy_settings_complete = nullptr,
       .link.classic.on_read_link_quality_complete = nullptr,
       .link.classic.on_read_link_supervision_timeout_complete = nullptr,
-      .link.classic.on_read_remote_version_information_complete =
-          btm_read_remote_version_complete,
+      .link.classic.on_read_remote_version_information_complete = nullptr,
       .link.classic.on_read_remote_extended_features_complete =
           acl_process_extended_features,
       .link.classic.on_read_rssi_complete = nullptr,
@@ -64,10 +62,8 @@ const acl_interface_t GetAclInterface() {
       .link.classic.on_role_change = btm_acl_role_changed,
       .link.classic.on_role_discovery_complete = nullptr,
 
-      .link.le.on_connection_update = acl_ble_update_event_received,
+      .link.le.on_connection_update = nullptr,
       .link.le.on_data_length_change = nullptr,
-      .link.le.on_read_remote_version_information_complete =
-          btm_read_remote_version_complete,
   };
   return acl_interface;
 }
