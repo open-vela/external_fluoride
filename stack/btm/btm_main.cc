@@ -22,13 +22,10 @@
  *
  ******************************************************************************/
 
-#include <memory>
-#include <string>
+#include <string.h>
 #include "bt_target.h"
 #include "bt_types.h"
 #include "btm_int.h"
-#include "main/shim/dumpsys.h"
-#include "stack/btm/btm_int_types.h"
 #include "stack_config.h"
 
 /* Global BTM control block structure
@@ -37,9 +34,7 @@ tBTM_CB btm_cb;
 
 extern void btm_acl_init(void);
 extern void btm_dev_init(void);
-extern void btm_dev_free(void);
 extern void btm_inq_db_init(void);
-extern void btm_inq_db_free(void);
 extern void btm_sco_init(void);
 extern void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec);
 
@@ -56,44 +51,60 @@ extern void wipe_secrets_and_remove(tBTM_SEC_DEV_REC* p_dev_rec);
  *
  ******************************************************************************/
 void btm_init(void) {
-  btm_cb.Init(stack_config_get_interface()->get_pts_secure_only_mode()
-                  ? BTM_SEC_MODE_SC
-                  : BTM_SEC_MODE_SP);
+  /* All fields are cleared; nonzero fields are reinitialized in appropriate
+   * function */
+  memset(&btm_cb, 0, sizeof(tBTM_CB));
+  btm_cb.page_queue = fixed_queue_new(SIZE_MAX);
+  btm_cb.sec_pending_q = fixed_queue_new(SIZE_MAX);
+  btm_cb.sec_collision_timer = alarm_new("btm.sec_collision_timer");
+  btm_cb.pairing_timer = alarm_new("btm.pairing_timer");
 
+#if defined(BTM_INITIAL_TRACE_LEVEL)
+  btm_cb.trace_level = BTM_INITIAL_TRACE_LEVEL;
+#else
+  btm_cb.trace_level = BT_TRACE_LEVEL_NONE; /* No traces */
+#endif
   /* Initialize BTM component structures */
   btm_inq_db_init(); /* Inquiry Database and Structures */
   btm_acl_init();    /* ACL Database and Structures */
+  /* Security Manager Database and Structures */
+  if (stack_config_get_interface()->get_pts_secure_only_mode())
+    btm_cb.security_mode = BTM_SEC_MODE_SC;
+  else
+    btm_cb.security_mode = BTM_SEC_MODE_SP;
+  btm_cb.pairing_bda = RawAddress::kAny;
+
   btm_sco_init(); /* SCO Database and Structures (If included) */
 
-  btm_dev_init(); /* Device Manager Structures & HCI_Reset */
+  btm_cb.sec_dev_rec = list_new(osi_free);
 
-  btm_cb.history_ = std::make_shared<TimestampedStringCircularBuffer>(40);
-  CHECK(btm_cb.history_ != nullptr);
-  btm_cb.history_->Push(std::string("Initialized btm history"));
+  btm_dev_init(); /* Device Manager Structures & HCI_Reset */
 }
 
 /** This function is called to free dynamic memory and system resource allocated by btm_init */
 void btm_free(void) {
-  btm_cb.history_.reset();
+  fixed_queue_free(btm_cb.page_queue, NULL);
+  btm_cb.page_queue = NULL;
 
-  btm_dev_free();
-  btm_inq_db_free();
+  fixed_queue_free(btm_cb.sec_pending_q, NULL);
+  btm_cb.sec_pending_q = NULL;
 
-  btm_cb.Free();
-}
+  list_node_t* end = list_end(btm_cb.sec_dev_rec);
+  list_node_t* node = list_begin(btm_cb.sec_dev_rec);
+  while (node != end) {
+    tBTM_SEC_DEV_REC* p_dev_rec = static_cast<tBTM_SEC_DEV_REC*>(list_node(node));
 
-constexpr size_t kMaxLogHistoryTagLength = 6;
-constexpr size_t kMaxLogHistoryMsgLength = 25;
+    // we do list_remove in, must grab next before removing
+    node = list_next(node);
+    wipe_secrets_and_remove(p_dev_rec);
+  }
 
-void BTM_LogHistory(const std::string& tag, const RawAddress& bd_addr,
-                    const std::string& msg, const std::string& extra) {
-  btm_cb.history_->Push("%-6s %-25s: %s %s",
-                        tag.substr(0, kMaxLogHistoryTagLength).c_str(),
-                        msg.substr(0, kMaxLogHistoryMsgLength).c_str(),
-                        PRIVATE_ADDRESS(bd_addr), extra.c_str());
-}
+  list_free(btm_cb.sec_dev_rec);
+  btm_cb.sec_dev_rec = NULL;
 
-void BTM_LogHistory(const std::string& tag, const RawAddress& bd_addr,
-                    const std::string& msg) {
-  BTM_LogHistory(tag, bd_addr, msg, std::string());
+  alarm_free(btm_cb.sec_collision_timer);
+  btm_cb.sec_collision_timer = NULL;
+
+  alarm_free(btm_cb.pairing_timer);
+  btm_cb.pairing_timer = NULL;
 }

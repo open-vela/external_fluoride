@@ -225,8 +225,13 @@ class BtifA2dpSource {
   BtifA2dpSource::RunState state_;
 };
 
+#if !defined(CONFIG_FLUORIDE_A2DP_SOURCE_STACKSIZE)
 static bluetooth::common::MessageLoopThread btif_a2dp_source_thread(
     "bt_a2dp_source_worker_thread");
+#else
+static bluetooth::common::MessageLoopThread btif_a2dp_source_thread(
+    "bt_a2dp_source_worker_thread", CONFIG_FLUORIDE_A2DP_SOURCE_STACKSIZE);
+#endif
 static BtifA2dpSource btif_a2dp_source_cb;
 
 static void btif_a2dp_source_init_delayed(void);

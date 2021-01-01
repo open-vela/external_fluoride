@@ -17,10 +17,14 @@
 #ifndef ANDROID_INCLUDE_BT_RC_H
 #define ANDROID_INCLUDE_BT_RC_H
 
+#include "bt_target.h"
+
 __BEGIN_DECLS
 
 /* Change this macro to use multiple RC */
+#ifndef BT_RC_NUM_APP
 #define BT_RC_NUM_APP 6
+#endif
 
 /* Macros */
 #define BTRC_MAX_ATTR_STR_LEN (1 << 16)

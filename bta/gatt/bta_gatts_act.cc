@@ -60,17 +60,15 @@ static void bta_gatts_conn_update_cback(tGATT_IF gatt_if, uint16_t conn_id,
                                         uint16_t interval, uint16_t latency,
                                         uint16_t timeout, tGATT_STATUS status);
 
-static tGATT_CBACK bta_gatts_cback = {
-    .p_conn_cb = bta_gatts_conn_cback,
-    .p_cmpl_cb = nullptr,
-    .p_disc_res_cb = nullptr,
-    .p_disc_cmpl_cb = nullptr,
-    .p_req_cb = bta_gatts_send_request_cback,
-    .p_enc_cmpl_cb = nullptr,
-    .p_congestion_cb = bta_gatts_cong_cback,
-    .p_phy_update_cb = bta_gatts_phy_update_cback,
-    .p_conn_update_cb = bta_gatts_conn_update_cback,
-};
+static tGATT_CBACK bta_gatts_cback = {bta_gatts_conn_cback,
+                                      NULL,
+                                      NULL,
+                                      NULL,
+                                      bta_gatts_send_request_cback,
+                                      NULL,
+                                      bta_gatts_cong_cback,
+                                      bta_gatts_phy_update_cback,
+                                      bta_gatts_conn_update_cback};
 
 tGATT_APPL_INFO bta_gatts_nv_cback = {bta_gatts_nv_save_cback,
                                       bta_gatts_nv_srv_chg_cback};
@@ -595,12 +593,13 @@ static void bta_gatts_conn_cback(tGATT_IF gatt_if, const RawAddress& bdaddr,
   tBTA_GATTS_RCB* p_reg;
 
   VLOG(1) << __func__ << "  bda=" << bdaddr << " gatt_if= " << gatt_if
-          << ", conn_id=" << loghex(conn_id) << " connected=" << connected;
+          << ", conn_id=" << loghex(conn_id) << " connected=" << connected
+          << ", reason=" << loghex(reason);
 
   if (connected)
     btif_debug_conn_state(bdaddr, BTIF_DEBUG_CONNECTED, GATT_CONN_UNKNOWN);
   else
-    btif_debug_conn_state(bdaddr, BTIF_DEBUG_DISCONNECTED, GATT_CONN_UNKNOWN);
+    btif_debug_conn_state(bdaddr, BTIF_DEBUG_DISCONNECTED, reason);
 
   p_reg = bta_gatts_find_app_rcb_by_app_if(gatt_if);
 
@@ -615,6 +614,7 @@ static void bta_gatts_conn_cback(tGATT_IF gatt_if, const RawAddress& bdaddr,
 
     cb_data.conn.conn_id = conn_id;
     cb_data.conn.server_if = gatt_if;
+    cb_data.conn.reason = reason;
     cb_data.conn.transport = transport;
     cb_data.conn.remote_bda = bdaddr;
     (*p_reg->p_cback)(evt, &cb_data);

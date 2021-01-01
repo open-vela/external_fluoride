@@ -42,10 +42,7 @@ void StackManager::StartUp(ModuleList* modules, Thread* stack_thread) {
                                   std::move(promise)));
 
   auto init_status = future.wait_for(std::chrono::seconds(3));
-  ASSERT_LOG(
-      init_status == std::future_status::ready,
-      "Can't start stack, last instance: %s",
-      registry_.last_instance_.c_str());
+  ASSERT_LOG(init_status == std::future_status::ready, "Can't start stack");
 
   LOG_INFO("init complete");
 }
@@ -61,10 +58,7 @@ void StackManager::ShutDown() {
   handler_->Post(common::BindOnce(&StackManager::handle_shut_down, common::Unretained(this), std::move(promise)));
 
   auto stop_status = future.wait_for(std::chrono::seconds(5));
-  ASSERT_LOG(
-      stop_status == std::future_status::ready,
-      "Can't stop stack, last instance: %s",
-      registry_.last_instance_.c_str());
+  ASSERT_LOG(stop_status == std::future_status::ready, "Can't stop stack");
 
   handler_->Clear();
   handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
