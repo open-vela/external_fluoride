@@ -55,6 +55,35 @@ class DeviceProperties {
     extended_features_[page_number] = features;
   }
 
+  bool GetSecureSimplePairingSupported() const {
+    uint64_t ssp_bit = 0x1;
+    return extended_features_[1] & ssp_bit;
+  }
+
+  void SetSecureSimplePairingSupport(bool supported) {
+    uint64_t ssp_bit = 0x1;
+    extended_features_[1] &= ~ssp_bit;
+    if (supported) {
+      extended_features_[1] = extended_features_[1] | ssp_bit;
+    }
+  }
+
+  void SetLeHostSupport(bool le_supported) {
+    uint64_t le_bit = 0x2;
+    extended_features_[1] &= ~le_bit;
+    if (le_supported) {
+      extended_features_[1] = extended_features_[1] | le_bit;
+    }
+  }
+
+  void SetSecureConnections(bool supported) {
+    uint64_t secure_bit = 0x8;
+    extended_features_[1] &= ~secure_bit;
+    if (supported) {
+      extended_features_[1] = extended_features_[1] | secure_bit;
+    }
+  }
+
   // Specification Version 4.2, Volume 2, Part E, Section 7.4.4
   uint8_t GetExtendedFeaturesMaximumPageNumber() const {
     return extended_features_.size() - 1;
@@ -278,6 +307,11 @@ class DeviceProperties {
     return le_supported_features_;
   }
 
+  // Specification Version 5.2, Volume 4, Part E, Section 7.8.6
+  int8_t GetLeAdvertisingPhysicalChannelTxPower() const {
+    return le_advertising_physical_channel_tx_power_;
+  }
+
   void SetLeSupportedFeatures(uint64_t features) {
     le_supported_features_ = features;
   }
@@ -325,7 +359,7 @@ class DeviceProperties {
   std::vector<uint8_t> supported_codecs_;
   std::vector<uint32_t> vendor_specific_codecs_;
   std::vector<uint8_t> supported_commands_;
-  std::vector<uint64_t> extended_features_{{0x875b3fd8fe8ffeff, 0x0f}};
+  std::vector<uint64_t> extended_features_{{0x875b3fd8fe8ffeff, 0x04}};
   ClassOfDevice class_of_device_{{0, 0, 0}};
   std::vector<uint8_t> extended_inquiry_data_;
   std::array<uint8_t, 248> name_{};
@@ -340,6 +374,7 @@ class DeviceProperties {
   uint8_t le_connect_list_size_;
   uint8_t le_resolving_list_size_;
   uint64_t le_supported_features_{0x075b3fd8fe8ffeff};
+  int8_t le_advertising_physical_channel_tx_power_{0x00};
   uint64_t le_supported_states_;
   uint64_t le_event_mask_{0x01f};
   std::vector<uint8_t> le_vendor_cap_;

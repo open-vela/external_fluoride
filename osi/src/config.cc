@@ -272,9 +272,7 @@ bool config_save(const config_t& config, const std::string& filename) {
   //    This ensures atomic update.
   // 5) Sync directory that has the conf file with fsync().
   //    This ensures directory entries are up-to-date.
-#if !defined(__NuttX__)
   int dir_fd = -1;
-#endif
   FILE* fp = nullptr;
   std::stringstream serialized;
 
@@ -289,14 +287,12 @@ bool config_save(const config_t& config, const std::string& filename) {
     goto error;
   }
 
-#if !defined(__NuttX__)
   dir_fd = open(directoryname.c_str(), O_RDONLY);
   if (dir_fd < 0) {
     LOG(ERROR) << __func__ << ": unable to open dir '" << directoryname
                << "': " << strerror(errno);
     goto error;
   }
-#endif
 
   fp = fopen(temp_filename.c_str(), "wt");
   if (!fp) {
@@ -341,7 +337,6 @@ bool config_save(const config_t& config, const std::string& filename) {
   }
   fp = nullptr;
 
-#if !defined(__NuttX__)
   // Change the file's permissions to Read/Write by User and Group
   if (chmod(temp_filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) ==
       -1) {
@@ -349,7 +344,6 @@ bool config_save(const config_t& config, const std::string& filename) {
                << filename << "': " << strerror(errno);
     goto error;
   }
-#endif
 
   // Rename written temp file to the actual config file.
   if (rename(temp_filename.c_str(), filename.c_str()) == -1) {
@@ -358,7 +352,6 @@ bool config_save(const config_t& config, const std::string& filename) {
     goto error;
   }
 
-#if !defined(__NuttX__)
   // This should ensure the directory is updated as well.
   if (fsync(dir_fd) < 0) {
     LOG(WARNING) << __func__ << ": unable to fsync dir '" << directoryname
@@ -370,7 +363,6 @@ bool config_save(const config_t& config, const std::string& filename) {
                << "': " << strerror(errno);
     goto error;
   }
-#endif
 
   return true;
 
@@ -379,9 +371,7 @@ error:
   // acceptable.
   unlink(temp_filename.c_str());
   if (fp) fclose(fp);
-#if !defined(__NuttX__)
   if (dir_fd != -1) close(dir_fd);
-#endif
   return false;
 }
 
@@ -399,9 +389,7 @@ bool checksum_save(const std::string& checksum, const std::string& filename) {
   // 4) Sync directory that has the conf file with fsync().
   //    This ensures directory entries are up-to-date.
   FILE* fp = nullptr;
-#if !defined(__NuttX__)
   int dir_fd = -1;
-#endif
 
   // Build temp config checksum file based on config checksum file (e.g.
   // bt_config.conf.encrypted-checksum.new).
@@ -416,14 +404,12 @@ bool checksum_save(const std::string& checksum, const std::string& filename) {
     goto error2;
   }
 
-#if !defined(__NuttX__)
   dir_fd = open(directoryname.c_str(), O_RDONLY);
   if (dir_fd < 0) {
     LOG(ERROR) << __func__ << ": unable to open dir '" << directoryname
                << "': " << strerror(errno);
     goto error2;
   }
-#endif
 
   if (base::WriteFile(path, checksum.data(), checksum.size()) !=
       (int)checksum.size()) {
@@ -452,7 +438,6 @@ bool checksum_save(const std::string& checksum, const std::string& filename) {
   }
   fp = nullptr;
 
-#if !defined(__NuttX__)
   // Change the file's permissions to Read/Write by User and Group
   if (chmod(temp_filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) ==
       -1) {
@@ -460,7 +445,6 @@ bool checksum_save(const std::string& checksum, const std::string& filename) {
                << filename << "': " << strerror(errno);
     goto error2;
   }
-#endif
 
   // Rename written temp file to the actual config file.
   if (rename(temp_filename.c_str(), filename.c_str()) == -1) {
@@ -469,7 +453,6 @@ bool checksum_save(const std::string& checksum, const std::string& filename) {
     goto error2;
   }
 
-#if !defined(__NuttX__)
   // This should ensure the directory is updated as well.
   if (fsync(dir_fd) < 0) {
     LOG(WARNING) << __func__ << ": unable to fsync dir '" << directoryname
@@ -481,7 +464,6 @@ bool checksum_save(const std::string& checksum, const std::string& filename) {
                << "': " << strerror(errno);
     goto error2;
   }
-#endif
 
   return true;
 
@@ -490,9 +472,7 @@ error2:
   // acceptable.
   unlink(temp_filename.c_str());
   if (fp) fclose(fp);
-#if !defined(__NuttX__)
   if (dir_fd != -1) close(dir_fd);
-#endif
   return false;
 }
 

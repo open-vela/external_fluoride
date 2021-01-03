@@ -43,8 +43,7 @@ class MessageLoopThread final {
    *
    * @param thread_name name of this worker thread
    */
-  explicit MessageLoopThread(const std::string& thread_name,
-                             int stack_size = 0);
+  explicit MessageLoopThread(const std::string& thread_name);
 
   /**
    * Destroys the message loop thread automatically when it goes out of scope
@@ -196,7 +195,6 @@ class MessageLoopThread final {
   base::PlatformThreadId thread_id_;
   // Linux specific abstractions
   pid_t linux_tid_;
-  int stack_size_;
   base::WeakPtrFactory<MessageLoopThread> weak_ptr_factory_;
   bool shutting_down_;
 

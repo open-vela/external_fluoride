@@ -32,11 +32,11 @@
 #include "connection_manager.h"
 #include "device/include/interop.h"
 #include "eatt.h"
-#include "gatt_int.h"
 #include "l2c_api.h"
 #include "osi/include/osi.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
+#include "stack/gatt/gatt_int.h"
 #include "stack/include/l2cap_acl_interface.h"
 
 using base::StringPrintf;
@@ -173,6 +173,26 @@ void gatt_free(void) {
   gatt_cb.srv_list_info = nullptr;
 
   EattExtension::GetInstance()->Stop();
+}
+
+void gatt_find_in_device_record(const RawAddress& bd_addr,
+                                tBLE_BD_ADDR* address_with_type) {
+  const tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bd_addr);
+  if (p_dev_rec == nullptr) {
+    return;
+  }
+
+  if (p_dev_rec->device_type & BT_DEVICE_TYPE_BLE) {
+    if (p_dev_rec->ble.identity_address_with_type.bda.IsEmpty()) {
+      *address_with_type = {.type = p_dev_rec->ble.ble_addr_type,
+                            .bda = bd_addr};
+      return;
+    }
+    *address_with_type = p_dev_rec->ble.identity_address_with_type;
+    return;
+  }
+  *address_with_type = {.type = BLE_ADDR_PUBLIC, .bda = bd_addr};
+  return;
 }
 
 /*******************************************************************************
@@ -502,7 +522,7 @@ void gatt_notify_phy_updated(tGATT_STATUS status, uint16_t handle,
 
 void gatt_notify_conn_update(uint16_t handle, uint16_t interval,
                              uint16_t latency, uint16_t timeout,
-                             tGATT_STATUS status) {
+                             tHCI_STATUS status) {
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
   if (!p_dev_rec) return;
 
@@ -515,7 +535,8 @@ void gatt_notify_conn_update(uint16_t handle, uint16_t interval,
     if (p_reg->in_use && p_reg->app_cb.p_conn_update_cb) {
       uint16_t conn_id = GATT_CREATE_CONN_ID(p_tcb->tcb_idx, p_reg->gatt_if);
       (*p_reg->app_cb.p_conn_update_cb)(p_reg->gatt_if, conn_id, interval,
-                                        latency, timeout, status);
+                                        latency, timeout,
+                                        static_cast<tGATT_STATUS>(status));
     }
   }
 }
@@ -948,7 +969,7 @@ void gatt_set_ch_state(tGATT_TCB* p_tcb, tGATT_CH_STATE ch_state) {
   if (!p_tcb) return;
 
   VLOG(1) << __func__ << ": old=" << +p_tcb->ch_state
-          << " new=" << loghex(ch_state);
+          << " new=" << loghex(static_cast<uint8_t>(ch_state));
   p_tcb->ch_state = ch_state;
 }
 
