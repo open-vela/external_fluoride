@@ -18,7 +18,6 @@ cc_library_shared {
         "android/bluetooth/IBluetoothCallback.aidl",
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
-        "android/bluetooth/IBluetoothHeadsetPhone.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
@@ -40,6 +39,7 @@ cc_library_shared {
         "android/bluetooth/le/IAdvertisingSetCallback.aidl",
         "android/bluetooth/le/IPeriodicAdvertisingCallback.aidl",
         "android/bluetooth/le/IScannerCallback.aidl"
+        "android/bluetooth/IBluetoothConnectionCallback.aidl",
         */
     ],
     export_include_dirs: ["./"],
@@ -92,9 +92,9 @@ filegroup {
         "android/bluetooth/IBluetoothCallback.aidl",
         "android/bluetooth/IBluetoothProfileServiceConnection.aidl",
         "android/bluetooth/IBluetoothHeadset.aidl",
-        "android/bluetooth/IBluetoothHeadsetPhone.aidl",
         "android/bluetooth/IBluetoothHearingAid.aidl",
         "android/bluetooth/IBluetoothHidHost.aidl",
+        "android/bluetooth/IBluetoothLeAudio.aidl",
         "android/bluetooth/IBluetoothPan.aidl",
         "android/bluetooth/IBluetoothManager.aidl",
         "android/bluetooth/IBluetoothManagerCallback.aidl",
@@ -115,5 +115,6 @@ filegroup {
         "android/bluetooth/le/IAdvertisingSetCallback.aidl",
         "android/bluetooth/le/IPeriodicAdvertisingCallback.aidl",
         "android/bluetooth/le/IScannerCallback.aidl",
+        "android/bluetooth/IBluetoothConnectionCallback.aidl",
     ],
 }

@@ -133,3 +133,97 @@ void ScalarField::GenValidator(std::ostream&) const {
 void ScalarField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
   s << "+" << accessor;
 }
+
+std::string ScalarField::GetRustDataType() const {
+  return util::GetRustTypeForSize(size_);
+}
+
+std::string ScalarField::GetRustParseDataType() const {
+  return util::GetRustTypeForSize(size_);
+}
+
+int ScalarField::GetRustBitOffset(
+    std::ostream&, Size start_offset, Size end_offset, Size size) const {
+  int num_leading_bits = 0;
+
+  if (!start_offset.empty()) {
+    // Default to start if available.
+    num_leading_bits = start_offset.bits() % 8;
+  } else if (!end_offset.empty()) {
+    num_leading_bits = GetShiftBits(end_offset.bits() + size.bits());
+    Size byte_offset = Size(num_leading_bits + size.bits()) + end_offset;
+  } else {
+    ERROR(this) << "Ambiguous offset for field.";
+  }
+  return num_leading_bits;
+}
+
+void ScalarField::GenRustGetter(std::ostream& s, Size start_offset, Size end_offset) const {
+  Size size = GetSize();
+
+  int num_leading_bits = GetRustBitOffset(s, start_offset, end_offset, GetSize());
+
+  s << "let " << GetName() << " = ";
+  if (num_leading_bits == 0) {
+    s << GetRustParseDataType() << "::from_le_bytes(bytes[" << start_offset.bytes() << "..";
+    s << start_offset.bytes() + size.bytes() << "].try_into().unwrap());";
+  } else {
+    s << GetRustParseDataType() << "::from_le_bytes(bytes[" << start_offset.bytes() - 1 << "..";
+    s << start_offset.bytes() + size.bytes() - 1 << "].try_into().unwrap());";
+    s << "let " << GetName() << " = " << GetName() << " >> " << num_leading_bits << ";";
+  }
+
+  if (util::RoundSizeUp(size.bits()) != size.bits()) {
+    uint64_t mask = 0;
+    for (int i = 0; i < size.bits(); i++) {
+      mask <<= 1;
+      mask |= 1;
+    }
+    s << "let " << GetName() << " = ";
+    s << GetName() << " & 0x" << std::hex << mask << std::dec << ";";
+  }
+
+  // needs casting from primitive
+  if (GetRustParseDataType() != GetRustDataType()) {
+    s << "let " << GetName() << " = ";
+    s << GetRustDataType() << "::from_" << GetRustParseDataType() << "(" << GetName() << ").unwrap();";
+  }
+}
+
+void ScalarField::GenRustWriter(std::ostream& s, Size start_offset, Size end_offset) const {
+  Size size = GetSize();
+  int num_leading_bits = GetRustBitOffset(s, start_offset, end_offset, GetSize());
+
+  // needs casting to primitive
+  if (GetRustParseDataType() != GetRustDataType()) {
+    s << "let " << GetName() << " = self." << GetName() << ".to_" << GetRustParseDataType() << "().unwrap();";
+  } else {
+    s << "let " << GetName() << " = self." << GetName() << ";";
+  }
+  if (util::RoundSizeUp(size.bits()) != size.bits()) {
+    uint64_t mask = 0;
+    for (int i = 0; i < size.bits(); i++) {
+      mask <<= 1;
+      mask |= 1;
+    }
+    s << "let " << GetName() << " = ";
+    s << GetName() << " & 0x" << std::hex << mask << std::dec << ";";
+  }
+
+  int access_offset = 0;
+  if (num_leading_bits != 0) {
+    access_offset = -1;
+    uint64_t mask = 0;
+    for (int i = 0; i < num_leading_bits; i++) {
+      mask <<= 1;
+      mask |= 1;
+    }
+    s << "let " << GetName() << " = (" << GetName() << " << " << num_leading_bits << ") | ("
+      << "(buffer[" << start_offset.bytes() << "] as " << GetRustParseDataType() << ") & 0x" << std::hex << mask
+      << std::dec << ");";
+  }
+
+  s << "buffer[" << start_offset.bytes() + access_offset << ".."
+    << start_offset.bytes() + GetSize().bytes() + access_offset << "].copy_from_slice(&" << GetName()
+    << ".to_le_bytes());";
+}

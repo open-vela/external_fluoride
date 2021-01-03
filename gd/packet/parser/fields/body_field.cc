@@ -75,3 +75,12 @@ void BodyField::GenValidator(std::ostream&) const {
 void BodyField::GenStringRepresentation(std::ostream& s, std::string accessor) const {
   s << "\"BODY REPRESENTATION_UNIMPLEMENTED " << accessor << " \"";
 }
+
+std::string BodyField::GetRustDataType() const {
+  return GetDataType();
+}
+
+void BodyField::GenRustGetter(std::ostream&, Size, Size) const {
+}
+
+void BodyField::GenRustWriter(std::ostream&, Size, Size) const {}
