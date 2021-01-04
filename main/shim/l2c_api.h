@@ -41,7 +41,8 @@ namespace shim {
  ******************************************************************************/
 uint16_t L2CA_Register(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
                        bool enable_snoop, tL2CAP_ERTM_INFO* p_ertm_info,
-                       uint16_t my_mtu, uint16_t required_remote_mtu);
+                       uint16_t my_mtu, uint16_t required_remote_mtu,
+                       uint16_t sec_level);
 
 /*******************************************************************************
  *
@@ -54,18 +55,6 @@ uint16_t L2CA_Register(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
  *
  ******************************************************************************/
 void L2CA_Deregister(uint16_t psm);
-
-/*******************************************************************************
- *
- * Function         L2CA_AllocatePSM
- *
- * Description      Other layers call this function to find an unused PSM for
- *                  L2CAP services.
- *
- * Returns          PSM to use.
- *
- ******************************************************************************/
-uint16_t L2CA_AllocatePSM(void);
 
 /*******************************************************************************
  *
@@ -120,7 +109,7 @@ uint16_t L2CA_ConnectReq(uint16_t psm, const RawAddress& p_bd_addr);
  *
  ******************************************************************************/
 uint16_t L2CA_RegisterLECoc(uint16_t psm, const tL2CAP_APPL_INFO& p_cb_info,
-                            uint16_t sec_level);
+                            uint16_t sec_level, tL2CAP_LE_CFG_INFO cfg);
 
 /*******************************************************************************
  *
@@ -148,21 +137,6 @@ void L2CA_DeregisterLECoc(uint16_t psm);
  ******************************************************************************/
 uint16_t L2CA_ConnectLECocReq(uint16_t psm, const RawAddress& p_bd_addr,
                               tL2CAP_LE_CFG_INFO* p_cfg);
-
-/*******************************************************************************
- *
- * Function         L2CA_ConnectLECocRsp
- *
- * Description      Higher layers call this function to accept an incoming
- *                  L2CAP LE COC connection, for which they had gotten a connect
- *                  indication callback.
- *
- * Returns          true for success, false for failure
- *
- ******************************************************************************/
-bool L2CA_ConnectLECocRsp(const RawAddress& p_bd_addr, uint8_t id,
-                          uint16_t lcid, uint16_t result, uint16_t status,
-                          tL2CAP_LE_CFG_INFO* p_cfg);
 
 /*******************************************************************************
  *
@@ -233,6 +207,8 @@ extern bool L2CA_ConnectCreditBasedRsp(const RawAddress& p_bd_addr, uint8_t id,
  ******************************************************************************/
 bool L2CA_DisconnectReq(uint16_t cid);
 
+bool L2CA_DisconnectLECocReq(uint16_t cid);
+
 /*******************************************************************************
  *
  * Function         L2CA_DataWrite
@@ -246,6 +222,8 @@ bool L2CA_DisconnectReq(uint16_t cid);
  *
  ******************************************************************************/
 uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
+
+uint8_t L2CA_LECocDataWrite(uint16_t cid, BT_HDR* p_data);
 
 // Given a local channel identifier, |lcid|, this function returns the bound
 // remote channel identifier, |rcid|. If
@@ -382,8 +360,6 @@ bool L2CA_RegisterFixedChannel(uint16_t fixed_cid,
  *
  ******************************************************************************/
 bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& bd_addr);
-bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& bd_addr,
-                           uint8_t initiating_phys);
 
 /*******************************************************************************
  *
@@ -517,6 +493,23 @@ void L2CA_AdjustConnectionIntervals(uint16_t* min_interval,
  * Check whether an ACL or LE link to the remote device is established
  */
 bool L2CA_IsLinkEstablished(const RawAddress& bd_addr, tBT_TRANSPORT transport);
+
+void L2CA_ConnectForSecurity(const RawAddress& bd_addr);
+
+// Set bonding state to acquire/release link refcount
+void L2CA_SetBondingState(const RawAddress& p_bd_addr, bool is_bonding);
+
+// Indicated by shim stack manager that GD L2cap is enabled but Security is not
+void L2CA_UseLegacySecurityModule();
+
+void L2CA_SwitchRoleToCentral(const RawAddress& addr);
+
+bool L2CA_ReadRemoteVersion(const RawAddress& addr, uint8_t* lmp_version,
+                            uint16_t* manufacturer, uint16_t* lmp_sub_version);
+
+void L2CA_DisconnectLink(const RawAddress& remote);
+
+uint16_t L2CA_GetNumLinks();
 
 }  // namespace shim
 }  // namespace bluetooth

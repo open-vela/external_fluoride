@@ -25,7 +25,7 @@
 #include <base/run_loop.h>
 #include <base/sequenced_task_runner.h>
 #include <base/threading/thread.h>
-#include <frameworks/base/core/proto/android/bluetooth/hci/enums.pb.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/hci/enums.pb.h>
 
 #include <signal.h>
 #include <string.h>
@@ -102,11 +102,7 @@ static const btsnoop_t* btsnoop;
 static const packet_fragmenter_t* packet_fragmenter;
 
 static future_t* startup_future;
-#if !defined(CONFIG_FLUORIDE_HCI_STACKSIZE)
 static MessageLoopThread hci_thread("bt_hci_thread");
-#else
-static MessageLoopThread hci_thread("bt_hci_thread", CONFIG_FLUORIDE_HCI_STACKSIZE);
-#endif
 
 static alarm_t* startup_timer;
 

@@ -427,6 +427,7 @@
 #define HCI_LE_ISO_READ_TEST_CNTRS (0x0072 | HCI_GRP_BLE_CMDS)
 #define HCI_LE_ISO_TEST_END (0x0073 | HCI_GRP_BLE_CMDS)
 #define HCI_LE_SET_HOST_FEATURE (0x0074 | HCI_GRP_BLE_CMDS)
+#define HCI_LE_READ_ISO_LINK_QUALITY (0x0075 | HCI_GRP_BLE_CMDS)
 
 /* Multi adv opcode */
 #define HCI_BLE_MULTI_ADV (0x0154 | HCI_GRP_VENDOR_SPECIFIC)
@@ -713,10 +714,12 @@ inline std::string RoleText(hci_role_t role) {
 }
 
 /* HCI mode defenitions */
-#define HCI_MODE_ACTIVE 0x00
-#define HCI_MODE_HOLD 0x01
-#define HCI_MODE_SNIFF 0x02
-#define HCI_MODE_PARK 0x03
+typedef enum : uint8_t {
+  HCI_MODE_ACTIVE = 0x00,
+  HCI_MODE_HOLD = 0x01,
+  HCI_MODE_SNIFF = 0x02,
+  HCI_MODE_PARK = 0x03,
+} tHCI_MODE;
 
 /* Page scan period modes */
 #define HCI_PAGE_SCAN_REP_MODE_R1 0x01
@@ -952,7 +955,7 @@ typedef struct {
 #define HCI_3_SLOT_EDR_ACL_SUPPORTED(x) ((x)[4] & 0x80)
 
 #define HCI_5_SLOT_EDR_ACL_SUPPORTED(x) ((x)[5] & 0x01)
-#define HCI_SNIFF_SUB_RATE_SUPPORTED(x) ((x)[5] & 0x02)
+#define HCI_SNIFF_SUB_RATE_SUPPORTED(x) (static_cast<bool>((x)[5] & 0x02))
 #define HCI_ATOMIC_ENCRYPT_SUPPORTED(x) ((x)[5] & 0x04)
 #define HCI_LMP_AFH_CAP_MASTR_SUPPORTED(x) ((x)[5] & 0x08)
 #define HCI_LMP_AFH_CLASS_MASTR_SUPPORTED(x) ((x)[5] & 0x10)
