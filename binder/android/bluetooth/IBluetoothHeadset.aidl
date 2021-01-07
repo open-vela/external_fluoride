@@ -65,7 +65,4 @@ interface IBluetoothHeadset {
     boolean isInbandRingingEnabled();
     boolean setPriority(in BluetoothDevice device, int connectionPolicy);
     int getPriority(in BluetoothDevice device);
-
-    boolean isNoiseReductionSupported(in BluetoothDevice device);
-    boolean isVoiceRecognitionSupported(in BluetoothDevice device);
 }
