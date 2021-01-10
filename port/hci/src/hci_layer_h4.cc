@@ -88,15 +88,17 @@ int  hci_open_firmware_log_file() { return INVALID_FD; }
 void hci_close_firmware_log_file(int fd) { }
 void hci_log_firmware_debug_packet(int fd, BT_HDR* packet) { }
 
-static void h4_data_dump(const char *tag, uint8_t *data, uint32_t len)
+static void h4_data_dump(const char *tag, uint8_t type, uint8_t *data, uint32_t len)
 {
 #ifdef HCI_DEBUG
-  uint8_t *end = len > 30 ? data + 30 : data + len;
+  struct iovec bufs[2];
 
-  printf("%s[%03d]: ", tag, len);
-  while (data != end)
-    printf("%02x,", *data++);
-  printf("\n");
+  bufs[0].iov_base = &type;
+  bufs[0].iov_len = 1;
+  bufs[1].iov_base = data;
+  bufs[1].iov_len = len;
+
+  lib_dumpvbuffer(tag, bufs, 2);
 #endif
 }
 
@@ -194,7 +196,7 @@ static void *h4_rx_thread(void *arg)
     memcpy(packet->data, &hdr, hdr_len);
 
     packet->len = hdr_len + data_len;
-    h4_data_dump("R", packet->data, packet->len);
+    h4_data_dump("R", type, packet->data, packet->len);
 
     pthread_mutex_unlock(&g_mutex);
 
@@ -223,8 +225,6 @@ void hci_transmit(BT_HDR* packet)
   uint8_t event;
   int ret;
 
-  h4_data_dump("W", packet->data + packet->offset, packet->len);
-
   switch (packet->event) {
     case MSG_STACK_TO_HC_HCI_CMD:
       event = HCI_PACKET_TYPE_COMMAND;
@@ -246,6 +246,8 @@ void hci_transmit(BT_HDR* packet)
     pthread_mutex_unlock(&g_mutex);
     return;
   }
+
+  h4_data_dump("W", event, packet->data + packet->offset, packet->len);
 
   ret = h4_send_data(packet->data + packet->offset, packet->len);
   if (ret != packet->len)
