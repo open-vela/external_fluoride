@@ -267,12 +267,11 @@ static void btapp_gatts_cback(tBTA_GATTS_EVT event, tBTA_GATTS* p_data) {
 /*******************************************************************************
  *  Server API Functions
  ******************************************************************************/
-static bt_status_t btif_gatts_register_app(const Uuid& bt_uuid,
-                                           bool eatt_support) {
+static bt_status_t btif_gatts_register_app(const Uuid& bt_uuid) {
   CHECK_BTGATT_INIT();
 
   return do_in_jni_thread(
-      Bind(&BTA_GATTS_AppRegister, bt_uuid, &btapp_gatts_cback, eatt_support));
+      Bind(&BTA_GATTS_AppRegister, bt_uuid, &btapp_gatts_cback, false));
 }
 
 static bt_status_t btif_gatts_unregister_app(int server_if) {
