@@ -211,8 +211,7 @@ typedef struct {
 
 typedef struct {
   /** Registers a GATT client application with the stack */
-  bt_status_t (*register_client)(const bluetooth::Uuid& uuid,
-                                 bool eatt_support);
+  bt_status_t (*register_client)(const bluetooth::Uuid& uuid);
 
   /** Unregister a client application from the stack */
   bt_status_t (*unregister_client)(int client_if);

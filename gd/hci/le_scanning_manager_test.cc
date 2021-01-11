@@ -236,6 +236,9 @@ class LeScanningManagerTest : public ::testing::Test {
     fake_registry_.InjectTestModule(&HciLayer::Factory, test_hci_layer_);
     fake_registry_.InjectTestModule(&Controller::Factory, test_controller_);
     fake_registry_.InjectTestModule(&AclManager::Factory, test_acl_manager_);
+    client_handler_ = fake_registry_.GetTestModuleHandler(&HciLayer::Factory);
+    ASSERT_NE(client_handler_, nullptr);
+    mock_callbacks_.handler_ = client_handler_;
     std::future<void> config_future = test_hci_layer_->GetCommandFuture();
     fake_registry_.Start<LeScanningManager>(&thread_);
     le_scanning_manager =
@@ -243,7 +246,6 @@ class LeScanningManagerTest : public ::testing::Test {
     auto result = config_future.wait_for(std::chrono::duration(std::chrono::milliseconds(1000)));
     ASSERT_EQ(std::future_status::ready, result);
     HandleConfiguration();
-    le_scanning_manager->RegisterScanningCallback(&mock_callbacks_);
   }
 
   void TearDown() override {
@@ -264,34 +266,14 @@ class LeScanningManagerTest : public ::testing::Test {
   LeScanningManager* le_scanning_manager = nullptr;
   os::Handler* client_handler_ = nullptr;
 
-  class MockCallbacks : public bluetooth::hci::ScanningCallback {
+  class MockLeScanningManagerCallbacks : public LeScanningManagerCallbacks {
    public:
-    MOCK_METHOD(
-        void,
-        OnScannerRegistered,
-        (const bluetooth::hci::Uuid app_uuid, ScannerId scanner_id, ScanningStatus status),
-        (override));
-    MOCK_METHOD(
-        void,
-        OnScanResult,
-        (uint16_t event_type,
-         uint8_t address_type,
-         Address address,
-         uint8_t primary_phy,
-         uint8_t secondary_phy,
-         uint8_t advertising_sid,
-         int8_t tx_power,
-         int8_t rssi,
-         uint16_t periodic_advertising_interval,
-         std::vector<GapData> advertising_data),
-        (override));
-    MOCK_METHOD(void, OnTrackAdvFoundLost, (), (override));
-    MOCK_METHOD(
-        void,
-        OnBatchScanReports,
-        (int client_if, int status, int report_format, int num_records, std::vector<uint8_t> data),
-        (override));
-    MOCK_METHOD(void, OnTimeout, (), (override));
+    MOCK_METHOD(void, on_advertisements, (std::vector<std::shared_ptr<LeReport>>), (override));
+    MOCK_METHOD(void, on_timeout, (), (override));
+    os::Handler* Handler() {
+      return handler_;
+    }
+    os::Handler* handler_{nullptr};
   } mock_callbacks_;
 
   OpCode param_opcode_{OpCode::LE_SET_ADVERTISING_PARAMETERS};
@@ -327,7 +309,7 @@ TEST_F(LeScanningManagerTest, startup_teardown) {}
 
 TEST_F(LeScanningManagerTest, start_scan_test) {
   auto next_command_future = test_hci_layer_->GetCommandFuture();
-  le_scanning_manager->Scan(true);
+  le_scanning_manager->StartScan(&mock_callbacks_);
 
   auto result = next_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
   ASSERT_EQ(std::future_status::ready, result);
@@ -347,14 +329,14 @@ TEST_F(LeScanningManagerTest, start_scan_test) {
   gap_data.push_back(data_item);
   report.advertising_data_ = gap_data;
 
-  EXPECT_CALL(mock_callbacks_, OnScanResult);
+  EXPECT_CALL(mock_callbacks_, on_advertisements);
 
   test_hci_layer_->IncomingLeMetaEvent(LeAdvertisingReportBuilder::Create({report}));
 }
 
 TEST_F(LeAndroidHciScanningManagerTest, start_scan_test) {
   auto next_command_future = test_hci_layer_->GetCommandFuture();
-  le_scanning_manager->Scan(true);
+  le_scanning_manager->StartScan(&mock_callbacks_);
 
   auto result = next_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
   ASSERT_EQ(std::future_status::ready, result);
@@ -374,14 +356,14 @@ TEST_F(LeAndroidHciScanningManagerTest, start_scan_test) {
   gap_data.push_back(data_item);
   report.advertising_data_ = gap_data;
 
-  EXPECT_CALL(mock_callbacks_, OnScanResult);
+  EXPECT_CALL(mock_callbacks_, on_advertisements);
 
   test_hci_layer_->IncomingLeMetaEvent(LeAdvertisingReportBuilder::Create({report}));
 }
 
 TEST_F(LeExtendedScanningManagerTest, start_scan_test) {
   auto next_command_future = test_hci_layer_->GetCommandFuture();
-  le_scanning_manager->Scan(true);
+  le_scanning_manager->StartScan(&mock_callbacks_);
 
   auto result = next_command_future.wait_for(std::chrono::duration(std::chrono::milliseconds(100)));
   ASSERT_EQ(std::future_status::ready, result);
@@ -404,7 +386,7 @@ TEST_F(LeExtendedScanningManagerTest, start_scan_test) {
   gap_data.push_back(data_item);
   report.advertising_data_ = gap_data;
 
-  EXPECT_CALL(mock_callbacks_, OnScanResult);
+  EXPECT_CALL(mock_callbacks_, on_advertisements);
 
   test_hci_layer_->IncomingLeMetaEvent(LeExtendedAdvertisingReportBuilder::Create({report}));
 }

@@ -138,8 +138,7 @@ typedef struct {
 /** Represents the standard BT-GATT server interface. */
 typedef struct {
   /** Registers a GATT server application with the stack */
-  bt_status_t (*register_server)(const bluetooth::Uuid& uuid,
-                                 bool eatt_support);
+  bt_status_t (*register_server)(const bluetooth::Uuid& uuid);
 
   /** Unregister a server application from the stack */
   bt_status_t (*unregister_server)(int server_if);
