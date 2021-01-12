@@ -19,7 +19,6 @@
 #include "main/shim/acl_api.h"
 #include "main/shim/config.h"
 #include "main/shim/shim.h"
-#include "main/shim/l2cap.h"
 #include "main/shim/controller.h"
 
 #include "hardware/bluetooth.h"
