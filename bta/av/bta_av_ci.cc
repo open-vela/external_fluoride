@@ -25,14 +25,14 @@
 
 #define LOG_TAG "bt_bta_av"
 
-#include "osi/include/log.h"
-
 #include "bta_av_ci.h"
 #include "bta_api.h"
 #include "bta_av_int.h"
 #include "bta_sys.h"
 
 #include <string.h>
+
+#include "osi/include/log.h"
 
 /*******************************************************************************
  *

@@ -25,6 +25,8 @@
 // a section.
 #define CONFIG_DEFAULT_SECTION "Global"
 
+#define entry_t _entry_t
+
 struct entry_t {
   std::string key;
   std::string value;

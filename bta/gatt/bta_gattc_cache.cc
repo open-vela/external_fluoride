@@ -185,8 +185,8 @@ static void bta_gattc_explore_next_service(uint16_t conn_id,
 
     if (p_srvc_cb->read_multiple_not_supported) {
       tGATT_READ_PARAM read_param{
-          .by_handle = {.handle = descriptors.front(),
-                        .auth_req = GATT_AUTH_REQ_NONE}};
+          .by_handle = {.auth_req = GATT_AUTH_REQ_NONE,
+                        .handle = descriptors.front()}};
       GATTC_Read(conn_id, GATT_READ_BY_HANDLE, &read_param);
       // asynchronous continuation in bta_gattc_op_cmpl_during_discovery
       return;

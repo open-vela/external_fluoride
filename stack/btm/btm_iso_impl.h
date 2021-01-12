@@ -117,8 +117,8 @@ struct iso_impl {
 
         evt.conn_handles.push_back(conn_handle);
         conn_hdl_to_cis_map_[conn_handle] = std::unique_ptr<iso_cis>(
-            new iso_cis({.sync_info = {.first_sync_ts = 0, .seq_nb = 0},
-                         .cig_id = cig_id,
+            new iso_cis({.cig_id = cig_id,
+                         .sync_info = {.first_sync_ts = 0, .seq_nb = 0},
                          .state_flags = kStateFlagsNone,
                          .sdu_itv = sdu_itv_mtos}));
       }
@@ -457,8 +457,8 @@ struct iso_impl {
     if (cis->state_flags & kStateFlagIsConnected) {
       cis_disconnected_evt evt = {
           .reason = reason,
-          .cis_conn_hdl = handle,
           .cig_id = cis->cig_id,
+          .cis_conn_hdl = handle,
       };
 
       cig_callbacks_->OnCisEvent(kIsoEventCisDisconnected, &evt);

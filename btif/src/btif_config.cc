@@ -21,8 +21,9 @@
 #include "btif_config.h"
 
 #include <base/logging.h>
-#include <openssl/rand.h>
+#if defined(OS_ANDROID)
 #include <private/android_filesystem_config.h>
+#endif
 #include <unistd.h>
 
 #include <cctype>
@@ -73,7 +74,11 @@ using bluetooth::common::AddressObfuscator;
 using bluetooth::common::MetricIdAllocator;
 
 // TODO(armansito): Find a better way than searching by a hardcoded path.
-#if defined(OS_GENERIC)
+#if defined(CONFIG_FLUORIDE_FILE_PATH)
+static const char* CONFIG_FILE_PATH = CONFIG_FLUORIDE_FILE_PATH;
+static const char* CONFIG_BACKUP_PATH = CONFIG_FLUORIDE_BACKUP_PATH;
+static const char* CONFIG_LEGACY_FILE_PATH = CONFIG_FLUORIDE_LEGACY_FILE_PATH;
+#elif defined(OS_GENERIC)
 static const char* CONFIG_FILE_PATH = "bt_config.conf";
 static const char* CONFIG_BACKUP_PATH = "bt_config.bak";
 static const char* CONFIG_LEGACY_FILE_PATH = "bt_config.xml";
@@ -96,7 +101,11 @@ static bool config_checksum_pass(int check_bit) {
   return ((get_niap_config_compare_result() & check_bit) == check_bit);
 }
 static bool btif_is_niap_mode() {
+#if defined(OS_ANDROID)
   return getuid() == AID_BLUETOOTH && is_niap_mode();
+#else
+  return is_niap_mode();
+#endif
 }
 static bool btif_in_encrypt_key_name_list(std::string key);
 
@@ -177,9 +186,9 @@ static void read_or_set_metrics_salt() {
   }
   if (!AddressObfuscator::IsSaltValid(metrics_salt)) {
     LOG(INFO) << __func__ << ": Metrics salt is not invalid, creating new one";
-    if (RAND_bytes(metrics_salt.data(), metrics_salt.size()) != 1) {
-      LOG(FATAL) << __func__ << "Failed to generate salt for metrics";
-    }
+
+    arc4random_buf(metrics_salt.data(), metrics_salt.size());
+
     if (!btif_config_set_bin(BT_CONFIG_METRICS_SECTION,
                              BT_CONFIG_METRICS_SALT_256BIT, metrics_salt.data(),
                              metrics_salt.size())) {

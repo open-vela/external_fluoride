@@ -26,15 +26,16 @@ namespace bluetooth {
 
 namespace common {
 
-static constexpr int kRealTimeFifoSchedulingPriority = 1;
+static constexpr int kRealTimeFifoSchedulingPriority = PTHREAD_DEFAULT_PRIORITY;
 
-MessageLoopThread::MessageLoopThread(const std::string& thread_name)
+MessageLoopThread::MessageLoopThread(const std::string& thread_name, int stack_size)
     : thread_name_(thread_name),
       message_loop_(nullptr),
       run_loop_(nullptr),
       thread_(nullptr),
       thread_id_(-1),
       linux_tid_(-1),
+      stack_size_(stack_size),
       weak_ptr_factory_(this),
       shutting_down_(false) {}
 
@@ -50,8 +51,14 @@ void MessageLoopThread::StartUp() {
 
       return;
     }
-    thread_ = new std::thread(&MessageLoopThread::RunThread, this,
-                              std::move(start_up_promise));
+    if (stack_size_ != 0) {
+      std::thread::attributes attrs;
+      attrs.stack_size(stack_size_);
+      thread_ = new std::thread(attrs, &MessageLoopThread::RunThread, this,
+                                std::move(start_up_promise));
+    } else
+      thread_ = new std::thread(&MessageLoopThread::RunThread, this,
+                                std::move(start_up_promise));
   }
   start_up_future.wait();
 }
@@ -178,7 +185,7 @@ void MessageLoopThread::Run(std::promise<void> start_up_promise) {
     message_loop_ = new base::MessageLoop();
     run_loop_ = new base::RunLoop();
     thread_id_ = base::PlatformThread::CurrentId();
-    linux_tid_ = static_cast<pid_t>(syscall(SYS_gettid));
+    linux_tid_ = static_cast<pid_t>(gettid());
     start_up_promise.set_value();
   }
 
