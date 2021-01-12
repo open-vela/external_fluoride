@@ -20,11 +20,13 @@
 #include "main/shim/entry.h"
 
 bool bluetooth::shim::is_gd_advertising_enabled() { return false; }
+bool bluetooth::shim::is_gd_scanning_enabled() { return false; }
 bool bluetooth::shim::is_gd_security_enabled() { return false; }
 bool bluetooth::shim::is_gd_acl_enabled() { return false; }
+bool bluetooth::shim::is_gd_link_policy_enabled() { return false; }
 bool bluetooth::shim::is_gd_hci_enabled() { return false; }
 bool bluetooth::shim::is_gd_controller_enabled() { return false; }
+bool bluetooth::shim::is_gd_l2cap_enabled() { return false; }
 bool bluetooth::shim::is_gd_shim_enabled() { return false; }
 bool bluetooth::shim::is_any_gd_enabled() { return false; }
 bool bluetooth::shim::is_gd_stack_started_up() { return false; }
-bool bluetooth::shim::is_gd_l2cap_enabled() { return false; }

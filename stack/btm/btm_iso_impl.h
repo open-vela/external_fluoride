@@ -524,8 +524,8 @@ struct iso_impl {
 
       if (evt.status == HCI_SUCCESS) {
         conn_hdl_to_bis_map_[conn_handle] = std::unique_ptr<iso_bis>(
-            new iso_bis({.sync_info = {.first_sync_ts = ts, .seq_nb = 0},
-                         .big_handle = evt.big_id,
+            new iso_bis({.big_handle = evt.big_id,
+                         .sync_info = {.first_sync_ts = ts, .seq_nb = 0},
                          .state_flags = kStateFlagIsBroadcast,
                          .sdu_itv = last_big_create_req_sdu_itv_}));
       }

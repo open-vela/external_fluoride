@@ -2872,8 +2872,8 @@ void acl_write_automatic_flush_timeout(const RawAddress& bd_addr,
 bool acl_create_le_connection_with_id(uint8_t id, const RawAddress& bd_addr) {
   if (bluetooth::shim::is_gd_acl_enabled()) {
     tBLE_BD_ADDR address_with_type{
-        .bda = bd_addr,
         .type = BLE_ADDR_RANDOM,
+        .bda = bd_addr,
     };
     gatt_find_in_device_record(bd_addr, &address_with_type);
     LOG_DEBUG("Creating le connection to:%s",
@@ -2891,8 +2891,8 @@ bool acl_create_le_connection(const RawAddress& bd_addr) {
 void acl_cancel_le_connection(const RawAddress& bd_addr) {
   if (bluetooth::shim::is_gd_acl_enabled()) {
     tBLE_BD_ADDR address_with_type{
-        .bda = bd_addr,
         .type = BLE_ADDR_RANDOM,
+        .bda = bd_addr,
     };
     return bluetooth::shim::ACL_CancelLeConnection(address_with_type);
   }
