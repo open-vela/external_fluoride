@@ -21,15 +21,6 @@
 namespace bluetooth {
   namespace common {
 
-    bool InitFlags::btaa_hci_log_enabled = false;
-    bool InitFlags::gd_core_enabled = false;
-    bool InitFlags::gd_advertising_enabled = false;
-    bool InitFlags::gd_security_enabled = false;
-    bool InitFlags::gd_acl_enabled = false;
-    bool InitFlags::gd_l2cap_enabled = false;
-    bool InitFlags::gd_hci_enabled = false;
-    bool InitFlags::gd_controller_enabled = false;
-    bool InitFlags::gatt_robust_caching_enabled = false;
     bool InitFlags::logging_debug_enabled_for_all = false;
     std::unordered_map<std::string, bool> InitFlags::logging_debug_explicit_tag_settings = {};
 

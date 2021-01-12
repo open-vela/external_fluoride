@@ -199,7 +199,6 @@ FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" vnd/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" audio_hal_interface}
 
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" android}
-FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" android/frameworks/base/core/proto}
 
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" embdrv/sbc/decoder/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" embdrv/sbc/encoder/include}

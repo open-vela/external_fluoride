@@ -21,7 +21,8 @@
 #include "types/raw_address.h"
 
 void bluetooth::shim::ACL_CreateClassicConnection(const RawAddress& raw_address) { }
-void bluetooth::shim::ACL_CreateLeConnection(const RawAddress& raw_address) { }
+void bluetooth::shim::ACL_CreateLeConnection(const tBLE_BD_ADDR& legacy_address_with_type) { }
+void bluetooth::shim::ACL_CancelLeConnection(const tBLE_BD_ADDR& legacy_address_with_type) { }
 void bluetooth::shim::ACL_WriteData(uint16_t handle, const BT_HDR* p_buf) { }
-void bluetooth::shim::ACL_CancelClassicConnection(const RawAddress& raw_address) { }
-void bluetooth::shim::ACL_CancelLeConnection(const RawAddress& raw_address) { }
+void bluetooth::shim::ACL_ConfigureLePrivacy(bool is_le_privacy_enabled) { }
+void bluetooth::shim::ACL_Disconnect(uint16_t handle, bool is_classic, tHCI_STATUS reason) { }

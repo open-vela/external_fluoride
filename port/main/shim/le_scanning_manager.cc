@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Android Open Source Project
+ * Copyright 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,26 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#define LOG_TAG "bt_shim_l2cap"
 
-#include <cstdint>
+#include "main/shim/le_scanning_manager.h"
 
-#include "main/shim/dumpsys.h"
-#include "main/shim/entry.h"
-#include "main/shim/l2cap.h"
-#include "main/shim/shim.h"
-#include "osi/include/allocator.h"
-#include "osi/include/log.h"
-#include "stack/include/btu.h"
-
-namespace bluetooth {
-  namespace shim {
-    namespace legacy {
-
-      L2cap::L2cap() { }
-      L2cap::~L2cap() { }
-      bool L2cap::Write(uint16_t cid, BT_HDR* bt_hdr) { return false; }
-
-    }
-  }
-}
+BleScannerInterface* bluetooth::shim::get_ble_scanner_instance() { return nullptr; }
+void bluetooth::shim::init_scanning_manager() { }
