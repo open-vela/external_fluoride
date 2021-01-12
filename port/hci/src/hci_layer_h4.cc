@@ -82,7 +82,6 @@ extern void iso_data_received(BT_HDR* packet);
 
 static pthread_mutex_t g_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static struct file     g_filep;
-static int             g_fd = -1;
 
 void hci_close() { }
 int  hci_open_firmware_log_file() { return INVALID_FD; }
@@ -224,9 +223,6 @@ void hci_transmit(BT_HDR* packet)
   uint8_t event;
   int ret;
 
-  if (g_fd < 0)
-    return;
-
   h4_data_dump("W", packet->data + packet->offset, packet->len);
 
   switch (packet->event) {
@@ -264,14 +260,8 @@ void hci_initialize(void)
   pthread_t pid;
   int ret;
 
-  if (g_fd > 0)
-    return OK;
-
-  g_fd = open(CONFIG_FLUORIDE_HCI_UART_NAME, O_RDWR | O_BINARY);
-  if (g_fd < 0)
-    return;
-
-  if (file_detach(g_fd, &g_filep) < 0)
+  ret = file_open(&g_filep, CONFIG_FLUORIDE_HCI_UART_NAME, O_RDWR | O_BINARY);
+  if (ret < 0)
     goto bail;
 
   pthread_attr_init(&pattr);
@@ -290,8 +280,7 @@ void hci_initialize(void)
   return;
 
 bail:
-  close(g_fd);
-  g_fd = -1;
+  file_close(&g_filep);
 
   LOG_ERROR("%s: fail to initialize hci drvier.", __func__);
 }
