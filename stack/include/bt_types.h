@@ -26,11 +26,11 @@
 #endif  // __cplusplus
 
 #ifndef FALSE
-#define FALSE false
+#define FALSE 0
 #endif
 
 #ifndef TRUE
-#define TRUE true
+#define TRUE 1
 #endif
 
 #ifdef __arm
@@ -229,11 +229,12 @@ typedef struct {
   uint16_t len;
   uint16_t offset;
   uint16_t layer_specific;
-  uint8_t data[];
+  uint8_t data[0];
 } BT_HDR;
 
 #define BT_HDR_SIZE (sizeof(BT_HDR))
 
+#ifdef __cplusplus
 enum : uint16_t {
   BT_PSM_SDP = 0x0001,
   BT_PSM_RFCOMM = 0x0003,
@@ -257,6 +258,7 @@ enum : uint16_t {
   BRCM_RESERVED_PSM_START = 0x5AE1,
   BRCM_RESERVED_PSM_END = 0x5AFF,
 };
+#endif  // __cplusplus
 
 /* These macros extract the HCI opcodes from a buffer
  */
@@ -681,13 +683,13 @@ typedef struct {
 
 /* Device Types
  */
+#ifdef __cplusplus
 enum : uint8_t {
   BT_DEVICE_TYPE_BREDR = (1 << 0),
   BT_DEVICE_TYPE_BLE = (1 << 1),
   BT_DEVICE_TYPE_DUMO = BT_DEVICE_TYPE_BREDR | BT_DEVICE_TYPE_BLE,
 };
 typedef uint8_t tBT_DEVICE_TYPE;
-#ifdef __cplusplus
 inline std::string DeviceTypeText(tBT_DEVICE_TYPE type) {
   switch (type) {
     case BT_DEVICE_TYPE_BREDR:

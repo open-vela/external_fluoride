@@ -46,7 +46,11 @@ void btm_route_sco_data(BT_HDR* p_msg);
 /* Define BTU storage area */
 uint8_t btu_trace_level = HCI_INITIAL_TRACE_LEVEL;
 
+#if !defined(CONFIG_FLUORIDE_MAIN_STACKSIZE)
 static MessageLoopThread main_thread("bt_main_thread");
+#else
+static MessageLoopThread main_thread("bt_main_thread", CONFIG_FLUORIDE_MAIN_STACKSIZE);
+#endif
 
 void btu_hci_msg_process(BT_HDR* p_msg) {
   /* Determine the input message type. */
