@@ -174,7 +174,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         android::bluetooth::hci::EVT_BLE_META, hci_ble_event, status,
         android::bluetooth::hci::STATUS_UNKNOWN);
 
-    tBLE_BD_ADDR address_with_type{.bda = bda, .type = bda_type};
+    tBLE_BD_ADDR address_with_type{.type = bda_type, .bda = bda};
     if (enhanced) {
       acl_ble_enhanced_connection_complete(
           address_with_type, handle, role, is_in_security_db, conn_interval,
@@ -192,7 +192,7 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
         android::bluetooth::hci::EVT_BLE_META, hci_ble_event, status,
         android::bluetooth::hci::STATUS_UNKNOWN);
 
-    tBLE_BD_ADDR address_with_type{.bda = bda, .type = bda_type};
+    tBLE_BD_ADDR address_with_type{.type = bda_type, .bda = bda};
     acl_ble_connection_fail(address_with_type, handle, enhanced,
                             static_cast<tHCI_STATUS>(status));
   }

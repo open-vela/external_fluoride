@@ -25,6 +25,7 @@
 #define BTA_AG_AT_H
 
 #include <cstdint>
+#include <sys/types.h>
 
 /*****************************************************************************
  *  Constants
