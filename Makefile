@@ -143,6 +143,7 @@ PORTCXXSRCS += hci/src/hci_layer_android.cc
 PORTCXXSRCS += hci/src/hci_layer_linux.cc
 
 CXXSRCS := $(filter-out $(subst port/,,$(PORTCXXSRCS)), $(CXXSRCS))
+CXXSRCS := $(filter-out service/main.cc, $(CXXSRCS))
 
 ifneq ($(CONFIG_LIB_ZLIB),)
   CXXSRCS := $(filter-out port/btif/src/btif_debug_btsnoop.cc, $(CXXSRCS))
