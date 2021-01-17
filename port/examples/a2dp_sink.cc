@@ -40,6 +40,7 @@
 #include "hardware/bt_sdp.h"
 #include "hardware/avrcp/avrcp_common.h"
 #include "hardware/avrcp/avrcp.h"
+#include "hardware/bt_hf_client.h"
 #include "property.h"
 #include "btif_util.h"
 
@@ -65,6 +66,7 @@ static const btrc_ctrl_interface_t        *g_ctrl;
 static const btav_sink_interface_t        *g_sink;
 static const btav_source_interface_t      *g_source;
 static const btsdp_interface_t            *g_sdp;
+static const bthf_client_interface_t      *g_hfc;
 
 static std::mutex                         g_state_mutex;
 static std::condition_variable            g_state_cond;
@@ -158,7 +160,7 @@ static void pin_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32
 static void ssp_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32_t cod,
     bt_ssp_variant_t pairing_variant, uint32_t pass_key) {
 
-  LOG_SAMPLES("%s: class: %u passkey: %x variant: %d\n", __func__, cod, pass_key, pairing_variant);
+  LOG_SAMPLES("%s: class: %lu passkey: %lx variant: %d\n", __func__, cod, pass_key, pairing_variant);
 
   g_interface->ssp_reply(remote_bd_addr, pairing_variant, true, pass_key);
 }
@@ -215,7 +217,7 @@ static void bta2dp_audio_state_callback(const RawAddress& bd_addr, btav_audio_st
 
 static void bta2dp_audio_config_callback(const RawAddress& bd_addr, uint32_t sample_rate, uint8_t channel_count)
 {
-  LOG_SAMPLES("%s: sample_rate: %d, channel_count: %d\n", __func__, sample_rate, channel_count);
+  LOG_SAMPLES("%s: sample_rate: %ld, channel_count: %d\n", __func__, sample_rate, channel_count);
 }
 
 static btav_sink_callbacks_t sSinkBluetoothA2dpCallbacks = {
@@ -401,6 +403,55 @@ static btsdp_callbacks_t sBluetoothSdpCallbacks = {
   sdp_search_callback
 };
 
+static void connection_state_cb(const RawAddress* bd_addr, bthf_client_connection_state_t state, unsigned int peer_feat, unsigned int chld_feat) TRACE_CALLBACK_BODY
+static void audio_state_cb(const RawAddress* bd_addr, bthf_client_audio_state_t state) TRACE_CALLBACK_BODY
+static void vr_cmd_cb(const RawAddress* bd_addr, bthf_client_vr_state_t state) TRACE_CALLBACK_BODY
+static void network_state_cb(const RawAddress* bd_addr, bthf_client_network_state_t state) TRACE_CALLBACK_BODY
+static void network_roaming_cb(const RawAddress* bd_addr, bthf_client_service_type_t type) TRACE_CALLBACK_BODY
+static void network_signal_cb(const RawAddress* bd_addr, int signal) TRACE_CALLBACK_BODY
+static void battery_level_cb(const RawAddress* bd_addr, int level) TRACE_CALLBACK_BODY
+static void current_operator_cb(const RawAddress* bd_addr, const char* name) TRACE_CALLBACK_BODY
+static void call_cb(const RawAddress* bd_addr, bthf_client_call_t call) TRACE_CALLBACK_BODY
+static void callsetup_cb(const RawAddress* bd_addr, bthf_client_callsetup_t callsetup) TRACE_CALLBACK_BODY
+static void callheld_cb(const RawAddress* bd_addr, bthf_client_callheld_t callheld) TRACE_CALLBACK_BODY
+static void resp_and_hold_cb(const RawAddress* bd_addr, bthf_client_resp_and_hold_t resp_and_hold) TRACE_CALLBACK_BODY
+static void clip_cb(const RawAddress* bd_addr, const char* number) TRACE_CALLBACK_BODY
+static void call_waiting_cb(const RawAddress* bd_addr, const char* number) TRACE_CALLBACK_BODY
+static void current_calls_cb(const RawAddress* bd_addr, int index, bthf_client_call_direction_t dir, bthf_client_call_state_t state, bthf_client_call_mpty_type_t mpty, const char* number) TRACE_CALLBACK_BODY
+static void volume_change_cb(const RawAddress* bd_addr, bthf_client_volume_type_t type, int volume) TRACE_CALLBACK_BODY
+static void cmd_complete_cb(const RawAddress* bd_addr, bthf_client_cmd_complete_t type, int cme) TRACE_CALLBACK_BODY
+static void subscriber_info_cb(const RawAddress* bd_addr, const char* name, bthf_client_subscriber_service_type_t type) TRACE_CALLBACK_BODY
+static void in_band_ring_cb(const RawAddress* bd_addr, bthf_client_in_band_ring_state_t in_band) TRACE_CALLBACK_BODY
+static void last_voice_tag_number_cb(const RawAddress* bd_addr, const char* number) TRACE_CALLBACK_BODY
+static void ring_indication_cb(const RawAddress* bd_addr) TRACE_CALLBACK_BODY
+static void unknown_event_cb(const RawAddress* bd_addr, const char* eventString) TRACE_CALLBACK_BODY
+
+static bthf_client_callbacks_t sBluetoothHfpClientCallbacks = {
+  sizeof(sBluetoothHfpClientCallbacks),
+  connection_state_cb,
+  audio_state_cb,
+  vr_cmd_cb,
+  network_state_cb,
+  network_roaming_cb,
+  network_signal_cb,
+  battery_level_cb,
+  current_operator_cb,
+  call_cb,
+  callsetup_cb,
+  callheld_cb,
+  resp_and_hold_cb,
+  clip_cb,
+  call_waiting_cb,
+  current_calls_cb,
+  volume_change_cb,
+  cmd_complete_cb,
+  subscriber_info_cb,
+  in_band_ring_cb,
+  last_voice_tag_number_cb,
+  ring_indication_cb,
+  unknown_event_cb,
+};
+
 extern "C" int main(int argc, char **argv)
 {
   bt_os_callouts_t bt_os_callouts = { sizeof(bt_os_callouts_t) };
@@ -464,6 +515,12 @@ extern "C" int main(int argc, char **argv)
     return status;
 
   g_avrcp->Init(&mAvrcpInterface, &mVolumeInterface);
+
+  g_hfc = (const bthf_client_interface_t *)g_interface->get_profile_interface(BT_PROFILE_HANDSFREE_CLIENT_ID);
+  if (g_hfc == NULL)
+    return status;
+
+  g_hfc->init(&sBluetoothHfpClientCallbacks);
 
   property = property_new_scan_mode(BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
   status = g_interface->set_adapter_property(property);
