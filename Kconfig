@@ -227,19 +227,19 @@ config MAX_ACL_CONNECTIONS
 
 config SDP_MAX_RECORDS
   int "The maximum number of SDP records the server can support."
-  default 5
+  default 10
   help
     The maximum number of SDP records the server can support.
 
 config SDP_MAX_REC_ATTR
   int "The maximum number of attributes in each record."
-  default 5
+  default 10
   help
     The maximum number of attributes in each record.
 
 config SDP_MAX_DISC_SERVER_RECS
   int "The maximum number of record handles retrieved in a search."
-  default 5
+  default 10
   help
     The maximum number of record handles retrieved in a search.
 

@@ -256,11 +256,25 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
   STACKSIZE = $(CONFIG_DEFAULT_TASK_STACKSIZE)
   MODULE    = $(CONFIG_FLUORIDE_EXAMPLES)
 
-  ifneq ($(CONFIG_FLUORIDE_EXAMPLES_A2DP_SINK),)
-    PROGNAME  += a2dp_sink
-    MAINSRC   += port/examples/a2dp_sink.cc
-  endif
+  CXXSRCS  += port/examples/a2dp.cc
+  CXXSRCS  += port/examples/avrcp.cc
+  CXXSRCS  += port/examples/avrcs.cc
+  CXXSRCS  += port/examples/avrcpc.cc
+  CXXSRCS  += port/examples/gatt.cc
+  CXXSRCS  += port/examples/hfp.cc
+  CXXSRCS  += port/examples/interface.cc
+  CXXSRCS  += port/examples/sdp.cc
+  CXXSRCS  += port/examples/shell.cc
+
+  PROGNAME += fluorided
+  MAINSRC  += port/examples/fluoride.cc
+
+  PROGNAME += bta
+  MAINSRC  += port/examples/bta.cc
 
 endif
+
+depend::
+	$(Q) ln -sf fluoride.cc port/examples/bta.cc
 
 include $(APPDIR)/Application.mk
