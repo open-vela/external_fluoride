@@ -145,11 +145,6 @@ PORTCXXSRCS += hci/src/hci_layer_linux.cc
 CXXSRCS := $(filter-out $(subst port/,,$(PORTCXXSRCS)), $(CXXSRCS))
 CXXSRCS := $(filter-out service/main.cc, $(CXXSRCS))
 
-ifneq ($(CONFIG_LIB_ZLIB),)
-  CXXSRCS := $(filter-out port/btif/src/btif_debug_btsnoop.cc, $(CXXSRCS))
-  CXXSRCS += btif/src/btif_debug_btsnoop.cc
-endif
-
 FLRDFLAGS += "-DEXPORT_SYMBOL=__attribute__((visibility(\"default\")))" -DOS_POSIX -D_POSIX_MONOTONIC_CLOCK=1 -DNDEBUG
 FLRDFLAGS += -Wno-undef -Wno-shadow -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-value
 FLRDFLAGS += -D_GNU_SOURCE -DFALLTHROUGH_INTENDED -DOS_GENERIC -fno-exceptions -DHAS_BDROID_BUILDCFG
