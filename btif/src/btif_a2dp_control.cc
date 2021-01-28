@@ -145,7 +145,9 @@ static void btif_a2dp_recv_ctrl_data(void) {
       break;
 
     case A2DP_CTRL_CMD_STOP:
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
       btif_a2dp_sink_disable_audio_send();
+#endif
       if (btif_av_get_peer_sep() == AVDT_TSEP_SNK &&
           !btif_a2dp_source_is_streaming()) {
         /* We are already stopped, just ack back */
@@ -402,7 +404,9 @@ static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
       UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_SET_READ_POLL_TMO,
                  reinterpret_cast<void*>(A2DP_DATA_READ_POLL_MS));
 
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
       btif_a2dp_sink_enable_audio_send();
+#endif
       if (btif_av_get_peer_sep() == AVDT_TSEP_SNK) {
         /* Start the media task to encode the audio */
       }
@@ -412,7 +416,9 @@ static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
 
     case UIPC_CLOSE_EVT:
       APPL_TRACE_EVENT("%s: ## AUDIO PATH DETACHED ##", __func__);
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
       btif_a2dp_sink_disable_audio_send();
+#endif
       btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
       /*
        * Send stop request only if we are actively streaming and haven't
