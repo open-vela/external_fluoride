@@ -676,7 +676,7 @@ static void btif_a2dp_sink_decoder_update_event(
   }
 }
 
-#ifdef CONFIG_FLUORIDE_EXAMPLES_A2DP_SINK
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
 uint8_t btif_a2dp_sink_send_buf(BT_HDR* p_pkt) {
   tA2DP_CODEC_TYPE codec_type = btif_a2dp_sink_get_codec_type();
   uint8_t* data = p_pkt->data + p_pkt->offset;
@@ -700,7 +700,7 @@ uint8_t btif_a2dp_sink_send_buf(BT_HDR* p_pkt) {
 #endif
 
 uint8_t btif_a2dp_sink_enqueue_buf(BT_HDR* p_pkt) {
-#ifdef CONFIG_FLUORIDE_EXAMPLES_A2DP_SINK
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
   btif_a2dp_sink_send_buf(p_pkt);
   return 0;
 #endif
@@ -785,6 +785,7 @@ void btif_a2dp_sink_set_audio_track_gain(float gain) {
 #endif
 }
 
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
 void btif_a2dp_sink_enable_audio_send(void) {
   LOG_INFO("%s", __func__);
   BtifAvrcpEnableAudioSend(btif_a2dp_sink_cb.audio_track);
@@ -794,6 +795,7 @@ void btif_a2dp_sink_disable_audio_send(void) {
   LOG_INFO("%s", __func__);
   BtifAvrcpDisableAudioSend(btif_a2dp_sink_cb.audio_track);
 }
+#endif
 
 static void btif_a2dp_sink_clear_track_event_req() {
   LOG_INFO("%s", __func__);
