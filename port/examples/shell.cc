@@ -65,12 +65,28 @@ static int fluoride_command_scan(struct fluoride_s *flrd, int argc, char **argv)
 static int fluoride_command_bdname(struct fluoride_s *flrd, int argc, char **argv)
 {
   bt_property_t *property;
+  char buf[64] = {};
+  char *env;
   int ret;
 
-  if (argc == 0 || strlen(argv[0]) <= 0)
-    return -1;
+  ret = snprintf(buf, sizeof(buf), "%s", CONFIG_FLUORIDE_DEVICE_NAME);
 
-  property = property_new_name(argv[0]);
+  if (argc == 0 || strlen(argv[0]) <= 0) {
+    env = getenv("SN");
+    if (env != NULL && !memcmp(env, "00000", 5))
+      env = NULL;
+
+    if (env == NULL) {
+      env = getenv("WMAC");
+      if (env != NULL)
+        snprintf(buf + ret, sizeof(buf) - ret, "-%c%c%c%c",
+            env[12], env[13], env[15], env[16]);
+    } else
+      snprintf(buf + ret, sizeof(buf) - ret, "-%s", env + 11);
+  } else
+    snprintf(buf + ret, sizeof(buf) - ret, "%s", argv[0]);
+
+  property = property_new_name(buf);
   ret = flrd->interface->set_adapter_property(property);
   property_free(property);
 
