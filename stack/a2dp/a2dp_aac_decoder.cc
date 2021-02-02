@@ -44,7 +44,7 @@ bool A2DP_LoadDecoderAac(void) {
 void A2DP_UnloadDecoderAac(void) { a2dp_aac_decoder_cleanup(); }
 
 bool a2dp_aac_decoder_init(decoded_data_callback_t decode_callback) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   a2dp_aac_decoder_cleanup();
 
   a2dp_aac_decoder_cb.aac_handle =
@@ -58,7 +58,7 @@ bool a2dp_aac_decoder_init(decoded_data_callback_t decode_callback) {
 }
 
 void a2dp_aac_decoder_cleanup(void) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   if (a2dp_aac_decoder_cb.has_aac_handle)
     aacDecoder_Close(a2dp_aac_decoder_cb.aac_handle);
   osi_free(a2dp_aac_decoder_cb.decode_buf);
@@ -67,7 +67,7 @@ void a2dp_aac_decoder_cleanup(void) {
 }
 
 bool a2dp_aac_decoder_decode_packet(BT_HDR* p_buf) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   auto* pBuffer = reinterpret_cast<UCHAR*>(p_buf->data + p_buf->offset);
   UINT bufferSize = p_buf->len;
   UINT bytesValid = p_buf->len;
