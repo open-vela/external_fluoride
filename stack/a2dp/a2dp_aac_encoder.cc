@@ -115,7 +115,7 @@ bool A2DP_LoadEncoderAac(void) {
 }
 
 void A2DP_UnloadEncoderAac(void) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   // Nothing to do - the library is statically linked
   if (a2dp_aac_encoder_cb.has_aac_handle)
     aacEncClose(&a2dp_aac_encoder_cb.aac_handle);
@@ -127,7 +127,7 @@ void a2dp_aac_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
                            A2dpCodecConfig* a2dp_codec_config,
                            a2dp_source_read_callback_t read_callback,
                            a2dp_source_enqueue_callback_t enqueue_callback) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   if (a2dp_aac_encoder_cb.has_aac_handle)
     aacEncClose(&a2dp_aac_encoder_cb.aac_handle);
   memset(&a2dp_aac_encoder_cb, 0, sizeof(a2dp_aac_encoder_cb));
@@ -186,7 +186,7 @@ static void a2dp_aac_encoder_update(uint16_t peer_mtu,
                                     bool* p_restart_input,
                                     bool* p_restart_output,
                                     bool* p_config_updated) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   tA2DP_AAC_ENCODER_PARAMS* p_encoder_params =
       &a2dp_aac_encoder_cb.aac_encoder_params;
   uint8_t codec_info[AVDT_CODEC_SIZE];
@@ -483,7 +483,7 @@ static void a2dp_aac_encoder_update(uint16_t peer_mtu,
 }
 
 void a2dp_aac_encoder_cleanup(void) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   if (a2dp_aac_encoder_cb.has_aac_handle)
     aacEncClose(&a2dp_aac_encoder_cb.aac_handle);
   memset(&a2dp_aac_encoder_cb, 0, sizeof(a2dp_aac_encoder_cb));
@@ -599,7 +599,7 @@ static void a2dp_aac_get_num_frame_iteration(uint8_t* num_of_iterations,
 }
 
 static void a2dp_aac_encode_frames(uint8_t nb_frame) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   tA2DP_AAC_ENCODER_PARAMS* p_encoder_params =
       &a2dp_aac_encoder_cb.aac_encoder_params;
   tA2DP_FEEDING_PARAMS* p_feeding_params = &a2dp_aac_encoder_cb.feeding_params;
@@ -727,7 +727,7 @@ static void a2dp_aac_encode_frames(uint8_t nb_frame) {
 }
 
 static bool a2dp_aac_read_feeding(uint8_t* read_buffer, uint32_t* bytes_read) {
-#ifdef ONFIG_CODEC_FDKAAC
+#ifdef CONFIG_CODEC_FDKAAC
   uint32_t read_size = a2dp_aac_encoder_cb.aac_encoder_params.frame_length *
                        a2dp_aac_encoder_cb.feeding_params.channel_count *
                        a2dp_aac_encoder_cb.feeding_params.bits_per_sample / 8;
