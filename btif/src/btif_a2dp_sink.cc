@@ -306,7 +306,7 @@ void btif_a2dp_sink_shutdown() {
 static void btif_a2dp_sink_shutdown_delayed() {
   LOG_INFO("%s", __func__);
   LockGuard lock(g_mutex);
-  btif_a2dp_control_cleanup();
+  // Nothing to do
 }
 
 void btif_a2dp_sink_cleanup() {
@@ -434,8 +434,8 @@ void btif_a2dp_sink_on_idle() {
 }
 
 void btif_a2dp_sink_on_stopped(UNUSED_ATTR tBTA_AV_SUSPEND* p_av_suspend) {
-#if 0
   LOG_INFO("%s", __func__);
+#ifndef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
   BT_HDR* p_buf = reinterpret_cast<BT_HDR*>(osi_malloc(sizeof(BT_HDR)));
   p_buf->event = BTIF_MEDIA_SINK_SUSPEND;
   btif_a2dp_sink_cb.worker_thread.DoInThread(
@@ -614,7 +614,6 @@ static void btif_a2dp_sink_audio_rx_flush_event() {
 static void btif_a2dp_sink_decoder_update_event(
     tBTIF_MEDIA_SINK_DECODER_UPDATE* p_buf) {
   LOG_INFO("%s", __func__);
-  tA2DP_CTRL_CMD cmd = A2DP_CTRL_CMD_AUDIO_CODEC_UPDATE;
   LockGuard lock(g_mutex);
   APPL_TRACE_DEBUG("%s: p_codec_info[%x:%x:%x:%x:%x:%x]", __func__,
                    p_buf->codec_info[1], p_buf->codec_info[2],
@@ -641,7 +640,6 @@ static void btif_a2dp_sink_decoder_update_event(
     LOG_ERROR("%s: cannot get the Sink channel type", __func__);
     return;
   }
-
   btif_a2dp_sink_cb.sample_rate = sample_rate;
   btif_a2dp_sink_cb.bits_per_sample = bits_per_sample;
   btif_a2dp_sink_cb.channel_count = channel_count;
@@ -665,9 +663,6 @@ static void btif_a2dp_sink_decoder_update_event(
   if (btif_a2dp_sink_cb.decoder_interface->decoder_configure != nullptr) {
     btif_a2dp_sink_cb.decoder_interface->decoder_configure(p_buf->codec_info);
   }
-
-  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
-            reinterpret_cast<uint8_t*>(&cmd), sizeof(tA2DP_CTRL_CMD));
 
   APPL_TRACE_DEBUG("%s: create audio track", __func__);
   btif_a2dp_sink_cb.audio_track =
@@ -818,7 +813,6 @@ static void btif_a2dp_sink_on_start_event() {
 
   UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
             reinterpret_cast<uint8_t*>(&cmd), sizeof(tA2DP_CTRL_CMD));
-
 
   if ((btif_a2dp_sink_cb.decoder_interface != nullptr) &&
       (btif_a2dp_sink_cb.decoder_interface->decoder_start != nullptr)) {

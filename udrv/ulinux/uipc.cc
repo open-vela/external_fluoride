@@ -159,16 +159,6 @@ static int accept_server_socket(int sfd) {
     return -1;
   }
 
-  // match socket buffer size option with client
-  const int size = AUDIO_STREAM_OUTPUT_BUFFER_SZ;
-  int ret =
-      setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&size, (int)sizeof(size));
-  if (ret < 0) {
-    BTIF_TRACE_ERROR("setsockopt failed (%s)", strerror(errno));
-  }
-
-  // BTIF_TRACE_EVENT("new fd %d", fd);
-
   return fd;
 }
 
@@ -482,6 +472,10 @@ static void* uipc_read_task(void* arg) {
 }
 
 int uipc_start_main_server_thread(tUIPC_STATE& uipc) {
+  struct sched_param       sparam;
+  pthread_attr_t           tattr;
+  int ret;
+
   uipc.running = 1;
 
   if (pthread_create(&uipc.tid, (const pthread_attr_t*)NULL, uipc_read_task,
