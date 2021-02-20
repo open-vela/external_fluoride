@@ -31,7 +31,6 @@ extern std::unique_ptr<tUIPC_STATE> a2dp_uipc;
 
 void BtifAvrcpAudioTrackDelete(void* handle)
 {
-  UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO);
 }
 
 void BtifAvrcpSetAudioTrackGain(void* handle, float gain)

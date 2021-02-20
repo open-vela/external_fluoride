@@ -36,8 +36,8 @@
  *****************************************************************************/
 
 #define A2DP_AUDIO_HARDWARE_INTERFACE "audio.a2dp"
-#define A2DP_CTRL_PATH "/bluedroid/.a2dp_ctrl"
-#define A2DP_DATA_PATH "/bluedroid/.a2dp_data"
+#define A2DP_CTRL_PATH "/data/misc/bluedroid/.a2dp_ctrl"
+#define A2DP_DATA_PATH "/data/misc/bluedroid/.a2dp_data"
 
 // AUDIO_STREAM_OUTPUT_BUFFER_SZ controls the size of the audio socket buffer.
 // If one assumes the write buffer is always full during normal BT playback,
@@ -89,7 +89,6 @@ typedef enum {
   A2DP_CTRL_GET_PRESENTATION_POSITION,
   A2DP_CTRL_CMD_AUDIO_START,
   A2DP_CTRL_CMD_AUDIO_SUSPEND,
-  A2DP_CTRL_CMD_AUDIO_CODEC_UPDATE,
 } tA2DP_CTRL_CMD;
 
 typedef enum {
