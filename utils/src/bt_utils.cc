@@ -138,16 +138,14 @@ void raise_priority_a2dp(tHIGH_PRIORITY_TASK high_task) {
     LOG_WARN("failed to change sched policy, tid %d, err: %d", tid, errno);
   }
 
-  // make A2DP threads use RT scheduling policy since they are part of the
-  // audio pipeline
   {
-    struct sched_param rt_params;
-    rt_params.sched_priority = A2DP_RT_PRIORITY;
+    struct sched_param sparams;
+    sparams.sched_priority = sched_get_priority_max(SCHED_FIFO) - 9;
 
-    const int rc = sched_setscheduler(tid, SCHED_FIFO, &rt_params);
+    const int rc = sched_setscheduler(tid, SCHED_FIFO, &sparams);
     if (rc != 0) {
       LOG_ERROR("%s unable to set SCHED_FIFO priority %d for tid %d, error %s",
-                __func__, A2DP_RT_PRIORITY, tid, strerror(errno));
+                __func__, sched_get_priority_max(SCHED_FIFO) - 9, strerror(errno));
     }
   }
 }
