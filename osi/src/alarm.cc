@@ -58,7 +58,7 @@ using base::MessageLoop;
 
 // Callback and timer threads should run at RT priority in order to ensure they
 // meet audio deadlines.  Use this priority for all audio/timer related thread.
-static const int THREAD_RT_PRIORITY = PTHREAD_DEFAULT_PRIORITY;
+static const int THREAD_RT_PRIORITY = sched_get_priority_max(SCHED_FIFO) - 9;
 static sem_t g_alarm_thread_sem = SEM_INITIALIZER(0);
 
 typedef struct {
@@ -358,10 +358,14 @@ static bool lazy_initialize(void) {
   }
 
 #if defined(CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE)
-  pthread_t pid;
+  struct sched_param sparam;
   pthread_attr_t pattr;
+  pthread_t pid;
 
   pthread_attr_init(&pattr);
+  sparam.sched_priority = THREAD_RT_PRIORITY;
+  pthread_attr_setschedparam(&pattr, &sparam);
+  pthread_attr_setschedpolicy(&pattr, SCHED_FIFO);
   pthread_attr_setstacksize(&pattr, CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE);
   pthread_create(&pid, &pattr, timer_dispatcher_thread, NULL);
   pthread_attr_destroy(&pattr);
