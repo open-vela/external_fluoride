@@ -267,6 +267,7 @@ void hci_initialize(void)
     goto bail;
 
   pthread_attr_init(&pattr);
+  pthread_attr_setschedpolicy(&pattr, SCHED_FIFO);
   pthread_attr_setstacksize(&pattr, CONFIG_FLUORIDE_HCI_RX_STACKSIZE);
 
   ret = pthread_create(&pid, &pattr, h4_rx_thread, NULL);
@@ -274,7 +275,7 @@ void hci_initialize(void)
   if (ret < 0)
     goto bail;
 
-  prctl(PR_SET_NAME_EXT, "bt_driver", pid);
+  prctl(PR_SET_NAME_EXT, "bt_rx_thread", pid);
 
   extern void initialization_complete();
   initialization_complete();
