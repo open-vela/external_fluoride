@@ -37,10 +37,16 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
     btav_connection_state_t state)
 {
   struct fluoride_s *flrd = fluoride_interface_get();
+  bt_property_t *property;
 
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
-  if (state == BTAV_CONNECTION_STATE_DISCONNECTED)
+  if (state == BTAV_CONNECTION_STATE_DISCONNECTED) {
     flrd->sink->disconnect(bd_addr);
+
+    property = property_new_scan_mode(BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+    flrd->interface->set_adapter_property(property);
+    property_free(property);
+  }
 }
 
 static void bta2dp_audio_state_callback(const RawAddress& bd_addr,
