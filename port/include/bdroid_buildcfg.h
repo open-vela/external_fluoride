@@ -17,8 +17,6 @@
 #ifndef _BDROID_BUILDCFG_H
 #define _BDROID_BUILDCFG_H
 
-#include <nuttx/config.h>
-
 /* Default class of device
 * {SERVICE_CLASS, MAJOR_CLASS, MINOR_CLASS}
 *
