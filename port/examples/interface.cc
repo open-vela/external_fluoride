@@ -143,7 +143,10 @@ static void bond_state_changed(bt_status_t status, RawAddress *remote_bd_addr, b
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
   if (state == BT_BOND_STATE_BONDED) {
     bd_addr.FromOctets(reinterpret_cast<const uint8_t*>(remote_bd_addr));
-    flrd->sink->connect(bd_addr);
+    if (flrd->sink)
+      flrd->sink->connect(bd_addr);
+    if (flrd->avrcs)
+      flrd->avrcs->ConnectDevice(bd_addr);
 
     property = property_new_scan_mode(BT_SCAN_MODE_NONE);
     flrd->interface->set_adapter_property(property);

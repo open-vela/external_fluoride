@@ -35,7 +35,6 @@
 
 static void btavrcp_passthrough_response_callback(const RawAddress& bd_addr, int id, int pressed) TRACE_CALLBACK_BODY
 static void btavrcp_groupnavigation_response_callback(int id, int pressed) TRACE_CALLBACK_BODY
-static void btavrcp_connection_state_callback(bool rc_connect, bool br_connect, const RawAddress& bd_addr) TRACE_CALLBACK_BODY
 static void btavrcp_get_rcfeatures_callback(const RawAddress& bd_addr, int features) TRACE_CALLBACK_BODY
 static void btavrcp_setplayerapplicationsetting_rsp_callback( const RawAddress& bd_addr, uint8_t accepted) TRACE_CALLBACK_BODY
 static void btavrcp_playerapplicationsetting_callback( const RawAddress& bd_addr, uint8_t num_attr, btrc_player_app_attr_t *app_attrs, uint8_t num_ext_attr, btrc_player_app_ext_attr_t *ext_attrs) TRACE_CALLBACK_BODY
@@ -53,6 +52,12 @@ static void btavrcp_addressed_player_changed_callback(const RawAddress& bd_addr,
 static void btavrcp_now_playing_content_changed_callback( const RawAddress& bd_addr) TRACE_CALLBACK_BODY
 static void btavrcp_available_player_changed_callback ( const RawAddress& bd_addr) TRACE_CALLBACK_BODY
 static void btavrcp_get_rcpsm_callback(const RawAddress& bd_addr, uint16_t psm) TRACE_CALLBACK_BODY
+
+static void btavrcp_connection_state_callback(bool rc_connect, bool br_connect, const RawAddress& bd_addr)
+{
+  struct fluoride_s *flrd = fluoride_interface_get();
+  flrd->avrcp_addr = bd_addr;
+}
 
 static btrc_ctrl_callbacks_t sBluetoothAvrcpCallbacks =
 {
