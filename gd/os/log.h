@@ -71,7 +71,7 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
 #include <ctime>
 
 #if !defined(CONFIG_FLUORIDE_LOG_LEVEL)
-#define LOGWRAPPER(fmt, args...)                                                                                    \
+#define LOGWRAPPER(level, fmt, args...)                                                                                    \
   do {                                                                                                              \
     auto _now = std::chrono::system_clock::now();                                                                   \
     auto _now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(_now);                                   \
@@ -84,7 +84,7 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
     fprintf(stderr, "%s %s - %s:%d - %s: " fmt "\n", _buf, LOG_TAG, __FILE__, __LINE__, __func__, ##args);          \
   } while (false)
 #else
-#define LOGWRAPPER(fmt, args...) syslog(LOG_ERR, fmt "\n", ##args)
+#define LOGWRAPPER(level, fmt, args...) syslog(level, fmt "\n", ##args)
 #endif
 
 #undef LOG_VERBOSE
@@ -95,25 +95,25 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
 #undef LOG_FATAL
 
 #if defined(CONFIG_FLUORIDE_LOG_LEVEL)
-#define LOG_TRACE_TYPE_ERROR   0x00000000
-#define LOG_TRACE_TYPE_WARNING 0x00000001
-#define LOG_TRACE_TYPE_API     0x00000002
-#define LOG_TRACE_TYPE_EVENT   0x00000003
-#define LOG_TRACE_TYPE_DEBUG   0x00000004
-#define LOG_TRACE_TYPE_VERBOSE 0x00000005
+#define LOG_TRACE_TYPE_ERROR   0x00000003
+#define LOG_TRACE_TYPE_WARNING 0x00000004
+#define LOG_TRACE_TYPE_API     0x00000006
+#define LOG_TRACE_TYPE_EVENT   0x00000006
+#define LOG_TRACE_TYPE_DEBUG   0x00000006
+#define LOG_TRACE_TYPE_VERBOSE 0x00000007
 
 #define LOG_VERBOSE(...) \
-  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_VERBOSE) LOGWRAPPER(__VA_ARGS__); } while (false)
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_VERBOSE) LOGWRAPPER(LOG_TRACE_TYPE_VERBOSE, __VA_ARGS__); } while (false)
 #define LOG_DEBUG(...) \
-  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_DEBUG) LOGWRAPPER(__VA_ARGS__); } while (false)
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_DEBUG) LOGWRAPPER(LOG_TRACE_TYPE_DEBUG, __VA_ARGS__); } while (false)
 #define LOG_INFO(...) \
-  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_API) LOGWRAPPER(__VA_ARGS__); } while (false)
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_API) LOGWRAPPER(LOG_TRACE_TYPE_API, __VA_ARGS__); } while (false)
 #define LOG_WARN(...) \
-  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_WARNING) LOGWRAPPER(__VA_ARGS__); } while (false)
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_WARNING) LOGWRAPPER(LOG_TRACE_TYPE_WARNING, __VA_ARGS__); } while (false)
 #define LOG_ERROR(...) \
-  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_ERROR) LOGWRAPPER(__VA_ARGS__); } while (false)
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_ERROR) LOGWRAPPER(LOG_TRACE_TYPE_ERROR, __VA_ARGS__); } while (false)
 #define LOG_FATAL(...) \
-  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_ERROR) LOGWRAPPER(__VA_ARGS__); } while (false)
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_ERROR) LOGWRAPPER(LOG_TRACE_TYPE_ERROR, __VA_ARGS__); } while (false)
 #else
 #ifdef FUZZ_TARGET
 #define LOG_VERBOSE(...)
@@ -130,7 +130,7 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
 #endif /* CONFIG_FLUORIDE_LOG_LEVEL */
 #define LOG_ALWAYS_FATAL(...) \
   do {                        \
-    LOGWRAPPER(__VA_ARGS__);  \
+    LOGWRAPPER(LOG_TRACE_TYPE_ERROR, __VA_ARGS__);  \
     abort();                  \
   } while (false)
 #define android_errorWriteLog(tag, subTag) LOG_ERROR("ERROR tag: 0x%x, sub_tag: %s", tag, subTag)
