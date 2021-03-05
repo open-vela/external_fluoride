@@ -81,6 +81,9 @@ struct fluoride_s
   bt_state_t                    state;
   pthread_mutex_t               mutex;
   pthread_cond_t                cond;
+
+  RawAddress                    addr;
+  RawAddress                    avrcp_addr;
 };
 
 const btgatt_interface_t      *bt_profile_gatt_init(struct fluoride_s *flrd);
