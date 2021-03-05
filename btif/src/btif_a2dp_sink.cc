@@ -809,10 +809,12 @@ static void btif_a2dp_sink_clear_track_event_req() {
 
 static void btif_a2dp_sink_on_start_event() {
   LOG_INFO("%s", __func__);
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
   tA2DP_CTRL_CMD cmd = A2DP_CTRL_CMD_AUDIO_START;
 
   UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
             reinterpret_cast<uint8_t*>(&cmd), sizeof(tA2DP_CTRL_CMD));
+#endif
 
   if ((btif_a2dp_sink_cb.decoder_interface != nullptr) &&
       (btif_a2dp_sink_cb.decoder_interface->decoder_start != nullptr)) {
@@ -824,10 +826,12 @@ static void btif_a2dp_sink_on_start_event() {
 
 static void btif_a2dp_sink_on_suspend_event() {
   LOG_INFO("%s", __func__);
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
   tA2DP_CTRL_CMD cmd = A2DP_CTRL_CMD_AUDIO_SUSPEND;
 
   UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
             reinterpret_cast<uint8_t*>(&cmd), sizeof(tA2DP_CTRL_CMD));
+#endif
 
   if ((btif_a2dp_sink_cb.decoder_interface != nullptr) &&
       (btif_a2dp_sink_cb.decoder_interface->decoder_suspend != nullptr)) {
