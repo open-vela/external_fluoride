@@ -258,6 +258,7 @@ void hci_transmit(BT_HDR* packet)
 
 void hci_initialize(void)
 {
+  struct sched_param sparam;
   pthread_attr_t pattr;
   pthread_t pid;
   int ret;
@@ -267,6 +268,8 @@ void hci_initialize(void)
     goto bail;
 
   pthread_attr_init(&pattr);
+  sparam.sched_priority = sched_get_priority_max(SCHED_FIFO) - 9;
+  pthread_attr_setschedparam(&pattr, &sparam);
   pthread_attr_setschedpolicy(&pattr, SCHED_FIFO);
   pthread_attr_setstacksize(&pattr, CONFIG_FLUORIDE_HCI_RX_STACKSIZE);
 
