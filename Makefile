@@ -130,10 +130,6 @@ ifeq ($(CONFIG_FLUORIDE_A2DP_SINK_NUTTX),y)
    PORTCXXSRCS += port/btif/src/btif_avrcp_audio_track_nuttx.cc
 endif
 
-ifeq ($(CONFIG_FLUORIDE_A2DP_SINK_FFMPEG),y)
-   PORTCXXSRCS += port/btif/src/btif_avrcp_audio_track_ffmpeg.cc
-endif
-
 CXXSRCS += $(PORTCXXSRCS)
 
 ifeq ($(CONFIG_AUDIO),y)
