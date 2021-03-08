@@ -59,7 +59,7 @@ class VolumeInterfaceImpl : public VolumeInterface {
 static AvrcpMediaInterfaceImpl mAvrcpInterface;
 static VolumeInterfaceImpl     mVolumeInterface;
 
-const ServiceInterface *bt_profile_avrcp_service_init(struct fluoride_s *flrd)
+ServiceInterface *bt_profile_avrcp_service_init(struct fluoride_s *flrd)
 {
   ServiceInterface *avrcs;
 

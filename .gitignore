@@ -5,4 +5,5 @@ third_party
 .depend
 Make.dep
 tags
+.built
 port/examples/bta.cc
