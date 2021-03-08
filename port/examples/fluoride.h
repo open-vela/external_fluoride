@@ -76,7 +76,7 @@ struct fluoride_s
   const bthf_client_interface_t *hfc;
   const btgatt_interface_t      *gatt;
 
-  const ServiceInterface        *avrcs;
+  ServiceInterface              *avrcs;
 
   bt_state_t                    state;
   pthread_mutex_t               mutex;
@@ -91,8 +91,8 @@ const btrc_ctrl_interface_t   *bt_profile_avrcp_control_init(struct fluoride_s *
 const btsdp_interface_t       *bt_profile_sdp_init(struct fluoride_s *flrd);
 const btav_sink_interface_t   *bt_profile_a2dp_sink_init(struct fluoride_s *flrd);
 const btrc_interface_t        *bt_profile_avrcp_init(struct fluoride_s *flrd);
-const ServiceInterface        *bt_profile_avrcp_service_init(struct fluoride_s *flrd);
 const bthf_client_interface_t *bt_profile_handsfree_init(struct fluoride_s *flrd);
+ServiceInterface              *bt_profile_avrcp_service_init(struct fluoride_s *flrd);
 
 struct fluoride_s             *fluoride_interface_get(void);
 int                            fluoride_shell(struct fluoride_s *flrd, int argc, char **argv);
