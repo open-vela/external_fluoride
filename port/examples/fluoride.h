@@ -34,6 +34,8 @@
 #ifndef __FLUORIDE_PORT_EXAMPLES_FLUORIDE_H
 #define __FLUORIDE_PORT_EXAMPLES_FLUORIDE_H
 
+#include <syslog.h>
+
 #include "btif_common.h"
 #include "btif_bqr.h"
 #include "btif_a2dp_sink.h"
@@ -57,7 +59,7 @@
 #define TRACE_CALLBACK_BODY { }
 #endif
 
-#define LOG_SAMPLES(fmt, args...) printf("CALLBACK " fmt, ##args)
+#define LOG_SAMPLES(fmt, args...) syslog(6, "Fluoride: Callback " fmt, ##args)
 
 using bluetooth::Uuid;
 using namespace bluetooth::avrcp;
