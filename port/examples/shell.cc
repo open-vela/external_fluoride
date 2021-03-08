@@ -37,8 +37,8 @@
 
 struct passthrough_command
 {
-  const unsigned char *command;
-  uint8_t             value;
+  const char *command;
+  uint8_t     value;
 };
 
 struct passthrough_command g_passthrough_command_maps[] =
@@ -114,7 +114,8 @@ struct fluoride_cmd_s
 
 static void fluoride_avrcp_help(void)
 {
-  int i;
+  unsigned int i;
+
   for (i = 0; i < sizeof(g_passthrough_command_maps) /
       sizeof(g_passthrough_command_maps[0]); i++)
     printf("[%3d] KEY CODE:  %3d  (%s)\n", i,
@@ -294,8 +295,8 @@ static struct fluoride_cmd_s g_shell_cmds[] =
 
 int fluoride_shell(struct fluoride_s *flrd, int argc, char **argv)
 {
+  unsigned int i;
   int ret = -1;
-  int i;
 
   while (!btif_is_enabled())
     usleep(100 * 1000);
