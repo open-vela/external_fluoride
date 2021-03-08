@@ -42,7 +42,9 @@
 
 #include "uipc.h"
 
+#ifndef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
 #undef OS_GENERIC
+#endif
 
 using bluetooth::common::MessageLoopThread;
 using LockGuard = std::lock_guard<std::mutex>;
@@ -103,12 +105,15 @@ class BtifA2dpSinkControlBlock {
         codec_type(0),
         rx_focus_state(BTIF_A2DP_SINK_FOCUS_NOT_GRANTED),
         audio_track(nullptr),
+        ffmpeg_ready(0),
         decoder_interface(nullptr) {}
 
   void Reset() {
     if (audio_track != nullptr) {
+#ifndef OS_GENERIC
       BtifAvrcpAudioTrackStop(audio_track);
       BtifAvrcpAudioTrackDelete(audio_track);
+#endif
     }
     audio_track = nullptr;
     fixed_queue_free(rx_audio_queue, nullptr);
@@ -121,6 +126,7 @@ class BtifA2dpSinkControlBlock {
     channel_count = 0;
     codec_type = 0;
     decoder_interface = nullptr;
+    ffmpeg_ready = 0;
   }
 
   MessageLoopThread worker_thread;
@@ -134,6 +140,7 @@ class BtifA2dpSinkControlBlock {
   btif_a2dp_sink_focus_state_t rx_focus_state; /* audio focus state */
   void* audio_track;
   const tA2DP_DECODER_INTERFACE* decoder_interface;
+  int ffmpeg_ready;
 };
 
 // Mutex for below data structures.
@@ -546,11 +553,20 @@ static void btif_a2dp_sink_on_decode_complete(uint8_t* data, uint32_t len) {
 
 // Must be called while locked.
 static void btif_a2dp_sink_handle_inc_media(BT_HDR* p_msg) {
+  uint8_t* data;
   if ((btif_av_get_peer_sep() == AVDT_TSEP_SNK) ||
       (btif_a2dp_sink_cb.rx_flush)) {
     APPL_TRACE_DEBUG("%s: state changed happened in this tick", __func__);
     return;
   }
+
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
+  if (p_msg->len > 0 && btif_a2dp_sink_cb.ffmpeg_ready == 1) {
+    data = p_msg->data + p_msg->offset;
+    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_msg->len);
+  }
+  return 0;
+#endif
 
   CHECK(btif_a2dp_sink_cb.decoder_interface != nullptr);
   if (!btif_a2dp_sink_cb.decoder_interface->decode_packet(p_msg)) {
@@ -677,34 +693,7 @@ static void btif_a2dp_sink_decoder_update_event(
   }
 }
 
-#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
-uint8_t btif_a2dp_sink_send_buf(BT_HDR* p_pkt) {
-  tA2DP_CODEC_TYPE codec_type = btif_a2dp_sink_get_codec_type();
-  uint8_t* data = p_pkt->data + p_pkt->offset;
-  size_t data_size = p_pkt->len;
-
-  LockGuard lock(g_mutex);
-  if (data_size == 0) {
-      LOG_ERROR("%s: Empty packet", __func__);
-      return 0;
-  }
-
-  if (codec_type == A2DP_MEDIA_CT_SBC) {
-    data += 1;
-    data_size--;
-  }
-
-  BtifAvrcpAudioTrackWriteData(btif_a2dp_sink_cb.audio_track,
-                               reinterpret_cast<void*>(data), data_size);
-  return 0;
-}
-#endif
-
 uint8_t btif_a2dp_sink_enqueue_buf(BT_HDR* p_pkt) {
-#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
-  btif_a2dp_sink_send_buf(p_pkt);
-  return 0;
-#endif
   LockGuard lock(g_mutex);
 
   if (btif_a2dp_sink_cb.rx_flush) /* Flush enabled, do not enqueue */
@@ -789,12 +778,12 @@ void btif_a2dp_sink_set_audio_track_gain(float gain) {
 #ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
 void btif_a2dp_sink_enable_audio_send(void) {
   LOG_INFO("%s", __func__);
-  BtifAvrcpEnableAudioSend(btif_a2dp_sink_cb.audio_track);
+  btif_a2dp_sink_cb.ffmpeg_ready = 1;
 }
 
 void btif_a2dp_sink_disable_audio_send(void) {
   LOG_INFO("%s", __func__);
-  BtifAvrcpDisableAudioSend(btif_a2dp_sink_cb.audio_track);
+  btif_a2dp_sink_cb.ffmpeg_ready = 0;
 }
 #endif
 
