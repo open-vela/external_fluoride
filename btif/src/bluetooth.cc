@@ -78,6 +78,8 @@
 #include "stack/include/btu.h"
 #include "stack_manager.h"
 
+#define ALIGN_UP(s, a)  (((s) + (a) - 1) & ~((a) - 1))
+
 using bluetooth::hearing_aid::HearingAidInterface;
 using bluetooth::le_audio::LeAudioClientInterface;
 
@@ -591,7 +593,7 @@ bt_property_t* property_deep_copy_array(int num_properties,
     for (int i = 0; i < num_properties; i++) {
       auto len = properties[i].len;
       if (len > 0) {
-        content_len += len;
+        content_len += ALIGN_UP(len, 8);
       }
     }
 
@@ -608,7 +610,7 @@ bt_property_t* property_deep_copy_array(int num_properties,
       }
       copy[i].val = content;
       memcpy(content, properties[i].val, len);
-      content += len;
+      content += ALIGN_UP(len, 8);
     }
   }
   return copy;
