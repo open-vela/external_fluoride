@@ -662,7 +662,7 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
     for (i = 0; i < BTA_MAX_SERVICE_ID; i++) {
       /* This should eventually become a function when more services are enabled
        */
-      if (service_mask & (tBTA_SERVICE_MASK)(1 << i)) {
+      if (service_mask & (tBTA_SERVICE_MASK)((uint64_t)1 << i)) {
         switch (i) {
           case BTA_HFP_SERVICE_ID: {
             *(p_uuid + num_uuids) =
