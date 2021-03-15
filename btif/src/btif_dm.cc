@@ -167,7 +167,7 @@ typedef struct {
   struct timespec timestamp;
 } btif_bond_event_t;
 
-#define BTA_SERVICE_ID_TO_SERVICE_MASK(id) (1 << (id))
+#define BTA_SERVICE_ID_TO_SERVICE_MASK(id) ((uint64_t)1 << (id))
 
 #define MAX_BTIF_BOND_EVENT_ENTRIES 15
 
