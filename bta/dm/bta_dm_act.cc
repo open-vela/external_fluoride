@@ -186,8 +186,11 @@ const tBTM_APPL_INFO bta_security = {&bta_dm_pin_cback,
                                      &bta_dm_authentication_complete_cback,
                                      &bta_dm_bond_cancel_complete_cback,
                                      &bta_dm_sp_cback,
+#if defined(CONFIG_FLUORIDE_BLE_ENABLED)
                                      &bta_dm_ble_smp_cback,
-                                     &bta_dm_ble_id_key_cback};
+                                     &bta_dm_ble_id_key_cback
+#endif
+                                     };
 
 #define MAX_DISC_RAW_DATA_BUF (4096)
 uint8_t g_disc_raw_data_buf[MAX_DISC_RAW_DATA_BUF];
