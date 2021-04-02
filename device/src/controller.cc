@@ -96,6 +96,12 @@ static bool iso_supported;
 static bool simple_pairing_supported;
 static bool secure_connections_supported;
 
+#if defined(CONFIG_FLUORIDE_BLE_ENABLED)
+  #define FLUORIDE_BLE_ENABLED (1)
+#else
+  #define FLUORIDE_BLE_ENABLED (0)
+#endif
+
 #define AWAIT_COMMAND(command) \
   static_cast<BT_HDR*>(        \
       future_await(local_hci->transmit_command_futured(command)))
@@ -200,7 +206,8 @@ static future_t* start_up(void) {
 #endif
 
   ble_supported = last_features_classic_page_index >= 1 &&
-                  HCI_LE_HOST_SUPPORTED(features_classic[1].as_array);
+                  HCI_LE_HOST_SUPPORTED(features_classic[1].as_array) &&
+                  FLUORIDE_BLE_ENABLED;
   if (ble_supported) {
     // Request the ble acceptlist size next
     response = AWAIT_COMMAND(packet_factory->make_ble_read_acceptlist_size());
@@ -354,7 +361,6 @@ static uint8_t* get_local_supported_codecs(uint8_t* number_of_codecs) {
 
 static const uint8_t* get_ble_supported_states(void) {
   CHECK(readable);
-  CHECK(ble_supported);
   return ble_supported_states;
 }
 
@@ -525,100 +531,100 @@ static bool supports_ble(void) {
 
 static bool supports_ble_privacy(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_ENHANCED_PRIVACY_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_set_privacy_mode() {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_ENHANCED_PRIVACY_SUPPORTED(features_ble.as_array) &&
          HCI_LE_SET_PRIVACY_MODE_SUPPORTED(supported_commands);
 }
 
 static bool supports_ble_packet_extension(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_DATA_LEN_EXT_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_connection_parameters_request(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_CONN_PARAM_REQ_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_2m_phy(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_2M_PHY_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_coded_phy(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_CODED_PHY_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_extended_advertising(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_EXTENDED_ADVERTISING_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_periodic_advertising(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_PERIODIC_ADVERTISING_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_peripheral_initiated_feature_exchange(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_PERIPHERAL_INIT_FEAT_EXC_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_connection_parameter_request(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_CONN_PARAM_REQ_SUPPORTED(features_ble.as_array);
 }
 
 static bool supports_ble_periodic_advertising_sync_transfer_sender(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_PERIODIC_ADVERTISING_SYNC_TRANSFER_SENDER(
       features_ble.as_array);
 }
 
 static bool supports_ble_periodic_advertising_sync_transfer_recipient(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_PERIODIC_ADVERTISING_SYNC_TRANSFER_RECIPIENT(
       features_ble.as_array);
 }
 
 static bool supports_ble_connected_isochronous_stream_central(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_CIS_CENTRAL(features_ble.as_array);
 }
 
 static bool supports_ble_connected_isochronous_stream_peripheral(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_CIS_PERIPHERAL(features_ble.as_array);
 }
 
 static bool supports_ble_isochronous_broadcaster(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_ISO_BROADCASTER(features_ble.as_array);
 }
 
 static bool supports_ble_synchronized_receiver(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return false;
   return HCI_LE_SYNCHRONIZED_RECEIVER(features_ble.as_array);
 }
 
@@ -629,7 +635,7 @@ static uint16_t get_acl_data_size_classic(void) {
 
 static uint16_t get_acl_data_size_ble(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return acl_data_size_ble;
 }
 
@@ -655,31 +661,31 @@ static uint16_t get_iso_packet_size(void) {
 
 static uint16_t get_ble_suggested_default_data_length(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_suggested_default_data_length;
 }
 
 static uint16_t get_ble_maximum_tx_data_length(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_supported_max_tx_octets;
 }
 
 static uint16_t get_ble_maxium_advertising_data_length(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_maxium_advertising_data_length;
 }
 
 static uint8_t get_ble_number_of_supported_advertising_sets(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_number_of_supported_advertising_sets;
 }
 
 static uint8_t get_ble_periodic_advertiser_list_size(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_periodic_advertiser_list_size;
 }
 
@@ -690,25 +696,25 @@ static uint16_t get_acl_buffer_count_classic(void) {
 
 static uint8_t get_acl_buffer_count_ble(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return acl_buffer_count_ble;
 }
 
 static uint8_t get_iso_buffer_count(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return iso_buffer_count;
 }
 
 static uint8_t get_ble_acceptlist_size(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_acceptlist_size;
 }
 
 static uint8_t get_ble_resolving_list_max_size(void) {
   CHECK(readable);
-  CHECK(ble_supported);
+  if (!ble_supported) return 0;
   return ble_resolving_list_max_size;
 }
 
@@ -718,7 +724,7 @@ static void set_ble_resolving_list_max_size(int resolving_list_max_size) {
   if (resolving_list_max_size != 0) {
     CHECK(readable);
   }
-  CHECK(ble_supported);
+  if (!ble_supported) return;
   ble_resolving_list_max_size = resolving_list_max_size;
 }
 

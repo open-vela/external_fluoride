@@ -62,6 +62,12 @@ config FLUORIDE_DEVICE_NAME
   help
     Bluetooth device name.
 
+config FLUORIDE_BLE_ENABLED
+  bool "Enable Fluoride Bluetooth Low Energy"
+  default y
+  help
+    Enable Fluoride Bluetooth Low Energy
+
 config FLUORIDE_FILE_PATH
   string "Fluoride config path"
   default "/data/bt_config.conf"
