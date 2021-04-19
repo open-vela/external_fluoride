@@ -260,11 +260,13 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
   CXXSRCS  += port/examples/avrcp.cc
   CXXSRCS  += port/examples/avrcs.cc
   CXXSRCS  += port/examples/avrcpc.cc
-  CXXSRCS  += port/examples/gatt.cc
   CXXSRCS  += port/examples/hfp.cc
   CXXSRCS  += port/examples/interface.cc
   CXXSRCS  += port/examples/sdp.cc
   CXXSRCS  += port/examples/shell.cc
+ifneq ($(CONFIG_FLUORIDE_BLE_ENABLED),)
+  CXXSRCS  += port/examples/gatt.cc
+endif
 
   PROGNAME += fluorided
   MAINSRC  += port/examples/fluoride.cc
@@ -272,9 +274,15 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
   PROGNAME += bta
   MAINSRC  += port/examples/bta.cc
 
+ifneq ($(CONFIG_FLUORIDE_BLE_ENABLED),)
+  PROGNAME += ble
+  MAINSRC  += port/examples/ble.cc
+endif
+
 endif
 
 depend::
 	$(Q) ln -sf fluoride.cc port/examples/bta.cc
+	$(Q) ln -sf fluoride.cc port/examples/ble.cc
 
 include $(APPDIR)/Application.mk

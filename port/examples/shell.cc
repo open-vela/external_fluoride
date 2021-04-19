@@ -103,6 +103,12 @@ struct passthrough_command g_passthrough_command_maps[] =
   PASSTHROUGH_COMMAND(AVRC_KEYPRESSED_RELEASE),
 };
 
+const bluetooth::Uuid kCCCDescriptorUuid      = bluetooth::Uuid::FromString("2902");
+const bluetooth::Uuid kHRServiceUuid          = bluetooth::Uuid::FromString("180D");
+const bluetooth::Uuid kHRMeasurementUuid      = bluetooth::Uuid::FromString("2A37");
+const bluetooth::Uuid kBodySensorLocationUuid = bluetooth::Uuid::FromString("2A38");
+const bluetooth::Uuid kHRControlPointUuid     = bluetooth::Uuid::FromString("2A39");
+
 typedef int (*flrdcmd_func)(struct fluoride_s *flrd, int argc, char **argv);
 
 struct fluoride_cmd_s
@@ -249,7 +255,7 @@ static int fluoride_command_connect(struct fluoride_s *flrd, int argc, char **ar
   return 0;
 }
 
-static struct fluoride_cmd_s g_shell_cmds[] =
+static struct fluoride_cmd_s g_bta_cmds[] =
 {
   {
     "scan",
@@ -293,29 +299,191 @@ static struct fluoride_cmd_s g_shell_cmds[] =
   },
 };
 
+static int fluoride_command_blescan(struct fluoride_s *flrd, int argc, char **argv)
+{
+  if (argc == 0)
+    return -1;
+
+  flrd->gatt->scanner->Scan(!!atoi(argv[0]));
+
+  return 0;
+}
+
+static void ble_advertising_enable_cb(uint8_t rid, bool enable, uint8_t status) TRACE_CALLBACK_BODY
+static void ble_advertising_set_timeout_cb(uint8_t advertiser_id, uint8_t status) TRACE_CALLBACK_BODY
+static void ble_advertising_set_started_cb(int reg_id,
+    uint8_t advertiser_id, int8_t tx_power, uint8_t status)
+{
+  struct fluoride_s *flrd = fluoride_interface_get();
+  flrd->aid = advertiser_id;
+
+  flrd->gatt->advertiser->Enable(flrd->aid, true,
+      base::Bind(&ble_advertising_enable_cb, flrd->aid, true), 0, 0,
+      base::Bind(&ble_advertising_enable_cb, flrd->aid, false));
+}
+
+static int fluoride_command_bleadv(struct fluoride_s *flrd, int argc, char **argv)
+{
+  PeriodicAdvertisingParameters pparams = {};
+  std::string name("Fluoride BLE");
+  AdvertiseParameters params = {};
+  std::vector<uint8_t> sdata;
+  std::vector<uint8_t> pdata;
+  int reg_id = -2;
+
+  /* Advertising data: 16-bit Service Uuid: Heart Rate Service, Tx power */
+
+  std::vector<uint8_t> adata { 0x03, bluetooth::kEIRTypeComplete16BitUuids,
+    0x0D, 0x18, 0x02, bluetooth::kEIRTypeTxPower, 0x00 };
+
+  if (argc == 0)
+    return -1;
+
+  if (atoi(argv[0]) == 0) {
+    if (flrd->aid >= 0) {
+      flrd->gatt->advertiser->Enable(flrd->aid, false,
+          base::Bind(&ble_advertising_enable_cb, flrd->aid, true), 0, 0,
+          base::Bind(&ble_advertising_enable_cb, flrd->aid, false));
+    }
+    return 0;
+  }
+
+  if (!flrd->element)
+    {
+      flrd->element = (btgatt_db_element_t *)calloc(5, sizeof(btgatt_db_element_t));
+      if (!flrd->element)
+        return -ENOMEM;
+
+      flrd->element_size = 5;
+
+      flrd->element[0].uuid        = kHRServiceUuid;
+      flrd->element[0].type        = BTGATT_DB_PRIMARY_SERVICE;
+      flrd->element[1].uuid        = kHRMeasurementUuid;
+      flrd->element[1].type        = BTGATT_DB_CHARACTERISTIC;
+      flrd->element[1].properties  = bluetooth::kCharacteristicPropertyNotify;
+      flrd->element[2].uuid        = kCCCDescriptorUuid;
+      flrd->element[2].type        = BTGATT_DB_DESCRIPTOR;
+      flrd->element[2].permissions = bluetooth::kAttributePermissionRead |
+                                     bluetooth::kAttributePermissionWrite;
+      flrd->element[3].uuid        = kBodySensorLocationUuid;
+      flrd->element[3].type        = BTGATT_DB_CHARACTERISTIC;
+      flrd->element[3].properties  = bluetooth::kCharacteristicPropertyRead;
+      flrd->element[3].permissions = bluetooth::kAttributePermissionRead;
+      flrd->element[4].uuid        = kHRControlPointUuid;
+      flrd->element[4].type        = BTGATT_DB_CHARACTERISTIC;
+      flrd->element[4].properties  = bluetooth::kCharacteristicPropertyWrite;
+      flrd->element[4].permissions = bluetooth::kAttributePermissionWrite;
+    }
+
+  if (flrd->sid == Uuid::kEmpty) {
+    flrd->sid = bluetooth::Uuid::GetRandom();
+    flrd->gatt->server->register_server(flrd->sid, false);
+  }
+
+  params.advertising_event_properties     = 0x13;
+  params.min_interval                     = 160;
+  params.max_interval                     = 240;
+  params.channel_map                      = 0x07; /* all channels */
+  params.tx_power                         = -15;
+  params.primary_advertising_phy          = 1;
+  params.secondary_advertising_phy        = 1;
+  params.scan_request_notification_enable = false;
+
+  pparams.enable                          = false;
+  pparams.min_interval                    = 80;
+  pparams.max_interval                    = 80 + 16; /* 20ms difference betwen min and max */
+
+  adata.push_back(name.length() + 1);
+  adata.push_back(bluetooth::kEIRTypeCompleteLocalName);
+  adata.insert(adata.end(), name.c_str(), name.c_str() + name.length());
+
+  flrd->gatt->advertiser->StartAdvertisingSet(reg_id,
+      base::Bind(&ble_advertising_set_started_cb, reg_id), params, adata,
+      sdata, pparams, pdata, UINT16_MAX, 0, base::Bind(ble_advertising_set_timeout_cb));
+
+  return 0;
+}
+
+static struct fluoride_cmd_s g_ble_cmds[] =
+{
+  {
+    "scan",
+    fluoride_command_blescan,
+    "< 0-1 >    ( 0: off, 1: on )",
+  },
+  {
+    "adv",
+    fluoride_command_bleadv,
+    "< 0-1 >    ( 0: off, 1: on )",
+  },
+};
+
+struct fluoride_cmd_table_s
+{
+  const char            *name;
+  int                    msize;
+  struct fluoride_cmd_s *commands;
+};
+
+struct fluoride_cmd_table_s g_cmd_tables[] =
+{
+  { "bta", ARRAY_SIZE(g_bta_cmds), g_bta_cmds },
+#ifdef CONFIG_FLUORIDE_BLE_ENABLED
+  { "ble", ARRAY_SIZE(g_ble_cmds), g_ble_cmds }
+#endif
+};
+
+void fluoride_shell_help(void)
+{
+  struct fluoride_cmd_s *commands;
+  int i;
+  int j;
+
+  for (i = 0; i < ARRAY_SIZE(g_cmd_tables); i++) {
+    commands = g_cmd_tables[i].commands;
+    printf("----------------------------------------\n");
+    for (j = 0; j < g_cmd_tables[i].msize; j++) {
+      if (commands[j].help)
+        printf("[%02d]: %s %16s : %s\n", j, g_cmd_tables[i].name,
+                                         commands[j].cmd, commands[j].help);
+    }
+  }
+}
+
 int fluoride_shell(struct fluoride_s *flrd, int argc, char **argv)
 {
+  struct fluoride_cmd_s *commands;
   unsigned int i;
   int ret = -1;
+  int size = 0;
 
   while (!btif_is_enabled())
     usleep(100 * 1000);
 
   pthread_mutex_lock(&flrd->mutex);
 
-  if (argc > 1) {
-    for (i = 0; i < sizeof(g_shell_cmds) / sizeof(g_shell_cmds[0]); i++)
-      if (!strncmp(g_shell_cmds[i].cmd, argv[1], strlen(g_shell_cmds[i].cmd))) {
-        ret = g_shell_cmds[i].func(flrd, argc - 2, &argv[2]);
-        break;
-      }
+  if (argc == 1)
+    goto bail;
+
+  for (i = 0; i < ARRAY_SIZE(g_cmd_tables); i++) {
+    if (!strncmp(argv[0], g_cmd_tables[i].name, strlen(g_cmd_tables[i].name))) {
+      commands = g_cmd_tables[i].commands;
+      size = g_cmd_tables[i].msize;
+      break;
+    }
   }
 
+  for (i = 0; i < size; i++) {
+    if (!strncmp(commands[i].cmd, argv[1], strlen(commands[i].cmd))) {
+      ret = commands[i].func(flrd, argc - 2, &argv[2]);
+      break;
+    }
+  }
+
+bail:
   if (ret < 0) {
     printf("%s shell commands :\n", argv[0]);
-    for (i = 0; i < sizeof(g_shell_cmds) / sizeof(g_shell_cmds[0]); i++)
-      if (g_shell_cmds[i].help)
-        printf("[%02d]: %s %16s : %s\n", i, argv[0], g_shell_cmds[i].cmd, g_shell_cmds[i].help);
+    fluoride_shell_help();
   }
 
   pthread_mutex_unlock(&flrd->mutex);
