@@ -148,7 +148,7 @@ const UUID128Bit& Uuid::To128BitBE() const { return uu; }
 
 Uuid Uuid::GetRandom() {
   Uuid uuid;
-  base::RandBytes(uuid.uu.data(), uuid.uu.size());
+  arc4random_buf(uuid.uu.data(), uuid.uu.size());
   return uuid;
 }
 
