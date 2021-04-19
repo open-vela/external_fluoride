@@ -43,7 +43,9 @@ static void adapter_state_changed(bt_state_t state)
   pthread_mutex_lock(&flrd->mutex);
   flrd->state = state;
 
+#ifdef CONFIG_FLUORIDE_BLE_ENABLED
   flrd->gatt  = (const btgatt_interface_t      *)bt_profile_gatt_init(flrd);
+#endif
   flrd->ctrl  = (const btrc_ctrl_interface_t   *)bt_profile_avrcp_control_init(flrd);
   flrd->avrcp = (const btrc_interface_t        *)bt_profile_avrcp_init(flrd);
   flrd->sdp   = (const btsdp_interface_t       *)bt_profile_sdp_init(flrd);
@@ -62,10 +64,8 @@ static void parse_properties(int num_properties, bt_property_t *property)
       case BT_PROPERTY_BDADDR:
         {
           const RawAddress *addr = property_as_addr(property);
-          LOG_SAMPLES("[%s]: addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
-              dump_property_type(property->type),
-              addr->address[0], addr->address[1], addr->address[2],
-              addr->address[3], addr->address[4], addr->address[5]);
+          LOG_SAMPLES("[%s]: addr: %s\n",
+              dump_property_type(property->type), addr->ToString().c_str());
         }
         break;
 

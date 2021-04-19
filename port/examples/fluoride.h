@@ -51,6 +51,10 @@
 #include "property.h"
 #include "btif_util.h"
 
+#include <bluetooth/low_energy_constants.h>
+
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 #define __TRACE_CALLBACK
 
 #if defined(__TRACE_CALLBACK)
@@ -86,6 +90,22 @@ struct fluoride_s
 
   RawAddress                    addr;
   RawAddress                    avrcp_addr;
+
+  /* GATT */
+
+  uint8_t                       aid;
+
+  bluetooth::Uuid               sid;
+  int                           sif;
+  int                           cid;
+
+  btgatt_db_element_t           *element;
+  int                           element_size;
+
+  timer_t                       timer;
+  uint16_t                      ncount;
+
+  uint16_t                      handle[5];
 };
 
 const btgatt_interface_t      *bt_profile_gatt_init(struct fluoride_s *flrd);
