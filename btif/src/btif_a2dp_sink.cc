@@ -553,20 +553,11 @@ static void btif_a2dp_sink_on_decode_complete(uint8_t* data, uint32_t len) {
 
 // Must be called while locked.
 static void btif_a2dp_sink_handle_inc_media(BT_HDR* p_msg) {
-  uint8_t* data;
   if ((btif_av_get_peer_sep() == AVDT_TSEP_SNK) ||
       (btif_a2dp_sink_cb.rx_flush)) {
     APPL_TRACE_DEBUG("%s: state changed happened in this tick", __func__);
     return;
   }
-
-#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
-  if (p_msg->len > 0 && btif_a2dp_sink_cb.ffmpeg_ready == 1) {
-    data = p_msg->data + p_msg->offset;
-    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_msg->len);
-  }
-  return 0;
-#endif
 
   CHECK(btif_a2dp_sink_cb.decoder_interface != nullptr);
   if (!btif_a2dp_sink_cb.decoder_interface->decode_packet(p_msg)) {
@@ -695,6 +686,15 @@ static void btif_a2dp_sink_decoder_update_event(
 
 uint8_t btif_a2dp_sink_enqueue_buf(BT_HDR* p_pkt) {
   LockGuard lock(g_mutex);
+  uint8_t* data;
+
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
+  if (p_pkt->len > 0 && btif_a2dp_sink_cb.ffmpeg_ready == 1) {
+    data = p_pkt->data + p_pkt->offset;
+    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_pkt->len);
+  }
+  return 0;
+#endif
 
   if (btif_a2dp_sink_cb.rx_flush) /* Flush enabled, do not enqueue */
     return fixed_queue_length(btif_a2dp_sink_cb.rx_audio_queue);
