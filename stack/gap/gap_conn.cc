@@ -389,7 +389,7 @@ uint16_t GAP_ConnReadData(uint16_t gap_handle, uint8_t* p_data,
   mutex_global_unlock();
 
   DVLOG(1) << StringPrintf(
-      "GAP_ConnReadData - rx_queue_size left=%d, *p_len=%d",
+      "GAP_ConnReadData - rx_queue_size left=%" PRIu32", *p_len=%d",
       p_ccb->rx_queue_size, *p_len);
 
   return (BT_PASS);
@@ -421,7 +421,7 @@ int GAP_GetRxQueueCnt(uint16_t handle, uint32_t* p_rx_queue_count) {
   } else
     rc = GAP_INVALID_HANDLE;
 
-  DVLOG(1) << StringPrintf("GAP_GetRxQueueCnt - rc = 0x%04x, rx_queue_count=%d",
+  DVLOG(1) << StringPrintf("GAP_GetRxQueueCnt - rc = 0x%04x, rx_queue_count=%" PRIu32,
                            rc, *p_rx_queue_count);
 
   return (rc);

@@ -105,8 +105,8 @@ class BtifA2dpSinkControlBlock {
         codec_type(0),
         rx_focus_state(BTIF_A2DP_SINK_FOCUS_NOT_GRANTED),
         audio_track(nullptr),
-        ffmpeg_ready(0),
-        decoder_interface(nullptr) {}
+        decoder_interface(nullptr),
+        ffmpeg_ready(0) {}
 
   void Reset() {
     if (audio_track != nullptr) {

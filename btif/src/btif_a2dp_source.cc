@@ -208,6 +208,8 @@ class BtifA2dpSource {
         return "STATE_RUNNING";
       case kStateShuttingDown:
         return "STATE_SHUTTING_DOWN";
+      default:
+        return NULL;
     }
   }
 

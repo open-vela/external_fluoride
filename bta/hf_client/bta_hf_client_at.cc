@@ -329,7 +329,7 @@ static void bta_hf_client_handle_cind_list_item(tBTA_HF_CLIENT_CB* client_cb,
                                                 uint32_t max, uint32_t index) {
   uint8_t i = 0;
 
-  APPL_TRACE_DEBUG("%s: %lu.%s <%lu:%lu>", __func__, index, name, min, max);
+  APPL_TRACE_DEBUG("%s: %" PRIu32".%s <%" PRIu32":%" PRIu32">", __func__, index, name, min, max);
 
   /* look for a matching indicator on list of supported ones */
   for (i = 0; i < BTA_HF_CLIENT_AT_SUPPORTED_INDICATOR_COUNT; i++) {
@@ -458,7 +458,7 @@ static void bta_hf_client_handle_cmeerror(tBTA_HF_CLIENT_CB* client_cb,
 
 static void bta_hf_client_handle_vgm(tBTA_HF_CLIENT_CB* client_cb,
                                      uint32_t value) {
-  APPL_TRACE_DEBUG("%s: %lu", __func__, value);
+  APPL_TRACE_DEBUG("%s: %" PRIu32, __func__, value);
 
   if (value <= BTA_HF_CLIENT_VGM_MAX) {
     bta_hf_client_evt_val(client_cb, BTA_HF_CLIENT_MIC_EVT, value);
@@ -467,7 +467,7 @@ static void bta_hf_client_handle_vgm(tBTA_HF_CLIENT_CB* client_cb,
 
 static void bta_hf_client_handle_vgs(tBTA_HF_CLIENT_CB* client_cb,
                                      uint32_t value) {
-  APPL_TRACE_DEBUG("%s: %lu", __func__, value);
+  APPL_TRACE_DEBUG("%s: %" PRIu32, __func__, value);
 
   if (value <= BTA_HF_CLIENT_VGS_MAX) {
     bta_hf_client_evt_val(client_cb, BTA_HF_CLIENT_SPK_EVT, value);
@@ -476,7 +476,7 @@ static void bta_hf_client_handle_vgs(tBTA_HF_CLIENT_CB* client_cb,
 
 static void bta_hf_client_handle_bvra(tBTA_HF_CLIENT_CB* client_cb,
                                       uint32_t value) {
-  APPL_TRACE_DEBUG("%s: %lu", __func__, value);
+  APPL_TRACE_DEBUG("%s: %" PRIu32, __func__, value);
 
   if (value > 1) {
     return;
@@ -540,7 +540,7 @@ static void bta_hf_client_handle_cnum(tBTA_HF_CLIENT_CB* client_cb,
 
 static void bta_hf_client_handle_btrh(tBTA_HF_CLIENT_CB* client_cb,
                                       uint16_t code) {
-  APPL_TRACE_DEBUG("%s: %lu", __func__, code);
+  APPL_TRACE_DEBUG("%s: %" PRIu16, __func__, code);
 
   bta_hf_client_evt_val(client_cb, BTA_HF_CLIENT_BTRH_EVT, code);
 }
@@ -835,7 +835,7 @@ static char* bta_hf_client_parse_uint32(
   int res;
   int offset;
 
-  res = sscanf(buffer, "%u%n", &value, &offset);
+  res = sscanf(buffer, "%" PRIu32"%n", &value, &offset);
   if (res < 1) {
     return NULL;
   }
@@ -865,7 +865,7 @@ static char* bta_hf_client_parse_cind_values(tBTA_HF_CLIENT_CB* client_cb,
   int offset;
   int res;
 
-  while ((res = sscanf(buffer, "%u%n", &value, &offset)) > 0) {
+  while ((res = sscanf(buffer, "%" PRIu32"%n", &value, &offset)) > 0) {
     /* decides if its valid index and value, if yes stores it */
     bta_hf_client_handle_cind_value(client_cb, index, value);
 
@@ -896,7 +896,7 @@ static char* bta_hf_client_parse_cind_list(tBTA_HF_CLIENT_CB* client_cb,
   uint32_t index = 0;
   int res;
 
-  while ((res = sscanf(buffer, "(\"%128[^\"]\",(%u%*[-,]%u))%n", name, &min,
+  while ((res = sscanf(buffer, "(\"%128[^\"]\",(%" PRIu32"%*[-,]%" PRIu32"))%n", name, &min,
                        &max, &offset)) > 2) {
     bta_hf_client_handle_cind_list_item(client_cb, name, min, max, index);
     if (offset == 0) {
@@ -993,7 +993,7 @@ static char* bta_hf_client_parse_ciev(tBTA_HF_CLIENT_CB* client_cb,
 
   AT_CHECK_EVENT(buffer, "+CIEV:");
 
-  res = sscanf(buffer, "%u,%u%n", &index, &value, &offset);
+  res = sscanf(buffer, "%" PRIu32",%" PRIu32"%n", &index, &value, &offset);
   if (res < 2) {
     return NULL;
   }
@@ -1086,7 +1086,7 @@ static char* bta_hf_client_parse_clip(tBTA_HF_CLIENT_CB* client_cb,
   AT_CHECK_EVENT(buffer, "+CLIP:");
 
   /* there might be something more after %lu but HFP doesn't care */
-  res = sscanf(buffer, "\"%32[^\"]\",%u%n", number, &type, &offset);
+  res = sscanf(buffer, "\"%32[^\"]\",%" PRIu32"%n", number, &type, &offset);
   if (res < 2) {
     return NULL;
   }
@@ -1118,7 +1118,7 @@ static char* bta_hf_client_parse_ccwa(tBTA_HF_CLIENT_CB* client_cb,
   AT_CHECK_EVENT(buffer, "+CCWA:");
 
   /* there might be something more after %lu but HFP doesn't care */
-  res = sscanf(buffer, "\"%32[^\"]\",%u%n", number, &type, &offset);
+  res = sscanf(buffer, "\"%32[^\"]\",%" PRIu32"%n", number, &type, &offset);
   if (res < 2) {
     return NULL;
   }
@@ -1672,7 +1672,7 @@ void bta_hf_client_send_at_brsf(tBTA_HF_CLIENT_CB* client_cb,
 
   APPL_TRACE_DEBUG("%s", __func__);
 
-  at_len = snprintf(buf, sizeof(buf), "AT+BRSF=%u\r", features);
+  at_len = snprintf(buf, sizeof(buf), "AT+BRSF=%" PRIu32"\r", features);
   if (at_len < 0) {
     APPL_TRACE_ERROR("%s: AT command Framing error", __func__);
     return;
@@ -1697,7 +1697,7 @@ void bta_hf_client_send_at_bcs(tBTA_HF_CLIENT_CB* client_cb, uint32_t codec) {
 
   APPL_TRACE_DEBUG("%s", __func__);
 
-  at_len = snprintf(buf, sizeof(buf), "AT+BCS=%u\r", codec);
+  at_len = snprintf(buf, sizeof(buf), "AT+BCS=%" PRIu32"\r", codec);
   if (at_len < 0) {
     APPL_TRACE_ERROR("%s: AT command Framing error", __func__);
     return;
@@ -1744,7 +1744,7 @@ void bta_hf_client_send_at_chld(tBTA_HF_CLIENT_CB* client_cb, char cmd,
   APPL_TRACE_DEBUG("%s", __func__);
 
   if (idx > 0)
-    at_len = snprintf(buf, sizeof(buf), "AT+CHLD=%c%u\r", cmd, idx);
+    at_len = snprintf(buf, sizeof(buf), "AT+CHLD=%c%" PRIu32"\r", cmd, idx);
   else
     at_len = snprintf(buf, sizeof(buf), "AT+CHLD=%c\r", cmd);
 
@@ -1837,7 +1837,7 @@ void bta_hf_client_send_at_vgs(tBTA_HF_CLIENT_CB* client_cb, uint32_t volume) {
 
   APPL_TRACE_DEBUG("%s", __func__);
 
-  at_len = snprintf(buf, sizeof(buf), "AT+VGS=%u\r", volume);
+  at_len = snprintf(buf, sizeof(buf), "AT+VGS=%" PRIu32"\r", volume);
   if (at_len < 0) {
     APPL_TRACE_ERROR("%s: AT command Framing error", __func__);
     return;
@@ -1852,7 +1852,7 @@ void bta_hf_client_send_at_vgm(tBTA_HF_CLIENT_CB* client_cb, uint32_t volume) {
 
   APPL_TRACE_DEBUG("%s", __func__);
 
-  at_len = snprintf(buf, sizeof(buf), "AT+VGM=%u\r", volume);
+  at_len = snprintf(buf, sizeof(buf), "AT+VGM=%" PRIu32"\r", volume);
   if (at_len < 0) {
     APPL_TRACE_ERROR("%s: AT command Framing error", __func__);
     return;
@@ -1871,7 +1871,7 @@ void bta_hf_client_send_at_atd(tBTA_HF_CLIENT_CB* client_cb, char* number,
   if (number[0] != '\0') {
     at_len = snprintf(buf, sizeof(buf), "ATD%s;\r", number);
   } else {
-    at_len = snprintf(buf, sizeof(buf), "ATD>%u;\r", memory);
+    at_len = snprintf(buf, sizeof(buf), "ATD>%" PRIu32";\r", memory);
   }
 
   if (at_len < 0) {
@@ -1928,7 +1928,7 @@ void bta_hf_client_send_at_btrh(tBTA_HF_CLIENT_CB* client_cb, bool query,
   if (query) {
     at_len = snprintf(buf, sizeof(buf), "AT+BTRH?\r");
   } else {
-    at_len = snprintf(buf, sizeof(buf), "AT+BTRH=%u\r", val);
+    at_len = snprintf(buf, sizeof(buf), "AT+BTRH=%" PRIu32"\r", val);
   }
 
   if (at_len < 0) {
@@ -1996,7 +1996,7 @@ void bta_hf_client_send_at_binp(tBTA_HF_CLIENT_CB* client_cb, uint32_t action) {
 
   APPL_TRACE_DEBUG("%s", __func__);
 
-  at_len = snprintf(buf, sizeof(buf), "AT+BINP=%u\r", action);
+  at_len = snprintf(buf, sizeof(buf), "AT+BINP=%" PRIu32"\r", action);
 
   if (at_len < 0) {
     APPL_TRACE_ERROR("%s: AT command Framing error", __func__);
@@ -2151,7 +2151,7 @@ void bta_hf_client_send_at_cmd(tBTA_HF_CLIENT_DATA* p_data) {
     default:
       APPL_TRACE_ERROR("Default case");
       snprintf(buf, BTA_HF_CLIENT_AT_MAX_LEN,
-               "Cmd %d 1st arg %u 2nd arg %u string arg %s", p_val->uint8_val,
+               "Cmd %d 1st arg %" PRIu32" 2nd arg %" PRIu32" string arg %s", p_val->uint8_val,
                p_val->uint32_val1, p_val->uint32_val2, p_val->str);
       APPL_TRACE_ERROR("%s: AT buffer: %s ", __func__, buf);
       break;

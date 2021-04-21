@@ -1067,7 +1067,7 @@ bool L2CA_GetPeerFeatures(const RawAddress& bd_addr, uint32_t* p_ext_feat,
   }
 
   VLOG(1) << __func__ << " BDA: " << bd_addr
-          << StringPrintf(" ExtFea: 0x%08x Chnl_Mask[0]: 0x%02x",
+          << StringPrintf(" ExtFea: 0x%08" PRIx32" Chnl_Mask[0]: 0x%02x",
                           p_lcb->peer_ext_fea, p_lcb->peer_chnl_mask[0]);
 
   *p_ext_feat = p_lcb->peer_ext_fea;

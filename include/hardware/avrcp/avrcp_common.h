@@ -346,6 +346,7 @@ struct MediaListItem {
       case SONG:
         return song_.size();
     }
+    return 0;
   }
 };
 
