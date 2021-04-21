@@ -109,7 +109,7 @@ namespace bluetooth {
     tBTM_STATUS btm_sec_mx_access_request(const RawAddress& bd_addr, bool is_originator, uint16_t security_requirement, tBTM_SEC_CALLBACK* p_callback, void* p_ref_data) { return BTM_SUCCESS; }
     tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport, tBTM_SEC_CALLBACK* p_callback, void* p_ref_data, tBTM_BLE_SEC_ACT sec_act) { return BTM_SUCCESS; }
     void BTM_SecClearSecurityFlags(const RawAddress& bd_addr) { }
-    char* BTM_SecReadDevName(const RawAddress& address) { return "TODO"; }
+    char* BTM_SecReadDevName(const RawAddress& address) { return (char *)"TODO"; }
     bool BTM_SecAddRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback) { return true; }
     bool BTM_SecDeleteRmtNameNotifyCallback(tBTM_RMT_NAME_CALLBACK* p_callback) { return true; }
     void BTM_PINCodeReply(const RawAddress& bd_addr, uint8_t res, uint8_t pin_len, uint8_t* p_pin) { }

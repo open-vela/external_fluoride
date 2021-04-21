@@ -107,7 +107,9 @@ static void a2dp_aac_get_num_frame_iteration(uint8_t* num_of_iterations,
                                              uint8_t* num_of_frames,
                                              uint64_t timestamp_us);
 static void a2dp_aac_encode_frames(uint8_t nb_frame);
+#ifdef CONFIG_CODEC_FDKAAC
 static bool a2dp_aac_read_feeding(uint8_t* read_buffer, uint32_t* bytes_read);
+#endif
 
 bool A2DP_LoadEncoderAac(void) {
   // Nothing to do - the library is statically linked
@@ -726,8 +728,8 @@ static void a2dp_aac_encode_frames(uint8_t nb_frame) {
 #endif
 }
 
-static bool a2dp_aac_read_feeding(uint8_t* read_buffer, uint32_t* bytes_read) {
 #ifdef CONFIG_CODEC_FDKAAC
+static bool a2dp_aac_read_feeding(uint8_t* read_buffer, uint32_t* bytes_read) {
   uint32_t read_size = a2dp_aac_encoder_cb.aac_encoder_params.frame_length *
                        a2dp_aac_encoder_cb.feeding_params.channel_count *
                        a2dp_aac_encoder_cb.feeding_params.bits_per_sample / 8;
@@ -749,9 +751,9 @@ static bool a2dp_aac_read_feeding(uint8_t* read_buffer, uint32_t* bytes_read) {
     nb_byte_read = read_size;
   }
   a2dp_aac_encoder_cb.stats.media_read_total_actual_reads_count++;
-#endif
   return true;
 }
+#endif
 
 uint64_t A2dpCodecConfigAacSource::encoderIntervalMs() const {
   return a2dp_aac_get_encoder_interval_ms();

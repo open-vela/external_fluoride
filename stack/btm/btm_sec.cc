@@ -3286,7 +3286,7 @@ void btm_sec_encrypt_change(uint16_t handle, tHCI_STATUS status,
   tBTM_STATUS btm_status = btm_sec_execute_procedure(p_dev_rec);
   /* If there is no next procedure, or procedure failed to start, notify the
    * caller */
-  if (status != BTM_CMD_STARTED)
+  if (btm_status != BTM_CMD_STARTED)
     btm_sec_dev_rec_cback_event(p_dev_rec, btm_status, false);
 }
 

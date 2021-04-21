@@ -47,7 +47,7 @@
 typedef struct {
   bluetooth::Uuid uuid; /* uuid of the attribute */
   uint8_t inst_id;      /* instance ID */
-} __attribute__((packed)) tBTA_GATT_ID;
+} tBTA_GATT_ID;
 
 /* Client callback function events */
 typedef enum : uint8_t {
