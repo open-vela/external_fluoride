@@ -81,6 +81,7 @@ EXPORT_SYMBOL extern const module_t bt_utils_module = {.name = BT_UTILS_MODULE,
                                                        .clean_up = clean_up,
                                                        .dependencies = {NULL}};
 
+#if  !defined(OS_GENERIC)
 /*****************************************************************************
  *
  * Function        check_do_scheduling_group
@@ -100,6 +101,7 @@ static void check_do_scheduling_group(void) {
     }
   }
 }
+#endif
 
 /*****************************************************************************
  *

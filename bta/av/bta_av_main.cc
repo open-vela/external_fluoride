@@ -1397,8 +1397,8 @@ void bta_debug_av_dump(int fd) {
           alarm_is_scheduled(bta_av_cb.accept_signalling_timer)
               ? "Scheduled"
               : "Not scheduled");
-  dprintf(fd, "  SDP A2DP source handle: %d\n", bta_av_cb.sdp_a2dp_handle);
-  dprintf(fd, "  SDP A2DP sink handle: %d\n", bta_av_cb.sdp_a2dp_snk_handle);
+  dprintf(fd, "  SDP A2DP source handle: %" PRIu32"\n", bta_av_cb.sdp_a2dp_handle);
+  dprintf(fd, "  SDP A2DP sink handle: %" PRIu32"\n", bta_av_cb.sdp_a2dp_snk_handle);
   dprintf(fd, "  Features: 0x%x\n", bta_av_cb.features);
   dprintf(fd, "  SDP handle: %d\n", bta_av_cb.handle);
   dprintf(fd, "  Disabling: %s\n", bta_av_cb.disabling ? "true" : "false");

@@ -23,6 +23,10 @@
   case const:                  \
     return #const;
 
+#define DEFAULT_BREAK() \
+  default:              \
+    break;
+
 const char* audio_a2dp_hw_dump_ctrl_event(tA2DP_CTRL_CMD event) {
   switch (event) {
     CASE_RETURN_STR(A2DP_CTRL_CMD_NONE)
@@ -35,6 +39,7 @@ const char* audio_a2dp_hw_dump_ctrl_event(tA2DP_CTRL_CMD event) {
     CASE_RETURN_STR(A2DP_CTRL_SET_OUTPUT_AUDIO_CONFIG)
     CASE_RETURN_STR(A2DP_CTRL_CMD_OFFLOAD_START)
     CASE_RETURN_STR(A2DP_CTRL_GET_PRESENTATION_POSITION)
+    DEFAULT_BREAK()
   }
 
   return "UNKNOWN A2DP_CTRL_CMD";

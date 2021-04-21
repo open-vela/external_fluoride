@@ -101,10 +101,12 @@ static void bta_dm_discover_device(const RawAddress& remote_bd_addr);
 
 static void bta_dm_disable_search_and_disc(void);
 
+#if defined(CONFIG_FLUORIDE_BLE_ENABLED)
 static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                                     tBTM_LE_EVT_DATA* p_data);
 static void bta_dm_ble_id_key_cback(uint8_t key_type,
                                     tBTM_BLE_LOCAL_KEYS* p_key);
+#endif
 static void bta_dm_gattc_register(void);
 static void btm_dm_start_gatt_discovery(const RawAddress& bd_addr);
 static void bta_dm_cancel_gatt_discovery(const RawAddress& bd_addr);
@@ -3242,6 +3244,7 @@ static void bta_dm_observe_cmpl_cb(void* p_result) {
   }
 }
 
+#if defined(CONFIG_FLUORIDE_BLE_ENABLED)
 static void ble_io_req(const RawAddress& bd_addr, tBTM_IO_CAP* p_io_cap,
                        tBTM_OOB_DATA* p_oob_data, tBTM_LE_AUTH_REQ* p_auth_req,
                        uint8_t* p_max_key_size, tBTM_LE_KEY_TYPE* p_init_key,
@@ -3456,6 +3459,7 @@ static void bta_dm_ble_id_key_cback(uint8_t key_type,
   }
   return;
 }
+#endif
 
 /*******************************************************************************
  *
