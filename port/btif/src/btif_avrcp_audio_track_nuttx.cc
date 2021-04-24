@@ -33,9 +33,6 @@
 typedef struct {
   struct ap_buffer_s **abuffer;
   struct ap_buffer_s *lbuffer;
-  uint8_t     *cache;
-  int         cache_size;
-  int         free_abuffer;
   char        mqname[16];
   mqd_t       mq;
   int         fd;
@@ -82,11 +79,6 @@ static int BtifAvrcpAudioTrackGetBuffer(void *handle, struct ap_buffer_s **abuff
     return -1;
 
   *abuffer = NULL;
-
-  if (priv->free_abuffer) {
-    *abuffer = priv->abuffer[--priv->free_abuffer];
-    return 0;
-  }
 
   ret = mq_getattr(priv->mq, &stat);
   if (ret < 0)
@@ -141,12 +133,6 @@ void BtifAvrcpAudioTrackDelete(void* handle)
     priv->abuffer = NULL;
   }
 
-  if (priv->cache) {
-    free(priv->cache);
-    priv->cache = NULL;
-    priv->cache_size = 0;
-  }
-
   close(priv->fd);
   priv->fd = -1;
 }
@@ -172,7 +158,6 @@ void *BtifAvrcpAudioTrackCreate(int trackFreq, int bitsPerSample, int channelCou
 
   priv->fd = ret;
   priv->pause = 0;
-  priv->cache_size = 0;
   priv->lbuffer = NULL;
 
   /* configure */
@@ -225,11 +210,6 @@ void *BtifAvrcpAudioTrackCreate(int trackFreq, int bitsPerSample, int channelCou
     }
   }
 
-  /* create local buffer */
-  priv->cache = (uint8_t *)malloc(priv->period_bytes);
-  if (!priv->cache)
-    ret = -ENOMEM;
-
 out:
   if (ret < 0) {
     BtifAvrcpAudioTrackDelete(priv);
@@ -279,7 +259,6 @@ void BtifAvrcpAudioTrackStop(void* handle)
   ioctl(priv->fd, AUDIOIOC_STOP, 0);
   priv->pause = false;
   priv->lbuffer = NULL;
-  priv->cache_size = 0;
 }
 
 void BtifAvrcpAudioTrackPause(void* handle)
@@ -294,7 +273,32 @@ void BtifAvrcpAudioTrackPause(void* handle)
   ioctl(priv->fd, AUDIOIOC_PAUSE, 0);
   priv->pause = true;
   priv->lbuffer = NULL;
-  priv->cache_size = 0;
+}
+
+static int BtifAvrcpAudioTrackDequeueBuffer(void *handle, struct ap_buffer_s **lbuffer)
+{
+  BtifAvrcpAudioTrack *priv = (BtifAvrcpAudioTrack *)handle;
+  struct ap_buffer_s *buffer = NULL;
+  int i = 0;
+  int ret;
+
+  while (1) {
+    ret = BtifAvrcpAudioTrackGetBuffer(priv, &buffer);
+    if (ret == -EAGAIN || !buffer) {
+      if (i++ > MAX_RETRY) {
+        return ret;
+      }
+      usleep(10);
+    } else if (ret)
+      return ret;
+    else
+      break;
+  }
+
+  buffer->nbytes = 0;
+  *lbuffer = buffer;
+
+  return 0;
 }
 
 int BtifAvrcpAudioTrackWriteData(void *handle, void *audioBuffer, int bufferLength)
@@ -302,54 +306,43 @@ int BtifAvrcpAudioTrackWriteData(void *handle, void *audioBuffer, int bufferLeng
   BtifAvrcpAudioTrack *priv = (BtifAvrcpAudioTrack *)handle;
   struct audio_buf_desc_s desc;
   struct ap_buffer_s *abuffer;
-  int expect, avail;
-  int i = 0;
+  int remain = bufferLength;
+  int avail;
   int ret;
 
   if (!priv || priv->fd < 0)
     return -1;
 
-  if (!priv->lbuffer) {
-    while (1) {
-      ret = BtifAvrcpAudioTrackGetBuffer(priv, &priv->lbuffer);
-      if (ret == -EAGAIN || !priv->lbuffer) {
-        if (i++ > MAX_RETRY) {
-          return ret;
-        }
-        usleep(10);
-      } else if (ret)
+  while (remain > 0) {
+    if (!priv->lbuffer) {
+      ret = BtifAvrcpAudioTrackDequeueBuffer(handle, &priv->lbuffer);
+      if (ret < 0)
         return ret;
-      else
-        break;
     }
-    priv->lbuffer->nbytes = 0;
+
+    abuffer = priv->lbuffer;
+    avail = abuffer->nmaxbytes - abuffer->nbytes;
+    if (avail >= remain) {
+      memcpy(abuffer->samp + abuffer->nbytes,
+          (char *)audioBuffer + (bufferLength - remain), remain);
+      abuffer->nbytes += remain;
+      remain = 0;
+    } else {
+      memcpy(abuffer->samp + abuffer->nbytes,
+          (char *)audioBuffer + (bufferLength - remain), avail);
+      abuffer->nbytes += avail;
+      remain -= avail;
+    }
+
+    if (abuffer->nmaxbytes == abuffer->nbytes) {
+      desc.u.buffer = abuffer;
+      ret = ioctl(priv->fd, AUDIOIOC_ENQUEUEBUFFER, (unsigned long)&desc);
+      if (ret < 0)
+        break;
+
+      priv->lbuffer = NULL;
+    }
   }
 
-  abuffer = priv->lbuffer;
-
-  if (priv->cache_size) {
-    memcpy(abuffer->samp, priv->cache, priv->cache_size);
-    abuffer->nbytes = priv->cache_size;
-    priv->cache_size = 0;
-  }
-
-  avail = abuffer->nmaxbytes - abuffer->nbytes;
-
-  if (avail >= bufferLength) {
-    memcpy(abuffer->samp + abuffer->nbytes, audioBuffer, bufferLength);
-    abuffer->nbytes += bufferLength;
-  } else {
-    memcpy(abuffer->samp + abuffer->nbytes, audioBuffer, avail);
-    abuffer->nbytes += avail;
-    priv->cache_size = bufferLength - avail;
-    memcpy(priv->cache, (uint8_t *)audioBuffer + avail, priv->cache_size);
-  }
-
-  if (abuffer->nmaxbytes != abuffer->nbytes)
-    return 0;
-
-  desc.u.buffer = abuffer;
-  priv->lbuffer = NULL;
-
-  return ioctl(priv->fd, AUDIOIOC_ENQUEUEBUFFER, (unsigned long)&desc);
+  return ret;
 }
