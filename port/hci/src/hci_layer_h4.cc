@@ -222,18 +222,18 @@ static void *h4_rx_thread(void *arg)
 
 void hci_transmit(BT_HDR* packet)
 {
-  uint8_t event;
+  uint8_t type;
   int ret;
 
-  switch (packet->event) {
+  switch (packet->event & MSG_EVT_MASK) {
     case MSG_STACK_TO_HC_HCI_CMD:
-      event = HCI_PACKET_TYPE_COMMAND;
+      type = HCI_PACKET_TYPE_COMMAND;
       break;
     case MSG_STACK_TO_HC_HCI_ACL:
-      event = HCI_PACKET_TYPE_ACL_DATA;
+      type = HCI_PACKET_TYPE_ACL_DATA;
       break;
     case MSG_STACK_TO_HC_HCI_ISO:
-      event = HCI_PACKET_TYPE_ISO_DATA;
+      type = HCI_PACKET_TYPE_ISO_DATA;
       break;
     default:
       return;
@@ -241,13 +241,13 @@ void hci_transmit(BT_HDR* packet)
 
   pthread_mutex_lock(&g_mutex);
 
-  ret = h4_send_data(&event, 1);
+  ret = h4_send_data(&type, 1);
   if (ret != 1) {
     pthread_mutex_unlock(&g_mutex);
     return;
   }
 
-  h4_data_dump("W", event, packet->data + packet->offset, packet->len);
+  h4_data_dump("W", type, packet->data + packet->offset, packet->len);
 
   ret = h4_send_data(packet->data + packet->offset, packet->len);
   if (ret != packet->len)
