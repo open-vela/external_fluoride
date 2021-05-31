@@ -218,9 +218,11 @@ class BleAdvertisingManagerImpl
                                   base::DoNothing());
           }
 
+          uint8_t inst_id = p_inst->inst_id;
+
           /* set it to controller */
           hci_interface->SetRandomAddress(
-              p_inst->inst_id, bda,
+              inst_id, bda,
               Bind(
                   [](AdvertisingInstance* p_inst, RawAddress bda,
                      MultiAdvCb configuredCb, uint8_t status) {
@@ -306,11 +308,12 @@ class BleAdvertisingManagerImpl
     c->inst_id = advertiser_id;
 
     using c_type = std::unique_ptr<CreatorParams>;
+    uint8_t inst_id = c->inst_id;
 
     // this code is intentionally left formatted this way to highlight the
     // asynchronous flow
     // clang-format off
-    c->self->SetParameters(c->inst_id, &c->params, Bind(
+    c->self->SetParameters(inst_id, params, Bind(
       [](c_type c, uint8_t status, int8_t tx_power) {
         if (!c->self) {
           LOG(INFO) << "Stack was shut down";
@@ -326,7 +329,8 @@ class BleAdvertisingManagerImpl
         c->self->adv_inst[c->inst_id].tx_power = tx_power;
 
         const RawAddress& rpa = c->self->adv_inst[c->inst_id].own_address;
-        c->self->GetHciInterface()->SetRandomAddress(c->inst_id, rpa, Bind(
+        uint8_t inst_id = c->inst_id;
+        c->self->GetHciInterface()->SetRandomAddress(inst_id, rpa, Bind(
           [](c_type c, uint8_t status) {
             if (!c->self) {
               LOG(INFO) << "Stack was shut down";
@@ -339,7 +343,10 @@ class BleAdvertisingManagerImpl
               return;
             }
 
-            c->self->SetData(c->inst_id, false, std::move(c->advertise_data), Bind(
+            std::vector<uint8_t> data = std::move(c->advertise_data);
+            uint8_t inst_id = c->inst_id;
+
+            c->self->SetData(inst_id, false, data, Bind(
               [](c_type c, uint8_t status) {
                 if (!c->self) {
                   LOG(INFO) << "Stack was shut down";
@@ -352,7 +359,10 @@ class BleAdvertisingManagerImpl
                   return;
                 }
 
-                c->self->SetData(c->inst_id, true, std::move(c->scan_response_data), Bind(
+                std::vector<uint8_t> data = std::move(c->scan_response_data);
+                uint8_t inst_id = c->inst_id;
+
+                c->self->SetData(inst_id, true, data, Bind(
                   [](c_type c, uint8_t status) {
                     if (!c->self) {
                       LOG(INFO) << "Stack was shut down";
@@ -412,8 +422,9 @@ class BleAdvertisingManagerImpl
         }
 
         c->inst_id = advertiser_id;
+        tBTM_BLE_ADV_PARAMS* params = &c->params;
 
-        c->self->SetParameters(c->inst_id, &c->params, Bind(
+        c->self->SetParameters(advertiser_id, params, Bind(
           [](c_type c, uint8_t status, int8_t tx_power) {
             if (!c->self) {
               LOG(INFO) << "Stack was shut down";
@@ -437,7 +448,8 @@ class BleAdvertisingManagerImpl
 
             //own_address_type == BLE_ADDR_RANDOM
             const RawAddress& rpa = c->self->adv_inst[c->inst_id].own_address;
-            c->self->GetHciInterface()->SetRandomAddress(c->inst_id, rpa, Bind(
+            uint8_t inst_id = c->inst_id;
+            c->self->GetHciInterface()->SetRandomAddress(inst_id, rpa, Bind(
               [](c_type c, uint8_t status) {
                 if (!c->self) {
                   LOG(INFO) << "Stack was shut down";
@@ -460,8 +472,10 @@ class BleAdvertisingManagerImpl
   }
 
   void StartAdvertisingSetAfterAddressPart(c_type c) {
+    uint8_t inst_id = c->inst_id;
+    std::vector<uint8_t> data = std::move(c->advertise_data);
     c->self->SetData(
-        c->inst_id, false, std::move(c->advertise_data),
+        inst_id, false, data,
         Bind(
             [](c_type c, uint8_t status) {
               if (!c->self) {
@@ -477,8 +491,10 @@ class BleAdvertisingManagerImpl
                 return;
               }
 
+              std::vector<uint8_t> data = std::move(c->scan_response_data);
+              uint8_t inst_id = c->inst_id;
               c->self->SetData(
-                  c->inst_id, true, std::move(c->scan_response_data),
+                  inst_id, true, data,
                   Bind(
                       [](c_type c, uint8_t status) {
                         if (!c->self) {
@@ -511,7 +527,9 @@ class BleAdvertisingManagerImpl
     // this code is intentionally left formatted this way to highlight the
     // asynchronous flow
     // clang-format off
-    c->self->SetPeriodicAdvertisingParameters(c->inst_id, &c->periodic_params, Bind(
+    tBLE_PERIODIC_ADV_PARAMS *params = &c->periodic_params;
+    uint8_t inst_id = c->inst_id;
+    c->self->SetPeriodicAdvertisingParameters(inst_id, params, Bind(
       [](c_type c, uint8_t status) {
         if (!c->self) {
           LOG(INFO) << "Stack was shut down";
@@ -525,7 +543,9 @@ class BleAdvertisingManagerImpl
           return;
         }
 
-        c->self->SetPeriodicAdvertisingData(c->inst_id, std::move(c->periodic_data), Bind(
+        std::vector<uint8_t> data = std::move(c->periodic_data);
+        uint8_t inst_id = c->inst_id;
+        c->self->SetPeriodicAdvertisingData(inst_id, data, Bind(
           [](c_type c, uint8_t status) {
             if (!c->self) {
               LOG(INFO) << "Stack was shut down";
@@ -539,7 +559,8 @@ class BleAdvertisingManagerImpl
               return;
             }
 
-            c->self->SetPeriodicAdvertisingEnable(c->inst_id, true, Bind(
+            uint8_t inst_id = c->inst_id;
+            c->self->SetPeriodicAdvertisingEnable(inst_id, true, Bind(
               [](c_type c, uint8_t status) {
                 if (!c->self) {
                   LOG(INFO) << "Stack was shut down";
