@@ -136,15 +136,7 @@ static void ssp_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32
 
 static void bond_state_changed(bt_status_t status, RawAddress *remote_bd_addr, bt_bond_state_t state)
 {
-  struct fluoride_s *flrd = fluoride_interface_get();
-  bt_property_t *property;
-
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
-  if (state == BT_BOND_STATE_BONDED) {
-    property = property_new_scan_mode(BT_SCAN_MODE_NONE);
-    flrd->interface->set_adapter_property(property);
-    property_free(property);
-  }
 }
 
 static void acl_state_changed(bt_status_t status, RawAddress *remote_bd_addr, bt_acl_state_t state)
