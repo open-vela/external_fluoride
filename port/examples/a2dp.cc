@@ -44,8 +44,10 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
     property = property_new_scan_mode(BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
     flrd->interface->set_adapter_property(property);
     property_free(property);
-  } else if (state == BTAV_CONNECTION_STATE_CONNECTED ||
-      state == BTAV_CONNECTION_STATE_CONNECTING) {
+  } else if (state == BTAV_CONNECTION_STATE_CONNECTED) {
+    property = property_new_scan_mode(BT_SCAN_MODE_NONE);
+    flrd->interface->set_adapter_property(property);
+    property_free(property);
     flrd->addr = bd_addr;
   }
 }
