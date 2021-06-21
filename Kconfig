@@ -291,6 +291,10 @@ config SC_MODE_INCLUDED
   help
     The option of 4.1/4.2 secure connections feature
 
+config AVRCP_DEFAULT_VERSION
+  string "Fluoride default AVRCP Version"
+  default "avrcp13"
+
 config FLUORIDE_EXAMPLES
   bool "Enable Fluoride Examples"
   default n
