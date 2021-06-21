@@ -268,6 +268,9 @@ static int fluoride_command_disconnect(struct fluoride_s *flrd, int argc, char *
   if (flrd->sink)
     flrd->sink->disconnect(flrd->addr);
 
+  if (flrd->hfc)
+    flrd->hfc->disconnect(&flrd->addr);
+
   return 0;
 }
 
