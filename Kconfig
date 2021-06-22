@@ -317,6 +317,8 @@ config FLUORIDE_EXAMPLES_A2DP_SINK
   help
     Enable Fluoride A2DP Sink Example
 
+endif
+
 if AUDIO
 
 choice
@@ -348,7 +350,7 @@ config CODEC_SBC
   default n
 
 endif
-endif
+
 endif
 
 endmenu
