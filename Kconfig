@@ -300,6 +300,12 @@ config FLUORIDE_EXAMPLES
 
 if FLUORIDE_EXAMPLES
 
+config FLUORIDE_EXAMPLES_STACKSIZE
+  int "Fluoride example stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Fluoride example stack size.
+
 config FLUORIDE_EXAMPLES_A2DP_SINK
   bool "Enable Fluoride A2DP Sink Example"
   default y
