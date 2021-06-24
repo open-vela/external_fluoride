@@ -85,7 +85,11 @@ typedef struct {
 #define STRING_VALUE_OF(x) #x
 
 // Abort if there is no response to an HCI command.
+#ifndef CONFIG_FLUORIDE_COMMAND_PENDING_TIMEOUT_MS
 static const uint32_t COMMAND_PENDING_TIMEOUT_MS = 2000;
+#else
+static const uint32_t COMMAND_PENDING_TIMEOUT_MS = CONFIG_FLUORIDE_COMMAND_PENDING_TIMEOUT_MS;
+#endif
 static const uint32_t COMMAND_PENDING_MUTEX_ACQUIRE_TIMEOUT_MS = 500;
 static const uint32_t COMMAND_TIMEOUT_RESTART_MS = 5000;
 static const uint32_t ROOT_INFLAMMED_RESTART_MS = 5000;
