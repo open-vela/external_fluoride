@@ -317,9 +317,17 @@ config FLUORIDE_EXAMPLES_A2DP_SINK
   help
     Enable Fluoride A2DP Sink Example
 
-endif
+config FLUORIDE_EXAMPLES_A2DP_SOURCE
+  bool "Enable Fluoride A2DP SOURCE Example"
+  default y
+  help
+    Enable Fluoride A2DP SOURCE Example
 
-if AUDIO
+if AUDIO && FLUORIDE_EXAMPLES_A2DP_SINK
+
+config CODEC_SBC
+  bool "Fluoride A2DP sink SBC codec"
+  default n
 
 choice
   prompt "Enable Fluoride A2DP Sink"
@@ -345,9 +353,7 @@ config FLUORIDE_A2DP_SINK_DEVNAME
 
 endif
 
-config CODEC_SBC
-  bool "Fluoride A2DP sink SBC codec"
-  default n
+endif
 
 endif
 

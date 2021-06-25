@@ -110,13 +110,14 @@ typedef struct {
 
 static tA2DP_SBC_ENCODER_CB a2dp_sbc_encoder_cb;
 
-#ifdef CONFIG_CODEC_SBC
 static void a2dp_sbc_encoder_update(uint16_t peer_mtu,
                                     A2dpCodecConfig* a2dp_codec_config,
                                     bool* p_restart_input,
                                     bool* p_restart_output,
                                     bool* p_config_updated);
+#ifdef CONFIG_CODEC_SBC
 static bool a2dp_sbc_read_feeding(uint32_t* bytes);
+#endif
 static void a2dp_sbc_encode_frames(uint8_t nb_frame);
 static void a2dp_sbc_get_num_frame_iteration(uint8_t* num_of_iterations,
                                              uint8_t* num_of_frames,
@@ -124,7 +125,6 @@ static void a2dp_sbc_get_num_frame_iteration(uint8_t* num_of_iterations,
 static uint8_t calculate_max_frames_per_packet(void);
 static uint16_t a2dp_sbc_source_rate(void);
 static uint32_t a2dp_sbc_frame_length(void);
-#endif
 
 bool A2DP_LoadEncoderSbc(void) {
   // Nothing to do - the library is statically linked
@@ -139,7 +139,6 @@ void a2dp_sbc_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
                            A2dpCodecConfig* a2dp_codec_config,
                            a2dp_source_read_callback_t read_callback,
                            a2dp_source_enqueue_callback_t enqueue_callback) {
-#ifdef CONFIG_CODEC_SBC
   memset(&a2dp_sbc_encoder_cb, 0, sizeof(a2dp_sbc_encoder_cb));
 
   a2dp_sbc_encoder_cb.stats.session_start_us =
@@ -159,13 +158,11 @@ void a2dp_sbc_encoder_init(const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params,
   bool config_updated = false;
   a2dp_sbc_encoder_update(a2dp_sbc_encoder_cb.peer_mtu, a2dp_codec_config,
                           &restart_input, &restart_output, &config_updated);
-#endif
 }
 
 bool A2dpCodecConfigSbcSource::updateEncoderUserConfig(
     const tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params, bool* p_restart_input,
     bool* p_restart_output, bool* p_config_updated) {
-#ifdef CONFIG_CODEC_SBC
   a2dp_sbc_encoder_cb.is_peer_edr = p_peer_params->is_peer_edr;
   a2dp_sbc_encoder_cb.peer_supports_3mbps = p_peer_params->peer_supports_3mbps;
   a2dp_sbc_encoder_cb.peer_mtu = p_peer_params->peer_mtu;
@@ -181,11 +178,9 @@ bool A2dpCodecConfigSbcSource::updateEncoderUserConfig(
 
   a2dp_sbc_encoder_update(a2dp_sbc_encoder_cb.peer_mtu, this, p_restart_input,
                           p_restart_output, p_config_updated);
-#endif
   return true;
 }
 
-#ifdef CONFIG_CODEC_SBC
 // Update the A2DP SBC encoder.
 // |peer_mtu| is the peer MTU.
 // |a2dp_codec_config| is the A2DP codec to use for the update.
@@ -369,21 +364,18 @@ static void a2dp_sbc_encoder_update(uint16_t peer_mtu,
 
   LOG_INFO("%s: final bit rate %d, final bit pool %d", __func__,
            p_encoder_params->u16BitRate, p_encoder_params->s16BitPool);
-
+#ifdef CONFIG_CODEC_SBC
   /* Reset the SBC encoder */
   SBC_Encoder_Init(&a2dp_sbc_encoder_cb.sbc_encoder_params);
+#endif
   a2dp_sbc_encoder_cb.tx_sbc_frames = calculate_max_frames_per_packet();
 }
-#endif
 
 void a2dp_sbc_encoder_cleanup(void) {
-#ifdef CONFIG_CODEC_SBC
   memset(&a2dp_sbc_encoder_cb, 0, sizeof(a2dp_sbc_encoder_cb));
-#endif
 }
 
 void a2dp_sbc_feeding_reset(void) {
-#ifdef CONFIG_CODEC_SBC
   /* By default, just clear the entire state */
   memset(&a2dp_sbc_encoder_cb.feeding_state, 0,
          sizeof(a2dp_sbc_encoder_cb.feeding_state));
@@ -397,14 +389,11 @@ void a2dp_sbc_feeding_reset(void) {
 
   LOG_INFO("%s: PCM bytes per tick %u", __func__,
            a2dp_sbc_encoder_cb.feeding_state.bytes_per_tick);
-#endif
 }
 
 void a2dp_sbc_feeding_flush(void) {
-#ifdef CONFIG_CODEC_SBC
   a2dp_sbc_encoder_cb.feeding_state.counter = 0;
   a2dp_sbc_encoder_cb.feeding_state.aa_feed_residue = 0;
-#endif
 }
 
 uint64_t a2dp_sbc_get_encoder_interval_ms(void) {
@@ -412,7 +401,6 @@ uint64_t a2dp_sbc_get_encoder_interval_ms(void) {
 }
 
 void a2dp_sbc_send_frames(uint64_t timestamp_us) {
-#ifdef CONFIG_CODEC_SBC
   uint8_t nb_frame = 0;
   uint8_t nb_iterations = 0;
 
@@ -425,10 +413,8 @@ void a2dp_sbc_send_frames(uint64_t timestamp_us) {
     // Transcode frame and enqueue
     a2dp_sbc_encode_frames(nb_frame);
   }
-#endif
 }
 
-#ifdef CONFIG_CODEC_SBC
 // Obtains the number of frames to send and number of iterations
 // to be used. |num_of_iterations| and |num_of_frames| parameters
 // are used as output param for returning the respective values.
@@ -561,6 +547,7 @@ static void a2dp_sbc_encode_frames(uint8_t nb_frame) {
     a2dp_sbc_encoder_cb.stats.media_read_total_expected_packets++;
 
     do {
+#ifdef CONFIG_CODEC_SBC
       /* Fill allocated buffer with 0 */
       memset(a2dp_sbc_encoder_cb.pcmBuffer, 0,
              blocm_x_subband * p_encoder_params->s16NumOfChannels);
@@ -572,14 +559,20 @@ static void a2dp_sbc_encode_frames(uint8_t nb_frame) {
         uint8_t* output = (uint8_t*)(p_buf + 1) + p_buf->offset + p_buf->len;
         int16_t* input = a2dp_sbc_encoder_cb.pcmBuffer;
         uint16_t output_len = SBC_Encode(p_encoder_params, input, output);
+        bytes_read += num_bytes;
+#else
+      /* Read encoded SBC data from UIPC socket */
+      uint8_t* output = (uint8_t*)(p_buf + 1) + p_buf->offset + p_buf->len;
+      uint32_t frame_len = a2dp_sbc_frame_length() + 1;
+      uint16_t output_len = a2dp_sbc_encoder_cb.read_callback((uint8_t*)output, frame_len);
+      if (output_len) {
         last_frame_len = output_len;
-
+        bytes_read += output_len;
+#endif
         /* Update SBC frame length */
         p_buf->len += output_len;
         nb_frame--;
         p_buf->layer_specific++;
-
-        bytes_read += num_bytes;
       } else {
         LOG_WARN("%s: underflow %d, %d", __func__, nb_frame,
                  a2dp_sbc_encoder_cb.feeding_state.aa_feed_residue);
@@ -615,7 +608,7 @@ static void a2dp_sbc_encode_frames(uint8_t nb_frame) {
     }
   }
 }
-
+#ifdef CONFIG_CODEC_SBC
 static bool a2dp_sbc_read_feeding(uint32_t* bytes_read) {
   SBC_ENC_PARAMS* p_encoder_params = &a2dp_sbc_encoder_cb.sbc_encoder_params;
   uint16_t blocm_x_subband =
@@ -773,6 +766,7 @@ static bool a2dp_sbc_read_feeding(uint32_t* bytes_read) {
   }
   return true;
 }
+#endif
 
 static uint8_t calculate_max_frames_per_packet(void) {
   uint16_t result = 0;
@@ -915,7 +909,6 @@ static uint32_t a2dp_sbc_frame_length(void) {
   LOG_VERBOSE("%s: calculated frame length: %d", __func__, frame_len);
   return frame_len;
 }
-#endif
 
 uint32_t a2dp_sbc_get_bitrate() {
   SBC_ENC_PARAMS* p_encoder_params = &a2dp_sbc_encoder_cb.sbc_encoder_params;
