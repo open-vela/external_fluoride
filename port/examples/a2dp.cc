@@ -40,16 +40,30 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
   bt_property_t *property;
 
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
+
   if (state == BTAV_CONNECTION_STATE_DISCONNECTED) {
     property = property_new_scan_mode(BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
     flrd->interface->set_adapter_property(property);
     property_free(property);
+
+    if (flrd->source)
+      flrd->source->set_active_device(RawAddress::kEmpty);
+
+    if (flrd->sink)
+      flrd->sink->set_active_device(RawAddress::kEmpty);
+
   } else if (state == BTAV_CONNECTION_STATE_CONNECTED) {
-    flrd->sink->set_active_device(bd_addr);
     property = property_new_scan_mode(BT_SCAN_MODE_NONE);
     flrd->interface->set_adapter_property(property);
     property_free(property);
+
     flrd->addr = bd_addr;
+
+    if (flrd->source)
+      flrd->source->set_active_device(bd_addr);
+
+    if (flrd->sink)
+      flrd->sink->set_active_device(bd_addr);
   }
 }
 
@@ -87,4 +101,42 @@ const btav_sink_interface_t *bt_profile_a2dp_sink_init(struct fluoride_s *flrd)
   sink->set_audio_focus_state(BTIF_A2DP_SINK_FOCUS_GRANTED);
 
   return sink;
+}
+
+/** BT-AV A2DP Source callback structure. */
+
+static void bta2dp_audio_source_config_callback(const RawAddress& bd_addr,
+    btav_a2dp_codec_config_t codec_config,
+    std::vector<btav_a2dp_codec_config_t> codecs_local_capabilities,
+    std::vector<btav_a2dp_codec_config_t> codecs_selectable_capabilities) TRACE_CALLBACK_BODY
+
+static bool bta2dp_mandatory_codec_preferred_callback( const RawAddress& bd_addr)
+{
+  LOG_SAMPLES("UNIMPLEMENTED: %s: %d\n", __func__, __LINE__);
+  return true;
+}
+
+static btav_source_callbacks_t sSourceBluetoothA2dpCallbacks =
+{
+  sizeof(sSourceBluetoothA2dpCallbacks),
+  bta2dp_connection_state_callback,
+  bta2dp_audio_state_callback,
+  bta2dp_audio_source_config_callback,
+  bta2dp_mandatory_codec_preferred_callback,
+};
+
+const btav_source_interface_t *bt_profile_a2dp_source_init(struct fluoride_s *flrd)
+{
+  std::vector<btav_a2dp_codec_config_t> priorities;
+  std::vector<btav_a2dp_codec_config_t> offloading;
+  const btav_source_interface_t *source;
+
+  source = (const btav_source_interface_t *)
+    flrd->interface->get_profile_interface(BT_PROFILE_ADVANCED_AUDIO_ID);
+  if (source == NULL)
+    return source;
+
+  source->init(&sSourceBluetoothA2dpCallbacks, 1, priorities, offloading);
+
+  return source;
 }

@@ -212,22 +212,21 @@ static void btif_a2dp_recv_ctrl_data(void) {
 
     case A2DP_CTRL_GET_OUTPUT_AUDIO_CONFIG: {
       btav_a2dp_codec_config_t codec_config;
-      btav_a2dp_codec_config_t codec_capability;
+      codec_config.codec_type = BTAV_A2DP_CODEC_INDEX_SOURCE_MIN;
       codec_config.sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_NONE;
       codec_config.bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_NONE;
       codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
-      codec_capability.sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_NONE;
-      codec_capability.bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_NONE;
-      codec_capability.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
 
       A2dpCodecConfig* current_codec = bta_av_get_a2dp_current_codec();
       if (current_codec != nullptr) {
         codec_config = current_codec->getCodecConfig();
-        codec_capability = current_codec->getCodecCapability();
       }
-
+      uint32_t bit_rate = current_codec->getTrackBitRate();
       btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
       // Send the current codec config
+      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+                reinterpret_cast<const uint8_t*>(&codec_config.codec_type),
+                sizeof(btav_a2dp_codec_sample_rate_t));
       UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
                 reinterpret_cast<const uint8_t*>(&codec_config.sample_rate),
                 sizeof(btav_a2dp_codec_sample_rate_t));
@@ -237,18 +236,9 @@ static void btif_a2dp_recv_ctrl_data(void) {
       UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
                 reinterpret_cast<const uint8_t*>(&codec_config.channel_mode),
                 sizeof(btav_a2dp_codec_channel_mode_t));
-      // Send the current codec capability
       UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
-                reinterpret_cast<const uint8_t*>(&codec_capability.sample_rate),
-                sizeof(btav_a2dp_codec_sample_rate_t));
-      UIPC_Send(
-          *a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
-          reinterpret_cast<const uint8_t*>(&codec_capability.bits_per_sample),
-          sizeof(btav_a2dp_codec_bits_per_sample_t));
-      UIPC_Send(
-          *a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
-          reinterpret_cast<const uint8_t*>(&codec_capability.channel_mode),
-          sizeof(btav_a2dp_codec_channel_mode_t));
+                reinterpret_cast<const uint8_t*>(&bit_rate),
+                sizeof(uint32_t));
       break;
     }
 
