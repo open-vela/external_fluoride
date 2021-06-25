@@ -114,6 +114,7 @@ const btgatt_interface_t      *bt_profile_gatt_init(struct fluoride_s *flrd);
 const btrc_ctrl_interface_t   *bt_profile_avrcp_control_init(struct fluoride_s *flrd);
 const btsdp_interface_t       *bt_profile_sdp_init(struct fluoride_s *flrd);
 const btav_sink_interface_t   *bt_profile_a2dp_sink_init(struct fluoride_s *flrd);
+const btav_source_interface_t *bt_profile_a2dp_source_init(struct fluoride_s *flrd);
 const btrc_interface_t        *bt_profile_avrcp_init(struct fluoride_s *flrd);
 const bthf_client_interface_t *bt_profile_handsfree_init(struct fluoride_s *flrd);
 ServiceInterface              *bt_profile_avrcp_service_init(struct fluoride_s *flrd);
