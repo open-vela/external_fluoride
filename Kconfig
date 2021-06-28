@@ -167,7 +167,7 @@ endif
 
 config FLUORIDE_LOG_LEVEL
   int "Fluoride Debug Log Level"
-  default 0
+  default 4
   help
     Sets log level for the Fluoride stack.
 
