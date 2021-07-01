@@ -661,7 +661,7 @@ static bool filter_incoming_event(BT_HDR* packet) {
 
     if (!wait_entry) {
       if (opcode != HCI_COMMAND_NONE) {
-        LOG_WARN(
+        LOG_DEBUG(
             "%s command complete event with no matching command (opcode: "
             "0x%04x).",
             __func__, opcode);
@@ -692,7 +692,7 @@ static bool filter_incoming_event(BT_HDR* packet) {
     process_command_credits(credits);
 
     if (!wait_entry) {
-      LOG_WARN(
+        LOG_DEBUG(
           "%s command status event with no matching command. opcode: 0x%04x",
           __func__, opcode);
     } else {

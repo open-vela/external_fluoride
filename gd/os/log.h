@@ -100,7 +100,7 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
 #define LOG_TRACE_TYPE_WARNING 0x00000004
 #define LOG_TRACE_TYPE_API     0x00000006
 #define LOG_TRACE_TYPE_EVENT   0x00000006
-#define LOG_TRACE_TYPE_DEBUG   0x00000006
+#define LOG_TRACE_TYPE_DEBUG   0x00000007
 #define LOG_TRACE_TYPE_VERBOSE 0x00000007
 
 #define LOG_VERBOSE(...) \
