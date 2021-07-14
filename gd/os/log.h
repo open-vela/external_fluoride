@@ -84,6 +84,7 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
     fprintf(stderr, "%s %s - %s:%d - %s: " fmt "\n", _buf, LOG_TAG, __FILE__, __LINE__, __func__, ##args);          \
   } while (false)
 #else
+#include <syslog.h>
 #define LOGWRAPPER(level, fmt, args...) syslog(level, fmt "\n", ##args)
 #endif
 
