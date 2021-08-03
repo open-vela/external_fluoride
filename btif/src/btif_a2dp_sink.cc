@@ -559,6 +559,29 @@ static void btif_a2dp_sink_handle_inc_media(BT_HDR* p_msg) {
     return;
   }
 
+#ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
+  BT_HDR* p_pkt = p_msg;
+  uint8_t* data;
+
+  if (p_pkt->len > 0 && btif_a2dp_sink_cb.ffmpeg_ready == 1) {
+    struct timespec ts_start, ts_end;
+    int consume_ms = 0;
+
+    data = p_pkt->data + p_pkt->offset;
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_pkt->len);
+    clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    consume_ms =  (ts_end.tv_sec - ts_start.tv_sec) * 1000 + \
+        (ts_end.tv_nsec - ts_start.tv_nsec)/1000000UL;
+
+    if (consume_ms > BTIF_SINK_MEDIA_TIME_TICK_MS * 25 || \
+      fixed_queue_length(btif_a2dp_sink_cb.rx_audio_queue) > 25) {
+        LOG_WARN("%s: consume:%d ms, flush queue", __func__, consume_ms);
+      fixed_queue_flush(btif_a2dp_sink_cb.rx_audio_queue, osi_free);
+    }
+  }
+  return;
+#endif
   CHECK(btif_a2dp_sink_cb.decoder_interface != nullptr);
   if (!btif_a2dp_sink_cb.decoder_interface->decode_packet(p_msg)) {
     LOG_ERROR("%s: decoding failed", __func__);
@@ -686,16 +709,11 @@ static void btif_a2dp_sink_decoder_update_event(
 
 uint8_t btif_a2dp_sink_enqueue_buf(BT_HDR* p_pkt) {
   LockGuard lock(g_mutex);
-  uint8_t* data;
 
 #ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
-  if (p_pkt->len > 0 && btif_a2dp_sink_cb.ffmpeg_ready == 1) {
-    data = p_pkt->data + p_pkt->offset;
-    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_pkt->len);
-  }
-  return 0;
+  if (p_pkt->len <= 0 || btif_a2dp_sink_cb.ffmpeg_ready != 1)
+    return 0;
 #endif
-
   if (btif_a2dp_sink_cb.rx_flush) /* Flush enabled, do not enqueue */
     return fixed_queue_length(btif_a2dp_sink_cb.rx_audio_queue);
 
