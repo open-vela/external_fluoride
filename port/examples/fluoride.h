@@ -50,6 +50,7 @@
 #include "hardware/bt_hf_client.h"
 #include "property.h"
 #include "btif_util.h"
+#include "hardware/bt_hd.h"
 
 #include <bluetooth/low_energy_constants.h>
 
@@ -81,6 +82,7 @@ struct fluoride_s
 
   const bthf_client_interface_t *hfc;
   const btgatt_interface_t      *gatt;
+  const bthd_interface_t        *hid;
 
   ServiceInterface              *avrcs;
 
@@ -115,6 +117,7 @@ const btav_sink_interface_t   *bt_profile_a2dp_sink_init(struct fluoride_s *flrd
 const btrc_interface_t        *bt_profile_avrcp_init(struct fluoride_s *flrd);
 const bthf_client_interface_t *bt_profile_handsfree_init(struct fluoride_s *flrd);
 ServiceInterface              *bt_profile_avrcp_service_init(struct fluoride_s *flrd);
+const bthd_interface_t        *bt_profile_hid_init(struct fluoride_s *flrd);
 
 struct fluoride_s             *fluoride_interface_get(void);
 int                            fluoride_shell(struct fluoride_s *flrd, int argc, char **argv);

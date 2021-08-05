@@ -51,6 +51,7 @@ static void adapter_state_changed(bt_state_t state)
   flrd->sdp   = (const btsdp_interface_t       *)bt_profile_sdp_init(flrd);
   flrd->sink  = (const btav_sink_interface_t   *)bt_profile_a2dp_sink_init(flrd);
   flrd->hfc   = (const bthf_client_interface_t *)bt_profile_handsfree_init(flrd);
+  flrd->hid   = (const bthd_interface_t        *)bt_profile_hid_init(flrd);
   flrd->avrcs = (ServiceInterface              *)bt_profile_avrcp_service_init(flrd);
 
   pthread_cond_broadcast(&flrd->cond);
