@@ -264,6 +264,7 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
   CXXSRCS  += port/examples/interface.cc
   CXXSRCS  += port/examples/sdp.cc
   CXXSRCS  += port/examples/shell.cc
+  CXXSRCS  += port/examples/hidd.cc
 ifneq ($(CONFIG_FLUORIDE_BLE_ENABLED),)
   CXXSRCS  += port/examples/gatt.cc
 endif
