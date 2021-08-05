@@ -103,6 +103,56 @@ struct passthrough_command g_passthrough_command_maps[] =
   PASSTHROUGH_COMMAND(AVRC_KEYPRESSED_RELEASE),
 };
 
+// Simplified US Keyboard with Shift modifier
+
+#define ID_KEYBOARD      1
+#define ID_MOUSE         2
+#define ID_CONTROL       3
+
+#define CHAR_ILLEGAL     0xff
+#define CHAR_RETURN     '\n'
+#define CHAR_ESCAPE      27
+#define CHAR_TAB         '\t'
+#define CHAR_BACKSPACE   0x7f
+
+static const uint8_t keytable_us_none [] = {
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /*   0-3 */
+  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',                   /*  4-13 */
+  'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',                   /* 14-23 */
+  'u', 'v', 'w', 'x', 'y', 'z',                                       /* 24-29 */
+  '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',                   /* 30-39 */
+  CHAR_RETURN, CHAR_ESCAPE, CHAR_BACKSPACE, CHAR_TAB, ' ',            /* 40-44 */
+  '-', '=', '[', ']', '\\', CHAR_ILLEGAL, ';', '\'', 0x60, ',',       /* 45-54 */
+  '.', '/', CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,   /* 55-60 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 61-64 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 65-68 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 69-72 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 73-76 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 77-80 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 81-84 */
+  '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
+  '6', '7', '8', '9', '0', '.', 0xa7,                                 /* 97-100 */
+};
+
+static const uint8_t keytable_us_shift[] = {
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /*  0-3  */
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',                   /*  4-13 */
+  'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',                   /* 14-23 */
+  'U', 'V', 'W', 'X', 'Y', 'Z',                                       /* 24-29 */
+  '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',                   /* 30-39 */
+  CHAR_RETURN, CHAR_ESCAPE, CHAR_BACKSPACE, CHAR_TAB, ' ',            /* 40-44 */
+  '_', '+', '{', '}', '|', CHAR_ILLEGAL, ':', '"', 0x7E, '<',         /* 45-54 */
+  '>', '?', CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,   /* 55-60 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 61-64 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 65-68 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 69-72 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 73-76 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 77-80 */
+  CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 81-84 */
+  '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
+  '6', '7', '8', '9', '0', '.', 0xb1,                                 /* 97-100 */
+};
+
 const bluetooth::Uuid kCCCDescriptorUuid      = bluetooth::Uuid::FromString("2902");
 const bluetooth::Uuid kHRServiceUuid          = bluetooth::Uuid::FromString("180D");
 const bluetooth::Uuid kHRMeasurementUuid      = bluetooth::Uuid::FromString("2A37");
@@ -255,6 +305,76 @@ static int fluoride_command_connect(struct fluoride_s *flrd, int argc, char **ar
   return 0;
 }
 
+static bool lookup_keycode(uint8_t character,
+                           const uint8_t *table,
+                           int size, uint8_t *keycode)
+{
+  int i;
+
+  for (i = 0; i < size; i++) {
+    if (table[i] != character)
+      continue;
+    *keycode = i;
+    return true;
+  }
+
+  return false;
+}
+
+static int fluoride_hkey(struct fluoride_s *flrd, int argc, char **argv)
+{
+  uint8_t report[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+  uint8_t code;
+  int count;
+  int i;
+
+  if (argc == 0 || strlen(argv[0]) <= 0)
+    return -1;
+
+  count = strlen(argv[0]);
+
+  for (i = 0; i < count; i++) {
+    if (lookup_keycode(argv[0][i], keytable_us_none,
+          sizeof(keytable_us_none), &code)) {
+      report[0] = 0;
+      report[3] = code;
+      flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA,
+          ID_KEYBOARD, sizeof(report), report);
+      report[3] = 0;
+      flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA,
+          ID_KEYBOARD, sizeof(report), report);
+      continue;
+    }
+
+    if (lookup_keycode(argv[0][i], keytable_us_shift,
+          sizeof(keytable_us_shift), &code)) {
+      report[0] = 2;
+      report[3] = code;
+      flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA,
+          ID_KEYBOARD, sizeof(report), report);
+      report[3] = 0;
+      flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA,
+          ID_KEYBOARD, sizeof(report), report);
+    }
+  }
+
+  return 0;
+}
+
+static int fluoride_hckey(struct fluoride_s *flrd, int argc, char **argv)
+{
+  uint8_t code;
+
+  if (argc == 0 || strlen(argv[0]) <= 0)
+    return -1;
+
+  code = atoi(argv[0]);
+
+  flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA, ID_CONTROL, 1, &code);
+
+  return 0;
+}
+
 static struct fluoride_cmd_s g_bta_cmds[] =
 {
   {
@@ -296,6 +416,19 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "playback_state",
     fluoride_command_playback_state,
     "< N/A >    ( PTS: AVRCP/CT/MDI/BV-01-C )",
+  },
+  {
+    "hkey",
+    fluoride_hkey,
+    "< string > ( HID keyboard Usage )",
+  },
+  {
+    "hckey",
+    fluoride_hckey,
+    "< value  > ( HID Control key )\n"
+    "E.G:\n"
+    "\tVoleme Up  :  16 (0x10)\n"
+    "\tVoleme Down:  32 (0x20)\n",
   },
 };
 
@@ -436,7 +569,7 @@ struct fluoride_cmd_table_s g_cmd_tables[] =
 void fluoride_shell_help(void)
 {
   struct fluoride_cmd_s *commands;
-  int i;
+  unsigned int i;
   int j;
 
   for (i = 0; i < ARRAY_SIZE(g_cmd_tables); i++) {
@@ -453,9 +586,9 @@ void fluoride_shell_help(void)
 int fluoride_shell(struct fluoride_s *flrd, int argc, char **argv)
 {
   struct fluoride_cmd_s *commands;
+  unsigned int size = 0;
   unsigned int i;
   int ret = -1;
-  int size = 0;
 
   while (!btif_is_enabled())
     usleep(100 * 1000);
