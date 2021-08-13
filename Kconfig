@@ -209,7 +209,7 @@ config HF_CLIENT_MAX_DEVICES
 
 config SDP_MAX_CONNECTIONS
   int "The maximum number of simultaneous client and server connections."
-  default 4
+  default 8
   help
     The maximum number of simultaneous client and server connections.
 
