@@ -56,7 +56,7 @@ extern std::unique_ptr<tUIPC_STATE> a2dp_uipc;
  */
 #define MAX_INPUT_A2DP_FRAME_QUEUE_SZ (MAX_PCM_FRAME_NUM_PER_TICK * 2)
 
-#define BTIF_SINK_MEDIA_TIME_TICK_MS 20
+#define BTIF_SINK_MEDIA_TIME_TICK_MS 18
 
 /* In case of A2DP Sink, we will delay start by 5 AVDTP Packets */
 #define MAX_A2DP_DELAYED_START_FRAME_COUNT 5
@@ -571,12 +571,19 @@ static void btif_a2dp_sink_handle_inc_media(BT_HDR* p_msg) {
     clock_gettime(CLOCK_MONOTONIC, &ts_start);
     UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_pkt->len);
     clock_gettime(CLOCK_MONOTONIC, &ts_end);
-    consume_ms =  (ts_end.tv_sec - ts_start.tv_sec) * 1000 + \
+
+    if ((ts_end.tv_nsec - ts_start.tv_nsec) > 0) {
+      consume_ms =  (ts_end.tv_sec - ts_start.tv_sec) * 1000 + \
         (ts_end.tv_nsec - ts_start.tv_nsec)/1000000UL;
+    } else {
+      consume_ms =  (ts_end.tv_sec - ts_start.tv_sec - 1) * 1000 + \
+        (1000000000LL + ts_end.tv_nsec - ts_start.tv_nsec)/1000000UL;
+    }
 
     if (consume_ms > BTIF_SINK_MEDIA_TIME_TICK_MS * 25 || \
       fixed_queue_length(btif_a2dp_sink_cb.rx_audio_queue) > 25) {
-        LOG_WARN("%s: consume:%d ms, flush queue", __func__, consume_ms);
+      LOG_WARN("%s: consume:%d ms, flush queue length: %d", __func__, consume_ms, \
+            fixed_queue_length(btif_a2dp_sink_cb.rx_audio_queue));
       fixed_queue_flush(btif_a2dp_sink_cb.rx_audio_queue, osi_free);
     }
   }
