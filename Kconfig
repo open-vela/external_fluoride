@@ -245,7 +245,7 @@ config SDP_MAX_RECORDS
 
 config SDP_MAX_REC_ATTR
   int "The maximum number of attributes in each record."
-  default 10
+  default 25
   help
     The maximum number of attributes in each record.
 
@@ -269,7 +269,7 @@ config BTM_SEC_MAX_DEVICE_RECORDS
 
 config BTM_SEC_MAX_SERVICE_RECORDS
   int "The number of security records for services."
-  default 8
+  default 32
   help
     The number of security records for services.
 
