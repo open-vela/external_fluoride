@@ -361,6 +361,34 @@ static int fluoride_hkey(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
+static int fluoride_hmkey(struct fluoride_s *flrd, int argc, char **argv)
+{
+  uint8_t report[] = {0, 0, 0, 0};
+
+  if (argc == 0 || strlen(argv[0]) <= 0)
+    return -1;
+
+  report[0] = atoi(argv[0]);
+  for (int i = 1; i < argc; i++) {
+    if (strlen(argv[i]) <= 0)
+      return -1;
+
+    if (atoi(argv[i]) > 127)
+      report[i] = 127;
+    else if (atoi(argv[i]) < -127)
+      report[i] = -127;
+    else
+      report[i] = atoi(argv[i]);
+
+    if (atoi(argv[i]) < 0)
+      report[i] |= 0x80;
+  }
+
+  flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA, ID_MOUSE, sizeof(report), report);
+
+  return 0;
+}
+
 static int fluoride_hckey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t code;
@@ -421,6 +449,18 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "hkey",
     fluoride_hkey,
     "< string > ( HID keyboard Usage )",
+  },
+  {
+    "hmkey",
+    fluoride_hmkey,
+    "< value... > ( HID mouse Usage )\n"
+    "E.G:\n"
+    "\tLeftmouse press  :  1\n"
+    "\tRightmouse press :  2\n"
+    "\tMiddlemouse press:  4\n"
+    "\tMove left 20 unit:  0 -20\n"
+    "\tMove down 20 unit:  0 0 20\n"
+    "\tRoller up 20 unit:  0 0 0 -20\n",
   },
   {
     "hckey",
