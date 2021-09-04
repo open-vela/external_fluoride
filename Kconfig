@@ -233,6 +233,12 @@ config BTA_AV_SINK_INCLUDED
   help
     Enable Fluoride A2DP Sink SDP
 
+config BTA_AV_RC_DISC_TIME_VAL
+  int "Avrcp discovery timeout value"
+  default 2500
+  help
+    Set avrcp discovery timeout value
+
 config GATT_CL_MAX_LCB
   int "Max GATT CL LCB"
   default 8
