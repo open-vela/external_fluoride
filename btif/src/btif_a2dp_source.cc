@@ -332,6 +332,7 @@ bool btif_a2dp_source_init(void) {
   btif_a2dp_source_thread.StartUp();
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_init_delayed));
+  btif_a2dp_control_init();
   return true;
 }
 
@@ -370,7 +371,6 @@ static void btif_a2dp_source_startup_delayed() {
       LOG(WARNING) << __func__ << ": Using BluetoothA2dp HAL";
     } else {
       LOG(WARNING) << __func__ << ": Using legacy HAL";
-      btif_a2dp_control_init();
     }
   }
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateRunning);
@@ -397,6 +397,7 @@ bool btif_a2dp_source_start_session(const RawAddress& peer_address,
 
 static void btif_a2dp_source_start_session_delayed(
     const RawAddress& peer_address, std::promise<void> peer_ready_promise) {
+  const uint8_t ack = A2DP_CTRL_ACK_SUCCESS;
   LOG(INFO) << __func__ << ": peer_address=" << peer_address
             << " state=" << btif_a2dp_source_cb.StateStr();
   if (btif_a2dp_source_cb.State() != BtifA2dpSource::kStateRunning) {
@@ -417,6 +418,7 @@ static void btif_a2dp_source_start_session_delayed(
         bluetooth::common::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
   }
   peer_ready_promise.set_value();
+  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, &ack, sizeof(ack));
 }
 
 bool btif_a2dp_source_restart_session(const RawAddress& old_peer_address,
@@ -512,8 +514,6 @@ static void btif_a2dp_source_shutdown_delayed(void) {
   } else if (btif_av_is_a2dp_offload_enabled()) {
     // TODO: BluetoothA2dp@1.0 is deprecated
     btif_a2dp_audio_interface_end_session();
-  } else {
-    btif_a2dp_control_cleanup();
   }
   fixed_queue_free(btif_a2dp_source_cb.tx_audio_queue, nullptr);
   btif_a2dp_source_cb.tx_audio_queue = nullptr;
