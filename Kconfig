@@ -26,6 +26,7 @@ menuconfig LIB_FLUORIDE
   select DEV_URANDOM_RANDOM_POOL
   select LIB_CHROMIUM
   select LIB_TINYXML2
+  select LIBC_SCANSET
   help
     Enable support for the Fluoride Bluetooth stack
 
