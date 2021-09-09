@@ -128,7 +128,7 @@ static void btif_a2dp_recv_ctrl_data(void) {
       if (btif_a2dp_source_is_streaming()) {
         APPL_TRACE_WARNING("%s: A2DP command %s while source is streaming",
                            __func__, audio_a2dp_hw_dump_ctrl_event(cmd));
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
         break;
       }
 
@@ -218,9 +218,11 @@ static void btif_a2dp_recv_ctrl_data(void) {
       codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
 
       A2dpCodecConfig* current_codec = bta_av_get_a2dp_current_codec();
-      if (current_codec != nullptr) {
-        codec_config = current_codec->getCodecConfig();
+      if (current_codec == nullptr) {
+        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        break;
       }
+      codec_config = current_codec->getCodecConfig();
       uint32_t bit_rate = current_codec->getTrackBitRate();
       btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
       // Send the current codec config
@@ -372,11 +374,6 @@ static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
                  UIPC_REG_REMOVE_ACTIVE_READSET, NULL);
       UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_SET_READ_POLL_TMO,
                  reinterpret_cast<void*>(A2DP_DATA_READ_POLL_MS));
-
-      if (btif_av_get_peer_sep() == AVDT_TSEP_SNK) {
-        /* Start the media task to encode the audio */
-        btif_a2dp_source_start_audio_req();
-      }
 
       /* ACK back when media task is fully started */
       break;
