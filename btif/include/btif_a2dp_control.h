@@ -21,18 +21,19 @@
 #define BTIF_A2DP_CONTROL_H
 
 #include "audio_a2dp_hw/include/audio_a2dp_hw.h"
+#include "uipc.h"
 
 // Initialize the A2DP control module. It should be called during the
 // startup stage of A2DP streaming.
-void btif_a2dp_control_init(void);
+void btif_a2dp_control_init(tUIPC_CH_ID ctrl_id, tUIPC_CH_ID data_id);
 
 // Cleanup the A2DP control module. It should be called during the shutdown
 // stage of A2DP streaming.
-void btif_a2dp_control_cleanup(void);
+void btif_a2dp_control_cleanup(tUIPC_CH_ID data_id);
 
 // Acknowledge A2DP command to the origin of audio streaming.
 // |status| is the acknowledement status - see |tA2DP_CTRL_ACK|.
-void btif_a2dp_command_ack(tA2DP_CTRL_ACK status);
+void btif_a2dp_command_ack(tUIPC_CH_ID ch_id, tA2DP_CTRL_ACK status);
 
 // Increment the total number audio data bytes that have been encoded since
 // last encoding attempt.

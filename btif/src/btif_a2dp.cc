@@ -48,6 +48,7 @@ void btif_a2dp_on_idle(void) {
 
 bool btif_a2dp_on_started(const RawAddress& peer_addr, tBTA_AV_START* p_av_start) {
   LOG(INFO) << __func__ << ": ## ON A2DP STARTED ## peer " << peer_addr << " p_av_start:" << p_av_start;
+  uint8_t type = btif_av_get_peer_sep();
 
   if (p_av_start == NULL) {
     tA2DP_CTRL_ACK status = A2DP_CTRL_ACK_SUCCESS;
@@ -63,7 +64,10 @@ bool btif_a2dp_on_started(const RawAddress& peer_addr, tBTA_AV_START* p_av_start
       // TODO: BluetoothA2dp@1.0 is deprecated
       btif_a2dp_audio_on_started(status);
     } else {
-      btif_a2dp_command_ack(status);
+      if (type == AVDT_TSEP_SNK)
+        btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, status);
+      else
+        btif_a2dp_command_ack(UIPC_CH_ID_AV_SINK_CTRL, status);
     }
     return true;
   }
@@ -91,7 +95,10 @@ bool btif_a2dp_on_started(const RawAddress& peer_addr, tBTA_AV_START* p_av_start
       }
     } else {
       if (p_av_start->initiator) {
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+        if (type == AVDT_TSEP_SNK)
+          btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, A2DP_CTRL_ACK_SUCCESS);
+        else
+          btif_a2dp_command_ack(UIPC_CH_ID_AV_SINK_CTRL, A2DP_CTRL_ACK_SUCCESS);
         return true;
       }
       /* media task is auto-started upon UIPC connection of a2dp audiopath */
@@ -104,7 +111,10 @@ bool btif_a2dp_on_started(const RawAddress& peer_addr, tBTA_AV_START* p_av_start
       // TODO: BluetoothA2dp@1.0 is deprecated
       btif_a2dp_audio_on_started(p_av_start->status);
     } else {
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+      if (type == AVDT_TSEP_SNK)
+        btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, A2DP_CTRL_ACK_FAILURE);
+      else
+        btif_a2dp_command_ack(UIPC_CH_ID_AV_SINK_CTRL, A2DP_CTRL_ACK_FAILURE);
     }
     return true;
   }
@@ -177,7 +187,10 @@ void btif_a2dp_on_offload_started(const RawAddress& peer_addr,
   if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
     bluetooth::audio::a2dp::ack_stream_started(ack);
   } else {
-    btif_a2dp_command_ack(ack);
+    if (btif_av_get_peer_sep() == AVDT_TSEP_SNK)
+      btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, ack);
+    else
+      btif_a2dp_command_ack(UIPC_CH_ID_AV_SINK_CTRL, ack);
     // TODO: BluetoothA2dp@1.0 is deprecated
     btif_a2dp_audio_on_started(status);
   }

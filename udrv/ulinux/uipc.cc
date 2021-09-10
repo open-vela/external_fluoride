@@ -362,15 +362,7 @@ static void uipc_flush_ch_locked(tUIPC_STATE& uipc, tUIPC_CH_ID ch_id) {
 static void uipc_flush_locked(tUIPC_STATE& uipc, tUIPC_CH_ID ch_id) {
   if (ch_id >= UIPC_CH_NUM) return;
 
-  switch (ch_id) {
-    case UIPC_CH_ID_AV_CTRL:
-      uipc_flush_ch_locked(uipc, UIPC_CH_ID_AV_CTRL);
-      break;
-
-    case UIPC_CH_ID_AV_AUDIO:
-      uipc_flush_ch_locked(uipc, UIPC_CH_ID_AV_AUDIO);
-      break;
-  }
+  uipc_flush_ch_locked(uipc, ch_id);
 }
 
 static int uipc_close_ch_locked(tUIPC_STATE& uipc, tUIPC_CH_ID ch_id) {
@@ -451,11 +443,14 @@ static void* uipc_read_task(void* arg) {
       uipc_check_task_flags_locked(uipc);
 
       /* make sure we service audio channel first */
-      uipc_check_fd_locked(uipc, UIPC_CH_ID_AV_AUDIO);
+      uipc_check_fd_locked(uipc, UIPC_CH_ID_AV_SINK_AUDIO);
+      uipc_check_fd_locked(uipc, UIPC_CH_ID_AV_SOURCE_AUDIO);
 
       /* check for other connections */
       for (ch_id = 0; ch_id < UIPC_CH_NUM; ch_id++) {
-        if (ch_id != UIPC_CH_ID_AV_AUDIO) uipc_check_fd_locked(uipc, ch_id);
+        if (ch_id != UIPC_CH_ID_AV_SINK_AUDIO &&
+            ch_id != UIPC_CH_ID_AV_SOURCE_AUDIO)
+          uipc_check_fd_locked(uipc, ch_id);
       }
     }
   }

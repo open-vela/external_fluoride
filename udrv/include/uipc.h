@@ -22,9 +22,13 @@
 
 #define UIPC_CH_ID_AV_CTRL 0
 #define UIPC_CH_ID_AV_AUDIO 1
-#define UIPC_CH_NUM 2
+#define UIPC_CH_ID_AV_SOURCE_CTRL 0
+#define UIPC_CH_ID_AV_SOURCE_AUDIO 1
+#define UIPC_CH_ID_AV_SINK_CTRL 2
+#define UIPC_CH_ID_AV_SINK_AUDIO 3
+#define UIPC_CH_NUM 4
 
-#define UIPC_CH_ID_ALL 3 /* used to address all the ch id at once */
+#define UIPC_CH_ID_ALL 5 /* used to address all the ch id at once */
 
 #define DEFAULT_READ_POLL_TMO_MS 100
 
