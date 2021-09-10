@@ -332,7 +332,7 @@ bool btif_a2dp_source_init(void) {
   btif_a2dp_source_thread.StartUp();
   btif_a2dp_source_thread.DoInThread(
       FROM_HERE, base::Bind(&btif_a2dp_source_init_delayed));
-  btif_a2dp_control_init();
+  btif_a2dp_control_init(UIPC_CH_ID_AV_SOURCE_CTRL, UIPC_CH_ID_AV_SOURCE_AUDIO);
   return true;
 }
 
@@ -418,7 +418,7 @@ static void btif_a2dp_source_start_session_delayed(
         bluetooth::common::CONNECTION_TECHNOLOGY_TYPE_BREDR, 0);
   }
   peer_ready_promise.set_value();
-  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, &ack, sizeof(ack));
+  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_CTRL, 0, &ack, sizeof(ack));
 }
 
 bool btif_a2dp_source_restart_session(const RawAddress& old_peer_address,
@@ -714,7 +714,7 @@ void btif_a2dp_source_on_stopped(tBTA_AV_SUSPEND* p_av_suspend) {
       if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
         bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_FAILURE);
       } else {
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, A2DP_CTRL_ACK_FAILURE);
       }
     }
   } else if (btif_av_is_a2dp_offload_running()) {
@@ -749,7 +749,7 @@ void btif_a2dp_source_on_suspended(tBTA_AV_SUSPEND* p_av_suspend) {
       if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
         bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_FAILURE);
       } else {
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, A2DP_CTRL_ACK_FAILURE);
       }
     }
   } else if (btif_av_is_a2dp_offload_running()) {
@@ -839,7 +839,7 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
     btif_a2dp_control_log_bytes_read(
         bluetooth::audio::a2dp::read(p_buf, sizeof(p_buf)));
   } else if (a2dp_uipc != nullptr) {
-    btif_a2dp_control_log_bytes_read(UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO,
+    btif_a2dp_control_log_bytes_read(UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO,
                                                &event, p_buf, sizeof(p_buf)));
   }
 
@@ -850,7 +850,7 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
   if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
     bluetooth::audio::a2dp::ack_stream_suspended(A2DP_CTRL_ACK_SUCCESS);
   } else if (a2dp_uipc != nullptr) {
-    UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO);
+    UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO);
 
     /*
      * Try to send acknowledgement once the media stream is
@@ -865,7 +865,7 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
      * to get the ACK for any pending command in such cases.
      */
 
-    btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+    btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, A2DP_CTRL_ACK_SUCCESS);
   }
 
   /* audio engine stopped, reset tx suspended flag */
@@ -911,7 +911,7 @@ static uint32_t btif_a2dp_source_read_callback(uint8_t* p_buf, uint32_t len) {
   if (bluetooth::audio::a2dp::is_hal_2_0_enabled()) {
     bytes_read = bluetooth::audio::a2dp::read(p_buf, len);
   } else if (a2dp_uipc != nullptr) {
-    bytes_read = UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, &event, p_buf, len);
+    bytes_read = UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO, &event, p_buf, len);
   }
 
   if (bytes_read < len) {
@@ -1038,7 +1038,7 @@ static void btif_a2dp_source_audio_tx_flush_event(void) {
   fixed_queue_flush(btif_a2dp_source_cb.tx_audio_queue, osi_free);
 
   if (!bluetooth::audio::a2dp::is_hal_2_0_enabled() && a2dp_uipc != nullptr) {
-    UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_REQ_RX_FLUSH, nullptr);
+    UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO, UIPC_REQ_RX_FLUSH, nullptr);
   }
 }
 

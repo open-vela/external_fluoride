@@ -218,7 +218,7 @@ bool btif_a2dp_sink_init() {
   }
   btif_a2dp_sink_cb.worker_thread.DoInThread(
       FROM_HERE, base::BindOnce(btif_a2dp_sink_init_delayed));
-      btif_a2dp_control_init();
+  btif_a2dp_control_init(UIPC_CH_ID_AV_SINK_CTRL, UIPC_CH_ID_AV_SINK_AUDIO);
   return true;
 }
 
@@ -569,7 +569,7 @@ static void btif_a2dp_sink_handle_inc_media(BT_HDR* p_msg) {
 
     data = p_pkt->data + p_pkt->offset;
     clock_gettime(CLOCK_MONOTONIC, &ts_start);
-    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)data, p_pkt->len);
+    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO, 0, (const uint8_t*)data, p_pkt->len);
     clock_gettime(CLOCK_MONOTONIC, &ts_end);
 
     if ((ts_end.tv_nsec - ts_start.tv_nsec) > 0) {
@@ -645,7 +645,7 @@ static void btif_a2dp_sink_audio_rx_flush_event() {
   LockGuard lock(g_mutex);
   // Flush all received encoded audio buffers
   fixed_queue_flush(btif_a2dp_sink_cb.rx_audio_queue, osi_free);
-  UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_REQ_RX_FLUSH, nullptr);
+  UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO, UIPC_REQ_RX_FLUSH, nullptr);
 }
 
 static void btif_a2dp_sink_decoder_update_event(
@@ -826,7 +826,7 @@ static void btif_a2dp_sink_on_start_event() {
 #ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
   tA2DP_CTRL_CMD cmd = A2DP_CTRL_CMD_AUDIO_START;
 
-  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_SINK_CTRL, 0,
             reinterpret_cast<uint8_t*>(&cmd), sizeof(tA2DP_CTRL_CMD));
 #endif
 
@@ -843,7 +843,7 @@ static void btif_a2dp_sink_on_suspend_event() {
 #ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
   tA2DP_CTRL_CMD cmd = A2DP_CTRL_CMD_AUDIO_SUSPEND;
 
-  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+  UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_SINK_CTRL, 0,
             reinterpret_cast<uint8_t*>(&cmd), sizeof(tA2DP_CTRL_CMD));
 #endif
 

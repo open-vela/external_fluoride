@@ -50,31 +50,40 @@ static void btif_a2dp_ctrl_cb(tUIPC_CH_ID ch_id, tUIPC_EVENT event);
 static tA2DP_CTRL_CMD a2dp_cmd_pending = A2DP_CTRL_CMD_NONE;
 std::unique_ptr<tUIPC_STATE> a2dp_uipc = nullptr;
 
-void btif_a2dp_control_init(void) {
-  a2dp_uipc = UIPC_Init();
-  UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, btif_a2dp_ctrl_cb, A2DP_CTRL_PATH);
-  UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, btif_a2dp_data_cb, A2DP_DATA_PATH);
+static const char *a2dp_uipc_path[] = {
+  A2DP_CTRL_PATH,
+  A2DP_DATA_PATH,
+  "/data/misc/bluedroid/.sink_ctrl",
+  "/data/misc/bluedroid/.sink_data"
+};
+
+void btif_a2dp_control_init(tUIPC_CH_ID ctrl_id, tUIPC_CH_ID data_id) {
+  if (a2dp_uipc == nullptr)
+    a2dp_uipc = UIPC_Init();
+
+  UIPC_Open(*a2dp_uipc, ctrl_id, btif_a2dp_ctrl_cb, a2dp_uipc_path[ctrl_id]);
+  UIPC_Open(*a2dp_uipc, data_id, btif_a2dp_data_cb, a2dp_uipc_path[data_id]);
 }
 
-void btif_a2dp_control_cleanup(void) {
+void btif_a2dp_control_cleanup(tUIPC_CH_ID data_id) {
   /* This calls blocks until UIPC is fully closed */
   if (a2dp_uipc != nullptr) {
-    UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO);
+      UIPC_Close(*a2dp_uipc, data_id);
   }
 }
 
-static void btif_a2dp_recv_ctrl_data(void) {
+static void btif_a2dp_recv_ctrl_data(tUIPC_CH_ID ch_id) {
   tA2DP_CTRL_CMD cmd = A2DP_CTRL_CMD_NONE;
   int n;
 
   uint8_t read_cmd = 0; /* The read command size is one octet */
-  n = UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, NULL, &read_cmd, 1);
+  n = UIPC_Read(*a2dp_uipc, ch_id, NULL, &read_cmd, 1);
   cmd = static_cast<tA2DP_CTRL_CMD>(read_cmd);
 
   /* detach on ctrl channel means audioflinger process was terminated */
   if (n == 0) {
     APPL_TRACE_WARNING("%s: CTRL CH DETACHED", __func__);
-    UIPC_Close(*a2dp_uipc, UIPC_CH_ID_AV_CTRL);
+    UIPC_Close(*a2dp_uipc, ch_id);
     return;
   }
 
@@ -94,20 +103,20 @@ static void btif_a2dp_recv_ctrl_data(void) {
       if (btif_a2dp_source_media_task_is_shutting_down()) {
         APPL_TRACE_WARNING("%s: A2DP command %s while media task shutting down",
                            __func__, audio_a2dp_hw_dump_ctrl_event(cmd));
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_FAILURE);
         return;
       }
 
 #ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
 #else
       /* check whether AV is ready to setup A2DP datapath */
       if (btif_av_stream_ready() || btif_av_stream_started_ready()) {
-          btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+          btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
       } else {
           APPL_TRACE_WARNING("%s: A2DP command %s while AV stream is not ready",
                   __func__, audio_a2dp_hw_dump_ctrl_event(cmd));
-          btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+          btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_FAILURE);
       }
 #endif
       break;
@@ -121,14 +130,14 @@ static void btif_a2dp_recv_ctrl_data(void) {
       if (!bluetooth::headset::IsCallIdle()) {
         APPL_TRACE_WARNING("%s: A2DP command %s while call state is busy",
                            __func__, audio_a2dp_hw_dump_ctrl_event(cmd));
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_INCALL_FAILURE);
+        btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_INCALL_FAILURE);
         break;
       }
 
       if (btif_a2dp_source_is_streaming()) {
         APPL_TRACE_WARNING("%s: A2DP command %s while source is streaming",
                            __func__, audio_a2dp_hw_dump_ctrl_event(cmd));
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+        btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
         break;
       }
 
@@ -137,8 +146,12 @@ static void btif_a2dp_recv_ctrl_data(void) {
 #endif
       if (btif_av_stream_ready()) {
         /* Setup audio data channel listener */
-        UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, btif_a2dp_data_cb,
-                  A2DP_DATA_PATH);
+        if (ch_id == UIPC_CH_ID_AV_SINK_CTRL)
+          UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO, btif_a2dp_data_cb,
+              a2dp_uipc_path[UIPC_CH_ID_AV_SINK_AUDIO]);
+        else
+          UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO, btif_a2dp_data_cb,
+              a2dp_uipc_path[UIPC_CH_ID_AV_SOURCE_AUDIO]);
 
         /*
          * Post start event and wait for audio path to open.
@@ -147,7 +160,7 @@ static void btif_a2dp_recv_ctrl_data(void) {
          */
         btif_av_stream_start();
         if (btif_av_get_peer_sep() == AVDT_TSEP_SRC)
-          btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+          btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
         break;
       }
 
@@ -156,14 +169,18 @@ static void btif_a2dp_recv_ctrl_data(void) {
          * Already started, setup audio data channel listener and ACK
          * back immediately.
          */
-        UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, btif_a2dp_data_cb,
-                  A2DP_DATA_PATH);
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+        if (ch_id == UIPC_CH_ID_AV_SINK_CTRL)
+          UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO, btif_a2dp_data_cb,
+              a2dp_uipc_path[UIPC_CH_ID_AV_SINK_AUDIO]);
+        else
+          UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO, btif_a2dp_data_cb,
+              a2dp_uipc_path[UIPC_CH_ID_AV_SOURCE_AUDIO]);
+        btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
         break;
       }
       APPL_TRACE_WARNING("%s: A2DP command %s while AV stream is not ready",
                          __func__, audio_a2dp_hw_dump_ctrl_event(cmd));
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_FAILURE);
       break;
 
     case A2DP_CTRL_CMD_STOP:
@@ -173,11 +190,11 @@ static void btif_a2dp_recv_ctrl_data(void) {
       if (btif_av_get_peer_sep() == AVDT_TSEP_SNK &&
           !btif_a2dp_source_is_streaming()) {
         /* We are already stopped, just ack back */
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+        btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
         break;
       }
       btif_av_stream_stop(RawAddress::kEmpty);
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
       break;
 
     case A2DP_CTRL_CMD_SUSPEND:
@@ -191,7 +208,7 @@ static void btif_a2dp_recv_ctrl_data(void) {
        * remotely suspended, clear REMOTE SUSPEND flag.
        */
       btif_av_clear_remote_suspend_flag();
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
       break;
 
     case A2DP_CTRL_GET_INPUT_AUDIO_CONFIG: {
@@ -199,13 +216,13 @@ static void btif_a2dp_recv_ctrl_data(void) {
       tA2DP_SAMPLE_RATE sample_rate = btif_a2dp_sink_get_sample_rate();
       tA2DP_CHANNEL_COUNT channel_count = btif_a2dp_sink_get_channel_count();
 
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 reinterpret_cast<uint8_t*>(&sample_rate),
                 sizeof(tA2DP_SAMPLE_RATE));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, &channel_count,
+      UIPC_Send(*a2dp_uipc, ch_id, 0, &channel_count,
                 sizeof(tA2DP_CHANNEL_COUNT));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, (const uint8_t*)&codec_type,
+      UIPC_Send(*a2dp_uipc, ch_id, 0, (const uint8_t*)&codec_type,
                 sizeof(tA2DP_CODEC_TYPE));
       break;
     }
@@ -219,26 +236,26 @@ static void btif_a2dp_recv_ctrl_data(void) {
 
       A2dpCodecConfig* current_codec = bta_av_get_a2dp_current_codec();
       if (current_codec == nullptr) {
-        btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+        btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_FAILURE);
         break;
       }
       codec_config = current_codec->getCodecConfig();
       uint32_t bit_rate = current_codec->getTrackBitRate();
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
       // Send the current codec config
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 reinterpret_cast<const uint8_t*>(&codec_config.codec_type),
                 sizeof(btav_a2dp_codec_sample_rate_t));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 reinterpret_cast<const uint8_t*>(&codec_config.sample_rate),
                 sizeof(btav_a2dp_codec_sample_rate_t));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 reinterpret_cast<const uint8_t*>(&codec_config.bits_per_sample),
                 sizeof(btav_a2dp_codec_bits_per_sample_t));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 reinterpret_cast<const uint8_t*>(&codec_config.channel_mode),
                 sizeof(btav_a2dp_codec_channel_mode_t));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 reinterpret_cast<const uint8_t*>(&bit_rate),
                 sizeof(uint32_t));
       break;
@@ -250,9 +267,9 @@ static void btif_a2dp_recv_ctrl_data(void) {
       codec_config.bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_NONE;
       codec_config.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
 
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
       // Send the current codec config
-      if (UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      if (UIPC_Read(*a2dp_uipc, ch_id, 0,
                     reinterpret_cast<uint8_t*>(&codec_config.sample_rate),
                     sizeof(btav_a2dp_codec_sample_rate_t)) !=
           sizeof(btav_a2dp_codec_sample_rate_t)) {
@@ -260,7 +277,7 @@ static void btif_a2dp_recv_ctrl_data(void) {
                          __func__);
         break;
       }
-      if (UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      if (UIPC_Read(*a2dp_uipc, ch_id, 0,
                     reinterpret_cast<uint8_t*>(&codec_config.bits_per_sample),
                     sizeof(btav_a2dp_codec_bits_per_sample_t)) !=
           sizeof(btav_a2dp_codec_bits_per_sample_t)) {
@@ -268,7 +285,7 @@ static void btif_a2dp_recv_ctrl_data(void) {
                          __func__);
         break;
       }
-      if (UIPC_Read(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      if (UIPC_Read(*a2dp_uipc, ch_id, 0,
                     reinterpret_cast<uint8_t*>(&codec_config.channel_mode),
                     sizeof(btav_a2dp_codec_channel_mode_t)) !=
           sizeof(btav_a2dp_codec_channel_mode_t)) {
@@ -291,26 +308,26 @@ static void btif_a2dp_recv_ctrl_data(void) {
       break;
 
     case A2DP_CTRL_GET_PRESENTATION_POSITION: {
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
 
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 (uint8_t*)&(delay_report_stats.total_bytes_read),
                 sizeof(uint64_t));
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0,
+      UIPC_Send(*a2dp_uipc, ch_id, 0,
                 (uint8_t*)&(delay_report_stats.audio_delay), sizeof(uint16_t));
 
       uint32_t seconds = delay_report_stats.timestamp.tv_sec;
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, (uint8_t*)&seconds,
+      UIPC_Send(*a2dp_uipc, ch_id, 0, (uint8_t*)&seconds,
                 sizeof(seconds));
 
       uint32_t nsec = delay_report_stats.timestamp.tv_nsec;
-      UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, (uint8_t*)&nsec,
+      UIPC_Send(*a2dp_uipc, ch_id, 0, (uint8_t*)&nsec,
                 sizeof(nsec));
       break;
     }
     default:
       APPL_TRACE_ERROR("%s: UNSUPPORTED CMD (%d)", __func__, cmd);
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_FAILURE);
       break;
   }
 
@@ -325,7 +342,7 @@ static void btif_a2dp_recv_ctrl_data(void) {
   }
 }
 
-static void btif_a2dp_ctrl_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
+static void btif_a2dp_ctrl_cb(tUIPC_CH_ID ch_id,
                               tUIPC_EVENT event) {
   // Don't log UIPC_RX_DATA_READY_EVT by default, because it
   // could be very chatty when audio is streaming.
@@ -344,12 +361,12 @@ static void btif_a2dp_ctrl_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
     case UIPC_CLOSE_EVT:
       /* restart ctrl server unless we are shutting down */
       if (btif_a2dp_source_media_task_is_running() || btif_a2dp_sink_media_task_is_running())
-        UIPC_Open(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, btif_a2dp_ctrl_cb,
+        UIPC_Open(*a2dp_uipc, ch_id, btif_a2dp_ctrl_cb,
                   A2DP_CTRL_PATH);
       break;
 
     case UIPC_RX_DATA_READY_EVT:
-      btif_a2dp_recv_ctrl_data();
+      btif_a2dp_recv_ctrl_data(ch_id);
       break;
 
     default:
@@ -359,7 +376,7 @@ static void btif_a2dp_ctrl_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
   }
 }
 
-static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
+static void btif_a2dp_data_cb(tUIPC_CH_ID ch_id,
                               tUIPC_EVENT event) {
   APPL_TRACE_WARNING("%s: BTIF MEDIA (A2DP-DATA) EVENT %s", __func__,
                      dump_uipc_event(event));
@@ -370,10 +387,17 @@ static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
        * Read directly from media task from here on (keep callback for
        * connection events.
        */
-      UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO,
-                 UIPC_REG_REMOVE_ACTIVE_READSET, NULL);
-      UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, UIPC_SET_READ_POLL_TMO,
-                 reinterpret_cast<void*>(A2DP_DATA_READ_POLL_MS));
+      if (ch_id == UIPC_CH_ID_AV_SINK_CTRL) {
+        UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO,
+            UIPC_REG_REMOVE_ACTIVE_READSET, NULL);
+        UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO, UIPC_SET_READ_POLL_TMO,
+            reinterpret_cast<void*>(A2DP_DATA_READ_POLL_MS));
+      } else {
+        UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO,
+            UIPC_REG_REMOVE_ACTIVE_READSET, NULL);
+        UIPC_Ioctl(*a2dp_uipc, UIPC_CH_ID_AV_SOURCE_AUDIO, UIPC_SET_READ_POLL_TMO,
+            reinterpret_cast<void*>(A2DP_DATA_READ_POLL_MS));
+      }
 
       /* ACK back when media task is fully started */
       break;
@@ -383,7 +407,7 @@ static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
 #ifdef CONFIG_FLUORIDE_A2DP_SINK_FFMPEG
       btif_a2dp_sink_disable_audio_send();
 #endif
-      btif_a2dp_command_ack(A2DP_CTRL_ACK_SUCCESS);
+      btif_a2dp_command_ack(ch_id, A2DP_CTRL_ACK_SUCCESS);
       /*
        * Send stop request only if we are actively streaming and haven't
        * received a stop request. Potentially, the audioflinger detached
@@ -402,7 +426,7 @@ static void btif_a2dp_data_cb(UNUSED_ATTR tUIPC_CH_ID ch_id,
   }
 }
 
-void btif_a2dp_command_ack(tA2DP_CTRL_ACK status) {
+void btif_a2dp_command_ack(tUIPC_CH_ID ch_id, tA2DP_CTRL_ACK status) {
   uint8_t ack = status;
 
   // Don't log A2DP_CTRL_GET_PRESENTATION_POSITION by default, because it
@@ -426,7 +450,7 @@ void btif_a2dp_command_ack(tA2DP_CTRL_ACK status) {
 
   /* Acknowledge start request */
   if (a2dp_uipc != nullptr) {
-    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_CTRL, 0, &ack, sizeof(ack));
+    UIPC_Send(*a2dp_uipc, ch_id, 0, &ack, sizeof(ack));
   }
 }
 
