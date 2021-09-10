@@ -1977,7 +1977,10 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event,
           LOG(ERROR) << __PRETTY_FUNCTION__ << ": Peer " << peer_.PeerAddress()
                      << " : cannot proceed to do AvStart";
           peer_.ClearFlags(BtifAvPeer::kFlagPendingStart);
-          btif_a2dp_command_ack(A2DP_CTRL_ACK_FAILURE);
+          if (peer_.IsSink())
+            btif_a2dp_command_ack(UIPC_CH_ID_AV_SOURCE_CTRL, A2DP_CTRL_ACK_FAILURE);
+          else if (peer_.IsSource())
+            btif_a2dp_command_ack(UIPC_CH_ID_AV_SINK_CTRL, A2DP_CTRL_ACK_FAILURE);
         }
         if (peer_.IsSink()) {
           src_disconnect_sink(peer_.PeerAddress());

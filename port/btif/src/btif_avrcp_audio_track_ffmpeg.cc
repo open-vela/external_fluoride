@@ -76,8 +76,7 @@ int BtifAvrcpAudioTrackWriteData(void *handle, void *audioBuffer, int bufferLeng
   BtifAvrcpAudioTrack *priv = (BtifAvrcpAudioTrack *)&g_track;
 
   if (priv->ffmpegReady > 0)
-  {
-    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_AUDIO, 0, (const uint8_t*)audioBuffer, bufferLength);
-  }
+    UIPC_Send(*a2dp_uipc, UIPC_CH_ID_AV_SINK_AUDIO, 0, (const uint8_t*)audioBuffer, bufferLength);
+
   return bufferLength;
 }
