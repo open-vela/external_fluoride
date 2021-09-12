@@ -63,15 +63,29 @@ static void adapter_state_changed(bt_state_t state)
   pthread_mutex_unlock(&flrd->mutex);
 }
 
-static void parse_properties(int num_properties, bt_property_t *property)
+static void parse_properties(const char *title,
+                             int status,
+                             int num_properties,
+                             bt_property_t *property)
 {
+  const bt_bdname_t* name = nullptr;
+  char prop[128];
+  int offset = 0;
+
   while (num_properties-- > 0) {
     switch (property->type) {
+      case BT_PROPERTY_BDNAME:
+        {
+          name = property_as_name(property);
+        }
+        break;
+
       case BT_PROPERTY_BDADDR:
         {
           const RawAddress *addr = property_as_addr(property);
-          LOG_SAMPLES("[%s]: addr: %s\n",
-              dump_property_type(property->type), addr->ToString().c_str());
+          offset += snprintf(prop + offset,
+                             sizeof(prop) - offset,
+                             "[%s]", addr->ToString().c_str());
         }
         break;
 
@@ -83,30 +97,32 @@ static void parse_properties(int num_properties, bt_property_t *property)
               const char *device_type;
             } device_type_lookup[] = {
               { "Unknown" },
-              { "Classic Only" },
-              { "BLE Only" },
-              { "Both Classic and BLE" },
+              { "CLS" },
+              { "BLE" },
+              { "CLS | BLE" },
             };
             int idx = (int)device_type;
             if (idx > BT_DEVICE_DEVTYPE_DUAL)
               idx = 0;
-            LOG_SAMPLES("[%s]: type: %s\n", dump_property_type(property->type),
-                device_type_lookup[idx].device_type);
+
+            offset += snprintf(prop + offset, sizeof(prop) - offset,
+                               "[%s]", device_type_lookup[idx].device_type);
           }
         }
         break;
 
       case BT_PROPERTY_CLASS_OF_DEVICE:
         {
-          LOG_SAMPLES("[%s]: class: 0x%x\n", dump_property_type(property->type),
-              device_class_to_int(property_as_device_class(property)));
+          offset += snprintf(prop + offset, sizeof(prop) - offset,
+                             "[0x%x]",
+                             device_class_to_int(property_as_device_class(property)));
         }
         break;
 
       case BT_PROPERTY_REMOTE_RSSI:
         {
-          LOG_SAMPLES("[%s]: rssi: %d\n", dump_property_type(property->type),
-              property_as_rssi(property));
+          offset += snprintf(prop + offset, sizeof(prop) - offset,
+                             "[%d]", property_as_rssi(property));
         }
         break;
       default:
@@ -114,19 +130,31 @@ static void parse_properties(int num_properties, bt_property_t *property)
     }
     property++;
   }
+
+  if (strnlen(prop, sizeof(prop)) > 0)
+    {
+      if (name != nullptr)
+        offset += snprintf(prop + offset,
+                           sizeof(prop) - offset, "[%s]", name->name);
+      LOG_SAMPLES("[%s][%d]%s\n", title, status, prop);
+    }
 }
 
 static void adapter_properties(bt_status_t status, int num_properties, bt_property_t *properties)
 {
-  parse_properties(num_properties, properties);
+  parse_properties("ADAPTE", status, num_properties, properties);
 }
 
 static void remote_device_properties(bt_status_t status, RawAddress *bd_addr, int num_properties, bt_property_t *properties)
 {
-  parse_properties(num_properties, properties);
+  parse_properties("REMOTE", status, num_properties, properties);
 }
 
-static void device_found(int num_properties, bt_property_t *properties) TRACE_CALLBACK_BODY
+static void device_found(int num_properties, bt_property_t *properties)
+{
+  parse_properties("DISCOV", BT_STATUS_SUCCESS, num_properties, properties);
+}
+
 static void discovery_state_changed(bt_discovery_state_t state) TRACE_CALLBACK_BODY
 static void pin_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32_t cod, bool min_16_digit) TRACE_CALLBACK_BODY
 
