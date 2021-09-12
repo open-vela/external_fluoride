@@ -46,12 +46,13 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
     flrd->interface->set_adapter_property(property);
     property_free(property);
 
-    if (flrd->source)
-      flrd->source->set_active_device(RawAddress::kEmpty);
-
-    if (flrd->sink)
-      flrd->sink->set_active_device(RawAddress::kEmpty);
-
+    if (flrd->arole == AVDT_TSEP_SNK) {
+      if (flrd->sink)
+        flrd->sink->set_active_device(RawAddress::kEmpty);
+    } else {
+      if (flrd->source)
+        flrd->source->set_active_device(RawAddress::kEmpty);
+    }
   } else if (state == BTAV_CONNECTION_STATE_CONNECTED) {
     property = property_new_scan_mode(BT_SCAN_MODE_NONE);
     flrd->interface->set_adapter_property(property);
@@ -59,11 +60,13 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
 
     flrd->addr = bd_addr;
 
-    if (flrd->source)
-      flrd->source->set_active_device(bd_addr);
-
-    if (flrd->sink)
-      flrd->sink->set_active_device(bd_addr);
+    if (flrd->arole == AVDT_TSEP_SNK) {
+      if (flrd->sink)
+        flrd->sink->set_active_device(bd_addr);
+    } else {
+      if (flrd->source)
+        flrd->source->set_active_device(bd_addr);
+    }
   }
 }
 
