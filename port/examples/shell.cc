@@ -168,7 +168,7 @@ struct fluoride_cmd_s
   const char     *help;
 };
 
-static void fluoride_avrcp_help(void)
+static void command_bta_avrcp_key_help(void)
 {
   unsigned int i;
 
@@ -179,12 +179,12 @@ static void fluoride_avrcp_help(void)
         g_passthrough_command_maps[i].command);
 }
 
-static int fluoride_command_key(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_key(struct fluoride_s *flrd, int argc, char **argv)
 {
   int command;
 
   if (argc == 0 || strlen(argv[0]) <= 0) {
-    fluoride_avrcp_help();
+    command_bta_avrcp_key_help();
     return -1;
   }
 
@@ -198,7 +198,7 @@ static int fluoride_command_key(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
-static int fluoride_command_scan(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_scan(struct fluoride_s *flrd, int argc, char **argv)
 {
   bt_property_t *property;
   int mode;
@@ -218,7 +218,7 @@ static int fluoride_command_scan(struct fluoride_s *flrd, int argc, char **argv)
   return ret;
 }
 
-static int fluoride_command_bdname(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_bdname(struct fluoride_s *flrd, int argc, char **argv)
 {
   bt_property_t *property;
   char buf[64] = {};
@@ -249,14 +249,14 @@ static int fluoride_command_bdname(struct fluoride_s *flrd, int argc, char **arg
   return ret;
 }
 
-static int fluoride_command_discovery(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_discovery(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (argc == 0 || atoi(argv[0]))
     return flrd->interface->start_discovery();
   return flrd->interface->cancel_discovery();
 }
 
-static int fluoride_command_volume(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_volume(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (argc == 0 || strlen(argv[0]) <= 0)
     return -1;
@@ -267,7 +267,7 @@ static int fluoride_command_volume(struct fluoride_s *flrd, int argc, char **arg
   return -1;
 }
 
-static int fluoride_command_disconnect(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_disconnect(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (flrd->avrcs)
     flrd->avrcs->DisconnectDevice(flrd->addr);
@@ -284,7 +284,7 @@ static int fluoride_command_disconnect(struct fluoride_s *flrd, int argc, char *
   return 0;
 }
 
-static int fluoride_command_playback_state(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_playback_state(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (flrd->ctrl)
     flrd->ctrl->get_playback_state_cmd(flrd->avrcp_addr);
@@ -292,13 +292,13 @@ static int fluoride_command_playback_state(struct fluoride_s *flrd, int argc, ch
   return 0;
 }
 
-static int fluoride_command_dump(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_dump(struct fluoride_s *flrd, int argc, char **argv)
 {
   flrd->interface->dump(STDOUT_FILENO, NULL);
   return 0;
 }
 
-static int fluoride_command_connect(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_connect(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (argc == 0 || strlen(argv[0]) <= 0) {
     return -1;
@@ -338,7 +338,7 @@ static bool lookup_keycode(uint8_t character,
   return false;
 }
 
-static int fluoride_hkey(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_hkey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t report[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
   uint8_t code;
@@ -378,7 +378,7 @@ static int fluoride_hkey(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
-static int fluoride_hmkey(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_hmkey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t report[] = {0, 0, 0, 0};
 
@@ -406,7 +406,7 @@ static int fluoride_hmkey(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
-static int fluoride_hckey(struct fluoride_s *flrd, int argc, char **argv)
+static int command_bta_hckey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t code;
 
@@ -424,57 +424,57 @@ static struct fluoride_cmd_s g_bta_cmds[] =
 {
   {
     "scan",
-    fluoride_command_scan,
+    command_bta_scan,
     "< 0-2 >    ( 0: off, 1: connectable, 2: connectable + discoverable )",
   },
   {
     "bdname",
-    fluoride_command_bdname,
+    command_bta_bdname,
     "< bdname > ( bluetooth device name )",
   },
   {
     "discovery",
-    fluoride_command_discovery,
-    "< 0-1 >    ( 1: start, 0: cancel)",
+    command_bta_discovery,
+    "< 0-1 >    ( 0: cancel, 1: start )",
   },
   {
     "volume",
-    fluoride_command_volume,
+    command_bta_volume,
     "< 0-127 >  ( AVRCP Volume - 1.4 enhancements )",
   },
   {
     "dump",
-    fluoride_command_dump,
+    command_bta_dump,
     "< N/A >    ( DumpSYS as Android Subsystem )",
   },
   {
     "connect",
-    fluoride_command_connect,
+    command_bta_connect,
     "< 00:11:22:33:44:55 > ( Peer MAC Address )",
   },
   {
     "disconnect",
-    fluoride_command_disconnect,
+    command_bta_disconnect,
     "< N/A >    ( Disconnect the current active connection )",
   },
   {
     "key",
-    fluoride_command_key,
+    command_bta_key,
     "< 0-128 >  ( Passthrough Key Code )",
   },
   {
     "playback_state",
-    fluoride_command_playback_state,
+    command_bta_playback_state,
     "< N/A >    ( PTS: AVRCP/CT/MDI/BV-01-C )",
   },
   {
     "hkey",
-    fluoride_hkey,
+    command_bta_hkey,
     "< string > ( HID keyboard Usage )",
   },
   {
     "hmkey",
-    fluoride_hmkey,
+    command_bta_hmkey,
     "< value... > ( HID mouse Usage )\n"
     "E.G:\n"
     "\tLeftmouse press  :  1\n"
@@ -486,7 +486,7 @@ static struct fluoride_cmd_s g_bta_cmds[] =
   },
   {
     "hckey",
-    fluoride_hckey,
+    command_bta_hckey,
     "< value  > ( HID Control key )\n"
     "E.G:\n"
     "\tVoleme Up  :  16 (0x10)\n"
@@ -494,7 +494,7 @@ static struct fluoride_cmd_s g_bta_cmds[] =
   },
 };
 
-static int fluoride_command_blescan(struct fluoride_s *flrd, int argc, char **argv)
+static int command_ble_scan(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (argc == 0)
     return -1;
@@ -517,7 +517,7 @@ static void ble_advertising_set_started_cb(int reg_id,
       base::Bind(&ble_advertising_enable_cb, flrd->aid, false));
 }
 
-static int fluoride_command_bleadv(struct fluoride_s *flrd, int argc, char **argv)
+static int command_ble_adv(struct fluoride_s *flrd, int argc, char **argv)
 {
   PeriodicAdvertisingParameters pparams = {};
   std::string name("Fluoride BLE");
@@ -603,12 +603,12 @@ static struct fluoride_cmd_s g_ble_cmds[] =
 {
   {
     "scan",
-    fluoride_command_blescan,
+    command_ble_scan,
     "< 0-1 >    ( 0: off, 1: on )",
   },
   {
     "adv",
-    fluoride_command_bleadv,
+    command_ble_adv,
     "< 0-1 >    ( 0: off, 1: on )",
   },
 };
