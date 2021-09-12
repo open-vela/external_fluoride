@@ -222,6 +222,11 @@ static int bt_interface_init(void)
   }
 
   flrd->interface = &bluetoothInterface;
+#ifdef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
+  flrd->arole = AVDT_TSEP_SRC;
+#else
+  flrd->arole = AVDT_TSEP_SNK;
+#endif
 
   ret = bluetoothInterface.init(&bt_callbacks,
       false, false, 0, nullptr, false);
