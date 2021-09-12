@@ -115,7 +115,7 @@ static void a2dp_sbc_encoder_update(uint16_t peer_mtu,
                                     bool* p_restart_input,
                                     bool* p_restart_output,
                                     bool* p_config_updated);
-#ifdef CONFIG_CODEC_SBC
+#ifndef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
 static bool a2dp_sbc_read_feeding(uint32_t* bytes);
 #endif
 static void a2dp_sbc_encode_frames(uint8_t nb_frame);
@@ -364,7 +364,7 @@ static void a2dp_sbc_encoder_update(uint16_t peer_mtu,
 
   LOG_INFO("%s: final bit rate %d, final bit pool %d", __func__,
            p_encoder_params->u16BitRate, p_encoder_params->s16BitPool);
-#ifdef CONFIG_CODEC_SBC
+#ifndef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
   /* Reset the SBC encoder */
   SBC_Encoder_Init(&a2dp_sbc_encoder_cb.sbc_encoder_params);
 #endif
@@ -547,7 +547,7 @@ static void a2dp_sbc_encode_frames(uint8_t nb_frame) {
     a2dp_sbc_encoder_cb.stats.media_read_total_expected_packets++;
 
     do {
-#ifdef CONFIG_CODEC_SBC
+#ifndef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
       /* Fill allocated buffer with 0 */
       memset(a2dp_sbc_encoder_cb.pcmBuffer, 0,
              blocm_x_subband * p_encoder_params->s16NumOfChannels);
@@ -608,7 +608,7 @@ static void a2dp_sbc_encode_frames(uint8_t nb_frame) {
     }
   }
 }
-#ifdef CONFIG_CODEC_SBC
+#ifndef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
 static bool a2dp_sbc_read_feeding(uint32_t* bytes_read) {
   SBC_ENC_PARAMS* p_encoder_params = &a2dp_sbc_encoder_cb.sbc_encoder_params;
   uint16_t blocm_x_subband =
@@ -925,7 +925,7 @@ int A2dpCodecConfigSbcSource::getEffectiveMtu() const {
 }
 
 void A2dpCodecConfigSbcSource::debug_codec_dump(int fd) {
-#ifdef CONFIG_CODEC_SBC
+#ifndef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
   a2dp_sbc_encoder_stats_t* stats = &a2dp_sbc_encoder_cb.stats;
 
   A2dpCodecConfig::debug_codec_dump(fd);
