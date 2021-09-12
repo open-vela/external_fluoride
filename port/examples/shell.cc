@@ -275,11 +275,30 @@ static int command_bta_disconnect(struct fluoride_s *flrd, int argc, char **argv
   if (flrd->hfc)
     flrd->hfc->disconnect(&flrd->addr);
 
-  if (flrd->sink)
-    flrd->sink->disconnect(flrd->addr);
+  if (flrd->arole == AVDT_TSEP_SNK) {
+    if (flrd->sink)
+      flrd->sink->disconnect(flrd->addr);
+  } else {
+    if (flrd->source)
+      flrd->source->disconnect(flrd->addr);
+  }
 
-  if (flrd->source)
-    flrd->source->disconnect(flrd->addr);
+  return 0;
+}
+
+static int command_bta_audiorole(struct fluoride_s *flrd, int argc, char **argv)
+{
+  int role;
+
+  if (argc == 0)
+    return -1;
+
+  role = atoi(argv[0]);
+
+  if (role != AVDT_TSEP_SRC && role != AVDT_TSEP_SNK)
+    return -1;
+
+  flrd->arole = role;
 
   return 0;
 }
@@ -312,11 +331,15 @@ static int command_bta_connect(struct fluoride_s *flrd, int argc, char **argv)
 
   bd_addr.FromString(str, bd_addr);
 
-  if (flrd->sink)
-    flrd->sink->connect(bd_addr);
+  if (flrd->hfc)
+    flrd->hfc->connect(&flrd->addr);
 
-  if (flrd->source) {
-    flrd->source->connect(bd_addr);
+  if (flrd->arole == AVDT_TSEP_SNK) {
+    if (flrd->sink)
+      flrd->sink->connect(bd_addr);
+  } else {
+    if (flrd->source)
+      flrd->source->connect(bd_addr);
   }
 
   return 0;
@@ -456,6 +479,11 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "disconnect",
     command_bta_disconnect,
     "< N/A >    ( Disconnect the current active connection )",
+  },
+  {
+    "arole",
+    command_bta_audiorole,
+    "< 0-1 >    ( A2DP audio role: 0: source, 1: sink )",
   },
   {
     "key",

@@ -90,6 +90,8 @@ struct fluoride_s
   pthread_mutex_t               mutex;
   pthread_cond_t                cond;
 
+  int                           arole;
+
   RawAddress                    addr;
   RawAddress                    avrcp_addr;
 
