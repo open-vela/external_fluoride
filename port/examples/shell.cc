@@ -249,6 +249,13 @@ static int fluoride_command_bdname(struct fluoride_s *flrd, int argc, char **arg
   return ret;
 }
 
+static int fluoride_command_discovery(struct fluoride_s *flrd, int argc, char **argv)
+{
+  if (argc == 0 || atoi(argv[0]))
+    return flrd->interface->start_discovery();
+  return flrd->interface->cancel_discovery();
+}
+
 static int fluoride_command_volume(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (argc == 0 || strlen(argv[0]) <= 0)
@@ -424,6 +431,11 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "bdname",
     fluoride_command_bdname,
     "< bdname > ( bluetooth device name )",
+  },
+  {
+    "discovery",
+    fluoride_command_discovery,
+    "< 0-1 >    ( 1: start, 0: cancel)",
   },
   {
     "volume",
