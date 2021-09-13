@@ -683,8 +683,6 @@ int fluoride_shell(struct fluoride_s *flrd, int argc, char **argv)
   while (!btif_is_enabled())
     usleep(100 * 1000);
 
-  pthread_mutex_lock(&flrd->mutex);
-
   if (argc == 1)
     goto bail;
 
@@ -708,8 +706,6 @@ bail:
     printf("%s shell commands :\n", argv[0]);
     fluoride_shell_help();
   }
-
-  pthread_mutex_unlock(&flrd->mutex);
 
   return ret;
 }
