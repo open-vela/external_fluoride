@@ -62,6 +62,7 @@ CXXSRCS += osi/src/ringbuffer.cc
 CXXSRCS += osi/src/semaphore.cc
 CXXSRCS += osi/src/socket_utils/socket_local_client.cc
 CXXSRCS += osi/src/socket_utils/socket_local_server.cc
+CXXSRCS += osi/src/socket.cc
 CXXSRCS += osi/src/thread.cc
 CXXSRCS += osi/src/wakelock.cc
 CXXSRCS += $(wildcard packet/avrcp/*.cc)
@@ -114,8 +115,6 @@ PORTCXXSRCS += port/btif/src/btif_bqr.cc
 PORTCXXSRCS += port/btif/src/btif_debug_btsnoop.cc
 PORTCXXSRCS += port/btif/src/btif_keystore.cc
 PORTCXXSRCS += port/btif/src/btif_pan.cc
-PORTCXXSRCS += port/btif/src/btif_sock.cc
-PORTCXXSRCS += port/btif/src/btif_sock_rfc.cc
 PORTCXXSRCS += $(wildcard port/main/shim/*.cc)
 
 ifeq ($(CONFIG_FLUORIDE_HCI_H4),y)
@@ -137,10 +136,6 @@ ifeq ($(CONFIG_AUDIO),y)
 endif
 PORTCXXSRCS += btif/src/btif_avrcp_audio_track.cc
 PORTCXXSRCS += btif/src/btif_a2dp_audio_interface.cc
-PORTCXXSRCS += btif/src/btif_sock_util.cc
-PORTCXXSRCS += btif/src/btif_sock_sco.cc
-PORTCXXSRCS += btif/src/btif_sock_thread.cc
-PORTCXXSRCS += btif/src/btif_sock_l2cap.cc
 PORTCXXSRCS += hci/src/hci_layer_android.cc
 PORTCXXSRCS += hci/src/hci_layer_linux.cc
 
@@ -263,6 +258,7 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
   CXXSRCS  += port/examples/hfp.cc
   CXXSRCS  += port/examples/interface.cc
   CXXSRCS  += port/examples/sdp.cc
+  CXXSRCS  += port/examples/socket.cc
   CXXSRCS  += port/examples/shell.cc
   CXXSRCS  += port/examples/hidd.cc
 ifneq ($(CONFIG_FLUORIDE_BLE_ENABLED),)
