@@ -45,6 +45,7 @@
 #include "hardware/bt_gatt.h"
 #include "hardware/bt_rc.h"
 #include "hardware/bt_sdp.h"
+#include "hardware/bt_sock.h"
 #include "hardware/avrcp/avrcp_common.h"
 #include "hardware/avrcp/avrcp.h"
 #include "hardware/bt_hf_client.h"
@@ -83,6 +84,7 @@ struct fluoride_s
   const bthf_client_interface_t *hfc;
   const btgatt_interface_t      *gatt;
   const bthd_interface_t        *hid;
+  const btsock_interface_t      *sock;
 
   ServiceInterface              *avrcs;
 
@@ -94,6 +96,10 @@ struct fluoride_s
 
   RawAddress                    addr;
   RawAddress                    avrcp_addr;
+
+  pthread_t                     pid;
+  int                           rfcfd;
+  int                           accfd;
 
   /* GATT */
 
@@ -121,6 +127,7 @@ const btrc_interface_t        *bt_profile_avrcp_init(struct fluoride_s *flrd);
 const bthf_client_interface_t *bt_profile_handsfree_init(struct fluoride_s *flrd);
 ServiceInterface              *bt_profile_avrcp_service_init(struct fluoride_s *flrd);
 const bthd_interface_t        *bt_profile_hid_init(struct fluoride_s *flrd);
+const btsock_interface_t      *bt_profile_socket_get(struct fluoride_s *flrd);
 
 struct fluoride_s             *fluoride_interface_get(void);
 int                            fluoride_shell(struct fluoride_s *flrd, int argc, char **argv);
