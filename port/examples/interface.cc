@@ -81,6 +81,8 @@ static void parse_properties(const char *title,
   char prop[128];
   int offset = 0;
 
+  prop[0] = '\0';
+
   while (num_properties-- > 0) {
     switch (property->type) {
       case BT_PROPERTY_BDNAME:
