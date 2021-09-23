@@ -149,7 +149,7 @@ static uint64_t now_ms(void);
 static void alarm_set_internal(alarm_t* alarm, uint64_t period_ms,
                                alarm_callback_t cb, void* data,
                                fixed_queue_t* queue, bool for_msg_loop);
-static void alarm_cancel_internal(alarm_t* alarm);
+static void* alarm_cancel_internal(alarm_t* alarm);
 static void remove_pending_alarm(alarm_t* alarm);
 static void schedule_next_instance(alarm_t* alarm);
 static void reschedule_root_alarm(void);
@@ -265,25 +265,29 @@ static void alarm_set_internal(alarm_t* alarm, uint64_t period_ms,
 #endif
 }
 
-void alarm_cancel(alarm_t* alarm) {
+void* alarm_cancel(alarm_t* alarm) {
   CHECK(alarms != NULL);
-  if (!alarm) return;
+  void* data;
+  if (!alarm) return NULL;
 
   {
     std::lock_guard<std::mutex> lock(alarms_mutex);
-    alarm_cancel_internal(alarm);
+    data = alarm_cancel_internal(alarm);
   }
 
   // If the callback for |alarm| is in progress, wait here until it completes.
   pthread_mutex_lock(&alarm->callback_mutex);
   pthread_mutex_unlock(&alarm->callback_mutex);
+
+  return data;
 }
 
 // Internal implementation of canceling an alarm.
 // The caller must hold the |alarms_mutex|
-static void alarm_cancel_internal(alarm_t* alarm) {
+static void* alarm_cancel_internal(alarm_t* alarm) {
   bool needs_reschedule =
       (!list_is_empty(alarms) && list_front(alarms) == alarm);
+  void* data = alarm->data;
 
   remove_pending_alarm(alarm);
 
@@ -297,6 +301,8 @@ static void alarm_cancel_internal(alarm_t* alarm) {
   alarm->queue = NULL;
 
   if (needs_reschedule) reschedule_root_alarm();
+
+  return data;
 }
 
 bool alarm_is_scheduled(const alarm_t* alarm) {
