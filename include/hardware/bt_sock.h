@@ -38,6 +38,7 @@ typedef struct {
   RawAddress bd_addr;
   int channel;
   int status;
+  int handle;
 
   // The writer must make writes using a buffer of this maximum size
   // to avoid loosing data. (L2CAP only)
