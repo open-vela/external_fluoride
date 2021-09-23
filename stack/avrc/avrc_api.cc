@@ -117,7 +117,7 @@ void avrc_flush_cmd_q(uint8_t handle) {
   AVRC_TRACE_DEBUG("AVRC: Flushing command queue for handle=0x%02x", handle);
   avrc_cb.ccb_int[handle].flags &= ~AVRC_CB_FLAGS_RSP_PENDING;
 
-  alarm_cancel(avrc_cb.ccb_int[handle].tle);
+  osi_free(alarm_cancel(avrc_cb.ccb_int[handle].tle));
   fixed_queue_free(avrc_cb.ccb_int[handle].cmd_q, osi_free);
   avrc_cb.ccb_int[handle].cmd_q = NULL;
 }
@@ -206,9 +206,16 @@ void avrc_start_cmd_timer(uint8_t handle, uint8_t label, uint8_t msg_mask) {
 
   AVRC_TRACE_DEBUG("AVRC: starting timer (handle=0x%02x, label=0x%02x)", handle,
                    label);
+  if (avrc_cb.ccb_int[handle].tle != NULL) {
+    if (alarm_is_scheduled(avrc_cb.ccb_int[handle].tle)) {
+      osi_free(alarm_cancel(avrc_cb.ccb_int[handle].tle));
+    }
 
-  alarm_set_on_mloop(avrc_cb.ccb_int[handle].tle, AVRC_CMD_TOUT_MS,
-                     avrc_process_timeout, param);
+    alarm_set_on_mloop(avrc_cb.ccb_int[handle].tle, AVRC_CMD_TOUT_MS,
+                       avrc_process_timeout, param);
+  } else {
+    osi_free(param);
+  }
 }
 
 /******************************************************************************
@@ -650,7 +657,7 @@ static void avrc_msg_cback(uint8_t handle, uint8_t label, uint8_t cr,
   } else if (cr == AVCT_RSP) {
     /* Received response. Stop command timeout timer */
     AVRC_TRACE_DEBUG("AVRC: stopping timer (handle=0x%02x)", handle);
-    alarm_cancel(avrc_cb.ccb_int[handle].tle);
+    osi_free(alarm_cancel(avrc_cb.ccb_int[handle].tle));
   }
 
   p_data = (uint8_t*)(p_pkt + 1) + p_pkt->offset;

@@ -84,7 +84,7 @@ void alarm_set_on_mloop(alarm_t* alarm, uint64_t interval_ms,
 // callback is not in progress and will not be called if it
 // hasn't already been called. This function is idempotent.
 // |alarm| may not be NULL.
-void alarm_cancel(alarm_t* alarm);
+void* alarm_cancel(alarm_t* alarm);
 
 // Tests whether the |alarm| is scheduled.
 // Return true if the |alarm| is scheduled or NULL, otherwise false.
