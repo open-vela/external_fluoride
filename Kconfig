@@ -27,6 +27,7 @@ menuconfig LIB_FLUORIDE
   select LIB_CHROMIUM
   select LIB_TINYXML2
   select LIBC_SCANSET
+  select NET_LOCAL_SCM
   help
     Enable support for the Fluoride Bluetooth stack
 
