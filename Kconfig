@@ -203,6 +203,12 @@ config GATT_CL_MAX_LCB
   help
     Max GATT CL LCB
 
+config BLE_LOCAL_PRIVACY_ENABLED
+  bool "Enable Fluoride BLE privacy"
+  default n
+  help
+    Enable Fluoride BLE privacy
+
 config HF_CLIENT_MAX_DEVICES
   int "Maximum number of HF devices supported simultaneously"
   default 2

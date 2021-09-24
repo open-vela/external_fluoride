@@ -37,6 +37,11 @@
 #define BT_RC_NUM_APP               CONFIG_BT_RC_NUM_APP
 #define HF_CLIENT_MAX_DEVICES       CONFIG_HF_CLIENT_MAX_DEVICES
 #define GATT_CL_MAX_LCB             CONFIG_GATT_CL_MAX_LCB
+#if defined(CONFIG_BLE_LOCAL_PRIVACY_ENABLED)
+  #define BLE_LOCAL_PRIVACY_ENABLED TRUE
+#else
+  #define BLE_LOCAL_PRIVACY_ENABLED FALSE
+#endif
 
 /******************************************************************************
  *
