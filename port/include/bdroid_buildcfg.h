@@ -64,6 +64,9 @@
 /* The IO capability of the local device (for Simple Pairing) */
 #define BTM_LOCAL_IO_CAPS           CONFIG_BTM_LOCAL_IO_CAPS
 
+/* The IO capability of the local device (for BLE Simple Pairing) */
+#define BTM_LOCAL_IO_CAPS_BLE       CONFIG_BTM_LOCAL_IO_CAPS_BLE
+
 /* 4.1/4.2 secure connections feature */
 #if defined(CONFIG_SC_MODE_INCLUDED)
   #define SC_MODE_INCLUDED          (1)

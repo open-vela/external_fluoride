@@ -293,6 +293,12 @@ config BTM_LOCAL_IO_CAPS
   help
     The IO capability of the local device (for Simple Pairing).
 
+config BTM_LOCAL_IO_CAPS_BLE
+  int "The IO capability of the local device (for BLE Simple Pairing)."
+  default 3
+  help
+    The IO capability of the local device (for BLE Simple Pairing).
+
 config SC_MODE_INCLUDED
   bool "4.1/4.2 secure connections feature"
   default n
