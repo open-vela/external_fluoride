@@ -337,6 +337,12 @@ config FLUORIDE_EXAMPLES_A2DP_SOURCE
   help
     Enable Fluoride A2DP SOURCE Example
 
+config FLUORIDE_EXAMPLES_RFCOMM
+  bool "Enable Fluoride rfcomm Example"
+  default y
+  help
+    Enable Fluoride rfcomm Example
+
 if AUDIO && FLUORIDE_EXAMPLES_A2DP_SINK
 
 config CODEC_SBC
