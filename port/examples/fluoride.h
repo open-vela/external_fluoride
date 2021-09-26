@@ -52,6 +52,7 @@
 #include "property.h"
 #include "btif_util.h"
 #include "hardware/bt_hd.h"
+#include "flrd.h"
 
 #include <bluetooth/low_energy_constants.h>
 
@@ -97,9 +98,12 @@ struct fluoride_s
   RawAddress                    addr;
   RawAddress                    avrcp_addr;
 
-  pthread_t                     pid;
-  int                           rfcfd;
-  int                           accfd;
+#ifdef CONFIG_FLUORIDE_EXAMPLES_RFCOMM
+  struct file                  *rfcfp;
+  struct file                  *accfp[2];
+  bt_socket_data_cb_t           sock_data_cb;
+  bt_socket_conn_cb_t           sock_conn_cb;
+#endif
 
   /* GATT */
 
@@ -127,9 +131,11 @@ const btrc_interface_t        *bt_profile_avrcp_init(struct fluoride_s *flrd);
 const bthf_client_interface_t *bt_profile_handsfree_init(struct fluoride_s *flrd);
 ServiceInterface              *bt_profile_avrcp_service_init(struct fluoride_s *flrd);
 const bthd_interface_t        *bt_profile_hid_init(struct fluoride_s *flrd);
-const btsock_interface_t      *bt_profile_socket_get(struct fluoride_s *flrd);
+const btsock_interface_t      *bt_profile_socket_init(struct fluoride_s *flrd);
 
 struct fluoride_s             *fluoride_interface_get(void);
 int                            fluoride_shell(struct fluoride_s *flrd, int argc, char **argv);
+
+void                           bt_socket_loop(struct fluoride_s *flrd);
 
 #endif /* __FLUORIDE_PORT_EXAMPLES_FLUORIDE_H */
