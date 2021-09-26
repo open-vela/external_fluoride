@@ -20,7 +20,7 @@
 
 #include "osi/include/socket.h"
 
-#include <asm/ioctls.h>
+#include <arpa/inet.h>
 #include <base/logging.h>
 #include <errno.h>
 #include <netinet/in.h>
