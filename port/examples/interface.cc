@@ -58,7 +58,9 @@ static void adapter_state_changed(bt_state_t state)
   flrd->hfc   = (const bthf_client_interface_t *)bt_profile_handsfree_init(flrd);
   flrd->hid   = (const bthd_interface_t        *)bt_profile_hid_init(flrd);
   flrd->avrcs = (ServiceInterface              *)bt_profile_avrcp_service_init(flrd);
-  flrd->sock  = (const btsock_interface_t      *)bt_profile_socket_get(flrd);
+#ifdef CONFIG_FLUORIDE_EXAMPLES_RFCOMM
+  flrd->sock  = (const btsock_interface_t      *)bt_profile_socket_init(flrd);
+#endif
 
   pthread_cond_broadcast(&flrd->cond);
   pthread_mutex_unlock(&flrd->mutex);
@@ -255,7 +257,13 @@ struct fluoride_s *fluoride_interface_get(void)
   if (ret == BT_STATUS_DONE)
     return &g_fluoride;
   else if (ret == BT_STATUS_SUCCESS)
-    pause();
+    {
+#ifdef CONFIG_FLUORIDE_EXAMPLES_RFCOMM
+      if (g_fluoride.sock)
+        bt_socket_loop(&g_fluoride);
+#endif
+      pause();
+    }
 
   return NULL;
 }
