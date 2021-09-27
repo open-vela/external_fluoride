@@ -39,6 +39,9 @@
 #include <errno.h>
 #include <stdio.h>
 
+#include <zblue/bluetooth.h>
+#include <zblue/gatt.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
