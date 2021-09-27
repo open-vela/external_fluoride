@@ -33,6 +33,14 @@
 
 #include "fluoride.h"
 
+struct bt_conn {
+  sq_entry_t          node;
+  struct bt_conn_info info;
+};
+
+static struct bt_conn_cb *g_conn_callback_list;
+static sq_queue_t         g_conn_list;
+
 const uint8_t kHRBodyLocationOther    = 0;
 const uint8_t kHRBodyLocationChest    = 1;
 const uint8_t kHRBodyLocationWrist    = 2;
@@ -125,9 +133,86 @@ static void btgatts_connection_cb(int conn_id,
     int server_if, int connected, const RawAddress& bda)
 {
   struct fluoride_s *flrd = fluoride_interface_get();
+  struct bt_conn_info *info;
+  FAR sq_entry_t *entry;
+  struct bt_conn_cb *cb;
+  struct bt_conn *conn;
+  bool found = false;
+  bt_addr_le_t *dst;
+
+  if (connected)
+    {
+      for (entry = sq_peek(&g_conn_list); entry; entry = sq_next(entry)) {
+        conn = (struct bt_conn *)entry;
+        if (conn->info.id == conn_id || !memcpy((void *)conn->info.le.dst->a.val,
+              bda.address, sizeof(bda.address)))
+          return;
+      }
+
+      conn = (struct bt_conn *)calloc(1, sizeof(*conn) + sizeof(bt_addr_le_t));
+      if (conn == NULL)
+        return;
+
+      dst = (bt_addr_le_t *)(conn + 1);
+
+      info       = &conn->info;
+      info->id   = conn_id;
+      info->role = BT_CONN_ROLE_MASTER;
+      info->type = BT_CONN_TYPE_LE;
+
+      dst->type = BT_ADDR_LE_PUBLIC;
+      memcpy(dst->a.val, bda.address, sizeof(dst->a.val));
+      info->le.dst = dst;
+
+      for (cb = g_conn_callback_list; cb; cb = cb->_next) {
+        if (cb->connected)
+          cb->connected(conn, 0);
+      }
+
+      sq_addlast(&conn->node, &g_conn_list);
+    }
+  else
+    {
+      for (entry = sq_peek(&g_conn_list); entry; entry = sq_next(entry)) {
+        conn = (struct bt_conn *)entry;
+        if (conn->info.id == conn_id || !memcpy((void *)conn->info.le.dst->a.val,
+              bda.address, sizeof(bda.address))) {
+          sq_rem(&conn->node, &g_conn_list);
+          found = true;
+          break;
+        }
+      }
+
+      if (found) {
+        for (cb = g_conn_callback_list; cb; cb = cb->_next) {
+          if (cb->disconnected)
+            cb->disconnected(conn, 0);
+        }
+        free(conn);
+      }
+
+    }
 
   if (server_if == flrd->sif)
     flrd->cid = conn_id;
+}
+
+extern "C"
+{
+
+  int bt_conn_get_info(const struct bt_conn *conn,
+                       struct bt_conn_info *info)
+  {
+    memcpy(info, &conn->info, sizeof(*info));
+    return 0;
+  }
+
+  void bt_conn_cb_register(struct bt_conn_cb *cb)
+  {
+    cb->_next = g_conn_callback_list;
+    g_conn_callback_list = cb;
+  }
+
 }
 
 static void btgatts_service_added_cb(int status,
@@ -320,6 +405,8 @@ const btgatt_interface_t *bt_profile_gatt_init(struct fluoride_s *flrd)
     flrd->interface->get_profile_interface(BT_PROFILE_GATT_ID);
   if (gatt == NULL)
     return gatt;
+
+  sq_init(&g_conn_list);
 
   gatt->init(&sGattCallbacks);
   gatt->advertiser->RegisterCallbacks(static_cast<AdvertisingCallbacks *>(&sAdvertisingCallbacks));
