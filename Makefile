@@ -263,6 +263,7 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
   CXXSRCS  += port/examples/hidd.cc
 ifneq ($(CONFIG_FLUORIDE_BLE_ENABLED),)
   CXXSRCS  += port/examples/gatt.cc
+  CXXSRCS  += port/examples/gap.cc
 endif
 
   PROGNAME += fluorided
