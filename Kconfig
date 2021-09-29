@@ -247,7 +247,7 @@ config MAX_ACL_CONNECTIONS
 
 config SDP_MAX_RECORDS
   int "The maximum number of SDP records the server can support."
-  default 10
+  default 20
   help
     The maximum number of SDP records the server can support.
 
