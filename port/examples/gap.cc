@@ -91,6 +91,7 @@ extern "C" {
     std::vector<uint8_t> adata;
     std::vector<uint8_t> sdata;
     std::vector<uint8_t> pdata;
+    uint16_t properties = 0;
     int reg_id = -2;
     size_t i;
     int ret;
@@ -100,7 +101,25 @@ extern "C" {
     else if (!param)
       return -EINVAL;
 
-    params.advertising_event_properties     = param->options;
+    if (param->options & BT_LE_ADV_OPT_CONNECTABLE)
+      properties |= 0x01;
+    if (param->options & BT_LE_ADV_OPT_SCANNABLE)
+      properties |= 0x02;
+    if (param->options & BT_LE_ADV_OPT_DIR_MODE_LOW_DUTY)
+      properties |= 0x04;
+    if (param->options & BT_LE_ADV_OPT_NOTIFY_SCAN_REQ)
+      properties |= 0x08;
+    if (param->options & BT_LE_ADV_OPT_ANONYMOUS)
+      properties |= 0x20;
+    if (param->options & BT_LE_ADV_OPT_USE_TX_POWER)
+      properties |= 0x40;
+
+    if (!properties)
+      return -EINVAL;
+
+    properties |= 0x10; /* legacy */
+
+    params.advertising_event_properties     = properties;
     params.min_interval                     = param->interval_min;
     params.max_interval                     = param->interval_max;
     params.channel_map                      = 0x07; /* all channels */

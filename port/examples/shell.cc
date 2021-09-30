@@ -153,12 +153,6 @@ static const uint8_t keytable_us_shift[] = {
   '6', '7', '8', '9', '0', '.', 0xb1,                                 /* 97-100 */
 };
 
-const bluetooth::Uuid kCCCDescriptorUuid      = bluetooth::Uuid::FromString("2902");
-const bluetooth::Uuid kHRServiceUuid          = bluetooth::Uuid::FromString("180D");
-const bluetooth::Uuid kHRMeasurementUuid      = bluetooth::Uuid::FromString("2A37");
-const bluetooth::Uuid kBodySensorLocationUuid = bluetooth::Uuid::FromString("2A38");
-const bluetooth::Uuid kHRControlPointUuid     = bluetooth::Uuid::FromString("2A39");
-
 typedef int (*flrdcmd_func)(struct fluoride_s *flrd, int argc, char **argv);
 
 struct fluoride_cmd_s
@@ -543,100 +537,149 @@ static int command_ble_scan(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
-static void ble_advertising_enable_cb(uint8_t rid, bool enable, uint8_t status) TRACE_CALLBACK_BODY
-static void ble_advertising_set_timeout_cb(uint8_t advertiser_id, uint8_t status) TRACE_CALLBACK_BODY
-static void ble_advertising_set_started_cb(int reg_id,
-    uint8_t advertiser_id, int8_t tx_power, uint8_t status)
+static void connected(struct bt_conn *conn, uint8_t err)
 {
-  struct fluoride_s *flrd = fluoride_interface_get();
-  flrd->aid = advertiser_id;
-
-  flrd->gatt->advertiser->Enable(flrd->aid, true,
-      base::Bind(&ble_advertising_enable_cb, flrd->aid, true), 0, 0,
-      base::Bind(&ble_advertising_enable_cb, flrd->aid, false));
+  printf("Connected, err: %x\n", err);
 }
+
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+  printf("Disconnected (reason 0x%02x)\n", reason);
+}
+
+static struct bt_conn_cb conn_callbacks = {
+  .connected    = connected,
+  .disconnected = disconnected,
+};
+
+static const struct bt_data advdata[] =
+{
+  BT_DATA_BYTES(BT_DATA_UUID16_ALL,
+                BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
+                BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
+                BT_UUID_16_ENCODE(BT_UUID_CTS_VAL)),
+  BT_DATA_BYTES(BT_DATA_UUID128_ALL,
+                0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12,
+                0x78, 0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12),
+};
+
+static const struct bt_data scandata[] =
+{
+  BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_FLUORIDE_DEVICE_NAME,
+          sizeof(CONFIG_FLUORIDE_DEVICE_NAME)),
+};
+
+static uint8_t ct[10];
+static uint8_t ct_update;
+static uint8_t hrs_blsc;
+static uint8_t battery_level = 100U;
+
+static void ct_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) TRACE_CALLBACK_BODY
+
+static ssize_t read_ct(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                       void *buf, uint16_t len, uint16_t offset)
+{
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data, sizeof(ct));
+}
+
+static ssize_t write_ct(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                        const void *buf, uint16_t len, uint16_t offset, uint8_t flags)
+{
+  uint8_t *value = (uint8_t *)attr->user_data;
+
+  if (offset + len > sizeof(ct))
+    return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+
+  memcpy(value + offset, buf, len);
+  ct_update = 1U;
+
+  return len;
+}
+
+static void hrmc_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+  bool notif_enabled = (value == BT_GATT_CCC_NOTIFY);
+
+  printf("HRS notifications %s\n", notif_enabled ? "enabled" : "disabled");
+}
+
+static ssize_t read_blsc(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                         void *buf, uint16_t len, uint16_t offset)
+{
+  return bt_gatt_attr_read(conn, attr, buf, len,
+                           offset, &hrs_blsc, sizeof(hrs_blsc));
+}
+
+static void blvl_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+                                 uint16_t value)
+{
+  bool notif_enabled = (value == BT_GATT_CCC_NOTIFY);
+
+  printf("BAS Notifications %s\n", notif_enabled ? "enabled" : "disabled");
+}
+
+static ssize_t read_blvl(struct bt_conn *conn,
+                         const struct bt_gatt_attr *attr, void *buf,
+                         uint16_t len, uint16_t offset)
+{
+  uint8_t lvl8 = battery_level;
+
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, &lvl8,
+         sizeof(lvl8));
+}
+
+/* GATT DEMO */
+static struct bt_gatt_attr cts_attrs[] =
+{
+  BT_GATT_PRIMARY_SERVICE(BT_UUID_CTS),
+  BT_GATT_CHARACTERISTIC(BT_UUID_CTS_CURRENT_TIME, BT_GATT_CHRC_READ |
+                         BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_WRITE,
+                         BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
+                         read_ct, write_ct, ct),
+
+  BT_GATT_CCC(ct_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+  BT_GATT_SECONDARY_SERVICE(BT_UUID_HRS),
+  BT_GATT_CHARACTERISTIC(BT_UUID_HRS_MEASUREMENT, BT_GATT_CHRC_NOTIFY,
+                         BT_GATT_PERM_NONE, NULL, NULL, NULL),
+  BT_GATT_CCC(hrmc_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+  BT_GATT_CHARACTERISTIC(BT_UUID_HRS_BODY_SENSOR, BT_GATT_CHRC_READ,
+                         BT_GATT_PERM_READ, read_blsc, NULL, NULL),
+  BT_GATT_CHARACTERISTIC(BT_UUID_HRS_CONTROL_POINT, BT_GATT_CHRC_WRITE,
+                         BT_GATT_PERM_NONE, NULL, NULL, NULL),
+
+  BT_GATT_SECONDARY_SERVICE(BT_UUID_BAS),
+  BT_GATT_CHARACTERISTIC(BT_UUID_BAS_BATTERY_LEVEL,
+                         BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                         BT_GATT_PERM_READ, read_blvl, NULL,
+                         &battery_level),
+  BT_GATT_CCC(blvl_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+};
+
+static struct bt_gatt_service cts_service = BT_GATT_SERVICE(cts_attrs);
 
 static int command_ble_adv(struct fluoride_s *flrd, int argc, char **argv)
 {
-  PeriodicAdvertisingParameters pparams = {};
-  std::string name("Fluoride BLE");
-  AdvertiseParameters params = {};
-  std::vector<uint8_t> sdata;
-  std::vector<uint8_t> pdata;
-  int reg_id = -2;
+  bt_le_adv_param param;
 
-  /* Advertising data: 16-bit Service Uuid: Heart Rate Service, Tx power */
-
-  std::vector<uint8_t> adata { 0x03, bluetooth::kEIRTypeComplete16BitUuids,
-    0x0D, 0x18, 0x02, bluetooth::kEIRTypeTxPower, 0x00 };
-
-  if (argc == 0)
-    return -1;
-
-  if (atoi(argv[0]) == 0) {
-    if (flrd->aid >= 0) {
-      flrd->gatt->advertiser->Enable(flrd->aid, false,
-          base::Bind(&ble_advertising_enable_cb, flrd->aid, true), 0, 0,
-          base::Bind(&ble_advertising_enable_cb, flrd->aid, false));
-    }
+  if (argc == 0 || atoi(argv[0]) == 0) {
+    bt_le_adv_stop();
     return 0;
   }
 
-  if (!flrd->element)
-    {
-      flrd->element = (btgatt_db_element_t *)calloc(5, sizeof(btgatt_db_element_t));
-      if (!flrd->element)
-        return -ENOMEM;
+  bt_conn_cb_register(&conn_callbacks);
+  bt_gatt_service_register(&cts_service);
 
-      flrd->element_size = 5;
+  param = BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE |
+                               BT_LE_ADV_OPT_SCANNABLE |
+                               BT_LE_ADV_OPT_USE_NAME,
+                               BT_GAP_ADV_FAST_INT_MIN_2,
+                               BT_GAP_ADV_FAST_INT_MAX_2, NULL);
 
-      flrd->element[0].uuid        = kHRServiceUuid;
-      flrd->element[0].type        = BTGATT_DB_PRIMARY_SERVICE;
-      flrd->element[1].uuid        = kHRMeasurementUuid;
-      flrd->element[1].type        = BTGATT_DB_CHARACTERISTIC;
-      flrd->element[1].properties  = bluetooth::kCharacteristicPropertyNotify;
-      flrd->element[2].uuid        = kCCCDescriptorUuid;
-      flrd->element[2].type        = BTGATT_DB_DESCRIPTOR;
-      flrd->element[2].permissions = bluetooth::kAttributePermissionRead |
-                                     bluetooth::kAttributePermissionWrite;
-      flrd->element[3].uuid        = kBodySensorLocationUuid;
-      flrd->element[3].type        = BTGATT_DB_CHARACTERISTIC;
-      flrd->element[3].properties  = bluetooth::kCharacteristicPropertyRead;
-      flrd->element[3].permissions = bluetooth::kAttributePermissionRead;
-      flrd->element[4].uuid        = kHRControlPointUuid;
-      flrd->element[4].type        = BTGATT_DB_CHARACTERISTIC;
-      flrd->element[4].properties  = bluetooth::kCharacteristicPropertyWrite;
-      flrd->element[4].permissions = bluetooth::kAttributePermissionWrite;
-    }
-
-  if (flrd->sid == Uuid::kEmpty) {
-    flrd->sid = bluetooth::Uuid::GetRandom();
-    flrd->gatt->server->register_server(flrd->sid, false);
-  }
-
-  params.advertising_event_properties     = 0x13;
-  params.min_interval                     = 160;
-  params.max_interval                     = 240;
-  params.channel_map                      = 0x07; /* all channels */
-  params.tx_power                         = -15;
-  params.primary_advertising_phy          = 1;
-  params.secondary_advertising_phy        = 1;
-  params.scan_request_notification_enable = false;
-
-  pparams.enable                          = false;
-  pparams.min_interval                    = 80;
-  pparams.max_interval                    = 80 + 16; /* 20ms difference betwen min and max */
-
-  adata.push_back(name.length() + 1);
-  adata.push_back(bluetooth::kEIRTypeCompleteLocalName);
-  adata.insert(adata.end(), name.c_str(), name.c_str() + name.length());
-
-  flrd->gatt->advertiser->StartAdvertisingSet(reg_id,
-      base::Bind(&ble_advertising_set_started_cb, reg_id), params, adata,
-      sdata, pparams, pdata, UINT16_MAX, 0, base::Bind(ble_advertising_set_timeout_cb));
-
-  return 0;
+  return bt_le_adv_start(&param, advdata, ARRAY_SIZE(advdata),
+                         scandata, ARRAY_SIZE(scandata));
 }
+/* GATT DEMO END */
 
 static struct fluoride_cmd_s g_ble_cmds[] =
 {
