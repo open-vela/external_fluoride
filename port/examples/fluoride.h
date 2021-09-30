@@ -36,6 +36,7 @@
 
 #include <syslog.h>
 
+#include "controller.h"
 #include "btif_common.h"
 #include "btif_bqr.h"
 #include "btif_a2dp_sink.h"
@@ -76,7 +77,7 @@ struct fluoride_s
   const bt_interface_t          *interface;
 
   const btrc_interface_t        *avrcp;
-  const btrc_ctrl_interface_t   *ctrl;
+  const btrc_ctrl_interface_t   *rcctrl;
   const btsdp_interface_t       *sdp;
 
   const btav_sink_interface_t   *sink;
@@ -86,6 +87,7 @@ struct fluoride_s
   const btgatt_interface_t      *gatt;
   const bthd_interface_t        *hid;
   const btsock_interface_t      *sock;
+  const controller_t            *ctrl;
 
   ServiceInterface              *avrcs;
 
@@ -120,6 +122,8 @@ struct fluoride_s
   uint16_t                      ncount;
 
   uint16_t                      handle[5];
+
+  const RawAddress             *laddr;
 };
 
 const btgatt_interface_t      *bt_profile_gatt_init(struct fluoride_s *flrd);

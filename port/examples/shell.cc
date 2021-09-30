@@ -190,9 +190,9 @@ static int command_bta_key(struct fluoride_s *flrd, int argc, char **argv)
 
   command = atoi(argv[0]);
 
-  if (flrd->ctrl) {
-    flrd->ctrl->send_pass_through_cmd(flrd->avrcp_addr, command, AVRC_STATE_PRESS);
-    flrd->ctrl->send_pass_through_cmd(flrd->avrcp_addr, command, AVRC_STATE_RELEASE);
+  if (flrd->rcctrl) {
+    flrd->rcctrl->send_pass_through_cmd(flrd->avrcp_addr, command, AVRC_STATE_PRESS);
+    flrd->rcctrl->send_pass_through_cmd(flrd->avrcp_addr, command, AVRC_STATE_RELEASE);
   }
 
   return 0;
@@ -247,6 +247,12 @@ static int command_bta_bdname(struct fluoride_s *flrd, int argc, char **argv)
   property_free(property);
 
   return ret;
+}
+
+static int command_bta_laddr(struct fluoride_s *flrd, int argc, char **argv)
+{
+  printf("Local Address: %s\n", flrd->laddr->ToString().c_str());
+  return 0;
 }
 
 static int command_bta_discovery(struct fluoride_s *flrd, int argc, char **argv)
@@ -305,8 +311,8 @@ static int command_bta_audiorole(struct fluoride_s *flrd, int argc, char **argv)
 
 static int command_bta_playback_state(struct fluoride_s *flrd, int argc, char **argv)
 {
-  if (flrd->ctrl)
-    flrd->ctrl->get_playback_state_cmd(flrd->avrcp_addr);
+  if (flrd->rcctrl)
+    flrd->rcctrl->get_playback_state_cmd(flrd->avrcp_addr);
 
   return 0;
 }
@@ -454,6 +460,11 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "bdname",
     command_bta_bdname,
     "< bdname > ( bluetooth device name )",
+  },
+  {
+    "laddr",
+    command_bta_laddr,
+    "< N/A >    ( Get Local Address )",
   },
   {
     "discovery",

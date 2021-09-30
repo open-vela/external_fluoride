@@ -174,6 +174,7 @@ FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" bta/gatt}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" bta/hh}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" bta/dm}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" udrv/include}
+FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" device/include}
 
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" stack}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" stack/avct}

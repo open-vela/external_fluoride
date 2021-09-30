@@ -43,10 +43,11 @@ static void adapter_state_changed(bt_state_t state)
   pthread_mutex_lock(&flrd->mutex);
   flrd->state = state;
 
+  flrd->ctrl  = (const controller_t            *)controller_get_interface();
 #ifdef CONFIG_FLUORIDE_BLE_ENABLED
   flrd->gatt  = (const btgatt_interface_t      *)bt_profile_gatt_init(flrd);
 #endif
-  flrd->ctrl  = (const btrc_ctrl_interface_t   *)bt_profile_avrcp_control_init(flrd);
+  flrd->rcctrl= (const btrc_ctrl_interface_t   *)bt_profile_avrcp_control_init(flrd);
   flrd->avrcp = (const btrc_interface_t        *)bt_profile_avrcp_init(flrd);
   flrd->sdp   = (const btsdp_interface_t       *)bt_profile_sdp_init(flrd);
 #ifdef CONFIG_FLUORIDE_EXAMPLES_A2DP_SOURCE
@@ -68,10 +69,11 @@ static void adapter_state_changed(bt_state_t state)
 
 static void parse_properties(const char *title,
                              int status,
+                             const RawAddress *addr,
                              int num_properties,
                              bt_property_t *property)
 {
-  const bt_bdname_t* name = nullptr;
+  const bt_bdname_t *name = nullptr;
   char prop[128];
   int offset = 0;
 
@@ -85,10 +87,7 @@ static void parse_properties(const char *title,
 
       case BT_PROPERTY_BDADDR:
         {
-          const RawAddress *addr = property_as_addr(property);
-          offset += snprintf(prop + offset,
-                             sizeof(prop) - offset,
-                             "[%s]", addr->ToString().c_str());
+          addr = property_as_addr(property);
         }
         break;
 
@@ -136,6 +135,9 @@ static void parse_properties(const char *title,
 
   if (strnlen(prop, sizeof(prop)) > 0)
     {
+      if (addr != nullptr)
+        offset += snprintf(prop + offset,
+                           sizeof(prop) - offset, "[%s]", addr->ToString().c_str());
       if (name != nullptr)
         offset += snprintf(prop + offset,
                            sizeof(prop) - offset, "[%s]", name->name);
@@ -145,17 +147,17 @@ static void parse_properties(const char *title,
 
 static void adapter_properties(bt_status_t status, int num_properties, bt_property_t *properties)
 {
-  parse_properties("ADAPTE", status, num_properties, properties);
+  parse_properties("ADAPTE", status, nullptr, num_properties, properties);
 }
 
 static void remote_device_properties(bt_status_t status, RawAddress *bd_addr, int num_properties, bt_property_t *properties)
 {
-  parse_properties("REMOTE", status, num_properties, properties);
+  parse_properties("REMOTE", status, bd_addr, num_properties, properties);
 }
 
 static void device_found(int num_properties, bt_property_t *properties)
 {
-  parse_properties("DISCOV", BT_STATUS_SUCCESS, num_properties, properties);
+  parse_properties("DISCOV", BT_STATUS_SUCCESS, nullptr, num_properties, properties);
 }
 
 static void discovery_state_changed(bt_discovery_state_t state) TRACE_CALLBACK_BODY
@@ -242,6 +244,8 @@ static int bt_interface_init(void)
 
   while (flrd->state != BT_STATE_ON)
     pthread_cond_wait(&flrd->cond, &flrd->mutex);
+
+  flrd->laddr = flrd->ctrl->get_address();
 
 bail:
   pthread_mutex_unlock(&flrd->mutex);
