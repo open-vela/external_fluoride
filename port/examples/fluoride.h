@@ -111,18 +111,6 @@ struct fluoride_s
 
   uint8_t                       aid;
 
-  bluetooth::Uuid               sid;
-  int                           sif;
-  int                           cid;
-
-  btgatt_db_element_t           *element;
-  int                           element_size;
-
-  timer_t                       timer;
-  uint16_t                      ncount;
-
-  uint16_t                      handle[5];
-
   const RawAddress             *laddr;
 };
 
