@@ -58,8 +58,8 @@ void btavrcp_volume_change_callback(uint8_t volume, uint8_t ctype, const RawAddr
 {
   struct fluoride_s *flrd = fluoride_interface_get();
 
-  if (flrd->ctrl)
-    flrd->ctrl->set_volume_rsp(flrd->avrcp_addr, volume, 0);
+  if (flrd->rcctrl)
+    flrd->rcctrl->set_volume_rsp(flrd->avrcp_addr, volume, 0);
   if (flrd->avrcp)
     flrd->avrcp->set_volume(volume);
 }

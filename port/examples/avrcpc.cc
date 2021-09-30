@@ -86,14 +86,14 @@ static btrc_ctrl_callbacks_t sBluetoothAvrcpCallbacks =
 
 const btrc_ctrl_interface_t *bt_profile_avrcp_control_init(struct fluoride_s *flrd)
 {
-  const btrc_ctrl_interface_t *ctrl;
+  const btrc_ctrl_interface_t *rcctrl;
 
-  ctrl = (const btrc_ctrl_interface_t *)
+  rcctrl = (const btrc_ctrl_interface_t *)
     flrd->interface->get_profile_interface(BT_PROFILE_AV_RC_CTRL_ID);
-  if (ctrl == NULL)
-    return ctrl;
+  if (rcctrl == NULL)
+    return rcctrl;
 
-  ctrl->init(&sBluetoothAvrcpCallbacks);
+  rcctrl->init(&sBluetoothAvrcpCallbacks);
 
-  return ctrl;
+  return rcctrl;
 }
