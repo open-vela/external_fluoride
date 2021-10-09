@@ -63,8 +63,8 @@
                        __LINE__)                                             \
   } while (0)
 
-#define MAX_THREAD 8
-#define MAX_POLL 64
+#define MAX_THREAD 1
+#define MAX_POLL 4
 #define POLL_EXCEPTION_EVENTS (POLLHUP | POLLRDHUP | POLLERR | POLLNVAL)
 #define IS_EXCEPTION(e) ((e)&POLL_EXCEPTION_EVENTS)
 #define IS_READ(e) ((e)&POLLIN)
