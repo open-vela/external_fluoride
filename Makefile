@@ -134,6 +134,9 @@ CXXSRCS += $(PORTCXXSRCS)
 ifeq ($(CONFIG_AUDIO),y)
   PORTCXXSRCS += btif/src/btif_avrcp_audio_track_linux.cc
 endif
+ifeq ($(CONFIG_BTA_AV_SINK_INCLUDED),)
+  PORTCXXSRCS += btif/src/btif_a2dp_sink.cc
+endif
 PORTCXXSRCS += btif/src/btif_avrcp_audio_track.cc
 PORTCXXSRCS += btif/src/btif_a2dp_audio_interface.cc
 PORTCXXSRCS += hci/src/hci_layer_android.cc
