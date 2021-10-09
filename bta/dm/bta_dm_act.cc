@@ -194,8 +194,10 @@ const tBTM_APPL_INFO bta_security = {&bta_dm_pin_cback,
 #endif
                                      };
 
+#if (SDP_RAW_DATA_INCLUDED == TRUE)
 #define MAX_DISC_RAW_DATA_BUF (4096)
 uint8_t g_disc_raw_data_buf[MAX_DISC_RAW_DATA_BUF];
+#endif
 
 extern DEV_CLASS local_device_default_class;
 
@@ -1133,6 +1135,7 @@ void bta_dm_sdp_result(tBTA_DM_MSG* p_data) {
         memcpy(p_msg->disc_result.result.disc_res.p_uuid_list, uuid_list.data(),
                uuid_list.size() * sizeof(Uuid));
       }
+#if (SDP_RAW_DATA_INCLUDED == TRUE)
       // Copy the raw_data to the discovery result structure
       if (bta_dm_search_cb.p_sdp_db != NULL &&
           bta_dm_search_cb.p_sdp_db->raw_used != 0 &&
@@ -1149,6 +1152,7 @@ void bta_dm_sdp_result(tBTA_DM_MSG* p_data) {
         APPL_TRACE_DEBUG("%s raw data size is 0 or raw_data is null!!",
                          __func__);
       }
+#endif
       /* Done with p_sdp_db. Free it */
       bta_dm_free_sdp_db();
       p_msg->disc_result.result.disc_res.services =
@@ -1481,10 +1485,12 @@ static void bta_dm_find_services(const RawAddress& bd_addr) {
       SDP_InitDiscoveryDb(bta_dm_search_cb.p_sdp_db, BTA_DM_SDP_DB_SIZE, 1,
                           &uuid, 0, NULL);
 
+#if (SDP_RAW_DATA_INCLUDED == TRUE)
       memset(g_disc_raw_data_buf, 0, sizeof(g_disc_raw_data_buf));
       bta_dm_search_cb.p_sdp_db->raw_data = g_disc_raw_data_buf;
 
       bta_dm_search_cb.p_sdp_db->raw_size = MAX_DISC_RAW_DATA_BUF;
+#endif
 
       if (!SDP_ServiceSearchAttributeRequest(bd_addr, bta_dm_search_cb.p_sdp_db,
                                              &bta_dm_sdp_callback)) {
@@ -1641,8 +1647,10 @@ static void bta_dm_discover_device(const RawAddress& remote_bd_addr) {
 
       if (transport == BT_TRANSPORT_LE) {
         if (bta_dm_search_cb.services_to_search & BTA_BLE_SERVICE_MASK) {
+#if (SDP_RAW_DATA_INCLUDED == TRUE)
           // set the raw data buffer here
           memset(g_disc_raw_data_buf, 0, sizeof(g_disc_raw_data_buf));
+#endif
           /* start GATT for service discovery */
           btm_dm_start_gatt_discovery(bta_dm_search_cb.peer_bdaddr);
           return;
