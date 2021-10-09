@@ -363,8 +363,10 @@ static void bta_create_raw_sdp_record(bluetooth_sdp_record* record,
   if (SDP_FindProtocolListElemInRec(p_rec, UUID_PROTOCOL_RFCOMM, &pe)) {
     record->pse.hdr.rfcomm_channel_number = pe.params[0];
   }
+#if (SDP_RAW_DATA_INCLUDED == TRUE)
   record->hdr.user1_ptr_len = p_bta_sdp_cfg->p_sdp_db->raw_size;
   record->hdr.user1_ptr = p_bta_sdp_cfg->p_sdp_db->raw_data;
+#endif
 }
 
 /** Callback from btm after search is completed */

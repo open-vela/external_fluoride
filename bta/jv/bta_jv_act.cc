@@ -783,8 +783,10 @@ void bta_jv_start_discovery(const RawAddress& bd_addr, uint16_t num_uuid,
                       num_uuid, uuid_list, 0, NULL);
 
   /* tell SDP to keep the raw data */
+#if (SDP_RAW_DATA_INCLUDED == TRUE)
   p_bta_jv_cfg->p_sdp_db->raw_data = p_bta_jv_cfg->p_sdp_raw_data;
   p_bta_jv_cfg->p_sdp_db->raw_size = p_bta_jv_cfg->sdp_raw_size;
+#endif
 
   bta_jv_cb.p_sel_raw_data = 0;
   bta_jv_cb.uuid = uuid_list[0];
