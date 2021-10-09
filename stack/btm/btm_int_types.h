@@ -44,6 +44,7 @@
 
 #define BTM_MAX_SCN_ 31  // PORT_MAX_RFC_PORTS system/bt/stack/include/rfcdefs.h
 
+#if 0
 constexpr size_t kMaxLogSize = 255;
 class TimestampedStringCircularBuffer
     : public bluetooth::common::TimestampedCircularBuffer<std::string> {
@@ -64,6 +65,16 @@ class TimestampedStringCircularBuffer
         std::string(buf));
   }
 };
+#else
+class TimestampedStringCircularBuffer
+{
+ public:
+  explicit TimestampedStringCircularBuffer(size_t size) {}
+  void Push(std::string s) {}
+  template <typename... Args>
+  void Push(Args... args) {}
+};
+#endif
 
 /*
  * Define device configuration structure
@@ -291,8 +302,6 @@ typedef struct {
   tBTM_BT_QUALITY_REPORT_RECEIVER* p_bqr_report_receiver{nullptr};
 
   tACL_CB acl_cb_;
-
-  std::shared_ptr<TimestampedStringCircularBuffer> history_{nullptr};
 
   void Init(uint8_t initial_security_mode) {
     memset(&cfg, 0, sizeof(cfg));
