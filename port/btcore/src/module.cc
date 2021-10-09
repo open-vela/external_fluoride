@@ -80,68 +80,35 @@ const module_t* get_module(const char* name)
   return NULL;
 }
 
+static bool call_lifecycle_function(module_lifecycle_fn function)
+{
+  future_t* future;
+  if (!function)
+    return true;
+
+  future = function();
+  if (!future)
+    return true;
+
+  return future_await(future);
+}
+
 bool module_init(const module_t* module)
 {
-  if (module->init)
-    return module->init();
-  return true;
+  return call_lifecycle_function(module->init);
 }
 
 bool module_start_up(const module_t* module)
 {
-  if (module->start_up)
-    return module->start_up();
-  return true;
+  return call_lifecycle_function(module->start_up);
 }
 
 void module_shut_down(const module_t* module)
 {
-  if (module->shut_down)
-    module->shut_down();
+  call_lifecycle_function(module->shut_down);
 }
 
 void module_clean_up(const module_t* module)
 {
-  if (module->clean_up)
-    module->clean_up();
-}
-
-class CallbackWrapper {
-  public:
-    explicit CallbackWrapper(const module_t* module,
-        MessageLoopThread* callback_thread,
-        thread_fn callback)
-      : module(module),
-      lifecycle_thread("bt_module_lifecycle_thread"),
-      callback_thread(callback_thread),
-      callback(callback),
-      success(false) {}
-    const module_t* module;
-    MessageLoopThread lifecycle_thread;
-    MessageLoopThread* callback_thread;
-    thread_fn callback;
-    bool success;
-};
-
-static void post_result_to_callback(std::shared_ptr<CallbackWrapper> wrapper) {
-  CHECK(wrapper);
-  wrapper->lifecycle_thread.ShutDown();
-  wrapper->callback(wrapper->success ? FUTURE_SUCCESS : FUTURE_FAIL);
-}
-
-static void run_wrapped_start_up(std::shared_ptr<CallbackWrapper> wrapper) {
-  CHECK(wrapper);
-  wrapper->success = module_start_up(wrapper->module);
-  wrapper->callback_thread->DoInThread(
-      FROM_HERE, base::BindOnce(post_result_to_callback, wrapper));
-}
-
-void module_start_up_callbacked_wrapper(const module_t* module,
-    MessageLoopThread* callback_thread,
-    thread_fn callback) {
-  std::shared_ptr<CallbackWrapper> wrapper =
-    std::make_shared<CallbackWrapper>(module, callback_thread, callback);
-  wrapper->lifecycle_thread.StartUp();
-  wrapper->lifecycle_thread.DoInThread(
-      FROM_HERE, base::BindOnce(run_wrapped_start_up, wrapper));
+  call_lifecycle_function(module->clean_up);
 }
