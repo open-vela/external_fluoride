@@ -113,6 +113,7 @@ PORTCXXSRCS += port/osi/src/allocator.cc
 PORTCXXSRCS += port/btif/co/bta_hh_co.cc
 PORTCXXSRCS += port/btif/src/btif_bqr.cc
 PORTCXXSRCS += port/btif/src/btif_debug_btsnoop.cc
+PORTCXXSRCS += port/btif/src/btif_debug_conn.cc
 PORTCXXSRCS += port/btif/src/btif_keystore.cc
 PORTCXXSRCS += port/btif/src/btif_pan.cc
 PORTCXXSRCS += $(wildcard port/main/shim/*.cc)
