@@ -212,6 +212,7 @@ static void btif_a2dp_recv_ctrl_data(tUIPC_CH_ID ch_id) {
       break;
 
     case A2DP_CTRL_GET_INPUT_AUDIO_CONFIG: {
+#if (BTA_AV_SINK_INCLUDED == TRUE)
       tA2DP_CODEC_TYPE codec_type = btif_a2dp_sink_get_codec_type();
       tA2DP_SAMPLE_RATE sample_rate = btif_a2dp_sink_get_sample_rate();
       tA2DP_CHANNEL_COUNT channel_count = btif_a2dp_sink_get_channel_count();
@@ -224,6 +225,7 @@ static void btif_a2dp_recv_ctrl_data(tUIPC_CH_ID ch_id) {
                 sizeof(tA2DP_CHANNEL_COUNT));
       UIPC_Send(*a2dp_uipc, ch_id, 0, (const uint8_t*)&codec_type,
                 sizeof(tA2DP_CODEC_TYPE));
+#endif
       break;
     }
 
