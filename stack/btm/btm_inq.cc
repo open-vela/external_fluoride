@@ -432,8 +432,6 @@ void BTM_CancelInquiry(void) {
     return;
   }
 
-  btm_cb.history_->Push("%-32s", "Inquiry scan stopped");
-
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
   BTM_TRACE_API("BTM_CancelInquiry called");
 
@@ -513,8 +511,6 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_RESULTS_CB* p_results_cb,
     LOG(ERROR) << __func__ << ": adapter is not up";
     return BTM_WRONG_MODE;
   }
-
-  btm_cb.history_->Push("%-32s", "Inquiry scan started");
 
   /* Save the inquiry parameters to be used upon the completion of
    * setting/clearing the inquiry filter */

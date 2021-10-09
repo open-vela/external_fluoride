@@ -66,15 +66,10 @@ void btm_init(void) {
   btm_sco_init(); /* SCO Database and Structures (If included) */
 
   btm_dev_init(); /* Device Manager Structures & HCI_Reset */
-
-  btm_cb.history_ = std::make_shared<TimestampedStringCircularBuffer>(40);
-  CHECK(btm_cb.history_ != nullptr);
-  btm_cb.history_->Push(std::string("<--- Initialized btm history --->"));
 }
 
 /** This function is called to free dynamic memory and system resource allocated by btm_init */
 void btm_free(void) {
-  btm_cb.history_.reset();
 
   btm_dev_free();
   btm_inq_db_free();
@@ -87,9 +82,6 @@ constexpr size_t kMaxLogHistoryMsgLength = 25;
 
 static void btm_log_history(const std::string& tag, const char* addr,
                             const std::string& msg, const std::string& extra) {
-  btm_cb.history_->Push(
-      "%-6s %-25s: %s %s", tag.substr(0, kMaxLogHistoryTagLength).c_str(),
-      msg.substr(0, kMaxLogHistoryMsgLength).c_str(), addr, extra.c_str());
 }
 
 void BTM_LogHistory(const std::string& tag, const RawAddress& bd_addr,
