@@ -106,7 +106,6 @@ static MessageLoopThread jni_thread("bt_jni_thread");
 #else
 static MessageLoopThread jni_thread("bt_jni_thread", CONFIG_FLUORIDE_JNI_STACKSIZE);
 #endif
-static base::AtExitManager* exit_manager;
 static uid_set_t* uid_set;
 
 /*******************************************************************************
@@ -241,7 +240,6 @@ static void bt_jni_msg_ready(void* context) {
  ******************************************************************************/
 bt_status_t btif_init_bluetooth() {
   LOG_INFO("%s entered", __func__);
-  exit_manager = new base::AtExitManager();
   jni_thread.StartUp();
   invoke_thread_evt_cb(ASSOCIATE_JVM);
   LOG_INFO("%s finished", __func__);
@@ -321,8 +319,6 @@ bt_status_t btif_cleanup_bluetooth() {
   invoke_thread_evt_cb(DISASSOCIATE_JVM);
   btif_queue_release();
   jni_thread.ShutDown();
-  delete exit_manager;
-  exit_manager = nullptr;
   btif_dut_mode = 0;
   LOG_INFO("%s finished", __func__);
   return BT_STATUS_SUCCESS;
