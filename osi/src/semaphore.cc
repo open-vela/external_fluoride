@@ -101,6 +101,13 @@ void semaphore_post(semaphore_t* semaphore) {
     LOG_ERROR("%s unable to post to semaphore: %s", __func__, strerror(errno));
 }
 
+void semaphore_post_fp(semaphore_t* semaphore, FAR struct file *filep) {
+  eventfd_t value = 1ULL;
+
+  if (filep)
+    file_write(filep, &value, sizeof (eventfd_t));
+}
+
 int semaphore_get_fd(const semaphore_t* semaphore) {
   CHECK(semaphore != NULL);
   CHECK(semaphore->fd != INVALID_FD);

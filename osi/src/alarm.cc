@@ -61,7 +61,6 @@ using base::MessageLoop;
 // Callback and timer threads should run at RT priority in order to ensure they
 // meet audio deadlines.  Use this priority for all audio/timer related thread.
 static const int THREAD_RT_PRIORITY = sched_get_priority_max(SCHED_FIFO) - 9;
-static sem_t g_alarm_thread_sem = SEM_INITIALIZER(0);
 
 typedef struct {
   size_t count;
@@ -136,6 +135,9 @@ static bool timer_set;
 static thread_t* dispatcher_thread;
 static bool dispatcher_thread_active;
 static semaphore_t* alarm_expired;
+#ifdef __NuttX__
+static file* alarm_expired_fp;
+#endif
 
 // Default alarm callback thread and queue
 static thread_t* default_callback_thread;
@@ -327,22 +329,14 @@ void alarm_cleanup(void) {
   alarms = NULL;
 }
 
-#if defined(CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE)
-static void *timer_dispatcher_thread(void *arg) {
-
-  prctl(PR_SET_NAME, "alarm_deprecated");
-
-  while (true) {
-    sem_wait(&g_alarm_thread_sem);
-    semaphore_post(alarm_expired);
-  }
-
-  return NULL;
-}
-#endif
-
 static bool lazy_initialize(void) {
   CHECK(alarms == NULL);
+#ifdef __NuttX__
+  struct _semaphore_t {
+    int fd;
+  };
+  struct _semaphore_t *sema;
+#endif
 
   // timer_t doesn't have an invalid value so we must track whether
   // the |timer| variable is valid ourselves.
@@ -373,18 +367,9 @@ static bool lazy_initialize(void) {
     goto error;
   }
 
-#if defined(CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE)
-  struct sched_param sparam;
-  pthread_attr_t pattr;
-  pthread_t pid;
-
-  pthread_attr_init(&pattr);
-  sparam.sched_priority = THREAD_RT_PRIORITY;
-  pthread_attr_setschedparam(&pattr, &sparam);
-  pthread_attr_setschedpolicy(&pattr, SCHED_FIFO);
-  pthread_attr_setstacksize(&pattr, CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE);
-  pthread_create(&pid, &pattr, timer_dispatcher_thread, NULL);
-  pthread_attr_destroy(&pattr);
+#ifdef __NuttX__
+  sema = (struct _semaphore_t *)alarm_expired;
+  fs_getfilep(sema->fd, &alarm_expired_fp);
 #endif
 
 #if !defined(CONFIG_FLUORIDE_ALARM_CALLBACK_STACKSIZE)
@@ -675,7 +660,11 @@ static void alarm_queue_ready(fixed_queue_t* queue, UNUSED_ATTR void* context) {
 
 // Callback function for wake alarms and our posix timer
 static void timer_callback(UNUSED_ATTR void* ptr) {
-  sem_post(&g_alarm_thread_sem);
+#ifdef __NuttX__
+  semaphore_post_fp(alarm_expired, alarm_expired_fp);
+#else
+  semaphore_post(alarm_expired);
+#endif
 }
 
 // Function running on |dispatcher_thread| that performs the following:

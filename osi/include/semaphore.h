@@ -19,6 +19,9 @@
 #pragma once
 
 #include <stdbool.h>
+#ifdef __NuttX__
+#include <nuttx/fs/fs.h>
+#endif
 
 struct semaphore_t;
 typedef struct semaphore_t semaphore_t;
@@ -43,6 +46,11 @@ bool semaphore_try_wait(semaphore_t* semaphore);
 
 // Increments the value of |semaphore|. |semaphore| may not be NULL.
 void semaphore_post(semaphore_t* semaphore);
+
+// Increments the value of |semaphore|. |semaphore| may not be NULL.
+#ifdef __NuttX__
+void semaphore_post_fp(semaphore_t* semaphore, FAR struct file *filep);
+#endif
 
 // Returns a file descriptor representing this semaphore. The caller may
 // only perform one operation on the file descriptor: select(2). If |select|
