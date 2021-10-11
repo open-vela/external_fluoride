@@ -56,10 +56,14 @@
 using bluetooth::Uuid;
 
 // Maximum number of RFCOMM channels (1-30 inclusive).
+#ifndef MAX_RFC_CHANNEL
 #define MAX_RFC_CHANNEL 30
+#endif
 
 // Maximum number of devices we can have an RFCOMM connection with.
+#ifndef MAX_RFC_SESSION
 #define MAX_RFC_SESSION 7
+#endif
 
 typedef struct {
   int outgoing_congest : 1;

@@ -34,7 +34,9 @@
  *  Constants and data types
  ****************************************************************************/
 /* Number of SCBs (AG service instances that can be registered) */
+#ifndef BTA_AG_MAX_NUM_CLIENTS
 #define BTA_AG_MAX_NUM_CLIENTS 6
+#endif
 
 #define HFP_HSP_VERSION_UNKNOWN 0x0000
 #define HFP_VERSION_1_1 0x0101

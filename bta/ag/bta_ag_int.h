@@ -43,8 +43,8 @@
 #define BTA_AG_MTU 256
 
 /* Max number of peer and local HF indicators */
-#define BTA_AG_MAX_NUM_PEER_HF_IND 20
-#define BTA_AG_MAX_NUM_LOCAL_HF_IND 4
+#define BTA_AG_MAX_NUM_PEER_HF_IND 4
+#define BTA_AG_MAX_NUM_LOCAL_HF_IND 2
 
 /* Internal profile indexes */
 #define BTA_AG_HSP 0     /* index for HSP */

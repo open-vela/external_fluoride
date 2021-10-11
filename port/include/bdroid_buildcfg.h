@@ -19,6 +19,24 @@
 
 #include <nuttx/config.h>
 
+#define BT_RC_NUM_APP               CONFIG_BT_RC_NUM_APP
+#define HF_CLIENT_MAX_DEVICES       CONFIG_HF_CLIENT_MAX_DEVICES
+#define GATT_CL_MAX_LCB             CONFIG_GATT_CL_MAX_LCB
+
+/******************************************************************************
+ *
+ * Buffer sizes
+ *
+ *****************************************************************************/
+
+#define BT_DEFAULT_BUFFER_SIZE      CONFIG_BT_DEFAULT_BUFFER_SIZE
+
+/******************************************************************************
+ *
+ * BTM
+ *
+ *****************************************************************************/
+
 /* Default class of device
 * {SERVICE_CLASS, MAJOR_CLASS, MINOR_CLASS}
 *
@@ -34,20 +52,13 @@
   CONFIG_FLUORIDE_MINOR_CLASS \
 }
 
-#define BT_RC_NUM_APP               CONFIG_BT_RC_NUM_APP
-#define HF_CLIENT_MAX_DEVICES       CONFIG_HF_CLIENT_MAX_DEVICES
-#define GATT_CL_MAX_LCB             CONFIG_GATT_CL_MAX_LCB
-#if defined(CONFIG_BLE_LOCAL_PRIVACY_ENABLED)
-  #define BLE_LOCAL_PRIVACY_ENABLED TRUE
-#else
-  #define BLE_LOCAL_PRIVACY_ENABLED FALSE
-#endif
+/* Maximum device name length used in btm database. */
+#define BTM_MAX_REM_BD_NAME_LEN     CONFIG_BTM_MAX_REM_BD_NAME_LEN
 
-/******************************************************************************
- *
- * BTM
- *
- *****************************************************************************/
+/* Maximum local device name length stored btm database. */
+#define BTM_MAX_LOC_BD_NAME_LEN     CONFIG_BTM_MAX_LOC_BD_NAME_LEN
+
+#define BD_NAME_LEN                 CONFIG_BD_NAME_LEN
 
 /* The number of SCO links. */
 #define BTM_MAX_SCO_LINKS           CONFIG_BTM_MAX_SCO_LINKS
@@ -82,13 +93,25 @@
 
 #define BTA_GATTC_KNOWN_SR_MAX      CONFIG_BTA_GATTC_KNOWN_SR_MAX
 #define BTA_GATTC_CL_MAX            CONFIG_BTA_GATTC_CL_MAX
+#define BTA_GATTC_NOTIF_REG_MAX     CONFIG_BTA_GATTC_NOTIF_REG_MAX
+#define BTA_AG_AT_MAX_LEN           CONFIG_BTA_AG_AT_MAX_LEN
+
+#define BTA_SDP_DB_SIZE             CONFIG_BTA_SDP_DB_SIZE
 #define BTA_DM_SDP_DB_SIZE          CONFIG_BTA_DM_SDP_DB_SIZE
+#define BTA_JV_SDP_DB_SIZE          CONFIG_BTA_JV_SDP_DB_SIZE
+#define BTA_JV_SDP_RAW_DATA_SIZE    CONFIG_BTA_JV_SDP_RAW_DATA_SIZE
 
 #if defined(CONFIG_BTA_AV_SINK_INCLUDED)
   #define BTA_AV_SINK_INCLUDED      (1)
 #else
   #define BTA_AV_SINK_INCLUDED      (0)
 #endif
+
+/* maximum number of streams created */
+#define BTA_AV_NUM_STRS             CONFIG_BTA_AV_NUM_STRS
+
+/* Number of SCBs (AG service instances that can be registered) */
+#define BTA_AG_MAX_NUM_CLIENTS      CONFIG_BTA_AG_MAX_NUM_CLIENTS
 
 /******************************************************************************
  *
@@ -127,6 +150,9 @@
 /* Number of simultaneous stream endpoints. */
 #define AVDT_NUM_SEPS               CONFIG_AVDT_NUM_SEPS
 
+/* Maximum size in bytes of the content protection information element. */
+#define AVDT_PROTECT_SIZE           CONFIG_AVDT_PROTECT_SIZE
+
 /******************************************************************************
  *
  * AVRCP
@@ -143,5 +169,109 @@
 
 /* The maximum number of simultaneous links that ACL can support. */
 #define MAX_ACL_CONNECTIONS         CONFIG_MAX_ACL_CONNECTIONS
+
+/* The maximum number of simultaneous channels that L2CAP can support. */
+#define MAX_L2CAP_CHANNELS          CONFIG_MAX_L2CAP_CHANNELS
+
+/* The maximum number of simultaneous applications that can register with L2CAP. */
+#define MAX_L2CAP_CLIENTS           CONFIG_MAX_L2CAP_CLIENTS
+
+/******************************************************************************
+ *
+ * RFCOMM
+ *
+ *****************************************************************************/
+
+/* Maximum number of RFCOMM channels. */
+#define MAX_RFC_CHANNEL             CONFIG_MAX_RFC_CHANNEL
+
+/* The maximum number of ports supported. */
+#define MAX_RFC_PORTS               CONFIG_MAX_RFC_PORTS
+
+/******************************************************************************
+ *
+ * GAP
+ *
+ *****************************************************************************/
+
+/* The maximum number of simultaneous GAP L2CAP connections. */
+#define GAP_MAX_CONNECTIONS         CONFIG_GAP_MAX_CONNECTIONS
+
+/******************************************************************************
+ *
+ * BNEP
+ *
+ *****************************************************************************/
+
+/* Enable BNEP support */
+#if defined(CONFIG_BNEP_INCLUDED)
+  #define BNEP_INCLUDED TRUE
+#else
+  #define BNEP_INCLUDED FALSE
+#endif
+
+/******************************************************************************
+ *
+ * ATT/GATT Protocol/Profile Settings
+ *
+ *****************************************************************************/
+
+#define GATT_MAX_PHY_CHANNEL        CONFIG_GATT_MAX_PHY_CHANNEL
+
+#define GATT_MAX_SR_PROFILES        CONFIG_GATT_MAX_SR_PROFILES
+
+#define GATT_MAX_APPS               CONFIG_GATT_MAX_APPS
+
+/******************************************************************************
+ *
+ * BLE
+ *
+ *****************************************************************************/
+
+/*
+ * Enables or disables support for local privacy (ex. address rotation)
+ */
+#if defined(CONFIG_BLE_LOCAL_PRIVACY_ENABLED)
+  #define BLE_LOCAL_PRIVACY_ENABLED TRUE
+#else
+  #define BLE_LOCAL_PRIVACY_ENABLED FALSE
+#endif
+
+/* The maximum number of simultaneous applications that can register with LE
+ * L2CAP. */
+#define BLE_MAX_L2CAP_CLIENTS       CONFIG_BLE_MAX_L2CAP_CLIENTS
+
+/******************************************************************************
+ *
+ * PAN
+ *
+ *****************************************************************************/
+
+/* Enable PAN support */
+#if defined(CONFIG_PAN_INCLUDED)
+  #define PAN_INCLUDED TRUE
+#else
+  #define PAN_INCLUDED FALSE
+#endif
+
+/******************************************************************************
+ *
+ * HID
+ *
+ *****************************************************************************/
+
+#define HID_HOST_MAX_DEVICES        CONFIG_HID_HOST_MAX_DEVICES
+
+/******************************************************************************
+ *
+ * AVCTP
+ *
+ *****************************************************************************/
+
+/* Number of simultaneous ACL links to different peer devices. */
+#define AVCT_NUM_LINKS              CONFIG_AVCT_NUM_LINKS
+
+/* Number of simultaneous AVCTP connections. */
+#define AVCT_NUM_CONN               (AVCT_NUM_LINKS * 2 + 2)
 
 #endif
