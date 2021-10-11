@@ -144,12 +144,6 @@ config FLUORIDE_ALARM_CALLBACK_STACKSIZE
   help
     Bluetooth alarm callback thread stack size.
 
-config FLUORIDE_ALARM_DEPRECATED_STACKSIZE
-  int "BT alarm deprecated thread stack size"
-  default DEFAULT_TASK_STACKSIZE
-  help
-    Bluetooth alarm deprecated thread stack size.
-
 config FLUORIDE_COMMAND_PENDING_TIMEOUT_MS
   int "Fluoride hci command pending timeout"
   default 10000
