@@ -173,23 +173,65 @@ config FLUORIDE_LOG_LEVEL
   help
     Sets log level for the Fluoride stack.
 
+config BTA_AV_NUM_STRS
+  int "Maximum number of streams created"
+  default 2
+  help
+    Maximum number of streams created
+
+config BTA_AG_MAX_NUM_CLIENTS
+  int "Number of SCBs (AG service instances that can be registered)"
+  default BTA_AV_NUM_STRS
+  help
+    Number of SCBs (AG service instances that can be registered)
+
 config BTA_GATTC_KNOWN_SR_MAX
   int "Max known devices GATTC can support in Bluetooth spec."
-  default 25
+  default 10
   help
     Max known devices GATTC can support in Bluetooth spec.
 
 config BTA_GATTC_CL_MAX
   int "Max client application GATTC can support"
-  default 8
+  default 2
   help
     Max client application GATTC can support
+
+config BTA_GATTC_NOTIF_REG_MAX
+  int "Max client application notifier can support"
+  default 8
+  help
+    Max client application notifier can support
 
 config BTA_DM_SDP_DB_SIZE
   int "Max DM SDP Database size"
   default 10240
   help
     Max DM SDP Database size
+
+config BTA_AG_AT_MAX_LEN
+  int "Maximum length of BTA AG AT"
+  default 128
+  help
+    Maximum length of BTA AG AT.
+
+config BTA_JV_SDP_DB_SIZE
+  int "Maximum size of BTA JV SDP database"
+  default 1024
+  help
+    Maximum size of BTA JV SDP database.
+
+config BTA_SDP_DB_SIZE
+  int "Maximum size of BTA SDP database"
+  default 1024
+  help
+    Maximum size of BTA SDP database.
+
+config BTA_JV_SDP_RAW_DATA_SIZE
+  int "Maximum size of BTA JV SDP raw data"
+  default 512
+  help
+    Maximum size of BTA JV SDP raw data.
 
 config BTA_AV_SINK_INCLUDED
   bool "Enable Fluoride A2DP Sink SDP"
@@ -203,11 +245,35 @@ config GATT_CL_MAX_LCB
   help
     Max GATT CL LCB
 
+config GATT_MAX_PHY_CHANNEL
+  int "Maximum number of GATT PHY channel count"
+  default 2
+  help
+    Maximum number of GATT PHY channel count
+
+config GATT_MAX_SR_PROFILES
+  int "Maximum number of GATT SR profiles"
+  default 8
+  help
+    Maximum number of GATT SR profiles
+
+config GATT_MAX_APPS
+  int "Maximum number of GATT Applications"
+  default 8
+  help
+    Maximum number of GATT Applications
+
 config BLE_LOCAL_PRIVACY_ENABLED
   bool "Enable Fluoride BLE privacy"
   default n
   help
     Enable Fluoride BLE privacy
+
+config BLE_MAX_L2CAP_CLIENTS
+  int "Maximum number of simultaneous applications that can register with LE"
+  default 4
+  help
+    Maximum number of simultaneous applications that can register with LE
 
 config HF_CLIENT_MAX_DEVICES
   int "Maximum number of HF devices supported simultaneously"
@@ -229,27 +295,45 @@ config SDP_RAW_DATA_INCLUDED
 
 config BT_RC_NUM_APP
   int "Change this macro to use multiple RC"
-  default 2
+  default BTA_AV_NUM_STRS
   help
     Change this macro to use multiple RC.
 
 config AVDT_NUM_LINKS
   int "Number of simultaneous links to different peer devices."
-  default 6
+  default BTA_AV_NUM_STRS
   help
     Number of simultaneous links to different peer devices.
 
 config AVDT_NUM_SEPS
   int "Number of simultaneous stream endpoints."
-  default 2
+  default BTA_AV_NUM_STRS
   help
     Number of simultaneous stream endpoints.
+
+config AVDT_PROTECT_SIZE
+  int "Maximum size in bytes of the content protection information element."
+  default 16
+  help
+    Maximum size in bytes of the content protection information element.
 
 config MAX_ACL_CONNECTIONS
   int "The maximum number of simultaneous links that ACL can support."
   default 2
   help
     The maximum number of simultaneous links that ACL can support.
+
+config MAX_L2CAP_CHANNELS
+  int "Maximum number of simultaneous channels that L2CAP can support."
+  default 12
+  help
+    Maximum number of simultaneous channels that L2CAP can support.
+
+config MAX_L2CAP_CLIENTS
+  int "Maximum number of simultaneous applications that can register with L2CAP"
+  default 10
+  help
+    Maximum number of simultaneous applications that can register with L2CAP.
 
 config SDP_MAX_RECORDS
   int "The maximum number of SDP records the server can support."
@@ -274,6 +358,24 @@ config BTM_MAX_SCO_LINKS
   default 2
   help
     The number of SCO links.
+
+config BD_NAME_LEN
+  int "Maximum device name length."
+  default 64
+  help
+    Maximum device name length.
+
+config BTM_MAX_REM_BD_NAME_LEN
+  int "Maximum device name length used in btm database."
+  default 64
+  help
+    Maximum device name length used in btm database.
+
+config BTM_MAX_LOC_BD_NAME_LEN
+  int "Maximum local device name length stored btm database. "
+  default 64
+  help
+    Maximum local device name length stored btm database.
 
 config BTM_SEC_MAX_DEVICE_RECORDS
   int "The number of security records for peer devices."
@@ -305,6 +407,42 @@ config BTM_LOCAL_IO_CAPS_BLE
   help
     The IO capability of the local device (for BLE Simple Pairing).
 
+config MAX_RFC_CHANNEL
+  int "Maximum number of RFCOMM channels."
+  default 4
+  help
+    Maximum number of RFCOMM channels.
+
+config MAX_RFC_PORTS
+  int "Maximum number of ports supported."
+  default 6
+  help
+    Maximum number of ports supported.
+
+config GAP_MAX_CONNECTIONS
+  int "Maximum number of simultaneous GAP L2CAP connections."
+  default 5
+  help
+    Maximum number of simultaneous GAP L2CAP connections.
+
+config BNEP_INCLUDED
+  bool "Enable Fluoride BNEP support"
+  default n
+  help
+    Enable Fluoride BNEP support
+
+config PAN_INCLUDED
+  bool "Enable Fluoride PAN support"
+  default n
+  help
+    Enable Fluoride PAN support
+
+config HID_HOST_MAX_DEVICES
+  int "Maximum number of HID host devices"
+  default 2
+  help
+    Maximum number of HID host devices.
+
 config SC_MODE_INCLUDED
   bool "4.1/4.2 secure connections feature"
   default n
@@ -314,6 +452,18 @@ config SC_MODE_INCLUDED
 config AVRCP_DEFAULT_VERSION
   string "Fluoride default AVRCP Version"
   default "avrcp13"
+
+config AVCT_NUM_LINKS
+  int "Maximum number of AVCTP links"
+  default 4
+  help
+    Maximum number of AVCTP links.
+
+config BT_DEFAULT_BUFFER_SIZE
+  int "Fluoride default buffer Size"
+  default 2064
+  help
+    Fluoride default buffer Size
 
 config FLUORIDE_EXAMPLES
   bool "Enable Fluoride Examples"

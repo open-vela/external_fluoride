@@ -587,6 +587,7 @@ typedef uint8_t BT_OCTET8[BT_OCTET8_LEN]; /* octet array: size 16 */
 #ifdef __cplusplus
 
 #include <array>
+#include "bdroid_buildcfg.h"
 
 constexpr int OCTET16_LEN = 16;
 typedef std::array<uint8_t, OCTET16_LEN> Octet16;
@@ -614,7 +615,6 @@ typedef uint8_t DEV_CLASS[DEV_CLASS_LEN]; /* Device class */
 #define EXT_INQ_RESP_LEN 3
 typedef uint8_t EXT_INQ_RESP[EXT_INQ_RESP_LEN]; /* Extended Inquiry Response */
 
-#define BD_NAME_LEN 248
 typedef uint8_t BD_NAME[BD_NAME_LEN + 1]; /* Device name */
 
 #define BD_FEATURES_LEN 8

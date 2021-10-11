@@ -64,7 +64,7 @@ typedef struct {
   bluetooth_sdp_record* record_data;
 } sdp_slot_t;
 
-#define MAX_SDP_SLOTS 128
+#define MAX_SDP_SLOTS 32
 static sdp_slot_t sdp_slots[MAX_SDP_SLOTS];
 
 /*****************************************************************************

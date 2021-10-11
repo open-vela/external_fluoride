@@ -22,6 +22,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
+#include "bdroid_buildcfg.h"
 #include "avrcp/avrcp.h"
 #include "bluetooth/uuid.h"
 #include "raw_address.h"
@@ -53,7 +54,7 @@
 #define BT_ACTIVITY_ATTRIBUTION_ID "activity_attribution"
 
 /** Bluetooth Device Name */
-typedef struct { uint8_t name[249]; } __attribute__((packed)) bt_bdname_t;
+typedef struct { uint8_t name[BD_NAME_LEN + 1]; } __attribute__((packed)) bt_bdname_t;
 
 /** Bluetooth Adapter Visibility Modes*/
 typedef enum {
