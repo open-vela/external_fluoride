@@ -52,6 +52,8 @@
 #define CLOCK_BOOTTIME_ALARM  CLOCK_BOOTTIME
 #endif
 
+#define ALARM_DISABLE_STATE
+
 using base::Bind;
 using base::CancelableClosure;
 using base::MessageLoop;
@@ -96,7 +98,7 @@ struct alarm_t {
   // potentially long-running callback is executing. |alarm_cancel| uses this
   // mutex to provide a guarantee to its caller that the callback will not be
   // in progress when it returns.
-  std::shared_ptr<std::recursive_mutex> callback_mutex;
+  pthread_mutex_t callback_mutex;
   uint64_t creation_time_ms;
   uint64_t period_ms;
   uint64_t deadline_ms;
@@ -106,10 +108,12 @@ struct alarm_t {
   fixed_queue_t* queue;  // The processing queue to add this alarm to
   alarm_callback_t callback;
   void* data;
+#ifndef ALARM_DISABLE_STATE
   alarm_stats_t stats;
+#endif
 
   bool for_msg_loop;  // True, if the alarm should be processed on message loop
-  CancelableClosureInStruct closure;  // posted to message loop for processing
+  CancelableClosureInStruct *closure;  // posted to message loop for processing
 };
 
 // If the next wakeup time is less than this threshold, we should acquire
@@ -151,18 +155,22 @@ static void alarm_queue_ready(fixed_queue_t* queue, void* context);
 static void timer_callback(void* data);
 static void callback_dispatch(void* context);
 static bool timer_create_internal(const clockid_t clock_id, timer_t* timer);
+#ifndef ALARM_DISABLE_STATE
 static void update_scheduling_stats(alarm_stats_t* stats, uint64_t now_ms,
                                     uint64_t deadline_ms);
+#endif
 // Registers |queue| for processing alarm callbacks on |thread|.
 // |queue| may not be NULL. |thread| may not be NULL.
 static void alarm_register_processing_queue(fixed_queue_t* queue,
                                             thread_t* thread);
 
+#ifndef ALARM_DISABLE_STATE
 static void update_stat(stat_t* stat, uint64_t delta_ms) {
   if (stat->max_ms < delta_ms) stat->max_ms = delta_ms;
   stat->total_ms += delta_ms;
   stat->count++;
 }
+#endif
 
 alarm_t* alarm_new(const char* name) { return alarm_new_internal(name, false); }
 
@@ -179,14 +187,17 @@ static alarm_t* alarm_new_internal(const char* name, bool is_periodic) {
 
   alarm_t* ret = static_cast<alarm_t*>(osi_calloc(sizeof(alarm_t)));
 
-  std::shared_ptr<std::recursive_mutex> ptr(new std::recursive_mutex());
-  ret->callback_mutex = ptr;
+  pthread_mutexattr_t mattr;
+  pthread_mutexattr_init(&mattr);
+  pthread_mutexattr_settype(&mattr, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&ret->callback_mutex, &mattr);
+  pthread_mutexattr_destroy(&mattr);
   ret->is_periodic = is_periodic;
+#ifndef ALARM_DISABLE_STATE
   ret->stats.name = osi_strdup(name);
+#endif
 
   ret->for_msg_loop = false;
-  // placement new
-  new (&ret->closure) CancelableClosureInStruct();
 
   // NOTE: The stats were reset by osi_calloc() above
 
@@ -198,9 +209,11 @@ void alarm_free(alarm_t* alarm) {
 
   alarm_cancel(alarm);
 
+#ifndef ALARM_DISABLE_STATE
   osi_free((void*)alarm->stats.name);
-  alarm->closure.~CancelableClosureInStruct();
-  alarm->callback_mutex.reset();
+#endif
+  delete alarm->closure;
+  pthread_mutex_destroy(&alarm->callback_mutex);
   osi_free(alarm);
 }
 
@@ -245,22 +258,23 @@ static void alarm_set_internal(alarm_t* alarm, uint64_t period_ms,
   alarm->for_msg_loop = for_msg_loop;
 
   schedule_next_instance(alarm);
+#ifndef ALARM_DISABLE_STATE
   alarm->stats.scheduled_count++;
+#endif
 }
 
 void alarm_cancel(alarm_t* alarm) {
   CHECK(alarms != NULL);
   if (!alarm) return;
 
-  std::shared_ptr<std::recursive_mutex> local_mutex_ref;
   {
     std::lock_guard<std::mutex> lock(alarms_mutex);
-    local_mutex_ref = alarm->callback_mutex;
     alarm_cancel_internal(alarm);
   }
 
   // If the callback for |alarm| is in progress, wait here until it completes.
-  std::lock_guard<std::recursive_mutex> lock(*local_mutex_ref);
+  pthread_mutex_lock(&alarm->callback_mutex);
+  pthread_mutex_unlock(&alarm->callback_mutex);
 }
 
 // Internal implementation of canceling an alarm.
@@ -275,7 +289,9 @@ static void alarm_cancel_internal(alarm_t* alarm) {
   alarm->prev_deadline_ms = 0;
   alarm->callback = NULL;
   alarm->data = NULL;
+#ifndef ALARM_DISABLE_STATE
   alarm->stats.canceled_count++;
+#endif
   alarm->queue = NULL;
 
   if (needs_reschedule) reschedule_root_alarm();
@@ -447,7 +463,8 @@ static void remove_pending_alarm(alarm_t* alarm) {
   list_remove(alarms, alarm);
 
   if (alarm->for_msg_loop) {
-    alarm->closure.i.Cancel();
+    if (alarm->closure)
+      alarm->closure->i.Cancel();
   } else {
     while (fixed_queue_try_remove_from_queue(alarm->queue, alarm) != NULL) {
       // Remove all repeated alarm instances from the queue.
@@ -608,8 +625,10 @@ static void alarm_ready_generic(alarm_t* alarm,
   // alarms and active ones.
   //
   if (!alarm->callback) {
+#ifndef ALARM_DISABLE_STATE
     LOG(FATAL) << __func__
                << ": timer callback is NULL! Name=" << alarm->stats.name;
+#endif
   }
   alarm_callback_t callback = alarm->callback;
   void* data = alarm->data;
@@ -627,16 +646,18 @@ static void alarm_ready_generic(alarm_t* alarm,
 
   // Increment the reference count of the mutex so it doesn't get freed
   // before the callback gets finished executing.
-  std::shared_ptr<std::recursive_mutex> local_mutex_ref = alarm->callback_mutex;
-  std::lock_guard<std::recursive_mutex> cb_lock(*local_mutex_ref);
+  pthread_mutex_lock(&alarm->callback_mutex);
   lock.unlock();
 
   // Update the statistics
+#ifndef ALARM_DISABLE_STATE
   update_scheduling_stats(&alarm->stats, now_ms(), deadline_ms);
+#endif
 
   // NOTE: Do NOT access "alarm" after the callback, as a safety precaution
   // in case the callback itself deleted the alarm.
   callback(data);
+  pthread_mutex_unlock(&alarm->callback_mutex);
 }
 
 static void alarm_ready_mloop(alarm_t* alarm) {
@@ -684,21 +705,27 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
     if (alarm->is_periodic) {
       alarm->prev_deadline_ms = alarm->deadline_ms;
       schedule_next_instance(alarm);
+#ifndef ALARM_DISABLE_STATE
       alarm->stats.rescheduled_count++;
+#endif
     }
     reschedule_root_alarm();
 
     // Enqueue the alarm for processing
     if (alarm->for_msg_loop) {
       if (!get_main_message_loop()) {
+#ifndef ALARM_DISABLE_STATE
         LOG_ERROR("%s: message loop already NULL. Alarm: %s", __func__,
                   alarm->stats.name);
+#endif
         continue;
       }
 
-      alarm->closure.i.Reset(Bind(alarm_ready_mloop, alarm));
+      if (alarm->closure == NULL)
+        alarm->closure = new CancelableClosureInStruct();
+      alarm->closure->i.Reset(Bind(alarm_ready_mloop, alarm));
       get_main_message_loop()->task_runner()->PostTask(
-          FROM_HERE, alarm->closure.i.callback());
+          FROM_HERE, alarm->closure->i.callback());
     } else {
       fixed_queue_enqueue(alarm->queue, alarm);
     }
@@ -742,6 +769,7 @@ static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
   return true;
 }
 
+#ifndef ALARM_DISABLE_STATE
 static void update_scheduling_stats(alarm_stats_t* stats, uint64_t now_ms,
                                     uint64_t deadline_ms) {
   stats->total_updates++;
@@ -766,8 +794,11 @@ static void dump_stat(int fd, stat_t* stat, const char* description) {
           (unsigned long long)stat->total_ms, (unsigned long long)stat->max_ms,
           (unsigned long long)average_time_ms);
 }
+#endif
 
-void alarm_debug_dump(int fd) {
+void alarm_debug_dump(int fd)
+{
+#ifndef ALARM_DISABLE_STATE
   dprintf(fd, "\nBluetooth Alarms Statistics:\n");
 
   std::lock_guard<std::mutex> lock(alarms_mutex);
@@ -813,4 +844,5 @@ void alarm_debug_dump(int fd) {
 
     dprintf(fd, "\n");
   }
+#endif
 }
