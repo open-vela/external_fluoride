@@ -27,7 +27,7 @@
 typedef uint8_t tBTA_HF_CLIENT_AT_CMD;
 
 /* Maximum combined buffer for received AT events string */
-#define BTA_HF_CLIENT_AT_PARSER_MAX_LEN 4096
+#define BTA_HF_CLIENT_AT_PARSER_MAX_LEN 1024
 
 /* This structure holds prepared AT command queued for sending */
 struct queued_at_cmd {
