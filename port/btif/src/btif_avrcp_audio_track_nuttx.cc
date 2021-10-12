@@ -307,8 +307,8 @@ int BtifAvrcpAudioTrackWriteData(void *handle, void *audioBuffer, int bufferLeng
   struct audio_buf_desc_s desc;
   struct ap_buffer_s *abuffer;
   int remain = bufferLength;
+  int ret = 0;
   int avail;
-  int ret;
 
   if (!priv || priv->fd < 0)
     return -1;
