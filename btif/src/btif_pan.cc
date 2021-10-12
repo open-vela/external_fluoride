@@ -66,6 +66,8 @@
 #include "osi/include/osi.h"
 #include "stack/include/btu.h"
 
+#if (BTA_PAN_INCLUDED == TRUE)
+
 #define FORWARD_IGNORE 1
 #define FORWARD_SUCCESS 0
 #define FORWARD_FAILURE (-1)
@@ -772,3 +774,5 @@ static void btpan_tap_fd_signaled(int fd, int type, int flags,
     do_in_main_thread(FROM_HERE, base::Bind(btu_exec_tap_fd_read, fd));
   }
 }
+
+#endif

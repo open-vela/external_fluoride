@@ -52,6 +52,17 @@ config FLUORIDE_HCI_H4
     Bluetooth H:4 UART driver. Requires hardware flow control
     lines to be available.
 
+if FLUORIDE_HCI_H4
+
+config FLUORIDE_HCI_UART_NAME
+  string "Device Name of UART Device for Bluetooth"
+  default "/dev/ttyBT"
+  help
+    This option specifies the name of UART device to be used
+    for Bluetooth.
+
+endif
+
 config FLUORIDE_HCI_USB
   bool "H:2 USB"
   default n
@@ -149,17 +160,6 @@ config FLUORIDE_COMMAND_PENDING_TIMEOUT_MS
   default 10000
   ---help---
     set hci command pending timeout time
-
-if FLUORIDE_HCI_H4
-
-config FLUORIDE_HCI_UART_NAME
-  string "Device Name of UART Device for Bluetooth"
-  default "/dev/ttyBT"
-  help
-    This option specifies the name of UART device to be used
-    for Bluetooth.
-
-endif
 
 config FLUORIDE_LOG_LEVEL
   int "Fluoride Debug Log Level"
@@ -425,17 +425,29 @@ config BNEP_INCLUDED
   help
     Enable Fluoride BNEP support
 
-config PAN_INCLUDED
+config BTA_PAN_INCLUDED
   bool "Enable Fluoride PAN support"
   default n
   help
     Enable Fluoride PAN support
+
+config BTA_HH_INCLUDED
+  bool "Enable Fluoride HID Host support"
+  default n
+  help
+    Enable Fluoride HID Host support
 
 config HID_HOST_MAX_DEVICES
   int "Maximum number of HID host devices"
   default 2
   help
     Maximum number of HID host devices.
+
+config BTA_HD_INCLUDED
+  bool "Enable Fluoride HID Device support"
+  default n
+  help
+    Enable Fluoride HID Device support
 
 config SC_MODE_INCLUDED
   bool "4.1/4.2 secure connections feature"
@@ -492,6 +504,28 @@ config FLUORIDE_EXAMPLES_RFCOMM
   default y
   help
     Enable Fluoride rfcomm Example
+
+if BTA_HD_INCLUDED
+
+config FLUORIDE_EXAMPLES_HD_KEYBOARD
+  bool "Enable Fluoride HID Device Keyboard support"
+  default n
+  help
+    Enable Fluoride HID Device Keyboard support
+
+config FLUORIDE_EXAMPLES_HD_MOUSE
+  bool "Enable Fluoride HID Device Mouse support"
+  default n
+  help
+    Enable Fluoride HID Device Mouse support
+
+config FLUORIDE_EXAMPLES_HD_MEDIACTRL
+  bool "Enable Fluoride HID Device Media Controller support"
+  default n
+  help
+    Enable Fluoride HID Device Keyboard support
+
+endif
 
 if AUDIO && FLUORIDE_EXAMPLES_A2DP_SINK
 

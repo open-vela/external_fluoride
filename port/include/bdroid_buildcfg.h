@@ -248,11 +248,13 @@
  *****************************************************************************/
 
 /* Enable PAN support */
-#if defined(CONFIG_PAN_INCLUDED)
-  #define PAN_INCLUDED TRUE
+#if defined(CONFIG_BTA_PAN_INCLUDED)
+  #define BTA_PAN_INCLUDED          TRUE
 #else
-  #define PAN_INCLUDED FALSE
+  #define BTA_PAN_INCLUDED          FALSE
 #endif
+
+#define PAN_INCLUDED                BTA_PAN_INCLUDED
 
 /******************************************************************************
  *
@@ -261,6 +263,20 @@
  *****************************************************************************/
 
 #define HID_HOST_MAX_DEVICES        CONFIG_HID_HOST_MAX_DEVICES
+
+/* Enable HID Host support */
+#if defined(CONFIG_BTA_HH_INCLUDED)
+  #define BTA_HH_INCLUDED           TRUE
+#else
+  #define BTA_HH_INCLUDED           FALSE
+#endif
+
+/* Enable HID Device support */
+#if defined(CONFIG_BTA_HD_INCLUDED)
+  #define BTA_HD_INCLUDED           TRUE
+#else
+  #define BTA_HD_INCLUDED           FALSE
+#endif
 
 /******************************************************************************
  *

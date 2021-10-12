@@ -1328,6 +1328,7 @@ bt_status_t btif_storage_get_remote_addr_type(const RawAddress* remote_bd_addr,
  *
  ******************************************************************************/
 
+#if (BTA_HD_INCLUDED == TRUE)
 bt_status_t btif_storage_add_hid_device_info(
     RawAddress* remote_bd_addr, uint16_t attr_mask, uint8_t sub_class,
     uint8_t app_id, uint16_t vendor_id, uint16_t product_id, uint16_t version,
@@ -1348,6 +1349,7 @@ bt_status_t btif_storage_add_hid_device_info(
   btif_config_save();
   return BT_STATUS_SUCCESS;
 }
+#endif
 
 /*******************************************************************************
  *
@@ -1359,6 +1361,7 @@ bt_status_t btif_storage_add_hid_device_info(
  * Returns          BT_STATUS_SUCCESS if successful, BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
+#if (BTA_HH_INCLUDED == TRUE)
 bt_status_t btif_storage_load_bonded_hid_info(void) {
   for (const auto& bd_addr : btif_config_get_paired_devices()) {
     auto name = bd_addr.ToString();
@@ -1447,6 +1450,7 @@ bt_status_t btif_storage_remove_hid_info(const RawAddress& remote_bd_addr) {
   btif_config_save();
   return BT_STATUS_SUCCESS;
 }
+#endif
 
 constexpr char HEARING_AID_READ_PSM_HANDLE[] = "HearingAidReadPsmHandle";
 constexpr char HEARING_AID_CAPABILITIES[] = "HearingAidCapabilities";
@@ -1691,6 +1695,7 @@ int btif_storage_get_num_bonded_devices(void) {
  *
  ******************************************************************************/
 bt_status_t btif_storage_load_hidd(void) {
+#if (BTA_HD_INCLUDED == TRUE)
   for (const auto& bd_addr : btif_config_get_paired_devices()) {
     auto name = bd_addr.ToString();
 
@@ -1703,6 +1708,7 @@ bt_status_t btif_storage_load_hidd(void) {
       }
     }
   }
+#endif
 
   return BT_STATUS_SUCCESS;
 }

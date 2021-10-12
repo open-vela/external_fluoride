@@ -109,6 +109,8 @@ struct passthrough_command g_passthrough_command_maps[] =
 #define ID_MOUSE         2
 #define ID_CONTROL       3
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_KEYBOARD
+
 #define CHAR_ILLEGAL     0xff
 #define CHAR_RETURN     '\n'
 #define CHAR_ESCAPE      27
@@ -152,6 +154,7 @@ static const uint8_t keytable_us_shift[] = {
   '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
   '6', '7', '8', '9', '0', '.', 0xb1,                                 /* 97-100 */
 };
+#endif
 
 typedef int (*flrdcmd_func)(struct fluoride_s *flrd, int argc, char **argv);
 
@@ -361,6 +364,7 @@ static bool lookup_keycode(uint8_t character,
   return false;
 }
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_KEYBOARD
 static int command_bta_hkey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t report[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -400,7 +404,9 @@ static int command_bta_hkey(struct fluoride_s *flrd, int argc, char **argv)
 
   return 0;
 }
+#endif
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_MOUSE
 static int command_bta_hmkey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t report[] = {0, 0, 0, 0};
@@ -428,7 +434,9 @@ static int command_bta_hmkey(struct fluoride_s *flrd, int argc, char **argv)
 
   return 0;
 }
+#endif
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_MEDIACTRL
 static int command_bta_hckey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t code;
@@ -442,6 +450,7 @@ static int command_bta_hckey(struct fluoride_s *flrd, int argc, char **argv)
 
   return 0;
 }
+#endif
 
 static struct fluoride_cmd_s g_bta_cmds[] =
 {
@@ -500,11 +509,14 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     command_bta_playback_state,
     "< N/A >    ( PTS: AVRCP/CT/MDI/BV-01-C )",
   },
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_KEYBOARD
   {
     "hkey",
     command_bta_hkey,
     "< string > ( HID keyboard Usage )",
   },
+#endif
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_MOUSE
   {
     "hmkey",
     command_bta_hmkey,
@@ -517,6 +529,8 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "\tMove down 20 unit:  0 0 20\n"
     "\tRoller up 20 unit:  0 0 0 -20\n",
   },
+#endif
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_MEDIACTRL
   {
     "hckey",
     command_bta_hckey,
@@ -525,6 +539,7 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "\tVoleme Up  :  16 (0x10)\n"
     "\tVoleme Down:  32 (0x20)\n",
   },
+#endif
 };
 
 static int command_ble_scan(struct fluoride_s *flrd, int argc, char **argv)
