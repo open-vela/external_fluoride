@@ -452,9 +452,12 @@ static void bta_dm_pm_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
     p_dev->pm_mode_failed = 0;
   }
 
+#if (BTA_HH_INCLUDED == TRUE)
   if (p_bta_dm_ssr_spec[index].max_lat || index == BTA_DM_PM_SSR_HH) {
     bta_dm_pm_ssr(peer_addr, index);
-  } else {
+  } else
+#endif
+  {
     const controller_t* controller = controller_get_interface();
     uint8_t* p = NULL;
     if (controller->supports_sniff_subrating() &&

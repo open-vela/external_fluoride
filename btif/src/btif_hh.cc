@@ -45,6 +45,8 @@
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 
+#if defined(BTA_HH_INCLUDED) && (BTA_HH_INCLUDED == TRUE)
+
 #define BTIF_HH_APP_ID_MI 0x01
 #define BTIF_HH_APP_ID_KB 0x02
 
@@ -1732,3 +1734,5 @@ const bthh_interface_t* btif_hh_get_interface() {
   BTIF_TRACE_EVENT("%s", __func__);
   return &bthhInterface;
 }
+
+#endif /* BTA_HH_INCLUDED */

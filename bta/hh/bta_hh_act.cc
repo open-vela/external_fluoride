@@ -157,7 +157,6 @@ void bta_hh_disc_cmpl(void) {
   if (HID_HostDeregister() != HID_SUCCESS) status = BTA_HH_ERR;
 
   bta_hh_cleanup_disable(status);
-#endif
 }
 
 /*******************************************************************************
@@ -1219,4 +1218,5 @@ static const char* bta_hh_hid_event_name(uint16_t event) {
       return "Unknown HID event";
   }
 }
+#endif
 #endif

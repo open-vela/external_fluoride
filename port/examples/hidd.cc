@@ -59,6 +59,7 @@
 
 static uint8_t dest_data[] =
 {
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_KEYBOARD
   0x05, 0x01, // Usage page (Generic Desktop)
   0x09, 0x06, // Usage (Keyboard)
   0xA1, 0x01, // Collection (Application)
@@ -83,7 +84,9 @@ static uint8_t dest_data[] =
   0x29, 0x65, //       Usage Maximum (101)
   0x81, 0x00, //       Input (Data, Array)              ; Key array (6 keys)
   0xC0, // End Collection
+#endif
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_MOUSE
   0x05, 0x01, // Usage Page (Generic Desktop)
   0x09, 0x02, // Usage (Mouse)
   0xA1, 0x01, // Collection (Application)
@@ -111,7 +114,9 @@ static uint8_t dest_data[] =
   0x95, 0x03, //       Report count (3)
   0x81, 0x06, //       Input (Data, Variable, Relative)
   0xC0, //    End Collection
+#endif
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_MEDIACTRL
   0x05, 0x0C, // Usage Page (Consumer)
   0x09, 0x01, // Usage (Consumer Control)
   0xA1, 0x01, // Collection (Application)
@@ -138,6 +143,7 @@ static uint8_t dest_data[] =
   0x81, 0x06, //        Input (Data,Value,Relative,Bit Field)
   0xC0, // End Collection
   0xC0 // End Collection
+#endif
 };
 
 static bthd_app_param_t app_param = {

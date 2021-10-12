@@ -404,8 +404,10 @@ static const void* get_profile_interface(const char* profile_id) {
   if (is_profile(profile_id, BT_PROFILE_SOCKETS_ID))
     return btif_sock_get_interface();
 
+#if defined(BTA_PAN_INCLUDED) && (BTA_PAN_INCLUDED == TRUE)
   if (is_profile(profile_id, BT_PROFILE_PAN_ID))
     return btif_pan_get_interface();
+#endif
 
   if (is_profile(profile_id, BT_PROFILE_ADVANCED_AUDIO_ID))
     return btif_av_get_src_interface();
@@ -413,11 +415,15 @@ static const void* get_profile_interface(const char* profile_id) {
   if (is_profile(profile_id, BT_PROFILE_ADVANCED_AUDIO_SINK_ID))
     return btif_av_get_sink_interface();
 
+#if defined(BTA_HD_INCLUDED) && (BTA_HD_INCLUDED == TRUE)
   if (is_profile(profile_id, BT_PROFILE_HIDHOST_ID))
     return btif_hh_get_interface();
+#endif
 
+#if defined(BTA_HH_INCLUDED) && (BTA_HH_INCLUDED == TRUE)
   if (is_profile(profile_id, BT_PROFILE_HIDDEV_ID))
     return btif_hd_get_interface();
+#endif
 
   if (is_profile(profile_id, BT_PROFILE_SDP_CLIENT_ID))
     return btif_sdp_get_interface();
