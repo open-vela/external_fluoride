@@ -44,6 +44,8 @@
 #include "btif_storage.h"
 #include "btif_util.h"
 
+#if defined(BTA_HD_INCLUDED) && (BTA_HD_INCLUDED == TRUE)
+
 #define BTIF_HD_APP_NAME_LEN 50
 #define BTIF_HD_APP_DESCRIPTION_LEN 50
 #define BTIF_HD_APP_PROVIDER_LEN 50
@@ -164,8 +166,10 @@ static void btif_hd_upstreams_evt(uint16_t event, char* p_param) {
       BTIF_TRACE_DEBUG("%s: status=%d", __func__, p_data->status);
       btif_hd_cb.status = BTIF_HD_DISABLED;
       if (btif_hd_cb.service_dereg_active) {
+#if (BTA_HH_INCLUDED == TRUE)
         BTIF_TRACE_WARNING("registering hid host now");
         btif_hh_service_registration(TRUE);
+#endif
         btif_hd_cb.service_dereg_active = FALSE;
       }
       btif_hd_free_buf();
@@ -356,6 +360,10 @@ static bt_status_t init(bthd_callbacks_t* callbacks) {
 
   btif_enable_service(BTA_HIDD_SERVICE_ID);
 
+#if !defined(BTA_HH_INCLUDED) || (BTA_HH_INCLUDED == FALSE)
+  btif_hd_service_registration();
+#endif
+
   return BT_STATUS_SUCCESS;
 }
 
@@ -433,7 +441,9 @@ static bt_status_t register_app(bthd_app_param_t* p_app_param,
 
   /* register HID Device with L2CAP and unregister HID Host with L2CAP */
   /* Disable HH */
+#if (BTA_HH_INCLUDED == TRUE)
   btif_hh_service_registration(FALSE);
+#endif
 
   return BT_STATUS_SUCCESS;
 }
@@ -687,3 +697,5 @@ void btif_hd_service_registration() {
     BTA_HdEnable(bte_hd_evt);
   }
 }
+
+#endif /* BTA_HD_INCLUDED */

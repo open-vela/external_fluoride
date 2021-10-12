@@ -272,18 +272,22 @@ bt_status_t btif_in_execute_service_request(tBTA_SERVICE_ID service_id,
     case BTA_A2DP_SINK_SERVICE_ID: {
       btif_av_sink_execute_service(b_enable);
     } break;
+#if (BTA_HH_INCLUDED == TRUE)
     case BTA_HID_SERVICE_ID: {
       btif_hh_execute_service(b_enable);
     } break;
+#endif
     case BTA_HFP_HS_SERVICE_ID: {
       btif_hf_client_execute_service(b_enable);
     } break;
     case BTA_SDP_SERVICE_ID: {
       btif_sdp_execute_service(b_enable);
     } break;
+#if (BTA_HD_INCLUDED == TRUE)
     case BTA_HIDD_SERVICE_ID: {
       btif_hd_execute_service(b_enable);
     } break;
+#endif
     default:
       BTIF_TRACE_ERROR("%s: Unknown service %d being %s", __func__, service_id,
                        (b_enable) ? "enabled" : "disabled");
@@ -625,10 +629,12 @@ static void btif_dm_cb_create_bond(const RawAddress bd_addr,
   }
 
   if (is_hid && (device_type & BT_DEVICE_TYPE_BLE) == 0) {
+#if (BTA_HH_INCLUDED == TRUE)
     bt_status_t status;
     status = (bt_status_t)btif_hh_connect(&bd_addr);
     if (status != BT_STATUS_SUCCESS)
       bond_state_changed(status, bd_addr, BT_BOND_STATE_NONE);
+#endif
   } else {
     BTA_DmBond(bd_addr, addr_type, transport, device_type);
   }

@@ -137,9 +137,11 @@ void bta_gattc_disable() {
     bta_gattc_cb.state = BTA_GATTC_STATE_DISABLING;
 /* don't deregister HH GATT IF */
 /* HH GATT IF will be deregistered by bta_hh_le_deregister when disable HH */
+#if (BTA_HH_INCLUDED == TRUE)
     if (!bta_hh_le_is_hh_gatt_if(bta_gattc_cb.cl_rcb[i].client_if)) {
       bta_gattc_deregister(&bta_gattc_cb.cl_rcb[i]);
     }
+#endif
   }
 
   /* no registered apps, indicate disable completed */
@@ -201,7 +203,9 @@ void bta_gattc_register(const Uuid& app_uuid, tBTA_GATTC_CBACK* p_cback,
 void bta_gattc_deregister(tBTA_GATTC_RCB* p_clreg) {
   if (!p_clreg) {
     LOG(ERROR) << __func__ << ": Deregister Failed unknown client cif";
+#if (defined(BTA_HH_INCLUDED) && (BTA_HH_INCLUDED == TRUE))
     bta_hh_cleanup_disable(BTA_HH_OK);
+#endif
     return;
   }
 
@@ -1102,9 +1106,11 @@ static void bta_gattc_enc_cmpl_cback(tGATT_IF gattc_if, const RawAddress& bda) {
    * In the future, if we want to enable encryption complete event
    * for all GATT clients, we can remove this code
    */
+#if (BTA_HH_INCLUDED == TRUE)
   if (!bta_hh_le_is_hh_gatt_if(gattc_if)) {
     return;
   }
+#endif
 
   VLOG(1) << __func__ << ": cif:" << +gattc_if;
 
