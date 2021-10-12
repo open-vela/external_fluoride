@@ -2923,11 +2923,14 @@ void bta_av_open_rc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       }
     } else {
       /* use main SM for AVRC SDP activities */
+#ifdef CONFIG_AVRCP_SERVICE
       if (is_new_avrcp_enabled()) {
         APPL_TRACE_WARNING("%s: Using the new AVRCP Profile", __func__);
         bluetooth::avrcp::AvrcpService::Get()->ConnectDevice(
             p_scb->PeerAddress());
-      } else {
+      } else
+#endif
+      {
         bta_av_rc_disc((uint8_t)(p_scb->hdi + 1));
       }
     }
