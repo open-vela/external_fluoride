@@ -29,6 +29,8 @@
 #include <hardware/bluetooth.h>
 #include <hardware/bt_hearing_aid.h>
 
+#ifdef CONFIG_BTA_HEARING_AID_INCLUDED
+
 using base::Bind;
 using base::Unretained;
 using bluetooth::hearing_aid::ConnectionState;
@@ -141,3 +143,4 @@ HearingAidInterface* btif_hearing_aid_get_interface() {
 
   return hearingAidInstance.get();
 }
+#endif
