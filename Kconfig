@@ -471,6 +471,10 @@ config AVRCP_DEFAULT_VERSION
   string "Fluoride default AVRCP Version"
   default "avrcp13"
 
+config AVRCP_SERVICE
+  bool "Fluoride new Avrcp service"
+  default n
+
 config AVCT_NUM_LINKS
   int "Maximum number of AVCTP links"
   default 4

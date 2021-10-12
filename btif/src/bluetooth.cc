@@ -366,7 +366,9 @@ static void dump(int fd, const char** arguments) {
   btif_debug_av_dump(fd);
   bta_debug_av_dump(fd);
   stack_debug_avdtp_api_dump(fd);
+#ifdef CONFIG_AVRCP_SERVICE
   bluetooth::avrcp::AvrcpService::DebugDump(fd);
+#endif
   btif_debug_config_dump(fd);
   BTA_HfClientDumpStatistics(fd);
   wakelock_debug_dump(fd);
@@ -539,7 +541,11 @@ static int config_clear(void) {
 }
 
 static bluetooth::avrcp::ServiceInterface* get_avrcp_service(void) {
+#ifdef CONFIG_AVRCP_SERVICE
   return bluetooth::avrcp::AvrcpService::GetServiceInterface();
+#else
+  return nullptr;
+#endif
 }
 
 static std::string obfuscate_address(const RawAddress& address) {
