@@ -1452,6 +1452,8 @@ bt_status_t btif_storage_remove_hid_info(const RawAddress& remote_bd_addr) {
 }
 #endif
 
+#ifdef CONFIG_BTA_HEARING_AID_INCLUDED
+
 constexpr char HEARING_AID_READ_PSM_HANDLE[] = "HearingAidReadPsmHandle";
 constexpr char HEARING_AID_CAPABILITIES[] = "HearingAidCapabilities";
 constexpr char HEARING_AID_CODECS[] = "HearingAidCodecs";
@@ -1665,6 +1667,8 @@ bool btif_storage_get_hearing_aid_prop(
   return true;
 }
 
+#endif
+
 /*******************************************************************************
  *
  * Function         btif_storage_is_restricted_device
@@ -1686,6 +1690,7 @@ int btif_storage_get_num_bonded_devices(void) {
   return bonded_devices.num_devices;
 }
 
+#if (BTA_HD_INCLUDED == TRUE)
 /*******************************************************************************
  * Function         btif_storage_load_hidd
  *
@@ -1695,7 +1700,6 @@ int btif_storage_get_num_bonded_devices(void) {
  *
  ******************************************************************************/
 bt_status_t btif_storage_load_hidd(void) {
-#if (BTA_HD_INCLUDED == TRUE)
   for (const auto& bd_addr : btif_config_get_paired_devices()) {
     auto name = bd_addr.ToString();
 
@@ -1708,7 +1712,6 @@ bt_status_t btif_storage_load_hidd(void) {
       }
     }
   }
-#endif
 
   return BT_STATUS_SUCCESS;
 }
@@ -1753,6 +1756,7 @@ bt_status_t btif_storage_remove_hidd(RawAddress* remote_bd_addr) {
 
   return BT_STATUS_SUCCESS;
 }
+#endif
 
 // Get the name of a device from btif for interop database matching.
 bool btif_storage_get_stored_remote_name(const RawAddress& bd_addr,

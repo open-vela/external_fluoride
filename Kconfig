@@ -449,6 +449,12 @@ config BTA_HD_INCLUDED
   help
     Enable Fluoride HID Device support
 
+config BTA_HEARING_AID_INCLUDED
+  bool "Enable Fluoride Hearing aid support"
+  default n
+  help
+    Enable Fluoride Hearing aid support
+
 config SC_MODE_INCLUDED
   bool "4.1/4.2 secure connections feature"
   default n

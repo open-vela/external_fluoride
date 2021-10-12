@@ -290,4 +290,13 @@
 /* Number of simultaneous AVCTP connections. */
 #define AVCT_NUM_CONN               (AVCT_NUM_LINKS * 2 + 2)
 
+/******************************************************************************
+ *
+ * Hearing AID
+ *
+ *****************************************************************************/
+
+/* Enable HEARING AID support */
+#define BTA_HEARING_AID_INCLUDED    CONFIG_BTA_HEARING_AID_INCLUDED
+
 #endif

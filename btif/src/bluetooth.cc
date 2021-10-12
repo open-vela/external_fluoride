@@ -372,7 +372,9 @@ static void dump(int fd, const char** arguments) {
   wakelock_debug_dump(fd);
   osi_allocator_debug_dump(fd);
   alarm_debug_dump(fd);
+#ifdef CONFIG_BTA_HEARING_AID_INCLUDED
   HearingAid::DebugDump(fd);
+#endif
   connection_manager::dump(fd);
   bluetooth::bqr::DebugDump(fd);
   if (bluetooth::shim::is_any_gd_enabled()) {
@@ -412,8 +414,10 @@ static const void* get_profile_interface(const char* profile_id) {
   if (is_profile(profile_id, BT_PROFILE_ADVANCED_AUDIO_ID))
     return btif_av_get_src_interface();
 
+#if (BTA_AV_SINK_INCLUDED == TRUE)
   if (is_profile(profile_id, BT_PROFILE_ADVANCED_AUDIO_SINK_ID))
     return btif_av_get_sink_interface();
+#endif
 
 #if defined(BTA_HD_INCLUDED) && (BTA_HD_INCLUDED == TRUE)
   if (is_profile(profile_id, BT_PROFILE_HIDHOST_ID))
@@ -437,15 +441,13 @@ static const void* get_profile_interface(const char* profile_id) {
   if (is_profile(profile_id, BT_PROFILE_AV_RC_CTRL_ID))
     return btif_rc_ctrl_get_interface();
 
+#ifdef CONFIG_BTA_HEARING_AID_INCLUDED
   if (is_profile(profile_id, BT_PROFILE_HEARING_AID_ID))
     return btif_hearing_aid_get_interface();
+#endif
 
   if (is_profile(profile_id, BT_KEYSTORE_ID))
     return bluetooth::bluetooth_keystore::getBluetoothKeystoreInterface();
-
-  if (is_profile(profile_id, BT_ACTIVITY_ATTRIBUTION_ID)) {
-    return NULL;
-  }
 
   if (is_profile(profile_id, BT_PROFILE_LE_AUDIO_ID))
     return btif_le_audio_get_interface();
