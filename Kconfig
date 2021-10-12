@@ -287,6 +287,12 @@ config SDP_RAW_DATA_INCLUDED
   help
     Keep the raw data received from SDP server in database.
 
+config SDP_MAX_PAD_LEN
+  int "The maximum number of SDP padding length."
+  default 200
+  help
+    The maximum number of SDP padding length.
+
 config BT_RC_NUM_APP
   int "Change this macro to use multiple RC"
   default BTA_AV_NUM_STRS

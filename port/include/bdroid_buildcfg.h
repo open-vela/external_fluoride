@@ -131,6 +131,9 @@
 /* The maximum number of simultaneous client and server connections. */
 #define SDP_MAX_CONNECTIONS         CONFIG_SDP_MAX_CONNECTIONS
 
+/* The maximum number of SDP padding length. */
+#define SDP_MAX_PAD_LEN             CONFIG_SDP_MAX_PAD_LEN
+
 /* keep the raw data received from SDP server in database. */
 #if defined(CONFIG_SDP_RAW_DATA_INCLUDED)
   #define SDP_RAW_DATA_INCLUDED     TRUE
