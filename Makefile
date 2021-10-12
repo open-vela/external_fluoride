@@ -19,7 +19,6 @@ include $(APPDIR)/Make.defs
 CXXEXT = .cc
 
 CXXSRCS += audio_a2dp_hw/src/audio_a2dp_hw_utils.cc
-CXXSRCS += audio_hearing_aid_hw/src/audio_hearing_aid_hw_utils.cc
 CXXSRCS += $(wildcard bta/ag/*.cc)
 CXXSRCS += $(wildcard bta/ar/*.cc)
 CXXSRCS += $(wildcard bta/av/*.cc)
@@ -38,7 +37,6 @@ CXXSRCS += $(wildcard bta/pan/*.cc)
 endif
 CXXSRCS += $(wildcard bta/sdp/*.cc)
 CXXSRCS += $(wildcard bta/sys/*.cc)
-CXXSRCS += bta/hearing_aid/hearing_aid.cc
 CXXSRCS += $(wildcard btcore/src/*.cc)
 CXXSRCS += $(wildcard btif/avrcp/*.cc)
 CXXSRCS += $(wildcard btif/co/*.cc)
@@ -110,6 +108,11 @@ CXXSRCS += types/bluetooth/uuid.cc
 CXXSRCS += types/raw_address.cc
 CXXSRCS += udrv/ulinux/uipc.cc
 CXXSRCS += utils/src/bt_utils.cc
+
+ifeq ($(CONFIG_BTA_HEARING_AID_INCLUDED),y)
+  CXXSRCS += bta/hearing_aid/hearing_aid.cc
+  CXXSRCS += audio_hearing_aid_hw/src/audio_hearing_aid_hw_utils.cc
+endif
 
 PORTCXXSRCS += port/audio_hal_interface/a2dp_encoding.cc
 PORTCXXSRCS += port/bta/hearing_aid/hearing_aid_audio_source.cc
