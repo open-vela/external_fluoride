@@ -57,8 +57,12 @@ static void adapter_state_changed(bt_state_t state)
   flrd->sink  = (const btav_sink_interface_t   *)bt_profile_a2dp_sink_init(flrd);
 #endif
   flrd->hfc   = (const bthf_client_interface_t *)bt_profile_handsfree_init(flrd);
+#ifdef CONFIG_BTA_HD_INCLUDED
   flrd->hid   = (const bthd_interface_t        *)bt_profile_hid_init(flrd);
+#endif
+#ifdef CONFIG_AVRCP_SERVICE
   flrd->avrcs = (ServiceInterface              *)bt_profile_avrcp_service_init(flrd);
+#endif
 #ifdef CONFIG_FLUORIDE_EXAMPLES_RFCOMM
   flrd->sock  = (const btsock_interface_t      *)bt_profile_socket_init(flrd);
 #endif

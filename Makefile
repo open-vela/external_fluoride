@@ -38,7 +38,9 @@ endif
 CXXSRCS += $(wildcard bta/sdp/*.cc)
 CXXSRCS += $(wildcard bta/sys/*.cc)
 CXXSRCS += $(wildcard btcore/src/*.cc)
-CXXSRCS += $(wildcard btif/avrcp/*.cc)
+ifeq ($(CONFIG_AVRCP_SERVICE),y)
+  CXXSRCS += $(wildcard btif/avrcp/*.cc)
+endif
 CXXSRCS += $(wildcard btif/co/*.cc)
 CXXSRCS += $(wildcard btif/src/*.cc)
 CXXSRCS += common/address_obfuscator.cc
@@ -69,9 +71,11 @@ CXXSRCS += osi/src/socket_utils/socket_local_server.cc
 CXXSRCS += osi/src/socket.cc
 CXXSRCS += osi/src/thread.cc
 CXXSRCS += osi/src/wakelock.cc
-CXXSRCS += $(wildcard packet/avrcp/*.cc)
+ifeq ($(CONFIG_AVRCP_SERVICE),y)
+  CXXSRCS += $(wildcard packet/avrcp/*.cc)
+  CXXSRCS += $(wildcard profile/avrcp/*.cc)
+endif
 CXXSRCS += $(wildcard packet/base/*.cc)
-CXXSRCS += $(wildcard profile/avrcp/*.cc)
 CXXSRCS += $(wildcard service/*.cc)
 CXXSRCS += $(wildcard service/common/bluetooth/*.cc)
 CXXSRCS += $(wildcard service/common/bluetooth/util*.cc)
@@ -269,14 +273,20 @@ ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
 
   CXXSRCS  += port/examples/a2dp.cc
   CXXSRCS  += port/examples/avrcp.cc
-  CXXSRCS  += port/examples/avrcs.cc
   CXXSRCS  += port/examples/avrcpc.cc
+ifeq ($(CONFIG_AVRCP_SERVICE),y)
+  CXXSRCS  += port/examples/avrcs.cc
+endif
   CXXSRCS  += port/examples/hfp.cc
   CXXSRCS  += port/examples/interface.cc
   CXXSRCS  += port/examples/sdp.cc
+ifeq ($(CONFIG_FLUORIDE_EXAMPLES_RFCOMM),y)
   CXXSRCS  += port/examples/socket.cc
+endif
   CXXSRCS  += port/examples/shell.cc
+ifeq ($(CONFIG_BTA_HD_INCLUDED),y)
   CXXSRCS  += port/examples/hidd.cc
+endif
 ifneq ($(CONFIG_FLUORIDE_BLE_ENABLED),)
   CXXSRCS  += port/examples/gatt.cc
   CXXSRCS  += port/examples/gap.cc
