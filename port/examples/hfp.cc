@@ -1,6 +1,5 @@
 #include "fluoride.h"
 
-static void connection_state_cb(const RawAddress* bd_addr, bthf_client_connection_state_t state, unsigned int peer_feat, unsigned int chld_feat) TRACE_CALLBACK_BODY
 static void audio_state_cb(const RawAddress* bd_addr, bthf_client_audio_state_t state) TRACE_CALLBACK_BODY
 static void vr_cmd_cb(const RawAddress* bd_addr, bthf_client_vr_state_t state) TRACE_CALLBACK_BODY
 static void network_state_cb(const RawAddress* bd_addr, bthf_client_network_state_t state) TRACE_CALLBACK_BODY
@@ -22,6 +21,20 @@ static void in_band_ring_cb(const RawAddress* bd_addr, bthf_client_in_band_ring_
 static void last_voice_tag_number_cb(const RawAddress* bd_addr, const char* number) TRACE_CALLBACK_BODY
 static void ring_indication_cb(const RawAddress* bd_addr) TRACE_CALLBACK_BODY
 static void unknown_event_cb(const RawAddress* bd_addr, const char* eventString) TRACE_CALLBACK_BODY
+
+static void connection_state_cb(const RawAddress* bd_addr, bthf_client_connection_state_t state, unsigned int peer_feat, unsigned int chld_feat)
+{
+  struct fluoride_s *flrd = fluoride_interface_get();
+  struct  bthf_client_cb_t *_cb;
+  bt_addr_t addr;
+
+  LOG_SAMPLES("%s: state: %d\n", __func__, state);
+  memcpy(addr.val, bd_addr->address, sizeof(addr.val));
+  for (_cb = flrd->hfp_client_cb; _cb; _cb = _cb->_next) {
+    if(_cb->hfp_conn_state_cb)
+      flrd->hfp_client_cb->hfp_conn_state_cb(addr, state);
+  }
+}
 
 static bthf_client_callbacks_t sBluetoothHfpClientCallbacks =
 {
@@ -62,4 +75,38 @@ const bthf_client_interface_t *bt_profile_handsfree_init(struct fluoride_s *flrd
   hfc->init(&sBluetoothHfpClientCallbacks);
 
   return hfc;
+}
+
+extern "C"
+{
+  void hfp_client_register_cb(struct bthf_client_cb_t* cb)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    struct bthf_client_cb_t *_cb;
+
+    for (_cb = flrd->hfp_client_cb; _cb; _cb = _cb->_next)
+      if (_cb == cb)
+        return;
+
+    cb->_next = flrd->hfp_client_cb;
+    flrd->hfp_client_cb = cb;
+  }
+
+  int hfp_client_connect(bt_addr_t addr)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bd_addr;
+
+    bd_addr.FromOctets(addr.val);
+    return flrd->hfc->connect(&bd_addr);
+  }
+
+  int hfp_client_disconnect(bt_addr_t addr)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bd_addr;
+
+    bd_addr.FromOctets(addr.val);
+    return flrd->hfc->disconnect(&bd_addr);
+  }
 }

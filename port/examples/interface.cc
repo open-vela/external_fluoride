@@ -163,10 +163,39 @@ static void remote_device_properties(bt_status_t status, RawAddress *bd_addr, in
 
 static void device_found(int num_properties, bt_property_t *properties)
 {
-  parse_properties("DISCOV", BT_STATUS_SUCCESS, nullptr, num_properties, properties);
+  struct fluoride_s *flrd = fluoride_interface_get();
+  bt_addr_t bd_addr;
+  char bd_name[32];
+  int8_t rssi = 0;
+  int cod = 0;
+
+  if (flrd->bt_adapter_cb) {
+    bd_name[0] = '\0';
+    for (int i = 0; i < num_properties; i++) {
+      if (properties->type == BT_PROPERTY_BDADDR)
+        memcpy(bd_addr.val, property_as_addr(properties)->address, sizeof(bd_addr.val));
+      else if (properties->type == BT_PROPERTY_BDNAME)
+        strncpy(bd_name, properties->val, sizeof(bd_name));
+      else if (properties->type == BT_PROPERTY_CLASS_OF_DEVICE)
+        cod = device_class_to_int(property_as_device_class(properties));
+      else if (properties->type  == BT_PROPERTY_REMOTE_RSSI)
+        rssi = property_as_rssi(properties);
+      properties++;
+    }
+    flrd->bt_adapter_cb->device_found_cb(bd_addr, bd_name, cod, rssi);
+  } else
+    parse_properties("DISCOV", BT_STATUS_SUCCESS, nullptr, num_properties, properties);
 }
 
-static void discovery_state_changed(bt_discovery_state_t state) TRACE_CALLBACK_BODY
+static void discovery_state_changed(bt_discovery_state_t state)
+{
+  struct fluoride_s *flrd = fluoride_interface_get();
+
+  LOG_SAMPLES("%s: state: %d\n", __func__, state);
+  if (flrd->bt_adapter_cb) {
+    flrd->bt_adapter_cb->discovery_state_changed_cb(state);
+  }
+}
 static void pin_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32_t cod, bool min_16_digit) TRACE_CALLBACK_BODY
 
 static void ssp_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32_t cod,
@@ -181,12 +210,26 @@ static void ssp_request(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uint32
 
 static void bond_state_changed(bt_status_t status, RawAddress *remote_bd_addr, bt_bond_state_t state)
 {
+  struct fluoride_s *flrd = fluoride_interface_get();
+  bt_addr_t addr;
+
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
+  if (flrd->bt_adapter_cb) {
+    memcpy(addr.val, remote_bd_addr->address, sizeof(addr.val));
+    flrd->bt_adapter_cb->bond_state_changed_cb(addr, state);
+  }
 }
 
 static void acl_state_changed(bt_status_t status, RawAddress *remote_bd_addr, bt_acl_state_t state)
 {
+  struct fluoride_s *flrd = fluoride_interface_get();
+  bt_addr_t addr;
+
   LOG_SAMPLES("%s: state: %d, acl_state: %d\n", __func__, status, state);
+  if (flrd->bt_adapter_cb) {
+    memcpy(addr.val, remote_bd_addr->address, sizeof(addr.val));
+    flrd->bt_adapter_cb->acl_state_changed_cb(addr, state);
+  }
 }
 
 static void thread_event(bt_cb_thread_evt evt) TRACE_CALLBACK_BODY
@@ -276,4 +319,52 @@ struct fluoride_s *fluoride_interface_get(void)
     }
 
   return NULL;
+}
+
+extern "C"
+{
+  void bt_adapter_register_cb(struct bt_adapter_cb_t* cb)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    flrd->bt_adapter_cb = cb;
+  }
+
+  int bt_start_discovery(void)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    return flrd->interface->start_discovery();
+  }
+
+  int bt_stop_discovery(void)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    return flrd->interface->cancel_discovery();
+  }
+
+  int bt_create_bond(bt_addr_t addr,int transport)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bd_addr;
+
+    bd_addr.FromOctets(addr.val);
+    return flrd->interface->create_bond(&bd_addr,transport);
+  }
+
+  int bt_remove_bond(bt_addr_t addr)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bd_addr;
+
+    bd_addr.FromOctets(addr.val);
+    return flrd->interface->remove_bond(&bd_addr);
+  }
+
+  void bt_set_scan_mode(int scan_mode)
+  {
+    bt_property_t *property = property_new_scan_mode(scan_mode);
+    struct fluoride_s *flrd = fluoride_interface_get();
+
+    flrd->interface->set_adapter_property(property);
+    property_free(property);
+  }
 }

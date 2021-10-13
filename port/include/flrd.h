@@ -50,9 +50,45 @@ typedef int (*bt_socket_data_cb_t)(void *handle,
                                          void *data, size_t len);
 typedef int (*bt_socket_conn_cb_t)(void *handle, bool connected);
 
+struct btav_source_cb_t {
+    void(*a2dp_conn_state_cb)(bt_addr_t addr, uint8_t state);
+    void (*a2dp_audio_state_cb) (bt_addr_t addr, uint8_t state);
+    void (*a2dp_audio_config_cb) (bt_addr_t addr, uint32_t sample_rate, uint8_t channel_count);
+    struct btav_source_cb_t *_next;
+};
+
+struct bthf_client_cb_t {
+    void(*hfp_conn_state_cb)(bt_addr_t addr,uint8_t state);
+    void(*hfp_audio_state_cb)(bt_addr_t addr,uint8_t state);
+    struct bthf_client_cb_t *_next;
+};
+
+struct bt_adapter_cb_t {
+    void(*device_found_cb)(bt_addr_t addr,char* name,int cod,int rssi);
+    void(*discovery_state_changed_cb)(bool state);
+    void(*bond_state_changed_cb)(bt_addr_t addr, uint8_t state);
+    void(*acl_state_changed_cb)(bt_addr_t addr, uint8_t state);
+};
+
 void bt_socket_register_cb(bt_socket_conn_cb_t ccb,
                                  bt_socket_data_cb_t dcb);
 int bt_socket_data_send(void *handle, const void *data, size_t len);
+
+
+void a2dp_source_register_cb(struct btav_source_cb_t* cb);
+int a2dp_source_connect(bt_addr_t addr);
+int a2dp_source_disconnect(bt_addr_t addr);
+
+void hfp_client_register_cb(struct bthf_client_cb_t* cb);
+int hfp_client_connect(bt_addr_t addr);
+int hfp_client_disconnect(bt_addr_t addr);
+
+void bt_adapter_register_cb(struct bt_adapter_cb_t* cb);
+int bt_start_discovery(void);
+int bt_stop_discovery(void);
+int bt_create_bond(bt_addr_t addr,int transport);
+int bt_remove_bond(bt_addr_t addr);
+void bt_set_scan_mode(int scan_mode);
 
 #ifdef __cplusplus
 }
