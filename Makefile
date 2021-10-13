@@ -131,6 +131,7 @@ PORTCXXSRCS += port/btif/src/btif_debug_btsnoop.cc
 PORTCXXSRCS += port/btif/src/btif_debug_conn.cc
 PORTCXXSRCS += port/btif/src/btif_keystore.cc
 PORTCXXSRCS += port/btif/src/btif_pan.cc
+PORTCXXSRCS += port/btif/src/btif_uid.cc
 PORTCXXSRCS += $(wildcard port/main/shim/*.cc)
 
 ifeq ($(CONFIG_FLUORIDE_HCI_H4),y)
