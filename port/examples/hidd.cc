@@ -142,7 +142,6 @@ static uint8_t dest_data[] =
   0x0A, 0x24, 0x02, //  Usage (AC Back)
   0x81, 0x06, //        Input (Data,Value,Relative,Bit Field)
   0xC0, // End Collection
-  0xC0 // End Collection
 #endif
 };
 
