@@ -107,6 +107,10 @@ struct fluoride_s
   bt_socket_conn_cb_t           sock_conn_cb;
 #endif
 
+  struct btav_source_cb_t      *a2dp_source_cb;
+  struct bthf_client_cb_t      *hfp_client_cb;
+  struct bt_adapter_cb_t       *bt_adapter_cb;
+
   /* GATT */
 
   uint8_t                       aid;

@@ -37,7 +37,9 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
     btav_connection_state_t state)
 {
   struct fluoride_s *flrd = fluoride_interface_get();
+  struct btav_source_cb_t* _cb;
   bt_property_t *property;
+  bt_addr_t addr;
 
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
 
@@ -68,19 +70,43 @@ static void bta2dp_connection_state_callback(const RawAddress& bd_addr,
         flrd->source->set_active_device(bd_addr);
     }
   }
+
+  memcpy(addr.val, bd_addr.address, sizeof(addr.val));
+  for (_cb = flrd->a2dp_source_cb; _cb; _cb = _cb->_next) {
+    if(_cb->a2dp_conn_state_cb)
+      flrd->a2dp_source_cb->a2dp_conn_state_cb(addr, state);
+  }
 }
 
 static void bta2dp_audio_state_callback(const RawAddress& bd_addr,
     btav_audio_state_t state)
 {
+  struct fluoride_s *flrd = fluoride_interface_get();
+  struct btav_source_cb_t* _cb;
+  bt_addr_t addr;
+
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
+  memcpy(addr.val, bd_addr.address, sizeof(addr.val));
+  for (_cb = flrd->a2dp_source_cb; _cb; _cb = _cb->_next) {
+    if(_cb->a2dp_audio_state_cb)
+      flrd->a2dp_source_cb->a2dp_audio_state_cb(addr, state);
+  }
 }
 
 static void bta2dp_audio_config_callback(const RawAddress& bd_addr,
     uint32_t sample_rate, uint8_t channel_count)
 {
+  struct fluoride_s *flrd = fluoride_interface_get();
+  struct btav_source_cb_t* _cb;
+  bt_addr_t addr;
+
   LOG_SAMPLES("%s: sample_rate: %" PRIu32 ", channel_count: %d\n",
       __func__, sample_rate, channel_count);
+  memcpy(addr.val, bd_addr.address, sizeof(addr.val));
+  for (_cb = flrd->a2dp_source_cb; _cb; _cb = _cb->_next) {
+    if(_cb->a2dp_audio_state_cb)
+      flrd->a2dp_source_cb->a2dp_audio_config_cb(addr, sample_rate, channel_count);
+  }
 }
 
 static btav_sink_callbacks_t sSinkBluetoothA2dpCallbacks =
@@ -142,4 +168,38 @@ const btav_source_interface_t *bt_profile_a2dp_source_init(struct fluoride_s *fl
   source->init(&sSourceBluetoothA2dpCallbacks, 1, priorities, offloading);
 
   return source;
+}
+
+extern "C"
+{
+  void a2dp_source_register_cb(struct btav_source_cb_t* cb)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    struct btav_source_cb_t* _cb;
+
+    for (_cb = flrd->a2dp_source_cb; _cb; _cb = _cb->_next)
+      if (_cb == cb)
+        return;
+
+    cb->_next = flrd->a2dp_source_cb;
+    flrd->a2dp_source_cb = cb;
+  }
+
+  int a2dp_source_connect(bt_addr_t addr)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bd_addr;
+
+    bd_addr.FromOctets(addr.val);
+    return flrd->source->connect(bd_addr);
+  }
+
+  int a2dp_source_disconnect(bt_addr_t addr)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bd_addr;
+
+    bd_addr.FromOctets(addr.val);
+    return flrd->source->disconnect(bd_addr);
+  }
 }
