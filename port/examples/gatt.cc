@@ -533,6 +533,18 @@ fail:
                                                conn->info.id, false, vec);
   }
 
+  int bt_conn_le_param_update(struct bt_conn *conn,
+                              const struct bt_le_conn_param *param)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    RawAddress bda;
+
+    bda.FromOctets(conn->info.le.dst->a.val);
+    return flrd->gatt->client->conn_parameter_update(bda,
+                                                     param->interval_min, param->interval_max,
+                                                     param->latency, param->timeout,
+                                                     0, 0);
+  }
 }
 
 static void btgatts_service_added_cb(int status, int server_if,
