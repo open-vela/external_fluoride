@@ -337,7 +337,7 @@ static void btgatts_connection_cb(int conn_id,
   if (connected) {
     for (entry = sq_peek(&g_conn_list); entry; entry = sq_next(entry)) {
       conn = (struct bt_conn *)entry;
-      if (conn->info.id == conn_id || !memcpy((void *)conn->info.le.dst->a.val,
+      if (conn->info.id == conn_id || !memcmp((void *)conn->info.le.dst->a.val,
             bda.address, sizeof(bda.address)))
         return;
     }
@@ -374,7 +374,7 @@ static void btgatts_connection_cb(int conn_id,
   } else {
     for (entry = sq_peek(&g_conn_list); entry; entry = sq_next(entry)) {
       conn = (struct bt_conn *)entry;
-      if (conn->info.id == conn_id || !memcpy((void *)conn->info.le.dst->a.val,
+      if (conn->info.id == conn_id || !memcmp((void *)conn->info.le.dst->a.val,
             bda.address, sizeof(bda.address))) {
         sq_rem(&conn->node, &g_conn_list);
         found = true;
