@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
 
 #define BIT(n)  (1 << (n))
 #define __deprecated
