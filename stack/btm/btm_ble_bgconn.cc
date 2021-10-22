@@ -337,10 +337,13 @@ void btm_ble_acceptlist_init(uint8_t acceptlist_size) {
 
 uint8_t BTM_GetAcceptlistSize() {
   const controller_t* controller = controller_get_interface();
+  uint8_t max_size = controller->get_ble_acceptlist_size();
+
   if (!controller->supports_ble()) {
     return 0;
   }
-  return controller->get_ble_acceptlist_size();
+  return max_size > BTA_GATTC_KNOWN_SR_MAX ?
+         BTA_GATTC_KNOWN_SR_MAX : max_size;
 }
 
 bool BTM_SetLeConnectionModeToFast() {
