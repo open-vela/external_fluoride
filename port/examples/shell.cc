@@ -306,6 +306,34 @@ static int command_bta_audiorole(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
+static int command_bta_dial(struct fluoride_s *flrd, int argc, char **argv)
+{
+  if (argc == 0 || strlen(argv[0]) <= 0)
+    return -1;
+
+  if (flrd->hfc)
+    flrd->hfc->dial(&flrd->addr, argv[0]);
+
+  return 0;
+}
+
+static int command_bta_call_action(struct fluoride_s *flrd, int argc, char **argv)
+{
+  uint8_t action;
+
+  if (argc == 0 || strlen(argv[0]) <= 0)
+    return -1;
+
+  action = atoi(argv[0]);
+  if (action > BTHF_CLIENT_CALL_ACTION_BTRH_2)
+    return -1;
+
+  if (flrd->hfc)
+    flrd->hfc->handle_call_action(&flrd->addr, action, 0);
+
+  return 0;
+}
+
 static int command_bta_playback_state(struct fluoride_s *flrd, int argc, char **argv)
 {
   if (flrd->rcctrl)
@@ -498,6 +526,16 @@ static struct fluoride_cmd_s g_bta_cmds[] =
     "arole",
     command_bta_audiorole,
     "< 0-1 >    ( A2DP audio role: 0: source, 1: sink )",
+  },
+  {
+    "dial",
+    command_bta_dial,
+    "< number string >    ( HFP call with number a number )",
+  },
+  {
+    "caction",
+    command_bta_call_action,
+    "< 0-11 >    ( HFP call action: 7: answer call, 8: reject call )",
   },
   {
     "key",
