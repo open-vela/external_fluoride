@@ -60,6 +60,8 @@ struct btav_source_cb_t {
 struct bthf_client_cb_t {
     void(*hfp_conn_state_cb)(bt_addr_t addr,uint8_t state);
     void(*hfp_audio_state_cb)(bt_addr_t addr,uint8_t state);
+    void(*hfp_call_cb)(bt_addr_t addr, uint8_t call);
+    void(*hfp_clip_cb)(bt_addr_t addr, char* number, char* name);
     struct bthf_client_cb_t *_next;
 };
 
@@ -82,6 +84,8 @@ int a2dp_source_disconnect(bt_addr_t addr);
 void hfp_client_register_cb(struct bthf_client_cb_t* cb);
 int hfp_client_connect(bt_addr_t addr);
 int hfp_client_disconnect(bt_addr_t addr);
+int hfp_client_dial(char *number);
+int hfp_client_call_action(uint8_t action);
 
 void bt_adapter_register_cb(struct bt_adapter_cb_t* cb);
 int bt_start_discovery(void);
