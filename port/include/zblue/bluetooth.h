@@ -34,7 +34,9 @@
 #define CONFIG_BT_MAX_CONN   CONFIG_MAX_ACL_CONNECTIONS
 #define CONFIG_BT_MAX_PAIRED 1
 
+#ifndef __packed
 #define __packed __attribute__((packed))
+#endif
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
