@@ -319,12 +319,12 @@ static int command_bta_dial(struct fluoride_s *flrd, int argc, char **argv)
 
 static int command_bta_call_action(struct fluoride_s *flrd, int argc, char **argv)
 {
-  uint8_t action;
+  bthf_client_call_action_t action;
 
   if (argc == 0 || strlen(argv[0]) <= 0)
     return -1;
 
-  action = atoi(argv[0]);
+  action = (bthf_client_call_action_t)atoi(argv[0]);
   if (action > BTHF_CLIENT_CALL_ACTION_BTRH_2)
     return -1;
 
@@ -376,6 +376,7 @@ static int command_bta_connect(struct fluoride_s *flrd, int argc, char **argv)
   return 0;
 }
 
+#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_KEYBOARD
 static bool lookup_keycode(uint8_t character,
                            const uint8_t *table,
                            int size, uint8_t *keycode)
@@ -392,7 +393,6 @@ static bool lookup_keycode(uint8_t character,
   return false;
 }
 
-#ifdef CONFIG_FLUORIDE_EXAMPLES_HD_KEYBOARD
 static int command_bta_hkey(struct fluoride_s *flrd, int argc, char **argv)
 {
   uint8_t report[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
