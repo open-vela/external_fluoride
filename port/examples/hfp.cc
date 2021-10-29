@@ -26,6 +26,11 @@ static void connection_state_cb(const RawAddress* bd_addr, bthf_client_connectio
   bt_addr_t addr;
 
   LOG_SAMPLES("%s: state: %d\n", __func__, state);
+
+  if (state == BTHF_CLIENT_CONNECTION_STATE_CONNECTED) {
+    flrd->addr = *bd_addr;
+  }
+
   memcpy(addr.val, bd_addr->address, sizeof(addr.val));
   for (_cb = flrd->hfp_client_cb; _cb; _cb = _cb->_next) {
     if(_cb->hfp_conn_state_cb)
