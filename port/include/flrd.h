@@ -87,6 +87,8 @@ int hfp_client_disconnect(bt_addr_t addr);
 int hfp_client_dial(char *number);
 int hfp_client_call_action(uint8_t action);
 
+int hidc_send_report(uint8_t *report, uint16_t size);
+
 void bt_adapter_register_cb(struct bt_adapter_cb_t* cb);
 int bt_start_discovery(void);
 int bt_stop_discovery(void);
