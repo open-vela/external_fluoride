@@ -196,3 +196,19 @@ const bthd_interface_t *bt_profile_hid_init(struct fluoride_s *flrd)
 
   return hid;
 }
+
+extern "C"
+{
+  int hidc_send_report(uint8_t *report, uint16_t size)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+
+    if (report == NULL || size == 0)
+      return -1;
+
+    if (flrd->hid)
+      flrd->hid->send_report(BTHD_REPORT_TYPE_INTRDATA, ID_CONTROL, size, report);
+
+    return 0;
+  }
+}
