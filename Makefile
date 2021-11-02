@@ -222,6 +222,10 @@ FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/libchrome
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/tinyxml2}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/modp_b64}
 
+ifneq ($(CONFIG_KVDB),)
+  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/kvdb}
+endif
+
 ifeq ($(CONFIG_ARCH_SIM),)
   FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port/deprecated}
 endif
