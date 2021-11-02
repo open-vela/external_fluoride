@@ -31,6 +31,7 @@
  *
  ****************************************************************************/
 
+#include <debug.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -38,6 +39,10 @@
 #include <termios.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+
+#ifdef CONFIG_KVDB
+#include <kvdb.h>
+#endif
 
 #include <base/bind.h>
 #include <base/location.h>
@@ -47,10 +52,9 @@
 #include "buffer_allocator.h"
 #include "hci_internals.h"
 #include "hci_layer.h"
+#include "l2cdefs.h"
 
 #include "osi/include/log.h"
-
-//#define HCI_DEBUG
 
 enum HciPacketType {
   HCI_PACKET_TYPE_UNKNOWN   = 0,
@@ -82,6 +86,7 @@ extern void iso_data_received(BT_HDR* packet);
 
 static pthread_mutex_t g_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static struct file     g_filep;
+static bool            g_debug;
 
 void hci_close() { }
 int  hci_open_firmware_log_file() { return INVALID_FD; }
@@ -90,8 +95,20 @@ void hci_log_firmware_debug_packet(int fd, BT_HDR* packet) { }
 
 static void h4_data_dump(const char *tag, uint8_t type, uint8_t *data, uint32_t len)
 {
-#ifdef HCI_DEBUG
+  struct bt_hci_acl_hdr *acl;
   struct iovec bufs[2];
+  uint16_t cid;
+
+  if (!g_debug)
+    return;
+
+  if (type == HCI_PACKET_TYPE_ACL_DATA && len > 69) {
+    acl = (struct bt_hci_acl_hdr *)data;
+    cid = *(uint16_t *)(data + 6);
+    if (cid > L2CAP_BASE_APPL_CID ||
+        (acl->handle >> 12) == L2CAP_PKT_CONTINUE)
+      return;
+  }
 
   bufs[0].iov_base = &type;
   bufs[0].iov_len = 1;
@@ -99,7 +116,6 @@ static void h4_data_dump(const char *tag, uint8_t type, uint8_t *data, uint32_t 
   bufs[1].iov_len = len;
 
   lib_dumpvbuffer(tag, bufs, 2);
-#endif
 }
 
 static int h4_recv_data(uint8_t *buf, int count)
@@ -262,6 +278,11 @@ void hci_initialize(void)
   pthread_attr_t pattr;
   pthread_t pid;
   int ret;
+
+#ifdef CONFIG_KVDB
+  if (property_get_bool("persist.bluetooth.hcidebug", false))
+    g_debug = true;
+#endif
 
   ret = file_open(&g_filep, CONFIG_FLUORIDE_HCI_UART_NAME, O_RDWR | O_BINARY);
   if (ret < 0)
