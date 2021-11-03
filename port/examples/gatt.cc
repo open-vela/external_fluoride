@@ -245,6 +245,7 @@ static void btgatts_register_server_cb(int status, int server_if,
   struct bt_gatt_attr *attrs;
   struct bt_gatt_chrc *chrc;
   btgatt_db_element_t elem;
+  struct bt_uuid_16 uhidref;
   struct bt_uuid_16 usecondary;
   struct bt_uuid_16 uprimary;
   struct bt_uuid_16 uchrc;
@@ -268,6 +269,8 @@ static void btgatts_register_server_cb(int status, int server_if,
   uprimary.val          = BT_UUID_GATT_PRIMARY_VAL;
   usecondary.uuid.type  = BT_UUID_TYPE_16;
   usecondary.val        = BT_UUID_GATT_SECONDARY_VAL;
+  uhidref.uuid.type     = BT_UUID_TYPE_16;
+  uhidref.val           = BT_UUID_HIDS_REPORT_REF_VAL;
 
   memset(&elem, 0x0, sizeof(elem));
 
@@ -291,6 +294,11 @@ static void btgatts_register_server_cb(int status, int server_if,
         u16       = (struct bt_uuid_16 *)u;
         elem.type = bt_gatt_conv_attr(u16->val);
       }
+      elem.permissions = convert_permissions(attrs->perm);
+      bt_gatt_service_insert(&svcs, &elem);
+    } else if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uhidref)) {
+      elem.type        = BTGATT_DB_DESCRIPTOR;
+      elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
       elem.permissions = convert_permissions(attrs->perm);
       bt_gatt_service_insert(&svcs, &elem);
     } else {
@@ -683,6 +691,9 @@ static void btgatts_request_read_descriptor_cb(int conn_id, int trans_id,
       if (ccc->cfg_changed)
         ccc->cfg_changed(attr, ccc->value);
       value = ccc->value;
+    } else if (u16->uuid.type == BT_UUID_TYPE_16 &&
+          u16->val == BT_UUID_HIDS_REPORT_REF_VAL) {
+      value = *(uint16_t *)attr->user_data;
     }
   }
 
