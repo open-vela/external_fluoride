@@ -45,17 +45,16 @@ struct bt_conn
 struct _bt_gatt_service
 {
   sq_entry_t                 node;
-  bluetooth::Uuid            uuid;
-  int                        handle;
-  int                        id;
   struct bt_gatt_service    *servs;
 };
+
+static int                   g_handle;
 
 static struct bt_conn_cb    *g_conn_callback_list;
 static sq_queue_t            g_conn_list;
 static sq_queue_t            g_gatts_callback_list;
-pthread_mutex_t              g_service_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
-pthread_cond_t               g_service_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t       g_service_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static pthread_cond_t        g_service_cond = PTHREAD_COND_INITIALIZER;
 
 static void btgattc_scan_result_cb(uint16_t event_type, uint8_t addr_type,
                                    RawAddress *bda, uint8_t primary_phy,
@@ -158,8 +157,7 @@ static bt_gatt_db_attribute_type_t bt_gatt_conv_attr(uint16_t u16)
 }
 
 static struct _bt_gatt_service *
-btgatt_service_find(const bluetooth::Uuid *uuid, int handle,
-                    int id, struct bt_gatt_service *servs)
+btgatt_service_find(struct bt_gatt_service *servs)
 {
   struct _bt_gatt_service *serv;
   FAR sq_entry_t *entry;
@@ -167,41 +165,11 @@ btgatt_service_find(const bluetooth::Uuid *uuid, int handle,
   for (entry = sq_peek(&g_gatts_callback_list);
        entry; entry = sq_next(entry)) {
     serv = (struct _bt_gatt_service *)entry;
-    if (handle > 0 && serv->handle == handle)
-      return serv;
-    else if (id > 0 && serv->id == id)
-      return serv;
-    else if (servs != NULL && serv->servs == servs)
-      return serv;
-    else if (*uuid != Uuid::kEmpty && *uuid == serv->uuid)
+    if (servs != NULL && serv->servs == servs)
       return serv;
   }
 
   return NULL;
-}
-
-static struct _bt_gatt_service *
-btgatt_service_find_by_uuid(const bluetooth::Uuid &uuid)
-{
-  return btgatt_service_find(&uuid, -1, -1, NULL);
-}
-
-static struct _bt_gatt_service *
-btgatt_service_find_by_handle(int handle)
-{
-  return btgatt_service_find(&Uuid::kEmpty, handle, -1, NULL);
-}
-
-static struct _bt_gatt_service *
-btgatt_service_find_by_id(int id)
-{
-  return btgatt_service_find(&Uuid::kEmpty, -1, id, NULL);
-}
-
-static struct _bt_gatt_service *
-btgatt_service_find_by_servs(struct bt_gatt_service *servs)
-{
-  return btgatt_service_find(&Uuid::kEmpty, -1, -1, servs);
 }
 
 static void bt_gatt_service_insert(std::vector<btgatt_db_element_t> *svcs,
@@ -239,77 +207,7 @@ static uint16_t convert_permissions(uint8_t perm)
 static void btgatts_register_server_cb(int status, int server_if,
                                        const Uuid& uuid)
 {
-  struct fluoride_s *flrd = fluoride_interface_get();
-  std::vector<btgatt_db_element_t> svcs;
-  struct _bt_gatt_service *serv;
-  struct bt_gatt_attr *attrs;
-  struct bt_gatt_chrc *chrc;
-  btgatt_db_element_t elem;
-  struct bt_uuid_16 uhidref;
-  struct bt_uuid_16 usecondary;
-  struct bt_uuid_16 uprimary;
-  struct bt_uuid_16 uchrc;
-  struct bt_uuid_16 uccc;
-  struct bt_uuid_16 *u16;
-  struct bt_uuid *u;
-  int count;
-
-  serv = btgatt_service_find_by_uuid(uuid);
-  if (serv == NULL)
-    return;
-
-  attrs = serv->servs->attrs;
-  count = serv->servs->attr_count;
-
-  uchrc.uuid.type       = BT_UUID_TYPE_16;
-  uchrc.val             = BT_UUID_GATT_CHRC_VAL;
-  uccc.uuid.type        = BT_UUID_TYPE_16;
-  uccc.val              = BT_UUID_GATT_CCC_VAL;
-  uprimary.uuid.type    = BT_UUID_TYPE_16;
-  uprimary.val          = BT_UUID_GATT_PRIMARY_VAL;
-  usecondary.uuid.type  = BT_UUID_TYPE_16;
-  usecondary.val        = BT_UUID_GATT_SECONDARY_VAL;
-  uhidref.uuid.type     = BT_UUID_TYPE_16;
-  uhidref.val           = BT_UUID_HIDS_REPORT_REF_VAL;
-
-  memset(&elem, 0x0, sizeof(elem));
-
-  for (; attrs && count; attrs++, count--) {
-    attrs->handle = 0;
-
-    if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uchrc)) {
-      chrc            = (struct bt_gatt_chrc *)attrs->user_data;
-      elem.properties = chrc->properties;
-      elem.type       = BTGATT_DB_CHARACTERISTIC;
-    } else if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uccc)) {
-      elem.type        = BTGATT_DB_DESCRIPTOR;
-      elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
-      elem.permissions = convert_permissions(attrs->perm);
-      bt_gatt_service_insert(&svcs, &elem);
-    } else if ((!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uprimary) ||
-          !bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&usecondary)) && attrs->user_data) {
-      u         = (struct bt_uuid *)attrs->user_data;
-      elem.uuid = bt_gatt_conv_uuid(u);
-      if (u->type == BT_UUID_TYPE_16) {
-        u16       = (struct bt_uuid_16 *)u;
-        elem.type = bt_gatt_conv_attr(u16->val);
-      }
-      elem.permissions = convert_permissions(attrs->perm);
-      bt_gatt_service_insert(&svcs, &elem);
-    } else if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uhidref)) {
-      elem.type        = BTGATT_DB_DESCRIPTOR;
-      elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
-      elem.permissions = convert_permissions(attrs->perm);
-      bt_gatt_service_insert(&svcs, &elem);
-    } else {
-      elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
-      elem.permissions = convert_permissions(attrs->perm);
-      bt_gatt_service_insert(&svcs, &elem);
-    }
-  }
-
-  serv->handle = server_if;
-  flrd->gatt->server->add_service(server_if, svcs);
+  g_handle = server_if;
 }
 
 static bt_conn *btgatts_get_connection(int conn_id)
@@ -330,17 +228,12 @@ static void btgatts_connection_cb(int conn_id,
     int server_if, int connected, const RawAddress& bda)
 {
   struct fluoride_s *flrd = fluoride_interface_get();
-  struct _bt_gatt_service *serv;
   struct bt_conn_info *info;
   FAR sq_entry_t *entry;
   struct bt_conn_cb *cb;
   struct bt_conn *conn;
   bool found = false;
   bt_addr_le_t *addr;
-
-  serv = btgatt_service_find_by_handle(server_if);
-  if (serv == NULL)
-    return;
 
   if (connected) {
     for (entry = sq_peek(&g_conn_list); entry; entry = sq_next(entry)) {
@@ -378,7 +271,6 @@ static void btgatts_connection_cb(int conn_id,
     }
 
     sq_addlast(&conn->node, &g_conn_list);
-    serv->id = conn_id;
   } else {
     for (entry = sq_peek(&g_conn_list); entry; entry = sq_next(entry)) {
       conn = (struct bt_conn *)entry;
@@ -397,8 +289,6 @@ static void btgatts_connection_cb(int conn_id,
       }
       free(conn);
     }
-
-    serv->id = 0;
   }
 }
 
@@ -425,35 +315,92 @@ extern "C"
   int bt_gatt_service_register(struct bt_gatt_service *servs)
   {
     struct fluoride_s *flrd = fluoride_interface_get();
+    std::vector<btgatt_db_element_t> svcs;
     struct _bt_gatt_service *serv;
+    struct bt_gatt_attr *attrs;
+    struct bt_gatt_chrc *chrc;
+    btgatt_db_element_t elem;
+    struct bt_uuid_16 uhidref;
+    struct bt_uuid_16 usecondary;
+    struct bt_uuid_16 uprimary;
+    struct bt_uuid_16 uchrc;
+    struct bt_uuid_16 uccc;
+    struct bt_uuid_16 *u16;
+    struct bt_uuid *u;
+    int count;
     bt_status_t status;
 
     if (servs->attr_count <= 0 || !servs->attrs)
       return BT_STATUS_PARM_INVALID;
 
-    pthread_mutex_lock(&g_service_mutex);
-    serv = btgatt_service_find_by_servs(servs);
-    if (serv) {
-      status = BT_STATUS_DONE;
-      goto fail;
-    }
+    serv = btgatt_service_find(servs);
+    if (serv)
+      return BT_STATUS_DONE;
 
     serv = (struct _bt_gatt_service *)calloc(1, sizeof(struct _bt_gatt_service));
-    if (serv == NULL) {
-      status = BT_STATUS_NOMEM;
-      goto fail;
+    if (serv == NULL)
+      return BT_STATUS_NOMEM;
+
+    attrs = servs->attrs;
+    count = servs->attr_count;
+
+    uchrc.uuid.type       = BT_UUID_TYPE_16;
+    uchrc.val             = BT_UUID_GATT_CHRC_VAL;
+    uccc.uuid.type        = BT_UUID_TYPE_16;
+    uccc.val              = BT_UUID_GATT_CCC_VAL;
+    uprimary.uuid.type    = BT_UUID_TYPE_16;
+    uprimary.val          = BT_UUID_GATT_PRIMARY_VAL;
+    usecondary.uuid.type  = BT_UUID_TYPE_16;
+    usecondary.val        = BT_UUID_GATT_SECONDARY_VAL;
+    uhidref.uuid.type     = BT_UUID_TYPE_16;
+    uhidref.val           = BT_UUID_HIDS_REPORT_REF_VAL;
+
+    memset(&elem, 0x0, sizeof(elem));
+
+    for (; attrs && count; attrs++, count--) {
+      attrs->handle = 0;
+
+      if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uchrc)) {
+        chrc            = (struct bt_gatt_chrc *)attrs->user_data;
+        elem.properties = chrc->properties;
+        elem.type       = BTGATT_DB_CHARACTERISTIC;
+      } else if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uccc)) {
+        elem.type        = BTGATT_DB_DESCRIPTOR;
+        elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
+        elem.permissions = convert_permissions(attrs->perm);
+        bt_gatt_service_insert(&svcs, &elem);
+      } else if ((!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uprimary) ||
+            !bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&usecondary)) && attrs->user_data) {
+        u         = (struct bt_uuid *)attrs->user_data;
+        elem.uuid = bt_gatt_conv_uuid(u);
+        if (u->type == BT_UUID_TYPE_16) {
+          u16       = (struct bt_uuid_16 *)u;
+          elem.type = bt_gatt_conv_attr(u16->val);
+        }
+        elem.permissions = convert_permissions(attrs->perm);
+        bt_gatt_service_insert(&svcs, &elem);
+      } else if (!bt_uuid_cmp(attrs->uuid, (const struct bt_uuid *)&uhidref)) {
+        elem.type        = BTGATT_DB_DESCRIPTOR;
+        elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
+        elem.permissions = convert_permissions(attrs->perm);
+        bt_gatt_service_insert(&svcs, &elem);
+      } else {
+        elem.uuid        = bt_gatt_conv_uuid((struct bt_uuid *)attrs->uuid);
+        elem.permissions = convert_permissions(attrs->perm);
+        bt_gatt_service_insert(&svcs, &elem);
+      }
     }
 
-    serv->uuid  = bluetooth::Uuid::GetRandom();
     serv->servs = servs;
+
+    pthread_mutex_lock(&g_service_mutex);
 
     sq_addlast(&serv->node, &g_gatts_callback_list);
 
-    status = flrd->gatt->server->register_server(serv->uuid, false);
+    status = flrd->gatt->server->add_service(g_handle, svcs);
     if (status == BT_STATUS_SUCCESS)
       pthread_cond_wait(&g_service_cond, &g_service_mutex);
 
-fail:
     pthread_mutex_unlock(&g_service_mutex);
 
     return status;
@@ -529,14 +476,10 @@ fail:
                         struct bt_gatt_notify_params *params)
   {
     struct fluoride_s *flrd = fluoride_interface_get();
-    struct _bt_gatt_service *serv = btgatt_service_find_by_id(conn->info.id);
     std::vector<uint8_t> vec((uint8_t *)params->data,
                              (uint8_t *)params->data + params->len);
 
-    if (serv == NULL)
-      return -EINVAL;
-
-    return flrd->gatt->server->send_indication(serv->handle,
+    return flrd->gatt->server->send_indication(g_handle,
                                                params->attr->handle,
                                                conn->info.id, false, vec);
   }
@@ -561,21 +504,23 @@ static void btgatts_service_added_cb(int status, int server_if,
   struct fluoride_s *flrd = fluoride_interface_get();
   struct _bt_gatt_service *serv;
   struct bt_gatt_attr *attrs;
+  FAR sq_entry_t *entry;
   size_t count, i, k;
 
-  serv = btgatt_service_find_by_handle(server_if);
-  if (serv == NULL)
-    return;
+  for (entry = sq_peek(&g_gatts_callback_list);
+       entry; entry = sq_next(entry)) {
 
-  attrs = serv->servs->attrs;
-  count = serv->servs->attr_count;
+    serv = (struct _bt_gatt_service *)entry;
+    attrs = serv->servs->attrs;
+    count = serv->servs->attr_count;
 
-  for (i = 0; i < elems.size(); i++) {
-    for (k = 0; k < count; k++) {
-      if (attrs[k].handle == 0 &&
-          elems[i].uuid == bt_gatt_conv_uuid((struct bt_uuid *)attrs[k].uuid)) {
-        attrs[k].handle = elems[i].attribute_handle;
-        break;
+    for (i = 0; i < elems.size(); i++) {
+      for (k = 0; k < count; k++) {
+        if (attrs[k].handle == 0 &&
+            elems[i].uuid == bt_gatt_conv_uuid((struct bt_uuid *)attrs[k].uuid)) {
+          attrs[k].handle = elems[i].attribute_handle;
+          break;
+        }
       }
     }
   }
@@ -585,16 +530,25 @@ static void btgatts_service_added_cb(int status, int server_if,
   pthread_mutex_unlock(&g_service_mutex);
 }
 
-static struct bt_gatt_attr *btgatts_find_attribute(struct _bt_gatt_service *serv,
-                                                   int attr_handle)
+static struct bt_gatt_attr *btgatts_find_attribute(int attr_handle)
 {
-  struct bt_gatt_attr *attrs = serv->servs->attrs;
-  int count = serv->servs->attr_count;
+  struct _bt_gatt_service *serv;
+  struct bt_gatt_attr *attrs;
+  FAR sq_entry_t *entry;
+  int count;
   int i;
 
-  for (i = 0; i < count; i++)
-    if (attrs[i].handle == attr_handle)
-      return &attrs[i];
+  for (entry = sq_peek(&g_gatts_callback_list);
+      entry; entry = sq_next(entry)) {
+
+    serv = (struct _bt_gatt_service *)entry;
+    attrs = serv->servs->attrs;
+    count = serv->servs->attr_count;
+
+    for (i = 0; i < count; i++)
+      if (attrs[i].handle == attr_handle)
+        return &attrs[i];
+  }
 
   return NULL;
 }
@@ -611,10 +565,6 @@ static void btgatts_request_write_cb(int conn_id, int trans_id, const RawAddress
   struct bt_uuid_16 *u16;
   struct bt_conn *conn;
 
-  serv = btgatt_service_find_by_id(conn_id);
-  if (serv == NULL)
-    return;
-
   response.handle            = attr_handle;
   response.attr_value.handle = attr_handle;
   response.attr_value.offset = offset;
@@ -625,7 +575,7 @@ static void btgatts_request_write_cb(int conn_id, int trans_id, const RawAddress
     return;
   }
 
-  attr = btgatts_find_attribute(serv, attr_handle);
+  attr = btgatts_find_attribute(attr_handle);
 
   if (attr) {
     if (type == BTGATT_DB_CHARACTERISTIC) {
@@ -672,17 +622,12 @@ static void btgatts_request_read_descriptor_cb(int conn_id, int trans_id,
 {
   struct fluoride_s *flrd = fluoride_interface_get();
   btgatt_response_t response = {};
-  struct _bt_gatt_service *serv;
   struct bt_gatt_attr *attr;
   struct _bt_gatt_ccc *ccc;
   struct bt_uuid_16 *u16;
   uint16_t value = 0;
 
-  serv = btgatt_service_find_by_id(conn_id);
-  if (serv == NULL)
-    return;
-
-  attr = btgatts_find_attribute(serv, attr_handle);
+  attr = btgatts_find_attribute(attr_handle);
   if (attr) {
     u16 = (struct bt_uuid_16 *)attr->uuid;
     if (u16->uuid.type == BT_UUID_TYPE_16 &&
@@ -713,15 +658,10 @@ static void btgatts_request_read_characteristic_cb(int conn_id, int trans_id,
 {
   struct fluoride_s *flrd = fluoride_interface_get();
   btgatt_response_t response = {};
-  struct _bt_gatt_service *serv;
   struct bt_gatt_attr *attr;
   struct bt_conn *conn;
 
-  serv = btgatt_service_find_by_id(conn_id);
-  if (serv == NULL)
-    return;
-
-  attr = btgatts_find_attribute(serv, attr_handle);
+  attr = btgatts_find_attribute(attr_handle);
   if (attr && attr->read && (conn = btgatts_get_connection(conn_id)) != NULL) {
     conn->tid = trans_id;
     attr->read(conn, attr, NULL, 0, offset);
@@ -831,6 +771,7 @@ const btgatt_interface_t *bt_profile_gatt_init(struct fluoride_s *flrd)
   gatt->init(&sGattCallbacks);
   gatt->advertiser->RegisterCallbacks(static_cast<AdvertisingCallbacks *>(&sAdvertisingCallbacks));
   gatt->scanner->RegisterCallbacks(static_cast<ScanningCallbacks *>(&sScanningCallbacks));
+  gatt->server->register_server(bluetooth::Uuid::GetRandom(), false);
 
   return gatt;
 }
