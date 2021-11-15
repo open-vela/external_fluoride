@@ -313,7 +313,7 @@ struct bt_conn_info {
 	/** Connection Role. */
 	uint8_t role;
 	/** Which local identity the connection was created with */
-	uint8_t id;
+	int id;
 	/** Connection Type specific Info.*/
 	union {
 		/** LE Connection specific Info. */
