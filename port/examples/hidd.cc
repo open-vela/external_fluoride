@@ -164,7 +164,14 @@ static bthd_qos_param_t qos_param = {
 };
 
 static void application_state_cb(RawAddress* bd_addr, bthd_application_state_t state) TRACE_CALLBACK_BODY
-static void connection_state_cb(RawAddress* bd_addr, bthd_connection_state_t state) TRACE_CALLBACK_BODY
+static void connection_state_cb(RawAddress* bd_addr, bthd_connection_state_t state)
+{
+  LOG_SAMPLES("HIDD %s: state %d\n", __func__, state);
+  if (state == BTHD_CONN_STATE_DISCONNECTING) {
+    struct fluoride_s *flrd = fluoride_interface_get();
+    flrd->hid->disconnect();
+  }
+}
 static void get_report_cb(uint8_t type, uint8_t id, uint16_t buffer_size) TRACE_CALLBACK_BODY
 static void set_report_cb(uint8_t type, uint8_t id, uint16_t len, uint8_t* p_data) TRACE_CALLBACK_BODY
 static void set_protocol_cb(uint8_t protocol) TRACE_CALLBACK_BODY
@@ -199,6 +206,20 @@ const bthd_interface_t *bt_profile_hid_init(struct fluoride_s *flrd)
 
 extern "C"
 {
+  int hid_device_connect(void)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+
+    return flrd->hid->connect(&flrd->addr);
+  }
+
+  int hid_device_disconnect(void)
+  {
+    struct fluoride_s *flrd = fluoride_interface_get();
+
+    return flrd->hid->disconnect();
+  }
+
   int hidc_send_report(uint8_t *report, uint16_t size)
   {
     struct fluoride_s *flrd = fluoride_interface_get();
