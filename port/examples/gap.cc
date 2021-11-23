@@ -167,7 +167,15 @@ extern "C" {
         base::Bind(&bt_le_adv_disable_cb, flrd->aid, true), 0, 0,
         base::Bind(&bt_le_adv_disable_cb, flrd->aid, false));
 
-    return 0;
+    pthread_mutex_lock(&flrd->mutex);
+    g_bt_le_adv_state = ADV_STATE_ENABLED;
+    while (g_bt_le_adv_state == ADV_STATE_ENABLED)
+      pthread_cond_wait(&flrd->cond, &flrd->mutex);
+    pthread_mutex_unlock(&flrd->mutex);
+
+    flrd->gatt->advertiser->Unregister(flrd->aid);
+
+    return (g_bt_le_adv_state == ADV_STATE_DISABLED) ? 0 : -1;
   }
 
 }
