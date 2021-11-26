@@ -667,6 +667,10 @@ void btm_set_link_policy(tACL_CONN* conn, tLINK_POLICY policy) {
       interop_match_addr(INTEROP_DISABLE_SNIFF, &(conn->remote_addr))) {
     conn->link_policy &= (~HCI_ENABLE_SNIFF_MODE);
   }
+
+  if (conn->is_transport_ble())
+    return;
+
   btsnd_hcic_write_policy_set(conn->hci_handle,
                               static_cast<uint16_t>(conn->link_policy));
 }
