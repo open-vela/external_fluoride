@@ -76,10 +76,6 @@ ifeq ($(CONFIG_AVRCP_SERVICE),y)
   CXXSRCS += $(wildcard profile/avrcp/*.cc)
 endif
 CXXSRCS += $(wildcard packet/base/*.cc)
-CXXSRCS += $(wildcard service/*.cc)
-CXXSRCS += $(wildcard service/common/bluetooth/*.cc)
-CXXSRCS += $(wildcard service/common/bluetooth/util*.cc)
-CXXSRCS += $(wildcard service/hal/*.cc)
 CXXSRCS += stack/a2dp/a2dp_api.cc
 CXXSRCS += stack/a2dp/a2dp_codec_config.cc
 CXXSRCS += stack/a2dp/a2dp_sbc.cc
@@ -160,7 +156,6 @@ PORTCXXSRCS += hci/src/hci_layer_android.cc
 PORTCXXSRCS += hci/src/hci_layer_linux.cc
 
 CXXSRCS := $(filter-out $(subst port/,,$(PORTCXXSRCS)), $(CXXSRCS))
-CXXSRCS := $(filter-out service/main.cc, $(CXXSRCS))
 
 FLRDFLAGS += "-DEXPORT_SYMBOL=__attribute__((visibility(\"default\")))" -DOS_POSIX -D_POSIX_MONOTONIC_CLOCK=1 -DNDEBUG
 FLRDFLAGS += -Wno-undef -Wno-shadow -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-value
