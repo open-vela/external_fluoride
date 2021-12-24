@@ -3016,7 +3016,7 @@ void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb,
 
   UINT32_TO_STREAM(p_param, offload_start->codec_type);
   UINT16_TO_STREAM(p_param, offload_start->max_latency);
-  ARRAY_TO_STREAM(p_param, offload_start->scms_t_enable,
+  ARRAY_TO_STREAM(p_param, offload_start->scms_t_enable.data(),
                   static_cast<int>(offload_start->scms_t_enable.size()));
   UINT32_TO_STREAM(p_param, offload_start->sample_rate);
   UINT8_TO_STREAM(p_param, offload_start->bits_per_sample);

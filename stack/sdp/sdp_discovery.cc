@@ -94,7 +94,7 @@ static uint8_t* sdpu_build_uuid_seq(uint8_t* p_out, uint16_t num_uuids,
       UINT32_TO_BE_STREAM(p_out, p_uuid_list->As32Bit());
     } else if (len == Uuid::kNumBytes128) {
       UINT8_TO_BE_STREAM(p_out, (UUID_DESC_TYPE << 3) | SIZE_SIXTEEN_BYTES);
-      ARRAY_TO_BE_STREAM(p_out, p_uuid_list->To128BitBE(),
+      ARRAY_TO_BE_STREAM(p_out, p_uuid_list->To128BitBE().data(),
                          (int)Uuid::kNumBytes128);
     } else {
       DCHECK(0) << "SDP: Passed UUID has invalid length " << len;

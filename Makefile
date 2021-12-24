@@ -114,6 +114,7 @@ ifeq ($(CONFIG_BTA_HEARING_AID_INCLUDED),y)
   CXXSRCS += audio_hearing_aid_hw/src/audio_hearing_aid_hw_utils.cc
 endif
 
+PORTCXXSRCS += port/stack/bt_types.cc
 PORTCXXSRCS += port/audio_hal_interface/a2dp_encoding.cc
 PORTCXXSRCS += port/bta/hearing_aid/hearing_aid_audio_source.cc
 PORTCXXSRCS += port/btcore/src/module.cc

@@ -63,6 +63,7 @@
                        __LINE__)                                             \
   } while (0)
 
+#define inline
 #define MAX_THREAD 1
 #define MAX_POLL 4
 #define POLL_EXCEPTION_EVENTS (POLLHUP | POLLRDHUP | POLLERR | POLLNVAL)

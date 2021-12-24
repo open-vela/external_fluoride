@@ -253,7 +253,7 @@ Octet16 Database::Hash() const {
     if (UuidSize(service.uuid) == Uuid::kNumBytes16) {
       UINT16_TO_STREAM(p, service.uuid.As16Bit());
     } else {
-      ARRAY_TO_STREAM(p, service.uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+      ARRAY_TO_STREAM(p, service.uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
     }
 
     for (const auto& is : service.included_services) {
@@ -265,7 +265,7 @@ Octet16 Database::Hash() const {
       if (UuidSize(is.uuid) == Uuid::kNumBytes16) {
         UINT16_TO_STREAM(p, is.uuid.As16Bit());
       } else {
-        ARRAY_TO_STREAM(p, is.uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+        ARRAY_TO_STREAM(p, is.uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
       }
     }
 
@@ -278,7 +278,7 @@ Octet16 Database::Hash() const {
       if (UuidSize(c.uuid) == Uuid::kNumBytes16) {
         UINT16_TO_STREAM(p, c.uuid.As16Bit());
       } else {
-        ARRAY_TO_STREAM(p, c.uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+        ARRAY_TO_STREAM(p, c.uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
       }
 
       for (const Descriptor& d : c.descriptors) {
