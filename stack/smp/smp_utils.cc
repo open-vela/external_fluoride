@@ -497,7 +497,7 @@ static BT_HDR* smp_build_confirm_cmd(UNUSED_ATTR uint8_t cmd_code,
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
 
   UINT8_TO_STREAM(p, SMP_OPCODE_CONFIRM);
-  ARRAY_TO_STREAM(p, p_cb->confirm, OCTET16_LEN);
+  ARRAY_TO_STREAM(p, p_cb->confirm.data(), OCTET16_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
   p_buf->len = SMP_CONFIRM_CMD_SIZE;
@@ -521,7 +521,7 @@ static BT_HDR* smp_build_rand_cmd(UNUSED_ATTR uint8_t cmd_code, tSMP_CB* p_cb) {
 
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
   UINT8_TO_STREAM(p, SMP_OPCODE_RAND);
-  ARRAY_TO_STREAM(p, p_cb->rand, OCTET16_LEN);
+  ARRAY_TO_STREAM(p, p_cb->rand.data(), OCTET16_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
   p_buf->len = SMP_RAND_CMD_SIZE;
@@ -546,7 +546,7 @@ static BT_HDR* smp_build_encrypt_info_cmd(UNUSED_ATTR uint8_t cmd_code,
 
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
   UINT8_TO_STREAM(p, SMP_OPCODE_ENCRYPT_INFO);
-  ARRAY_TO_STREAM(p, p_cb->ltk, OCTET16_LEN);
+  ARRAY_TO_STREAM(p, p_cb->ltk.data(), OCTET16_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
   p_buf->len = SMP_ENC_INFO_SIZE;
@@ -651,7 +651,7 @@ static BT_HDR* smp_build_signing_info_cmd(UNUSED_ATTR uint8_t cmd_code,
 
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
   UINT8_TO_STREAM(p, SMP_OPCODE_SIGN_INFO);
-  ARRAY_TO_STREAM(p, p_cb->csrk, OCTET16_LEN);
+  ARRAY_TO_STREAM(p, p_cb->csrk.data(), OCTET16_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
   p_buf->len = SMP_SIGN_INFO_SIZE;
@@ -758,7 +758,7 @@ static BT_HDR* smp_build_pairing_commitment_cmd(UNUSED_ATTR uint8_t cmd_code,
 
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
   UINT8_TO_STREAM(p, SMP_OPCODE_CONFIRM);
-  ARRAY_TO_STREAM(p, p_cb->commitment, OCTET16_LEN);
+  ARRAY_TO_STREAM(p, p_cb->commitment.data(), OCTET16_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
   p_buf->len = SMP_PAIR_COMMITM_SIZE;
@@ -783,7 +783,7 @@ static BT_HDR* smp_build_pair_dhkey_check_cmd(UNUSED_ATTR uint8_t cmd_code,
 
   p = (uint8_t*)(p_buf + 1) + L2CAP_MIN_OFFSET;
   UINT8_TO_STREAM(p, SMP_OPCODE_PAIR_DHKEY_CHECK);
-  ARRAY_TO_STREAM(p, p_cb->dhkey_check, OCTET16_LEN);
+  ARRAY_TO_STREAM(p, p_cb->dhkey_check.data(), OCTET16_LEN);
 
   p_buf->offset = L2CAP_MIN_OFFSET;
   p_buf->len = SMP_PAIR_DHKEY_CHECK_SIZE;

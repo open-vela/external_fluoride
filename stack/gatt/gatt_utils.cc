@@ -476,10 +476,10 @@ uint8_t gatt_build_uuid_to_stream(uint8_t** p_dst, const Uuid& uuid) {
     UINT16_TO_STREAM(p, uuid.As16Bit());
   } else if (len == Uuid::kNumBytes32) {
     /* always convert 32 bits into 128 bits */
-    ARRAY_TO_STREAM(p, uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+    ARRAY_TO_STREAM(p, uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
     len = Uuid::kNumBytes128;
   } else if (len == Uuid::kNumBytes128) {
-    ARRAY_TO_STREAM(p, uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+    ARRAY_TO_STREAM(p, uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
   }
 
   *p_dst = p;

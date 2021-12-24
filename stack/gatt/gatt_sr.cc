@@ -602,11 +602,11 @@ static tGATT_STATUS gatt_build_find_info_rsp(tGATT_SRV_LIST_ELEM& el,
     } else if (p_msg->offset == GATT_INFO_TYPE_PAIR_128 &&
                uuid_len == Uuid::kNumBytes128) {
       UINT16_TO_STREAM(p, attr.handle);
-      ARRAY_TO_STREAM(p, attr.uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+      ARRAY_TO_STREAM(p, attr.uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
     } else if (p_msg->offset == GATT_INFO_TYPE_PAIR_128 &&
                uuid_len == Uuid::kNumBytes32) {
       UINT16_TO_STREAM(p, attr.handle);
-      ARRAY_TO_STREAM(p, attr.uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+      ARRAY_TO_STREAM(p, attr.uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
     } else {
       LOG(ERROR) << "format mismatch";
       return GATT_NO_RESOURCES;
