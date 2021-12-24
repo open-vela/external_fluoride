@@ -167,6 +167,12 @@ config FLUORIDE_LOG_LEVEL
   help
     Sets log level for the Fluoride stack.
 
+config FLUORIDE_LOG_TRACE
+  bool "Fluoride Trace log enable"
+  default n
+  help
+    Sets log level for the Fluoride stack.
+
 config BTA_AV_NUM_STRS
   int "Maximum number of streams created"
   default 2
