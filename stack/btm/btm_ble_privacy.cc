@@ -761,7 +761,7 @@ bool btm_ble_resolving_list_load_dev(tBTM_SEC_DEV_REC* p_dev_rec) {
     uint8_t* p = param;
 
     UINT8_TO_STREAM(p, BTM_BLE_META_ADD_IRK_ENTRY);
-    ARRAY_TO_STREAM(p, p_dev_rec->ble.keys.irk, OCTET16_LEN);
+    ARRAY_TO_STREAM(p, p_dev_rec->ble.keys.irk.data(), OCTET16_LEN);
     UINT8_TO_STREAM(p, p_dev_rec->ble.identity_address_with_type.type);
     BDADDR_TO_STREAM(p, p_dev_rec->ble.identity_address_with_type.bda);
 

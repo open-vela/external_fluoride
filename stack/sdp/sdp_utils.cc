@@ -575,6 +575,9 @@ uint8_t* sdpu_extract_uid_seq(uint8_t* p, uint16_t param_len,
   uint8_t* p_seq_end;
   uint8_t descr, type, size;
   uint32_t seq_len, uuid_len;
+  uint8_t val8;
+  uint16_t val16;
+  uint32_t val32;
 
   /* Assume none found */
   p_seq->num_uids = 0;
@@ -602,17 +605,20 @@ uint8_t* sdpu_extract_uid_seq(uint8_t* p, uint16_t param_len,
     case SIZE_IN_NEXT_BYTE:
       if (sizeof(uint8_t) > param_len) return (NULL);
       param_len -= sizeof(uint8_t);
-      BE_STREAM_TO_UINT8(seq_len, p);
+      BE_STREAM_TO_UINT8(val8, p);
+      seq_len = val8;
       break;
     case SIZE_IN_NEXT_WORD:
       if (sizeof(uint16_t) > param_len) return (NULL);
       param_len -= sizeof(uint16_t);
-      BE_STREAM_TO_UINT16(seq_len, p);
+      BE_STREAM_TO_UINT16(val16, p);
+      seq_len = val16;
       break;
     case SIZE_IN_NEXT_LONG:
       if (sizeof(uint32_t) > param_len) return (NULL);
       param_len -= sizeof(uint32_t);
-      BE_STREAM_TO_UINT32(seq_len, p);
+      BE_STREAM_TO_UINT32(val32, p);
+      seq_len = val32;
       break;
     default:
       return (NULL);
@@ -642,15 +648,18 @@ uint8_t* sdpu_extract_uid_seq(uint8_t* p, uint16_t param_len,
         break;
       case SIZE_IN_NEXT_BYTE:
         if (p + sizeof(uint8_t) > p_seq_end) return NULL;
-        BE_STREAM_TO_UINT8(uuid_len, p);
+        BE_STREAM_TO_UINT8(val8, p);
+        uuid_len = val8;
         break;
       case SIZE_IN_NEXT_WORD:
         if (p + sizeof(uint16_t) > p_seq_end) return NULL;
-        BE_STREAM_TO_UINT16(uuid_len, p);
+        BE_STREAM_TO_UINT16(val16, p);
+        uuid_len = val16;
         break;
       case SIZE_IN_NEXT_LONG:
         if (p + sizeof(uint32_t) > p_seq_end) return NULL;
-        BE_STREAM_TO_UINT32(uuid_len, p);
+        BE_STREAM_TO_UINT32(val32, p);
+        uuid_len = val32;
         break;
       default:
         return (NULL);
@@ -690,6 +699,9 @@ uint8_t* sdpu_extract_attr_seq(uint8_t* p, uint16_t param_len,
   uint8_t* p_end_list;
   uint8_t descr, type, size;
   uint32_t list_len, attr_len;
+  uint8_t val8;
+  uint16_t val16;
+  uint32_t val32;
 
   /* Assume none found */
   p_seq->num_attr = 0;
@@ -707,19 +719,22 @@ uint8_t* sdpu_extract_attr_seq(uint8_t* p, uint16_t param_len,
     case SIZE_IN_NEXT_BYTE:
       if (param_len < sizeof(uint8_t)) return NULL;
       param_len -= sizeof(uint8_t);
-      BE_STREAM_TO_UINT8(list_len, p);
+      BE_STREAM_TO_UINT8(val8, p);
+      list_len = val8;
       break;
 
     case SIZE_IN_NEXT_WORD:
       if (param_len < sizeof(uint16_t)) return NULL;
       param_len -= sizeof(uint16_t);
-      BE_STREAM_TO_UINT16(list_len, p);
+      BE_STREAM_TO_UINT16(val16, p);
+      list_len = val16;
       break;
 
     case SIZE_IN_NEXT_LONG:
       if (param_len < sizeof(uint32_t)) return NULL;
       param_len -= sizeof(uint32_t);
-      BE_STREAM_TO_UINT32(list_len, p);
+      BE_STREAM_TO_UINT32(val32, p);
+      list_len = val32;
       break;
 
     default:
@@ -747,15 +762,18 @@ uint8_t* sdpu_extract_attr_seq(uint8_t* p, uint16_t param_len,
         break;
       case SIZE_IN_NEXT_BYTE:
         if (p + sizeof(uint8_t) > p_end_list) return NULL;
-        BE_STREAM_TO_UINT8(attr_len, p);
+        BE_STREAM_TO_UINT8(val8, p);
+        attr_len = val8;
         break;
       case SIZE_IN_NEXT_WORD:
         if (p + sizeof(uint16_t) > p_end_list) return NULL;
-        BE_STREAM_TO_UINT16(attr_len, p);
+        BE_STREAM_TO_UINT16(val16, p);
+        attr_len = val16;
         break;
       case SIZE_IN_NEXT_LONG:
         if (p + sizeof(uint32_t) > p_end_list) return NULL;
-        BE_STREAM_TO_UINT32(attr_len, p);
+        BE_STREAM_TO_UINT32(val32, p);
+        attr_len = val32;
         break;
       default:
         return NULL;

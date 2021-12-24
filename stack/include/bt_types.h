@@ -276,6 +276,7 @@ enum : uint16_t {
 /*******************************************************************************
  * Macros to get and put bytes to and from a stream (Little Endian format).
  */
+#ifndef __NuttX__
 #define UINT64_TO_BE_STREAM(p, u64)  \
   {                                  \
     *(p)++ = (uint8_t)((u64) >> 56); \
@@ -427,6 +428,7 @@ enum : uint16_t {
     uint8_t* _pa = (uint8_t*)(a) + (len)-1;            \
     for (ijk = 0; ijk < (len); ijk++) *_pa-- = *(p)++; \
   }
+#endif
 
 #define STREAM_SKIP_UINT8(p) \
   do {                       \
@@ -469,6 +471,7 @@ enum : uint16_t {
 /*******************************************************************************
  * Macros to get and put bytes to and from a stream (Big Endian format)
  */
+#ifndef __NuttX__
 #define UINT32_TO_BE_STREAM(p, u32)  \
   {                                  \
     *(p)++ = (uint8_t)((u32) >> 24); \
@@ -535,6 +538,7 @@ enum : uint16_t {
     int ijk;                                                         \
     for (ijk = 0; ijk < (len); ijk++) ((uint8_t*)(a))[ijk] = *(p)++; \
   }
+#endif
 
 /*******************************************************************************
  * Macros to get and put bytes to and from a field (Big Endian format).
@@ -568,6 +572,7 @@ enum : uint16_t {
 #include <bluetooth/uuid.h>
 #include <include/hardware/bluetooth.h>
 
+#ifndef __NuttX__
 inline void BDADDR_TO_STREAM(uint8_t*& p, const RawAddress& a) {
   for (int ijk = 0; ijk < BD_ADDR_LEN; ijk++)
     *(p)++ = (uint8_t)(a.address)[BD_ADDR_LEN - 1 - ijk];
@@ -577,6 +582,7 @@ inline void STREAM_TO_BDADDR(RawAddress& a, uint8_t*& p) {
   uint8_t* pbda = (uint8_t*)(a.address) + BD_ADDR_LEN - 1;
   for (int ijk = 0; ijk < BD_ADDR_LEN; ijk++) *pbda-- = *(p)++;
 }
+#endif
 
 #endif
 
@@ -597,9 +603,11 @@ typedef Octet16 LinkKey; /* Link Key */
 
 /* Sample LTK from BT Spec 5.1 | Vol 6, Part C 1
  * 0x4C68384139F574D836BCF34E9DFB01BF */
+#ifndef __NuttX__
 constexpr Octet16 SAMPLE_LTK = {0xbf, 0x01, 0xfb, 0x9d, 0x4e, 0xf3, 0xbc, 0x36,
                                 0xd8, 0x74, 0xf5, 0x39, 0x41, 0x38, 0x68, 0x4c};
 inline bool is_sample_ltk(const Octet16& ltk) { return ltk == SAMPLE_LTK; }
+#endif
 
 #endif
 
@@ -623,6 +631,7 @@ typedef uint8_t
 
 #ifdef __cplusplus
 // Bit order [0]:0-7 [1]:8-15 ... [7]:56-63
+#ifndef __NuttX__
 inline std::string bd_features_text(const BD_FEATURES& features) {
   uint8_t len = BD_FEATURES_LEN;
   char buf[255];
@@ -633,6 +642,7 @@ inline std::string bd_features_text(const BD_FEATURES& features) {
   }
   return std::string(buf);
 }
+#endif
 #endif  // __cplusplus
 
 #define BT_EVENT_MASK_LEN 8
@@ -750,5 +760,93 @@ inline std::string DeviceTypeText(tBT_DEVICE_TYPE type) {
 #define TRACE_TYPE_API 0x00000002
 #define TRACE_TYPE_EVENT 0x00000003
 #define TRACE_TYPE_DEBUG 0x00000004
+
+#ifdef __NuttX__
+void _UINT64_TO_BE_STREAM(uint8_t **ptr, uint64_t u64);
+void _UINT32_TO_STREAM(uint8_t **ptr, uint32_t u32);
+void _UINT24_TO_STREAM(uint8_t **ptr, uint32_t u24);
+void _UINT16_TO_STREAM(uint8_t **ptr, uint16_t u16);
+void _UINT8_TO_STREAM(uint8_t **ptr, uint8_t u8);
+void _INT8_TO_STREAM(uint8_t **ptr, int8_t u8);
+void _ARRAY32_TO_STREAM(uint8_t **ptr, uint8_t *a);
+void _ARRAY16_TO_STREAM(uint8_t **ptr, uint8_t *a);
+void _ARRAY8_TO_STREAM(uint8_t **ptr, uint8_t *a);
+void _LAP_TO_STREAM(uint8_t **ptr, uint8_t *a);
+void _DEVCLASS_TO_STREAM(uint8_t **ptr, uint8_t *a);
+void _ARRAY_TO_STREAM(uint8_t **ptr, uint8_t *a, int len);
+void _REVERSE_ARRAY_TO_STREAM(uint8_t **ptr, uint8_t *a, int len);
+void _STREAM_TO_INT8(int8_t *u8, uint8_t **ptr);
+void _STREAM_TO_UINT8(uint8_t *u8, uint8_t **ptr);
+void _STREAM_TO_UINT16(uint16_t *u16, uint8_t **ptr);
+void _STREAM_TO_UINT24(uint32_t *u32, uint8_t **ptr);
+void _STREAM_TO_UINT32(uint32_t *u32, uint8_t **ptr);
+void _STREAM_TO_UINT64(uint64_t *u64, uint8_t **ptr);
+void _STREAM_TO_ARRAY32(uint8_t *a, uint8_t **ptr);
+void _STREAM_TO_ARRAY16(uint8_t *a, uint8_t **ptr);
+void _STREAM_TO_ARRAY8(uint8_t *a, uint8_t **ptr);
+void _STREAM_TO_DEVCLASS(uint8_t *a, uint8_t **ptr);
+void _STREAM_TO_LAP(uint8_t *a, uint8_t **ptr);
+void _STREAM_TO_ARRAY(uint8_t *a, uint8_t **ptr, int len);
+void _REVERSE_STREAM_TO_ARRAY(uint8_t *a, uint8_t **ptr, int len);
+
+void _UINT32_TO_BE_STREAM(uint8_t **ptr, uint32_t u32);
+void _UINT24_TO_BE_STREAM(uint8_t **ptr, uint32_t u24);
+void _UINT16_TO_BE_STREAM(uint8_t **ptr, uint16_t u16);
+void _UINT8_TO_BE_STREAM(uint8_t **ptr, uint8_t u8);
+void _ARRAY_TO_BE_STREAM(uint8_t **ptr, uint8_t *a, int len);
+void _ARRAY_TO_BE_STREAM_REVERSE(uint8_t **ptr, uint8_t *a, int len);
+void _BE_STREAM_TO_UINT8(uint8_t *u8, uint8_t **ptr);
+void _BE_STREAM_TO_UINT16(uint16_t *u16, uint8_t **ptr);
+void _BE_STREAM_TO_UINT24(uint32_t *u32, uint8_t **ptr);
+void _BE_STREAM_TO_UINT32(uint32_t *u32, uint8_t **ptr);
+void _BE_STREAM_TO_UINT64(uint64_t *u64, uint8_t **ptr);
+void _BE_STREAM_TO_ARRAY(uint8_t **ptr, uint8_t *a, int len);
+#define UINT64_TO_BE_STREAM(p, u64)           _UINT64_TO_BE_STREAM(&(p), u64)
+#define UINT32_TO_STREAM(p, u32)              _UINT32_TO_STREAM(&(p), u32)
+#define UINT24_TO_STREAM(p, u24)              _UINT24_TO_STREAM(&(p), u24)
+#define UINT16_TO_STREAM(p, u16)              _UINT16_TO_STREAM(&(p), u16)
+#define UINT8_TO_STREAM(p, u8)                _UINT8_TO_STREAM(&(p), u8)
+#define INT8_TO_STREAM(p, u8)                 _INT8_TO_STREAM(&(p), u8)
+#define ARRAY32_TO_STREAM(p, a)               _ARRAY32_TO_STREAM(&(p), (uint8_t *)(a))
+#define ARRAY16_TO_STREAM(p, a)               _ARRAY16_TO_STREAM(&(p), (uint8_t *)(a))
+#define ARRAY8_TO_STREAM(p, a)                _ARRAY8_TO_STREAM(&(p), (uint8_t *)(a))
+#define LAP_TO_STREAM(p, a)                   _LAP_TO_STREAM(&(p), (uint8_t *)(a))
+#define DEVCLASS_TO_STREAM(p, a)              _DEVCLASS_TO_STREAM(&(p), (uint8_t *)(a))
+#define ARRAY_TO_STREAM(p, a, len)            _ARRAY_TO_STREAM(&(p), (uint8_t *)(a), len)
+#define REVERSE_ARRAY_TO_STREAM(p, a, len)    _REVERSE_ARRAY_TO_STREAM(&(p), (uint8_t *)(a), len)
+#define STREAM_TO_INT8(u8, p)                 _STREAM_TO_INT8((int8_t *)&(u8), (uint8_t **)&(p))
+#define STREAM_TO_UINT8(u8, p)                _STREAM_TO_UINT8((uint8_t *)&(u8), (uint8_t **)&(p))
+#define STREAM_TO_UINT16(u16, p)              _STREAM_TO_UINT16((uint16_t *)&(u16), (uint8_t **)&(p))
+#define STREAM_TO_UINT24(u32, p)              _STREAM_TO_UINT24(&(u32), &(p))
+#define STREAM_TO_UINT32(u32, p)              _STREAM_TO_UINT32(&(u32), &(p))
+#define STREAM_TO_UINT64(u64, p)              _STREAM_TO_UINT64(&(u64), &(p))
+#define STREAM_TO_ARRAY32(a, p)               _STREAM_TO_ARRAY32(a, &(p))
+#define STREAM_TO_ARRAY16(a, p)               _STREAM_TO_ARRAY16(a, &(p))
+#define STREAM_TO_ARRAY8(a, p)                _STREAM_TO_ARRAY8(a, &(p))
+#define STREAM_TO_DEVCLASS(a, p)              _STREAM_TO_DEVCLASS(a, &(p))
+#define STREAM_TO_LAP(a, p)                   _STREAM_TO_LAP(a, &(p))
+#define STREAM_TO_ARRAY(a, p, len)            _STREAM_TO_ARRAY(a, &(p), len)
+#define REVERSE_STREAM_TO_ARRAY(a, p, len)    _REVERSE_STREAM_TO_ARRAY(a, &(p), len)
+
+#define UINT32_TO_BE_STREAM(p, u32)           _UINT32_TO_BE_STREAM(&(p), u32)
+#define UINT24_TO_BE_STREAM(p, u24)           _UINT24_TO_BE_STREAM(&(p), u24)
+#define UINT16_TO_BE_STREAM(p, u16)           _UINT16_TO_BE_STREAM(&(p), u16)
+#define UINT8_TO_BE_STREAM(p, u8)             _UINT8_TO_BE_STREAM(&(p), u8)
+#define ARRAY_TO_BE_STREAM(p, a, len)         _ARRAY_TO_BE_STREAM(&(p), (uint8_t *)(a), len)
+#define ARRAY_TO_BE_STREAM_REVERSE(p, a, len) _ARRAY_TO_BE_STREAM_REVERSE(&(p), (uint8_t *)(a), len)
+#define BE_STREAM_TO_UINT8(u8, p)             _BE_STREAM_TO_UINT8((uint8_t *)&(u8), &(p))
+#define BE_STREAM_TO_UINT16(u16, p)           _BE_STREAM_TO_UINT16(&(u16), &(p))
+#define BE_STREAM_TO_UINT24(u32, p)           _BE_STREAM_TO_UINT24(&(u32), &(p))
+#define BE_STREAM_TO_UINT32(u32, p)           _BE_STREAM_TO_UINT32(&(u32), &(p))
+#define BE_STREAM_TO_UINT64(u64, p)           _BE_STREAM_TO_UINT64(&(u64), &(p))
+#define BE_STREAM_TO_ARRAY(p, a, len)         _BE_STREAM_TO_ARRAY(&(p), (uint8_t *)(a), len)
+
+#ifdef __cplusplus
+void BDADDR_TO_STREAM(uint8_t*& p, const RawAddress& a);
+void STREAM_TO_BDADDR(RawAddress& a, uint8_t*& p);
+bool is_sample_ltk(const Octet16& ltk);
+std::string bd_features_text(const BD_FEATURES& features);
+#endif
+#endif
 
 #endif

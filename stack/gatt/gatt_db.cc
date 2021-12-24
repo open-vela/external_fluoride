@@ -206,7 +206,7 @@ static tGATT_STATUS read_attr_value(tGATT_ATTR& attr16, uint16_t offset,
       UINT16_TO_STREAM(p, val_attr->uuid.As16Bit());
     } else {
       /* if 32 bit UUID, convert to 128 bit */
-      ARRAY_TO_STREAM(p, val_attr->uuid.To128BitLE(), (int)Uuid::kNumBytes128);
+      ARRAY_TO_STREAM(p, val_attr->uuid.To128BitLE().data(), (int)Uuid::kNumBytes128);
     }
     *p_data = p;
     return GATT_SUCCESS;

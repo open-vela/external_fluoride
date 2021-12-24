@@ -291,7 +291,7 @@ static tAVRC_STS avrc_pars_browse_rsp(tAVRC_MSG_BROWSE* p_msg,
           case AVRC_ITEM_PLAYER: {
             /* Handle player */
             tAVRC_ITEM_PLAYER* player = &(curr_item->u.player);
-            uint8_t player_len;
+            uint16_t player_len;
             min_len += 10 + AVRC_FEATURE_MASK_SIZE;
             if (pkt_len < min_len) goto browse_length_error;
             BE_STREAM_TO_UINT16(player_len, p);
@@ -346,7 +346,7 @@ static tAVRC_STS avrc_pars_browse_rsp(tAVRC_MSG_BROWSE* p_msg,
 
           case AVRC_ITEM_MEDIA: {
             tAVRC_ITEM_MEDIA* media = &(curr_item->u.media);
-            uint8_t media_len;
+            uint16_t media_len;
             min_len += 3 + AVRC_UID_SIZE;
             if (pkt_len < min_len) goto browse_length_error;
             BE_STREAM_TO_UINT16(media_len, p);
@@ -433,7 +433,7 @@ static tAVRC_STS avrc_pars_browse_rsp(tAVRC_MSG_BROWSE* p_msg,
         android_errorWriteLog(0x534e4554, "179162665");
         goto browse_length_error;
       }
-      BE_STREAM_TO_UINT8(get_attr_rsp->status, p)
+      BE_STREAM_TO_UINT8(get_attr_rsp->status, p);
       BE_STREAM_TO_UINT8(get_attr_rsp->num_attrs, p);
       get_attr_rsp->p_attrs = (tAVRC_ATTR_ENTRY*)osi_malloc(
           get_attr_rsp->num_attrs * sizeof(tAVRC_ATTR_ENTRY));
