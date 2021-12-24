@@ -200,10 +200,15 @@ static const char BTE_LOGMSG_MODULE[] = "bte_logmsg_module";
 #define BT_APP_TRACE(l, t, ...) \
   LogMsg((l), ##__VA_ARGS__)
 #else
-#define BT_TRACE(l, t, ...) \
+#  if defined(CONFIG_FLUORIDE_LOG_TRACE)
+#    define BT_TRACE(l, t, ...) \
   if (t <= CONFIG_FLUORIDE_LOG_LEVEL) LogMsg((TRACE_CTRL_GENERAL | (l) | TRACE_ORG_STACK | (t)), ##__VA_ARGS__)
-#define BT_APP_TRACE(l, t, ...) \
+#    define BT_APP_TRACE(l, t, ...) \
   if (t <= CONFIG_FLUORIDE_LOG_LEVEL) LogMsg((l) | (t), ##__VA_ARGS__)
+#  else
+#    define BT_TRACE(l, t, ...)
+#    define BT_APP_TRACE(l, t, ...)
+#  endif
 #endif
 
 /* Define tracing for the HCI unit */
