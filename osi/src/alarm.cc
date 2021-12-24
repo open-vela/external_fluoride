@@ -97,7 +97,7 @@ struct alarm_t {
   // potentially long-running callback is executing. |alarm_cancel| uses this
   // mutex to provide a guarantee to its caller that the callback will not be
   // in progress when it returns.
-  pthread_mutex_t callback_mutex;
+  std::shared_ptr<std::recursive_mutex> callback_mutex;
   uint64_t creation_time_ms;
   uint64_t period_ms;
   uint64_t deadline_ms;
@@ -189,11 +189,8 @@ static alarm_t* alarm_new_internal(const char* name, bool is_periodic) {
 
   alarm_t* ret = static_cast<alarm_t*>(osi_calloc(sizeof(alarm_t)));
 
-  pthread_mutexattr_t mattr;
-  pthread_mutexattr_init(&mattr);
-  pthread_mutexattr_settype(&mattr, PTHREAD_MUTEX_RECURSIVE);
-  pthread_mutex_init(&ret->callback_mutex, &mattr);
-  pthread_mutexattr_destroy(&mattr);
+  std::shared_ptr<std::recursive_mutex> ptr(new std::recursive_mutex());
+  ret->callback_mutex = ptr;
   ret->is_periodic = is_periodic;
 #ifndef ALARM_DISABLE_STATE
   ret->stats.name = osi_strdup(name);
@@ -215,7 +212,7 @@ void alarm_free(alarm_t* alarm) {
   osi_free((void*)alarm->stats.name);
 #endif
   delete alarm->closure;
-  pthread_mutex_destroy(&alarm->callback_mutex);
+  alarm->callback_mutex.reset();
   osi_free(alarm);
 }
 
@@ -270,14 +267,15 @@ void* alarm_cancel(alarm_t* alarm) {
   void* data;
   if (!alarm) return NULL;
 
+  std::shared_ptr<std::recursive_mutex> local_mutex_ref;
   {
     std::lock_guard<std::mutex> lock(alarms_mutex);
+    local_mutex_ref = alarm->callback_mutex;
     data = alarm_cancel_internal(alarm);
   }
 
   // If the callback for |alarm| is in progress, wait here until it completes.
-  pthread_mutex_lock(&alarm->callback_mutex);
-  pthread_mutex_unlock(&alarm->callback_mutex);
+  std::lock_guard<std::recursive_mutex> lock(*local_mutex_ref);
 
   return data;
 }
@@ -637,7 +635,8 @@ static void alarm_ready_generic(alarm_t* alarm,
 
   // Increment the reference count of the mutex so it doesn't get freed
   // before the callback gets finished executing.
-  pthread_mutex_lock(&alarm->callback_mutex);
+  std::shared_ptr<std::recursive_mutex> local_mutex_ref = alarm->callback_mutex;
+  std::lock_guard<std::recursive_mutex> cb_lock(*local_mutex_ref);
   lock.unlock();
 
   // Update the statistics
@@ -648,7 +647,6 @@ static void alarm_ready_generic(alarm_t* alarm,
   // NOTE: Do NOT access "alarm" after the callback, as a safety precaution
   // in case the callback itself deleted the alarm.
   callback(data);
-  pthread_mutex_unlock(&alarm->callback_mutex);
 }
 
 static void alarm_ready_mloop(alarm_t* alarm) {
