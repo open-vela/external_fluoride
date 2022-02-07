@@ -485,7 +485,7 @@ void hci_initialize(void)
   if (ret < 0)
     return;
 
-  prctl(PR_SET_NAME_EXT, "bt_rx_thread", pid);
+  pthread_setname_np(pid, "bt_rx_thread");
 
   extern void initialization_complete();
   initialization_complete();
