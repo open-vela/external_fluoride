@@ -1,10 +1,5 @@
 buildtools
 out
 third_party
-*.o
-.depend
-Make.dep
-tags
-.built
 port/examples/bta.cc
 port/examples/ble.cc
